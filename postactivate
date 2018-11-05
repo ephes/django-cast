@@ -1,0 +1,4 @@
+#!/bin/zsh
+# This hook is sourced after this virtualenv is activated.
+
+cd ~/projects/django-cast && ./getenv.sh | while read line; do export $line;done
