@@ -48,3 +48,12 @@ docs/_build
 
 # environmen
 .env
+
+# gitignore
+.gitignore.swp
+
+# django files
+CACHE
+cast_images
+cast_videos
+django_cast.egg-info

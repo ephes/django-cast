@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{% block content %}
+<p><a class="btn btn-secondary btn-lg" href="{% url "cast:post_list" slug=blog_slug %}" role ="button">Back to Blog</a></p>
+{% if form.errors %}
+  <!-- Error messaging -->
+  <div id="errors" class="alert alert-danger" role="alert">
+    <div class="inner">
+      <p>There were some errors in the information you entered. Please correct the following:</p>
+        {{ form.non_field_errors }}
+        <ul>
+        {% for field in form %}
+          {% if field.errors %}
+            <li>{{ field.label }}: {{ field.errors|striptags }}</li>
+          {% endif %}
+        {% endfor %}
+        </ul>
+     </div>
+  </div>
+  <!-- /Error messaging -->
+{% endif %}
+
+  <br>
+  <form id="create-form" method="post" action="./" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.media }}
+    {{ form.as_p }}
+    <p><input type="submit" value="post"></p>
+  </form>
+  <p>
+    <p>
+    <label class="custom-file" id="customFile">
+      <input type="file" id="image-input" class="custom-file-input" multiple>
+      <span class="custom-file-control form-control-file"></span>
+    </label>
+    </p>
+
+    <p>
+    <button id="insert-images" type="button" class="btn btn-primary">Insert Images</button>
+    <div id='preview-images' class="clearfix"></div>
+    </p>
+  </p>
+
+  <p>
+    <p>
+    <label class="custom-file" id="customFile">
+      <input type="file" id="video-input" class="custom-file-input" multiple>
+      <span class="custom-file-control form-control-file"></span>
+    </label>
+    </p>
+
+    <p>
+    <button id="insert-video" type="button" class="btn btn-primary">Insert Video</button>
+    <div id='preview-videos' class="clearfix"></div>
+    </p>
+  </p>
+{% endblock content %}
+
+{% block template_script %}
+<script src="{% static 'rest_framework/js/coreapi-0.1.1.js' %}"></script>
+<script src="{% url 'api-docs:schema-js' %}"></script>
+<script src="{% static 'js/cast/create.js' %}"></script>
+{% endblock template_script %}

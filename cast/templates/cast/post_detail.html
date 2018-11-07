@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{% block content %}
+<a class="btn btn-secondary btn-lg" href="{% url "cast:post_list" slug=post.blog.slug %}" role="button">Back to Blog</a>
+{% if user.is_authenticated %}
+  <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_update" blog_slug=post.blog.slug slug=post.slug %}">Update Entry</a>
+{% endif %}
+<article>
+  <header>
+    <h1>{{ post.title }}</h1>
+    <a href="{% url "cast:post_detail" blog_slug=post.blog.slug slug=post.slug %}">
+        <time date-time="{{ post.visible_date|date:"c" }}">{{ post.visible_date|date}}</time>
+    </a>
+    <span class="author">{{ post.author.username | title}}</span>
+  </header>
+  <section>
+    {{ post.description|safe }}
+  </section>
+</article>
+{% endblock content %}
+
+{% block template_script %}
+<script src="{% static 'js/cast/gallery.js' %}"></script>
+{% endblock template_script %}
