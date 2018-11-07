@@ -14,5 +14,7 @@ pytest
 factory-boy
 pytest-django
 
+django-ckeditor
+
 coreapi
 djangorestframework
