@@ -6,7 +6,6 @@ codecov>=2.0.0
 
 
 # Additional test requirements go here
-django
 django-environ
 
 django-allauth
