@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{% block content %}
+{% for blog in blogs %}
+  <ul>
+      <li> <a href="{% url "cast:blog_detail" slug=blog.slug %}">{{ blog.title }}</a></li>
+  </ul>
+{% endfor %}
+{% endblock content %}

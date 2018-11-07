@@ -30,6 +30,9 @@ clean-pyc: ## remove Python file artifacts
 lint: ## check style with flake8
 	flake8 cast tests
 
+black: ## paint it black
+	black cast tests
+
 test: ## run tests quickly with the default Python
 	python runtests.py tests
 

@@ -1,2 +1,14 @@
+# Models
+django-model-utils
 
-# Additional requirements go here
+# Unicode slugification
+awesome-slugify
+
+# Images
+Pillow
+
+# wysiwig editor
+django-ckeditor
+
+# imagekit for resized images, thumbnails..
+django-imagekit

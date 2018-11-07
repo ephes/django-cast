@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load staticfiles %}
+
+{% block content %}
+
+{{ blog.pk }}
+{{ blog.title }}
+{% if user.is_authenticated %}
+<a href="{% url "cast:post-create" slug=blog.slug %}">Create Arcticle</a>
+{% endif %}
+
+<br>
+<a href="{% url "cast:post-list" slug=blog.slug %}">articles</a>
+{% endblock content %}
