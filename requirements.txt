@@ -12,3 +12,7 @@ django-ckeditor
 
 # imagekit for resized images, thumbnails..
 django-imagekit
+
+# docs
+Sphinx
+sphinx-rtd-theme
