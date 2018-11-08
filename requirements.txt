@@ -16,3 +16,6 @@ django-imagekit
 # docs
 Sphinx
 sphinx-rtd-theme
+
+# package upload
+twine

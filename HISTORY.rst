@@ -6,7 +6,7 @@ History
 ++++++++++++++++++
 
 * Added some requirements
-* formatting
+* Release Documentation
 
 0.1.1 (2018-11-07)
 ++++++++++++++++++
