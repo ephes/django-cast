@@ -1,0 +1,6 @@
+vim HISTORY.rst
+vim setup.cfg
+vim cast/__init__.py
+make release
+git tag -a 0.1.2 -m "version 0.1.2"
+git push --tags
