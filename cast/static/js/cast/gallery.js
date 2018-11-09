@@ -47,6 +47,6 @@ $(document).keydown(function (e) {
   }
 })
 
-$('.gallery-modal').click(function (e) {
+$('.cast-gallery-modal').click(function (e) {
   setModalImage($(e.target))
 })
