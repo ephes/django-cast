@@ -224,6 +224,83 @@ class Gallery(TimeStampedModel):
         return set([i.pk for i in self.images.all()])
 
 
+class Audio(TimeStampedModel):
+    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
+    duration = models.DurationField(null=True, blank=True)
+    title = models.CharField(max_length=255, null=True, blank=True)
+    subtitle = models.CharField(max_length=512, null=True, blank=True)
+    flac = models.FileField(upload_to="cast_audio/", null=True, blank=True)
+    mp3 = models.FileField(upload_to="cast_audio/", null=True, blank=True)
+    mp4 = models.FileField(upload_to="cast_audio/", null=True, blank=True)
+
+    audio_formats = {"flac", "mp3", "mp4"}
+    mime_lookup = {key: f"audio/{key}" for key in audio_formats}
+    title_lookup = {key: f"Audio {key.upper()}" for key in audio_formats}
+
+    @property
+    def uploaded_audio_files(self):
+        for name in self.audio_formats:
+            field = getattr(self, name)
+            if field.name is not None and len(field.name) > 0:
+                yield name, field
+
+    def get_all_paths(self):
+        paths = set()
+        for name, field in self.uploaded_audio_files:
+            paths.add(field.name)
+        return paths
+
+    def _get_audio_duration(self, audio_url):
+        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
+        result = subprocess.check_output(
+            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
+        )
+        lines = result.decode("utf8").split("\n")
+        duration = None
+        for line in lines:
+            if "Duration" in line:
+                duration = line.split(",")[0].split()[-1]
+                break
+        return duration
+
+    def create_duration(self):
+        for name, field in self.uploaded_audio_files:
+            audio_url = field.url
+            if not audio_url.startswith("http"):
+                audio_url = field.path
+            duration = self._get_audio_duration(audio_url)
+            if duration is not None:
+                self.duration = duration
+                break
+
+    @property
+    def audio(self):
+        items = []
+        for name, field in self.uploaded_audio_files:
+            items.append(
+                {
+                    "url": field.url,
+                    "mimeType": self.mime_lookup[name],
+                    "size": field.size,
+                    "title": self.title_lookup[name],
+                }
+            )
+        return items
+
+    @property
+    def podlove_url(self):
+        return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})
+
+    def save(self, *args, **kwargs):
+        generate_duration = kwargs.pop("duration", True)
+        result = super().save(*args, **kwargs)
+        if generate_duration and self.duration is None:
+            logger.info("save audio duration")
+            self.create_duration()
+            result = super().save(*args, **kwargs)
+        return result
+
+
 class File(TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     original = models.FileField(upload_to="cast_files/")
@@ -254,8 +331,14 @@ class Post(TimeStampedModel):
     images = models.ManyToManyField(Image)
     videos = models.ManyToManyField(Video)
     galleries = models.ManyToManyField(Gallery)
+    audios = models.ManyToManyField(Audio)
 
-    media_model_lookup = {"image": Image, "video": Video, "gallery": Gallery}
+    media_model_lookup = {
+        "image": Image,
+        "video": Video,
+        "gallery": Gallery,
+        "audio": Audio,
+    }
 
     objects = models.Manager()
     published = PublishedManager()
@@ -289,6 +372,7 @@ class Post(TimeStampedModel):
             "image": {i.pk: i for i in self.images.all()},
             "video": {v.pk: v for v in self.videos.all()},
             "gallery": {g.pk: g for g in self.galleries.all()},
+            "audio": {a.pk: a for a in self.audios.all()},
         }
 
     @property
@@ -302,7 +386,12 @@ class Post(TimeStampedModel):
 
     @property
     def media_attr_lookup(self):
-        return {"image": self.images, "video": self.videos, "gallery": self.galleries}
+        return {
+            "image": self.images,
+            "video": self.videos,
+            "gallery": self.galleries,
+            "audio": self.audios,
+        }
 
     def add_missing_media_objects(self):
         media_attr_lookup = self.media_attr_lookup

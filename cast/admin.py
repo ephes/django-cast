@@ -2,7 +2,7 @@ import logging
 
 from django.contrib import admin
 
-from .models import Blog, Post, File, Image, Video, Gallery
+from .models import Blog, Post, File, Image, Video, Gallery, Audio
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,20 @@ class ImageModelAdmin(AdminUserMixin, admin.ModelAdmin):
 admin.site.register(Image, ImageModelAdmin)
 
 
-class FileAdmin(AdminUserMixin, admin.ModelAdmin):
+class FileModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("original", "user")
     fields = ("user", "original")
 
 
-admin.site.register(File, FileAdmin)
+admin.site.register(File, FileModelAdmin)
+
+
+class AudioAdmin(AdminUserMixin, admin.ModelAdmin):
+    list_display = ("user", "title", "subtitle", "flac", "mp3", "mp4")
+    fields = ("user", "title", "subtitle", "flac", "mp3", "mp4")
+
+
+admin.site.register(Audio, AudioAdmin)
 
 
 class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):

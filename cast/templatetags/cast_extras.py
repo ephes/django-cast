@@ -30,6 +30,12 @@ def video(context, pk):
     return mark_safe(video_tag)
 
 
+@register.simple_tag(takes_context=True)
+def audio(context, pk):
+    audio_tag = f'<div id="audio_{pk}"></div>'
+    return mark_safe(audio_tag)
+
+
 # gallery tag
 
 

@@ -14,14 +14,20 @@ from rest_framework.decorators import api_view
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 
-from .serializers import ImageSerializer, VideoSerializer, GallerySerializer
+from .serializers import (
+    ImageSerializer,
+    VideoSerializer,
+    GallerySerializer,
+    AudioSerializer,
+    AudioPodloveSerializer,
+)
 
 from ..forms import ImageForm, VideoForm
 
 from ..viewmixins import AddRequestUserMixin
 from .viewmixins import FileUploadResponseMixin
 
-from ..models import Image, Video, Gallery
+from ..models import Image, Video, Gallery, Audio
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +42,7 @@ def api_root(request):
         ("images", request.build_absolute_uri(reverse("cast:api:image_list"))),
         ("galleries", request.build_absolute_uri(reverse("cast:api:gallery_list"))),
         ("videos", request.build_absolute_uri(reverse("cast:api:video_list"))),
+        ("audios", request.build_absolute_uri(reverse("cast:api:audio_list"))),
     )
     return Response(OrderedDict(root_api_urls))
 
@@ -94,6 +101,28 @@ class VideoDetailView(generics.RetrieveDestroyAPIView):
     queryset = Video.objects.all()
     serializer_class = VideoSerializer
     permission_classes = (IsAuthenticated,)
+
+
+class AudioListView(generics.ListCreateAPIView):
+    serializer_class = AudioSerializer
+    pagination_class = StandardResultsSetPagination
+    permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Audio.objects.all().filter(user=user)
+        return qs.order_by("-created")
+
+
+class AudioDetailView(generics.RetrieveDestroyAPIView):
+    queryset = Audio.objects.all()
+    serializer_class = AudioSerializer
+    permission_classes = (IsAuthenticated,)
+
+
+class AudioPodloveDetailView(generics.RetrieveAPIView):
+    queryset = Audio.objects.all()
+    serializer_class = AudioPodloveSerializer
 
 
 class GalleryListView(generics.ListCreateAPIView):
