@@ -57,3 +57,6 @@ CACHE
 cast_images
 cast_videos
 django_cast.egg-info
+
+# vim
+.*swp
