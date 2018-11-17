@@ -57,8 +57,10 @@
   </p>
 {% endblock content %}
 
-{% block template_script %}
+{% block javascript %}
+<!-- block.super will get the content of the block from the parent template -->
+{{ block.super }}
 <script src="{% static 'rest_framework/js/coreapi-0.1.1.js' %}"></script>
 <script src="{% url 'api-docs:schema-js' %}"></script>
 <script src="{% static 'js/cast/create.js' %}"></script>
-{% endblock template_script %}
+{% endblock javascript %}
