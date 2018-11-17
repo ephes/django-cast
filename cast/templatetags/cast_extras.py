@@ -21,7 +21,7 @@ def video(context, pk):
     if video.poster:
         poster_url = video.poster.url
     else:
-        poster_url = "/static/images/Video-icon.svg"
+        poster_url = "/static/img/cast/Video-icon.svg"
     video_tag = (
         '<video class="cast-video" preload="auto" controls poster="{poster}">'
         '  <source src="{src}" type="video/mp4">'

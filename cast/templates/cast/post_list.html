@@ -1,12 +1,17 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block css %}
+  {{ block.super }}
+  <link href="{% static 'css/cast.css' %}" rel="stylesheet">
+{% endblock css %}
+
 {% block content %}
   <h1 class="display-3">{{ blog.title }}</h1>
   <p class="lead">
     {{ blog.description }}
   </p>
-  <a href="{% url "cast:post_feed" slug=blog.slug %}"><img src='/static/images/Feed-icon.svg'></img></a>
+  <a href="{% url "cast:post_feed" slug=blog.slug %}"><img src="{% static 'img/cast/Feed-icon.svg' %}"></img></a>
   {% if user.is_authenticated %}
       <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
   {% endif %}

@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% load staticfiles %}
 
+{% block css %}
+  {{ block.super }}
+  <link href="{% static 'css/cast.css' %}" rel="stylesheet">
+{% endblock css %}
+
 {% block content %}
 <p><a class="btn btn-secondary btn-lg" href="{% url "cast:post_list" slug=blog_slug %}" role ="button">Back to Blog</a></p>
 {% if form.errors %}

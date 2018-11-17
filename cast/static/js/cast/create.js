@@ -85,7 +85,7 @@ function showExistingVideos (videos) {
     var video = videos[i]
     var videoThumbnail = video.poster_thumbnail
     if (!videoThumbnail) {
-      videoThumbnail = '/static/images/Video-icon.svg'
+      videoThumbnail = '/static/img/cast/Video-icon.svg'
     }
     // console.log('video thumbnail: ' + videoThumbnail)
     var videoEl = $('<img></img>')

@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% load staticfiles %}
 
+{% block css %}
+{{ block.super }}
+<link href="{% static 'css/cast.css' %}" rel="stylesheet">
+{% endblock css %}
+
 {% block content %}
 {% for blog in blogs %}
   <ul>
