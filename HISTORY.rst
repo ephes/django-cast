@@ -1,7 +1,13 @@
 .. :changelog:
 
 History
--------
+0.1.3 (2018-11-17)
+++++++++++++++++++
+
+* Fixed css/static icons
+* Merged pull request from SmartC2016 to fix javascript block issue
+* Added some documentation
+
 0.1.2 (2018-11-08)
 ++++++++++++++++++
 
