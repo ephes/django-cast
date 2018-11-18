@@ -25,7 +25,7 @@ Install Django Cast::
 
     pip install django-cast
 
-Add django-cast and some dependencies to your `INSTALLED_APPS`:
+Add django-cast and some dependencies to your ``INSTALLED_APPS``:
 
 .. code-block:: python
 
