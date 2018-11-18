@@ -1,6 +1,12 @@
 .. :changelog:
 
 History
+0.1.4 (2018-11-18)
+++++++++++++++++++
+
+* Include css via cast_base.html
+* audio fixes
+
 0.1.3 (2018-11-17)
 ++++++++++++++++++
 
