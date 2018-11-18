@@ -13,7 +13,7 @@ Django Cast
 
 Just another blogging / podcasting package
 
-Daocumentation
+Documentation
 -------------
 
 The full documentation is at https://django-cast.readthedocs.io.
@@ -40,26 +40,7 @@ Add django-cast and some dependencies to your `INSTALLED_APPS`:
         ...
     )
 
-Add Django Cast's URL patterns:
 
-.. code-block:: python
-
-    from django.urls import path
-
-    from rest_framework.documentation import include_docs_urls
-    from rest_framework.authtoken import views as authtokenviews
-
-
-    urlpatterns = [
-        ...
-        path('cast/', include('cast.urls', namespace='cast')),
-        path('api/api-token-auth/', authtokenviews.obtain_auth_token),
-        path('docs/', include_docs_urls(title='API service')),
-        ...
-    ]
-
-The api token auth urls and the docs urls are both necessary to provide api endpoints
-with the right namespace.
 
 Add required settings:
 
@@ -90,6 +71,28 @@ Add required settings:
 
    # django imagekit
    IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY='imagekit.cachefiles.strategies.Optimistic'
+
+Add Django Cast's URL patterns:
+
+.. code-block:: python
+
+    from django.urls import path
+
+    from rest_framework.documentation import include_docs_urls
+    from rest_framework.authtoken import views as authtokenviews
+
+
+    urlpatterns = [
+        ...
+        path('cast/', include('cast.urls', namespace='cast')),
+        path('api/api-token-auth/', authtokenviews.obtain_auth_token),
+        path('docs/', include_docs_urls(title='API service')),
+        path("ckeditor/", include('ckeditor_uploader.urls')),
+        ...
+    ]
+
+The api token auth urls and the docs urls are both necessary to provide api endpoints
+with the right namespace.
 
 Features
 --------
