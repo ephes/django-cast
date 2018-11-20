@@ -13,7 +13,7 @@ class TestPublished:
 
     def test_get_only_published_entries(self, client, unpublished_post):
         bp = unpublished_post
-        feed_url = reverse("cast:post_feed", kwargs={"slug": bp.blog.slug})
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": bp.blog.slug})
 
         r = client.get(feed_url)
         assert r.status_code == 200

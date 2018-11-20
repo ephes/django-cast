@@ -23,8 +23,10 @@
 {% block javascript %}
   {{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
-  <script src="https://cdn.podlove.org/web-player/embed.js"></script>
-  {% for pk, audio in post.media_lookup.audio.items %}
-    <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
-  {% endfor %}
+  {% if post.has_audio %}
+    <script src="https://cdn.podlove.org/web-player/embed.js"></script>
+    {% for pk, audio in post.media_lookup.audio.items %}
+      <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
+    {% endfor %}
+  {% endif %}
 {% endblock javascript %}

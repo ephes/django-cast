@@ -6,7 +6,7 @@
   <p class="lead">
     {{ blog.description }}
   </p>
-  <a href="{% url "cast:post_feed" slug=blog.slug %}"><img src="{% static 'img/cast/Feed-icon.svg' %}"></img></a>
+  <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}"><img src="{% static 'img/cast/Feed-icon.svg' %}"></img></a>
   {% if user.is_authenticated %}
       <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
   {% endif %}

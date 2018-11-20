@@ -2,7 +2,7 @@ import logging
 
 from django.contrib import admin
 
-from .models import Blog, Post, File, Image, Video, Gallery, Audio
+from .models import Blog, Post, File, Image, Video, Audio, Gallery, ItunesArtWork
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,14 @@ class ImageModelAdmin(AdminUserMixin, admin.ModelAdmin):
 admin.site.register(Image, ImageModelAdmin)
 
 
+class ItunesArtWorkModelAdmin(AdminUserMixin, admin.ModelAdmin):
+    list_display = ("pk", "original")
+    fields = ("original",)
+
+
+admin.site.register(ItunesArtWork, ItunesArtWorkModelAdmin)
+
+
 class FileModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("original", "user")
     fields = ("user", "original")
@@ -46,8 +54,8 @@ admin.site.register(File, FileModelAdmin)
 
 
 class AudioAdmin(AdminUserMixin, admin.ModelAdmin):
-    list_display = ("user", "title", "subtitle", "flac", "mp3", "mp4")
-    fields = ("user", "title", "subtitle", "flac", "mp3", "mp4")
+    list_display = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus")
+    fields = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus")
 
 
 admin.site.register(Audio, AudioAdmin)
