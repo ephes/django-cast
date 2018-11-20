@@ -40,12 +40,13 @@
 </nav>
 {% endblock content %}
 
-{% block template_script %}
-<script src="{% static 'js/cast/gallery.js' %}"></script>
-<script src="https://cdn.podlove.org/web-player/embed.js"></script>
-{% for post in posts %}
+{% block javascript %}
+  {{ block.super }}
+  <script src="{% static 'js/cast/gallery.js' %}"></script>
+  <script src="https://cdn.podlove.org/web-player/embed.js"></script>
+  {% for post in posts %}
     {% for pk, audio in post.media_lookup.audio.items %}
       <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
     {% endfor %}
-{% endfor %}
-{% endblock template_script %}
+  {% endfor %}
+{% endblock javascript %}
