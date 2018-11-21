@@ -64,7 +64,6 @@ class ITunesElements:
 
         self.add_artwork(blog, handler)
 
-        haqe("guid", str(blog.uuid), attrs={"isPermaLink": "false"})
         haqe("itunes:subtitle", self.feed["subtitle"])
         haqe("itunes:author", blog.user.get_full_name())
         handler.startElement("itunes:owner", {})
