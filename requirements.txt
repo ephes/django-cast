@@ -19,3 +19,6 @@ sphinx-rtd-theme
 
 # package upload
 twine
+
+# docs
+sphinx_rtd_theme

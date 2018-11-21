@@ -1,5 +1,7 @@
 import os
 import re
+import uuid
+import json
 import logging
 import tempfile
 import subprocess
@@ -13,6 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
+from django.utils.translation import ugettext_lazy as _
 
 from ckeditor_uploader.fields import RichTextUploadingField
 
@@ -26,18 +29,6 @@ from slugify import slugify
 
 
 logger = logging.getLogger(__name__)
-
-
-class Blog(TimeStampedModel):
-    user = models.ForeignKey(
-        get_user_model(), on_delete=models.CASCADE, related_name="cast_user"
-    )
-    title = models.CharField(max_length=255)
-    description = models.CharField(max_length=500)
-    slug = models.SlugField(max_length=50)
-
-    def __str__(self):
-        return self.title
 
 
 def image_spec_thumbnail(size):
@@ -115,6 +106,16 @@ class Image(TimeStampedModel):
     @property
     def full_src(self):
         return self.full.url
+
+
+class ItunesArtWork(TimeStampedModel):
+    original = models.ImageField(
+        upload_to="cast_images/itunes_artwork",
+        height_field="original_height",
+        width_field="original_width",
+    )
+    original_height = models.PositiveIntegerField(blank=True, null=True)
+    original_width = models.PositiveIntegerField(blank=True, null=True)
 
 
 class Video(TimeStampedModel):
@@ -229,12 +230,19 @@ class Audio(TimeStampedModel):
     duration = models.DurationField(null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)
     subtitle = models.CharField(max_length=512, null=True, blank=True)
-    flac = models.FileField(upload_to="cast_audio/", null=True, blank=True)
-    mp3 = models.FileField(upload_to="cast_audio/", null=True, blank=True)
-    mp4 = models.FileField(upload_to="cast_audio/", null=True, blank=True)
 
-    audio_formats = {"flac", "mp3", "mp4"}
-    mime_lookup = {key: f"audio/{key}" for key in audio_formats}
+    m4a = models.FileField(upload_to="cast_audio/", null=True, blank=True)
+    mp3 = models.FileField(upload_to="cast_audio/", null=True, blank=True)
+    oga = models.FileField(upload_to="cast_audio/", null=True, blank=True)
+    opus = models.FileField(upload_to="cast_audio/", null=True, blank=True)
+
+    mime_lookup = {
+        "mp3": "audio/mpeg",
+        "m4a": "audio/mp4",
+        "oga": "audio/ogg",
+        "opus": "audio/opus",
+    }
+    audio_formats = list(mime_lookup.keys())
     title_lookup = {key: f"Audio {key.upper()}" for key in audio_formats}
 
     @property
@@ -269,6 +277,9 @@ class Audio(TimeStampedModel):
             if not audio_url.startswith("http"):
                 audio_url = field.path
             duration = self._get_audio_duration(audio_url)
+            # skipt duration for small files (tests won't work otherwise :(..)
+            if not int(duration.split(":")[2].split(".")[0]) > 0:
+                duration = None
             if duration is not None:
                 self.duration = duration
                 break
@@ -291,6 +302,11 @@ class Audio(TimeStampedModel):
     def podlove_url(self):
         return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})
 
+    @property
+    def duration_str(self):
+        dur = str(self.duration)
+        return dur.split(".")[0]
+
     def save(self, *args, **kwargs):
         generate_duration = kwargs.pop("duration", True)
         result = super().save(*args, **kwargs)
@@ -311,27 +327,122 @@ class File(TimeStampedModel):
         return paths
 
 
-class PublishedManager(models.Manager):
+class Blog(TimeStampedModel):
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE, related_name="cast_user"
+    )
+    title = models.CharField(max_length=255)
+    description = models.CharField(max_length=500)
+    slug = models.SlugField(max_length=50)
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    email = models.EmailField(null=True, default=None, blank=True)
+
+    # podcast stuff
+
+    # atm it's only used for podcast image
+    itunes_artwork = models.ForeignKey(
+        ItunesArtWork, null=True, blank=True, on_delete=models.CASCADE
+    )
+    itunes_categories = models.CharField(
+        _("itunes_categories"),
+        max_length=512,
+        blank=True,
+        default="",
+        help_text=_(
+            "A json dict of itunes categories pointing to lists "
+            "of subcategories. Taken from this list "
+            "https://validator.w3.org/feed/docs/error/InvalidItunesCategory.html"
+        ),
+    )
+    EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
+    keywords = models.CharField(
+        _("keywords"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_(
+            """A comma-delimitedlist of up to 12 words for iTunes
+            searches. Perhaps include misspellings of the title."""
+        ),
+    )
+    explicit = models.PositiveSmallIntegerField(
+        _("explicit"),
+        default=1,
+        choices=EXPLICIT_CHOICES,
+        help_text=_("``Clean`` will put the clean iTunes graphic by it."),
+    )
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def last_build_date(self):
+        return (
+            Post.published.filter(blog=self).order_by("-visible_date")[1].visible_date
+        )
+
+    @property
+    def itunes_categories_parsed(self):
+        try:
+            return json.loads(self.itunes_categories)
+        except json.decoder.JSONDecodeError:
+            return {}
+
+
+class PostPublishedManager(models.Manager):
     use_for_related_fields = True
 
     def get_queryset(self):
         return super().get_queryset().filter(pub_date__lte=timezone.now())
 
+    @property
+    def podcast_episodes(self):
+        return self.get_queryset().filter(podcast_audio__isnull=False)
+
 
 class Post(TimeStampedModel):
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     author = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     pub_date = models.DateTimeField(null=True, blank=True)
     visible_date = models.DateTimeField(default=timezone.now, blank=True)
+    podcast_audio = models.ForeignKey(
+        Audio, null=True, blank=True, on_delete=models.CASCADE, related_name="posts"
+    )
+    keywords = models.CharField(
+        _("keywords"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_(
+            """A comma-demlimitedlist of up to 12 words for iTunes
+            searches. Perhaps include misspellings of the title."""
+        ),
+    )
+    explicit = models.PositiveSmallIntegerField(
+        _("explicit"),
+        choices=Blog.EXPLICIT_CHOICES,
+        help_text=_("``Clean`` will put the clean iTunes graphic by it."),
+        default=1,
+    )
+    block = models.BooleanField(
+        _("block"),
+        default=False,
+        help_text=_(
+            "Check to block this episode from iTunes because <br />its "
+            "content might cause the entire show to be <br />removed from iTunes."
+            ""
+        ),
+    )
 
     content = RichTextUploadingField()
     slug = models.SlugField(max_length=50)
 
-    images = models.ManyToManyField(Image)
-    videos = models.ManyToManyField(Video)
-    galleries = models.ManyToManyField(Gallery)
-    audios = models.ManyToManyField(Audio)
+    images = models.ManyToManyField(Image, blank=True)
+    videos = models.ManyToManyField(Video, blank=True)
+    galleries = models.ManyToManyField(Gallery, blank=True)
+    audios = models.ManyToManyField(Audio, blank=True)
 
     media_model_lookup = {
         "image": Image,
@@ -341,7 +452,7 @@ class Post(TimeStampedModel):
     }
 
     objects = models.Manager()
-    published = PublishedManager()
+    published = PostPublishedManager()
 
     @property
     def is_published(self):
@@ -353,6 +464,12 @@ class Post(TimeStampedModel):
     def get_absolute_url(self):
         params = {"slug": self.slug, "blog_slug": self.blog.slug}
         return reverse("cast:post_detail", kwargs=params)
+
+    def get_enclosure_url(self, audio_format):
+        return getattr(self.podcast_audio, audio_format).url
+
+    def get_enclosure_size(self, audio_format):
+        return getattr(self.podcast_audio, audio_format).size
 
     def get_slug(self):
         return slugify(self.title)
@@ -423,6 +540,10 @@ class Post(TimeStampedModel):
             for media_pk in media_pks:
                 if media_pk not in media_content_lookup.get(media_type, set()):
                     media_attr_lookup[media_type].remove(media_pk)
+
+    @property
+    def has_audio(self):
+        return self.audios.count() > 0 or self.podcast_audio is not None
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)

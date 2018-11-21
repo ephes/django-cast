@@ -1,18 +1,11 @@
 import logging
 
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 
-from django.contrib.syndication.views import Feed
-from django.contrib.auth.mixins import LoginRequiredMixin
-
-from django.urls import reverse
-from django.shortcuts import get_object_or_404
-
-
 from .forms import PostForm
-
 from .models import Blog, Post
-
 from .viewmixins import RenderPostMixin, AddRequestUserMixin, PostChangeMixin
 
 logger = logging.getLogger(__name__)
@@ -50,31 +43,6 @@ class PostsListView(RenderPostMixin, ListView):
         for post in context[self.context_object_name]:
             self.render_post(post)
         return context
-
-
-class LatestEntriesFeed(RenderPostMixin, Feed):
-    def get_object(self, request, *args, **kwargs):
-        self.object = get_object_or_404(Blog, slug=kwargs["slug"])
-
-    def title(self):
-        return self.object.title
-
-    def description(self):
-        return self.object.description
-
-    def link(self):
-        return reverse("cast:post_feed", kwargs={"slug": self.object.slug})
-
-    def items(self):
-        queryset = Post.published.filter(blog=self.object).order_by("-pub_date")
-        return queryset[:5]
-
-    def item_title(self, item):
-        return item.title
-
-    def item_description(self, item):
-        self.render_post(item, javascript=False)
-        return item.description
 
 
 class PostDetailView(RenderPostMixin, DetailView):

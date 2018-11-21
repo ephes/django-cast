@@ -26,3 +26,5 @@ django-imagekit
 
 coreapi
 djangorestframework
+
+feedparser
