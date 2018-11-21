@@ -105,8 +105,7 @@ class ITunesElements:
         haqe("itunes:author", post.author.get_full_name())
         haqe("itunes:subtitle", post.description)
         haqe("itunes:summary", post.description)
-        duration = str(post.podcast_audio.duration)
-        haqe("itunes:duration", duration)
+        haqe("itunes:duration", post.podcast_audio.duration_str)
         haqe("itunes:keywords", post.keywords)
         haqe("itunes:explicit", post.get_explicit_display())
         if post.block:

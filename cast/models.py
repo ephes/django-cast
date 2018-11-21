@@ -302,6 +302,11 @@ class Audio(TimeStampedModel):
     def podlove_url(self):
         return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})
 
+    @property
+    def duration_str(self):
+        dur = str(self.duration)
+        return dur.split(".")[0]
+
     def save(self, *args, **kwargs):
         generate_duration = kwargs.pop("duration", True)
         result = super().save(*args, **kwargs)
