@@ -160,13 +160,11 @@ def blog_with_artwork(user, itunes_artwork):
 
 @pytest.fixture()
 def blog_with_itunes_categories(user):
-    categories = {
-        "foo": [
-            "baz",
-        ]
-    }
+    categories = {"foo": ["baz"]}
     return Blog.objects.create(
-        user=user, title="testblog", slug="testblog",
+        user=user,
+        title="testblog",
+        slug="testblog",
         itunes_categories=json.dumps(categories),
     )
 

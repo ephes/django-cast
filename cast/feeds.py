@@ -58,7 +58,7 @@ class ITunesElements:
     def add_itunes_categories(self, blog, handler):
         itunes_categories = blog.itunes_categories_parsed
         if len(itunes_categories) == 0:
-            return 
+            return
         for category, subcategories in itunes_categories.items():
             handler.startElement("itunes:category", {"text": category})
             for subcategory in subcategories:

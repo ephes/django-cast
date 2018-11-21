@@ -352,7 +352,7 @@ class Blog(TimeStampedModel):
             "A json dict of itunes categories pointing to lists "
             "of subcategories. Taken from this list "
             "https://validator.w3.org/feed/docs/error/InvalidItunesCategory.html"
-        )
+        ),
     )
     EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
     keywords = models.CharField(
