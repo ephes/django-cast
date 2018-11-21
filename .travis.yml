@@ -11,6 +11,10 @@ env:
 matrix:
   fast_finish: true
 
+before_install:
+    - sudo apt-get update
+    - sudo apt-get install ffmpeg
+
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install: pip install -r requirements_test.txt
 
