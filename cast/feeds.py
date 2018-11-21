@@ -1,6 +1,5 @@
 import logging
 
-from django.utils import timezone
 from django.contrib.syndication.views import Feed
 
 from django.utils.feedgenerator import Atom1Feed, rfc2822_date, Rss201rev2Feed
@@ -85,14 +84,12 @@ class ITunesElements:
 
         haqe("itunes:summary", blog.description)
         haqe("itunes:explicit", blog.get_explicit_display())
-        haqe("keywords", blog.keywords)
         try:
             haqe("lastBuildDate", rfc2822_date(blog.last_build_date))
         except IndexError:
             pass
         generator = "Django Web Framework / django-cast"
         haqe("generator", generator)
-        haqe("generator-detail", generator)
         haqe("docs", "http://blogs.law.harvard.edu/tech/rss")
 
     def add_item_elements(self, handler, item):
@@ -102,8 +99,9 @@ class ITunesElements:
 
         post = item["post"]
         haqe("guid", str(post.uuid), attrs={"isPermaLink": "false"})
-        year = timezone.now().year
-        haqe("copyright", "{0} {1}".format("insert license", year))
+        # Maybe add license later
+        # year = timezone.now().year
+        # haqe("copyright", "{0} {1}".format("insert license", year))
         haqe("itunes:author", post.author.get_full_name())
         haqe("itunes:subtitle", post.description)
         haqe("itunes:summary", post.description)
