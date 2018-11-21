@@ -56,6 +56,16 @@ class ITunesElements:
         haqe("link", self.feed["link"])
         handler.endElement("image")
 
+    def add_itunes_categories(self, blog, handler):
+        itunes_categories = blog.itunes_categories_parsed
+        if len(itunes_categories) == 0:
+            return 
+        for category, subcategories in itunes_categories.items():
+            handler.startElement("itunes:category", {"text": category})
+            for subcategory in subcategories:
+                handler.addQuickElement("itunes:category", attrs={"text": subcategory})
+            handler.endElement("itunes:category")
+
     def add_root_elements(self, handler):
         """ Add additional elements to the blog object"""
         super(ITunesElements, self).add_root_elements(handler)
@@ -70,7 +80,9 @@ class ITunesElements:
         haqe("itunes:name", blog.user.get_full_name())
         haqe("itunes:email", blog.user.email)
         handler.endElement("itunes:owner")
-        haqe("itunes:category", attrs={"text": self.feed["categories"][0]})
+
+        self.add_itunes_categories(blog, handler)
+
         haqe("itunes:summary", blog.description)
         haqe("itunes:explicit", blog.get_explicit_display())
         haqe("keywords", blog.keywords)
@@ -147,7 +159,10 @@ class PodcastFeed(RenderPostMixin, Feed):
         return self.object.title
 
     def categories(self, blog):
-        return ("Python",)
+        return (blog.keywords.split(",")[0],)
+
+    def itunes_categories(self, blog):
+        return blog.itunes_categories.split(",")
 
     def items(self, blog):
         queryset = Post.published.podcast_episodes.filter(blog=self.object).order_by(
@@ -220,6 +235,7 @@ class RssPodcastFeed(PodcastFeed):
         return None
 
     def description(self, blog):
+        print("get description..")
         return blog.description
 
     def link(self):

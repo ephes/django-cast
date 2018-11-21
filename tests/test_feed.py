@@ -32,6 +32,15 @@ class TestFeedCreation:
         with pytest.raises(Http404):
             pf.set_audio_format("foobar")
 
+    @pytest.mark.django_db
+    def test_itunes_categories(self, dummy_handler, blog_with_itunes_categories):
+        blog = blog_with_itunes_categories
+        ie = ITunesElements()
+        ie.add_itunes_categories(blog, dummy_handler)
+        assert dummy_handler.se["itunes:category"]["text"] == "foo"
+        assert dummy_handler.aqe["itunes:category"][-1]["text"] == "baz"
+        assert "itunes:category" in dummy_handler.ee
+
 
 class TestGeneratedFeeds:
     @pytest.mark.django_db

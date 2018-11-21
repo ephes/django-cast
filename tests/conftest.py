@@ -1,5 +1,6 @@
 import io
 import os
+import json
 import pytest
 
 from django.utils import timezone
@@ -154,6 +155,19 @@ def blog(user):
 def blog_with_artwork(user, itunes_artwork):
     return Blog.objects.create(
         user=user, title="testblog", slug="testblog", itunes_artwork=itunes_artwork
+    )
+
+
+@pytest.fixture()
+def blog_with_itunes_categories(user):
+    categories = {
+        "foo": [
+            "baz",
+        ]
+    }
+    return Blog.objects.create(
+        user=user, title="testblog", slug="testblog",
+        itunes_categories=json.dumps(categories),
     )
 
 

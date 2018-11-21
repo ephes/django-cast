@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+import json
 import logging
 import tempfile
 import subprocess
@@ -337,6 +338,17 @@ class Blog(TimeStampedModel):
     itunes_artwork = models.ForeignKey(
         ItunesArtWork, null=True, blank=True, on_delete=models.CASCADE
     )
+    itunes_categories = models.CharField(
+        _("itunes_categories"),
+        max_length=512,
+        blank=True,
+        default="",
+        help_text=_(
+            "A json dict of itunes categories pointing to lists "
+            "of subcategories. Taken from this list "
+            "https://validator.w3.org/feed/docs/error/InvalidItunesCategory.html"
+        )
+    )
     EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
     keywords = models.CharField(
         _("keywords"),
@@ -344,7 +356,7 @@ class Blog(TimeStampedModel):
         blank=True,
         default="",
         help_text=_(
-            """A comma-demlimitedlist of up to 12 words for iTunes
+            """A comma-delimitedlist of up to 12 words for iTunes
             searches. Perhaps include misspellings of the title."""
         ),
     )
@@ -363,6 +375,13 @@ class Blog(TimeStampedModel):
         return (
             Post.published.filter(blog=self).order_by("-visible_date")[1].visible_date
         )
+
+    @property
+    def itunes_categories_parsed(self):
+        try:
+            return json.loads(self.itunes_categories)
+        except json.decoder.JSONDecodeError:
+            return {}
 
 
 class PostPublishedManager(models.Manager):
