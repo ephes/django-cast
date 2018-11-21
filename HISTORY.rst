@@ -1,6 +1,13 @@
 .. :changelog:
 
 History
+0.1.5 (2018-11-21)
+++++++++++++++++++
+
+* basic feed support (rss/atom) for podcasts
+* travis now runs tests with ffprobe, too
+* documentation fixes from @SmartC2016 and @oryon-dominik
+
 0.1.4 (2018-11-18)
 ++++++++++++++++++
 
