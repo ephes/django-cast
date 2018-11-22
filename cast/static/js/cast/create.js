@@ -14,6 +14,19 @@ let auth = new coreapi.auth.SessionAuthentication({
 let client = new coreapi.Client({auth: auth})
 console.log(client)
 
+const cast_prefix = false;
+let imagesAction = ['cast', 'api', 'images', 'list'];
+try {
+  client.action(schema, imagesAction).then(function (result) {
+    console.log(result)
+    cast_prefix = true;
+  })
+}
+catch(err) {
+  console.log("catched error: ", err);
+}
+
+
 // get/show existing images/galleries
 
 function markableImageHandler () {
@@ -44,14 +57,20 @@ function showExistingImages (images) {
   $('.gallery-image-markable').click(markableImageHandler)
 }
 
-let imagesAction = ['cast', 'api', 'images', 'list']
+imagesAction = ['api', 'images', 'list']
+if (cast_prefix) {
+  imagesAction.unshift('cast');
+}
 client.action(schema, imagesAction).then(function (result) {
   console.log(result)
   showExistingImages(result.results)
 })
 
 var galleries = {}
-let galleriesAction = ['cast', 'api', 'gallery', 'list']
+let galleriesAction = ['api', 'gallery', 'list']
+if (cast_prefix) {
+  galleriesAction.unshift('cast');
+}
 client.action(schema, galleriesAction).then(function (result) {
   var results = result.results
   console.log('galleries', result)
@@ -102,14 +121,20 @@ function showExistingVideos (videos) {
   $('.gallery-video-markable').click(markableVideoHandler)
 }
 
-let videosAction = ['cast', 'api', 'videos', 'list']
+let videosAction = ['api', 'videos', 'list']
+if (cast_prefix) {
+  videosAction.unshift('cast');
+}
 client.action(schema, videosAction).then(function (result) {
   console.log(result)
   showExistingVideos(result.results)
 })
 
 function replaceWithUploadedImage (imagePk, img) {
-  let action = ['cast', 'api', 'images', 'read']
+  let action = ['api', 'images', 'read']
+  if (cast_prefix) {
+    action.unshift('cast');
+  }
   let params = {id: imagePk}
   console.log('params', params)
   client.action(schema, action, params).then(function (result) {
@@ -122,7 +147,10 @@ function replaceWithUploadedImage (imagePk, img) {
 }
 
 function replaceWithUploadedVideo (videoPk, video) {
-  let action = ['cast', 'api', 'videos', 'read']
+  let action = ['api', 'videos', 'read']
+  if (cast_prefix) {
+    action.unshift('cast');
+  }
   let params = {id: videoPk}
   console.log('params', params)
   client.action(schema, action, params).then(function (result) {
@@ -316,7 +344,10 @@ function addGallery (imagePks, ckForm) {
     var templateTag = '{' + '% ' + 'gallery ' + galleries[images] + ' %' + '}'
     ckForm.insertHtml(templateTag)
   } else {
-    let action = ['cast', 'api', 'gallery', 'create']
+    let action = ['api', 'gallery', 'create']
+    if (cast_prefix) {
+      action.unshift('cast');
+    }
     let params = {'images': imagePks}
     console.log('params', params)
     client.action(schema, action, params).then(function (result) {
