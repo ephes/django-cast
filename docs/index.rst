@@ -14,6 +14,7 @@ Contents:
    readme
    installation
    usage
+   cdn
    contributing
    authors
    history
