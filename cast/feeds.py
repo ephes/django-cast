@@ -53,7 +53,6 @@ class ITunesElements:
         haqe("url", itunes_artwork_url)
         haqe("title", self.feed["title"])
         haqe("link", self.feed["link"])
-        haqe("language", "de-de")
         handler.endElement("image")
 
     def add_itunes_categories(self, blog, handler):
@@ -155,6 +154,9 @@ class PodcastFeed(RenderPostMixin, Feed):
 
     def title(self, blog):
         return self.object.title
+
+    def language(self, blog):
+        return "de-de"
 
     def categories(self, blog):
         return (blog.keywords.split(",")[0],)
