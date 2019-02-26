@@ -375,6 +375,9 @@ class Blog(TimeStampedModel):
     def __str__(self):
         return self.title
 
+    def get_absolute_url(self):
+        return reverse("cast:post_list", kwargs={"slug": self.slug})
+
     @property
     def last_build_date(self):
         return (
@@ -406,7 +409,7 @@ class Post(TimeStampedModel):
     blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     pub_date = models.DateTimeField(null=True, blank=True)
-    visible_date = models.DateTimeField(default=timezone.now, blank=True)
+    visible_date = models.DateTimeField(default=timezone.now)
     podcast_audio = models.ForeignKey(
         Audio, null=True, blank=True, on_delete=models.CASCADE, related_name="posts"
     )

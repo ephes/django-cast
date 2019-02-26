@@ -7,9 +7,20 @@ from django.utils.translation import ugettext_lazy as _
 from .models import Post, Image, Video
 
 
+class MyDateTimeInput(forms.DateTimeInput):
+    def render(self, *args, **kwargs):
+        value = kwargs.get("value")
+        if value is not None:
+            kwargs["value"] = str(value.date())
+        print("date time input render: ", kwargs["value"])
+        return super().render(*args, **kwargs)
+
+
 class PostForm(forms.ModelForm):
     is_published = forms.BooleanField(required=False)
     pub_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
+#    visible_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
+#    visible_date = forms.DateField()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,8 +34,9 @@ class PostForm(forms.ModelForm):
         self.fields["pub_date"].help_text = _(
             "Article will be published after this date/time."
         )
+
         self.fields["visible_date"].required = False
-        self.fields["visible_date"].widget = forms.DateInput(attrs={"type": "date"})
+        self.fields["visible_date"].widget = MyDateTimeInput(attrs={"type": "date"})
         self.fields["visible_date"].label = _("Visible date")
         self.fields["visible_date"].help_text = _("Date to be shown above article.")
 
