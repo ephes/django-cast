@@ -35,9 +35,19 @@ class PostForm(forms.ModelForm):
             cleaned_data["pub_date"] = timezone.now()
         return cleaned_data
 
+    def _set_visible_date(self, cleaned_data):
+        # dunno why this is necessary. 2019-02-26 jochen
+        # visible_date is neither None in tests nor in notebook, but using
+        # browser it raises null constraint error :/ wtf?
+        visible_date = cleaned_data.get("visible_date")
+        if visible_date is None:
+            cleaned_data["visible_date"] = timezone.now()
+        return cleaned_data
+
     def clean(self):
         cleaned_data = super().clean()
         cleaned_data = self._set_pub_date(cleaned_data)
+        cleaned_data = self._set_visible_date(cleaned_data)
         return cleaned_data
 
     class Meta:
