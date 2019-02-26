@@ -391,6 +391,10 @@ class Blog(TimeStampedModel):
         except json.decoder.JSONDecodeError:
             return {}
 
+    @property
+    def is_podcast(self):
+        return self.post_set.exclude(podcast_audio__isnull=True).count() > 0
+
 
 class PostPublishedManager(models.Manager):
     use_for_related_fields = True
