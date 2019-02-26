@@ -14,16 +14,17 @@ let auth = new coreapi.auth.SessionAuthentication({
 let client = new coreapi.Client({auth: auth})
 console.log(client)
 
-const cast_prefix = false;
-let imagesAction = ['cast', 'api', 'images', 'list'];
+let cast_prefix = false;
+let imagesAction = ['api', 'images', 'list'];
 try {
   client.action(schema, imagesAction).then(function (result) {
     console.log(result)
-    cast_prefix = true;
   })
 }
 catch(err) {
   console.log("catched error: ", err);
+  console.log("schema: ", schema);
+  cast_prefix = 'blogs';
 }
 
 
@@ -58,8 +59,9 @@ function showExistingImages (images) {
 }
 
 imagesAction = ['api', 'images', 'list']
+console.log('cast prefix: ', cast_prefix);
 if (cast_prefix) {
-  imagesAction.unshift('cast');
+  imagesAction.unshift(cast_prefix);
 }
 client.action(schema, imagesAction).then(function (result) {
   console.log(result)
@@ -69,7 +71,7 @@ client.action(schema, imagesAction).then(function (result) {
 var galleries = {}
 let galleriesAction = ['api', 'gallery', 'list']
 if (cast_prefix) {
-  galleriesAction.unshift('cast');
+  galleriesAction.unshift(cast_prefix);
 }
 client.action(schema, galleriesAction).then(function (result) {
   var results = result.results
@@ -123,7 +125,7 @@ function showExistingVideos (videos) {
 
 let videosAction = ['api', 'videos', 'list']
 if (cast_prefix) {
-  videosAction.unshift('cast');
+  videosAction.unshift(cast_prefix);
 }
 client.action(schema, videosAction).then(function (result) {
   console.log(result)
@@ -133,7 +135,7 @@ client.action(schema, videosAction).then(function (result) {
 function replaceWithUploadedImage (imagePk, img) {
   let action = ['api', 'images', 'read']
   if (cast_prefix) {
-    action.unshift('cast');
+    action.unshift(cast_prefix);
   }
   let params = {id: imagePk}
   console.log('params', params)
@@ -149,7 +151,7 @@ function replaceWithUploadedImage (imagePk, img) {
 function replaceWithUploadedVideo (videoPk, video) {
   let action = ['api', 'videos', 'read']
   if (cast_prefix) {
-    action.unshift('cast');
+    action.unshift(cast_prefix);
   }
   let params = {id: videoPk}
   console.log('params', params)
@@ -346,7 +348,7 @@ function addGallery (imagePks, ckForm) {
   } else {
     let action = ['api', 'gallery', 'create']
     if (cast_prefix) {
-      action.unshift('cast');
+      action.unshift(cast_prefix);
     }
     let params = {'images': imagePks}
     console.log('params', params)
