@@ -14,19 +14,11 @@ let auth = new coreapi.auth.SessionAuthentication({
 let client = new coreapi.Client({auth: auth})
 console.log(client)
 
-let cast_prefix = false;
-let imagesAction = ['api', 'images', 'list'];
-try {
-  client.action(schema, imagesAction).then(function (result) {
-    console.log(result)
-  })
+// get cast prefix from schema
+let cast_prefix = Object.keys(schema.content).slice(-1)[0];
+if (cast_prefix === 'api') {
+  cast_prefix = false;
 }
-catch(err) {
-  console.log("catched error: ", err);
-  console.log("schema: ", schema);
-  cast_prefix = 'blogs';
-}
-
 
 // get/show existing images/galleries
 
@@ -180,11 +172,11 @@ function fileUpload (thumb, file, progressBar) {
     }
   }, false)
 
-  var uploadUrl = '/cast/api/upload_image/'
+  var uploadUrl = '/blogs/api/upload_image/'
   let tagName = $(thumb).prop('tagName')
   console.log('tagname: ', tagName)
   if (tagName === 'VIDEO') {
-    uploadUrl = '/cast/api/upload_video/'
+    uploadUrl = '/blogs/api/upload_video/'
   }
 
   xhr.open('POST', uploadUrl)
