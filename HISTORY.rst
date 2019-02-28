@@ -2,6 +2,12 @@
 
 History
 
+0.1.8 (2018-02-28)
+++++++++++++++++++
+
+* Added support for m4v and improved dimension detection for iOS videos
+* Added some tests for different video sources
+
 0.1.7 (2018-02-28)
 ++++++++++++++++++
 

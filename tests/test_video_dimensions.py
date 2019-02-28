@@ -1,4 +1,4 @@
-import pytest
+# flake8: noqa:E501
 
 from cast.models import get_video_dimensions
 
@@ -8,7 +8,6 @@ class TestVideoDimensions:
         ffmpeg_output = """
 ffmpeg version 4.1.1 Copyright (c) 2000-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)
-  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
   libavutil      56. 22.100 / 56. 22.100
   libavcodec     58. 35.100 / 58. 35.100
   libavformat    58. 20.100 / 58. 20.100
@@ -59,7 +58,6 @@ Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/Users/jochen/projects/homepage/homepag
         ffmpeg_output = """
 ffmpeg version 4.1.1 Copyright (c) 2000-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)
-  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
   libavutil      56. 22.100 / 56. 22.100
   libavcodec     58. 35.100 / 58. 35.100
   libavformat    58. 20.100 / 58. 20.100
@@ -126,11 +124,10 @@ video:22kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing ov
         assert width == 480
         assert height == 360
 
-    def test_video_from_ios_device_portrait(self):
+    def test_video_from_ios_portrait(self):
         ffmpeg_output = """
 ffmpeg version 4.1.1 Copyright (c) 2000-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)
-  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
   libavutil      56. 22.100 / 56. 22.100
   libavcodec     58. 35.100 / 58. 35.100
   libavformat    58. 20.100 / 58. 20.100
@@ -207,7 +204,6 @@ video:211kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing o
         ffmpeg_output = """
 ffmpeg version 4.1.1 Copyright (c) 2000-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)
-  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
   libavutil      56. 22.100 / 56. 22.100
   libavcodec     58. 35.100 / 58. 35.100
   libavformat    58. 20.100 / 58. 20.100
@@ -269,7 +265,6 @@ video:97kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing ov
         ffmpeg_output = """
 ffmpeg version 4.1.1 Copyright (c) 2000-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)
-  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
   libavutil      56. 22.100 / 56. 22.100
   libavcodec     58. 35.100 / 58. 35.100
   libavformat    58. 20.100 / 58. 20.100
@@ -327,7 +322,6 @@ video:75kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing ov
         ffmpeg_output = """
 ffmpeg version 4.1.1 Copyright (c) 2000-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)
-  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
   libavutil      56. 22.100 / 56. 22.100
   libavcodec     58. 35.100 / 58. 35.100
   libavformat    58. 20.100 / 58. 20.100
@@ -385,7 +379,6 @@ video:84kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing ov
         ffmpeg_output = """
 ffmpeg version 4.1.1 Copyright (c) 2000-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.0 (clang-1000.11.45.5)
-  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/openjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
   libavutil      56. 22.100 / 56. 22.100
   libavcodec     58. 35.100 / 58. 35.100
   libavformat    58. 20.100 / 58. 20.100
