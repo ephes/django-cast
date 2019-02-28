@@ -19,8 +19,8 @@ class MyDateTimeInput(forms.DateTimeInput):
 class PostForm(forms.ModelForm):
     is_published = forms.BooleanField(required=False)
     pub_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
-#    visible_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
-#    visible_date = forms.DateField()
+    #    visible_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
+    #    visible_date = forms.DateField()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

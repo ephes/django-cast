@@ -220,6 +220,7 @@ class AtomPodcastFeed(PodcastFeed):
     # def author_link(self, blog):
     #     return blog.link
 
+
 #    def link(self):
 #        return reverse(
 #            "cast:podcast_feed_atom",
