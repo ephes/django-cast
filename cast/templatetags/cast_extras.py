@@ -25,6 +25,7 @@ def video(context, pk):
     video_tag = (
         '<video class="cast-video" preload="auto" controls poster="{poster}">'
         '  <source src="{src}" type="video/mp4">'
+        '  your browser does not support the video tag'
         "</video>"
     ).format(src=video.original.url, poster=poster_url)
     return mark_safe(video_tag)

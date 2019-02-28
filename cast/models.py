@@ -132,6 +132,10 @@ def get_video_dimensions(lines):
             if video_type in line:
                 width, height = get_width_height(video_type, line)
                 break
+        else:
+            # necessary to break out of nested loop
+            continue
+        break
     portrait = False
     for line in lines:
         if "rotation of" in line:

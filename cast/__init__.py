@@ -12,13 +12,11 @@ def upload_handler(request):
     for ending in ("wav", "webm", "ogg", "mp3", "m4a"):
         lookup[ending] = (models.Audio, ending, "user")
 
-    for ending in ("mp4", "mov"):
+    for ending in ("mp4", "mov", "m4v"):
         lookup[ending] = (models.Video, "original", "user")
 
     file_name = str(request.FILES["original"])
     ending = file_name.lower().split(".")[-1]
-    print("request filename: ", file_name, ending)
-    print("request user: ", request.user)
     local_model, upload_field_name, user_field = lookup[ending]
     return get_model_form(
         local_model, upload_field_name=upload_field_name, user_field=user_field
