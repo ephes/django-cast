@@ -11,6 +11,11 @@ env:
 matrix:
   fast_finish: true
 
+before_install:
+    - sudo add-apt-repository -y ppa:mc3man/trusty-media
+    - sudo apt-get -qq update
+    - sudo apt-get install -y ffmpeg
+
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
 install: pip install -r requirements_test.txt
 

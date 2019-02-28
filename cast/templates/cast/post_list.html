@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "cast/cast_base.html" %}
 {% load static %}
 
 {% block content %}
@@ -6,7 +6,46 @@
   <p class="lead">
     {{ blog.description }}
   </p>
-  <a href="{% url "cast:post_feed" slug=blog.slug %}"><img src='/static/images/Feed-icon.svg'></img></a>
+  <!--
+  <div class="cast-feeds-container">
+    <div class="cast-feed-item">
+      <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
+      <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
+        Plain RSS
+      </a>
+    </div>
+    <div class="cast-feed-item">
+      <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
+      <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">Podcast RSS MP4 <img src="{% static 'img/cast/Feed-icon.svg' %}" alt="Podcast RSS-Feed m4a"></img></a>
+    </div>
+    <div class="cast-feed-item">
+      <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
+      <a href="{% url "cast:podcast_feed_atom" slug=blog.slug audio_format='m4a' %}">
+        Podcast Atom MP4
+      </a>
+    </div>
+  </div>
+  -->
+  <h4>Feeds:</h4>
+  <ul>
+    <li>
+      <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
+        Plain RSS latest entries feed
+      </a>
+    </li>
+    {% if blog.is_podcast %}
+      <li>
+        <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">
+          Podcast RSS MP4
+        </a>
+      </li>
+      <li>
+        <a href="{% url "cast:podcast_feed_atom" slug=blog.slug audio_format='m4a' %}">
+          Podcast Atom MP4
+        </a>
+      </li>
+    {% endif %}
+  </ul>
   {% if user.is_authenticated %}
       <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
   {% endif %}
@@ -40,6 +79,13 @@
 </nav>
 {% endblock content %}
 
-{% block template_script %}
-<script src="{% static 'js/cast/gallery.js' %}"></script>
-{% endblock template_script %}
+{% block javascript %}
+  {{ block.super }}
+  <script src="{% static 'js/cast/gallery.js' %}"></script>
+  <script src="https://cdn.podlove.org/web-player/embed.js"></script>
+  {% for post in posts %}
+    {% for pk, audio in post.media_lookup.audio.items %}
+      <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
+    {% endfor %}
+  {% endfor %}
+{% endblock javascript %}

@@ -7,6 +7,9 @@ awesome-slugify
 # Images
 Pillow
 
+# File upload
+django-filepond
+
 # wysiwig editor
 django-ckeditor
 
@@ -19,3 +22,6 @@ sphinx-rtd-theme
 
 # package upload
 twine
+
+# docs
+sphinx_rtd_theme

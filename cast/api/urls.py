@@ -37,4 +37,14 @@ urlpatterns = [
         view=views.VideoCreateView.as_view(),
         name="upload_video",
     ),
+    # audio
+    url(r"^audio/?$", views.AudioListView.as_view(), name="audio_list"),
+    url(
+        r"^audios/(?P<pk>\d+)/?$", views.AudioDetailView.as_view(), name="audio_detail"
+    ),
+    url(
+        r"^audios/podlove/(?P<pk>\d+)/?$",
+        views.AudioPodloveDetailView.as_view(),
+        name="audio_podlove_detail",
+    ),
 ]

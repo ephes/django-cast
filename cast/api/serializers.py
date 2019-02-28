@@ -2,7 +2,7 @@ import logging
 
 from rest_framework import serializers
 
-from ..models import Image, Video, Gallery
+from ..models import Image, Video, Gallery, Audio
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,25 @@ class VideoSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Video
         fields = ("id", "url", "original", "poster", "poster_thumbnail")
+
+
+class AudioSerializer(serializers.HyperlinkedModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="cast:api:audio_detail")
+    podlove = serializers.HyperlinkedIdentityField(
+        view_name="cast:api:audio_podlove_detail"
+    )
+
+    class Meta:
+        model = Audio
+        fields = ("id", "url", "podlove", "mp3")
+
+
+class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
+    audio = serializers.ListField()
+
+    class Meta:
+        model = Audio
+        fields = ("title", "subtitle", "audio", "duration")
 
 
 class GallerySerializer(serializers.HyperlinkedModelSerializer):
