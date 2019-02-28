@@ -142,13 +142,17 @@ class Video(TimeStampedModel):
         lines = result.decode("utf8").split("\n")
         width, height = None, None
         for line in lines:
-            if "SAR" in line:
+            if "SAR" in line or "hevc" in line:
                 data = line.split(", ")[3]
                 r1, r2 = map(int, data.split(" ")[0].split("x"))
-                o1, o2 = map(int, data.rstrip("]").split(" ")[-1].split(":"))
-                portrait = o1 < o2
-                width, height = (r2, r1) if portrait else (r1, r2)
+                width, height = r1, r2
                 break
+        portrait = False
+        for line in lines:
+            if "rotation of" in line:
+                portrait = True
+        if portrait:
+            width, height = height, width
         return width, height
 
     def _create_poster(self):
