@@ -20,6 +20,66 @@ if (cast_prefix === 'api') {
   cast_prefix = false;
 }
 
+function onFilepondUploadError(response) {
+  console.log("on upload error: ", response);
+}
+
+function onFilepondUploadSuccess(response) {
+  console.log("on upload success: ", response);
+  refreshMedia();
+  return response;
+}
+
+function onFilepondRevertSuccess(response) {
+  console.log("on revert success: ", response);
+  refreshMedia();
+  return response;
+}
+
+// Filepond
+$(function(){
+  // First register any plugins
+  $.fn.filepond.registerPlugin(FilePondPluginImagePreview);
+  /*
+  $.fn.filepond.registerPlugin(FilePondPluginFileValidateType);
+  $.fn.filepond.registerPlugin(FilePondPluginImageExifOrientation);
+  $.fn.filepond.registerPlugin(FilePondPluginImageCrop);
+  $.fn.filepond.registerPlugin(FilePondPluginImageResize);
+  $.fn.filepond.registerPlugin(FilePondPluginImageTransform);
+  $.fn.filepond.registerPlugin(FilePondPluginImageEdit);
+  */
+
+  // Turn input element into a pond
+  $('.my-pond').filepond();
+
+  // Settings
+  $('.my-pond').filepond('allowMultiple', true);
+  $('.my-pond').filepond('instantUpload', true);
+  $('.my-pond').filepond('acceptedFileTypes', 'image/jpeg, image/png, audio/*, video/*');
+
+  const serverConfig = {
+    process: {
+      url: '/uploads/process/cast',
+      onerror: onFilepondUploadError,
+      onload: onFilepondUploadSuccess,
+    },
+    fetch: null,
+    revert: {
+      url: '/uploads/revert/',
+      method: 'POST',
+      onload: onFilepondRevertSuccess,
+    },
+  }
+
+  $('.my-pond').filepond('server', serverConfig);
+
+  // Listen for addfile event
+  $('.my-pond').on('FilePond:addfile', function(e) {
+      console.log('file added event', e);
+  });
+
+});
+
 // get/show existing images/galleries
 
 function markableImageHandler () {
@@ -50,15 +110,19 @@ function showExistingImages (images) {
   $('.gallery-image-markable').click(markableImageHandler)
 }
 
-imagesAction = ['api', 'images', 'list']
-console.log('cast prefix: ', cast_prefix);
-if (cast_prefix) {
-  imagesAction.unshift(cast_prefix);
+function refreshImages() {
+  imagesAction = ['api', 'images', 'list']
+  console.log('cast prefix: ', cast_prefix);
+  if (cast_prefix) {
+    imagesAction.unshift(cast_prefix);
+  }
+  client.action(schema, imagesAction).then(function (result) {
+    $('#preview-images').empty();
+    showExistingImages(result.results)
+  })
 }
-client.action(schema, imagesAction).then(function (result) {
-  console.log(result)
-  showExistingImages(result.results)
-})
+
+refreshImages();
 
 var galleries = {}
 let galleriesAction = ['api', 'gallery', 'list']
@@ -115,215 +179,23 @@ function showExistingVideos (videos) {
   $('.gallery-video-markable').click(markableVideoHandler)
 }
 
-let videosAction = ['api', 'videos', 'list']
-if (cast_prefix) {
-  videosAction.unshift(cast_prefix);
-}
-client.action(schema, videosAction).then(function (result) {
-  console.log(result)
-  showExistingVideos(result.results)
-})
-
-function replaceWithUploadedImage (imagePk, img) {
-  let action = ['api', 'images', 'read']
+function refreshVideos() {
+  videosAction = ['api', 'videos', 'list']
   if (cast_prefix) {
-    action.unshift(cast_prefix);
+    videosAction.unshift(cast_prefix);
   }
-  let params = {id: imagePk}
-  console.log('params', params)
-  client.action(schema, action, params).then(function (result) {
-    console.log('get detail for image ' + imagePk, result)
-    $(img).attr({id: imagePk, src: result.thumbnail_src})
-      .removeClass('image-obj')
-      .addClass('gallery-image-markable')
-    $(img).click(markableImageHandler)
+  client.action(schema, videosAction).then(function (result) {
+    $('#preview-videos').empty();
+    showExistingVideos(result.results)
   })
 }
 
-function replaceWithUploadedVideo (videoPk, video) {
-  let action = ['api', 'videos', 'read']
-  if (cast_prefix) {
-    action.unshift(cast_prefix);
-  }
-  let params = {id: videoPk}
-  console.log('params', params)
-  client.action(schema, action, params).then(function (result) {
-    console.log('get detail for video ' + videoPk, result)
-    $(video).attr({id: videoPk, src: result.original})
-      .removeClass('video-obj')
-      .addClass('gallery-video-markable')
-    $(video).click(markableVideoHandler)
-  })
+refreshVideos();
+
+function refreshMedia() {
+  refreshImages();
+  refreshVideos();
 }
-
-var runningUploads = 0
-
-function fileUpload (thumb, file, progressBar) {
-  var xhr = new window.XMLHttpRequest()
-  console.log('file upload:', thumb, file)
-  xhr.upload.addEventListener('progress', function (e) {
-    if (e.lengthComputable) {
-      var percentage = Math.round((e.loaded * 100) / e.total)
-      console.log('progress: ' + percentage)
-      progressBar.attr({
-        'aria-valuenow': percentage,
-        'style': 'width: ' + percentage + '%'
-      })
-    }
-  }, false)
-
-  var uploadUrl = '/blogs/api/upload_image/'
-  let tagName = $(thumb).prop('tagName')
-  console.log('tagname: ', tagName)
-  if (tagName === 'VIDEO') {
-    uploadUrl = '/blogs/api/upload_video/'
-  }
-
-  xhr.open('POST', uploadUrl)
-  xhr.setRequestHeader('X-CSRFToken', csrfToken)
-  var formData = new window.FormData()
-  formData.append('original', file)
-  xhr.enctype = 'mutlipart/form-data'
-
-  xhr.onreadystatechange = function () {
-    if (xhr.readyState === window.XMLHttpRequest.DONE && xhr.status === 201) {
-      console.log('request finished:')
-      var mediaPk = xhr.responseText
-      console.log('media id: ', mediaPk)
-      progressBar.attr({
-        'aria-valuenow': '100',
-        'style': 'width: 100%'
-      })
-      progressBar.remove()
-      if (tagName === 'VIDEO') {
-        replaceWithUploadedVideo(mediaPk, thumb)
-      } else {
-        replaceWithUploadedImage(mediaPk, thumb)
-      }
-      runningUploads = runningUploads - 1
-    }
-  }
-
-  xhr.send(formData)
-}
-
-function waitForUpload (thumb, file, progressBar) {
-  if (runningUploads < 2) {
-    runningUploads = runningUploads + 1
-    console.log('wait for upload: upload')
-    fileUpload(thumb, file, progressBar)
-  } else {
-    setTimeout(waitForUpload, 500, thumb, file, progressBar)
-    console.log('wait for upload: wait')
-  }
-}
-
-function sendFiles (uploadFiles, uploadProgress, className) {
-  console.log('sendFiles..', className)
-  var files = document.querySelectorAll('.' + className)
-  for (var i = 0; i < files.length; i++) {
-    var file = uploadFiles[i]
-    var progressBar = uploadProgress[i]
-    waitForUpload(files[i], file, progressBar)
-    // fileUpload(files[i], file, progressBar)
-  }
-}
-
-function getThumbnail (tagName, className) {
-  var thumb = $('<' + tagName + ' />')
-    .addClass('gallery-thumbnail ' + className)
-
-  var progressBar = $('<div></div>')
-    .addClass('progress-bar')
-    .attr({
-      role: 'progressbar',
-      'aria-valuenow': '0',
-      'aria-valuemin': '0',
-      'aria-valuemax': '100'
-    })
-
-  var progressDiv = $('<div></div>')
-    .addClass('progress gallery-progress-bar')
-    .append(progressBar)
-
-  var thumbDiv = $('<div></div>')
-    .addClass('gallery-preview')
-    .append(thumb)
-    .append(progressDiv)
-  return [thumb, thumbDiv, progressBar]
-}
-
-function handleImageFiles () {
-  console.log('handleImageFiles')
-  var files = $(this.files)
-  console.log(files)
-  var preview = $('#preview-images')
-  var uploadFiles = []
-  var uploadProgress = []
-  for (var i = 0, numFiles = files.length; i < numFiles; i++) {
-    var file = files[i]
-    console.log(file.name)
-    console.log(file.size)
-    console.log(file.type)
-    var imageType = /^image\//
-
-    if (!imageType.test(file.type)) {
-      continue
-    }
-    var [thumb, thumbDiv, progressBar] = getThumbnail('img', 'image-obj')
-
-    uploadFiles.push(file)
-    uploadProgress.push(progressBar)
-    preview.prepend(thumbDiv)
-
-    var reader = new window.FileReader()
-    reader.onload = (function (aImg) {
-      return function (e) {
-        aImg.attr({src: e.target.result})
-      }
-    })(thumb)
-    reader.readAsDataURL(file)
-  }
-  sendFiles(uploadFiles, uploadProgress, 'image-obj')
-}
-
-$('#image-input').on('change', handleImageFiles)
-
-function handleVideoFiles () {
-  console.log('handleVideoFiles')
-  var files = $(this.files)
-  console.log(files)
-  var preview = $('#preview-videos')
-  var uploadFiles = []
-  var uploadProgress = []
-  for (var i = 0, numFiles = files.length; i < numFiles; i++) {
-    var file = files[i]
-    console.log(file.name)
-    console.log(file.size)
-    console.log(file.type)
-    var videoType = /^video\//
-
-    if (!videoType.test(file.type)) {
-      continue
-    }
-    var [thumb, thumbDiv, progressBar] = getThumbnail('video', 'video-obj')
-
-    uploadFiles.push(file)
-    uploadProgress.push(progressBar)
-    preview.prepend(thumbDiv)
-
-    var reader = new window.FileReader()
-    reader.onload = (function (aImg) {
-      return function (e) {
-        aImg.attr({src: e.target.result})
-      }
-    })(thumb)
-    reader.readAsDataURL(file)
-  }
-  sendFiles(uploadFiles, uploadProgress, 'video-obj')
-}
-
-$('#video-input').on('change', handleVideoFiles)
 
 function getCkEditorInstance () {
   for (var instanceName in CKEDITOR.instances) {
