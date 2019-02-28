@@ -12,15 +12,12 @@ class MyDateTimeInput(forms.DateTimeInput):
         value = kwargs.get("value")
         if value is not None:
             kwargs["value"] = str(value.date())
-        print("date time input render: ", kwargs["value"])
         return super().render(*args, **kwargs)
 
 
 class PostForm(forms.ModelForm):
     is_published = forms.BooleanField(required=False)
     pub_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
-    #    visible_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
-    #    visible_date = forms.DateField()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

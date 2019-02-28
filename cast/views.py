@@ -114,5 +114,4 @@ class PostUpdateView(
         context = super().get_context_data(**kwargs)
         # needed for back button
         context["blog_slug"] = self.kwargs["blog_slug"]
-        print("context post: ", context["object"].visible_date)
         return context
