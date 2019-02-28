@@ -154,9 +154,6 @@ class PodcastFeed(RenderPostMixin, Feed):
     def title(self, blog):
         return self.object.title
 
-    def language(self, blog):
-        return "de-de"
-
     def categories(self, blog):
         return (blog.keywords.split(",")[0],)
 
