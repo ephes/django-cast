@@ -27,7 +27,7 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return self.object.description
 
     def link(self):
-        return reverse("cast:latest_entries_feed", kwargs={"slug": self.object.slug})
+        return self.object.get_absolute_url()
 
     def items(self):
         queryset = Post.published.filter(blog=self.object).order_by("-pub_date")
