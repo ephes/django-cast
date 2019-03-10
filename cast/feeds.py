@@ -27,7 +27,7 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return self.object.description
 
     def link(self):
-        return reverse("cast:latest_entries_feed", kwargs={"slug": self.object.slug})
+        return self.object.get_absolute_url()
 
     def items(self):
         queryset = Post.published.filter(blog=self.object).order_by("-pub_date")
@@ -52,7 +52,6 @@ class ITunesElements:
         handler.startElement("image", {})
         haqe("url", itunes_artwork_url)
         haqe("title", self.feed["title"])
-        haqe("link", self.feed["link"])
         handler.endElement("image")
 
     def add_itunes_categories(self, blog, handler):
@@ -150,7 +149,7 @@ class PodcastFeed(RenderPostMixin, Feed):
         return self.object
 
     def link(self):
-        return reverse("cast:podcast_feed", kwargs={"slug": self.object.slug})
+        return self.object.get_absolute_url()
 
     def title(self, blog):
         return self.object.title
@@ -214,14 +213,19 @@ class AtomPodcastFeed(PodcastFeed):
     def author_email(self, blog):
         return blog.user.email
 
+    def link(self):
+        """atom link is still wrong, dunno why FIXME"""
+        return self.object.get_absolute_url()
+
     # def author_link(self, blog):
     #     return blog.link
 
-    def link(self):
-        return reverse(
-            "cast:podcast_feed_atom",
-            kwargs={"slug": self.object.slug, "audio_format": self.audio_format},
-        )
+
+#    def link(self):
+#        return reverse(
+#            "cast:podcast_feed_atom",
+#            kwargs={"slug": self.object.slug, "audio_format": self.audio_format},
+#        )
 
 
 class RssPodcastFeed(PodcastFeed):
@@ -232,11 +236,4 @@ class RssPodcastFeed(PodcastFeed):
         return None
 
     def description(self, blog):
-        print("get description..")
         return blog.description
-
-    def link(self):
-        return reverse(
-            "cast:podcast_feed_rss",
-            kwargs={"slug": self.object.slug, "audio_format": self.audio_format},
-        )

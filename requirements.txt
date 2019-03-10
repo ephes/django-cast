@@ -7,6 +7,9 @@ python-slugify
 # Images
 Pillow
 
+# File upload
+django-filepond
+
 # wysiwig editor
 django-ckeditor
 

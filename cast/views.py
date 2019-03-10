@@ -1,5 +1,6 @@
 import logging
 
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
@@ -74,6 +75,11 @@ class PostCreateView(
     template_name = "cast/post_edit.html"
     user_field_name = "author"
     success_msg = "Entry created!"
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial["visible_date"] = timezone.now()
+        return initial
 
     def form_valid(self, form):
         self.blog_slug = self.kwargs["slug"]

@@ -118,6 +118,33 @@ class ItunesArtWork(TimeStampedModel):
     original_width = models.PositiveIntegerField(blank=True, null=True)
 
 
+def get_video_dimensions(lines):
+    def get_width_height(video_type, line):
+        dim_col = line.split(", ")[3]
+        if video_type != "h264":
+            dim_col = dim_col.split(" ")[0]
+        return map(int, dim_col.split("x"))
+
+    width, height = None, None
+    video_types = ("SAR", "hevc", "h264")
+    for line in lines:
+        for video_type in video_types:
+            if video_type in line:
+                width, height = get_width_height(video_type, line)
+                break
+        else:
+            # necessary to break out of nested loop
+            continue
+        break
+    portrait = False
+    for line in lines:
+        if "rotation of" in line:
+            portrait = True
+    if portrait:
+        width, height = height, width
+    return width, height
+
+
 class Video(TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     original = models.FileField(upload_to="cast_videos/")
@@ -140,16 +167,7 @@ class Video(TimeStampedModel):
             ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
         )
         lines = result.decode("utf8").split("\n")
-        width, height = None, None
-        for line in lines:
-            if "SAR" in line:
-                data = line.split(", ")[3]
-                r1, r2 = map(int, data.split(" ")[0].split("x"))
-                o1, o2 = map(int, data.rstrip("]").split(" ")[-1].split(":"))
-                portrait = o1 < o2
-                width, height = (r2, r1) if portrait else (r1, r2)
-                break
-        return width, height
+        return get_video_dimensions(lines)
 
     def _create_poster(self):
         """Moved into own method to make it mockable in tests."""
@@ -375,6 +393,9 @@ class Blog(TimeStampedModel):
     def __str__(self):
         return self.title
 
+    def get_absolute_url(self):
+        return reverse("cast:post_list", kwargs={"slug": self.slug})
+
     @property
     def last_build_date(self):
         return (
@@ -387,6 +408,10 @@ class Blog(TimeStampedModel):
             return json.loads(self.itunes_categories)
         except json.decoder.JSONDecodeError:
             return {}
+
+    @property
+    def is_podcast(self):
+        return self.post_set.exclude(podcast_audio__isnull=True).count() > 0
 
 
 class PostPublishedManager(models.Manager):
@@ -406,7 +431,7 @@ class Post(TimeStampedModel):
     blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     pub_date = models.DateTimeField(null=True, blank=True)
-    visible_date = models.DateTimeField(default=timezone.now, blank=True)
+    visible_date = models.DateTimeField(default=timezone.now)
     podcast_audio = models.ForeignKey(
         Audio, null=True, blank=True, on_delete=models.CASCADE, related_name="posts"
     )

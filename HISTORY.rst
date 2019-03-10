@@ -1,6 +1,30 @@
 .. :changelog:
 
 History
+
+0.1.8 (2018-02-28)
+++++++++++++++++++
+
+* Added support for m4v and improved dimension detection for iOS videos
+* Added some tests for different video sources
+
+0.1.7 (2018-02-28)
+++++++++++++++++++
+
+* forgot linting
+
+0.1.6 (2018-02-28)
+++++++++++++++++++
+
+* Use filepond for media uploads (images video)
+* Improved portrait video support
+* Get api prefix programatically from schema
+* Fixed link to podcast in itunes (was feed, now it's post list)
+* Set visible date to now if it's not set
+* use load static instead of staticfiles (deprecated)
+* Fixed language displayed in itunes (you have to set it in base.py in settings)
+* Dont try to be fancy, just display a plain list of feed on top of post list site (and podcast feeds only if blog.is_podcast is True)
+
 0.1.5 (2018-11-21)
 ++++++++++++++++++
 
