@@ -119,6 +119,11 @@ function refreshImages() {
   client.action(schema, imagesAction).then(function (result) {
     $('#preview-images').empty();
     showExistingImages(result.results)
+    if (result.results.length > 0) {
+      $('#insert-images').show();
+    } else {
+      $('#insert-images').hide();
+    }
   })
 }
 
@@ -187,6 +192,11 @@ function refreshVideos() {
   client.action(schema, videosAction).then(function (result) {
     $('#preview-videos').empty();
     showExistingVideos(result.results)
+    if (result.results.length > 0) {
+      $('#insert-video').show();
+    } else {
+      $('#insert-video').hide();
+    }
   })
 }
 
