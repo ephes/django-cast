@@ -2,7 +2,7 @@
 django-model-utils
 
 # Unicode slugification
-awesome-slugify
+python-slugify
 
 # Images
 Pillow
