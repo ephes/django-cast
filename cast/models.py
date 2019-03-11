@@ -270,6 +270,12 @@ class Audio(TimeStampedModel):
             if field.name is not None and len(field.name) > 0:
                 yield name, field
 
+    @property
+    def name(self):
+        if self.title is not None:
+            return self.title
+        return "foobar audio"
+
     def get_all_paths(self):
         paths = set()
         for name, field in self.uploaded_audio_files:
