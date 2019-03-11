@@ -276,6 +276,9 @@ class Audio(TimeStampedModel):
             return self.title
         return "foobar audio"
 
+    def __str__(self):
+        return f"{self.pk} - {self.name}"
+
     def get_all_paths(self):
         paths = set()
         for name, field in self.uploaded_audio_files:
