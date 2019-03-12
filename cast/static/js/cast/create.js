@@ -108,7 +108,7 @@ function showExistingImages (images) {
       .append(img)
     preview.append(thumbDiv)
   }
-  $('.gallery-image-markable').click(markableImageHandler)
+  $('.cast-gallery-image-markable').click(markableImageHandler)
 }
 
 function refreshImages() {
