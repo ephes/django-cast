@@ -6,8 +6,8 @@ import logging
 import tempfile
 import subprocess
 
+from pathlib import Path
 from subprocess import check_output
-
 from collections import defaultdict
 
 from django.db import models
@@ -270,11 +270,17 @@ class Audio(TimeStampedModel):
             if field.name is not None and len(field.name) > 0:
                 yield name, field
 
+    def get_audio_file_names(self):
+        audio_file_names = set()
+        for audio_format, field in self.uploaded_audio_files:
+            audio_file_names.add(Path(field.name).stem)
+        return audio_file_names
+
     @property
     def name(self):
         if self.title is not None:
             return self.title
-        return "foobar audio"
+        return ','.join([_ for _ in self.get_audio_file_names()])
 
     def __str__(self):
         return f"{self.pk} - {self.name}"
