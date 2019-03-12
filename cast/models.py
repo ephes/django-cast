@@ -270,6 +270,10 @@ class Audio(TimeStampedModel):
             if field.name is not None and len(field.name) > 0:
                 yield name, field
 
+    @property
+    def file_formats(self):
+        return " ".join([n for n, f in self.uploaded_audio_files])
+
     def get_audio_file_names(self):
         audio_file_names = set()
         for audio_format, field in self.uploaded_audio_files:

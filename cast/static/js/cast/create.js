@@ -229,7 +229,7 @@ function showExistingAudios (audios) {
       .addClass('cast-gallery-thumbnail')
       .addClass('cast-gallery-audio-markable')
       .attr({src: audioThumbnail, id: audio.id})
-    let audioNameEl = $(`<div>${audio.name}</div>`)
+    let audioNameEl = $(`<div>${audio.name} ${audio.file_formats}</div>`)
       .addClass('cast-gallery-thumbnail')
       .addClass('cast-gallery-audio-markable')
       .attr({id: audio.id})
