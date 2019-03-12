@@ -2,6 +2,14 @@
 
 History
 
+0.1.9 (2018-03-12)
+++++++++++++++++++
+
+* Added some podcast specific fields to post edit form
+* If two audio uploads have the same name, add them to the same model instance
+* Added audio file support for post edit form
+* Show which audio files already were uploaded
+
 0.1.8 (2018-02-28)
 ++++++++++++++++++
 
