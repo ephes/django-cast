@@ -9,7 +9,7 @@ def upload_handler(request):
     for ending in ("jpg", "jpeg", "png", "gif"):
         lookup[ending] = (models.Image, "original", "user")
 
-    for ending in ("wav", "webm", "ogg", "mp3", "m4a"):
+    for ending in ("wav", "webm", "ogg", "mp3", "m4a", "opus"):
         lookup[ending] = (models.Audio, ending, "user")
 
     for ending in ("mp4", "mov", "m4v"):
