@@ -31,7 +31,7 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
 
     def items(self):
         queryset = Post.published.filter(blog=self.object).order_by("-pub_date")
-        return queryset[:5]
+        return queryset
 
     def item_title(self, item):
         return item.title
@@ -164,7 +164,7 @@ class PodcastFeed(RenderPostMixin, Feed):
         queryset = Post.published.podcast_episodes.filter(blog=self.object).order_by(
             "-pub_date"
         )
-        return queryset[:5]
+        return queryset
 
     def item_title(self, item):
         return item.title
