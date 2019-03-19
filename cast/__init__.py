@@ -28,7 +28,10 @@ def upload_handler(request):
         lookup[ending] = (models.Image, "original", "user")
 
     for ending in ("wav", "webm", "ogg", "mp3", "m4a", "opus"):
-        lookup[ending] = (models.Audio, ending, "user")
+        upload_field_name = ending
+        if ending == "ogg":
+            upload_field_name = "oga"
+        lookup[ending] = (models.Audio, upload_field_name, "user")
 
     for ending in ("mp4", "mov", "m4v"):
         lookup[ending] = (models.Video, "original", "user")
