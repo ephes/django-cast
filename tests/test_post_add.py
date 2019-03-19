@@ -30,6 +30,10 @@ class TestPostAdd:
             "title": "test title",
             "content": "foo bar baz",
             "published": True,
+            "keywords": "",
+            "podcast_audio": "",
+            "explicit": "2",    # 2 -> no
+            "block": False,
             "slug": "blog-slug",
         }
         r = client.post(create_url, data, follow=True)
@@ -47,9 +51,14 @@ class TestPostAdd:
             "title": "test title",
             "content": "foo bar baz",
             "published": True,
+            "keywords": "",
+            "podcast_audio": "",
+            "explicit": "2",    # 2 -> no
+            "block": False,
             "slug": "blog-slug",
         }
         r = client.post(create_url, data)
+        print(r.content)
         assert r.status_code == 302
         assert Post.objects.get(slug=data["slug"]).title == data["title"]
 
@@ -64,6 +73,10 @@ class TestPostAdd:
             "title": "test title",
             "content": content,
             "published": True,
+            "keywords": "",
+            "podcast_audio": "",
+            "explicit": "2",    # 2 -> no
+            "block": False,
             "slug": "blog-slug",
         }
         r = client.post(create_url, data)
@@ -84,6 +97,10 @@ class TestPostAdd:
             "title": "test title",
             "content": content,
             "published": True,
+            "keywords": "",
+            "podcast_audio": "",
+            "explicit": "2",    # 2 -> no
+            "block": False,
             "slug": "blog-slug",
         }
         r = client.post(create_url, data)
@@ -104,6 +121,10 @@ class TestPostAdd:
             "title": "test title",
             "content": content,
             "published": True,
+            "keywords": "",
+            "podcast_audio": "",
+            "explicit": "2",    # 2 -> no
+            "block": False,
             "slug": "blog-slug",
         }
         r = client.post(create_url, data)

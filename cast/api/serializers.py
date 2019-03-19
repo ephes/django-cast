@@ -36,7 +36,7 @@ class AudioSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Audio
-        fields = ("id", "url", "podlove", "mp3")
+        fields = ("id", "name", "file_formats", "url", "podlove", "mp3")
 
 
 class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
