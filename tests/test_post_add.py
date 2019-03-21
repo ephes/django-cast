@@ -32,7 +32,7 @@ class TestPostAdd:
             "published": True,
             "keywords": "",
             "podcast_audio": "",
-            "explicit": "2",    # 2 -> no
+            "explicit": "2",  # 2 -> no
             "block": False,
             "slug": "blog-slug",
         }
@@ -53,7 +53,7 @@ class TestPostAdd:
             "published": True,
             "keywords": "",
             "podcast_audio": "",
-            "explicit": "2",    # 2 -> no
+            "explicit": "2",  # 2 -> no
             "block": False,
             "slug": "blog-slug",
         }
@@ -75,7 +75,7 @@ class TestPostAdd:
             "published": True,
             "keywords": "",
             "podcast_audio": "",
-            "explicit": "2",    # 2 -> no
+            "explicit": "2",  # 2 -> no
             "block": False,
             "slug": "blog-slug",
         }
@@ -99,7 +99,7 @@ class TestPostAdd:
             "published": True,
             "keywords": "",
             "podcast_audio": "",
-            "explicit": "2",    # 2 -> no
+            "explicit": "2",  # 2 -> no
             "block": False,
             "slug": "blog-slug",
         }
@@ -123,7 +123,7 @@ class TestPostAdd:
             "published": True,
             "keywords": "",
             "podcast_audio": "",
-            "explicit": "2",    # 2 -> no
+            "explicit": "2",  # 2 -> no
             "block": False,
             "slug": "blog-slug",
         }

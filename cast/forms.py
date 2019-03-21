@@ -37,7 +37,9 @@ class PostForm(forms.ModelForm):
         self.fields["visible_date"].label = _("Visible date")
         self.fields["visible_date"].help_text = _("Date to be shown above article.")
 
-        self.fields["podcast_audio"].help_text = _("The audio object to be used as podcast episode.")
+        self.fields["podcast_audio"].help_text = _(
+            "The audio object to be used as podcast episode."
+        )
 
     def _set_pub_date(self, cleaned_data):
         pub_date = cleaned_data.get("pub_date")

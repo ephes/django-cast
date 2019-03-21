@@ -284,7 +284,7 @@ class Audio(TimeStampedModel):
     def name(self):
         if self.title is not None:
             return self.title
-        return ','.join([_ for _ in self.get_audio_file_names()])
+        return ",".join([_ for _ in self.get_audio_file_names()])
 
     def __str__(self):
         return f"{self.pk} - {self.name}"
