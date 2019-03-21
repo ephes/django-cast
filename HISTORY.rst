@@ -2,6 +2,13 @@
 
 History
 
+0.1.10 (2018-03-21)
++++++++++++++++++++
+
+* Dont limit the number of items in feed (was 5 items)
+* Workaround for ogg files (ending differs for Audio model field name)
+* Added opus format to Audio model
+
 0.1.9 (2018-03-12)
 ++++++++++++++++++
 
