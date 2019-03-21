@@ -1,9 +1,6 @@
 # Models
 django-model-utils
 
-# Unicode slugification
-python-slugify
-
 # Images
 Pillow
 
@@ -15,6 +12,9 @@ django-ckeditor
 
 # imagekit for resized images, thumbnails..
 django-imagekit
+
+# slugs
+python-slugify
 
 # docs
 Sphinx

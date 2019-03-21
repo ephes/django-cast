@@ -57,9 +57,10 @@ setup(
     install_requires=[
         "Pillow",
         "django-model-utils",
-        "awesome-slugify",
         "django-ckeditor",
         "django-imagekit",
+        "django-filepond",
+        "python-slugify",
     ],
     license="BSD",
     zip_safe=False,
