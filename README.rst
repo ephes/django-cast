@@ -21,6 +21,12 @@ The full documentation is at https://django-cast.readthedocs.io.
 Quickstart
 ----------
 
+.. raw:: html
+
+    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
+      <iframe width="1280" height="720" src="https://www.youtube.com/embed/DFMvurjY9HI" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+    </div>
+
 Install Django Cast::
 
     pip install django-cast
