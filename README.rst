@@ -105,15 +105,15 @@ Add Django Cast's URL patterns:
     ]
 
 The api token auth urls and the docs urls are both necessary to provide api endpoints
-with the right namespace. Filepond_ is used to dispatch uploads to the right media
-models.
-
-.. _Filepond: https://github.com/ephes/django-filepond
+with the right namespace. The `django-filepond <https://github.com/ephes/django-filepond>`_
+app is used to dispatch uploads to the right media models.
 
 Features
 --------
 
-* TODO
+* Support for responsive images / video / audio media objects
+* Use django template syntax for posts allowing you to use custom template tags for galleries etc. for example
+* Good looking file uploads via `filepond <https://pqina.nl/filepond/>`_
 
 Running Tests
 -------------
