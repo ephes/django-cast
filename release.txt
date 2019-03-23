@@ -2,5 +2,5 @@ vim HISTORY.rst
 vim setup.cfg
 vim cast/__init__.py
 make release
-git tag -a 0.1.11 -m "version 0.1.11"
+git tag -a 0.1.12 -m "version 0.1.12"
 git push --tags
