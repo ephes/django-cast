@@ -67,11 +67,10 @@ setup(
     keywords="django-cast",
     classifiers=[
         "Development Status :: 3 - Alpha",
-        "Framework :: Django :: 2.0",
+        "Framework :: Django :: 2.1",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Natural Language :: English",
-        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
     ],
