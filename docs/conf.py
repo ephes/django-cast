@@ -24,7 +24,6 @@ sys.path.append(parent)
 
 # dunno whether this is really needed
 import django
-os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
 django.setup()
 
 import cast
