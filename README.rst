@@ -38,12 +38,12 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
 
     INSTALLED_APPS = (
         ...
-        'imagekit',
-        'ckeditor',
-        'ckeditor_uploader',
-        'rest_framework',
-        'rest_framework.authtoken',
-        'cast.apps.CastConfig',
+        "imagekit",
+        "ckeditor",
+        "ckeditor_uploader",
+        "rest_framework.authtoken",
+        "filepond.apps.FilepondConfig",
+        "cast.apps.CastConfig",
         ...
     )
 
@@ -53,31 +53,32 @@ Add required settings:
 
 .. code-block:: python
 
-   # CKEditor
-   CKEDITOR_UPLOAD_PATH = 'uploads/ckeditor/'
-   CKEDITOR_IMAGE_BACKEND = 'pillow'
-   AWS_QUERYSTRING_AUTH = False
-   X_FRAME_OPTIONS = 'SAMEORIGIN'
-   CKEDITOR_CONFIGS = {
-   'default': {
-    'removePlugins': 'stylesheetparser',
-    'allowedContent': True,
-    'enterMode': 2,
-   },
-   }
+    # CKEditor
+    CKEDITOR_UPLOAD_PATH = "uploads/ckeditor/"
+    CKEDITOR_IMAGE_BACKEND = "pillow"
+    AWS_QUERYSTRING_AUTH = False
+    X_FRAME_OPTIONS = "SAMEORIGIN"
+    CKEDITOR_CONFIGS = {
+            "default": {
+            "removePlugins": "stylesheetparser",
+            "allowedContent": True,
+            "enterMode": 2,
+        },
+    }
 
-   # REST
-   REST_FRAMEWORK = {
-    # Use Django's standard django.contrib.auth permissions,
-    # or allow read-only access for unauthenticated users.
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
-    )
-   }
+    # REST
+    REST_FRAMEWORK = {
+        # Use Django's standard django.contrib.auth permissions,
+        # or allow read-only access for unauthenticated users.
+        "DEFAULT_AUTHENTICATION_CLASSES": (
+            "rest_framework.authentication.SessionAuthentication",
+            "rest_framework.authentication.TokenAuthentication",
+        )
+    }
 
-   # django imagekit
-   IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY='imagekit.cachefiles.strategies.Optimistic'
+    # django imagekit
+    IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY="imagekit.cachefiles.strategies.Optimistic"
+
 
 Add Django Cast's URL patterns:
 
@@ -91,15 +92,22 @@ Add Django Cast's URL patterns:
 
     urlpatterns = [
         ...
-        path('cast/', include('cast.urls', namespace='cast')),
-        path('api/api-token-auth/', authtokenviews.obtain_auth_token),
-        path('docs/', include_docs_urls(title='API service')),
-        path("ckeditor/", include('ckeditor_uploader.urls')),
+        # Cast urls
+        path("api/api-token-auth/", authtokenviews.obtain_auth_token),
+        path("docs/", include_docs_urls(title="API service")),
+        path("ckeditor/", include("ckeditor_uploader.urls")),
+        # Uploads
+        path("uploads/", include("filepond.urls", namespace="filepond")),
+        # Cast
+        path("/cast", include("cast.urls", namespace="cast")),
         ...
     ]
 
 The api token auth urls and the docs urls are both necessary to provide api endpoints
-with the right namespace.
+with the right namespace. Filepond_ is used to dispatch uploads to the right media
+models.
+
+.. _Filepond: https://github.com/ephes/django-filepond
 
 Features
 --------
