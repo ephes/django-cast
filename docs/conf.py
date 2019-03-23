@@ -22,10 +22,6 @@ cwd = os.getcwd()
 parent = os.path.dirname(cwd)
 sys.path.append(parent)
 
-# dunno whether this is really needed
-import django
-django.setup()
-
 import cast
 import sphinx_rtd_theme
 
@@ -36,7 +32,7 @@ import sphinx_rtd_theme
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode']
+# extensions = ['sphinx.ext.viewcode']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -75,7 +71,7 @@ release = cast.__version__
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build']
+exclude_patterns = ['_build', 'cast.*']
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 #default_role = None
