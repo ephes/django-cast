@@ -4,7 +4,6 @@ flake8>=2.1.0
 tox>=1.7.0
 codecov>=2.0.0
 
-
 # Additional test requirements go here
 Pillow
 
@@ -18,7 +17,7 @@ pytest
 factory-boy
 pytest-django
 
-awesome-slugify
+python-slugify
 
 django-ckeditor
 

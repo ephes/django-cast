@@ -2,6 +2,31 @@
 
 History
 
+0.1.12 (2018-03-22)
++++++++++++++++++++
+
+* Improved installation documentation
+
+0.1.11 (2018-03-21)
++++++++++++++++++++
+
+* Fixed requirements for package
+
+0.1.10 (2018-03-21)
++++++++++++++++++++
+
+* Dont limit the number of items in feed (was 5 items)
+* Workaround for ogg files (ending differs for Audio model field name)
+* Added opus format to Audio model
+
+0.1.9 (2018-03-12)
+++++++++++++++++++
+
+* Added some podcast specific fields to post edit form
+* If two audio uploads have the same name, add them to the same model instance
+* Added audio file support for post edit form
+* Show which audio files already were uploaded
+
 0.1.8 (2018-02-28)
 ++++++++++++++++++
 

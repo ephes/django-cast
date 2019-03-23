@@ -60,11 +60,12 @@ Ready to contribute? Here's how to set up `django-cast` for local development.
 1. Fork the `django-cast` repo on GitHub.
 2. Clone your fork locally::
 
-    $ git clone git@github.com:your_name_here/django-cast.git
+    $ git clone git@github.com:ephes/django-cast.git
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
 
-    $ mkvirtualenv django-cast
+    $ mkvirtualenv cast
+    $ workon cast
     $ cd django-cast/
     $ python setup.py develop
 
@@ -78,7 +79,7 @@ Ready to contribute? Here's how to set up `django-cast` for local development.
    tests, including testing other Python versions with tox::
 
         $ flake8 cast tests
-        $ python setup.py test
+        $ python runtests.py test
         $ tox
 
    To get flake8 and tox, just pip install them into your virtualenv. 
@@ -109,4 +110,4 @@ Tips
 
 To run a subset of tests::
 
-    $ python -m unittest tests.test_cast
+    $ python runtests.py tests -k test_get_post_detail

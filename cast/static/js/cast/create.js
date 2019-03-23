@@ -15,6 +15,7 @@ let client = new coreapi.Client({auth: auth})
 console.log(client)
 
 // get cast prefix from schema
+console.log('schema: ', schema);
 let cast_prefix = Object.keys(schema.content).slice(-1)[0];
 if (cast_prefix === 'api') {
   cast_prefix = false;
@@ -98,16 +99,16 @@ function showExistingImages (images) {
   for (var i = 0; i < images.length; i++) {
     let image = images[i]
     var img = $('<img></img>')
-      .addClass('gallery-thumbnail')
-      .addClass('gallery-image-markable')
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-image-markable')
       .attr({src: image.thumbnail_src, id: image.id})
 
     var thumbDiv = $('<div></div>')
-      .addClass('gallery-preview')
+      .addClass('cast-gallery-preview')
       .append(img)
     preview.append(thumbDiv)
   }
-  $('.gallery-image-markable').click(markableImageHandler)
+  $('.cast-gallery-image-markable').click(markableImageHandler)
 }
 
 function refreshImages() {
@@ -119,6 +120,11 @@ function refreshImages() {
   client.action(schema, imagesAction).then(function (result) {
     $('#preview-images').empty();
     showExistingImages(result.results)
+    if (result.results.length > 0) {
+      $('#insert-images').show();
+    } else {
+      $('#insert-images').hide();
+    }
   })
 }
 
@@ -148,7 +154,7 @@ function markableVideoHandler () {
   if (el.hasClass('border')) {
     el.removeClass('border border-primary')
   } else {
-    $('.gallery-video-markable.border').each(function () {
+    $('.cast-gallery-video-markable.border').each(function () {
       $(this).removeClass('border border-primary')
     })
     el.addClass('border border-primary')
@@ -166,17 +172,17 @@ function showExistingVideos (videos) {
     }
     // console.log('video thumbnail: ' + videoThumbnail)
     var videoEl = $('<img></img>')
-      .addClass('gallery-thumbnail')
-      .addClass('gallery-video-markable')
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-video-markable')
       .attr({src: videoThumbnail, id: video.id})
       // .attr({src: video.poster_thumbnail, id: video.id})
 
     var thumbDiv = $('<div></div>')
-      .addClass('gallery-preview')
+      .addClass('cast-gallery-preview')
       .append(videoEl)
     preview.append(thumbDiv)
   }
-  $('.gallery-video-markable').click(markableVideoHandler)
+  $('.cast-gallery-video-markable').click(markableVideoHandler)
 }
 
 function refreshVideos() {
@@ -187,14 +193,79 @@ function refreshVideos() {
   client.action(schema, videosAction).then(function (result) {
     $('#preview-videos').empty();
     showExistingVideos(result.results)
+    if (result.results.length > 0) {
+      $('#insert-video').show();
+    } else {
+      $('#insert-video').hide();
+    }
   })
 }
 
 refreshVideos();
 
+// get/show existing audios
+
+function markableAudioHandler () {
+  var el = $(this)
+  console.log('clicked audio: ' + el.attr('id'))
+  if (el.hasClass('border')) {
+    el.removeClass('border border-primary')
+  } else {
+    $('.cast-gallery-audio-markable.border').each(function () {
+      $(this).removeClass('border border-primary')
+    })
+    el.addClass('border border-primary')
+  }
+}
+
+
+function showExistingAudios (audios) {
+  console.log(audios.length)
+  var preview = $('#preview-audios')
+  for (var i = 0; i < audios.length; i++) {
+    let audio = audios[i]
+    const audioThumbnail = '/static/img/cast/Audio-icon.svg'
+    let audioEl = $('<img></img>')
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-audio-markable')
+      .attr({src: audioThumbnail, id: audio.id})
+    let audioNameEl = $(`<div>${audio.name} ${audio.file_formats}</div>`)
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-audio-markable')
+      .attr({id: audio.id})
+    var thumbDiv = $('<div></div>')
+      .addClass('cast-gallery-preview')
+      //.append(audioEl)
+      .append(audioNameEl)
+    preview.append(thumbDiv)
+  }
+  $('.cast-gallery-audio-markable').click(markableAudioHandler)
+}
+
+function refreshAudios() {
+  audiosAction = ['api', 'audio', 'list']
+  console.log('cast prefix audios: ', cast_prefix);
+  if (cast_prefix) {
+    audiosAction.unshift(cast_prefix);
+  }
+  client.action(schema, audiosAction).then(function (result) {
+    $('#preview-audios').empty();
+    console.log("audios list: ", result.results)
+    showExistingAudios(result.results)
+    if (result.results.length > 0) {
+      $('#insert-audio').show();
+    } else {
+      $('#insert-audio').hide();
+    }
+  })
+}
+
+refreshAudios();
+
 function refreshMedia() {
   refreshImages();
   refreshVideos();
+  refreshAudios();
 }
 
 function getCkEditorInstance () {
@@ -268,3 +339,25 @@ function handleVideoInsert () {
 }
 
 $('#insert-video').click(handleVideoInsert)
+
+function handleAudioInsert () {
+  console.log('handle audio insert')
+  var marked = $('.cast-gallery-audio-markable.border')
+  var audioPks = []
+  for (var i = 0; i < marked.length; i++) {
+    audioPks.push(parseInt($(marked[i]).attr('id')))
+  }
+  var ckForm = getCkEditorInstance()
+  if (audioPks.length === 0) {
+    console.log('no audio media to add')
+  } else if (audioPks.length === 1) {
+    var audioPk = audioPks[0]
+    var templateTag = '{' + '% ' + 'audio ' + audioPk + ' %' + '}'
+    ckForm.insertHtml(templateTag)
+  } else {
+    console.log('multiple audios not supported yet')
+  }
+}
+
+$('#insert-audio').click(handleAudioInsert)
+
