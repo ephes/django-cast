@@ -2,6 +2,11 @@
 
 History
 
+0.1.14 (2018-03-23)
++++++++++++++++++++
+
+* Added rtfd configuration file to be able to use python 3 :/
+
 0.1.13 (2018-03-22)
 +++++++++++++++++++
 
