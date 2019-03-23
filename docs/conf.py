@@ -22,6 +22,11 @@ cwd = os.getcwd()
 parent = os.path.dirname(cwd)
 sys.path.append(parent)
 
+# dunno whether this is really needed
+import django
+os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
+django.setup()
+
 import cast
 import sphinx_rtd_theme
 
@@ -48,7 +53,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Django Cast'
-copyright = u'2018, Jochen Wersdörfer'
+copyright = u'2019, Jochen Wersdörfer'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
