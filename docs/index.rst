@@ -12,8 +12,6 @@ Contents:
    :maxdepth: 2
 
    readme
-   installation
-   usage
    cdn
    contributing
    authors
