@@ -120,11 +120,10 @@ Running Tests
 
 Does the code actually work?
 
-::
+.. code-block:: shell
 
     source <YOURVIRTUALENV>/bin/activate
-    (myenv) $ pip install tox
-    (myenv) $ tox
+    (myenv) $ python runtests.py tests
 
 Credits
 -------
