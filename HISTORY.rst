@@ -1,6 +1,11 @@
 .. :changelog:
 
 History
+0.1.16 (2018-03-23)
++++++++++++++++++++
+
+* Finally, rtfd is working again, including screencast
+
 0.1.15 (2018-03-23)
 +++++++++++++++++++
 
