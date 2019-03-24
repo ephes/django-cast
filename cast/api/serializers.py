@@ -41,10 +41,11 @@ class AudioSerializer(serializers.HyperlinkedModelSerializer):
 
 class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     audio = serializers.ListField()
+    chapters = serializers.ListField()
 
     class Meta:
         model = Audio
-        fields = ("title", "subtitle", "audio", "duration")
+        fields = ("title", "subtitle", "audio", "duration", "chapters")
 
 
 class GallerySerializer(serializers.HyperlinkedModelSerializer):

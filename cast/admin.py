@@ -2,7 +2,17 @@ import logging
 
 from django.contrib import admin
 
-from .models import Blog, Post, File, Image, Video, Audio, Gallery, ItunesArtWork
+from .models import (
+    Blog,
+    Post,
+    File,
+    Image,
+    Video,
+    Audio,
+    Gallery,
+    ItunesArtWork,
+    ChapterMark,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +69,13 @@ class AudioAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 admin.site.register(Audio, AudioAdmin)
+
+
+class ChapterMarkModelAdmin(AdminUserMixin, admin.ModelAdmin):
+    list_display = ("start", "title", "link", "image")
+
+
+admin.site.register(ChapterMark, ChapterMarkModelAdmin)
 
 
 class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):

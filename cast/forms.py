@@ -4,7 +4,7 @@ from django import forms
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 
-from .models import Post, Image, Video
+from .models import Post, Image, Video, ChapterMark
 
 
 class MyDateTimeInput(forms.DateTimeInput):
@@ -41,6 +41,9 @@ class PostForm(forms.ModelForm):
             "The audio object to be used as podcast episode."
         )
 
+        if self.instance.podcast_audio:
+            self.fields["chaptermarks"] = forms.CharField(widget=forms.Textarea)
+
     def _set_pub_date(self, cleaned_data):
         pub_date = cleaned_data.get("pub_date")
         is_published = cleaned_data.get("is_published")
@@ -57,10 +60,32 @@ class PostForm(forms.ModelForm):
             cleaned_data["visible_date"] = timezone.now()
         return cleaned_data
 
+    def _clean_chaptermarks(self, cleaned_data):
+        if self.instance.podcast_audio:
+            for line in cleaned_data.get("chaptermarks", "").split("\n"):
+                start, *parts = line.split()
+                title = " ".join(parts)
+                # print(f"chapter mark: {start} | {title}")
+                # TODO:
+                # * tests
+                # * one ChapterMarkForm per line
+                # * return error on validation error
+                # * image/link handling
+                # * crud (create update delete) / think about
+                # * lint / black
+                # * add to docs
+                # * new release
+                cm = ChapterMark(
+                    audio=self.instance.podcast_audio, start=start, title=title
+                )
+                cm.save()
+        return cleaned_data
+
     def clean(self):
         cleaned_data = super().clean()
         cleaned_data = self._set_pub_date(cleaned_data)
         cleaned_data = self._set_visible_date(cleaned_data)
+        cleaned_data = self._clean_chaptermarks(cleaned_data)
         return cleaned_data
 
     class Meta:
