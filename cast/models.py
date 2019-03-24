@@ -336,6 +336,20 @@ class Audio(TimeStampedModel):
         return items
 
     @property
+    def chapters(self):
+        items = []
+        for chapter in self.chaptermarks.all():
+            items.append(
+                {
+                    "start": chapter.start,
+                    "title": chapter.title,
+                    "link": chapter.link,
+                    "image": chapter.image,
+                }
+            )
+        return items
+
+    @property
     def podlove_url(self):
         return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})
 
@@ -594,3 +608,13 @@ class Post(TimeStampedModel):
         self.add_missing_media_objects()
         self.remove_obsolete_media_objects()
         return save_return
+
+
+class ChapterMark(models.Model):
+    audio = models.ForeignKey(
+        Audio, on_delete=models.CASCADE, related_name="chaptermarks"
+    )
+    start = models.CharField(max_length=12)
+    title = models.CharField(max_length=255)
+    link = models.URLField(max_length=2000, null=True, blank=True)
+    image = models.URLField(max_length=2000, null=True, blank=True)
