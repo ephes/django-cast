@@ -252,6 +252,24 @@ function refreshAudios() {
     $('#preview-audios').empty();
     console.log("audios list: ", result.results)
     showExistingAudios(result.results)
+    let audio_select = $('select[name=podcast_audio]');
+    if (audio_select.length > 0) {
+      // found podcast audio select element
+      let choose_lookup = {}
+      for (let child of audio_select.children()) {
+        if (child.value) {
+          choose_lookup[child.value] = child;
+        }
+      }
+      for (let item of result.results) {
+        if (!(item.id in choose_lookup)) {
+          // add newly uploaded audio to select as option
+          let option_el_text = '<option value="' + item.id + '">';
+          option_el_text = option_el_text + item.id + " - " + item.name + '</option>';
+          $(audio_select).append(option_el_text);
+        }
+      }
+    }
     if (result.results.length > 0) {
       $('#insert-audio').show();
     } else {
