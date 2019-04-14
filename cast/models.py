@@ -338,10 +338,12 @@ class Audio(TimeStampedModel):
     @property
     def chapters(self):
         items = []
-        for chapter in self.chaptermarks.all():
+        # chapter marks have to be ordered by start for
+        # podlove web player - dunno why, 2019-04-19 jochen
+        for chapter in self.chaptermarks.order_by("start"):
             items.append(
                 {
-                    "start": chapter.start,
+                    "start": chapter.start.split(".")[0],
                     "title": chapter.title,
                     "link": chapter.link,
                     "image": chapter.image,
@@ -618,3 +620,6 @@ class ChapterMark(models.Model):
     title = models.CharField(max_length=255)
     link = models.URLField(max_length=2000, null=True, blank=True)
     image = models.URLField(max_length=2000, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.pk} {self.start} {self.title}"
