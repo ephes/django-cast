@@ -42,6 +42,7 @@ class AudioSerializer(serializers.HyperlinkedModelSerializer):
 class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     audio = serializers.ListField()
     chapters = serializers.ListField()
+    duration = serializers.CharField(source="duration_str")
 
     class Meta:
         model = Audio
