@@ -72,7 +72,7 @@ admin.site.register(Audio, AudioAdmin)
 
 
 class ChapterMarkModelAdmin(AdminUserMixin, admin.ModelAdmin):
-    list_display = ("start", "title", "link", "image")
+    list_display = ("start", "title", "link", "image", "audio")
 
 
 admin.site.register(ChapterMark, ChapterMarkModelAdmin)
