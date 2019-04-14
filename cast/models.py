@@ -623,3 +623,13 @@ class ChapterMark(models.Model):
 
     def __str__(self):
         return f"{self.pk} {self.start} {self.title}"
+
+    @property
+    def original_line(self):
+        link = ""
+        if self.link is not None:
+            link = self.link
+        image = ""
+        if self.image is not None:
+            image = self.image
+        return f"{self.start} {self.title} {link} {image}"

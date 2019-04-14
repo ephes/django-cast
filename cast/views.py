@@ -101,9 +101,16 @@ class PostUpdateView(
     user_field_name = "author"
     success_msg = "Entry updated!"
 
+    def get_initial_chaptermarks(self):
+        chaptermarks = []
+        for chapter_mark in self.object.podcast_audio.chaptermarks.all():
+            chaptermarks.append(chapter_mark.original_line)
+        return "\n".join(chaptermarks)
+
     def get_initial(self):
         initial = super().get_initial()
         initial["is_published"] = self.object.is_published
+        initial["chaptermarks"] = self.get_initial_chaptermarks()
         return initial
 
     def form_valid(self, form):
