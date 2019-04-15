@@ -155,7 +155,9 @@ def chaptermarks(audio):
     ]
     results = []
     for start, title, href, image in cms:
-        results.append(ChapterMark.objects.create(audio=audio, start=start, title=title))
+        results.append(
+            ChapterMark.objects.create(audio=audio, start=start, title=title)
+        )
     return results
 
 

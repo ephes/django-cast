@@ -5,13 +5,10 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('cast', '0022_chaptermark'),
-    ]
+    dependencies = [("cast", "0022_chaptermark")]
 
     operations = [
         migrations.AlterUniqueTogether(
-            name='chaptermark',
-            unique_together={('audio', 'start')},
-        ),
+            name="chaptermark", unique_together={("audio", "start")}
+        )
     ]
