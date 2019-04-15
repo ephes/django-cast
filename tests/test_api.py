@@ -143,3 +143,10 @@ class TestBlogAudio:
         # dont redirect to login page
         assert r.status_code == 200
         assert "results" in r.json()
+
+    @pytest.mark.django_db
+    def test_podlove_detail_endpoint_without_authentication(self, api_client, audio):
+        """Should be accessible without authentication."""
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+        r = api_client.get(podlove_detail_url, format="json")
+        assert r.status_code == 200
