@@ -114,6 +114,7 @@ Features
 * Support for responsive images / video / audio media objects
 * Use django template syntax for posts allowing you to use custom template tags for galleries etc. for example
 * Good looking file uploads via `filepond <https://pqina.nl/filepond/>`_
+* Chaptermarks for podcast Episodes
 
 Running Tests
 -------------

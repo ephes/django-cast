@@ -314,7 +314,7 @@ class Audio(TimeStampedModel):
             if not audio_url.startswith("http"):
                 audio_url = field.path
             duration = self._get_audio_duration(audio_url)
-            # skipt duration for small files (tests won't work otherwise :(..)
+            # skip duration for small files (tests won't work otherwise :(..)
             if not int(duration.split(":")[2].split(".")[0]) > 0:
                 duration = None
             if duration is not None:
@@ -331,6 +331,22 @@ class Audio(TimeStampedModel):
                     "mimeType": self.mime_lookup[name],
                     "size": field.size,
                     "title": self.title_lookup[name],
+                }
+            )
+        return items
+
+    @property
+    def chapters(self):
+        items = []
+        # chapter marks have to be ordered by start for
+        # podlove web player - dunno why, 2019-04-19 jochen
+        for chapter in self.chaptermarks.order_by("start"):
+            items.append(
+                {
+                    "start": chapter.start.split(".")[0],
+                    "title": chapter.title,
+                    "href": chapter.link,
+                    "image": chapter.image,
                 }
             )
         return items
@@ -594,3 +610,29 @@ class Post(TimeStampedModel):
         self.add_missing_media_objects()
         self.remove_obsolete_media_objects()
         return save_return
+
+
+class ChapterMark(models.Model):
+    audio = models.ForeignKey(
+        Audio, on_delete=models.CASCADE, related_name="chaptermarks"
+    )
+    start = models.CharField(max_length=12)
+    title = models.CharField(max_length=255)
+    link = models.URLField(max_length=2000, null=True, blank=True)
+    image = models.URLField(max_length=2000, null=True, blank=True)
+
+    class Meta:
+        unique_together = (("audio", "start"),)
+
+    def __str__(self):
+        return f"{self.pk} {self.start} {self.title}"
+
+    @property
+    def original_line(self):
+        link = ""
+        if self.link is not None:
+            link = self.link
+        image = ""
+        if self.image is not None:
+            image = self.image
+        return f"{self.start} {self.title} {link} {image}"

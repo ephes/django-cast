@@ -1,6 +1,13 @@
 .. :changelog:
 
 History
+0.1.17 (2018-04-15)
++++++++++++++++++++
+
+* Added chaptermarks feature
+* Duration is now displayed correctly in podlove player
+* If an audio upload succeeded, add the uploaded element to podcast audio select form
+
 0.1.16 (2018-03-23)
 +++++++++++++++++++
 
