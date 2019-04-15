@@ -1,5 +1,7 @@
 import pytest
 
+from datetime import timedelta
+
 from django.urls import reverse
 
 from .factories import UserFactory
@@ -144,9 +146,24 @@ class TestBlogAudio:
         assert r.status_code == 200
         assert "results" in r.json()
 
+
+class TestPodcastAudio:
     @pytest.mark.django_db
     def test_podlove_detail_endpoint_without_authentication(self, api_client, audio):
         """Should be accessible without authentication."""
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         assert r.status_code == 200
+
+    @pytest.mark.django_db
+    def test_podlove_detail_endpoint_duration(self, api_client, audio):
+        """Test whether microseconds get stripped away from duration via api - they have
+        to be for podlove player to work.
+        """
+        delta = timedelta(days=0, hours=1, minutes=10, seconds=20, microseconds=40)
+        audio.duration = delta
+        audio.save()
+        assert "." in str(audio.duration)
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+        r = api_client.get(podlove_detail_url, format="json")
+        assert "." not in r.json()["duration"]
