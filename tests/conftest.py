@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
 
-from cast.models import Blog, Post, Image, Audio, ItunesArtWork
+from cast.models import Blog, Post, Image, Audio, ItunesArtWork, ChapterMark
 
 from .factories import UserFactory
 from .factories import VideoFactory
@@ -144,6 +144,21 @@ def audio(user, m4a_audio):
     yield audio
     # teardown
     os.unlink(audio.m4a.path)
+
+
+@pytest.fixture()
+def chaptermarks(audio):
+    cms = [
+        ("00:01:01.234", "introduction", "", ""),
+        ("00:03:05.567", "coughing", "http://google.com", ""),
+        ("00:02:05.567", "wrong order", "", ""),
+    ]
+    results = []
+    for start, title, href, image in cms:
+        results.append(
+            ChapterMark.objects.create(audio=audio, start=start, title=title)
+        )
+    return results
 
 
 @pytest.fixture()
