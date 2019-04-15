@@ -314,7 +314,7 @@ class Audio(TimeStampedModel):
             if not audio_url.startswith("http"):
                 audio_url = field.path
             duration = self._get_audio_duration(audio_url)
-            # skipt duration for small files (tests won't work otherwise :(..)
+            # skip duration for small files (tests won't work otherwise :(..)
             if not int(duration.split(":")[2].split(".")[0]) > 0:
                 duration = None
             if duration is not None:
