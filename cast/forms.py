@@ -10,9 +10,15 @@ from .models import Post, Image, Video, ChapterMark
 class MyDateTimeInput(forms.DateTimeInput):
     def render(self, *args, **kwargs):
         value = kwargs.get("value")
-        if value is not None:
+        if value is not None and not isinstance(value, str):
             kwargs["value"] = str(value.date())
         return super().render(*args, **kwargs)
+
+
+class ChapterMarkForm(forms.ModelForm):
+    class Meta:
+        model = ChapterMark
+        fields = ("audio", "start", "title", "link", "image")
 
 
 class PostForm(forms.ModelForm):
@@ -61,24 +67,34 @@ class PostForm(forms.ModelForm):
         return cleaned_data
 
     def _clean_chaptermarks(self, cleaned_data):
-        if self.instance.podcast_audio:
+        audio = self.instance.podcast_audio
+        if audio:
+            errors = []
+            lines = cleaned_data.get("chaptermarks", "").split("\n")
+            if len(lines) > 0:
+                audio.chaptermarks.all().delete()
             for line in cleaned_data.get("chaptermarks", "").split("\n"):
                 start, *parts = line.split()
                 title = " ".join(parts)
-                # print(f"chapter mark: {start} | {title}")
+                row = {
+                    "audio": audio.pk,
+                    "start": start,
+                    "title": title,
+                    # "link": None,
+                    # "image": None
+                }
+                form = ChapterMarkForm(row)
+                if form.is_valid():
+                    form.save()
+                else:
+                    errors.append(form.errors)
                 # TODO:
-                # * tests
-                # * one ChapterMarkForm per line
-                # * return error on validation error
-                # * image/link handling
-                # * crud (create update delete) / think about
+                # * image/link handling + tests
                 # * lint / black
                 # * add to docs
                 # * new release
-                cm = ChapterMark(
-                    audio=self.instance.podcast_audio, start=start, title=title
-                )
-                cm.save()
+            if len(errors) > 0:
+                self.add_error("chaptermarks", errors)
         return cleaned_data
 
     def clean(self):
