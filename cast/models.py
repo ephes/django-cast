@@ -345,7 +345,7 @@ class Audio(TimeStampedModel):
                 {
                     "start": chapter.start.split(".")[0],
                     "title": chapter.title,
-                    "link": chapter.link,
+                    "href": chapter.link,
                     "image": chapter.image,
                 }
             )
