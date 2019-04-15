@@ -90,9 +90,6 @@ class PostForm(forms.ModelForm):
                     errors.append(form.errors)
                 # TODO:
                 # * image/link handling + tests
-                # * lint / black
-                # * add to docs
-                # * new release
             if len(errors) > 0:
                 self.add_error("chaptermarks", errors)
         return cleaned_data
