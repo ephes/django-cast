@@ -167,3 +167,18 @@ class TestPodcastAudio:
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         assert "." not in r.json()["duration"]
+
+    @pytest.mark.django_db
+    def test_podlove_detail_endpoint_chaptermarks(self, api_client, audio, chaptermarks):
+        """Test whether chaptermarks get delivered via podlove endpoint."""
+        print("chaptermarks: ", chaptermarks)
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+        r = api_client.get(podlove_detail_url, format="json")
+        chapters = r.json()["chapters"]
+        for chapter in chapters:
+            # assert microseconds are stripped away
+            assert "." not in chapter["start"]
+            assert ":" in chapter["start"]
+        assert len(chapters) == 3
+        # assert reordering
+        assert chapters[-1]["title"] == "coughing"
