@@ -621,6 +621,9 @@ class ChapterMark(models.Model):
     link = models.URLField(max_length=2000, null=True, blank=True)
     image = models.URLField(max_length=2000, null=True, blank=True)
 
+    class Meta:
+        unique_together = (("audio", "start"),)
+
     def __str__(self):
         return f"{self.pk} {self.start} {self.title}"
 
