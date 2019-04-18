@@ -6,8 +6,8 @@ import logging
 import tempfile
 import subprocess
 
+from pathlib import Path
 from subprocess import check_output
-
 from collections import defaultdict
 
 from django.db import models
@@ -118,6 +118,33 @@ class ItunesArtWork(TimeStampedModel):
     original_width = models.PositiveIntegerField(blank=True, null=True)
 
 
+def get_video_dimensions(lines):
+    def get_width_height(video_type, line):
+        dim_col = line.split(", ")[3]
+        if video_type != "h264":
+            dim_col = dim_col.split(" ")[0]
+        return map(int, dim_col.split("x"))
+
+    width, height = None, None
+    video_types = ("SAR", "hevc", "h264")
+    for line in lines:
+        for video_type in video_types:
+            if video_type in line:
+                width, height = get_width_height(video_type, line)
+                break
+        else:
+            # necessary to break out of nested loop
+            continue
+        break
+    portrait = False
+    for line in lines:
+        if "rotation of" in line:
+            portrait = True
+    if portrait:
+        width, height = height, width
+    return width, height
+
+
 class Video(TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     original = models.FileField(upload_to="cast_videos/")
@@ -140,16 +167,7 @@ class Video(TimeStampedModel):
             ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
         )
         lines = result.decode("utf8").split("\n")
-        width, height = None, None
-        for line in lines:
-            if "SAR" in line:
-                data = line.split(", ")[3]
-                r1, r2 = map(int, data.split(" ")[0].split("x"))
-                o1, o2 = map(int, data.rstrip("]").split(" ")[-1].split(":"))
-                portrait = o1 < o2
-                width, height = (r2, r1) if portrait else (r1, r2)
-                break
-        return width, height
+        return get_video_dimensions(lines)
 
     def _create_poster(self):
         """Moved into own method to make it mockable in tests."""
@@ -252,6 +270,25 @@ class Audio(TimeStampedModel):
             if field.name is not None and len(field.name) > 0:
                 yield name, field
 
+    @property
+    def file_formats(self):
+        return " ".join([n for n, f in self.uploaded_audio_files])
+
+    def get_audio_file_names(self):
+        audio_file_names = set()
+        for audio_format, field in self.uploaded_audio_files:
+            audio_file_names.add(Path(field.name).stem)
+        return audio_file_names
+
+    @property
+    def name(self):
+        if self.title is not None:
+            return self.title
+        return ",".join([_ for _ in self.get_audio_file_names()])
+
+    def __str__(self):
+        return f"{self.pk} - {self.name}"
+
     def get_all_paths(self):
         paths = set()
         for name, field in self.uploaded_audio_files:
@@ -277,7 +314,7 @@ class Audio(TimeStampedModel):
             if not audio_url.startswith("http"):
                 audio_url = field.path
             duration = self._get_audio_duration(audio_url)
-            # skipt duration for small files (tests won't work otherwise :(..)
+            # skip duration for small files (tests won't work otherwise :(..)
             if not int(duration.split(":")[2].split(".")[0]) > 0:
                 duration = None
             if duration is not None:
@@ -294,6 +331,22 @@ class Audio(TimeStampedModel):
                     "mimeType": self.mime_lookup[name],
                     "size": field.size,
                     "title": self.title_lookup[name],
+                }
+            )
+        return items
+
+    @property
+    def chapters(self):
+        items = []
+        # chapter marks have to be ordered by start for
+        # podlove web player - dunno why, 2019-04-19 jochen
+        for chapter in self.chaptermarks.order_by("start"):
+            items.append(
+                {
+                    "start": chapter.start.split(".")[0],
+                    "title": chapter.title,
+                    "href": chapter.link,
+                    "image": chapter.image,
                 }
             )
         return items
@@ -375,6 +428,9 @@ class Blog(TimeStampedModel):
     def __str__(self):
         return self.title
 
+    def get_absolute_url(self):
+        return reverse("cast:post_list", kwargs={"slug": self.slug})
+
     @property
     def last_build_date(self):
         return (
@@ -387,6 +443,10 @@ class Blog(TimeStampedModel):
             return json.loads(self.itunes_categories)
         except json.decoder.JSONDecodeError:
             return {}
+
+    @property
+    def is_podcast(self):
+        return self.post_set.exclude(podcast_audio__isnull=True).count() > 0
 
 
 class PostPublishedManager(models.Manager):
@@ -406,7 +466,7 @@ class Post(TimeStampedModel):
     blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     pub_date = models.DateTimeField(null=True, blank=True)
-    visible_date = models.DateTimeField(default=timezone.now, blank=True)
+    visible_date = models.DateTimeField(default=timezone.now)
     podcast_audio = models.ForeignKey(
         Audio, null=True, blank=True, on_delete=models.CASCADE, related_name="posts"
     )
@@ -550,3 +610,29 @@ class Post(TimeStampedModel):
         self.add_missing_media_objects()
         self.remove_obsolete_media_objects()
         return save_return
+
+
+class ChapterMark(models.Model):
+    audio = models.ForeignKey(
+        Audio, on_delete=models.CASCADE, related_name="chaptermarks"
+    )
+    start = models.CharField(max_length=12)
+    title = models.CharField(max_length=255)
+    link = models.URLField(max_length=2000, null=True, blank=True)
+    image = models.URLField(max_length=2000, null=True, blank=True)
+
+    class Meta:
+        unique_together = (("audio", "start"),)
+
+    def __str__(self):
+        return f"{self.pk} {self.start} {self.title}"
+
+    @property
+    def original_line(self):
+        link = ""
+        if self.link is not None:
+            link = self.link
+        image = ""
+        if self.image is not None:
+            image = self.image
+        return f"{self.start} {self.title} {link} {image}"

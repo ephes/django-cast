@@ -1,5 +1,6 @@
 import logging
 
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
@@ -75,6 +76,11 @@ class PostCreateView(
     user_field_name = "author"
     success_msg = "Entry created!"
 
+    def get_initial(self):
+        initial = super().get_initial()
+        initial["visible_date"] = timezone.now()
+        return initial
+
     def form_valid(self, form):
         self.blog_slug = self.kwargs["slug"]
         return super().form_valid(form)
@@ -95,9 +101,17 @@ class PostUpdateView(
     user_field_name = "author"
     success_msg = "Entry updated!"
 
+    def get_initial_chaptermarks(self):
+        chaptermarks = []
+        if self.object.podcast_audio is not None:
+            for chapter_mark in self.object.podcast_audio.chaptermarks.all():
+                chaptermarks.append(chapter_mark.original_line)
+        return "\n".join(chaptermarks)
+
     def get_initial(self):
         initial = super().get_initial()
         initial["is_published"] = self.object.is_published
+        initial["chaptermarks"] = self.get_initial_chaptermarks()
         return initial
 
     def form_valid(self, form):

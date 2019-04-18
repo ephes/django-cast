@@ -14,18 +14,72 @@ let auth = new coreapi.auth.SessionAuthentication({
 let client = new coreapi.Client({auth: auth})
 console.log(client)
 
-const cast_prefix = false;
-let imagesAction = ['cast', 'api', 'images', 'list'];
-try {
-  client.action(schema, imagesAction).then(function (result) {
-    console.log(result)
-    cast_prefix = true;
-  })
-}
-catch(err) {
-  console.log("catched error: ", err);
+// get cast prefix from schema
+console.log('schema: ', schema);
+let cast_prefix = Object.keys(schema.content).slice(-1)[0];
+if (cast_prefix === 'api') {
+  cast_prefix = false;
 }
 
+function onFilepondUploadError(response) {
+  console.log("on upload error: ", response);
+}
+
+function onFilepondUploadSuccess(response) {
+  console.log("on upload success: ", response);
+  refreshMedia();
+  return response;
+}
+
+function onFilepondRevertSuccess(response) {
+  console.log("on revert success: ", response);
+  refreshMedia();
+  return response;
+}
+
+// Filepond
+$(function(){
+  // First register any plugins
+  $.fn.filepond.registerPlugin(FilePondPluginImagePreview);
+  /*
+  $.fn.filepond.registerPlugin(FilePondPluginFileValidateType);
+  $.fn.filepond.registerPlugin(FilePondPluginImageExifOrientation);
+  $.fn.filepond.registerPlugin(FilePondPluginImageCrop);
+  $.fn.filepond.registerPlugin(FilePondPluginImageResize);
+  $.fn.filepond.registerPlugin(FilePondPluginImageTransform);
+  $.fn.filepond.registerPlugin(FilePondPluginImageEdit);
+  */
+
+  // Turn input element into a pond
+  $('.my-pond').filepond();
+
+  // Settings
+  $('.my-pond').filepond('allowMultiple', true);
+  $('.my-pond').filepond('instantUpload', true);
+  $('.my-pond').filepond('acceptedFileTypes', 'image/jpeg, image/png, audio/*, video/*');
+
+  const serverConfig = {
+    process: {
+      url: '/uploads/process/cast',
+      onerror: onFilepondUploadError,
+      onload: onFilepondUploadSuccess,
+    },
+    fetch: null,
+    revert: {
+      url: '/uploads/revert/',
+      method: 'POST',
+      onload: onFilepondRevertSuccess,
+    },
+  }
+
+  $('.my-pond').filepond('server', serverConfig);
+
+  // Listen for addfile event
+  $('.my-pond').on('FilePond:addfile', function(e) {
+      console.log('file added event', e);
+  });
+
+});
 
 // get/show existing images/galleries
 
@@ -45,31 +99,41 @@ function showExistingImages (images) {
   for (var i = 0; i < images.length; i++) {
     let image = images[i]
     var img = $('<img></img>')
-      .addClass('gallery-thumbnail')
-      .addClass('gallery-image-markable')
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-image-markable')
       .attr({src: image.thumbnail_src, id: image.id})
 
     var thumbDiv = $('<div></div>')
-      .addClass('gallery-preview')
+      .addClass('cast-gallery-preview')
       .append(img)
     preview.append(thumbDiv)
   }
-  $('.gallery-image-markable').click(markableImageHandler)
+  $('.cast-gallery-image-markable').click(markableImageHandler)
 }
 
-imagesAction = ['api', 'images', 'list']
-if (cast_prefix) {
-  imagesAction.unshift('cast');
+function refreshImages() {
+  imagesAction = ['api', 'images', 'list']
+  console.log('cast prefix: ', cast_prefix);
+  if (cast_prefix) {
+    imagesAction.unshift(cast_prefix);
+  }
+  client.action(schema, imagesAction).then(function (result) {
+    $('#preview-images').empty();
+    showExistingImages(result.results)
+    if (result.results.length > 0) {
+      $('#insert-images').show();
+    } else {
+      $('#insert-images').hide();
+    }
+  })
 }
-client.action(schema, imagesAction).then(function (result) {
-  console.log(result)
-  showExistingImages(result.results)
-})
+
+refreshImages();
 
 var galleries = {}
 let galleriesAction = ['api', 'gallery', 'list']
 if (cast_prefix) {
-  galleriesAction.unshift('cast');
+  galleriesAction.unshift(cast_prefix);
 }
 client.action(schema, galleriesAction).then(function (result) {
   var results = result.results
@@ -90,7 +154,7 @@ function markableVideoHandler () {
   if (el.hasClass('border')) {
     el.removeClass('border border-primary')
   } else {
-    $('.gallery-video-markable.border').each(function () {
+    $('.cast-gallery-video-markable.border').each(function () {
       $(this).removeClass('border border-primary')
     })
     el.addClass('border border-primary')
@@ -108,228 +172,119 @@ function showExistingVideos (videos) {
     }
     // console.log('video thumbnail: ' + videoThumbnail)
     var videoEl = $('<img></img>')
-      .addClass('gallery-thumbnail')
-      .addClass('gallery-video-markable')
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-video-markable')
       .attr({src: videoThumbnail, id: video.id})
       // .attr({src: video.poster_thumbnail, id: video.id})
 
     var thumbDiv = $('<div></div>')
-      .addClass('gallery-preview')
+      .addClass('cast-gallery-preview')
       .append(videoEl)
     preview.append(thumbDiv)
   }
-  $('.gallery-video-markable').click(markableVideoHandler)
+  $('.cast-gallery-video-markable').click(markableVideoHandler)
 }
 
-let videosAction = ['api', 'videos', 'list']
-if (cast_prefix) {
-  videosAction.unshift('cast');
-}
-client.action(schema, videosAction).then(function (result) {
-  console.log(result)
-  showExistingVideos(result.results)
-})
-
-function replaceWithUploadedImage (imagePk, img) {
-  let action = ['api', 'images', 'read']
+function refreshVideos() {
+  videosAction = ['api', 'videos', 'list']
   if (cast_prefix) {
-    action.unshift('cast');
+    videosAction.unshift(cast_prefix);
   }
-  let params = {id: imagePk}
-  console.log('params', params)
-  client.action(schema, action, params).then(function (result) {
-    console.log('get detail for image ' + imagePk, result)
-    $(img).attr({id: imagePk, src: result.thumbnail_src})
-      .removeClass('image-obj')
-      .addClass('gallery-image-markable')
-    $(img).click(markableImageHandler)
+  client.action(schema, videosAction).then(function (result) {
+    $('#preview-videos').empty();
+    showExistingVideos(result.results)
+    if (result.results.length > 0) {
+      $('#insert-video').show();
+    } else {
+      $('#insert-video').hide();
+    }
   })
 }
 
-function replaceWithUploadedVideo (videoPk, video) {
-  let action = ['api', 'videos', 'read']
-  if (cast_prefix) {
-    action.unshift('cast');
-  }
-  let params = {id: videoPk}
-  console.log('params', params)
-  client.action(schema, action, params).then(function (result) {
-    console.log('get detail for video ' + videoPk, result)
-    $(video).attr({id: videoPk, src: result.original})
-      .removeClass('video-obj')
-      .addClass('gallery-video-markable')
-    $(video).click(markableVideoHandler)
-  })
-}
+refreshVideos();
 
-var runningUploads = 0
+// get/show existing audios
 
-function fileUpload (thumb, file, progressBar) {
-  var xhr = new window.XMLHttpRequest()
-  console.log('file upload:', thumb, file)
-  xhr.upload.addEventListener('progress', function (e) {
-    if (e.lengthComputable) {
-      var percentage = Math.round((e.loaded * 100) / e.total)
-      console.log('progress: ' + percentage)
-      progressBar.attr({
-        'aria-valuenow': percentage,
-        'style': 'width: ' + percentage + '%'
-      })
-    }
-  }, false)
-
-  var uploadUrl = '/cast/api/upload_image/'
-  let tagName = $(thumb).prop('tagName')
-  console.log('tagname: ', tagName)
-  if (tagName === 'VIDEO') {
-    uploadUrl = '/cast/api/upload_video/'
-  }
-
-  xhr.open('POST', uploadUrl)
-  xhr.setRequestHeader('X-CSRFToken', csrfToken)
-  var formData = new window.FormData()
-  formData.append('original', file)
-  xhr.enctype = 'mutlipart/form-data'
-
-  xhr.onreadystatechange = function () {
-    if (xhr.readyState === window.XMLHttpRequest.DONE && xhr.status === 201) {
-      console.log('request finished:')
-      var mediaPk = xhr.responseText
-      console.log('media id: ', mediaPk)
-      progressBar.attr({
-        'aria-valuenow': '100',
-        'style': 'width: 100%'
-      })
-      progressBar.remove()
-      if (tagName === 'VIDEO') {
-        replaceWithUploadedVideo(mediaPk, thumb)
-      } else {
-        replaceWithUploadedImage(mediaPk, thumb)
-      }
-      runningUploads = runningUploads - 1
-    }
-  }
-
-  xhr.send(formData)
-}
-
-function waitForUpload (thumb, file, progressBar) {
-  if (runningUploads < 2) {
-    runningUploads = runningUploads + 1
-    console.log('wait for upload: upload')
-    fileUpload(thumb, file, progressBar)
+function markableAudioHandler () {
+  var el = $(this)
+  console.log('clicked audio: ' + el.attr('id'))
+  if (el.hasClass('border')) {
+    el.removeClass('border border-primary')
   } else {
-    setTimeout(waitForUpload, 500, thumb, file, progressBar)
-    console.log('wait for upload: wait')
-  }
-}
-
-function sendFiles (uploadFiles, uploadProgress, className) {
-  console.log('sendFiles..', className)
-  var files = document.querySelectorAll('.' + className)
-  for (var i = 0; i < files.length; i++) {
-    var file = uploadFiles[i]
-    var progressBar = uploadProgress[i]
-    waitForUpload(files[i], file, progressBar)
-    // fileUpload(files[i], file, progressBar)
-  }
-}
-
-function getThumbnail (tagName, className) {
-  var thumb = $('<' + tagName + ' />')
-    .addClass('gallery-thumbnail ' + className)
-
-  var progressBar = $('<div></div>')
-    .addClass('progress-bar')
-    .attr({
-      role: 'progressbar',
-      'aria-valuenow': '0',
-      'aria-valuemin': '0',
-      'aria-valuemax': '100'
+    $('.cast-gallery-audio-markable.border').each(function () {
+      $(this).removeClass('border border-primary')
     })
-
-  var progressDiv = $('<div></div>')
-    .addClass('progress gallery-progress-bar')
-    .append(progressBar)
-
-  var thumbDiv = $('<div></div>')
-    .addClass('gallery-preview')
-    .append(thumb)
-    .append(progressDiv)
-  return [thumb, thumbDiv, progressBar]
-}
-
-function handleImageFiles () {
-  console.log('handleImageFiles')
-  var files = $(this.files)
-  console.log(files)
-  var preview = $('#preview-images')
-  var uploadFiles = []
-  var uploadProgress = []
-  for (var i = 0, numFiles = files.length; i < numFiles; i++) {
-    var file = files[i]
-    console.log(file.name)
-    console.log(file.size)
-    console.log(file.type)
-    var imageType = /^image\//
-
-    if (!imageType.test(file.type)) {
-      continue
-    }
-    var [thumb, thumbDiv, progressBar] = getThumbnail('img', 'image-obj')
-
-    uploadFiles.push(file)
-    uploadProgress.push(progressBar)
-    preview.prepend(thumbDiv)
-
-    var reader = new window.FileReader()
-    reader.onload = (function (aImg) {
-      return function (e) {
-        aImg.attr({src: e.target.result})
-      }
-    })(thumb)
-    reader.readAsDataURL(file)
+    el.addClass('border border-primary')
   }
-  sendFiles(uploadFiles, uploadProgress, 'image-obj')
 }
 
-$('#image-input').on('change', handleImageFiles)
 
-function handleVideoFiles () {
-  console.log('handleVideoFiles')
-  var files = $(this.files)
-  console.log(files)
-  var preview = $('#preview-videos')
-  var uploadFiles = []
-  var uploadProgress = []
-  for (var i = 0, numFiles = files.length; i < numFiles; i++) {
-    var file = files[i]
-    console.log(file.name)
-    console.log(file.size)
-    console.log(file.type)
-    var videoType = /^video\//
-
-    if (!videoType.test(file.type)) {
-      continue
-    }
-    var [thumb, thumbDiv, progressBar] = getThumbnail('video', 'video-obj')
-
-    uploadFiles.push(file)
-    uploadProgress.push(progressBar)
-    preview.prepend(thumbDiv)
-
-    var reader = new window.FileReader()
-    reader.onload = (function (aImg) {
-      return function (e) {
-        aImg.attr({src: e.target.result})
-      }
-    })(thumb)
-    reader.readAsDataURL(file)
+function showExistingAudios (audios) {
+  console.log(audios.length)
+  var preview = $('#preview-audios')
+  for (var i = 0; i < audios.length; i++) {
+    let audio = audios[i]
+    const audioThumbnail = '/static/img/cast/Audio-icon.svg'
+    let audioEl = $('<img></img>')
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-audio-markable')
+      .attr({src: audioThumbnail, id: audio.id})
+    let audioNameEl = $(`<div>${audio.name} ${audio.file_formats}</div>`)
+      .addClass('cast-gallery-thumbnail')
+      .addClass('cast-gallery-audio-markable')
+      .attr({id: audio.id})
+    var thumbDiv = $('<div></div>')
+      .addClass('cast-gallery-preview')
+      //.append(audioEl)
+      .append(audioNameEl)
+    preview.append(thumbDiv)
   }
-  sendFiles(uploadFiles, uploadProgress, 'video-obj')
+  $('.cast-gallery-audio-markable').click(markableAudioHandler)
 }
 
-$('#video-input').on('change', handleVideoFiles)
+function refreshAudios() {
+  audiosAction = ['api', 'audio', 'list']
+  console.log('cast prefix audios: ', cast_prefix);
+  if (cast_prefix) {
+    audiosAction.unshift(cast_prefix);
+  }
+  client.action(schema, audiosAction).then(function (result) {
+    $('#preview-audios').empty();
+    console.log("audios list: ", result.results)
+    showExistingAudios(result.results)
+    let audio_select = $('select[name=podcast_audio]');
+    if (audio_select.length > 0) {
+      // found podcast audio select element
+      let choose_lookup = {}
+      for (let child of audio_select.children()) {
+        if (child.value) {
+          choose_lookup[child.value] = child;
+        }
+      }
+      for (let item of result.results) {
+        if (!(item.id in choose_lookup)) {
+          // add newly uploaded audio to select as option
+          let option_el_text = '<option value="' + item.id + '">';
+          option_el_text = option_el_text + item.id + " - " + item.name + '</option>';
+          $(audio_select).append(option_el_text);
+        }
+      }
+    }
+    if (result.results.length > 0) {
+      $('#insert-audio').show();
+    } else {
+      $('#insert-audio').hide();
+    }
+  })
+}
+
+refreshAudios();
+
+function refreshMedia() {
+  refreshImages();
+  refreshVideos();
+  refreshAudios();
+}
 
 function getCkEditorInstance () {
   for (var instanceName in CKEDITOR.instances) {
@@ -346,7 +301,7 @@ function addGallery (imagePks, ckForm) {
   } else {
     let action = ['api', 'gallery', 'create']
     if (cast_prefix) {
-      action.unshift('cast');
+      action.unshift(cast_prefix);
     }
     let params = {'images': imagePks}
     console.log('params', params)
@@ -363,7 +318,7 @@ function addGallery (imagePks, ckForm) {
 
 function handleImageInsert () {
   console.log('handle image insert')
-  var marked = $('img.border')
+  var marked = $('.cast-gallery-image-markable.border')
   var imagePks = []
   for (var i = 0; i < marked.length; i++) {
     imagePks.push(parseInt($(marked[i]).attr('id')))
@@ -384,7 +339,7 @@ $('#insert-images').click(handleImageInsert)
 
 function handleVideoInsert () {
   console.log('handle video insert')
-  var marked = $('.gallery-video-markable.border')
+  var marked = $('.cast-gallery-video-markable.border')
   var videoPks = []
   for (var i = 0; i < marked.length; i++) {
     videoPks.push(parseInt($(marked[i]).attr('id')))
@@ -402,3 +357,25 @@ function handleVideoInsert () {
 }
 
 $('#insert-video').click(handleVideoInsert)
+
+function handleAudioInsert () {
+  console.log('handle audio insert')
+  var marked = $('.cast-gallery-audio-markable.border')
+  var audioPks = []
+  for (var i = 0; i < marked.length; i++) {
+    audioPks.push(parseInt($(marked[i]).attr('id')))
+  }
+  var ckForm = getCkEditorInstance()
+  if (audioPks.length === 0) {
+    console.log('no audio media to add')
+  } else if (audioPks.length === 1) {
+    var audioPk = audioPks[0]
+    var templateTag = '{' + '% ' + 'audio ' + audioPk + ' %' + '}'
+    ckForm.insertHtml(templateTag)
+  } else {
+    console.log('multiple audios not supported yet')
+  }
+}
+
+$('#insert-audio').click(handleAudioInsert)
+

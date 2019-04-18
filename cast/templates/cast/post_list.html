@@ -33,16 +33,18 @@
         Plain RSS latest entries feed
       </a>
     </li>
-    <li>
-      <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">
-        Podcast RSS MP4
-      </a>
-    </li>
-    <li>
-      <a href="{% url "cast:podcast_feed_atom" slug=blog.slug audio_format='m4a' %}">
-        Podcast Atom MP4
-      </a>
-    </li>
+    {% if blog.is_podcast %}
+      <li>
+        <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">
+          Podcast RSS MP4
+        </a>
+      </li>
+      <li>
+        <a href="{% url "cast:podcast_feed_atom" slug=blog.slug audio_format='m4a' %}">
+          Podcast Atom MP4
+        </a>
+      </li>
+    {% endif %}
   </ul>
   {% if user.is_authenticated %}
       <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>

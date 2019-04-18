@@ -1,17 +1,20 @@
 # Models
 django-model-utils
 
-# Unicode slugification
-awesome-slugify
-
 # Images
 Pillow
+
+# File upload
+django-filepond
 
 # wysiwig editor
 django-ckeditor
 
 # imagekit for resized images, thumbnails..
 django-imagekit
+
+# slugs
+python-slugify
 
 # docs
 Sphinx
