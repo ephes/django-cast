@@ -103,8 +103,9 @@ class PostUpdateView(
 
     def get_initial_chaptermarks(self):
         chaptermarks = []
-        for chapter_mark in self.object.podcast_audio.chaptermarks.all():
-            chaptermarks.append(chapter_mark.original_line)
+        if self.object.podcast_audio is not None:
+            for chapter_mark in self.object.podcast_audio.chaptermarks.all():
+                chaptermarks.append(chapter_mark.original_line)
         return "\n".join(chaptermarks)
 
     def get_initial(self):
