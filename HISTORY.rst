@@ -1,6 +1,12 @@
 .. :changelog:
 
 History
+0.1.18 (2018-04-18)
++++++++++++++++++++
+
+* Fixed broken update view due to empty chaptermarks + test
+* Fixed two image/video javascript bugs
+
 0.1.17 (2018-04-15)
 +++++++++++++++++++
 
