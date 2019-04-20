@@ -2,50 +2,58 @@
 {% load static %}
 
 {% block content %}
-  <h1 class="display-3">{{ blog.title }}</h1>
-  <p class="lead">
-    {{ blog.description }}
-  </p>
-  <!--
-  <div class="cast-feeds-container">
-    <div class="cast-feed-item">
-      <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
-      <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
-        Plain RSS
-      </a>
+  <div class="cast-post-list-header">
+    <div>
+      <h1 class="display-3">{{ blog.title }}</h1>
+      <p class="lead">
+        {{ blog.description }}
+      </p>
     </div>
-    <div class="cast-feed-item">
-      <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
-      <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">Podcast RSS MP4 <img src="{% static 'img/cast/Feed-icon.svg' %}" alt="Podcast RSS-Feed m4a"></img></a>
-    </div>
-    <div class="cast-feed-item">
-      <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
-      <a href="{% url "cast:podcast_feed_atom" slug=blog.slug audio_format='m4a' %}">
-        Podcast Atom MP4
-      </a>
-    </div>
-  </div>
-  -->
-  <h4>Feeds:</h4>
-  <ul>
-    <li>
-      <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
-        Plain RSS latest entries feed
-      </a>
-    </li>
-    {% if blog.is_podcast %}
-      <li>
-        <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">
-          Podcast RSS MP4
+    {% block feeds %}
+    <!--
+    <div class="cast-feeds-container">
+      <div class="cast-feed-item">
+        <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
+        <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
+          Plain RSS
         </a>
-      </li>
-      <li>
+      </div>
+      <div class="cast-feed-item">
+        <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
+        <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">Podcast RSS MP4 <img src="{% static 'img/cast/Feed-icon.svg' %}" alt="Podcast RSS-Feed m4a"></img></a>
+      </div>
+      <div class="cast-feed-item">
+        <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}"></img>
         <a href="{% url "cast:podcast_feed_atom" slug=blog.slug audio_format='m4a' %}">
           Podcast Atom MP4
         </a>
-      </li>
-    {% endif %}
-  </ul>
+      </div>
+    </div>
+    -->
+    <div>
+      <h4>Feeds:</h4>
+      <ul>
+        <li>
+          <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
+            Plain RSS latest entries feed
+          </a>
+        </li>
+        {% if blog.is_podcast %}
+          <li>
+            <a href="{% url "cast:podcast_feed_rss" slug=blog.slug audio_format='m4a' %}">
+              Podcast RSS MP4
+            </a>
+          </li>
+          <li>
+            <a href="{% url "cast:podcast_feed_atom" slug=blog.slug audio_format='m4a' %}">
+              Podcast Atom MP4
+            </a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endblock feeds %}
+  </div>
   {% if user.is_authenticated %}
       <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
   {% endif %}

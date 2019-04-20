@@ -177,3 +177,8 @@
 
 .cast-feed-icon {
 }
+
+.cast-post-list-header {
+    display: flex;
+    justify-content: space-between;
+}
