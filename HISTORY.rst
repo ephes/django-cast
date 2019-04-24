@@ -1,6 +1,14 @@
 .. :changelog:
 
 History
+-------
+
+0.1.20 (2018-04-24)
++++++++++++++++++++
+
+* Fixed version history
+* Better release docs
+
 0.1.19 (2018-04-24)
 +++++++++++++++++++
 
