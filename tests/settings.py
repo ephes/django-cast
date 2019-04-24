@@ -28,7 +28,10 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "ckeditor",
-    "ckeditor_uploader",  # file upload for ckeditor
+    "ckeditor_uploader",  # File upload for ckeditor
+    "django_filters",
+    "watson",  # Fulltext search
+    "crispy_forms",  # Form layouts
     "cast",
 ]
 

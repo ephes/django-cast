@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib import admin
+from watson.admin import SearchAdmin
 
 from .models import (
     Blog,
@@ -29,8 +30,9 @@ class BlogModelAdmin(AdminUserMixin, admin.ModelAdmin):
 admin.site.register(Blog, BlogModelAdmin)
 
 
-class PostModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class PostModelAdmin(AdminUserMixin, SearchAdmin):
     list_display = ("title", "author", "blog")
+    search_fields = ("title", "content")
 
     class Media:
         js = ("js/cast/ckeditor_fix.js",)

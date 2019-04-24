@@ -182,3 +182,13 @@
     display: flex;
     justify-content: space-between;
 }
+
+.cast-date-facet-container {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.cast-date-facet-item {
+    margin-right: 10px;
+    margin-left: 10px;
+}
