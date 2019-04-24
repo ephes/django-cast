@@ -13,6 +13,15 @@ django-ckeditor
 # imagekit for resized images, thumbnails..
 django-imagekit
 
+# fulltext search
+django-watson
+
+# queryset filtering
+django-filter
+
+# search / filter forms
+django-crispy-forms
+
 # slugs
 python-slugify
 

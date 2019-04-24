@@ -40,3 +40,25 @@ class PostChangeMixin:
     def form_invalid(self, form):
         logger.info("form invalid: {}".format(form.errors))
         return super().form_invalid(form)
+
+
+class GetParamsMixin:
+    """Collect all request.GET parameters in a querystring and make them
+    available to the template. Needed for pagination:
+    href="?page={{ page_obj.next_page_number }}{{ parameters }}"
+    """
+
+    initial_params = {}
+
+    def get_other_get_params(self):
+        get_copy = self.request.GET.copy()
+        get_copy.update(self.initial_params.copy())
+        parameters = get_copy.pop("page", True) and get_copy.urlencode()
+        if len(parameters) > 0:
+            parameters = f"&{parameters}"
+        return parameters
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["parameters"] = self.get_other_get_params()
+        return context
