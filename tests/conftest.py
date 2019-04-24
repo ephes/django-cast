@@ -240,6 +240,19 @@ def post_with_different_date(blog):
 
 
 @pytest.fixture()
+def post_with_search(blog):
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="asdf",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        visible_date=timezone.now(),
+        content="bsdf",
+    )
+
+
+@pytest.fixture()
 def unpublished_post(blog):
     return Post.objects.create(
         author=blog.user,
