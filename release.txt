@@ -6,3 +6,8 @@ git flow release finish
 make release
 git tag -a 0.1.21 -m "version 0.1.21"
 git push --tags
+
+git checkout master
+git push
+
+git checkout develop
