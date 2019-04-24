@@ -3,6 +3,12 @@
 History
 -------
 
+0.1.21 (2018-04-24)
++++++++++++++++++++
+
+* Fixed package dependencies
+* Better release docs
+
 0.1.20 (2018-04-24)
 +++++++++++++++++++
 
