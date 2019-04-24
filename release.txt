@@ -1,5 +1,5 @@
-git flow release start
 vim HISTORY.rst
+git flow release start
 vim setup.cfg
 vim cast/__init__.py
 git flow release finish
