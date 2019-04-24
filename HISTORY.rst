@@ -1,6 +1,13 @@
 .. :changelog:
 
 History
+0.1.19 (2018-04-24)
++++++++++++++++++++
+
+* Added fulltext search
+* Added filtering by date + some faceted navigation support
+* use overwritable template block for feeds section (could be used for podlove subscribe button)
+
 0.1.18 (2018-04-18)
 +++++++++++++++++++
 
