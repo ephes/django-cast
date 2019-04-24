@@ -197,6 +197,18 @@ def post(blog):
 
 
 @pytest.fixture()
+def draft_post(blog):
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=None,
+        content="foobar",
+    )
+
+
+@pytest.fixture()
 def unpublished_post(blog):
     return Post.objects.create(
         author=blog.user,
