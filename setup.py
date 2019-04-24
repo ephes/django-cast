@@ -59,6 +59,8 @@ setup(
         "django-model-utils",
         "django-ckeditor",
         "django-imagekit",
+        "django-watson",
+        "django-filter",
         "django-filepond",
         "python-slugify",
     ],
