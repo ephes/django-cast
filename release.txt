@@ -4,5 +4,5 @@ vim setup.cfg
 vim cast/__init__.py
 git flow release finish
 make release
-git tag -a 0.1.19 -m "version 0.1.19"
+git tag -a 0.1.20 -m "version 0.1.20"
 git push --tags
