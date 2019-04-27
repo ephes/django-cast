@@ -119,6 +119,7 @@ class ItunesArtWork(TimeStampedModel):
 
 
 def get_video_dimensions(lines):
+    """Has it's own function to be easier to test."""
     def get_width_height(video_type, line):
         dim_col = line.split(", ")[3]
         if video_type != "h264":

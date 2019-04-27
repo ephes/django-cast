@@ -508,3 +508,12 @@ Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'Tripptrappkuckuck.mp4':
         print("width x height: ", width, height)
         assert width == 1920
         assert height == 1080
+
+    def test_video_from_empty(self):
+        ffmpeg_output = """
+           foo bar baz
+        """
+        width, height = get_video_dimensions(ffmpeg_output.split("\n"))
+        print("width x height: ", width, height)
+        assert width == None
+        assert height == None
