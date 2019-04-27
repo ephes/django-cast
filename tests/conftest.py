@@ -11,7 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
 
-from cast.models import Blog, Post, Image, Audio, ItunesArtWork, ChapterMark
+from cast.models import Blog, Post, Image, Audio, Video, ItunesArtWork, ChapterMark
 
 from .factories import UserFactory
 from .factories import VideoFactory
@@ -141,6 +141,25 @@ def image(user, image_1px):
     yield image
     # teardown
     os.unlink(image.original.path)
+
+
+@pytest.fixture()
+def video(user, minimal_mp4):
+    video = Video(user=user, original=minimal_mp4)
+    video.save()
+    yield video
+    # teardown
+    os.unlink(video.original.path)
+
+
+@pytest.fixture()
+def video_with_poster(user, minimal_mp4, image_1px):
+    video = Video(user=user, original=minimal_mp4, poster=image_1px)
+    video.save()
+    yield video
+    # teardown
+    os.unlink(video.original.path)
+    os.unlink(video.poster.path)
 
 
 @pytest.fixture()
