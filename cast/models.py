@@ -137,9 +137,11 @@ def get_video_dimensions(lines):
             continue
         break
     portrait = False
+    portrait_triggers = ["rotation of", "DAR 9:16"]
     for line in lines:
-        if "rotation of" in line:
-            portrait = True
+        for portrait_trigger in portrait_triggers:
+            if portrait_trigger in line:
+                portrait = True
     if portrait:
         width, height = height, width
     return width, height
