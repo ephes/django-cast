@@ -105,7 +105,7 @@ class Image(TimeStampedModel):
 
     @property
     def full_src(self):
-        return self.full.url
+        return self.img_full.url
 
 
 class ItunesArtWork(TimeStampedModel):
