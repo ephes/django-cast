@@ -1,7 +1,10 @@
 import io
 import os
 import json
+import pytz
 import pytest
+
+from datetime import datetime
 
 from django.utils import timezone
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -193,6 +196,59 @@ def post(blog):
         slug="test-entry",
         pub_date=timezone.now(),
         content="foobar",
+    )
+
+
+@pytest.fixture()
+def draft_post(blog):
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=None,
+        content="foobar",
+    )
+
+
+@pytest.fixture()
+def post_with_date(blog):
+    visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2018, 1, 1, 8))
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        visible_date=visible_date,
+        content="foobar",
+    )
+
+
+@pytest.fixture()
+def post_with_different_date(blog):
+    visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        visible_date=visible_date,
+        content="foobar",
+    )
+
+
+@pytest.fixture()
+def post_with_search(blog):
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="asdf",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        visible_date=timezone.now(),
+        content="bsdf",
     )
 
 

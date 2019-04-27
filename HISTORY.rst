@@ -1,6 +1,33 @@
 .. :changelog:
 
 History
+-------
+
+0.1.21 (2018-04-24)
++++++++++++++++++++
+
+* Fixed package dependencies
+* Better release docs
+
+0.1.20 (2018-04-24)
++++++++++++++++++++
+
+* Fixed version history
+* Better release docs
+
+0.1.19 (2018-04-24)
++++++++++++++++++++
+
+* Added fulltext search
+* Added filtering by date + some faceted navigation support
+* use overwritable template block for feeds section (could be used for podlove subscribe button)
+
+0.1.18 (2018-04-18)
++++++++++++++++++++
+
+* Fixed broken update view due to empty chaptermarks + test
+* Fixed two image/video javascript bugs
+
 0.1.17 (2018-04-15)
 +++++++++++++++++++
 

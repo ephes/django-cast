@@ -318,7 +318,7 @@ function addGallery (imagePks, ckForm) {
 
 function handleImageInsert () {
   console.log('handle image insert')
-  var marked = $('img.border')
+  var marked = $('.cast-gallery-image-markable.border')
   var imagePks = []
   for (var i = 0; i < marked.length; i++) {
     imagePks.push(parseInt($(marked[i]).attr('id')))
@@ -339,7 +339,7 @@ $('#insert-images').click(handleImageInsert)
 
 function handleVideoInsert () {
   console.log('handle video insert')
-  var marked = $('.gallery-video-markable.border')
+  var marked = $('.cast-gallery-video-markable.border')
   var videoPks = []
   for (var i = 0; i < marked.length; i++) {
     videoPks.push(parseInt($(marked[i]).attr('id')))

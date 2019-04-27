@@ -1,6 +1,13 @@
 vim HISTORY.rst
+git flow release start
 vim setup.cfg
 vim cast/__init__.py
+git flow release finish
 make release
-git tag -a 0.1.17 -m "version 0.1.17"
+git tag -a 0.1.21 -m "version 0.1.21"
 git push --tags
+
+git checkout master
+git push
+
+git checkout develop

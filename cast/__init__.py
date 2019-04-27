@@ -1,5 +1,7 @@
-__version__ = "0.1.17"
+__version__ = "0.1.21"
 from pathlib import Path
+
+default_app_config = "cast.apps.CastConfig"
 
 
 def podcast_same_audio_case(audio_model, file_name, context):
