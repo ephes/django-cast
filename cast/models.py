@@ -218,7 +218,7 @@ class Video(TimeStampedModel):
             try:
                 if self.poster_thumbnail:
                     paths.add(self.poster_thumbnail.name)
-            except FileNotFoundError:
+            except (FileNotFoundError, OSError):
                 pass
         return paths
 

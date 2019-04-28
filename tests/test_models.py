@@ -1,3 +1,4 @@
+import os
 import pytest
 
 from cast.models import Image
@@ -32,3 +33,29 @@ class TestVideoModel:
     def test_get_all_video_paths_with_poster(self, video_with_poster):
         all_paths = list(video_with_poster.get_all_paths())
         assert len(all_paths) == 3
+
+    @pytest.mark.django_db
+    def test_get_all_video_paths_without_thumbnail(self, video):
+
+        class Dummy:
+            name = "foobar"
+            closed = True
+
+            def open(self):
+                return None
+
+            def close(self):
+                return None
+
+            def seek(self, position):
+                return None
+
+            def read(self, num_bytes):
+                return b""
+
+            def tell(self):
+                return 0
+
+        video.poster = Dummy()
+        all_paths = list(video.get_all_paths())
+        assert len(all_paths) == 2

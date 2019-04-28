@@ -160,6 +160,7 @@ def video_with_poster(user, minimal_mp4, image_1px):
     # teardown
     os.unlink(video.original.path)
     os.unlink(video.poster.path)
+    os.unlink(video.poster_thumbnail.path)
 
 
 @pytest.fixture()
