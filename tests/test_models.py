@@ -121,3 +121,9 @@ class TestFileModel:
     def test_get_all_file_paths(self, file_instance):
         all_paths = list(file_instance.get_all_paths())
         assert len(all_paths) == 1
+
+
+class TestBlogModel:
+    @pytest.mark.django_db
+    def test_blog_str(self, blog):
+        assert blog.title == str(blog)
