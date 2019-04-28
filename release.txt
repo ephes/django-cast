@@ -2,9 +2,11 @@ vim HISTORY.rst
 git flow release start
 vim setup.cfg
 vim cast/__init__.py
+git add .
+git commit -m "bump version number"
 git flow release finish
 make release
-git tag -a 0.1.21 -m "version 0.1.21"
+git tag -a 0.1.22 -m "version 0.1.22"
 git push --tags
 
 git checkout master
