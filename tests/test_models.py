@@ -127,3 +127,18 @@ class TestBlogModel:
     @pytest.mark.django_db
     def test_blog_str(self, blog):
         assert blog.title == str(blog)
+
+
+class TestPostModel:
+    @pytest.mark.django_db
+    def test_post_slug(self, post):
+        assert post.get_slug() == "test-entry"
+
+    @pytest.mark.django_db
+    def test_post_has_audio(self, post):
+        assert post.has_audio == False
+
+    @pytest.mark.django_db
+    def test_post_has_audio_true(self, post, audio):
+        post.podcast_audio = audio
+        assert post.has_audio == True

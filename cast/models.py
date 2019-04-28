@@ -540,15 +540,6 @@ class Post(TimeStampedModel):
         return slugify(self.title)
 
     @property
-    def media_lookup_old(self):
-        lookup = defaultdict(dict)
-        media = list(self.media.all().prefetch_related("content_object"))
-        for item in media:
-            obj = item.content_object
-            lookup[obj.post_context_key][obj.pk] = obj
-        return lookup
-
-    @property
     def media_lookup(self):
         return {
             "image": {i.pk: i for i in self.images.all()},
@@ -583,7 +574,6 @@ class Post(TimeStampedModel):
         for model_name, model_pk in self.media_from_content:
             try:
                 model = media_lookup[model_name][model_pk]
-                logger.info("found: {} {} {}".format(model_name, model_pk, model))
             except KeyError:
                 media_object = model_lookup[model_name].objects.get(pk=model_pk)
                 media_attr_lookup[model_name].add(media_object)
