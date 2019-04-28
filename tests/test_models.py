@@ -59,3 +59,9 @@ class TestVideoModel:
         video.poster = Dummy()
         all_paths = list(video.get_all_paths())
         assert len(all_paths) == 2
+
+
+class TestGalleryModel:
+    @pytest.mark.django_db
+    def test_get_image_ids(self, gallery):
+        assert len(gallery.image_ids) == gallery.images.count()
