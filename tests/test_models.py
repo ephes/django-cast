@@ -1,7 +1,4 @@
-import os
 import pytest
-
-from cast.models import Image
 
 
 class TestImageModel:
@@ -36,7 +33,6 @@ class TestVideoModel:
 
     @pytest.mark.django_db
     def test_get_all_video_paths_without_thumbnail(self, video):
-
         class Dummy:
             name = "foobar"
             closed = True
@@ -136,12 +132,12 @@ class TestPostModel:
 
     @pytest.mark.django_db
     def test_post_has_audio(self, post):
-        assert post.has_audio == False
+        assert post.has_audio is False
 
     @pytest.mark.django_db
     def test_post_has_audio_true(self, post, audio):
         post.podcast_audio = audio
-        assert post.has_audio == True
+        assert post.has_audio is True
 
 
 class TestChapterMarkModel:

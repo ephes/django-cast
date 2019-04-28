@@ -11,7 +11,16 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
 
-from cast.models import Blog, Post, Image, Audio, Video, File, ItunesArtWork, ChapterMark
+from cast.models import (
+    Blog,
+    Post,
+    Image,
+    Audio,
+    Video,
+    File,
+    ItunesArtWork,
+    ChapterMark,
+)
 
 from .factories import UserFactory
 from .factories import VideoFactory
@@ -59,10 +68,12 @@ def image_1px_io():
     bio_file.seek(0)
     return bio_file
 
+
 def read_test_mp4(fixture_dir):
     with open(os.path.join(fixture_dir, "test.mp4"), "rb") as f:
         mp4 = f.read()
     return mp4
+
 
 @pytest.fixture()
 def minimal_mp4(fixture_dir):
@@ -71,6 +82,7 @@ def minimal_mp4(fixture_dir):
         name="test.mp4", content=mp4, content_type="video/mp4"
     )
     return simple_mp4
+
 
 def create_small_rgb():
     # this is a small test jpeg
@@ -141,15 +153,6 @@ def image(user, image_1px):
     yield image
     # teardown
     os.unlink(image.original.path)
-
-
-@pytest.fixture()
-def video(user, minimal_mp4):
-    video = Video(user=user, original=minimal_mp4)
-    video.save()
-    yield video
-    # teardown
-    os.unlink(video.original.path)
 
 
 @pytest.fixture()

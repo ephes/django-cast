@@ -1,4 +1,3 @@
-import os
 import pytest
 
 from cast.templatetags.cast_extras import video as video_tag

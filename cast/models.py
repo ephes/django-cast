@@ -120,6 +120,7 @@ class ItunesArtWork(TimeStampedModel):
 
 def get_video_dimensions(lines):
     """Has it's own function to be easier to test."""
+
     def get_width_height(video_type, line):
         dim_col = line.split(", ")[3]
         if video_type != "h264":
@@ -573,7 +574,7 @@ class Post(TimeStampedModel):
         model_lookup = self.media_model_lookup
         for model_name, model_pk in self.media_from_content:
             try:
-                model = media_lookup[model_name][model_pk]
+                media_lookup[model_name][model_pk]
             except KeyError:
                 media_object = model_lookup[model_name].objects.get(pk=model_pk)
                 media_attr_lookup[model_name].add(media_object)

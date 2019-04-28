@@ -2,8 +2,6 @@ import pytest
 
 from django.urls import reverse
 
-from cast.models import Video
-
 
 class TestVideoUpload:
     @pytest.mark.django_db
