@@ -3,6 +3,13 @@
 History
 -------
 
+0.1.22 (2018-04-28)
++++++++++++++++++++
+
+* Use proper time field for chaptermark start instead of char
+* Improved test coverage
+* Improved video dimension handling for handbrake generated portrait videos
+
 0.1.21 (2018-04-24)
 +++++++++++++++++++
 
