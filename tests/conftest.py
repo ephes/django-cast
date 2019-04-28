@@ -7,6 +7,7 @@ import pytest
 from datetime import datetime
 
 from django.utils import timezone
+from django.test.client import RequestFactory
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
@@ -378,3 +379,7 @@ class DummyHandler:
 @pytest.fixture()
 def dummy_handler():
     return DummyHandler()
+
+@pytest.fixture()
+def request_factory():
+    return RequestFactory()

@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "django_filters",
     "watson",  # Fulltext search
     "crispy_forms",  # Form layouts
+    "filepond",  # uploads
     "cast",
 ]
 
