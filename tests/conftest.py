@@ -11,7 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
 
-from cast.models import Blog, Post, Image, Audio, Video, ItunesArtWork, ChapterMark
+from cast.models import Blog, Post, Image, Audio, Video, File, ItunesArtWork, ChapterMark
 
 from .factories import UserFactory
 from .factories import VideoFactory
@@ -194,6 +194,15 @@ def chaptermarks(audio):
             ChapterMark.objects.create(audio=audio, start=start, title=title)
         )
     return results
+
+
+@pytest.fixture()
+def file_instance(user, m4a_audio):
+    _ = File(user=user, original=m4a_audio)
+    _.save()
+    yield _
+    # teardown
+    os.unlink(_.original.path)
 
 
 @pytest.fixture()

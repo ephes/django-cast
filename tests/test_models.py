@@ -114,3 +114,10 @@ class TestAudioModel:
     @pytest.mark.django_db
     def test_audio_podlove_url(self, audio):
         assert audio.podlove_url == "/api/audios/podlove/1"
+
+
+class TestFileModel:
+    @pytest.mark.django_db
+    def test_get_all_file_paths(self, file_instance):
+        all_paths = list(file_instance.get_all_paths())
+        assert len(all_paths) == 1
