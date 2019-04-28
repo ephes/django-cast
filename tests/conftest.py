@@ -380,6 +380,7 @@ class DummyHandler:
 def dummy_handler():
     return DummyHandler()
 
+
 @pytest.fixture()
 def request_factory():
     return RequestFactory()

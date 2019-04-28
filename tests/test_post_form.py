@@ -27,7 +27,7 @@ class TestPostForm:
         for chaptermark in chaptermarks:
             lines.append(chaptermark.original_line)
         chaptermarks_text = "\n".join(lines)
-        
+
         # create form + test
         form = PostForm(instance=post)
         form._clean_chaptermarks({"chaptermarks": chaptermarks_text})
@@ -40,7 +40,7 @@ class TestPostForm:
 
         # create text for chaptermarks area
         chaptermarks_text = "foooooooooooooooooooooooooooo bar baz blub"
-        
+
         # create form + test
         form = PostForm(instance=post)
         cleaned_data = {"chaptermarks": chaptermarks_text}
