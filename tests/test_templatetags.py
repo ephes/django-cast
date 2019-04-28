@@ -2,6 +2,7 @@ import os
 import pytest
 
 from cast.templatetags.cast_extras import video as video_tag
+from cast.templatetags.cast_extras import audio as audio_tag
 
 class TestVideoTag:
     @pytest.mark.django_db
@@ -20,3 +21,11 @@ class TestVideoTag:
         assert "svg" not in tag
         assert "test.png" in tag
         assert "video/mp4" in tag
+
+
+class TestAudioTag:
+    @pytest.mark.django_db
+    def test_audio_template_tag(self, audio):
+        context = {"audio": {audio.pk: audio}}
+        tag = audio_tag(context, audio.pk)
+        assert f"audio_{audio.pk}" in tag
