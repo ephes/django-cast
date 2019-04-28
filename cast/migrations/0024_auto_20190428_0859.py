@@ -5,14 +5,12 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('cast', '0023_auto_20190415_0803'),
-    ]
+    dependencies = [("cast", "0023_auto_20190415_0803")]
 
     operations = [
         migrations.AlterField(
-            model_name='chaptermark',
-            name='start',
-            field=models.TimeField(verbose_name='Start time of chaptermark'),
-        ),
+            model_name="chaptermark",
+            name="start",
+            field=models.TimeField(verbose_name="Start time of chaptermark"),
+        )
     ]
