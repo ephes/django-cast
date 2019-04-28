@@ -3,6 +3,8 @@ import pytest
 
 from cast.templatetags.cast_extras import video as video_tag
 from cast.templatetags.cast_extras import audio as audio_tag
+from cast.templatetags.cast_extras import gallery as gallery_tag
+
 
 class TestVideoTag:
     @pytest.mark.django_db
@@ -29,3 +31,18 @@ class TestAudioTag:
         context = {"audio": {audio.pk: audio}}
         tag = audio_tag(context, audio.pk)
         assert f"audio_{audio.pk}" in tag
+
+
+class TestGalleryTag:
+    @pytest.mark.django_db
+    def test_gallery_template_tag_with_javascript(self, post, gallery):
+        context = {"gallery": {gallery.pk: gallery}, "post": post}
+        tag = gallery_tag(context, gallery.pk)
+        assert "galleryModal" in tag
+
+    @pytest.mark.django_db
+    def test_gallery_template_tag_without_javascript(self, post, gallery):
+        context = {"gallery": {gallery.pk: gallery}, "post": post, "javascript": False}
+        tag = gallery_tag(context, gallery.pk)
+        assert "Modal" not in tag
+        assert "srcset" in tag
