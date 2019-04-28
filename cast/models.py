@@ -349,7 +349,7 @@ class Audio(TimeStampedModel):
         for chapter in self.chaptermarks.order_by("start"):
             items.append(
                 {
-                    "start": chapter.start.split(".")[0],
+                    "start": str(chapter.start).split(".")[0],
                     "title": chapter.title,
                     "href": chapter.link,
                     "image": chapter.image,
@@ -612,7 +612,7 @@ class ChapterMark(models.Model):
     audio = models.ForeignKey(
         Audio, on_delete=models.CASCADE, related_name="chaptermarks"
     )
-    start = models.CharField(max_length=12)
+    start = models.TimeField(_("Start time of chaptermark"))
     title = models.CharField(max_length=255)
     link = models.URLField(max_length=2000, null=True, blank=True)
     image = models.URLField(max_length=2000, null=True, blank=True)
