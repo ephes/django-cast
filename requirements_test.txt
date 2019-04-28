@@ -8,10 +8,11 @@ codecov>=2.0.0
 Pillow
 
 django-environ
-
+django-watson
 django-model-utils
-
 django-allauth
+django-filter
+django-crispy-forms
 
 pytest
 factory-boy

@@ -105,7 +105,7 @@ class Image(TimeStampedModel):
 
     @property
     def full_src(self):
-        return self.full.url
+        return self.img_full.url
 
 
 class ItunesArtWork(TimeStampedModel):
@@ -119,6 +119,8 @@ class ItunesArtWork(TimeStampedModel):
 
 
 def get_video_dimensions(lines):
+    """Has it's own function to be easier to test."""
+
     def get_width_height(video_type, line):
         dim_col = line.split(", ")[3]
         if video_type != "h264":
@@ -137,9 +139,11 @@ def get_video_dimensions(lines):
             continue
         break
     portrait = False
+    portrait_triggers = ["rotation of", "DAR 9:16"]
     for line in lines:
-        if "rotation of" in line:
-            portrait = True
+        for portrait_trigger in portrait_triggers:
+            if portrait_trigger in line:
+                portrait = True
     if portrait:
         width, height = height, width
     return width, height
@@ -215,7 +219,7 @@ class Video(TimeStampedModel):
             try:
                 if self.poster_thumbnail:
                     paths.add(self.poster_thumbnail.name)
-            except FileNotFoundError:
+            except (FileNotFoundError, OSError):
                 pass
         return paths
 
@@ -295,18 +299,20 @@ class Audio(TimeStampedModel):
             paths.add(field.name)
         return paths
 
-    def _get_audio_duration(self, audio_url):
-        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
-        result = subprocess.check_output(
-            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
-        )
-        lines = result.decode("utf8").split("\n")
+    def _lines_to_duration(self, lines):
         duration = None
         for line in lines:
             if "Duration" in line:
                 duration = line.split(",")[0].split()[-1]
                 break
         return duration
+
+    def _get_audio_duration(self, audio_url):
+        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
+        result = subprocess.check_output(
+            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
+        )
+        return self._lines_to_duration(result.decode("utf8").split("\n"))
 
     def create_duration(self):
         for name, field in self.uploaded_audio_files:
@@ -343,7 +349,7 @@ class Audio(TimeStampedModel):
         for chapter in self.chaptermarks.order_by("start"):
             items.append(
                 {
-                    "start": chapter.start.split(".")[0],
+                    "start": str(chapter.start).split(".")[0],
                     "title": chapter.title,
                     "href": chapter.link,
                     "image": chapter.image,
@@ -535,15 +541,6 @@ class Post(TimeStampedModel):
         return slugify(self.title)
 
     @property
-    def media_lookup_old(self):
-        lookup = defaultdict(dict)
-        media = list(self.media.all().prefetch_related("content_object"))
-        for item in media:
-            obj = item.content_object
-            lookup[obj.post_context_key][obj.pk] = obj
-        return lookup
-
-    @property
     def media_lookup(self):
         return {
             "image": {i.pk: i for i in self.images.all()},
@@ -577,8 +574,7 @@ class Post(TimeStampedModel):
         model_lookup = self.media_model_lookup
         for model_name, model_pk in self.media_from_content:
             try:
-                model = media_lookup[model_name][model_pk]
-                logger.info("found: {} {} {}".format(model_name, model_pk, model))
+                media_lookup[model_name][model_pk]
             except KeyError:
                 media_object = model_lookup[model_name].objects.get(pk=model_pk)
                 media_attr_lookup[model_name].add(media_object)
@@ -616,7 +612,7 @@ class ChapterMark(models.Model):
     audio = models.ForeignKey(
         Audio, on_delete=models.CASCADE, related_name="chaptermarks"
     )
-    start = models.CharField(max_length=12)
+    start = models.TimeField(_("Start time of chaptermark"))
     title = models.CharField(max_length=255)
     link = models.URLField(max_length=2000, null=True, blank=True)
     image = models.URLField(max_length=2000, null=True, blank=True)

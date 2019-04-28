@@ -73,7 +73,7 @@ class PostForm(forms.ModelForm):
             lines = cleaned_data.get("chaptermarks", "").split("\n")
             if len(lines) > 0:
                 audio.chaptermarks.all().delete()
-            for line in cleaned_data.get("chaptermarks", "").split("\n"):
+            for line in lines:
                 start, *parts = line.split()
                 title = " ".join(parts)
                 row = {

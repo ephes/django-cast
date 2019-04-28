@@ -432,3 +432,88 @@ video:91kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing ov
         width, height = get_video_dimensions(ffmpeg_output.split("\n"))
         assert width == 1920
         assert height == 1080
+
+    def test_video_from_handbrake_portrait(self):
+        ffmpeg_output = """
+ffprobe version 4.1.3 Copyright (c) 2007-2019 the FFmpeg developers
+  built with Apple LLVM version 10.0.1 (clang-1001.0.46.4)
+  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.3_1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/adoptopenjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/adoptopenjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
+  libavutil      56. 22.100 / 56. 22.100
+  libavcodec     58. 35.100 / 58. 35.100
+  libavformat    58. 20.100 / 58. 20.100
+  libavdevice    58.  5.100 / 58.  5.100
+  libavfilter     7. 40.101 /  7. 40.101
+  libavresample   4.  0.  0 /  4.  0.  0
+  libswscale      5.  3.100 /  5.  3.100
+  libswresample   3.  3.100 /  3.  3.100
+  libpostproc    55.  3.100 / 55.  3.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'Michaelsbergschaukel.mp4':
+  Metadata:
+    major_brand     : mp42
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    creation_time   : 2019-04-27T00:04:26.000000Z
+    title           : Michaelsbergschaukel
+    date            : 2018-09-22T14:58:10+0200
+    encoder         : HandBrake 1.2.1 2019021700
+  Duration: 00:00:13.79, start: 0.000000, bitrate: 10086 kb/s
+    Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080 [SAR 81:256 DAR 9:16], 9970 kb/s, 29.97 fps, 29.97 tbr, 90k tbn, 180k tbc (default)
+    Metadata:
+      creation_time   : 2019-04-27T00:04:26.000000Z
+      handler_name    : VideoHandler
+    Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 162 kb/s (default)
+    Metadata:
+      creation_time   : 2019-04-27T00:04:26.000000Z
+      handler_name    : SoundHandler
+        """
+        width, height = get_video_dimensions(ffmpeg_output.split("\n"))
+        print("width x height: ", width, height)
+        assert width == 1080
+        assert height == 1920
+
+    def test_video_from_handbrake_landscape(self):
+        ffmpeg_output = """
+ffprobe version 4.1.3 Copyright (c) 2007-2019 the FFmpeg developers
+  built with Apple LLVM version 10.0.1 (clang-1001.0.46.4)
+  configuration: --prefix=/usr/local/Cellar/ffmpeg/4.1.3_1 --enable-shared --enable-pthreads --enable-version3 --enable-hardcoded-tables --enable-avresample --cc=clang --host-cflags='-I/Library/Java/JavaVirtualMachines/adoptopenjdk-11.0.2.jdk/Contents/Home/include -I/Library/Java/JavaVirtualMachines/adoptopenjdk-11.0.2.jdk/Contents/Home/include/darwin' --host-ldflags= --enable-ffplay --enable-gnutls --enable-gpl --enable-libaom --enable-libbluray --enable-libmp3lame --enable-libopus --enable-librubberband --enable-libsnappy --enable-libtesseract --enable-libtheora --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-libxvid --enable-lzma --enable-libfontconfig --enable-libfreetype --enable-frei0r --enable-libass --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenjpeg --enable-librtmp --enable-libspeex --enable-videotoolbox --disable-libjack --disable-indev=jack --enable-libaom --enable-libsoxr
+  libavutil      56. 22.100 / 56. 22.100
+  libavcodec     58. 35.100 / 58. 35.100
+  libavformat    58. 20.100 / 58. 20.100
+  libavdevice    58.  5.100 / 58.  5.100
+  libavfilter     7. 40.101 /  7. 40.101
+  libavresample   4.  0.  0 /  4.  0.  0
+  libswscale      5.  3.100 /  5.  3.100
+  libswresample   3.  3.100 /  3.  3.100
+  libpostproc    55.  3.100 / 55.  3.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'Tripptrappkuckuck.mp4':
+  Metadata:
+    major_brand     : mp42
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    creation_time   : 2019-04-27T00:12:09.000000Z
+    title           : Tripptrappkuckuck
+    date            : 2018-09-25T21:25:49+0200
+    encoder         : HandBrake 1.2.1 2019021700
+  Duration: 00:00:41.82, start: 0.000000, bitrate: 2030 kb/s
+    Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080 [SAR 1:1 DAR 16:9], 1860 kb/s, 29.97 fps, 29.97 tbr, 90k tbn, 180k tbc (default)
+    Metadata:
+      creation_time   : 2019-04-27T00:12:09.000000Z
+      handler_name    : VideoHandler
+    Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 162 kb/s (default)
+    Metadata:
+      creation_time   : 2019-04-27T00:12:09.000000Z
+      handler_name    : SoundHandler
+        """
+        width, height = get_video_dimensions(ffmpeg_output.split("\n"))
+        print("width x height: ", width, height)
+        assert width == 1920
+        assert height == 1080
+
+    def test_video_from_empty(self):
+        ffmpeg_output = """
+           foo bar baz
+        """
+        width, height = get_video_dimensions(ffmpeg_output.split("\n"))
+        print("width x height: ", width, height)
+        assert width == None
+        assert height == None
