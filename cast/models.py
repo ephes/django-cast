@@ -298,18 +298,20 @@ class Audio(TimeStampedModel):
             paths.add(field.name)
         return paths
 
-    def _get_audio_duration(self, audio_url):
-        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
-        result = subprocess.check_output(
-            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
-        )
-        lines = result.decode("utf8").split("\n")
+    def _lines_to_duration(self, lines):
         duration = None
         for line in lines:
             if "Duration" in line:
                 duration = line.split(",")[0].split()[-1]
                 break
         return duration
+
+    def _get_audio_duration(self, audio_url):
+        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
+        result = subprocess.check_output(
+            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
+        )
+        return self._lines_to_duration(result.decode("utf8").split("\n"))
 
     def create_duration(self):
         for name, field in self.uploaded_audio_files:
