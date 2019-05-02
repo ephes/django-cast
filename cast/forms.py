@@ -48,7 +48,9 @@ class PostForm(forms.ModelForm):
         )
 
         if self.instance.podcast_audio:
-            self.fields["chaptermarks"] = forms.CharField(widget=forms.Textarea)
+            self.fields["chaptermarks"] = forms.CharField(
+                widget=forms.Textarea, required=False
+            )
 
     def _set_pub_date(self, cleaned_data):
         pub_date = cleaned_data.get("pub_date")
