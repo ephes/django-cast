@@ -4,7 +4,6 @@ from django.contrib.syndication.views import Feed
 
 from django.utils.feedgenerator import Atom1Feed, rfc2822_date, Rss201rev2Feed
 
-from django.urls import reverse
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
@@ -216,16 +215,6 @@ class AtomPodcastFeed(PodcastFeed):
     def link(self):
         """atom link is still wrong, dunno why FIXME"""
         return self.object.get_absolute_url()
-
-    # def author_link(self, blog):
-    #     return blog.link
-
-
-#    def link(self):
-#        return reverse(
-#            "cast:podcast_feed_atom",
-#            kwargs={"slug": self.object.slug, "audio_format": self.audio_format},
-#        )
 
 
 class RssPodcastFeed(PodcastFeed):

@@ -1,14 +1,27 @@
 import io
 import os
 import json
+import pytz
 import pytest
 
+from datetime import datetime
+
 from django.utils import timezone
+from django.test.client import RequestFactory
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
 
-from cast.models import Blog, Post, Image, Audio, ItunesArtWork
+from cast.models import (
+    Blog,
+    Post,
+    Image,
+    Audio,
+    Video,
+    File,
+    ItunesArtWork,
+    ChapterMark,
+)
 
 from .factories import UserFactory
 from .factories import VideoFactory
@@ -55,6 +68,21 @@ def image_1px_io():
     bio_file.name = "testimage.png"
     bio_file.seek(0)
     return bio_file
+
+
+def read_test_mp4(fixture_dir):
+    with open(os.path.join(fixture_dir, "test.mp4"), "rb") as f:
+        mp4 = f.read()
+    return mp4
+
+
+@pytest.fixture()
+def minimal_mp4(fixture_dir):
+    mp4 = read_test_mp4(fixture_dir)
+    simple_mp4 = SimpleUploadedFile(
+        name="test.mp4", content=mp4, content_type="video/mp4"
+    )
+    return simple_mp4
 
 
 def create_small_rgb():
@@ -129,6 +157,20 @@ def image(user, image_1px):
 
 
 @pytest.fixture()
+def video_with_poster(user, minimal_mp4, image_1px):
+    video = Video(user=user, original=minimal_mp4, poster=image_1px)
+    video.save()
+    yield video
+    # teardown
+    os.unlink(video.original.path)
+    os.unlink(video.poster.path)
+    try:
+        os.unlink(video.poster_thumbnail.path)
+    except FileNotFoundError:
+        pass
+
+
+@pytest.fixture()
 def itunes_artwork(image_1px):
     ia = ItunesArtWork(original=image_1px)
     ia.save()
@@ -144,6 +186,30 @@ def audio(user, m4a_audio):
     yield audio
     # teardown
     os.unlink(audio.m4a.path)
+
+
+@pytest.fixture()
+def chaptermarks(audio):
+    cms = [
+        ("00:01:01.234", "introduction", "", ""),
+        ("00:03:05.567", "coughing", "http://google.com", ""),
+        ("00:02:05.567", "wrong order", "", ""),
+    ]
+    results = []
+    for start, title, href, image in cms:
+        results.append(
+            ChapterMark.objects.create(audio=audio, start=start, title=title)
+        )
+    return results
+
+
+@pytest.fixture()
+def file_instance(user, m4a_audio):
+    _ = File(user=user, original=m4a_audio)
+    _.save()
+    yield _
+    # teardown
+    os.unlink(_.original.path)
 
 
 @pytest.fixture()
@@ -178,6 +244,59 @@ def post(blog):
         slug="test-entry",
         pub_date=timezone.now(),
         content="foobar",
+    )
+
+
+@pytest.fixture()
+def draft_post(blog):
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=None,
+        content="foobar",
+    )
+
+
+@pytest.fixture()
+def post_with_date(blog):
+    visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2018, 1, 1, 8))
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        visible_date=visible_date,
+        content="foobar",
+    )
+
+
+@pytest.fixture()
+def post_with_different_date(blog):
+    visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        visible_date=visible_date,
+        content="foobar",
+    )
+
+
+@pytest.fixture()
+def post_with_search(blog):
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="asdf",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        visible_date=timezone.now(),
+        content="bsdf",
     )
 
 
@@ -260,3 +379,8 @@ class DummyHandler:
 @pytest.fixture()
 def dummy_handler():
     return DummyHandler()
+
+
+@pytest.fixture()
+def request_factory():
+    return RequestFactory()
