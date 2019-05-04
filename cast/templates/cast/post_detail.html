@@ -1,5 +1,6 @@
 {% extends "cast/cast_base.html" %}
 {% load static %}
+{% load threadedcomments_tags %}
 
 {% block content %}
 <a class="btn btn-secondary btn-lg" href="{% url "cast:post_list" slug=post.blog.slug %}" role="button">Back to Blog</a>
@@ -18,10 +19,25 @@
     {{ post.description|safe }}
   </section>
 </article>
+
+<h2>Comments for {{ post.title }}:</h2>
+
+<div class="comments_wrapper" id="comments">
+    {% render_comment_list for post %}
+
+    <div id="wrap_write_comment">
+              
+      <div id="form-comment">
+      {% render_comment_form for post %}
+      </div>
+
+    </div>
+</div>
 {% endblock content %}
 
+
 {% block javascript %}
-  {{ block.super }}
+{{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
   {% if post.has_audio %}
     <script src="https://cdn.podlove.org/web-player/embed.js"></script>
@@ -29,4 +45,23 @@
       <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
     {% endfor %}
   {% endif %}
-{% endblock javascript %}
+
+  <script type="text/javascript">
+      function show_reply_form(event) {
+          var $this = $(this);
+          var comment_id = $this.data('comment-id');
+          $('#id_parent').val(comment_id);
+          $('#form-comment').insertAfter($this.closest('.comment'));
+      };
+      function cancel_reply_form(event) {
+          $('#id_comment').val('');
+          $('#id_parent').val('');
+          $('#form-comment').appendTo($('#wrap_write_comment'));
+      }
+      $.fn.ready(function() {
+          $('.comment_reply_link').click(show_reply_form);
+          $('#cancel_reply').click(cancel_reply_form);
+      })
+  </script>
+
+  {% endblock javascript %}
