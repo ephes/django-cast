@@ -23,6 +23,7 @@ from cast.models import (
     ChapterMark,
 )
 
+from cast import appsettings
 from .factories import UserFactory
 from .factories import VideoFactory
 from .factories import GalleryFactory
@@ -384,3 +385,18 @@ def dummy_handler():
 @pytest.fixture()
 def request_factory():
     return RequestFactory()
+
+
+@pytest.fixture()
+def comments_enabled():
+    from cast.appsettings import CAST_COMMENTS_ENABLED as previous
+    appsettings.CAST_COMMENTS_ENABLED = True
+    yield appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = previous
+
+@pytest.fixture()
+def comments_disabled():
+    from cast.appsettings import CAST_COMMENTS_ENABLED as previous
+    appsettings.CAST_COMMENTS_ENABLED = False
+    yield appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = previous

@@ -1,5 +1,9 @@
 {% extends "cast/cast_base.html" %}
-{% load comments static %}
+{% load static %}
+
+{% if comments_enabled %}
+  {% load comments %}
+{% endif %}
 
 {% block css %}
 {{ block.super }}
@@ -24,9 +28,11 @@
   </section>
 </article>
 
-<h2>Comments for {{ post.title }}:</h2>
-{% render_comment_list for object %}
-{% render_comment_form for object %}
+{% if comments_enabled %}
+  <h2>Comments for {{ post.title }}:</h2>
+  {% render_comment_list for object %}
+  {% render_comment_form for object %}
+{% endif %}
 
 {% endblock content %}
 
@@ -41,6 +47,8 @@
     {% endfor %}
   {% endif %}
 
-  <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+  {% if comments_enabled %}
+    <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+  {% endif %}
 
   {% endblock javascript %}

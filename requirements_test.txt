@@ -13,6 +13,8 @@ django-model-utils
 django-allauth
 django-filter
 django-crispy-forms
+django-fluent-comments
+django-threadedcomments
 
 pytest
 factory-boy
