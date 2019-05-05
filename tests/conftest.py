@@ -9,6 +9,8 @@ from datetime import datetime
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django_comments import get_model as get_comments_model
+from django.conf import settings
 
 from rest_framework.test import APIClient
 
@@ -24,6 +26,7 @@ from cast.models import (
 )
 
 from cast import appsettings
+
 from .factories import UserFactory
 from .factories import VideoFactory
 from .factories import GalleryFactory
@@ -400,3 +403,10 @@ def comments_disabled():
     appsettings.CAST_COMMENTS_ENABLED = False
     yield appsettings.CAST_COMMENTS_ENABLED
     appsettings.CAST_COMMENTS_ENABLED = previous
+
+@pytest.fixture()
+def comment(post):
+    comment_model = get_comments_model()
+    instance = comment_model(content_object=post, site_id=settings.SITE_ID, title="foobar", comment="bar baz")
+    instance.save()
+    return instance
