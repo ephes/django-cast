@@ -1,6 +1,10 @@
 {% extends "cast/cast_base.html" %}
-{% load static %}
-{% load threadedcomments_tags %}
+{% load comments static %}
+
+{% block css %}
+{{ block.super }}
+  <link rel="stylesheet" type="text/css" href="{% static 'fluent_comments/css/ajaxcomments.css' %}" />
+{% endblock css %}
 
 {% block content %}
 <a class="btn btn-secondary btn-lg" href="{% url "cast:post_list" slug=post.blog.slug %}" role="button">Back to Blog</a>
@@ -21,18 +25,9 @@
 </article>
 
 <h2>Comments for {{ post.title }}:</h2>
+{% render_comment_list for object %}
+{% render_comment_form for object %}
 
-<div class="comments_wrapper" id="comments">
-    {% render_comment_list for post %}
-
-    <div id="wrap_write_comment">
-              
-      <div id="form-comment">
-      {% render_comment_form for post %}
-      </div>
-
-    </div>
-</div>
 {% endblock content %}
 
 
@@ -46,22 +41,6 @@
     {% endfor %}
   {% endif %}
 
-  <script type="text/javascript">
-      function show_reply_form(event) {
-          var $this = $(this);
-          var comment_id = $this.data('comment-id');
-          $('#id_parent').val(comment_id);
-          $('#form-comment').insertAfter($this.closest('.comment'));
-      };
-      function cancel_reply_form(event) {
-          $('#id_comment').val('');
-          $('#id_parent').val('');
-          $('#form-comment').appendTo($('#wrap_write_comment'));
-      }
-      $.fn.ready(function() {
-          $('.comment_reply_link').click(show_reply_form);
-          $('#cancel_reply').click(cancel_reply_form);
-      })
-  </script>
+  <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
 
   {% endblock javascript %}
