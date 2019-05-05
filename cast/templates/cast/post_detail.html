@@ -1,6 +1,15 @@
 {% extends "cast/cast_base.html" %}
 {% load static %}
 
+{% if comments_enabled %}
+  {% load comments %}
+{% endif %}
+
+{% block css %}
+{{ block.super }}
+  <link rel="stylesheet" type="text/css" href="{% static 'fluent_comments/css/ajaxcomments.css' %}" />
+{% endblock css %}
+
 {% block content %}
 <a class="btn btn-secondary btn-lg" href="{% url "cast:post_list" slug=post.blog.slug %}" role="button">Back to Blog</a>
 {% if user.is_authenticated %}
@@ -18,10 +27,18 @@
     {{ post.description|safe }}
   </section>
 </article>
+
+{% if comments_enabled %}
+  <h2>Comments for {{ post.title }}:</h2>
+  {% render_comment_list for object %}
+  {% render_comment_form for object %}
+{% endif %}
+
 {% endblock content %}
 
+
 {% block javascript %}
-  {{ block.super }}
+{{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
   {% if post.has_audio %}
     <script src="https://cdn.podlove.org/web-player/embed.js"></script>
@@ -29,4 +46,9 @@
       <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
     {% endfor %}
   {% endif %}
-{% endblock javascript %}
+
+  {% if comments_enabled %}
+    <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+  {% endif %}
+
+  {% endblock javascript %}

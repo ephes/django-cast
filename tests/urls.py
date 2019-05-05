@@ -12,4 +12,8 @@ urlpatterns = [
     # rest framework docs/schema urls
     url(r"^docs/", include_docs_urls(title="cast API service")),
     url(r"^", include("cast.urls", namespace="cast")),
+    
+    # comments
+    url(r'^posts/comments/', include('fluent_comments.urls')),
+    
 ]
