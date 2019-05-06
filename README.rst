@@ -43,6 +43,7 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
         "ckeditor",
         "ckeditor_uploader"
         "crispy_forms",
+        "django_filters",
         "rest_framework",
         "rest_framework.authtoken",
         "filepond.apps.FilepondConfig",
