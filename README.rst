@@ -101,7 +101,7 @@ Add Django Cast's URL patterns:
         # Uploads
         path("uploads/", include("filepond.urls", namespace="filepond")),
         # Cast
-        path("/cast", include("cast.urls", namespace="cast")),
+        path("cast/", include("cast.urls", namespace="cast")),
         ...
     ]
 
