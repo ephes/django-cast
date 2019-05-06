@@ -46,6 +46,7 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
         "rest_framework.authtoken",
         "filepond.apps.FilepondConfig",
         "cast.apps.CastConfig",
+        "watson",
         ...
     )
 
