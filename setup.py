@@ -59,6 +59,7 @@ setup(
         "Pillow",
         "django-model-utils",
         "django-ckeditor",
+        "django-crispy-forms",
         "django-imagekit",
         "django-watson",
         "django-filter",

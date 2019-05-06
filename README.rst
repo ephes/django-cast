@@ -41,7 +41,8 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
         ...
         "imagekit",
         "ckeditor",
-        "ckeditor_uploader",
+        "ckeditor_uploader"
+        "crispy_forms",
         "rest_framework",
         "rest_framework.authtoken",
         "filepond.apps.FilepondConfig",
