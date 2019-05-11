@@ -1,7 +1,6 @@
 import logging
 
 from django.db import models
-from django.conf import settings
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db.models.functions import TruncMonth

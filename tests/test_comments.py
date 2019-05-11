@@ -51,7 +51,7 @@ class TestPostComments:
             if "security_hash" in line:
                 for part in line.split("input"):
                     if "security_hash" in part:
-                        for attr in part.split(' '):
+                        for attr in part.split(" "):
                             if "value" in attr:
                                 security_hash = attr.split('"')[1]
                     if "timestamp" in part:
@@ -69,7 +69,7 @@ class TestPostComments:
             "security_hash": security_hash,
             "timestamp": timestamp,
         }
-        
+
         r = client.post(ajax_url, data, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         assert r.status_code == 200
 
