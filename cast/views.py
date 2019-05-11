@@ -9,6 +9,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView
 
 from django_filters.views import FilterView
 
+from . import appsettings
 from .forms import PostForm
 from .filters import PostFilter
 from .filters import parse_date_facets
@@ -124,8 +125,10 @@ class PostDetailView(RenderPostMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        Post = context[self.context_object_name]
-        self.render_post(Post)
+        post = context[self.context_object_name]
+        self.render_post(post)
+        context["next"] = post.get_absolute_url()
+        context["comments_enabled"] = appsettings.CAST_COMMENTS_ENABLED
         return context
 
 

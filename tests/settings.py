@@ -33,6 +33,9 @@ INSTALLED_APPS = [
     "watson",  # Fulltext search
     "crispy_forms",  # Form layouts
     "filepond",  # uploads
+    "fluent_comments",
+    "threadedcomments",
+    "django_comments",
     "cast",
 ]
 
@@ -135,3 +138,6 @@ CKEDITOR_CONFIGS = {
         "enterMode": 2,
     }
 }
+
+# Comments
+COMMENTS_APP = "fluent_comments"
