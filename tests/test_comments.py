@@ -1,4 +1,5 @@
 import pytest
+<<<<<<< HEAD
 
 from django.urls import reverse
 
@@ -63,17 +64,18 @@ class TestPostComments:
             "content_type": "cast.post",
             "object_pk": str(post.pk),
             "comment": "new content",
-            "name": "my name",
-            "email": "jochen@foobar.de",
-            "title": "this title",
+            "name": "Name",
+            "email": "fuz@baz.com",
+            "title": "buzz",
             "security_hash": security_hash,
             "timestamp": timestamp,
         }
+        
         r = client.post(ajax_url, data, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         assert r.status_code == 200
 
         rdata = r.json()
         assert rdata["success"]
-        
+
         comment = get_comments_model().objects.get(pk=rdata["object_id"])
         assert comment.comment == data["comment"]

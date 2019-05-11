@@ -42,8 +42,9 @@
 
 {% endblock content %}
 
+
 {% block javascript %}
-  {{ block.super }}
+{{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
   {% if comments_enabled %}
     <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
@@ -54,4 +55,9 @@
       <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
     {% endfor %}
   {% endif %}
-{% endblock javascript %}
+
+  {% if comments_enabled %}
+    <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+  {% endif %}
+
+  {% endblock javascript %}

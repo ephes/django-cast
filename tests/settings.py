@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     "watson",  # Fulltext search
     "crispy_forms",  # Form layouts
     "filepond",  # uploads
-    "fluent_comments",
+    "fluent_comments",  # must be before django_comments
     "threadedcomments",
     "django_comments",
     "cast",
