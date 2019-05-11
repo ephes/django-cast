@@ -1,5 +1,4 @@
 import pytest
-<<<<<<< HEAD
 
 from django.urls import reverse
 
