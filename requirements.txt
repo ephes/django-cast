@@ -22,6 +22,10 @@ django-filter
 # search / filter forms
 django-crispy-forms
 
+# API
+coreapi
+djangorestframework
+
 # slugs
 python-slugify
 

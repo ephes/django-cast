@@ -55,6 +55,7 @@ setup(
     packages=["cast"],
     include_package_data=True,
     install_requires=[
+        "coreapi",
         "Pillow",
         "django-model-utils",
         "django-ckeditor",
@@ -62,6 +63,7 @@ setup(
         "django-watson",
         "django-filter",
         "django-filepond",
+        "djangorestframework",
         "python-slugify",
     ],
     license="BSD",
