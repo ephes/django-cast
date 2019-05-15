@@ -23,7 +23,7 @@ pytest-django
 python-slugify
 
 django-ckeditor
-
+django-filepond
 django-imagekit
 
 coreapi
