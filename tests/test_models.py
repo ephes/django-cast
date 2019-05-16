@@ -136,6 +136,30 @@ class TestPostModel:
         post.podcast_audio = audio
         assert post.has_audio is True
 
+    @pytest.mark.django_db
+    def test_post_comments_enabled(self, post, comments_enabled):
+        post.comments_enabled = True
+        post.blog.comments_enabled = True
+        assert post.comments_are_enabled
+
+    @pytest.mark.django_db
+    def test_post_comments_disabled_settings(self, post, comments_not_enabled):
+        post.comments_enabled = True
+        post.blog.comments_enabled = True
+        assert not post.comments_are_enabled
+
+    @pytest.mark.django_db
+    def test_post_comments_disabled_blog(self, post, comments_enabled):
+        post.comments_enabled = True
+        post.blog.comments_enabled = False
+        assert not post.comments_are_enabled
+
+    @pytest.mark.django_db
+    def test_post_comments_disabled_post(self, post, comments_enabled):
+        post.comments_enabled = False
+        post.blog.comments_enabled = True
+        assert not post.comments_are_enabled
+
 
 class TestChapterMarkModel:
     @pytest.mark.django_db

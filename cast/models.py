@@ -28,6 +28,8 @@ from model_utils.models import TimeStampedModel
 
 from slugify import slugify
 
+from . import appsettings
+
 
 logger = logging.getLogger(__name__)
 
@@ -396,6 +398,14 @@ class Blog(TimeStampedModel):
     slug = models.SlugField(max_length=50)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     email = models.EmailField(null=True, default=None, blank=True)
+    comments_enabled = models.BooleanField(
+        _("comments_enabled"),
+        default=True,
+        help_text=_(
+            "Whether comments are enabled for this blog."
+            ""
+        ),
+    )
 
     # podcast stuff
 
@@ -502,6 +512,14 @@ class Post(TimeStampedModel):
             ""
         ),
     )
+    comments_enabled = models.BooleanField(
+        _("comments_enabled"),
+        default=True,
+        help_text=_(
+            "Whether comments are enabled for this post."
+            ""
+        ),
+    )
 
     content = RichTextUploadingField()
     slug = models.SlugField(max_length=50)
@@ -601,6 +619,10 @@ class Post(TimeStampedModel):
     @property
     def has_audio(self):
         return self.audios.count() > 0 or self.podcast_audio is not None
+
+    @property
+    def comments_are_enabled(self):
+        return appsettings.CAST_COMMENTS_ENABLED and self.blog.comments_enabled and self.comments_enabled
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)
