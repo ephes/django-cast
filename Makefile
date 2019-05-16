@@ -28,7 +28,7 @@ clean-pyc: ## remove Python file artifacts
 	find . -name '*~' -exec rm -f {} +
 
 lint: ## check style with flake8
-	flake8 cast tests
+	flake8 cast tests --ignore=W503
 
 black: ## paint it black
 	black cast tests
