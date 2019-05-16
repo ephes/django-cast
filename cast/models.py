@@ -317,7 +317,7 @@ class Audio(TimeStampedModel):
             .decode()
             .strip()
         )
-        m = re.match("^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
+        m = re.match(r"^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
         return timedelta(seconds=int(m["seconds"]), microseconds=int(m["microseconds"]))
 
     def create_duration(self):
