@@ -6,11 +6,16 @@ import pytest
 
 from datetime import datetime
 
+from django.conf import settings
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
+
+from django_comments import get_model as get_comments_model
+
+from cast import appsettings
 
 from cast.models import (
     Blog,
@@ -384,3 +389,29 @@ def dummy_handler():
 @pytest.fixture()
 def request_factory():
     return RequestFactory()
+
+
+@pytest.fixture()
+def comments_enabled():
+    previous = appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = True
+    yield appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = previous
+
+
+@pytest.fixture()
+def comments_not_enabled():
+    previous = appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = False
+    yield appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = previous
+
+
+@pytest.fixture()
+def comment(post):
+    comment_model = get_comments_model()
+    instance = comment_model(
+        content_object=post, site_id=settings.SITE_ID, title="foobar", comment="bar baz"
+    )
+    instance.save()
+    return instance

@@ -3,83 +3,90 @@
 History
 -------
 
-0.1.22 (2018-04-28)
+0.1.23 (2019-05-16)
++++++++++++++++++++
+
+* Comment en/disabling per site/blog/post
+* Fix duration extraction and small issues with the installation docs @jnns
+* Support for comments by @oryon-dominik
+
+0.1.22 (2019-04-28)
 +++++++++++++++++++
 
 * Use proper time field for chaptermark start instead of char
 * Improved test coverage
 * Improved video dimension handling for handbrake generated portrait videos
 
-0.1.21 (2018-04-24)
+0.1.21 (2019-04-24)
 +++++++++++++++++++
 
 * Fixed package dependencies
 * Better release docs
 
-0.1.20 (2018-04-24)
+0.1.20 (2019-04-24)
 +++++++++++++++++++
 
 * Fixed version history
 * Better release docs
 
-0.1.19 (2018-04-24)
+0.1.19 (2019-04-24)
 +++++++++++++++++++
 
 * Added fulltext search
 * Added filtering by date + some faceted navigation support
 * use overwritable template block for feeds section (could be used for podlove subscribe button)
 
-0.1.18 (2018-04-18)
+0.1.18 (2019-04-18)
 +++++++++++++++++++
 
 * Fixed broken update view due to empty chaptermarks + test
 * Fixed two image/video javascript bugs
 
-0.1.17 (2018-04-15)
+0.1.17 (2019-04-15)
 +++++++++++++++++++
 
 * Added chaptermarks feature
 * Duration is now displayed correctly in podlove player
 * If an audio upload succeeded, add the uploaded element to podcast audio select form
 
-0.1.16 (2018-03-23)
+0.1.16 (2019-03-23)
 +++++++++++++++++++
 
 * Finally, rtfd is working again, including screencast
 
-0.1.15 (2018-03-23)
+0.1.15 (2019-03-23)
 +++++++++++++++++++
 
 * Trying again... rtfd still failing
 
-0.1.14 (2018-03-23)
+0.1.14 (2019-03-23)
 +++++++++++++++++++
 
 * Added rtfd configuration file to be able to use python 3 :/
 
-0.1.13 (2018-03-22)
+0.1.13 (2019-03-22)
 +++++++++++++++++++
 
 * Release to update read the docs
 
-0.1.12 (2018-03-22)
+0.1.12 (2019-03-22)
 +++++++++++++++++++
 
 * Improved installation documentation
 
-0.1.11 (2018-03-21)
+0.1.11 (2019-03-21)
 +++++++++++++++++++
 
 * Fixed requirements for package
 
-0.1.10 (2018-03-21)
+0.1.10 (2019-03-21)
 +++++++++++++++++++
 
 * Dont limit the number of items in feed (was 5 items)
 * Workaround for ogg files (ending differs for Audio model field name)
 * Added opus format to Audio model
 
-0.1.9 (2018-03-12)
+0.1.9 (2019-03-12)
 ++++++++++++++++++
 
 * Added some podcast specific fields to post edit form
@@ -87,18 +94,18 @@ History
 * Added audio file support for post edit form
 * Show which audio files already were uploaded
 
-0.1.8 (2018-02-28)
+0.1.8 (2019-02-28)
 ++++++++++++++++++
 
 * Added support for m4v and improved dimension detection for iOS videos
 * Added some tests for different video sources
 
-0.1.7 (2018-02-28)
+0.1.7 (2019-02-28)
 ++++++++++++++++++
 
 * forgot linting
 
-0.1.6 (2018-02-28)
+0.1.6 (2019-02-28)
 ++++++++++++++++++
 
 * Use filepond for media uploads (images video)

@@ -6,6 +6,7 @@ import logging
 import tempfile
 import subprocess
 
+from datetime import timedelta
 from pathlib import Path
 from subprocess import check_output
 from collections import defaultdict
@@ -26,6 +27,8 @@ from imagekit.processors import Transpose
 from model_utils.models import TimeStampedModel
 
 from slugify import slugify
+
+from . import appsettings
 
 
 logger = logging.getLogger(__name__)
@@ -299,20 +302,23 @@ class Audio(TimeStampedModel):
             paths.add(field.name)
         return paths
 
-    def _lines_to_duration(self, lines):
-        duration = None
-        for line in lines:
-            if "Duration" in line:
-                duration = line.split(",")[0].split()[-1]
-                break
-        return duration
-
     def _get_audio_duration(self, audio_url):
-        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
-        result = subprocess.check_output(
-            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
+        # Taken from: http://trac.ffmpeg.org/wiki/FFprobeTips
+        cmd = f"""
+        ffprobe  \
+            -v 0  \
+            -print_format json  \
+            -show_entries format=duration  \
+            -of default=noprint_wrappers=1:nokey=1  \
+            '{audio_url}'
+        """
+        result = (
+            subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+            .decode()
+            .strip()
         )
-        return self._lines_to_duration(result.decode("utf8").split("\n"))
+        m = re.match(r"^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
+        return timedelta(seconds=int(m["seconds"]), microseconds=int(m["microseconds"]))
 
     def create_duration(self):
         for name, field in self.uploaded_audio_files:
@@ -320,9 +326,6 @@ class Audio(TimeStampedModel):
             if not audio_url.startswith("http"):
                 audio_url = field.path
             duration = self._get_audio_duration(audio_url)
-            # skip duration for small files (tests won't work otherwise :(..)
-            if not int(duration.split(":")[2].split(".")[0]) > 0:
-                duration = None
             if duration is not None:
                 self.duration = duration
                 break
@@ -395,6 +398,11 @@ class Blog(TimeStampedModel):
     slug = models.SlugField(max_length=50)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     email = models.EmailField(null=True, default=None, blank=True)
+    comments_enabled = models.BooleanField(
+        _("comments_enabled"),
+        default=True,
+        help_text=_("Whether comments are enabled for this blog." ""),
+    )
 
     # podcast stuff
 
@@ -501,6 +509,11 @@ class Post(TimeStampedModel):
             ""
         ),
     )
+    comments_enabled = models.BooleanField(
+        _("comments_enabled"),
+        default=True,
+        help_text=_("Whether comments are enabled for this post." ""),
+    )
 
     content = RichTextUploadingField()
     slug = models.SlugField(max_length=50)
@@ -600,6 +613,14 @@ class Post(TimeStampedModel):
     @property
     def has_audio(self):
         return self.audios.count() > 0 or self.podcast_audio is not None
+
+    @property
+    def comments_are_enabled(self):
+        return (
+            appsettings.CAST_COMMENTS_ENABLED
+            and self.blog.comments_enabled
+            and self.comments_enabled
+        )
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)

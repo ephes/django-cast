@@ -13,6 +13,8 @@ django-model-utils
 django-allauth
 django-filter
 django-crispy-forms
+django-threadedcomments
+django-fluent-comments
 
 pytest
 factory-boy
@@ -21,7 +23,7 @@ pytest-django
 python-slugify
 
 django-ckeditor
-
+django-filepond
 django-imagekit
 
 coreapi

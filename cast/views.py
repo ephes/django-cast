@@ -124,8 +124,10 @@ class PostDetailView(RenderPostMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        Post = context[self.context_object_name]
-        self.render_post(Post)
+        post = context[self.context_object_name]
+        self.render_post(post)
+        context["next"] = post.get_absolute_url()
+        context["comments_enabled"] = post.comments_are_enabled
         return context
 
 
