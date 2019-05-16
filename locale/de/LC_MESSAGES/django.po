@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-05-05 08:54-0500\n"
+"POT-Creation-Date: 2019-05-16 17:53+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -38,90 +38,101 @@ msgstr ""
 msgid "The audio object to be used as podcast episode."
 msgstr ""
 
-#: build/lib/cast/models.py:400 cast/models.py:406
+#: build/lib/cast/models.py:407 cast/models.py:407
 msgid "itunes_categories"
 msgstr ""
 
-#: build/lib/cast/models.py:405 cast/models.py:411
+#: build/lib/cast/models.py:412 cast/models.py:412
 msgid ""
 "A json dict of itunes categories pointing to lists of subcategories. Taken "
 "from this list https://validator.w3.org/feed/docs/error/"
 "InvalidItunesCategory.html"
 msgstr ""
 
-#: build/lib/cast/models.py:410 cast/models.py:416
+#: build/lib/cast/models.py:417 cast/models.py:417
 msgid "yes"
 msgstr ""
 
-#: build/lib/cast/models.py:410 cast/models.py:416
+#: build/lib/cast/models.py:417 cast/models.py:417
 msgid "no"
 msgstr ""
 
-#: build/lib/cast/models.py:410 cast/models.py:416
+#: build/lib/cast/models.py:417 cast/models.py:417
 msgid "clean"
 msgstr ""
 
-#: build/lib/cast/models.py:412 build/lib/cast/models.py:474 cast/models.py:418
-#: cast/models.py:480
+#: build/lib/cast/models.py:419 build/lib/cast/models.py:481 cast/models.py:419
+#: cast/models.py:481
 msgid "keywords"
 msgstr ""
 
-#: build/lib/cast/models.py:417 cast/models.py:423
+#: build/lib/cast/models.py:424 cast/models.py:424
 msgid ""
 "A comma-delimitedlist of up to 12 words for iTunes\n"
 "            searches. Perhaps include misspellings of the title."
 msgstr ""
 
-#: build/lib/cast/models.py:422 build/lib/cast/models.py:484 cast/models.py:428
-#: cast/models.py:490
+#: build/lib/cast/models.py:429 build/lib/cast/models.py:491 cast/models.py:429
+#: cast/models.py:491
 msgid "explicit"
 msgstr ""
 
-#: build/lib/cast/models.py:425 build/lib/cast/models.py:486 cast/models.py:431
-#: cast/models.py:492
+#: build/lib/cast/models.py:432 build/lib/cast/models.py:493 cast/models.py:432
+#: cast/models.py:493
 msgid "``Clean`` will put the clean iTunes graphic by it."
 msgstr ""
 
-#: build/lib/cast/models.py:479 cast/models.py:485
+#: build/lib/cast/models.py:486 cast/models.py:486
 msgid ""
 "A comma-demlimitedlist of up to 12 words for iTunes\n"
 "            searches. Perhaps include misspellings of the title."
 msgstr ""
 
-#: build/lib/cast/models.py:490 cast/models.py:496
+#: build/lib/cast/models.py:497 cast/models.py:497
 msgid "block"
 msgstr ""
 
-#: build/lib/cast/models.py:493 cast/models.py:499
+#: build/lib/cast/models.py:500 cast/models.py:500
 msgid ""
 "Check to block this episode from iTunes because <br />its content might "
 "cause the entire show to be <br />removed from iTunes."
 msgstr ""
 
-#: build/lib/cast/widgets.py:54 cast/widgets.py:54
-msgid "All"
-msgstr ""
-
-#: cast/models.py:615
+#: build/lib/cast/models.py:616 cast/models.py:616
 msgid "Start time of chaptermark"
 msgstr ""
 
-#: cast/templates/cast/post_detail.html:36
+#: build/lib/cast/templates/cast/post_detail.html:40
+#: build/lib/cast/views.py:133 cast/templates/cast/post_detail.html:36
 msgid "Comments"
 msgstr "Kommentare"
 
-#: cast/templates/foo_comments/form.html:18
-msgid "Post"
+#: build/lib/cast/templates/comments/comment.html:4
+#: cast/templates/comments/comment.html:4
+msgid "Preview of your comment"
 msgstr ""
 
-#: cast/templates/foo_comments/form.html:19
-msgid "Preview"
+#: build/lib/cast/templates/comments/comment.html:8
+#: cast/templates/comments/comment.html:8
+msgid "Anonymous"
 msgstr ""
 
-#: cast/templates/foo_comments/posted.html:5
-msgid "Thanks for commenting"
+#: build/lib/cast/templates/comments/comment.html:11
+#: cast/templates/comments/comment.html:11
+#, python-format
+msgid "on %(submit_date)s"
 msgstr ""
 
-#: cast/templates/foo_comments/posted.html:10
-msgid "Thank you for your comment"
+#: build/lib/cast/templates/comments/comment.html:12
+#: cast/templates/comments/comment.html:12
+msgid "moderated"
+msgstr ""
+
+#: build/lib/cast/templates/comments/comment.html:13
+#: cast/templates/comments/comment.html:13
+msgid "reply"
+msgstr ""
+
+#: build/lib/cast/widgets.py:54 cast/widgets.py:54
+msgid "All"
 msgstr ""

@@ -33,8 +33,7 @@
 
 {% if comments_enabled %}
   <p>
-  <!-- <h4>{% trans "Comments" %}:</h4> -->
-    <h4>Kommentare:</h4>
+    <h4>{% trans "Comments" %}:</h4>
     {% render_comment_list for object %}
     {% render_comment_form for object %}
   </p>
@@ -60,4 +59,4 @@
     <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
   {% endif %}
 
-  {% endblock javascript %}
+{% endblock javascript %}
