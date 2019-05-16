@@ -6,6 +6,7 @@ import logging
 import tempfile
 import subprocess
 
+from datetime import timedelta
 from pathlib import Path
 from subprocess import check_output
 from collections import defaultdict
@@ -299,20 +300,23 @@ class Audio(TimeStampedModel):
             paths.add(field.name)
         return paths
 
-    def _lines_to_duration(self, lines):
-        duration = None
-        for line in lines:
-            if "Duration" in line:
-                duration = line.split(",")[0].split()[-1]
-                break
-        return duration
-
     def _get_audio_duration(self, audio_url):
-        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
-        result = subprocess.check_output(
-            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
+        # Taken from: http://trac.ffmpeg.org/wiki/FFprobeTips
+        cmd = f"""
+        ffprobe  \
+            -v 0  \
+            -print_format json  \
+            -show_entries format=duration  \
+            -of default=noprint_wrappers=1:nokey=1  \
+            '{audio_url}'
+        """
+        result = (
+            subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+            .decode()
+            .strip()
         )
-        return self._lines_to_duration(result.decode("utf8").split("\n"))
+        m = re.match("^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
+        return timedelta(seconds=int(m["seconds"]), microseconds=int(m["microseconds"]))
 
     def create_duration(self):
         for name, field in self.uploaded_audio_files:
@@ -320,9 +324,6 @@ class Audio(TimeStampedModel):
             if not audio_url.startswith("http"):
                 audio_url = field.path
             duration = self._get_audio_duration(audio_url)
-            # skip duration for small files (tests won't work otherwise :(..)
-            if not int(duration.split(":")[2].split(".")[0]) > 0:
-                duration = None
             if duration is not None:
                 self.duration = duration
                 break

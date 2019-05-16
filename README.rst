@@ -41,10 +41,14 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
         ...
         "imagekit",
         "ckeditor",
-        "ckeditor_uploader",
+        "ckeditor_uploader"
+        "crispy_forms",
+        "django_filters",
+        "rest_framework",
         "rest_framework.authtoken",
         "filepond.apps.FilepondConfig",
         "cast.apps.CastConfig",
+        "watson",
         ...
     )
 
@@ -85,7 +89,7 @@ Add Django Cast's URL patterns:
 
 .. code-block:: python
 
-    from django.urls import path
+    from django.urls import path, include
 
     from rest_framework.documentation import include_docs_urls
     from rest_framework.authtoken import views as authtokenviews
@@ -100,7 +104,7 @@ Add Django Cast's URL patterns:
         # Uploads
         path("uploads/", include("filepond.urls", namespace="filepond")),
         # Cast
-        path("/cast", include("cast.urls", namespace="cast")),
+        path("cast/", include("cast.urls", namespace="cast")),
         ...
     ]
 

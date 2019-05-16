@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 
 
@@ -93,12 +95,7 @@ class TestAudioModel:
     @pytest.mark.django_db
     def test_audio_duration(self, audio):
         duration = audio._get_audio_duration(audio.m4a.path)
-        assert duration == "00:00:00.70"
-
-    @pytest.mark.django_db
-    def test_audio_duration_none(self, audio):
-        duration = audio._lines_to_duration([])
-        assert duration is None
+        assert duration == timedelta(microseconds=700000)
 
     @pytest.mark.django_db
     def test_audio_create_duration(self, audio):
