@@ -5,19 +5,25 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
-    dependencies = [
-        ('cast', '0024_auto_20190428_0859'),
-    ]
+    dependencies = [("cast", "0024_auto_20190428_0859")]
 
     operations = [
         migrations.AddField(
-            model_name='blog',
-            name='comments_enabled',
-            field=models.BooleanField(default=True, help_text='Whether comments are enabled for this blog.', verbose_name='comments_enabled'),
+            model_name="blog",
+            name="comments_enabled",
+            field=models.BooleanField(
+                default=True,
+                help_text="Whether comments are enabled for this blog.",
+                verbose_name="comments_enabled",
+            ),
         ),
         migrations.AddField(
-            model_name='post',
-            name='comments_enabled',
-            field=models.BooleanField(default=True, help_text='Whether comments are enabled for this post.', verbose_name='comments_enabled'),
+            model_name="post",
+            name="comments_enabled",
+            field=models.BooleanField(
+                default=True,
+                help_text="Whether comments are enabled for this post.",
+                verbose_name="comments_enabled",
+            ),
         ),
     ]

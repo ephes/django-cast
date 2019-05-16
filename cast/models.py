@@ -401,10 +401,7 @@ class Blog(TimeStampedModel):
     comments_enabled = models.BooleanField(
         _("comments_enabled"),
         default=True,
-        help_text=_(
-            "Whether comments are enabled for this blog."
-            ""
-        ),
+        help_text=_("Whether comments are enabled for this blog." ""),
     )
 
     # podcast stuff
@@ -515,10 +512,7 @@ class Post(TimeStampedModel):
     comments_enabled = models.BooleanField(
         _("comments_enabled"),
         default=True,
-        help_text=_(
-            "Whether comments are enabled for this post."
-            ""
-        ),
+        help_text=_("Whether comments are enabled for this post." ""),
     )
 
     content = RichTextUploadingField()
@@ -622,7 +616,11 @@ class Post(TimeStampedModel):
 
     @property
     def comments_are_enabled(self):
-        return appsettings.CAST_COMMENTS_ENABLED and self.blog.comments_enabled and self.comments_enabled
+        return (
+            appsettings.CAST_COMMENTS_ENABLED
+            and self.blog.comments_enabled
+            and self.comments_enabled
+        )
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)
