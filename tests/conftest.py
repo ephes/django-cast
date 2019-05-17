@@ -331,6 +331,21 @@ def podcast_episode(blog, audio):
 
 
 @pytest.fixture()
+def podcast_episode_with_different_visible_date(blog, audio):
+    visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test podast episode",
+        slug="test-podcast-entry",
+        pub_date=timezone.now(),
+        visible_date=visible_date,
+        content="foobar",
+        podcast_audio=audio,
+    )
+
+
+@pytest.fixture()
 def test_templ():
     return """
         {% lorem %}

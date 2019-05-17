@@ -3,6 +3,11 @@
 History
 -------
 
+0.1.24 (2019-05-XX)
++++++++++++++++++++
+
+* Use visible_date as pubDate for feed and sort feed by -visible_date instead of -pub_date
+
 0.1.23 (2019-05-16)
 +++++++++++++++++++
 

@@ -29,7 +29,7 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return self.object.get_absolute_url()
 
     def items(self):
-        queryset = Post.published.filter(blog=self.object).order_by("-pub_date")
+        queryset = Post.published.filter(blog=self.object).order_by("-visible_date")
         return queryset
 
     def item_title(self, item):
@@ -161,7 +161,7 @@ class PodcastFeed(RenderPostMixin, Feed):
 
     def items(self, blog):
         queryset = Post.published.podcast_episodes.filter(blog=self.object).order_by(
-            "-pub_date"
+            "-visible_date"
         )
         return queryset
 
@@ -176,7 +176,10 @@ class PodcastFeed(RenderPostMixin, Feed):
         return item.get_absolute_url()
 
     def item_pubdate(self, item):
-        return item.pub_date
+        return item.visible_date
+
+    def item_updateddate(self, item):
+        return item.modified
 
     # def item_categories(self, post):
     #    return self.categories(self.blog)
