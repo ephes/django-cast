@@ -3,6 +3,15 @@
 History
 -------
 
+0.1.24 (2019-05-22)
++++++++++++++++++++
+
+* Use blog.email as itunes:email instead of blog.user.email
+* Added author field to have user editable author name
+* Translation should now work since locale dir is included in MANIFEST.in
+* Include documentation in package
+* Use visible_date as pubDate for feed and sort feed by -visible_date instead of -pub_date
+
 0.1.23 (2019-05-16)
 +++++++++++++++++++
 

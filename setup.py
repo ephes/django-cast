@@ -72,11 +72,17 @@ setup(
     keywords="django-cast",
     classifiers=[
         "Development Status :: 3 - Alpha",
-        "Framework :: Django :: 2.1",
+        "Environment :: Web Environment",
+        "Framework :: Django",
+        "Framework :: Django :: 2.2",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
+        "Operating System :: OS Independent",
         "Natural Language :: English",
+        "Programming Language :: Python",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Topic :: Internet :: WWW/HTTP",
+        "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     ],
 )
