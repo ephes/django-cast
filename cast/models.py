@@ -393,6 +393,7 @@ class Blog(TimeStampedModel):
     user = models.ForeignKey(
         get_user_model(), on_delete=models.CASCADE, related_name="cast_user"
     )
+    author = models.CharField(max_length=255, default=None, null=True, blank=True)
     title = models.CharField(max_length=255)
     description = models.CharField(max_length=500)
     slug = models.SlugField(max_length=50)
@@ -461,6 +462,13 @@ class Blog(TimeStampedModel):
     @property
     def is_podcast(self):
         return self.post_set.exclude(podcast_audio__isnull=True).count() > 0
+
+    @property
+    def author_name(self):
+        if self.author is not None:
+            return self.author
+        else:
+            return self.user.get_full_name()
 
 
 class PostPublishedManager(models.Manager):

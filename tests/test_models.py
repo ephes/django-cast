@@ -121,6 +121,16 @@ class TestBlogModel:
     def test_blog_str(self, blog):
         assert blog.title == str(blog)
 
+    @pytest.mark.django_db
+    def test_blog_author_null(self, blog):
+        blog.author = None
+        assert blog.author_name == blog.user.get_full_name()
+
+    @pytest.mark.django_db
+    def test_blog_author_not_null(self, blog):
+        blog.author = "Foobar"
+        assert blog.author_name == blog.author
+
 
 class TestPostModel:
     @pytest.mark.django_db

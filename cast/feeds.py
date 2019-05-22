@@ -72,10 +72,10 @@ class ITunesElements:
         self.add_artwork(blog, handler)
 
         haqe("itunes:subtitle", self.feed["subtitle"])
-        haqe("itunes:author", blog.user.get_full_name())
+        haqe("itunes:author", blog.author_name)
         handler.startElement("itunes:owner", {})
-        haqe("itunes:name", blog.user.get_full_name())
-        haqe("itunes:email", blog.user.email)
+        haqe("itunes:name", blog.author_name)
+        haqe("itunes:email", blog.email)
         handler.endElement("itunes:owner")
 
         self.add_itunes_categories(blog, handler)
@@ -210,10 +210,10 @@ class AtomPodcastFeed(PodcastFeed):
         return blog.description
 
     def author_name(self, blog):
-        return blog.user.get_full_name()
+        return blog.author_name
 
     def author_email(self, blog):
-        return blog.user.email
+        return blog.email
 
     def link(self):
         """atom link is still wrong, dunno why FIXME"""
