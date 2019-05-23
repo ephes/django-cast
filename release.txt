@@ -1,7 +1,6 @@
 vim HISTORY.rst
 git flow release start
-vim setup.cfg
-vim cast/__init__.py
+vim setup.cfg cast/__init__.py
 git add .
 git commit -m "bump version number"
 git flow release finish
