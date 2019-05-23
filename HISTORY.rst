@@ -3,6 +3,12 @@
 History
 -------
 
+0.1.25 (2019-05-23)
++++++++++++++++++++
+
+* Bugfix: i18n should now work, finally
+* Bugfix: Allow empty chaptermarks text field + test
+
 0.1.24 (2019-05-22)
 +++++++++++++++++++
 
