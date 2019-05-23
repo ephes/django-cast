@@ -1,4 +1,4 @@
-__version__ = "0.1.24"
+__version__ = "0.1.25"
 from pathlib import Path
 
 default_app_config = "cast.apps.CastConfig"
