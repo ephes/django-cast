@@ -5,7 +5,7 @@ git add .
 git commit -m "bump version number"
 git flow release finish
 make release
-git tag -a 0.1.25 -m "version 0.1.25"
+git tag -a 0.1.26 -m "version 0.1.26"
 git push --tags
 
 git checkout master
