@@ -3,6 +3,11 @@
 History
 -------
 
+0.1.25 (2019-05-XX)
++++++++++++++++++++
+
+* Bugfix: Allow empty chaptermarks text field + test
+
 0.1.24 (2019-05-22)
 +++++++++++++++++++
 
