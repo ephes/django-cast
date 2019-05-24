@@ -43,6 +43,7 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
 
     INSTALLED_APPS = (
         ...
+        "django.contrib.sites",
         "imagekit",
         "ckeditor",
         "ckeditor_uploader",
@@ -59,7 +60,7 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
         ...
     )
 
-
+    SITE_ID = 1
 
 Add required settings:
 
