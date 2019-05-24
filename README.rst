@@ -45,7 +45,7 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
         ...
         "imagekit",
         "ckeditor",
-        "ckeditor_uploader"
+        "ckeditor_uploader",
         "crispy_forms",
         "django_filters",
         "rest_framework",
