@@ -3,6 +3,12 @@
 History
 -------
 
+0.1.26 (2019-05-XX)
++++++++++++++++++++
+
+* Changed documentation to work with comments
+* Fixed comments dependencies in setup.py
+
 0.1.26 (2019-05-23)
 +++++++++++++++++++
 
