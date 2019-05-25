@@ -112,13 +112,16 @@ The api token auth urls and the docs urls are both necessary to provide api endp
 with the right namespace. The `django-filepond <https://github.com/ephes/django-filepond>`_
 app is used to dispatch uploads to the right media models.
 
-Features
---------
+Features Overview
+-----------------
 
 * Support for responsive images / video / audio media objects
 * Use django template syntax for posts allowing you to use custom template tags for galleries etc. for example
-* Good looking file uploads via `filepond <https://pqina.nl/filepond/>`_
+* Good looking file uploads via filepond_
 * Chaptermarks for podcast Episodes
+* Fulltext search via django-watson_
+* Faceted navigation via django-filter_
+* Comments for posts via django-contrib-comments_, django-threadedcomments_ and django-fluent-comments_
 
 Running Tests
 -------------
@@ -135,8 +138,38 @@ Credits
 
 Tools used in rendering this package:
 
-*  Cookiecutter_
-*  `cookiecutter-djangopackage`_
+* django-imagekit_
+* filepond_
+* django-filter_
+* django-watson_
+* django-contrib-comments_
+* django-threadedcomments_
+* django-fluent-comments_
+* podlove-web-player_
+* podlove-subscribe-button_
+* djangorestframework_
+* django-model-utils_
+* django-crispy-forms_
+* django-ckeditor_
+* Cookiecutter_
+* `cookiecutter-djangopackage`_
+* jquery_
+* bootstrap_
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`cookiecutter-djangopackage`: https://github.com/pydanny/cookiecutter-djangopackage
+.. _`filepond`: https://pqina.nl/filepond/
+.. _`django-watson`: https://github.com/etianen/django-watson
+.. _`django-filter`: https://github.com/carltongibson/django-filter
+.. _`django-contrib-comments`: https://github.com/django/django-contrib-comments
+.. _`django-threadedcomments`: https://github.com/HonzaKral/django-threadedcomments
+.. _`django-fluent-comments`: https://github.com/django-fluent/django-fluent-comments
+.. _`django-model-utils`: https://github.com/jazzband/django-model-utils
+.. _`django-ckeditor`: https://github.com/django-ckeditor/django-ckeditor
+.. _`django-crispy-forms`: https://github.com/django-crispy-forms/django-crispy-forms
+.. _`django-imagekit`: https://github.com/matthewwithanm/django-imagekit
+.. _`djangorestframework`: https://www.django-rest-framework.org
+.. _`podlove-web-player`: https://podlove.org/podlove-web-player/
+.. _`podlove-subscribe-button`: https://podlove.org/podlove-subscribe-button/
+.. _`jquery`: https://jquery.com
+.. _`bootstrap`: https://getbootstrap.com/docs/4.0/getting-started/introduction/
