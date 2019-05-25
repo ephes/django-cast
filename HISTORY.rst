@@ -3,9 +3,11 @@
 History
 -------
 
-0.1.26 (2019-05-XX)
+0.1.27 (2019-05-XX)
 +++++++++++++++++++
 
+* Better docs for the comments feature
+* Extended credits documentation
 * Changed documentation to work with comments
 * Fixed comments dependencies in setup.py
 
