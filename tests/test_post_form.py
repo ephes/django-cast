@@ -47,3 +47,18 @@ class TestPostForm:
         form.cleaned_data = cleaned_data
         form._clean_chaptermarks(cleaned_data)
         assert "chaptermarks" in form.errors
+
+    @pytest.mark.django_db
+    def test_post_form_clean_chaptermarks_empty(self, post, audio):
+        # prepare post
+        post.podcast_audio = audio
+
+        # create text for chaptermarks area
+        chaptermarks_text = ""
+
+        # create form + test
+        form = PostForm(instance=post)
+        cleaned_data = {"chaptermarks": chaptermarks_text}
+        form.cleaned_data = cleaned_data
+        form._clean_chaptermarks(cleaned_data)
+        assert len(form.errors) == 0

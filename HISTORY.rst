@@ -3,9 +3,28 @@
 History
 -------
 
-0.1.24 (2019-05-XX)
+0.1.26 (2019-05-XX)
 +++++++++++++++++++
 
+* Changed documentation to work with comments
+* Fixed comments dependencies in setup.py
+
+0.1.26 (2019-05-23)
++++++++++++++++++++
+
+* Bugfix: i18n should now work, finally!!1 duh
+
+0.1.25 (2019-05-23)
++++++++++++++++++++
+
+* Bugfix: i18n should now work, finally
+* Bugfix: Allow empty chaptermarks text field + test
+
+0.1.24 (2019-05-22)
++++++++++++++++++++
+
+* Use blog.email as itunes:email instead of blog.user.email
+* Added author field to have user editable author name
 * Translation should now work since locale dir is included in MANIFEST.in
 * Include documentation in package
 * Use visible_date as pubDate for feed and sort feed by -visible_date instead of -pub_date

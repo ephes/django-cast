@@ -16,3 +16,4 @@ Contents:
    contributing
    authors
    history
+   comments

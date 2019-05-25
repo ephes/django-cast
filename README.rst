@@ -11,6 +11,10 @@ Django Cast
 .. image:: https://codecov.io/gh/ephes/django-cast/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/ephes/django-cast
 
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+    :target: https://github.com/ephes/django-cast
+
+
 Just another blogging / podcasting package
 
 Documentation
@@ -39,9 +43,10 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
 
     INSTALLED_APPS = (
         ...
+        "django.contrib.sites",
         "imagekit",
         "ckeditor",
-        "ckeditor_uploader"
+        "ckeditor_uploader",
         "crispy_forms",
         "django_filters",
         "rest_framework",
@@ -49,10 +54,13 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
         "filepond.apps.FilepondConfig",
         "cast.apps.CastConfig",
         "watson",
+        "fluent_comments",
+        "threadedcomments",
+        "django_comments",
         ...
     )
 
-
+    SITE_ID = 1
 
 Add required settings:
 
@@ -84,12 +92,17 @@ Add required settings:
     # django imagekit
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY="imagekit.cachefiles.strategies.Optimistic"
 
+    # Comments
+    COMMENTS_APP = 'fluent_comments'
+    FLUENT_COMMENTS_EXCLUDE_FIELDS = ('email', 'url', "title")
+    CAST_COMMENTS_ENABLED = True
+
 
 Add Django Cast's URL patterns:
 
 .. code-block:: python
 
-    from django.urls import path, include
+    from django.urls import include, path, re_path
 
     from rest_framework.documentation import include_docs_urls
     from rest_framework.authtoken import views as authtokenviews
@@ -105,8 +118,11 @@ Add Django Cast's URL patterns:
         path("uploads/", include("filepond.urls", namespace="filepond")),
         # Cast
         path("cast/", include("cast.urls", namespace="cast")),
+        # Threadedcomments
+        re_path(r'^cast/comments/', include('fluent_comments.urls')),
         ...
     ]
+
 
 The api token auth urls and the docs urls are both necessary to provide api endpoints
 with the right namespace. The `django-filepond <https://github.com/ephes/django-filepond>`_
