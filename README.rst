@@ -1,6 +1,6 @@
-=============================
+###########
 Django Cast
-=============================
+###########
 
 .. image:: https://badge.fury.io/py/django-cast.svg
     :target: https://badge.fury.io/py/django-cast
@@ -18,12 +18,12 @@ Django Cast
 Just another blogging / podcasting package
 
 Documentation
--------------
+*************
 
 The full documentation is at https://django-cast.readthedocs.io.
 
 Installation Screencast
------------------------
+***********************
 .. raw:: html
 
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
@@ -31,7 +31,7 @@ Installation Screencast
     </div>
 
 Quickstart
-----------
+**********
 
 Install Django Cast::
 
@@ -129,7 +129,7 @@ with the right namespace. The `django-filepond <https://github.com/ephes/django-
 app is used to dispatch uploads to the right media models.
 
 Features Overview
------------------
+*****************
 
 * Support for responsive images / video / audio media objects
 * Use django template syntax for posts allowing you to use custom template tags for galleries etc. for example
@@ -140,7 +140,7 @@ Features Overview
 * Comments for posts via django-contrib-comments_, django-threadedcomments_ and django-fluent-comments_
 
 Running Tests
--------------
+*************
 
 Does the code actually work?
 
@@ -150,7 +150,7 @@ Does the code actually work?
     (myenv) $ python runtests.py tests
 
 Credits
--------
+*******
 
 Tools used in rendering this package:
 

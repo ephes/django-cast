@@ -1,5 +1,5 @@
 Comments
---------
+********
 
 You can enable / disable comments on app, blog and post-level. For app-level,
 there's a global switch you can use in the settings. Blog and post models have
