@@ -80,7 +80,8 @@
     </div>
   {% endblock filters %}
   {% if user.is_authenticated %}
-      <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
+    <p></p>
+    <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
   {% endif %}
   <hr class="my-4">
 
