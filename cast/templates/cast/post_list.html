@@ -1,4 +1,5 @@
 {% extends "cast/cast_base.html" %}
+{% load i18n %}
 {% load static %}
 {% load crispy_forms_tags %}
 
@@ -96,6 +97,9 @@
       {{ post.description|safe }}
     </section>
   </article>
+  <a href="{% url "cast:post_detail" blog_slug=blog.slug slug=post.slug %}">
+      Shownotes | {% trans "Comments" %} | Permalink
+  </a>
   <hr class="my-4">
 {% endfor %}
 
