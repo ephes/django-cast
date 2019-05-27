@@ -59,7 +59,10 @@ To include an audio model, simply use the audio templatetag:
 
 The number denotes the primary key of the audio model. The templatetag won't do that
 much, because the player is pure javascript and chaptermarks and other metadata are pulled
-from a rest-api by the player_.
+from a rest-api by the player_. Note that you have to explicitly set the podcast_audio
+if you want some audio model included as the podcast episode audio. There can only be
+one such model whereas you can link to an arbitrary number of audio models that are
+not the podcast episode audio.
 
 Content in post list and detail view
 ====================================
