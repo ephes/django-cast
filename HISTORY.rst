@@ -3,6 +3,14 @@
 History
 -------
 
+0.1.27 (2019-05-27)
++++++++++++++++++++
+
+* Extended documentation
+* It's now possible to mark content as "for post detail page" only
+* Changed documentation to work with comments
+* Fixed comments dependencies in setup.py
+
 0.1.26 (2019-05-23)
 +++++++++++++++++++
 

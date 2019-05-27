@@ -12,8 +12,8 @@ Contents:
    :maxdepth: 2
 
    readme
+   features
    cdn
    contributing
    authors
    history
-   comments

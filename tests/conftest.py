@@ -248,7 +248,7 @@ def post(blog):
         title="test entry",
         slug="test-entry",
         pub_date=timezone.now(),
-        content="foobar",
+        content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",
     )
 
 
