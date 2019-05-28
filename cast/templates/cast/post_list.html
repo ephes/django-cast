@@ -98,9 +98,14 @@
       {{ post.description|safe }}
     </section>
   </article>
-  <a href="{% url "cast:post_detail" blog_slug=blog.slug slug=post.slug %}">
-      Shownotes | {% trans "Comments" %} | Permalink
-  </a>
+  {% block detail_link %}
+    <a href="{% url "cast:post_detail" blog_slug=blog.slug slug=post.slug %}">
+      {% trans "More" %}
+      {% if post.comments_are_enabled %}
+        | {% trans "Comments" %}
+      {% endif %}
+    </a>
+  {% endblock detail_link %}
   <hr class="my-4">
 {% endfor %}
 
