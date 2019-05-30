@@ -6,6 +6,7 @@ History
 0.1.28 (2019-05-XX)
 +++++++++++++++++++
 
+* Added some deployment documentation for heroku
 * Overwritable block for detail link in post list template + documentation
 
 0.1.27 (2019-05-27)

@@ -13,6 +13,7 @@ Contents:
 
    readme
    features
+   deployment
    cdn
    contributing
    authors
