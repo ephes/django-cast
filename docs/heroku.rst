@@ -94,5 +94,9 @@ for django-imagekit_. I didn't manage to get my fork installed on heroku_ becaus
 django-cast requires django-imagekit so even if I put it in requirements/base.txt
 it get's overwritten. Bad karma from not creating a PR in time is bad.
 
+SSL
+^^^
+You need to upload certificates to heroku. Quite cumbersome.
+
 .. _`heroku`: https://devcenter.heroku.com/articles/getting-started-with-python
 .. _`django-imagekit`: https://github.com/matthewwithanm/django-imagekit
