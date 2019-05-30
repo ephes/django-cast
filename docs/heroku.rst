@@ -66,6 +66,13 @@ Finally you should be able to check your deployment and open the website:
     heroku run python manage.py check --deploy
     heroku open
 
+Use your own domain name with heroku
+------------------------------------
+
+Just follow the instructions on the custom-domains_ help site at heroku_.
+
+.. _custom-domains: https://devcenter.heroku.com/articles/custom-domains
+
 Caveats
 -------
 
