@@ -325,7 +325,7 @@ def podcast_episode(blog, audio):
         title="test podast episode",
         slug="test-podcast-entry",
         pub_date=timezone.now(),
-        content="foobar",
+        content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",
         podcast_audio=audio,
     )
 
