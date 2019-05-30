@@ -127,7 +127,7 @@
 {% block javascript %}
   {{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
-  <script src="https://cdn.podlove.org/web-player/embed.js"></script>
+  <script src={% static  'js/cast/web-player/embed.js' %}></script>
   {% for post in posts %}
     {% for pk, audio in post.media_lookup.audio.items %}
       <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>
