@@ -241,6 +241,11 @@ def blog_with_itunes_categories(user):
 
 
 @pytest.fixture()
+def post_data():
+    return {"title": "foobar", "content": "blub", "explicit": "2", "pub_date": ""}
+
+
+@pytest.fixture()
 def post(blog):
     return Post.objects.create(
         author=blog.user,

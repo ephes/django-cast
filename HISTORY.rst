@@ -6,7 +6,8 @@ History
 0.1.28 (2019-05-XX)
 +++++++++++++++++++
 
-* Use local web-player
+* Fixed pub_date bug, leading to safari not being able to update posts + some tests
+* Use local web-player (didn't improve performance, though :( )
 * Fixed detail content not included in feed (shownotes were missing) bug
 * Added some deployment documentation for heroku, ec2 and docker
 * Overwritable block for detail link in post list template + documentation

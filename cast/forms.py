@@ -23,7 +23,9 @@ class ChapterMarkForm(forms.ModelForm):
 
 class PostForm(forms.ModelForm):
     is_published = forms.BooleanField(required=False)
-    pub_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M"])
+    pub_date = forms.DateTimeField(
+        input_formats=["%Y-%m-%dT%H:%M", "%d.%m.%Y %H:%M:%S"]
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -54,9 +56,18 @@ class PostForm(forms.ModelForm):
 
     def _set_pub_date(self, cleaned_data):
         pub_date = cleaned_data.get("pub_date")
+        old_pub_date = self.initial.get("pub_date")
         is_published = cleaned_data.get("is_published")
-        if pub_date is None and is_published:
-            cleaned_data["pub_date"] = timezone.now()
+        # Handle special cases where new pub_date should not be set
+        if old_pub_date is None:
+            if pub_date is None and is_published:
+                # No pub_date yet, but is_published was set to True
+                cleaned_data["pub_date"] = timezone.now()
+        else:
+            if pub_date is None:
+                # Keep old pub_date if nothing has changed
+                cleaned_data["pub_date"] = old_pub_date
+        # default is to set cleaned_data["pub_date"] to the new value
         return cleaned_data
 
     def _set_visible_date(self, cleaned_data):
