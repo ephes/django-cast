@@ -47,4 +47,6 @@ urlpatterns = [
         views.AudioPodloveDetailView.as_view(),
         name="audio_podlove_detail",
     ),
+    # request
+    url(r"^request/?$", views.RequestListView.as_view(), name="request_list"),
 ]

@@ -4,6 +4,7 @@ import json
 import pytz
 import pytest
 
+from pathlib import Path
 from datetime import datetime
 
 from django.conf import settings
@@ -435,3 +436,20 @@ def comment(post):
     )
     instance.save()
     return instance
+
+
+@pytest.fixture()
+def access_log_path(fixture_dir):
+    return Path(fixture_dir) / "access.log"
+
+
+@pytest.fixture()
+def last_request_dummy():
+    class RequestDummy:
+        def __init__(self):
+            self.timestamp = datetime.strptime(
+                "01/Dec/2018:06:55:44 +0100", "%d/%b/%Y:%H:%M:%S %z"
+            )
+            self.ip = "79.230.47.221"
+
+    return RequestDummy()
