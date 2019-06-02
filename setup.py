@@ -69,7 +69,7 @@ setup(
         "python-slugify",
         "django-fluent-comments",
         "django-threadedcomments",
-        "pandas",
+        # "pandas",
     ],
     license="BSD",
     zip_safe=False,
