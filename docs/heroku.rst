@@ -6,7 +6,7 @@ Install the heroku_ command line app
 
 At first you have to create an heroku account and install the heroku_ command line app.
 
-Then creeate your app with the heroku client and make your newly created app the default app,
+Then create your app with the heroku client and make your newly created app the default app,
 to avoid having to specify it for every heroku toolbelt call with "-a":
 
 
@@ -14,6 +14,85 @@ to avoid having to specify it for every heroku toolbelt call with "-a":
 
     heroku create --buildpack https://github.com/heroku/heroku-buildpack-python --region eu
     heroku git:remote -a <name-of-the-app>
+
+Use S3 for storing media files
+------------------------------
+
+You probably want to use S3 to store your media files (user uploaded content, images for blog
+posts etc). We use django-imagekit_ for responsive images and there is some incompatibility
+between boto_ and django-imagekit_ keeping it from working out of the box. Luckily there's a
+workaround. At this custom storage class to your "config/settings/production.py" file and use
+it:
+
+.. code-block:: shell
+
+	import os
+	from tempfile import SpooledTemporaryFile
+	...
+
+	class CustomS3Boto3Storage(S3Boto3Storage):
+		"""
+		This is our custom version of S3Boto3Storage that fixes a bug in
+		boto3 where the passed in file is closed upon upload.
+
+		https://github.com/boto/boto3/issues/929
+		https://github.com/matthewwithanm/django-imagekit/issues/391
+		"""
+
+		location = "media"
+		file_overwrite = False
+		default_acl = "public-read"
+
+		def _save_content(self, obj, content, parameters):
+			"""
+			We create a clone of the content file as when this is passed to boto3
+			it wrongly closes the file upon upload where as the storage backend
+			expects it to still be open
+			"""
+			# Seek our content back to the start
+			content.seek(0, os.SEEK_SET)
+
+			# Create a temporary file that will write to disk after a specified size
+			content_autoclose = SpooledTemporaryFile()
+
+			# Write our original content into our copy that will be closed by boto3
+			content_autoclose.write(content.read())
+
+			# Upload the object which will auto close the content_autoclose instance
+			super(CustomS3Boto3Storage, self)._save_content(
+				obj, content_autoclose, parameters
+			)
+
+			# Cleanup if this is fixed upstream our duplicate should always close
+			if not content_autoclose.closed:
+				content_autoclose.close()
+
+	...
+	DEFAULT_FILE_STORAGE = "config.settings.production.CustomS3Boto3Storage"
+
+
+Using S3 in a non-default region
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you want to use S3 in the region "eu-central-1" you have to set some additional parameters
+in your "config/settings/production.py":
+
+.. code-block:: shell
+
+	AWS_AUTO_CREATE_BUCKET = True
+	AWS_S3_REGION_NAME = 'eu-central-1'  # if your region differs from default
+	AWS_S3_SIGNATURE_VERSION = 's3v4'
+	AWS_S3_FILE_OVERWRITE = True
+
+Using cloudfront as CDN
+^^^^^^^^^^^^^^^^^^^^^^^
+
+If you want to deliver your media files via cloudfront there's an additional option you'll
+have to set:
+
+.. code-block:: shell
+
+	AWS_S3_CUSTOM_DOMAIN = env('CLOUDFRONT_DOMAIN')
 
 Set the configuration variables for heroku_
 -------------------------------------------
@@ -86,17 +165,10 @@ urls are https by default, so this didn't work either. Maybe you can fix that by
 a cloudfront distribution etc. but using whitebox to serve static files worked out of
 the box.
 
-MEDIA_ROOT
-^^^^^^^^^^
-MEDIA_ROOT in S3 wont work at the moment. I used a fork of django-imagekit where I
-fixed an issue with S3 and always used my fork and forgot to create a pull request
-for django-imagekit_. I didn't manage to get my fork installed on heroku_ because
-django-cast requires django-imagekit so even if I put it in requirements/base.txt
-it get's overwritten. Bad karma from not creating a PR in time is bad.
-
 SSL
 ^^^
-You need to upload certificates to heroku. Quite cumbersome.
+You need to upload certificates to heroku_. Quite cumbersome.
 
 .. _`heroku`: https://devcenter.heroku.com/articles/getting-started-with-python
 .. _`django-imagekit`: https://github.com/matthewwithanm/django-imagekit
+.. _`boto`: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
