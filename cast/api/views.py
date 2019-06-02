@@ -147,7 +147,7 @@ class GalleryDetailView(generics.RetrieveDestroyAPIView):
 
 
 class RequestListView(generics.ListCreateAPIView):
-    queryset = Request.objects.all()
+    queryset = Request.objects.all().order_by("-timestamp")
     serializer_class = RequestSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
