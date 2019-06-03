@@ -1,0 +1,34 @@
+{% extends "cast/cast_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block css %}
+  {{ block.super }}
+  <!--
+  <link rel="stylesheet" type="text/css" href="{% static 'css/my_div.css' %}" />
+  -->
+{% endblock css %}
+
+{% block content %}
+<h1>Dashboard</h1>
+<div id="chart_div_day"><!-- Plotly chart will be drawn inside this DIV --></div>
+<div id="chart_div_week"><!-- Plotly chart will be drawn inside this DIV --></div>
+{% endblock content %}
+
+{% block javascript %}
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script>
+      // day chart
+      var dayData = {{ day_data | safe }};
+      var dayLayout = {{ day_layout | safe }};
+      Plotly.newPlot('chart_div_day', dayData, dayLayout, {showSendToCloud: true});
+
+      // week chart
+      var weekData = {{ week_data | safe }};
+      var weekLayout = {{ week_layout | safe }};
+      Plotly.newPlot('chart_div_week', weekData, weekLayout, {showSendToCloud: true});
+  </script>
+  <!--
+  <script src="{% static 'js/cast/dashboard.js' %}"></script>
+  -->
+{% endblock javascript %}
