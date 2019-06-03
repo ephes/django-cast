@@ -13,7 +13,7 @@ class Command(BaseCommand):
         username = os.environ.get("USERNAME", "analytics")
         obtain_token_url = os.environ.get("OBTAIN_TOKEN_URL")
 
-        params = {"username": "analytics", "password": getpass()}
+        params = {"username": username, "password": getpass()}
         r = requests.post(obtain_token_url, data=params)
         token = r.json()["token"]
         print("token: ", token)
