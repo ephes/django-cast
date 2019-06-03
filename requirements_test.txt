@@ -31,4 +31,5 @@ djangorestframework
 
 feedparser
 
+plotly
 pandas
