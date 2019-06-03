@@ -4,6 +4,7 @@ import json
 import pytz
 import pytest
 
+from pathlib import Path
 from datetime import datetime
 
 from django.conf import settings
@@ -241,6 +242,11 @@ def blog_with_itunes_categories(user):
 
 
 @pytest.fixture()
+def post_data():
+    return {"title": "foobar", "content": "blub", "explicit": "2", "pub_date": ""}
+
+
+@pytest.fixture()
 def post(blog):
     return Post.objects.create(
         author=blog.user,
@@ -325,7 +331,7 @@ def podcast_episode(blog, audio):
         title="test podast episode",
         slug="test-podcast-entry",
         pub_date=timezone.now(),
-        content="foobar",
+        content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",
         podcast_audio=audio,
     )
 
@@ -430,3 +436,20 @@ def comment(post):
     )
     instance.save()
     return instance
+
+
+@pytest.fixture()
+def access_log_path(fixture_dir):
+    return Path(fixture_dir) / "access.log"
+
+
+@pytest.fixture()
+def last_request_dummy():
+    class RequestDummy:
+        def __init__(self):
+            self.timestamp = datetime.strptime(
+                "01/Dec/2018:06:55:44 +0100", "%d/%b/%Y:%H:%M:%S %z"
+            )
+            self.ip = "79.230.47.221"
+
+    return RequestDummy()

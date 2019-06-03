@@ -80,7 +80,8 @@
     </div>
   {% endblock filters %}
   {% if user.is_authenticated %}
-      <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
+    <p></p>
+    <a class="btn btn-primary btn-lg" role="button" href="{% url "cast:post_create" slug=blog.slug %}">Create Arcticle</a>
   {% endif %}
   <hr class="my-4">
 
@@ -97,9 +98,14 @@
       {{ post.description|safe }}
     </section>
   </article>
-  <a href="{% url "cast:post_detail" blog_slug=blog.slug slug=post.slug %}">
-      Shownotes | {% trans "Comments" %} | Permalink
-  </a>
+  {% block detail_link %}
+    <a href="{% url "cast:post_detail" blog_slug=blog.slug slug=post.slug %}">
+      {% trans "More" %}
+      {% if post.comments_are_enabled %}
+        | {% trans "Comments" %}
+      {% endif %}
+    </a>
+  {% endblock detail_link %}
   <hr class="my-4">
 {% endfor %}
 
@@ -121,7 +127,7 @@
 {% block javascript %}
   {{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
-  <script src="https://cdn.podlove.org/web-player/embed.js"></script>
+  <script src={% static  'js/cast/web-player/embed.js' %}></script>
   {% for post in posts %}
     {% for pk, audio in post.media_lookup.audio.items %}
       <script>podlovePlayer("#audio_{{pk}}", "{{audio.podlove_url}}");</script>

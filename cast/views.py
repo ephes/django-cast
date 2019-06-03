@@ -176,6 +176,7 @@ class PostUpdateView(
         initial = super().get_initial()
         initial["is_published"] = self.object.is_published
         initial["chaptermarks"] = self.get_initial_chaptermarks()
+        initial["pub_date"] = self.object.pub_date
         return initial
 
     def form_valid(self, form):

@@ -3,6 +3,16 @@
 History
 -------
 
+0.1.28 (2019-06-03)
++++++++++++++++++++
+
+* Added some analytics support: import your access.log and view dashboard with hits/day,week
+* Fixed pub_date bug, leading to safari not being able to update posts + some tests
+* Use local web-player and subscribe button (didn't improve performance, though :( )
+* Fixed detail content not included in feed (shownotes were missing) bug
+* Added some deployment documentation for heroku, ec2 and docker
+* Overwritable block for detail link in post list template + documentation
+
 0.1.27 (2019-05-27)
 +++++++++++++++++++
 
