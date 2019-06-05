@@ -24,7 +24,7 @@ between boto_ and django-imagekit_ keeping it from working out of the box. Lucki
 workaround. At this custom storage class to your "config/settings/production.py" file and use
 it:
 
-.. code-block:: shell
+.. code-block:: python
 
 	import os
 	from tempfile import SpooledTemporaryFile
@@ -77,7 +77,7 @@ Using S3 in a non-default region
 If you want to use S3 in the region "eu-central-1" you have to set some additional parameters
 in your "config/settings/production.py":
 
-.. code-block:: shell
+.. code-block:: python
 
 	AWS_AUTO_CREATE_BUCKET = True
 	AWS_S3_REGION_NAME = 'eu-central-1'  # if your region differs from default
@@ -90,7 +90,7 @@ Using cloudfront as CDN
 If you want to deliver your media files via cloudfront there's an additional option you'll
 have to set:
 
-.. code-block:: shell
+.. code-block:: python
 
 	AWS_S3_CUSTOM_DOMAIN = env('CLOUDFRONT_DOMAIN')
 
@@ -152,6 +152,81 @@ Just follow the instructions on the custom-domains_ help site at heroku_.
 
 .. _custom-domains: https://devcenter.heroku.com/articles/custom-domains
 
+SSL
+---
+
+Caution: This only works with paid heroku plans (hobby and upwards).
+
+Install letsencrypt client
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+For paid dynos there's automatic certificate management with heroku-ssl_ available.
+If you are using a hobby dyno, you have to upload your certificates manually. A first
+step is to install certbot on your local machine.
+
+.. code-block:: shell
+
+    brew install certbot
+
+
+Prepare your app for verification
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Add this to your "config/urls.py" file:
+
+.. code-block:: python
+
+    ...
+	from django.http import HttpResponse
+	...
+
+    urlpatterns = [
+        ...
+        # letsencrypt
+        path(
+            ".well-known/acme-challenge/{settings.LETSENCRYPT_VERIFICATION_URL}",
+            letsencrypt_view,
+            name="letsencrypt",
+        ),
+        ...
+
+And this to your "config/settings/base.py" file:
+
+.. code-block:: python
+
+    # Letsencrypt
+    LETSENCRYPT_VERIFICATION_URL=env("LETSENCRYPT_VERIFICATION_URL")
+    LETSENCRYPT_VERIFICATION_DATA=env("LETSENCRYPT_VERIFICATION_DATA")
+
+
+To verify your domain ownership you need to serve a snipped of data under
+a specific url. Both provided by letsencrypt if you run this command. Stop
+after you see the "Waiting for verification" message from certbot_.
+
+.. code-block:: shell
+
+    sudo certbot certonly --manual
+
+Now you have to set those two letsencrypt environment variables. The cerbot
+client will show the content of those variables in the output:
+
+.. code-block:: shell
+
+    heroku config:set LETSENCRYPT_VERIFICATION_URL=<the_part_after acme-challenge/>
+    heroku config:set LETSENCRYPT_VERIFICATION_DATA=<the_part_after file containting just this data:>
+    git add .
+    git commit -m "added letsencrypt endpoint"
+    git push heroku master
+
+You should check if you get the correct data from your site. If that's the case
+you can now press <enter> on certbots verification step. If all went well, it will
+show you a congratulation message and tell you the location of the certificate.
+
+You now need to add the certificate and key to heroku:
+
+.. code-block:: shell
+
+    heroku certs:add /etc/letsencrypt/live/your_domain_name/fullchain.pem /etc/letsencrypt/live/your_domain_name/privkey.pem
+
 Caveats
 -------
 
@@ -165,10 +240,9 @@ urls are https by default, so this didn't work either. Maybe you can fix that by
 a cloudfront distribution etc. but using whitebox to serve static files worked out of
 the box.
 
-SSL
-^^^
-You need to upload certificates to heroku_. Quite cumbersome.
 
 .. _`heroku`: https://devcenter.heroku.com/articles/getting-started-with-python
+.. _`heroku-ssl`: https://devcenter.heroku.com/articles/ssl
 .. _`django-imagekit`: https://github.com/matthewwithanm/django-imagekit
 .. _`boto`: https://boto3.amazonaws.com/v1/documentation/api/latest/index.html
+.. _`certbot`: https://certbot.eff.org/
