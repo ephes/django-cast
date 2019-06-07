@@ -68,7 +68,7 @@ class VideoCreateView(
 
 
 class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 20
+    page_size = 40
     page_size_query_param = "pageSize"
     max_page_size = 10000
 
