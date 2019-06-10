@@ -13,7 +13,9 @@ Contents:
 
    readme
    features
+   deployment
    cdn
+   analytics
    contributing
    authors
    history

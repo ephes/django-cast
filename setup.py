@@ -69,6 +69,7 @@ setup(
         "python-slugify",
         "django-fluent-comments",
         "django-threadedcomments",
+        "plotly",
     ],
     license="BSD",
     zip_safe=False,

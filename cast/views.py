@@ -104,7 +104,7 @@ class PostsListView(RenderPostMixin, GetParamsMixin, FilterView):
         context = super().get_context_data(**kwargs)
         context["blog"] = self.blog
         for post in context[self.context_object_name]:
-            self.render_post(post)
+            self.render_post(post, include_detail=False)
         return context
 
 
@@ -125,7 +125,7 @@ class PostDetailView(RenderPostMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         post = context[self.context_object_name]
-        self.render_post(post)
+        self.render_post(post, include_detail=True)
         context["next"] = post.get_absolute_url()
         context["comments_enabled"] = post.comments_are_enabled
         return context
@@ -176,6 +176,7 @@ class PostUpdateView(
         initial = super().get_initial()
         initial["is_published"] = self.object.is_published
         initial["chaptermarks"] = self.get_initial_chaptermarks()
+        initial["pub_date"] = self.object.pub_date
         return initial
 
     def form_valid(self, form):

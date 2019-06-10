@@ -20,27 +20,27 @@ msgstr ""
 
 #: build/lib/cast/forms.py:36 cast/forms.py:36
 msgid "Publication date"
-msgstr ""
+msgstr "Veröffentlichungsdatum"
 
 #: build/lib/cast/forms.py:38 cast/forms.py:38
 msgid "Article will be published after this date/time."
-msgstr ""
+msgstr "Artikel wird nach diesem Zeitpunkt veröffentlich"
 
 #: build/lib/cast/forms.py:43 cast/forms.py:43
 msgid "Visible date"
-msgstr ""
+msgstr "Sichtbares Datum"
 
 #: build/lib/cast/forms.py:44 cast/forms.py:44
 msgid "Date to be shown above article."
-msgstr ""
+msgstr "Dieses Datum wird über dem Artikel zu sehen sein"
 
 #: build/lib/cast/forms.py:47 cast/forms.py:47
 msgid "The audio object to be used as podcast episode."
-msgstr ""
+msgstr "Dasjenige Audio-Objekt, das als Podcast-Episoden-Audio verwendet werden soll."
 
 #: build/lib/cast/models.py:407 cast/models.py:407
 msgid "itunes_categories"
-msgstr ""
+msgstr "Itunes Kategorien"
 
 #: build/lib/cast/models.py:412 cast/models.py:412
 msgid ""
@@ -51,15 +51,15 @@ msgstr ""
 
 #: build/lib/cast/models.py:417 cast/models.py:417
 msgid "yes"
-msgstr ""
+msgstr "ja"
 
 #: build/lib/cast/models.py:417 cast/models.py:417
 msgid "no"
-msgstr ""
+msgstr "nein"
 
 #: build/lib/cast/models.py:417 cast/models.py:417
 msgid "clean"
-msgstr ""
+msgstr "suber"
 
 #: build/lib/cast/models.py:419 build/lib/cast/models.py:481 cast/models.py:419
 #: cast/models.py:481
@@ -75,7 +75,7 @@ msgstr ""
 #: build/lib/cast/models.py:429 build/lib/cast/models.py:491 cast/models.py:429
 #: cast/models.py:491
 msgid "explicit"
-msgstr ""
+msgstr "explizit"
 
 #: build/lib/cast/models.py:432 build/lib/cast/models.py:493 cast/models.py:432
 #: cast/models.py:493
@@ -100,7 +100,7 @@ msgstr ""
 
 #: build/lib/cast/models.py:616 cast/models.py:616
 msgid "Start time of chaptermark"
-msgstr ""
+msgstr "Startzeitpunkt der Kapitelmarke"
 
 #: build/lib/cast/templates/cast/post_detail.html:40
 #: build/lib/cast/views.py:133 cast/templates/cast/post_detail.html:36
@@ -110,18 +110,18 @@ msgstr "Kommentare"
 #: build/lib/cast/templates/comments/comment.html:4
 #: cast/templates/comments/comment.html:4
 msgid "Preview of your comment"
-msgstr ""
+msgstr "Vorschau deines Kommentars"
 
 #: build/lib/cast/templates/comments/comment.html:8
 #: cast/templates/comments/comment.html:8
 msgid "Anonymous"
-msgstr ""
+msgstr "Anonym"
 
 #: build/lib/cast/templates/comments/comment.html:11
 #: cast/templates/comments/comment.html:11
 #, python-format
 msgid "on %(submit_date)s"
-msgstr ""
+msgstr "am %(submit_date)s"
 
 #: build/lib/cast/templates/comments/comment.html:12
 #: cast/templates/comments/comment.html:12
@@ -131,8 +131,8 @@ msgstr ""
 #: build/lib/cast/templates/comments/comment.html:13
 #: cast/templates/comments/comment.html:13
 msgid "reply"
-msgstr ""
+msgstr "antworten"
 
 #: build/lib/cast/widgets.py:54 cast/widgets.py:54
 msgid "All"
-msgstr ""
+msgstr "Alle"

@@ -30,3 +30,6 @@ coreapi
 djangorestframework
 
 feedparser
+
+plotly
+pandas

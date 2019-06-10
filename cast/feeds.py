@@ -36,7 +36,7 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return item.title
 
     def item_description(self, item):
-        self.render_post(item, javascript=False)
+        self.render_post(item, include_detail=True, javascript=False)
         return item.description
 
 
@@ -169,7 +169,7 @@ class PodcastFeed(RenderPostMixin, Feed):
         return item.title
 
     def item_description(self, item):
-        self.render_post(item, javascript=False)
+        self.render_post(item, include_detail=True, javascript=False)
         return item.description
 
     def item_link(self, item):
