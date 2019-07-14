@@ -3,7 +3,7 @@
 History
 -------
 
-0.1.28 (2019-06-03)
+.1.28 (2019-06-03)
 +++++++++++++++++++
 
 * Added some analytics support: import your access.log and view dashboard with hits/day,week
