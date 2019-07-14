@@ -226,6 +226,14 @@ class Video(TimeStampedModel):
                 pass
         return paths
 
+    def get_mime_type(self):
+        ending = self.original.name.split(".")[-1].lower()
+        return {
+            "mp4": "video/mp4",
+            "mov": "video/quicktime",
+            "avi": "video/x-msvideo",
+        }.get(ending, "video/mp4")
+
     def save(self, *args, **kwargs):
         generate_poster = kwargs.pop("poster", True)
         # need to save original first - django file handling is driving me nuts
