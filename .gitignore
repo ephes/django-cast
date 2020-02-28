@@ -67,3 +67,6 @@ hints/*
 
 # vim
 .*swp
+
+# pypi
+.pypirc
