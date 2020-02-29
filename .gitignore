@@ -70,3 +70,6 @@ hints/*
 
 # pypi
 .pypirc
+
+# pyenv
+.python-version
