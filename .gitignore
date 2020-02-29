@@ -73,3 +73,6 @@ hints/*
 
 # pyenv
 .python-version
+
+# tmp media
+tests/media/
