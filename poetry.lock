@@ -316,14 +316,18 @@ python-versions = "*"
 version = "2.1"
 
 [package.dependencies]
-django-contrib-comments = ">=1.8"
-django-crispy-forms = ">=1.1.1"
+django-contrib-comments = ">=1.9"
+django-crispy-forms = ">=1.7.1"
 django-tag-parser = ">=3.1"
 python-akismet = ">=0.4.1"
 
 [package.extras]
-threadedcomments = ["django-threadedcomments (>=1.1)"]
+threadedcomments = ["django-threadedcomments (>=1.2)"]
 
+[package.source]
+reference = "109b9896cdc1c32b149a27e7ed254aef09c1b07e"
+type = "git"
+url = "https://github.com/ephes/django-fluent-comments"
 [[package]]
 category = "main"
 description = "Django model mixins and utilities"
@@ -1693,7 +1697,7 @@ python-versions = "*"
 version = "1.3"
 
 [metadata]
-content-hash = "f07aba69927ce15408acf75de9f2c74d27e2b14df1c5bca0e7ac65f05b0ecacd"
+content-hash = "acb586e723b62123a6df5c2caa4f6f97e4eb492597463cc005a40599dc670b95"
 python-versions = "^3.8"
 
 [metadata.files]
@@ -1883,10 +1887,7 @@ django-filter = [
     {file = "django-filter-2.2.0.tar.gz", hash = "sha256:c3deb57f0dd7ff94d7dce52a047516822013e2b441bed472b722a317658cfd14"},
     {file = "django_filter-2.2.0-py3-none-any.whl", hash = "sha256:558c727bce3ffa89c4a7a0b13bc8976745d63e5fd576b3a9a851650ef11c401b"},
 ]
-django-fluent-comments = [
-    {file = "django-fluent-comments-2.1.tar.gz", hash = "sha256:1bf03076c527be7a46f5d17b62a99495c7328871199fd3b275f0a21cc164cde9"},
-    {file = "django_fluent_comments-2.1-py2.py3-none-any.whl", hash = "sha256:5c439c30cf8148df1376ac8ad44140039fd452e4d359ea815c5ddc44e82cc749"},
-]
+django-fluent-comments = []
 django-model-utils = [
     {file = "django-model-utils-4.0.0.tar.gz", hash = "sha256:adf09e5be15122a7f4e372cb5a6dd512bbf8d78a23a90770ad0983ee9d909061"},
     {file = "django_model_utils-4.0.0-py2.py3-none-any.whl", hash = "sha256:9cf882e5b604421b62dbe57ad2b18464dc9c8f963fc3f9831badccae66c1139c"},

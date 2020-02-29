@@ -22,7 +22,7 @@ django-allauth = "^0.41.0"
 wagtail = "^2.8"
 pandas = "^1.0.1"
 django-threadedcomments = "^1.2"
-django-fluent-comments = "^2.1"
+django-fluent-comments = {git = "https://github.com/ephes/django-fluent-comments"}
 feedparser = "^5.2.1"
 plotly = "^4.5.2"
 
