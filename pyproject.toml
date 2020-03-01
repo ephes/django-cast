@@ -46,6 +46,9 @@ django-threadedcomments = "^1.2"
 django-fluent-comments = {git = "https://github.com/ephes/django-fluent-comments"}
 feedparser = "^5.2.1"
 plotly = "^4.5.2"
+django-ckeditor = "^5.9.0"
+django-filepond = "^0.1.2"
+django-imagekit = "^4.0.2"
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^2.4.3"
