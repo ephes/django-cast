@@ -67,3 +67,12 @@ hints/*
 
 # vim
 .*swp
+
+# pypi
+.pypirc
+
+# pyenv
+.python-version
+
+# tmp media
+tests/media/

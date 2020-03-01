@@ -139,8 +139,26 @@ Features Overview
 * Faceted navigation via django-filter_
 * Comments for posts via django-contrib-comments_, django-threadedcomments_ and django-fluent-comments_
 
+
 Running Tests
 *************
+
+Install Dependencies
+--------------------
+
+Non python packages that are required but need to be installed using your
+operating system package manager:
+
+* ffmpeg
+
+Install packages that are required to be able to run the tests via poetry:
+
+.. code-block:: shell
+
+    poetry install
+
+Run Tests
+---------
 
 Does the code actually work?
 
