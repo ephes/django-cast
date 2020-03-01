@@ -58,5 +58,21 @@ cast_images
 cast_videos
 django_cast.egg-info
 
+# domis hints for development
+hints/*
+
+# vscode
+.vscode/*
+*.code-workspace
+
 # vim
 .*swp
+
+# pypi
+.pypirc
+
+# pyenv
+.python-version
+
+# tmp media
+tests/media/

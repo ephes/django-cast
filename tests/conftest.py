@@ -4,13 +4,19 @@ import json
 import pytz
 import pytest
 
+from pathlib import Path
 from datetime import datetime
 
+from django.conf import settings
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
+
+from django_comments import get_model as get_comments_model
+
+from cast import appsettings
 
 from cast.models import (
     Blog,
@@ -236,6 +242,11 @@ def blog_with_itunes_categories(user):
 
 
 @pytest.fixture()
+def post_data():
+    return {"title": "foobar", "content": "blub", "explicit": "2", "pub_date": ""}
+
+
+@pytest.fixture()
 def post(blog):
     return Post.objects.create(
         author=blog.user,
@@ -243,7 +254,7 @@ def post(blog):
         title="test entry",
         slug="test-entry",
         pub_date=timezone.now(),
-        content="foobar",
+        content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",
     )
 
 
@@ -320,6 +331,21 @@ def podcast_episode(blog, audio):
         title="test podast episode",
         slug="test-podcast-entry",
         pub_date=timezone.now(),
+        content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",
+        podcast_audio=audio,
+    )
+
+
+@pytest.fixture()
+def podcast_episode_with_different_visible_date(blog, audio):
+    visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
+    return Post.objects.create(
+        author=blog.user,
+        blog=blog,
+        title="test podast episode",
+        slug="test-podcast-entry",
+        pub_date=timezone.now(),
+        visible_date=visible_date,
         content="foobar",
         podcast_audio=audio,
     )
@@ -384,3 +410,46 @@ def dummy_handler():
 @pytest.fixture()
 def request_factory():
     return RequestFactory()
+
+
+@pytest.fixture()
+def comments_enabled():
+    previous = appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = True
+    yield appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = previous
+
+
+@pytest.fixture()
+def comments_not_enabled():
+    previous = appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = False
+    yield appsettings.CAST_COMMENTS_ENABLED
+    appsettings.CAST_COMMENTS_ENABLED = previous
+
+
+@pytest.fixture()
+def comment(post):
+    comment_model = get_comments_model()
+    instance = comment_model(
+        content_object=post, site_id=settings.SITE_ID, title="foobar", comment="bar baz"
+    )
+    instance.save()
+    return instance
+
+
+@pytest.fixture()
+def access_log_path(fixture_dir):
+    return Path(fixture_dir) / "access.log"
+
+
+@pytest.fixture()
+def last_request_dummy():
+    class RequestDummy:
+        def __init__(self):
+            self.timestamp = datetime.strptime(
+                "01/Dec/2018:06:55:44 +0100", "%d/%b/%Y:%H:%M:%S %z"
+            )
+            self.ip = "79.230.47.221"
+
+    return RequestDummy()

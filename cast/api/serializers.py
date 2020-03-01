@@ -2,7 +2,7 @@ import logging
 
 from rest_framework import serializers
 
-from ..models import Image, Video, Gallery, Audio
+from ..models import Image, Video, Gallery, Audio, Request
 
 logger = logging.getLogger(__name__)
 
@@ -63,3 +63,9 @@ class GallerySerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Gallery
         fields = ("id", "url", "images")
+
+
+class RequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Request
+        fields = "__all__"

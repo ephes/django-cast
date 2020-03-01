@@ -1,5 +1,9 @@
+import pytz
 import pytest
 import feedparser
+
+from time import mktime
+from datetime import datetime
 
 from django.urls import reverse
 from django.http import Http404
@@ -95,3 +99,38 @@ class TestGeneratedFeeds:
         d = feedparser.parse(r.content)
         assert len(d.entries) == 1
         assert Post.objects.filter(blog=podcast_episode.blog).count() == 2
+
+    @pytest.mark.django_db
+    def test_podcast_feed_contains_visible_date_as_pubdate(
+        self, client, podcast_episode_with_different_visible_date
+    ):
+        podcast_episode = podcast_episode_with_different_visible_date
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+        )
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        d = feedparser.parse(r.content)
+        date_from_feed = datetime.fromtimestamp(
+            mktime(d.entries[0]["published_parsed"])
+        )
+        date_from_feed = pytz.utc.localize(date_from_feed)
+        assert date_from_feed == podcast_episode.visible_date
+
+    @pytest.mark.django_db
+    def test_podcast_feed_contains_detail_information(self, client, podcast_episode):
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+        )
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        d = feedparser.parse(r.content)
+        content = d.entries[0]["content"][0]["value"]
+        assert "in_all" in content
+        assert "only_in_detail" in content

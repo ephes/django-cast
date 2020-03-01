@@ -12,7 +12,10 @@ Contents:
    :maxdepth: 2
 
    readme
+   features
+   deployment
    cdn
+   analytics
    contributing
    authors
    history

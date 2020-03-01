@@ -6,6 +6,7 @@ import logging
 import tempfile
 import subprocess
 
+from datetime import timedelta
 from pathlib import Path
 from subprocess import check_output
 from collections import defaultdict
@@ -15,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 
 from ckeditor_uploader.fields import RichTextUploadingField
 
@@ -26,6 +27,8 @@ from imagekit.processors import Transpose
 from model_utils.models import TimeStampedModel
 
 from slugify import slugify
+
+from . import appsettings
 
 
 logger = logging.getLogger(__name__)
@@ -223,6 +226,14 @@ class Video(TimeStampedModel):
                 pass
         return paths
 
+    def get_mime_type(self):
+        ending = self.original.name.split(".")[-1].lower()
+        return {
+            "mp4": "video/mp4",
+            "mov": "video/quicktime",
+            "avi": "video/x-msvideo",
+        }.get(ending, "video/mp4")
+
     def save(self, *args, **kwargs):
         generate_poster = kwargs.pop("poster", True)
         # need to save original first - django file handling is driving me nuts
@@ -299,20 +310,23 @@ class Audio(TimeStampedModel):
             paths.add(field.name)
         return paths
 
-    def _lines_to_duration(self, lines):
-        duration = None
-        for line in lines:
-            if "Duration" in line:
-                duration = line.split(",")[0].split()[-1]
-                break
-        return duration
-
     def _get_audio_duration(self, audio_url):
-        ffprobe_cmd = 'ffprobe -show_entries format=duration -i "{}"'.format(audio_url)
-        result = subprocess.check_output(
-            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
+        # Taken from: http://trac.ffmpeg.org/wiki/FFprobeTips
+        cmd = f"""
+        ffprobe  \
+            -v 0  \
+            -print_format json  \
+            -show_entries format=duration  \
+            -of default=noprint_wrappers=1:nokey=1  \
+            '{audio_url}'
+        """
+        result = (
+            subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+            .decode()
+            .strip()
         )
-        return self._lines_to_duration(result.decode("utf8").split("\n"))
+        m = re.match(r"^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
+        return timedelta(seconds=int(m["seconds"]), microseconds=int(m["microseconds"]))
 
     def create_duration(self):
         for name, field in self.uploaded_audio_files:
@@ -320,9 +334,6 @@ class Audio(TimeStampedModel):
             if not audio_url.startswith("http"):
                 audio_url = field.path
             duration = self._get_audio_duration(audio_url)
-            # skip duration for small files (tests won't work otherwise :(..)
-            if not int(duration.split(":")[2].split(".")[0]) > 0:
-                duration = None
             if duration is not None:
                 self.duration = duration
                 break
@@ -390,11 +401,17 @@ class Blog(TimeStampedModel):
     user = models.ForeignKey(
         get_user_model(), on_delete=models.CASCADE, related_name="cast_user"
     )
+    author = models.CharField(max_length=255, default=None, null=True, blank=True)
     title = models.CharField(max_length=255)
     description = models.CharField(max_length=500)
     slug = models.SlugField(max_length=50)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     email = models.EmailField(null=True, default=None, blank=True)
+    comments_enabled = models.BooleanField(
+        _("comments_enabled"),
+        default=True,
+        help_text=_("Whether comments are enabled for this blog." ""),
+    )
 
     # podcast stuff
 
@@ -454,6 +471,13 @@ class Blog(TimeStampedModel):
     def is_podcast(self):
         return self.post_set.exclude(podcast_audio__isnull=True).count() > 0
 
+    @property
+    def author_name(self):
+        if self.author is not None:
+            return self.author
+        else:
+            return self.user.get_full_name()
+
 
 class PostPublishedManager(models.Manager):
     use_for_related_fields = True
@@ -500,6 +524,11 @@ class Post(TimeStampedModel):
             "content might cause the entire show to be <br />removed from iTunes."
             ""
         ),
+    )
+    comments_enabled = models.BooleanField(
+        _("comments_enabled"),
+        default=True,
+        help_text=_("Whether comments are enabled for this post." ""),
     )
 
     content = RichTextUploadingField()
@@ -601,6 +630,14 @@ class Post(TimeStampedModel):
     def has_audio(self):
         return self.audios.count() > 0 or self.podcast_audio is not None
 
+    @property
+    def comments_are_enabled(self):
+        return (
+            appsettings.CAST_COMMENTS_ENABLED
+            and self.blog.comments_enabled
+            and self.comments_enabled
+        )
+
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)
         self.add_missing_media_objects()
@@ -632,3 +669,37 @@ class ChapterMark(models.Model):
         if self.image is not None:
             image = self.image
         return f"{self.start} {self.title} {link} {image}"
+
+
+class Request(models.Model):
+    """
+    Hold requests from access.log files.
+    """
+
+    ip = models.GenericIPAddressField()
+    timestamp = models.DateTimeField()
+    status = models.PositiveSmallIntegerField()
+    size = models.PositiveIntegerField()
+    referer = models.CharField(max_length=2048, blank=True, null=True)
+    user_agent = models.CharField(max_length=1024, blank=True, null=True)
+
+    REQUEST_METHOD_CHOICES = [
+        (1, "GET"),
+        (2, "HEAD"),
+        (3, "POST"),
+        (4, "PUT"),
+        (5, "PATCH"),
+        (6, "DELETE"),
+        (7, "OPTIONS"),
+        (8, "CONNECT"),
+        (8, "TRACE"),
+    ]
+    method = models.PositiveSmallIntegerField(choices=REQUEST_METHOD_CHOICES)
+
+    path = models.CharField(max_length=1024)
+
+    HTTP_PROTOCOL_CHOICES = [(1, "HTTP/1.0"), (2, "HTTP/1.1"), (3, "HTTP/2.0")]
+    protocol = models.PositiveSmallIntegerField(choices=HTTP_PROTOCOL_CHOICES)
+
+    def __str__(self):
+        return f"{self.pk} {self.ip} {self.path}"

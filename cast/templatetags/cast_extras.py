@@ -24,10 +24,10 @@ def video(context, pk):
         poster_url = "/static/img/cast/Video-icon.svg"
     video_tag = (
         '<video class="cast-video" preload="auto" controls poster="{poster}">'
-        '  <source src="{src}" type="video/mp4">'
+        '  <source src="{src}" type="{mime_type}">'
         "  your browser does not support the video tag"
         "</video>"
-    ).format(src=video.original.url, poster=poster_url)
+    ).format(src=video.original.url, poster=poster_url, mime_type=video.get_mime_type())
     return mark_safe(video_tag)
 
 

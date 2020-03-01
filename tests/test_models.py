@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 
 
@@ -93,12 +95,7 @@ class TestAudioModel:
     @pytest.mark.django_db
     def test_audio_duration(self, audio):
         duration = audio._get_audio_duration(audio.m4a.path)
-        assert duration == "00:00:00.70"
-
-    @pytest.mark.django_db
-    def test_audio_duration_none(self, audio):
-        duration = audio._lines_to_duration([])
-        assert duration is None
+        assert duration == timedelta(microseconds=700000)
 
     @pytest.mark.django_db
     def test_audio_create_duration(self, audio):
@@ -124,6 +121,16 @@ class TestBlogModel:
     def test_blog_str(self, blog):
         assert blog.title == str(blog)
 
+    @pytest.mark.django_db
+    def test_blog_author_null(self, blog):
+        blog.author = None
+        assert blog.author_name == blog.user.get_full_name()
+
+    @pytest.mark.django_db
+    def test_blog_author_not_null(self, blog):
+        blog.author = "Foobar"
+        assert blog.author_name == blog.author
+
 
 class TestPostModel:
     @pytest.mark.django_db
@@ -138,6 +145,30 @@ class TestPostModel:
     def test_post_has_audio_true(self, post, audio):
         post.podcast_audio = audio
         assert post.has_audio is True
+
+    @pytest.mark.django_db
+    def test_post_comments_enabled(self, post, comments_enabled):
+        post.comments_enabled = True
+        post.blog.comments_enabled = True
+        assert post.comments_are_enabled
+
+    @pytest.mark.django_db
+    def test_post_comments_disabled_settings(self, post, comments_not_enabled):
+        post.comments_enabled = True
+        post.blog.comments_enabled = True
+        assert not post.comments_are_enabled
+
+    @pytest.mark.django_db
+    def test_post_comments_disabled_blog(self, post, comments_enabled):
+        post.comments_enabled = True
+        post.blog.comments_enabled = False
+        assert not post.comments_are_enabled
+
+    @pytest.mark.django_db
+    def test_post_comments_disabled_post(self, post, comments_enabled):
+        post.comments_enabled = False
+        post.blog.comments_enabled = True
+        assert not post.comments_are_enabled
 
 
 class TestChapterMarkModel:

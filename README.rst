@@ -1,6 +1,6 @@
-=============================
+###########
 Django Cast
-=============================
+###########
 
 .. image:: https://badge.fury.io/py/django-cast.svg
     :target: https://badge.fury.io/py/django-cast
@@ -11,15 +11,19 @@ Django Cast
 .. image:: https://codecov.io/gh/ephes/django-cast/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/ephes/django-cast
 
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+    :target: https://github.com/ephes/django-cast
+
+
 Just another blogging / podcasting package
 
 Documentation
--------------
+*************
 
 The full documentation is at https://django-cast.readthedocs.io.
 
 Installation Screencast
------------------------
+***********************
 .. raw:: html
 
     <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; height: auto;">
@@ -27,7 +31,7 @@ Installation Screencast
     </div>
 
 Quickstart
-----------
+**********
 
 Install Django Cast::
 
@@ -39,16 +43,24 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
 
     INSTALLED_APPS = (
         ...
+        "django.contrib.sites",
         "imagekit",
         "ckeditor",
         "ckeditor_uploader",
+        "crispy_forms",
+        "django_filters",
+        "rest_framework",
         "rest_framework.authtoken",
         "filepond.apps.FilepondConfig",
         "cast.apps.CastConfig",
+        "watson",
+        "fluent_comments",
+        "threadedcomments",
+        "django_comments",
         ...
     )
 
-
+    SITE_ID = 1
 
 Add required settings:
 
@@ -80,12 +92,17 @@ Add required settings:
     # django imagekit
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY="imagekit.cachefiles.strategies.Optimistic"
 
+    # Comments
+    COMMENTS_APP = 'fluent_comments'
+    FLUENT_COMMENTS_EXCLUDE_FIELDS = ('email', 'url', "title")
+    CAST_COMMENTS_ENABLED = True
+
 
 Add Django Cast's URL patterns:
 
 .. code-block:: python
 
-    from django.urls import path
+    from django.urls import include, path, re_path
 
     from rest_framework.documentation import include_docs_urls
     from rest_framework.authtoken import views as authtokenviews
@@ -100,24 +117,48 @@ Add Django Cast's URL patterns:
         # Uploads
         path("uploads/", include("filepond.urls", namespace="filepond")),
         # Cast
-        path("/cast", include("cast.urls", namespace="cast")),
+        path("cast/", include("cast.urls", namespace="cast")),
+        # Threadedcomments
+        re_path(r'^cast/comments/', include('fluent_comments.urls')),
         ...
     ]
+
 
 The api token auth urls and the docs urls are both necessary to provide api endpoints
 with the right namespace. The `django-filepond <https://github.com/ephes/django-filepond>`_
 app is used to dispatch uploads to the right media models.
 
-Features
---------
+Features Overview
+*****************
 
 * Support for responsive images / video / audio media objects
 * Use django template syntax for posts allowing you to use custom template tags for galleries etc. for example
-* Good looking file uploads via `filepond <https://pqina.nl/filepond/>`_
+* Good looking file uploads via filepond_
 * Chaptermarks for podcast Episodes
+* Fulltext search via django-watson_
+* Faceted navigation via django-filter_
+* Comments for posts via django-contrib-comments_, django-threadedcomments_ and django-fluent-comments_
+
 
 Running Tests
--------------
+*************
+
+Install Dependencies
+--------------------
+
+Non python packages that are required but need to be installed using your
+operating system package manager:
+
+* ffmpeg
+
+Install packages that are required to be able to run the tests via poetry:
+
+.. code-block:: shell
+
+    poetry install
+
+Run Tests
+---------
 
 Does the code actually work?
 
@@ -127,12 +168,42 @@ Does the code actually work?
     (myenv) $ python runtests.py tests
 
 Credits
--------
+*******
 
 Tools used in rendering this package:
 
-*  Cookiecutter_
-*  `cookiecutter-djangopackage`_
+* django-imagekit_
+* filepond_
+* django-filter_
+* django-watson_
+* django-contrib-comments_
+* django-threadedcomments_
+* django-fluent-comments_
+* podlove-web-player_
+* podlove-subscribe-button_
+* djangorestframework_
+* django-model-utils_
+* django-crispy-forms_
+* django-ckeditor_
+* Cookiecutter_
+* `cookiecutter-djangopackage`_
+* jquery_
+* bootstrap_
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`cookiecutter-djangopackage`: https://github.com/pydanny/cookiecutter-djangopackage
+.. _`filepond`: https://pqina.nl/filepond/
+.. _`django-watson`: https://github.com/etianen/django-watson
+.. _`django-filter`: https://github.com/carltongibson/django-filter
+.. _`django-contrib-comments`: https://github.com/django/django-contrib-comments
+.. _`django-threadedcomments`: https://github.com/HonzaKral/django-threadedcomments
+.. _`django-fluent-comments`: https://github.com/django-fluent/django-fluent-comments
+.. _`django-model-utils`: https://github.com/jazzband/django-model-utils
+.. _`django-ckeditor`: https://github.com/django-ckeditor/django-ckeditor
+.. _`django-crispy-forms`: https://github.com/django-crispy-forms/django-crispy-forms
+.. _`django-imagekit`: https://github.com/matthewwithanm/django-imagekit
+.. _`djangorestframework`: https://www.django-rest-framework.org
+.. _`podlove-web-player`: https://podlove.org/podlove-web-player/
+.. _`podlove-subscribe-button`: https://podlove.org/podlove-subscribe-button/
+.. _`jquery`: https://jquery.com
+.. _`bootstrap`: https://getbootstrap.com/docs/4.0/getting-started/introduction/

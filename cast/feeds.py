@@ -29,14 +29,14 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return self.object.get_absolute_url()
 
     def items(self):
-        queryset = Post.published.filter(blog=self.object).order_by("-pub_date")
+        queryset = Post.published.filter(blog=self.object).order_by("-visible_date")
         return queryset
 
     def item_title(self, item):
         return item.title
 
     def item_description(self, item):
-        self.render_post(item, javascript=False)
+        self.render_post(item, include_detail=True, javascript=False)
         return item.description
 
 
@@ -72,10 +72,10 @@ class ITunesElements:
         self.add_artwork(blog, handler)
 
         haqe("itunes:subtitle", self.feed["subtitle"])
-        haqe("itunes:author", blog.user.get_full_name())
+        haqe("itunes:author", blog.author_name)
         handler.startElement("itunes:owner", {})
-        haqe("itunes:name", blog.user.get_full_name())
-        haqe("itunes:email", blog.user.email)
+        haqe("itunes:name", blog.author_name)
+        haqe("itunes:email", blog.email)
         handler.endElement("itunes:owner")
 
         self.add_itunes_categories(blog, handler)
@@ -161,7 +161,7 @@ class PodcastFeed(RenderPostMixin, Feed):
 
     def items(self, blog):
         queryset = Post.published.podcast_episodes.filter(blog=self.object).order_by(
-            "-pub_date"
+            "-visible_date"
         )
         return queryset
 
@@ -169,14 +169,17 @@ class PodcastFeed(RenderPostMixin, Feed):
         return item.title
 
     def item_description(self, item):
-        self.render_post(item, javascript=False)
+        self.render_post(item, include_detail=True, javascript=False)
         return item.description
 
     def item_link(self, item):
         return item.get_absolute_url()
 
     def item_pubdate(self, item):
-        return item.pub_date
+        return item.visible_date
+
+    def item_updateddate(self, item):
+        return item.modified
 
     # def item_categories(self, post):
     #    return self.categories(self.blog)
@@ -207,10 +210,10 @@ class AtomPodcastFeed(PodcastFeed):
         return blog.description
 
     def author_name(self, blog):
-        return blog.user.get_full_name()
+        return blog.author_name
 
     def author_email(self, blog):
-        return blog.user.email
+        return blog.email
 
     def link(self):
         """atom link is still wrong, dunno why FIXME"""

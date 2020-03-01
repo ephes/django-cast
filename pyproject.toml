@@ -1,0 +1,79 @@
+[tool.poetry]
+name = "django-cast"
+version = "0.1.29"
+description = "Just another blogging / podcasting package"
+authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>"]
+license = "BSD-4-Clause"
+readme = "README.rst"
+repository = "https://github.com/ephes/django-cast"
+documentation = "https://django-cast.readthedocs.io/en/latest/"
+keywords = [
+    "blog", "podcast", "video", "audio"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 3.0",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+packages = [
+    { include = "./commands.py" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+django = "^3.0.3"
+Pillow = "^6"
+django-filter = "^2.2.0"
+django-watson = "^1.5.4"
+coreapi = "^2.3.3"
+djangorestframework = "^3.11.0"
+python-slugify = "^4.0.0"
+django-model-utils = "^4.0.0"
+django-environ = "^0.4.5"
+django-allauth = "^0.41.0"
+wagtail = "^2.8"
+pandas = "^1.0.1"
+django-threadedcomments = "^1.2"
+django-fluent-comments = {git = "https://github.com/ephes/django-fluent-comments"}
+feedparser = "^5.2.1"
+plotly = "^4.5.2"
+
+[tool.poetry.dev-dependencies]
+Sphinx = "^2.4.3"
+sphinx-rtd-theme = "^0.4.3"
+twine = "^3.1.1"
+flake8 = "^3.7.9"
+black = "^19.10b0"
+typer = "^0.0.8"
+jupyter = "^1.0.0"
+ipdb = "^0.13.1"
+coverage = "^5.0.3"
+pytest = "^5.3.5"
+factory_boy = "^2.12.0"
+pytest-django = "^3.8.0"
+tox = "^3.14.5"
+
+[tool.poetry.scripts]
+test = "commands:test"
+lint = "commands:flake8"
+autoformat = "commands:black"
+show_coverage = "commands:coverage"
+docs = "commands:docs"
+notebook = "commands:notebook"
+clean-build = "commands:clean_build"
+clean-pyc = "commands:clean_pyc"
+clean = "commands:clean"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
+

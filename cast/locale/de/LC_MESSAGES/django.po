@@ -1,0 +1,138 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-05-16 17:53+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: build/lib/cast/forms.py:36 cast/forms.py:36
+msgid "Publication date"
+msgstr "Veröffentlichungsdatum"
+
+#: build/lib/cast/forms.py:38 cast/forms.py:38
+msgid "Article will be published after this date/time."
+msgstr "Artikel wird nach diesem Zeitpunkt veröffentlich"
+
+#: build/lib/cast/forms.py:43 cast/forms.py:43
+msgid "Visible date"
+msgstr "Sichtbares Datum"
+
+#: build/lib/cast/forms.py:44 cast/forms.py:44
+msgid "Date to be shown above article."
+msgstr "Dieses Datum wird über dem Artikel zu sehen sein"
+
+#: build/lib/cast/forms.py:47 cast/forms.py:47
+msgid "The audio object to be used as podcast episode."
+msgstr "Dasjenige Audio-Objekt, das als Podcast-Episoden-Audio verwendet werden soll."
+
+#: build/lib/cast/models.py:407 cast/models.py:407
+msgid "itunes_categories"
+msgstr "Itunes Kategorien"
+
+#: build/lib/cast/models.py:412 cast/models.py:412
+msgid ""
+"A json dict of itunes categories pointing to lists of subcategories. Taken "
+"from this list https://validator.w3.org/feed/docs/error/"
+"InvalidItunesCategory.html"
+msgstr ""
+
+#: build/lib/cast/models.py:417 cast/models.py:417
+msgid "yes"
+msgstr "ja"
+
+#: build/lib/cast/models.py:417 cast/models.py:417
+msgid "no"
+msgstr "nein"
+
+#: build/lib/cast/models.py:417 cast/models.py:417
+msgid "clean"
+msgstr "suber"
+
+#: build/lib/cast/models.py:419 build/lib/cast/models.py:481 cast/models.py:419
+#: cast/models.py:481
+msgid "keywords"
+msgstr ""
+
+#: build/lib/cast/models.py:424 cast/models.py:424
+msgid ""
+"A comma-delimitedlist of up to 12 words for iTunes\n"
+"            searches. Perhaps include misspellings of the title."
+msgstr ""
+
+#: build/lib/cast/models.py:429 build/lib/cast/models.py:491 cast/models.py:429
+#: cast/models.py:491
+msgid "explicit"
+msgstr "explizit"
+
+#: build/lib/cast/models.py:432 build/lib/cast/models.py:493 cast/models.py:432
+#: cast/models.py:493
+msgid "``Clean`` will put the clean iTunes graphic by it."
+msgstr ""
+
+#: build/lib/cast/models.py:486 cast/models.py:486
+msgid ""
+"A comma-demlimitedlist of up to 12 words for iTunes\n"
+"            searches. Perhaps include misspellings of the title."
+msgstr ""
+
+#: build/lib/cast/models.py:497 cast/models.py:497
+msgid "block"
+msgstr ""
+
+#: build/lib/cast/models.py:500 cast/models.py:500
+msgid ""
+"Check to block this episode from iTunes because <br />its content might "
+"cause the entire show to be <br />removed from iTunes."
+msgstr ""
+
+#: build/lib/cast/models.py:616 cast/models.py:616
+msgid "Start time of chaptermark"
+msgstr "Startzeitpunkt der Kapitelmarke"
+
+#: build/lib/cast/templates/cast/post_detail.html:40
+#: build/lib/cast/views.py:133 cast/templates/cast/post_detail.html:36
+msgid "Comments"
+msgstr "Kommentare"
+
+#: build/lib/cast/templates/comments/comment.html:4
+#: cast/templates/comments/comment.html:4
+msgid "Preview of your comment"
+msgstr "Vorschau deines Kommentars"
+
+#: build/lib/cast/templates/comments/comment.html:8
+#: cast/templates/comments/comment.html:8
+msgid "Anonymous"
+msgstr "Anonym"
+
+#: build/lib/cast/templates/comments/comment.html:11
+#: cast/templates/comments/comment.html:11
+#, python-format
+msgid "on %(submit_date)s"
+msgstr "am %(submit_date)s"
+
+#: build/lib/cast/templates/comments/comment.html:12
+#: cast/templates/comments/comment.html:12
+msgid "moderated"
+msgstr ""
+
+#: build/lib/cast/templates/comments/comment.html:13
+#: cast/templates/comments/comment.html:13
+msgid "reply"
+msgstr "antworten"
+
+#: build/lib/cast/widgets.py:54 cast/widgets.py:54
+msgid "All"
+msgstr "Alle"

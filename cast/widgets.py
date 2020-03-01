@@ -3,9 +3,9 @@ from itertools import chain
 from django.forms import Widget
 from django.forms.utils import flatatt
 from django.utils.http import urlencode
-from django.utils.encoding import force_text
+from django.utils.encoding import force_str
 from django.utils.safestring import mark_safe
-from django.utils.translation import ugettext as _
+from django.utils.translation import gettext as _
 from django.db.models.fields import BLANK_CHOICE_DASH
 
 
@@ -34,7 +34,7 @@ class DateFacetWidget(Widget):
         return mark_safe("\n".join(output))
 
     def render_options(self, choices, selected_choices, name):
-        selected_choices = set(force_text(v) for v in selected_choices)
+        selected_choices = set(force_str(v) for v in selected_choices)
         output = []
         for option_value, option_label in chain(self.choices, choices):
             if isinstance(option_label, (list, tuple)):
@@ -49,7 +49,7 @@ class DateFacetWidget(Widget):
         return "\n".join(output)
 
     def render_option(self, name, selected_choices, option_value, option_label):
-        option_value = force_text(option_value)
+        option_value = force_str(option_value)
         if option_label == BLANK_CHOICE_DASH[0][1]:
             option_label = _("All")
         data = self.data.copy()
@@ -62,7 +62,7 @@ class DateFacetWidget(Widget):
         return self.option_string() % {
             "attrs": selected and ' class="selected"' or "",
             "query_string": url,
-            "label": force_text(option_label),
+            "label": force_str(option_label),
         }
 
     def option_string(self):

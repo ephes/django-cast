@@ -36,6 +36,16 @@ class TestPostList:
         assert "html" in content
         assert draft_post.title in content
 
+    def test_get_post_list_without_post_detail(self, client, post):
+        blog_url = reverse("cast:post_list", kwargs={"slug": post.blog.slug})
+
+        r = client.get(blog_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert "in_all" in content
+        assert "only_in_detail" not in content
+
 
 class TestPostListFilter:
     pytestmark = pytest.mark.django_db
