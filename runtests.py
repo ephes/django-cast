@@ -15,9 +15,9 @@ from django.test.utils import get_runner
 
 def run_tests(*test_args):
     if not test_args:
-        test_args = ['tests']
+        test_args = ["tests"]
 
-    os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
+    os.environ["DJANGO_SETTINGS_MODULE"] = "tests.settings"
     django.setup()
     TestRunner = get_runner(settings)
     test_runner = TestRunner()
@@ -27,5 +27,5 @@ def run_tests(*test_args):
     sys.exit(bool(failures))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_tests(*sys.argv[1:])
