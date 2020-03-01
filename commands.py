@@ -1,5 +1,6 @@
 import os
 import typer
+import shutil
 import webbrowser
 import subprocess
 
@@ -76,6 +77,35 @@ def coverage():
         run_command(command, debug=True)
     file_url = "file://" + str(Path("htmlcov/index.html").resolve())
     webbrowser.open_new_tab(file_url)
+
+
+@typer_cli
+def clean_build():
+    commands = [
+        "rm -fr build/",
+        "rm -fr dist/",
+        "rm -fr *.egg-info",
+        "rm -fr __pycache__",
+    ]
+    for command in commands:
+        run_command(command, debug=True)
+
+
+@typer_cli
+def clean_pyc():
+    commands = [
+        "find . -name '*.pyc' -exec rm -f {} +",
+        "find . -name '*.pyo' -exec rm -f {} +",
+        "find . -name '*~' -exec rm -f {} +",
+    ]
+    for command in commands:
+        run_command(command, debug=True)
+
+
+@typer_cli
+def clean():
+    clean_build()
+    clean_pyc()
 
 
 @typer_cli
