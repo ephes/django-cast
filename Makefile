@@ -27,12 +27,6 @@ clean-pyc: ## remove Python file artifacts
 	find . -name '*.pyo' -exec rm -f {} +
 	find . -name '*~' -exec rm -f {} +
 
-lint: ## check style with flake8
-	flake8 cast tests --ignore=W503
-
-black: ## paint it black
-	black cast tests
-
 test: ## run tests quickly with the default Python
 	python runtests.py tests
 
@@ -44,14 +38,6 @@ coverage: ## check code coverage quickly with the default Python
 	coverage report -m
 	coverage html
 	open htmlcov/index.html
-
-docs: ## generate Sphinx HTML documentation, including API docs
-	rm -f docs/django-cast.rst
-	rm -f docs/modules.rst
-	# sphinx-apidoc -o docs/ cast
-	$(MAKE) -C docs clean
-	$(MAKE) -C docs html
-	$(BROWSER) docs/_build/html/index.html
 
 release: clean ## package and upload a release
 	python setup.py sdist
