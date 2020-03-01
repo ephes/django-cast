@@ -3,7 +3,11 @@
 History
 -------
 
-.1.28 (2019-06-03)
+0.1.29 (2020-01-03)
++++++++++++++++++++
+* Use poetry instead of requirements.txt and setup.py
+
+0.1.28 (2019-06-03)
 +++++++++++++++++++
 
 * Added some analytics support: import your access.log and view dashboard with hits/day,week
