@@ -68,7 +68,7 @@ def black():
 @typer_cli
 def coverage():
     commands = [
-        "coverage run --source src/wagtail_srcset/templatetags --branch runtests.py tests",
+        "coverage run --source cast --branch runtests.py tests",
         "coverage report -m",
         "coverage html",
     ]
