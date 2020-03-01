@@ -61,7 +61,7 @@ def flake8():
 
 @typer_cli
 def black():
-    command = "black src tests"
+    command = "black cast tests"
     run_command(command, debug=True)
 
 
