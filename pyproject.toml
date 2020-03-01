@@ -3,6 +3,25 @@ name = "django-cast"
 version = "0.1.0"
 description = "Just another blogging / podcasting package"
 authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>"]
+license = "BSD-4-Clause"
+readme = "README.rst"
+repository = "https://github.com/ephes/django-cast"
+documentation = "https://django-cast.readthedocs.io/en/latest/"
+keywords = "blog,podcast,video,audio"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 3.0",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Natural Language :: English",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
 packages = [
     { include = "./commands.py" },
 ]
