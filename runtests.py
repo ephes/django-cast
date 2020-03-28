@@ -23,7 +23,10 @@ def run_tests(*test_args):
     test_runner = TestRunner()
     failures = test_runner.run_tests(test_args)
     media_root = Path(settings.MEDIA_ROOT)
-    shutil.rmtree(media_root)  # FIXME move cleanup to tests
+    try:
+        shutil.rmtree(media_root)  # FIXME move cleanup to tests
+    except FileNotFoundError:
+        pass
     sys.exit(bool(failures))
 
 
