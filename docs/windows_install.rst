@@ -2,6 +2,7 @@ Locally / Setting up your development machine to develop on django-cast
 ========================================================================
 
 Install `pyenv-win` & set the environment variable PYENV then add $env:PYENV\bin and $env:PYENV\shims to PATH
+(attention: some poetry commands may not work with pyenv-win and may be broken, Dominik 2020-03-28)
 
 .. code-block:: powershell
 
@@ -45,7 +46,20 @@ To checkout the wagtail branch & set local django-settings
 activate your venv: e.g: `poetry shell` & start the server
 
 .. code-block:: powershell
+
     python manage.py migrate
     python manage.py createsuperuser
     python manage.py runserver localhost:8000
 
+
+To run the tests:
+
+.. code-block:: powershell
+
+    poetry run test
+    poetry run show_coverage
+    poetry run docs
+    poetry run autoformat
+
+    # linting with flake8
+    poetry run lint
