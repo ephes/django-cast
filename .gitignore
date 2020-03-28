@@ -76,3 +76,6 @@ hints/*
 
 # tmp media
 tests/media/
+
+# local database
+db.sqlite3
