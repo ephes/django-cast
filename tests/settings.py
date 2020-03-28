@@ -36,6 +36,19 @@ INSTALLED_APPS = [
     "fluent_comments",  # must be before django_comments
     "threadedcomments",
     "django_comments",
+    "modelcluster",
+    "taggit",
+    "wagtail.contrib.forms",
+    "wagtail.contrib.redirects",
+    "wagtail.embeds",
+    "wagtail.sites",
+    "wagtail.users",
+    "wagtail.snippets",
+    "wagtail.documents",
+    "wagtail.images",
+    "wagtail.search",
+    "wagtail.admin",
+    "wagtail.core",
     "cast",
 ]
 
