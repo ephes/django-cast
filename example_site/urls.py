@@ -18,9 +18,7 @@ from rest_framework.authtoken import views as authtokenviews
 urlpatterns = [
     path("", RedirectView.as_view(url="/about"), name="home"),
     path(
-        "about/",
-        TemplateView.as_view(template_name="pages/about.html"),
-        name="about",
+        "about/", TemplateView.as_view(template_name="pages/about.html"), name="about",
     ),
     url(r"^django-admin/", admin.site.urls),
     url(r"^admin/", include(wagtailadmin_urls)),
@@ -28,8 +26,9 @@ urlpatterns = [
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
     # Cast
-    path("api/api-token-auth/", authtokenviews.obtain_auth_token),
-    path("docs/", include_docs_urls(title="API service")),
+    url(r"^api/api-token-auth/", authtokenviews.obtain_auth_token),
+    url(r"^api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+    url(r"^docs/", include_docs_urls(title="My Blog API service")),
     path("ckeditor/", include("ckeditor_uploader.urls")),
     # Uploads
     path("uploads/", include("filepond.urls", namespace="filepond")),
