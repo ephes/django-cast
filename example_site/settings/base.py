@@ -120,6 +120,9 @@ TEMPLATES = [
     },
 ]
 
+# See: http://django-crispy-forms.readthedocs.io/en/latest/install.html#template-packs
+CRISPY_TEMPLATE_PACK = "bootstrap4"
+
 WSGI_APPLICATION = "example_site.wsgi.application"
 
 
@@ -213,3 +216,16 @@ CKEDITOR_CONFIGS = {
 COMMENTS_APP = "fluent_comments"
 FLUENT_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
 CAST_COMMENTS_ENABLED = True
+
+# REST
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.TokenAuthentication",
+    ),
+    # AttributeError at /api/docs/ -> 'AutoSchema' object has no attribute 'get_link'
+    "DEFAULT_SCHEMA_CLASS": "rest_framework.schemas.coreapi.AutoSchema",
+}
+
+# django imagekit
+IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
