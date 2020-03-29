@@ -18,6 +18,11 @@ from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
 from django.utils.translation import gettext_lazy as _
 
+from wagtail.core.models import Page
+from wagtail.core.fields import RichTextField
+from wagtail.admin.edit_handlers import FieldPanel
+from wagtail.search import index
+
 from ckeditor_uploader.fields import RichTextUploadingField
 
 from imagekit.models import ImageSpecField
@@ -42,7 +47,9 @@ def image_spec_thumbnail(size):
 
 
 class Image(TimeStampedModel):
-    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE, related_name="cast_images"
+    )
 
     original = models.ImageField(
         upload_to="cast_images/originals",
@@ -397,6 +404,12 @@ class File(TimeStampedModel):
         return paths
 
 
+class BlogIndexPage(Page):
+    intro = RichTextField(blank=True)
+
+    content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
+
+
 class Blog(TimeStampedModel):
     user = models.ForeignKey(
         get_user_model(), on_delete=models.CASCADE, related_name="cast_user"
@@ -477,6 +490,23 @@ class Blog(TimeStampedModel):
             return self.author
         else:
             return self.user.get_full_name()
+
+
+class BlogPage(Page):
+    date = models.DateField("Post date")
+    intro = models.CharField(max_length=250)
+    body = RichTextField(blank=True)
+
+    search_fields = Page.search_fields + [
+        index.SearchField("intro"),
+        index.SearchField("body"),
+    ]
+
+    content_panels = Page.content_panels + [
+        FieldPanel("date"),
+        FieldPanel("intro"),
+        FieldPanel("body", classname="full"),
+    ]
 
 
 class PostPublishedManager(models.Manager):
