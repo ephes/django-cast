@@ -2,8 +2,10 @@ from django.urls import path
 from django.urls import re_path
 from django.contrib import admin
 from django.conf import settings
-from django.conf.urls import include, url
 from django.contrib import admin
+from django.conf.urls import include, url
+from django.views.generic import TemplateView
+from django.views.generic import RedirectView
 
 from wagtail.admin import urls as wagtailadmin_urls
 from wagtail.core import urls as wagtail_urls
@@ -14,6 +16,12 @@ from rest_framework.authtoken import views as authtokenviews
 
 
 urlpatterns = [
+    path("", RedirectView.as_view(url="/about"), name="home"),
+    path(
+        "about/",
+        TemplateView.as_view(template_name="pages/about.html"),
+        name="about",
+    ),
     url(r"^django-admin/", admin.site.urls),
     url(r"^admin/", include(wagtailadmin_urls)),
     url(r"^documents/", include(wagtaildocs_urls)),
@@ -30,7 +38,7 @@ urlpatterns = [
     # Threadedcomments
     re_path(r"^show/comments/", include("fluent_comments.urls")),
     # Wagtail
-    url(r"^pages/", include(wagtail_urls)),
+    url(r"^wagtail/", include(wagtail_urls)),
 ]
 
 
