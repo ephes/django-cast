@@ -50,6 +50,7 @@ django-ckeditor = "^5.9.0"
 django-filepond = "^0.1.2"
 django-imagekit = "^4.0.2"
 wagtail_srcset = "^0.1.1"
+markdown = "^3.2.1"
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^2.4.3"
@@ -67,6 +68,7 @@ pytest-django = "^3.8.0"
 tox = "^3.14.5"
 django_extensions = "^2.2.8"
 django-ckeditor = "^5.9.0"
+coreapi-cli = "^1.0.9"
 
 [tool.poetry.scripts]
 test = "commands:test"
