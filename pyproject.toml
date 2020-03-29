@@ -2,7 +2,7 @@
 name = "django-cast"
 version = "0.1.29"
 description = "Just another blogging / podcasting package"
-authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>"]
+authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>", "Dominik Geldmacher <oryon@cyberise.de>"]
 license = "BSD-4-Clause"
 readme = "README.rst"
 repository = "https://github.com/ephes/django-cast"
