@@ -404,7 +404,7 @@ class File(TimeStampedModel):
         return paths
 
 
-class BlogIndexPage(Page):
+class BlogIndexPage(Page):  # -> Blog
     intro = RichTextField(blank=True)
 
     content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
@@ -492,7 +492,7 @@ class Blog(TimeStampedModel):
             return self.user.get_full_name()
 
 
-class BlogPage(Page):
+class BlogPage(Page):  # -> Post
     date = models.DateField("Post date")
     intro = models.CharField(max_length=250)
     body = RichTextField(blank=True)
@@ -507,6 +507,7 @@ class BlogPage(Page):
         FieldPanel("intro"),
         FieldPanel("body", classname="full"),
     ]
+
 
 
 class PostPublishedManager(models.Manager):
