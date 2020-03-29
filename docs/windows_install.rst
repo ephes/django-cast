@@ -56,9 +56,16 @@ To run the tests:
 
 .. code-block:: powershell
 
+    # python .\runtests.py tests
     poetry run test
+
+    # coverage run --source cast --branch runtests.py tests
+    # coverage report -m
+    # coverage html
     poetry run show_coverage
+
     poetry run docs
+
     poetry run autoformat
 
     # linting with flake8

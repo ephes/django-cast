@@ -10,4 +10,4 @@ Development Lead
 Contributors
 ------------
 
-* Dominik Geldmacher <oryon@soila.de>
+* Dominik Geldmacher <oryon@cyberise.de>
