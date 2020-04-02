@@ -18,9 +18,12 @@ from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
 from django.utils.translation import gettext_lazy as _
 
+from wagtail.core import blocks
 from wagtail.core.models import Page
+from wagtail.core.fields import StreamField
 from wagtail.core.fields import RichTextField
-from wagtail.admin.edit_handlers import FieldPanel
+from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
+from wagtail.images.blocks import ImageChooserBlock
 from wagtail.search import index
 
 from ckeditor_uploader.fields import RichTextUploadingField
@@ -494,18 +497,20 @@ class Blog(TimeStampedModel):
 
 class BlogPage(Page):  # -> Post
     date = models.DateField("Post date")
-    intro = models.CharField(max_length=250)
     body = RichTextField(blank=True)
+    body = StreamField([
+        ('heading', blocks.CharBlock(classname="full title")),
+        ('paragraph', blocks.RichTextBlock()),
+        ('image', ImageChooserBlock(template="cast/wagtail_image.html")),
+    ])
 
     search_fields = Page.search_fields + [
-        index.SearchField("intro"),
         index.SearchField("body"),
     ]
 
     content_panels = Page.content_panels + [
         FieldPanel("date"),
-        FieldPanel("intro"),
-        FieldPanel("body", classname="full"),
+        StreamFieldPanel("body"),
     ]
 
 

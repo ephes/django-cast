@@ -3,6 +3,8 @@
 {% load static %}
 
 {% load wagtailcore_tags %}
+{% load wagtailimages_tags %}
+{% load wagtail_srcset_tags %}
 
 {% load comments %}
 
@@ -15,17 +17,19 @@
 {% block body_class %}template-blogpage{% endblock %}
 
 {% block content %}
-    <h1>{{ page.title }}</h1>
-    <p class="meta">{{ page.date }}</p>
+  <article>
+    {% for block in page.body %}
+      <section class="block-{{ block.block_type }}">
+        {% include_block block %}
+      </section>
+    {% endfor %}
+    <!-- {% include_block page.body %} -->
+  </article>
 
-    <div class="intro">{{ page.intro }}</div>
+  {% render_comment_list for page %}
+  {% render_comment_form for page %}
 
-    {{ page.body|richtext }}
-
-    {% render_comment_list for page %}
-    {% render_comment_form for page %}
-
-    <p><a href="{{ page.get_parent.url }}">Return to blog</a></p>
+  <p><a href="{{ page.get_parent.url }}">Return to blog</a></p>
 
 {% endblock %}
 
