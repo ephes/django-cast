@@ -502,9 +502,7 @@ class BlogPage(Page):  # -> Post
         ('heading', blocks.CharBlock(classname="full title")),
         ('paragraph', blocks.RichTextBlock()),
         ('image', ImageChooserBlock(template="cast/wagtail_image.html")),
-        ('gallery', GalleryBlock(
-            ImageChooserBlock(), template="cast/wagtail_gallery_block.html")
-        ),
+        ('gallery', GalleryBlock(ImageChooserBlock())),
     ])
 
     search_fields = Page.search_fields + [
