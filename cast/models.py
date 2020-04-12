@@ -498,7 +498,6 @@ class Blog(TimeStampedModel):
 
 class BlogPage(Page):  # -> Post
     date = models.DateField("Post date")
-    body = RichTextField(blank=True)
     body = StreamField([
         ('heading', blocks.CharBlock(classname="full title")),
         ('paragraph', blocks.RichTextBlock()),
