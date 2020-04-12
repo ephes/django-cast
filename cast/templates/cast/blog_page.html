@@ -23,7 +23,6 @@
         {% include_block block %}
       </section>
     {% endfor %}
-    <!-- {% include_block page.body %} -->
   </article>
 
   {% render_comment_list for page %}
@@ -41,7 +40,6 @@
   <!-- block.super needs to be below full jquery because otherwise jquery-slim would overwrite calls necessary for comments -->
   {{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
-
   <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
 
 {% endblock javascript %}

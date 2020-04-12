@@ -37,6 +37,7 @@ from model_utils.models import TimeStampedModel
 from slugify import slugify
 
 from . import appsettings
+from .blocks import GalleryBlock
 
 
 logger = logging.getLogger(__name__)
@@ -502,6 +503,9 @@ class BlogPage(Page):  # -> Post
         ('heading', blocks.CharBlock(classname="full title")),
         ('paragraph', blocks.RichTextBlock()),
         ('image', ImageChooserBlock(template="cast/wagtail_image.html")),
+        ('gallery', GalleryBlock(
+            ImageChooserBlock(), template="cast/wagtail_gallery_block.html")
+        ),
     ])
 
     search_fields = Page.search_fields + [
