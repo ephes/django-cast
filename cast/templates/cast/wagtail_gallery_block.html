@@ -8,7 +8,7 @@
     src="#"
     class="cast-gallery-modal"
     data-toggle="modal"
-    data-target="#galleryModalKey"
+    data-target="#galleryModal-{{ block.id }}"
     data-full="{{ image.src }}"
   >
     {% srcset_image image max-120x80 as thumbnail %}
@@ -25,7 +25,7 @@
   </a>
 {% endfor %}
 <!-- Modal -->
-<div class="modal fade" id="galleryModalKey" tabindex="-1" role="dialog"
+<div class="modal fade" id="galleryModal-{{ block.id }}" tabindex="-1" role="dialog"
      aria-labelledby="galleryModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg cast-gallery-lg" role="document">
         <div class="modal-content cast-gallery-content">
