@@ -3,31 +3,27 @@
 <h1>hello world</h1>
 
 <div class="cast-gallery-container">
-{% with image_prev="false" %}
 {% for image in block.value %}
-  <section class="block-{{ block.block_type }}">
-    <a
-      src="#"
-      class="cast-gallery-modal"
-      data-toggle="modal"
-      data-target="#galleryModalKey"
-      data-full="{{ image.src }}"
-    >
-      {% srcset_image image width-60 as thumbnail %}
-      <img
-       id="img-{{image.pk}}"
-       class="cast-gallery-thumbnail"
-       src="{{ thumbnail.url }}"
-       width="{{ thumbnail.width }}"
-       height="{{ thumbnail.height }}"
-       srcset="{{ thumbnail.srcset }}"
-       data-prev="{{ image.prev }}"
-       data-next="{{ image.next }}"
-      />
-    </a>
-  </section>
+  <a
+    src="#"
+    class="cast-gallery-modal"
+    data-toggle="modal"
+    data-target="#galleryModalKey"
+    data-full="{{ image.src }}"
+  >
+    {% srcset_image image max-120x80 as thumbnail %}
+    <img
+     id="img-{{image.pk}}"
+     class="cast-gallery-thumbnail"
+     src="{{ thumbnail.url }}"
+     width="{{ thumbnail.width }}"
+     height="{{ thumbnail.height }}"
+     srcset="{{ thumbnail.srcset }}"
+     data-prev="{{ image.prev }}"
+     data-next="{{ image.next }}"
+    />
+  </a>
 {% endfor %}
-{% endwith %}
 <!-- Modal -->
 <div class="modal fade" id="galleryModalKey" tabindex="-1" role="dialog"
      aria-labelledby="galleryModalLabel" aria-hidden="true">
