@@ -1,6 +1,6 @@
-vim HISTORY.rst
+release.txtvim HISTORY.rst
 git flow release start
-vim setup.cfg cast/__init__.py
+vim setup.cfg cast/__init__.py pyproject.toml
 git add .
 git commit -m "bump version number"
 git flow release finish
