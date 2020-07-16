@@ -1,3 +1,5 @@
+import string
+
 from datetime import datetime
 
 import django_filters
@@ -10,6 +12,10 @@ from .widgets import DateFacetWidget
 
 def parse_date_facets(value):
     """Split into function, because it needs to be imported by the post list view."""
+    # clean up value a little bit, because otherwise sql-injection
+    # search requests are spamming the logfile with garbage -> analytics wont work
+    allowed = set(string.digits + "-")
+    value = "".join([c for c in value if c in allowed])
     year_month = datetime.strptime(value, "%Y-%m")
     return year_month
 
