@@ -155,7 +155,7 @@ Install packages that are required to be able to run the tests via poetry:
 
 .. code-block:: shell
 
-    poetry install
+    $ poetry install
 
 Run Tests
 ---------
@@ -164,8 +164,8 @@ Does the code actually work?
 
 .. code-block:: shell
 
-    source <YOURVIRTUALENV>/bin/activate
-    (myenv) $ python runtests.py tests
+    $ poetry shell
+    $ python runtests.py tests
 
 Credits
 *******

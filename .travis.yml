@@ -6,9 +6,6 @@ dist: buster
 python:
   - "3.8"
 
-env: 
-  - TOX_ENV=py38-django-30
-
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y ffmpeg
@@ -21,7 +18,7 @@ matrix:
 install: poetry install -v
 
 # command to run tests using coverage, e.g. python setup.py test
-script: tox -e $TOX_ENV
+script: coverage run --source cast runtests.py
 
 after_success:
   - codecov -e TOX_ENV
