@@ -1,0 +1,1 @@
+* vendor in django-fluentcomments (no pypi package + no poetry publish with git dependency)
