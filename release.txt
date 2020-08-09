@@ -1,4 +1,4 @@
-release.txtvim HISTORY.rst
+vim release.txt HISTORY.rst
 git flow release start
 vim setup.cfg cast/__init__.py pyproject.toml
 git add .
