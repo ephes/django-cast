@@ -40,7 +40,6 @@ python-slugify = "^4.0.0"
 django-model-utils = "^4.0.0"
 django-environ = "^0.4.5"
 django-allauth = "^0.42.0"
-wagtail = "^2.8"
 pandas = "^1.0.1"
 django-threadedcomments = "^1.2"
 django-fluent-comments = {git = "https://github.com/ephes/django-fluent-comments"}
