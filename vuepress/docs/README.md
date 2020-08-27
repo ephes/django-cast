@@ -5,11 +5,12 @@ tagline: Just a small blogging/podcasting platform
 actionText: Quick Start →
 actionLink: /guide/
 features:
-- title: Feature 1 Title
-  details: Feature 1 Description
-- title: Feature 2 Title
-  details: Feature 2 Description
-- title: Feature 3 Title
-  details: Feature 3 Description
+- title: Podcast Support
+  details: Podlove Web Player / iTunes Feed
+- title: Responsive Images
+  details: Sharp images served in appropriate sizes to different devices
+- title: Video Support
+  details: Large media files hosted on S3
 footer: Made by Jochen Wersdörfer with ❤️
 ---
+Hello World
