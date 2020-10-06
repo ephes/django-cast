@@ -1,5 +1,5 @@
 import pytz
-import pandas as pd
+# import pandas as pd
 
 from io import StringIO
 from datetime import datetime
@@ -80,45 +80,45 @@ def parse_datetime(x):
     return dt.replace(tzinfo=pytz.FixedOffset(dt_tz))
 
 
-def get_dataframe_from_position(access_log_path, start_position=0, chunk_size=None):
-    log_buffer = access_log_to_buffer(
-        access_log_path, start_position=start_position, chunk_size=chunk_size
-    )
-    df = pd.read_csv(
-        log_buffer,
-        sep=r'\s(?=(?:[^"]*"[^"]*")*[^"]*$)(?![^\[]*\])',
-        engine="python",
-        na_values="-",
-        header=None,
-        usecols=[0, 3, 4, 5, 6, 7, 8],
-        names=[
-            "ip",
-            "user",
-            "user1",
-            "timestamp",
-            "request",
-            "status",
-            "size",
-            "referer",
-            "user_agent",
-        ],
-        converters={
-            "timestamp": parse_datetime,
-            "request": parse_str,
-            "status": int,
-            "size": int,
-            "referer": parse_str,
-            "user_agent": parse_str,
-        },
-    )
-    df = df.drop(df[df.ip.str.len() > 100].index)
-    try:
-        # breaks on empty df
-        df[["method", "path", "protocol"]] = df.request.str.split(" ", expand=True)
-    except ValueError:
-        pass
-    df = df.drop("request", axis=1)
-    return df
+#def get_dataframe_from_position(access_log_path, start_position=0, chunk_size=None):
+#    log_buffer = access_log_to_buffer(
+#        access_log_path, start_position=start_position, chunk_size=chunk_size
+#    )
+#    df = pd.read_csv(
+#        log_buffer,
+#        sep=r'\s(?=(?:[^"]*"[^"]*")*[^"]*$)(?![^\[]*\])',
+#        engine="python",
+#        na_values="-",
+#        header=None,
+#        usecols=[0, 3, 4, 5, 6, 7, 8],
+#        names=[
+#            "ip",
+#            "user",
+#            "user1",
+#            "timestamp",
+#            "request",
+#            "status",
+#            "size",
+#            "referer",
+#            "user_agent",
+#        ],
+#        converters={
+#            "timestamp": parse_datetime,
+#            "request": parse_str,
+#            "status": int,
+#            "size": int,
+#            "referer": parse_str,
+#            "user_agent": parse_str,
+#        },
+#    )
+#    df = df.drop(df[df.ip.str.len() > 100].index)
+#    try:
+#        # breaks on empty df
+#        df[["method", "path", "protocol"]] = df.request.str.split(" ", expand=True)
+#    except ValueError:
+#        pass
+#    df = df.drop("request", axis=1)
+#    return df
 
 
 def pandas_rows_to_dict(rows):
