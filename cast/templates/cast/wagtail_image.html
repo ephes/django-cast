@@ -1,0 +1,5 @@
+{% load wagtail_srcset_tags %}
+
+<a href="{{ block.value.file.url }}">
+  {% srcset_image block.value width-600 class="cast-image" sizes="100vw" %}
+</a>

@@ -67,6 +67,7 @@ hints/*
 
 # vim
 .*swp
+.*swo
 
 # pypi
 .pypirc
@@ -76,3 +77,6 @@ hints/*
 
 # tmp media
 tests/media/
+
+# local database
+db.sqlite3

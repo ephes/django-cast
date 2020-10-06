@@ -1,0 +1,44 @@
+{% load wagtail_srcset_tags %}
+
+<h1>hello world</h1>
+
+<div class="cast-gallery-container">
+{% for image in block.value %}
+  <a
+    src="#"
+    class="cast-gallery-modal"
+    data-toggle="modal"
+    data-target="#galleryModal-{{ block.id }}"
+    data-full="{{ image.src }}"
+  >
+    {% srcset_image image max-120x80 as thumbnail %}
+    <img
+     id="img-{{image.pk}}"
+     class="cast-gallery-thumbnail"
+     src="{{ thumbnail.url }}"
+     width="{{ thumbnail.width }}"
+     height="{{ thumbnail.height }}"
+     srcset="{{ thumbnail.srcset }}"
+     data-prev="{{ image.prev }}"
+     data-next="{{ image.next }}"
+    />
+  </a>
+{% endfor %}
+<!-- Modal -->
+<div class="modal fade" id="galleryModal-{{ block.id }}" tabindex="-1" role="dialog"
+     aria-labelledby="galleryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg cast-gallery-lg" role="document">
+        <div class="modal-content cast-gallery-content">
+            <div class="modal-header cast-gallery-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body cast-gallery-body">
+                <a href=""><img class="modal-image cast-image" src="" srcset="" sizes="100vw"></img></a>
+            </div>
+            <div class="modal-footer cast-gallery-footer">
+                </div>
+            </div>
+    </div>
+</div>

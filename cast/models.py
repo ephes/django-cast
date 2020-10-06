@@ -18,6 +18,14 @@ from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
 from django.utils.translation import gettext_lazy as _
 
+from wagtail.core import blocks
+from wagtail.core.models import Page
+from wagtail.core.fields import StreamField
+from wagtail.core.fields import RichTextField
+from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
+from wagtail.images.blocks import ImageChooserBlock
+from wagtail.search import index
+
 from ckeditor_uploader.fields import RichTextUploadingField
 
 from imagekit.models import ImageSpecField
@@ -29,6 +37,7 @@ from model_utils.models import TimeStampedModel
 from slugify import slugify
 
 from . import appsettings
+from .blocks import GalleryBlock
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +51,9 @@ def image_spec_thumbnail(size):
 
 
 class Image(TimeStampedModel):
-    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        get_user_model(), on_delete=models.CASCADE, related_name="cast_images"
+    )
 
     original = models.ImageField(
         upload_to="cast_images/originals",
@@ -397,6 +408,12 @@ class File(TimeStampedModel):
         return paths
 
 
+class BlogIndexPage(Page):  # -> Blog
+    intro = RichTextField(blank=True)
+
+    content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
+
+
 class Blog(TimeStampedModel):
     user = models.ForeignKey(
         get_user_model(), on_delete=models.CASCADE, related_name="cast_user"
@@ -477,6 +494,26 @@ class Blog(TimeStampedModel):
             return self.author
         else:
             return self.user.get_full_name()
+
+
+class BlogPage(Page):  # -> Post
+    date = models.DateField("Post date")
+    body = StreamField([
+        ('heading', blocks.CharBlock(classname="full title")),
+        ('paragraph', blocks.RichTextBlock()),
+        ('image', ImageChooserBlock(template="cast/wagtail_image.html")),
+        ('gallery', GalleryBlock(ImageChooserBlock())),
+    ])
+
+    search_fields = Page.search_fields + [
+        index.SearchField("body"),
+    ]
+
+    content_panels = Page.content_panels + [
+        FieldPanel("date"),
+        StreamFieldPanel("body"),
+    ]
+
 
 
 class PostPublishedManager(models.Manager):

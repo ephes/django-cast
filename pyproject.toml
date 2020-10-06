@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "django-cast"
-version = "0.1.31"
+version = "0.1.29"
 description = "Just another blogging / podcasting package"
-authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>"]
+authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>", "Dominik Geldmacher <oryon@cyberise.de>"]
 license = "BSD-4-Clause"
 readme = "README.rst"
 repository = "https://github.com/ephes/django-cast"
@@ -30,7 +30,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-django = "^3"
+django = "^3.0"
 Pillow = "^6"
 django-filter = "^2.2.0"
 django-watson = "^1.5.4"
@@ -39,7 +39,8 @@ djangorestframework = "^3.11.0"
 python-slugify = "^4.0.0"
 django-model-utils = "^4.0.0"
 django-environ = "^0.4.5"
-django-allauth = "^0.42.0"
+django-allauth = "^0.41.0"
+wagtail = "^2.8"
 pandas = "^1.0.1"
 django-threadedcomments = "^1.2"
 django-fluent-comments = {git = "https://github.com/ephes/django-fluent-comments"}
@@ -48,6 +49,8 @@ plotly = "^4.5.2"
 django-ckeditor = "^5.9.0"
 django-filepond = "^0.1.2"
 django-imagekit = "^4.0.2"
+wagtail_srcset = "^0.1.1"
+markdown = "^3.2.1"
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^2.4.3"
@@ -63,6 +66,9 @@ pytest = "^5.3.5"
 factory_boy = "^2.12.0"
 pytest-django = "^3.8.0"
 tox = "^3.14.5"
+django_extensions = "^2.2.8"
+django-ckeditor = "^5.9.0"
+coreapi-cli = "^1.0.9"
 
 [tool.poetry.scripts]
 test = "commands:test"

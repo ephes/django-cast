@@ -1,0 +1,45 @@
+{% extends "cast/cast_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% load wagtailcore_tags %}
+{% load wagtailimages_tags %}
+{% load wagtail_srcset_tags %}
+
+{% load comments %}
+
+{% block css %}
+  {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'fluent_comments/css/ajaxcomments.css' %}" />
+{% endblock css %}
+
+
+{% block body_class %}template-blogpage{% endblock %}
+
+{% block content %}
+  <article>
+    {% for block in page.body %}
+      <section class="block-{{ block.block_type }}">
+        {% include_block block %}
+      </section>
+    {% endfor %}
+  </article>
+
+  {% render_comment_list for page %}
+  {% render_comment_form for page %}
+
+  <p><a href="{{ page.get_parent.url }}">Return to blog</a></p>
+
+{% endblock %}
+
+{% block javascript %}
+  <!-- recent jquery is needed for fluent-comments -->
+  <script src="https://code.jquery.com/jquery-3.4.1.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script>
+  <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+
+  <!-- block.super needs to be below full jquery because otherwise jquery-slim would overwrite calls necessary for comments -->
+  {{ block.super }}
+  <script src="{% static 'js/cast/gallery.js' %}"></script>
+  <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+
+{% endblock javascript %}
