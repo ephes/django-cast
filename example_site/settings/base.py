@@ -197,7 +197,7 @@ WAGTAIL_SITE_NAME = "example_site"
 BASE_URL = "http://example.com"
 
 # django admin
-ADMIN_URL = "django_admin/"
+ADMIN_URL = "admin/"
 
 # CKEditor
 CKEDITOR_UPLOAD_PATH = "uploads/ckeditor/"

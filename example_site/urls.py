@@ -3,7 +3,7 @@ from django.urls import re_path
 from django.contrib import admin
 from django.conf import settings
 from django.contrib import admin
-from django.conf.urls import include, url
+from django.conf.urls import include, url, re_path
 from django.views.generic import TemplateView
 from django.views.generic import RedirectView
 
@@ -16,13 +16,10 @@ from rest_framework.authtoken import views as authtokenviews
 
 
 urlpatterns = [
-    path("", RedirectView.as_view(url="/about"), name="home"),
+    # path("", RedirectView.as_view(url="/about"), name="home"),
     path(
         "about/", TemplateView.as_view(template_name="pages/about.html"), name="about",
     ),
-    url(r"^django-admin/", admin.site.urls),
-    url(r"^admin/", include(wagtailadmin_urls)),
-    url(r"^documents/", include(wagtaildocs_urls)),
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
     # Cast
@@ -33,11 +30,13 @@ urlpatterns = [
     # Uploads
     path("uploads/", include("filepond.urls", namespace="filepond")),
     # Cast
-    path("cast/", include("cast.urls", namespace="cast")),
+    # path("cast/", include("cast.urls", namespace="cast")),
     # Threadedcomments
     re_path(r"^show/comments/", include("fluent_comments.urls")),
     # Wagtail
-    url(r"^wagtail/", include(wagtail_urls)),
+    url(r"^cms/", include(wagtailadmin_urls)),
+    url(r"^documents/", include(wagtaildocs_urls)),
+    re_path(r"", include(wagtail_urls)),  # default is wagtail
 ]
 
 
