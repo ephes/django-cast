@@ -24,15 +24,15 @@ class AdminUserMixin:
 
 
 class BlogModelAdmin(AdminUserMixin, admin.ModelAdmin):
-    list_display = ("title", "user")
+    list_display = ("title", "owner")
 
 
 admin.site.register(Blog, BlogModelAdmin)
 
 
 class PostModelAdmin(AdminUserMixin, SearchAdmin):
-    list_display = ("title", "author", "blog")
-    search_fields = ("title", "content")
+    list_display = ("title", "owner", "blog")
+    search_fields = ("title",)
 
     class Media:
         js = ("js/cast/ckeditor_fix.js",)

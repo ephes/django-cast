@@ -1,14 +1,10 @@
 {% extends "cast/cast_base.html" %}
-
 {% load wagtailcore_tags %}
 
-{% block body_class %}template-blogindexpage{% endblock %}
+{% block body_class %}template-bloglistpage{% endblock %}
 
 {% block content %}
 <h1>{{ page.title }}</h1>
-
-<h2>Hello World</h2>
-
 <div class="intro">{{ page.intro|richtext }}</div>
 
 {% for post in page.get_children %}

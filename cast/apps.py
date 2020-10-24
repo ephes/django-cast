@@ -8,4 +8,4 @@ class CastConfig(AppConfig):
 
     def ready(self):
         Post = self.get_model("Post")
-        watson.register(Post)
+        # watson.register(Post)  # use wagtails own search interface FIXME

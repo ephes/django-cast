@@ -1,0 +1,19 @@
+{% extends "cast/cast_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% load wagtailcore_tags %}
+{% load wagtailimages_tags %}
+{% load wagtail_srcset_tags %}
+
+{% block body_class %}template-homepage{% endblock %}
+
+{% block content %}
+  <article>
+    {% for block in page.body %}
+      <section class="block-{{ block.block_type }}">
+        {% include_block block %}
+      </section>
+    {% endfor %}
+  </article>
+{% endblock %}

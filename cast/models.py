@@ -14,12 +14,13 @@ from collections import defaultdict
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
+from django.shortcuts import redirect
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
 from django.utils.translation import gettext_lazy as _
 
 from wagtail.core import blocks
-from wagtail.core.models import Page
+from wagtail.core.models import Page, PageManager
 from wagtail.core.fields import StreamField
 from wagtail.core.fields import RichTextField
 from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
@@ -408,20 +409,45 @@ class File(TimeStampedModel):
         return paths
 
 
-class BlogIndexPage(Page):  # -> Blog
-    intro = RichTextField(blank=True)
-
-    content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
-
-
-class Blog(TimeStampedModel):
-    user = models.ForeignKey(
-        get_user_model(), on_delete=models.CASCADE, related_name="cast_user"
+class HomePage(Page):
+    body = StreamField(
+        [
+            ("heading", blocks.CharBlock(classname="full title")),
+            ("paragraph", blocks.RichTextBlock()),
+            ("image", ImageChooserBlock(template="cast/wagtail_image.html")),
+            ("gallery", GalleryBlock(ImageChooserBlock())),
+        ]
     )
+    alias_for_page = models.ForeignKey(
+        "wagtailcore.Page",
+        related_name="aliases",
+        null=True,
+        blank=True,
+        default=None,
+        on_delete=models.SET_NULL,
+        verbose_name="Redirect to another page",
+        help_text="Make this page an alias for another page, redirecting to it with a non permanent redirect.",
+    )
+
+    content_panels = Page.content_panels + [
+        FieldPanel("alias_for_page"),
+        StreamFieldPanel("body"),
+    ]
+
+    def serve(self, request):
+        if self.alias_for_page is not None:
+            return redirect(self.alias_for_page.url, permanent=False)
+        return super().serve(request)
+
+
+# class BlogIndexPage(Page):  # -> Blog
+#     intro = RichTextField(blank=True)
+
+#     content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
+
+
+class Blog(TimeStampedModel, Page):
     author = models.CharField(max_length=255, default=None, null=True, blank=True)
-    title = models.CharField(max_length=255)
-    description = models.CharField(max_length=500)
-    slug = models.SlugField(max_length=50)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     email = models.EmailField(null=True, default=None, blank=True)
     comments_enabled = models.BooleanField(
@@ -434,7 +460,7 @@ class Blog(TimeStampedModel):
 
     # atm it's only used for podcast image
     itunes_artwork = models.ForeignKey(
-        ItunesArtWork, null=True, blank=True, on_delete=models.CASCADE
+        ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL
     )
     itunes_categories = models.CharField(
         _("itunes_categories"),
@@ -464,6 +490,14 @@ class Blog(TimeStampedModel):
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
+
+    # wagtail
+    intro = RichTextField(blank=True)
+    template = "cast/blog_list_of_posts.html"
+    content_panels = Page.content_panels + [
+        FieldPanel("intro", classname="full"),
+        FieldPanel("email"),
+    ]
 
     def __str__(self):
         return self.title
@@ -496,27 +530,26 @@ class Blog(TimeStampedModel):
             return self.user.get_full_name()
 
 
-class BlogPage(Page):  # -> Post
-    date = models.DateField("Post date")
-    body = StreamField([
-        ('heading', blocks.CharBlock(classname="full title")),
-        ('paragraph', blocks.RichTextBlock()),
-        ('image', ImageChooserBlock(template="cast/wagtail_image.html")),
-        ('gallery', GalleryBlock(ImageChooserBlock())),
-    ])
+# class BlogPage(Page):  # -> Post
+#     date = models.DateField("Post date")
+#     body = StreamField([
+#         ('heading', blocks.CharBlock(classname="full title")),
+#         ('paragraph', blocks.RichTextBlock()),
+#         ('image', ImageChooserBlock(template="cast/wagtail_image.html")),
+#         ('gallery', GalleryBlock(ImageChooserBlock())),
+#     ])
 
-    search_fields = Page.search_fields + [
-        index.SearchField("body"),
-    ]
+#     search_fields = Page.search_fields + [
+#         index.SearchField("body"),
+#     ]
 
-    content_panels = Page.content_panels + [
-        FieldPanel("date"),
-        StreamFieldPanel("body"),
-    ]
+#     content_panels = Page.content_panels + [
+#         FieldPanel("date"),
+#         StreamFieldPanel("body"),
+#     ]
 
 
-
-class PostPublishedManager(models.Manager):
+class PostPublishedManager(PageManager):
     use_for_related_fields = True
 
     def get_queryset(self):
@@ -527,15 +560,13 @@ class PostPublishedManager(models.Manager):
         return self.get_queryset().filter(podcast_audio__isnull=False)
 
 
-class Post(TimeStampedModel):
+class Post(TimeStampedModel, Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
-    author = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
-    blog = models.ForeignKey(Blog, on_delete=models.CASCADE)
-    title = models.CharField(max_length=255)
+    # parent_blog = models.ForeignKey(Blog, null=True, on_delete=models.SET_NULL) FIXME update manually
     pub_date = models.DateTimeField(null=True, blank=True)
     visible_date = models.DateTimeField(default=timezone.now)
     podcast_audio = models.ForeignKey(
-        Audio, null=True, blank=True, on_delete=models.CASCADE, related_name="posts"
+        Audio, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts"
     )
     keywords = models.CharField(
         _("keywords"),
@@ -568,9 +599,6 @@ class Post(TimeStampedModel):
         help_text=_("Whether comments are enabled for this post." ""),
     )
 
-    content = RichTextUploadingField()
-    slug = models.SlugField(max_length=50)
-
     images = models.ManyToManyField(Image, blank=True)
     videos = models.ManyToManyField(Video, blank=True)
     galleries = models.ManyToManyField(Gallery, blank=True)
@@ -583,7 +611,28 @@ class Post(TimeStampedModel):
         "audio": Audio,
     }
 
-    objects = models.Manager()
+    # wagtail
+    body = StreamField(
+        [
+            ("heading", blocks.CharBlock(classname="full title")),
+            ("paragraph", blocks.RichTextBlock()),
+            ("image", ImageChooserBlock(template="cast/wagtail_image.html")),
+            ("gallery", GalleryBlock(ImageChooserBlock())),
+        ]
+    )
+
+    search_fields = Page.search_fields + [
+        index.SearchField("body"),
+    ]
+
+    content_panels = Page.content_panels + [
+        FieldPanel("visible_date"),
+        StreamFieldPanel("body"),
+    ]
+    template = "cast/post.html"
+
+    # managers
+    objects = PageManager()
     published = PostPublishedManager()
 
     @property
@@ -593,9 +642,9 @@ class Post(TimeStampedModel):
     def __str__(self):
         return self.title
 
-    def get_absolute_url(self):
-        params = {"slug": self.slug, "blog_slug": self.blog.slug}
-        return reverse("cast:post_detail", kwargs=params)
+    # def get_absolute_url(self):  #  FIXME
+    #     params = {"slug": self.slug, "blog_slug": self.blog.slug}
+    #     return reverse("cast:post_detail", kwargs=params)
 
     def get_enclosure_url(self, audio_format):
         return getattr(self.podcast_audio, audio_format).url
@@ -677,8 +726,8 @@ class Post(TimeStampedModel):
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)
-        self.add_missing_media_objects()
-        self.remove_obsolete_media_objects()
+        # self.add_missing_media_objects()  FIXME
+        # self.remove_obsolete_media_objects()  FIXME
         return save_return
 
 
