@@ -55,6 +55,9 @@ django-imagekit = "^4.0.2"
 wagtail_srcset = "^0.1"
 markdown = "^3.2.1"
 django-crispy-forms = "*"
+python-akismet = "*"
+django-tag-parser = "*"
+django-contrib-comments = "*"
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^3"
