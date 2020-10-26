@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-cast"
-version = "0.1.34"
+version = "0.1.35"
 description = "Just another blogging / podcasting package"
 authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>", "Dominik Geldmacher <oryon@cyberise.de>"]
 license = "BSD-4-Clause"
