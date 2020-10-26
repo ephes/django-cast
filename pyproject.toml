@@ -54,7 +54,7 @@ django-filepond = "^0.1.2"
 django-imagekit = "^4.0.2"
 wagtail_srcset = "^0.1"
 markdown = "^3.2.1"
-django-crispy-forms = "^1.9"
+django-crispy-forms = "*"
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^3"
