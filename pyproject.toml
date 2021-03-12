@@ -24,8 +24,13 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
+include = [
+    "cast",
+    "fluent_comments",
+]
 packages = [
-    { include = "./commands.py" },
+    {include = "cast"},
+    {include = "fluent_comments"},
 ]
 
 [tool.poetry.dependencies]
@@ -42,7 +47,6 @@ django-environ = "^0.4.5"
 django-allauth = "^0.42.0"
 pandas = "^1.0.1"
 django-threadedcomments = "^1.2"
-django-fluent-comments = {git = "https://github.com/ephes/django-fluent-comments"}
 feedparser = "^6"
 plotly = "^4.5.2"
 django-ckeditor = "^5.9.0"
