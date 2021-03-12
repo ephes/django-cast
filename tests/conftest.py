@@ -328,7 +328,7 @@ def podcast_episode(blog, audio):
     return Post.objects.create(
         author=blog.user,
         blog=blog,
-        title="test podast episode",
+        title="test podcast episode",
         slug="test-podcast-entry",
         pub_date=timezone.now(),
         content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",

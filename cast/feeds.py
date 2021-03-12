@@ -101,7 +101,7 @@ class ITunesElements:
         # year = timezone.now().year
         # haqe("copyright", "{0} {1}".format("insert license", year))
         haqe("itunes:author", post.author.get_full_name())
-        haqe("itunes:subtitle", post.description)
+        haqe("itunes:subtitle", post.title)
         haqe("itunes:summary", post.description)
         haqe("itunes:duration", post.podcast_audio.duration_str)
         haqe("itunes:keywords", post.keywords)

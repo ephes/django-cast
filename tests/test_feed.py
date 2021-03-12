@@ -43,7 +43,7 @@ class TestFeedCreation:
         ie.add_itunes_categories(blog, dummy_handler)
         assert dummy_handler.se["itunes:category"]["text"] == "foo"
         assert dummy_handler.aqe["itunes:category"][-1]["text"] == "baz"
-        assert "itunes:category" in dummy_handler.ee
+        assert "itunes:category" in dummy_handler.ee        
 
 
 class TestGeneratedFeeds:
@@ -134,3 +134,18 @@ class TestGeneratedFeeds:
         content = d.entries[0]["content"][0]["value"]
         assert "in_all" in content
         assert "only_in_detail" in content
+
+    @pytest.mark.django_db
+    def test_itunes_subtitle_set_to_title(self, client, podcast_episode):
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+        )
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        d = feedparser.parse(r.content)
+        subtitle = d.entries[0]["subtitle"]
+        assert subtitle == podcast_episode.title
+
