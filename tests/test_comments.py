@@ -17,7 +17,8 @@ class TestPostComments:
 
         content = r.content.decode("utf-8")
         assert post.title in content
-        assert "comment" not in content
+        print(content)
+        assert "comment-form" not in content
 
     def test_comment_form_included(self, client, post, comments_enabled):
         slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
@@ -28,7 +29,7 @@ class TestPostComments:
 
         content = r.content.decode("utf-8")
         assert post.title in content
-        assert "comment" in content
+        assert "comment-form" in content
 
     def test_comment_in_comment_list(self, client, post, comment, comments_enabled):
         slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
