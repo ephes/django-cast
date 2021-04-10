@@ -1,6 +1,5 @@
 import os
 import typer
-import shutil
 import webbrowser
 import subprocess
 

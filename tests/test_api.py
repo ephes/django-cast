@@ -274,5 +274,5 @@ class TestRequest:
         # we omitted some lines intentionally
         number_of_unique_lines = 0
         with open(access_log_path) as f:
-            number_of_unique_lines = len(set([l for l in f]))
+            number_of_unique_lines = len(set([_ for _ in f]))
         assert Request.objects.count() == number_of_unique_lines

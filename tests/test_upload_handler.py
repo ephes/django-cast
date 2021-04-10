@@ -37,6 +37,6 @@ class TestUploadHandler:
     def test_upload_handler_audio_ogg(self, request_factory):
         """For ogg the field name is different from the file ending."""
         request = request_factory.post("")
-        request.FILES["original"] = f"foobar.ogg"
+        request.FILES["original"] = "foobar.ogg"
         form_class, context = upload_handler(request)
         assert context["upload_field_name"] == "oga"

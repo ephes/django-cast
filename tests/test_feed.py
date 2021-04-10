@@ -43,7 +43,7 @@ class TestFeedCreation:
         ie.add_itunes_categories(blog, dummy_handler)
         assert dummy_handler.se["itunes:category"]["text"] == "foo"
         assert dummy_handler.aqe["itunes:category"][-1]["text"] == "baz"
-        assert "itunes:category" in dummy_handler.ee        
+        assert "itunes:category" in dummy_handler.ee
 
 
 class TestGeneratedFeeds:
@@ -148,4 +148,3 @@ class TestGeneratedFeeds:
         d = feedparser.parse(r.content)
         subtitle = d.entries[0]["subtitle"]
         assert subtitle == podcast_episode.title
-
