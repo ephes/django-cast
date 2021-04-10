@@ -79,3 +79,6 @@ tests/media/
 
 # sqlite
 db.sqlite3
+
+# jupyter
+.ipynb_checkpoints
