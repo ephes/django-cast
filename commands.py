@@ -131,5 +131,5 @@ def docs():
 def notebook():
     env = os.environ.copy()
     env["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
-    command = "python ../manage.py shell_plus --settings example.settings --notebook"
+    command = "python ../manage.py shell_plus --settings example_site.settings.dev --notebook"
     run_command(command, cwd="notebooks", debug=True, env=env)
