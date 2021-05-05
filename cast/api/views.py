@@ -2,11 +2,10 @@ import logging
 
 from collections import OrderedDict
 
-from django.views.generic import CreateView
-
-from django.contrib.auth.mixins import LoginRequiredMixin
-
 from django.urls import reverse
+from django.conf import settings
+from django.views.generic import CreateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 from rest_framework import status
 from rest_framework import generics
@@ -67,8 +66,14 @@ class VideoCreateView(
     user_field_name = "user"
 
 
+if hasattr(settings, "CAST_API_PAGE_SIZE"):
+    STANDARD_PAGE_SIZE = settings.CAST_API_PAGE_SIZE
+else:
+    STANDARD_PAGE_SIZE = 40
+
+
 class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 40
+    page_size = STANDARD_PAGE_SIZE
     page_size_query_param = "pageSize"
     max_page_size = 10000
 
