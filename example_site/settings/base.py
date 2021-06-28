@@ -233,3 +233,6 @@ IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic
 # wagtail-srcset
 # breaks gallery because image renditions are then too small
 # SRCSET_DYNAMIC = True
+
+# auto field
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
