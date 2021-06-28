@@ -121,7 +121,7 @@ class PostForm(forms.ModelForm):
         model = Post
         fields = [
             "title",
-            "content",
+            # "content",
             "pub_date",
             "visible_date",
             "is_published",
