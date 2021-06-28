@@ -420,7 +420,7 @@ class HomePage(Page):
     )
     alias_for_page = models.ForeignKey(
         "wagtailcore.Page",
-        related_name="aliases",
+        related_name="aliases_homepage",
         null=True,
         blank=True,
         default=None,
@@ -440,10 +440,10 @@ class HomePage(Page):
         return super().serve(request)
 
 
-# class BlogIndexPage(Page):  # -> Blog
-#     intro = RichTextField(blank=True)
+class BlogIndexPage(Page):  # -> Blog
+    intro = RichTextField(blank=True)
 
-#     content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
+    content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
 
 
 class Blog(TimeStampedModel, Page):
