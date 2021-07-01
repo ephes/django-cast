@@ -24,6 +24,7 @@ from wagtail.core.models import Page, PageManager
 from wagtail.core.fields import StreamField
 from wagtail.core.fields import RichTextField
 from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
+from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.search import index
 
@@ -39,6 +40,7 @@ from slugify import slugify
 
 from . import appsettings
 from .blocks import GalleryBlock
+from .blocks import VideoChooserBlock
 
 
 logger = logging.getLogger(__name__)
@@ -618,6 +620,8 @@ class Post(TimeStampedModel, Page):
             ("paragraph", blocks.RichTextBlock()),
             ("image", ImageChooserBlock(template="cast/wagtail_image.html")),
             ("gallery", GalleryBlock(ImageChooserBlock())),
+            ("embed", EmbedBlock()),
+            # ("video", VideoChooserBlock(template="cast/wagtail_video.html")),
         ]
     )
 

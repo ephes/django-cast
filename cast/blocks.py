@@ -1,6 +1,9 @@
 from itertools import tee, islice, chain
 
+from django.utils.functional import cached_property
+
 from wagtail.core.blocks import ListBlock
+from wagtail.core.blocks import ChooserBlock
 
 
 def previous_and_next(iterable):
@@ -23,3 +26,30 @@ class GalleryBlock(ListBlock):
     def get_context(self, gallery, parent_context=None):
         self.add_prev_next(gallery)
         return super().get_context(gallery, parent_context=parent_context)
+
+
+class VideoChooserBlock(ChooserBlock):
+    @cached_property
+    def target_model(self):
+        from .models import Video
+        return Video
+
+    @cached_property
+    def widget(self):
+        from .wagtail_widgets import AdminVideoChooser
+        return AdminVideoChooser()
+
+    def get_form_state(self, value):
+        value_data = self.widget.get_value_data(value)
+        if value_data is None:
+            return None
+        else:
+            return {
+                'id': value_data['id'],
+                'edit_link': value_data['edit_url'],
+                'title': value_data['title'],
+                'preview': value_data['preview'],
+            }
+
+    class Meta:
+        icon = "media"
