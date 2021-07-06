@@ -83,3 +83,6 @@ db.sqlite3
 
 # virtualfish
 .venv
+
+# example site media root
+media
