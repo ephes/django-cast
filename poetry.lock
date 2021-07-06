@@ -2035,6 +2035,20 @@ python-versions = ">=3.6,<4.0"
 wagtail = ">=2.8,<3.0"
 
 [[package]]
+name = "wagtailmedia"
+version = "0.7.1"
+description = "A module for Wagtail that provides functionality similar to wagtail.documents module, but for audio and video files."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+wagtail = ">=2.7"
+
+[package.extras]
+testing = ["mock (>=1.0.0)", "coverage (>=3.7.0)", "flake8 (>=3.6.0)", "isort (==5.6.4)", "tox (==3.9.0)", "psycopg2-binary", "django-redis-cache"]
+
+[[package]]
 name = "wcwidth"
 version = "0.2.5"
 description = "Measures the displayed width of unicode strings in a terminal"
@@ -2113,7 +2127,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "f6ef4cfd71467fe2b0e2a652561724046fc62b05021687096f4f63a57b2c435b"
+content-hash = "f8d56bd615605cec32e7aa454e4bbbb4ca78a57cba5df0e66cb2fce73ee48e81"
 
 [metadata.files]
 alabaster = [
@@ -3175,6 +3189,10 @@ wagtail = [
 wagtail-srcset = [
     {file = "wagtail-srcset-0.1.5.tar.gz", hash = "sha256:2a86eb391efd227e305986a59daab2c74d979c0a580feca72002e527bb2c811c"},
     {file = "wagtail_srcset-0.1.5-py3-none-any.whl", hash = "sha256:ed18893d1e240e957352751dce9e0ec4755e279949008c5ec4dbd4ca194448ca"},
+]
+wagtailmedia = [
+    {file = "wagtailmedia-0.7.1-py2.py3-none-any.whl", hash = "sha256:e045dfe71305a8fc96212a6edbdabf85af98cfaa1c14b5272e80a0e3aacfd2f1"},
+    {file = "wagtailmedia-0.7.1.tar.gz", hash = "sha256:ae579029818925367f9ce6a74269bd707278062caf1223a81b77a03645577e45"},
 ]
 wcwidth = [
     {file = "wcwidth-0.2.5-py2.py3-none-any.whl", hash = "sha256:beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784"},
