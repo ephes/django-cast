@@ -89,3 +89,6 @@ example/media
 
 # jupyter notebooks
 .ipynb_checkpoints
+
+# macOS stuff
+.DS_Store
