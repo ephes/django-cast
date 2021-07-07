@@ -85,4 +85,4 @@ db.sqlite3
 .venv
 
 # example site media root
-media
+example/media
