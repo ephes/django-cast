@@ -4,7 +4,6 @@ from django.db import models
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db.models.functions import TruncMonth
-from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 
@@ -13,7 +12,7 @@ from django_filters.views import FilterView
 from .forms import PostForm
 from .filters import PostFilter
 from .filters import parse_date_facets
-from .models import Blog, Post, Video
+from .models import Blog, Post
 from .viewmixins import (
     RenderPostMixin,
     AddRequestUserMixin,
@@ -189,61 +188,3 @@ class PostUpdateView(
         # needed for back button
         context["blog_slug"] = self.kwargs["blog_slug"]
         return context
-
-
-@permission_checker.require_any("add", "change", "delete")
-@vary_on_headers("X-Requested-With")
-def video_index(request):
-    ordering = "-created_at"
-    videos = Video.objects.all().order_by(ordering)
-
-    # Search
-    query_string = None
-    if "q" in request.GET:
-        form = SearchForm(request.GET, placeholder=_("Search video files"))
-        if form.is_valid():
-            query_string = form.cleaned_data["q"]
-            media = media.search(query_string)
-    else:
-        form = SearchForm(placeholder=_("Search media"))
-
-    # Pagination
-    paginator, media = paginate(request, media)
-
-    collections = permission_policy.collections_user_has_any_permission_for(
-        request.user, ["add", "change"]
-    )
-    if len(collections) < 2:
-        collections = None
-
-    # Create response
-    if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return render(
-            request,
-            "wagtailmedia/media/results.html",
-            {
-                "ordering": ordering,
-                "media_files": media,
-                "query_string": query_string,
-                "is_searching": bool(query_string),
-            },
-        )
-    else:
-        return render(
-            request,
-            "wagtailmedia/media/index.html",
-            {
-                "ordering": ordering,
-                "media_files": media,
-                "query_string": query_string,
-                "is_searching": bool(query_string),
-                "search_form": form,
-                "popular_tags": popular_tags_for_model(Media),
-                "user_can_add": permission_policy.user_has_permission(
-                    request.user, "add"
-                ),
-                "collections": collections,
-                "current_collection": current_collection,
-            },
-        )
-

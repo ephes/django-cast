@@ -2,9 +2,12 @@ from django.urls import path, re_path
 
 from wagtailmedia.views import chooser, media
 
+from .wagtail_views import video_index
+
 
 urlpatterns = [
-    path("", media.index, name="index"),
+    # path("", media.index, name="index"),
+    path("", video_index, name="index"),
     re_path(r"^(?P<media_type>audio|video|media)/add/$", media.add, name="add"),
     path("edit/<int:media_id>/", media.edit, name="edit"),
     path("delete/<int:media_id>/", media.delete, name="delete"),
