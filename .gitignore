@@ -86,3 +86,6 @@ db.sqlite3
 
 # example site media root
 example/media
+
+# jupyter notebooks
+.ipynb_checkpoints
