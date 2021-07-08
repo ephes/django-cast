@@ -12,7 +12,7 @@
         {% search_other %}
     {% endif %}
 
-    {% include "cast/wagtail/wagtail_video_list.html" %}
+    {% include "cast/wagtail/video_list.html" %}
 
     {% include "wagtailadmin/shared/pagination_nav.html" with items=media_files is_searching=is_searching linkurl="wagtailmedia:index" %}
 {% else %}
