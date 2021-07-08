@@ -1,0 +1,2 @@
+# convert video from atem to format usable in firefox
+ffmpeg -i 2021-06-28_dinos.mp4 -codec copy 2021-06-28_dinos_new.mp4
