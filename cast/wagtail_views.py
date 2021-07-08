@@ -39,6 +39,8 @@ def video_index(request):
         collections = None
 
     # Create response
+    print("fooobarbz")
+    print(request.headers.get("x-requested-with"))
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return render(
             request,
@@ -53,7 +55,7 @@ def video_index(request):
     else:
         return render(
             request,
-            "wagtailmedia/media/index.html",
+            "cast/wagtail_video_index.html",
             {
                 "ordering": ordering,
                 "media_files": media,
