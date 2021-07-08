@@ -169,6 +169,7 @@ def get_video_dimensions(lines):
 
 class Video(TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
+    title = models.CharField(default="", max_length=255)
     original = models.FileField(upload_to="cast_videos/")
     poster = models.ImageField(upload_to="cast_videos/poster/", null=True, blank=True)
     poster_seconds = models.FloatField(default=1)
@@ -182,6 +183,14 @@ class Video(TimeStampedModel):
 
     post_context_key = "video"
     calc_poster = True
+
+    @property
+    def filename(self):
+        return Path(self.original.name).name
+
+    @property
+    def type(self):
+        return "video"
 
     def _get_video_dimensions(self, video_url):
         ffprobe_cmd = 'ffprobe -i "{}"'.format(video_url)
