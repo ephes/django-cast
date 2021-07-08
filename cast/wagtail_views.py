@@ -55,7 +55,7 @@ def video_index(request):
     else:
         return render(
             request,
-            "cast/wagtail_video_index.html",
+            "cast/wagtail/wagtail_video_index.html",
             {
                 "ordering": ordering,
                 "media_files": media,
