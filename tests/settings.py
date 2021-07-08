@@ -154,3 +154,6 @@ CKEDITOR_CONFIGS = {
 
 # Comments
 COMMENTS_APP = "fluent_comments"
+
+# For Django >= 3.2 - auto field
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
