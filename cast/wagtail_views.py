@@ -63,10 +63,54 @@ def video_index(request):
                 "is_searching": bool(query_string),
                 "search_form": form,
                 "popular_tags": popular_tags_for_model(Video),
-                "user_can_add": permission_policy.user_has_permission(
-                    request.user, "add"
-                ),
+                "user_can_add": permission_policy.user_has_permission(request.user, "add"),
                 "collections": collections,
                 "current_collection": None,
             },
         )
+
+from django.urls import reverse
+from django.shortcuts import redirect
+
+from wagtail.admin import messages
+from wagtail.search.backends import get_search_backends
+
+from .models import Video
+from .forms import VideoForm
+
+
+@permission_checker.require("add")
+def video_add(request):
+    if request.POST:
+        video = Video(user=request.user)
+        form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
+        if form.is_valid():
+            form.save()
+
+            # Reindex the media entry to make sure all tags are indexed
+            for backend in get_search_backends():
+                backend.add(video)
+
+            messages.success(
+                request,
+                _("Video file '{0}' added.").format(video.title),
+                buttons=[
+                    messages.button(
+                        reverse("wagtailmedia:edit", args=(video.id,)), _("Edit")
+                    )
+                ],
+            )
+            return redirect("castmedia:index")
+        else:
+            messages.error(
+                request, _("The video file could not be saved due to errors.")
+            )
+    else:
+        video = Video(user=request.user)
+        form = VideoForm(user=request.user, instance=video)
+
+    return render(
+        request,
+        "cast/wagtail/video_add.html",
+        {"form": form},
+    )
