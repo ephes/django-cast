@@ -12,7 +12,7 @@ from .models import Video
 @hooks.register("register_admin_urls")
 def register_admin_urls():
     return [
-        path("media/", include((admin_urls, "wagtailmedia"), namespace="castmedia")),
+        path("video/", include((admin_urls, "wagtailmedia"), namespace="castmedia")),
     ]
 
 
