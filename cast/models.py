@@ -20,6 +20,7 @@ from django.core.files import File as DjangoFile
 from django.utils.translation import gettext_lazy as _
 
 from wagtail.core import blocks
+from wagtail.core.models import CollectionMember
 from wagtail.core.models import Page, PageManager
 from wagtail.core.fields import StreamField
 from wagtail.core.fields import RichTextField
@@ -28,7 +29,7 @@ from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.search import index
 
-from ckeditor_uploader.fields import RichTextUploadingField
+from taggit.managers import TaggableManager
 
 from imagekit.models import ImageSpecField
 from imagekit.processors import Thumbnail
@@ -167,7 +168,7 @@ def get_video_dimensions(lines):
     return width, height
 
 
-class Video(TimeStampedModel):
+class Video(CollectionMember, TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     title = models.CharField(default="", max_length=255)
     original = models.FileField(upload_to="cast_videos/")
@@ -183,6 +184,9 @@ class Video(TimeStampedModel):
 
     post_context_key = "video"
     calc_poster = True
+
+    admin_form_fields = ("title", "original", "poster", "tags")
+    tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     @property
     def filename(self):

@@ -76,11 +76,12 @@ from wagtail.admin import messages
 from wagtail.search.backends import get_search_backends
 
 from .models import Video
-from .forms import VideoForm
+from .wagtail_forms import get_video_form
 
 
 @permission_checker.require("add")
 def video_add(request):
+    VideoForm = get_video_form()
     if request.POST:
         video = Video(user=request.user)
         form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
