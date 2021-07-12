@@ -9,7 +9,7 @@ from .wagtail_views import video_index, video_add
 urlpatterns = [
     path("", media.index, name="index"),
     path("video_index", video_index, name="video_index"),
-    path(r"video/add/$", video_add, name="video_add"),
+    path(r"video/add/", video_add, name="video_add"),
     re_path(r"(?P<media_type>audio|video|media)/add/$", media.add, name="add"),
     path("edit/<int:media_id>/", media.edit, name="edit"),
     path("delete/<int:media_id>/", media.delete, name="delete"),
