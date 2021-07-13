@@ -16,6 +16,8 @@ class AdminVideoChooser(AdminChooser):
     def render_html(self, name, value, attrs):
         instance, value = self.get_instance_and_id(Video, value)
         original_field_html = super().render_html(name, value, attrs)
+        print("attrs: ", attrs)
+        print("value: ", value)
 
         return render_to_string(
             "cast/wagtail/video_chooser.html",
@@ -33,6 +35,6 @@ class AdminVideoChooser(AdminChooser):
 
     class Media:
         js = [
-            "wagtailmedia/js/media-chooser-modal.js",
-            "wagtailmedia/js/media-chooser.js",
+            "js/cast/wagtail/media-chooser-modal.js",
+            "js/cast/wagtail/media-chooser.js",
         ]
