@@ -7,7 +7,7 @@
         <tr class="table-headers">
             <th>
                 {% if not is_searching %}
-                    <a href="{% url 'wagtailmedia:index' %}{% if not ordering == "title" %}?ordering=title{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "title" %}teal{% endif %}">
+                    <a href="{% url 'castmedia:index' %}{% if not ordering == "title" %}?ordering=title{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "title" %}teal{% endif %}">
                         {% trans "Title" %}
                     </a>
                 {% else %}
@@ -18,7 +18,7 @@
             <th>{% trans "Type" %}</th>
             <th>
                 {% if not is_searching %}
-                    <a href="{% url 'wagtailmedia:index' %}{% if not ordering == "-created_at" %}?ordering=-created_at{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "-created_at" %}teal{% endif %}">
+                    <a href="{% url 'castmedia:index' %}{% if not ordering == "-created" %}?ordering=-created{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "-created" %}teal{% endif %}">
                         {% trans "Uploaded" %}
                     </a>
                 {% else %}
@@ -32,9 +32,9 @@
             <tr>
                 <td class="title">
                     {% if choosing %}
-                        <h2><a href="{% url 'wagtailmedia:media_chosen' media_file.id %}" class="media-choice">{{ media_file.title }}</a></h2>
+                        <h2><a href="{% url 'castmedia:media_chosen' media_file.id %}" class="media-choice">{{ media_file.title }}</a></h2>
                     {% else %}
-                        <h2><a href="{% url 'wagtailmedia:edit' media_file.id %}">{{ media_file.title }}</a></h2>
+                        <h2><a href="{% url 'castmedia:edit' media_file.id %}">{{ media_file.title }}</a></h2>
                     {% endif %}
                 </td>
                 <td>

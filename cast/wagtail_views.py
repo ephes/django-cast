@@ -1,8 +1,10 @@
 from django.shortcuts import render
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
 
 from wagtailmedia.utils import paginate
+from wagtail.admin.auth import permission_denied
 from wagtail.admin.models import popular_tags_for_model
 from wagtailmedia.permissions import permission_policy
 from wagtail.admin.auth import PermissionPolicyChecker
@@ -97,11 +99,11 @@ def video_add(request):
                 _("Video file '{0}' added.").format(video.title),
                 buttons=[
                     messages.button(
-                        reverse("wagtailmedia:edit", args=(video.id,)), _("Edit")
+                        reverse("castmedia:edit", args=(video.id,)), _("Edit")
                     )
                 ],
             )
-            return redirect("castmedia:index")
+            return redirect("castmedia:video_index")
         else:
             messages.error(
                 request, _("The video file could not be saved due to errors.")
@@ -114,4 +116,77 @@ def video_add(request):
         request,
         "cast/wagtail/video_add.html",
         {"form": form},
+    )
+
+
+@permission_checker.require("change")
+def video_edit(request, video_id):
+    VideoForm = get_video_form()
+    video = get_object_or_404(Video, id=video_id)
+
+    if not permission_policy.user_has_permission_for_instance(request.user, "change", video):
+        return permission_denied(request)
+
+    if request.POST:
+        original_file = video.original
+        form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
+        if form.is_valid():
+            if "file" in form.changed_data:
+                # if providing a new media file, delete the old one.
+                # NB Doing this via original_file.delete() clears the file field,
+                # which definitely isn't what we want...
+                original_file.storage.delete(original_file.name)
+            video = form.save()
+
+            # Reindex the media entry to make sure all tags are indexed
+            for backend in get_search_backends():
+                backend.add(video)
+
+            messages.success(
+                request,
+                _("Video file '{0}' updated").format(video.title),
+                buttons=[
+                    messages.button(
+                        reverse("castmedia:edit", args=(video.id,)), _("Edit")
+                    )
+                ],
+            )
+            return redirect("castmedia:video_index")
+        else:
+            messages.error(request, _("The media could not be saved due to errors."))
+    else:
+        form = VideoForm(instance=video, user=request.user)
+
+    filesize = None
+
+    # Get file size when there is a file associated with the Media object
+    if video.original:
+        try:
+            filesize = video.original.size
+        except OSError:
+            # File doesn't exist
+            pass
+
+    if not filesize:
+        messages.error(
+            request,
+            _(
+                "The file could not be found. Please change the source or delete the video file"
+            ),
+            buttons=[
+                messages.button(
+                    reverse("castmedia:delete", args=(video.id,)), _("Delete")
+                )
+            ],
+        )
+
+    return render(
+        request,
+        "cast/wagtail/video_edit.html",
+        {
+            "video": video,
+            "filesize": filesize,
+            "form": form,
+            "user_can_delete": permission_policy.user_has_permission_for_instance(request.user, "delete", video),
+        },
     )
