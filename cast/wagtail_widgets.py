@@ -18,7 +18,7 @@ class AdminVideoChooser(AdminChooser):
         original_field_html = super().render_html(name, value, attrs)
 
         return render_to_string(
-            "cast/widgets/video_chooser.html",
+            "cast/wagtail/video_chooser.html",
             {
                 "widget": self,
                 "original_field_html": original_field_html,
