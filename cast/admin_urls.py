@@ -12,6 +12,7 @@ urlpatterns = [
     path(r"video/add/", video_add, name="video_add"),
     path("edit/<int:video_id>/", video_edit, name="video_edit"),
     path("delete/<int:video_id>/", video_delete, name="video_delete"),
+    path("video/chooser/", video_chooser, name="video_chooser"),
     re_path(r"(?P<media_type>audio|video|media)/add/$", media.add, name="add"),
     path("edit/<int:media_id>/", media.edit, name="edit"),
     path("delete/<int:media_id>/", media.delete, name="delete"),

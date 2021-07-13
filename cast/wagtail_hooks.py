@@ -1,3 +1,4 @@
+from django.utils.html import format_html
 from django.urls import path, include, reverse
 from django.utils.translation import gettext_lazy as _
 
@@ -30,4 +31,16 @@ def register_media_menu_item():
         name="video",
         classnames="icon icon-media",
         order=300,
+    )
+
+
+@hooks.register("insert_editor_js")
+def editor_js():
+    return format_html(
+        """
+        <script>
+            window.chooserUrls.videoChooser = '{0}';
+        </script>
+        """,
+        reverse("castmedia:video_chooser"),
     )
