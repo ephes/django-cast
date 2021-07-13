@@ -3,7 +3,7 @@ from django.urls import path, re_path
 from wagtailmedia.views import media
 from wagtailmedia.views import chooser
 
-from .wagtail_views import video_index, video_add, video_edit, video_delete
+from .wagtail_views import video_index, video_add, video_edit, video_delete, video_chooser
 
 
 urlpatterns = [
