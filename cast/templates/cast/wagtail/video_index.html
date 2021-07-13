@@ -5,7 +5,7 @@
     {{ block.super }}
     <script>
         window.headerSearch = {
-            url: "{% url 'castmedia:index' %}",
+            url: "{% url 'castmedia:video_index' %}",
             termInput: "#id_q",
             targetOutput: "#media-results"
         };
@@ -19,17 +19,16 @@
 {% endblock %}
 
 {% block content %}
-    <h1>Hello World!</h1>
-    {% trans "Media" as media_str %}
+    {% trans "Video" as video_str %}
     <header class="nice-padding">
         <div class="row">
             <div class="left">
                 <div class="col">
                     <h1 class="icon icon-media">
-                    {{ media_str }}
+                    {{ video_str }}
                     </h1>
                 </div>
-                <form class="col search-form" action="{% url 'castmedia:index' %}{% if query_parameters %}?{{ query_parameters }}{% endif %}" method="get" novalidate>
+                <form class="col search-form" action="{% url 'castmedia:video_index' %}{% if query_parameters %}?{{ query_parameters }}{% endif %}" method="get" novalidate>
                     <ul class="fields">
                         {% for field in search_form %}
                             {% include "wagtailadmin/shared/field_as_li.html" with field=field field_classes="field-small iconfield" input_classes="icon-search" %}
@@ -54,7 +53,7 @@
 
     <div class="nice-padding">
         {% if collections %}
-            <form class="image-search search-bar" action="{% url 'castmedia:index' %}" method="GET" novalidate>
+            <form class="image-search search-bar" action="{% url 'castmedia:video_index' %}" method="GET" novalidate>
                 <ul class="fields">
                     {% include "wagtailadmin/shared/collection_chooser.html" %}
                 </ul>

@@ -190,3 +190,18 @@ def video_edit(request, video_id):
             "user_can_delete": permission_policy.user_has_permission_for_instance(request.user, "delete", video),
         },
     )
+
+
+@permission_checker.require("delete")
+def video_delete(request, video_id):
+    video = get_object_or_404(Video, id=video_id)
+
+    if not permission_policy.user_has_permission_for_instance(request.user, "delete", video):
+        return permission_denied(request)
+
+    if request.POST:
+        video.delete()
+        messages.success(request, _("Video '{0}' deleted.").format(video.title))
+        return redirect("castmedia:video_index")
+
+    return render(request, "cast/wagtail/video_confirm_delete.html", {"video": video})
