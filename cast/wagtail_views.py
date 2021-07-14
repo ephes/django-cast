@@ -7,6 +7,7 @@ from wagtail.core import hooks
 from wagtailmedia.utils import paginate
 from wagtail.admin.auth import permission_denied
 from wagtail.admin.models import popular_tags_for_model
+from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtailmedia.permissions import permission_policy
 from wagtail.admin.auth import PermissionPolicyChecker
 from wagtail.admin.forms.search import SearchForm
@@ -209,72 +210,27 @@ def video_delete(request, video_id):
 
 
 def video_chooser(request):
-    media_files = permission_policy.instances_user_has_any_permission_for(
-        request.user, ["change", "delete"]
-    )
+    ordering = "-created"
+    videos = Video.objects.all().order_by(ordering)
 
-    # allow hooks to modify the queryset
-    for hook in hooks.get_hooks("construct_media_chooser_queryset"):
-        media_files = hook(media_files, request)
-
-    if permission_policy.user_has_permission(request.user, "add"):
-        Media = get_media_model()
-        MediaForm = get_media_form(Media)
-        uploadform = MediaForm(user=request.user, prefix="media-chooser-upload")
+    if permission_policy.user_has_permission(request.user, "add") or True:
+        uploadform = get_video_form()
     else:
         uploadform = None
 
-    q = None
-    is_searching = False
-    if "q" in request.GET or "p" in request.GET or "collection_id" in request.GET:
-        collection_id = request.GET.get("collection_id")
-        if collection_id:
-            media_files = media_files.filter(collection=collection_id)
-
-        searchform = SearchForm(request.GET)
-        if searchform.is_valid():
-            q = searchform.cleaned_data["q"]
-
-            media_files = media_files.search(q)
-            is_searching = True
-        else:
-            media_files = media_files.order_by("-created_at")
-            is_searching = False
-
-        # Pagination
-        paginator, media_files = paginate(request, media_files, per_page=10)
-
-        return render(
-            request,
-            "wagtailmedia/chooser/results.html",
-            {
-                "media_files": media_files,
-                "query_string": q,
-                "is_searching": is_searching,
-                "pagination_template": pagination_template,
-            },
-        )
-    else:
-        searchform = SearchForm()
-
-        collections = Collection.objects.all()
-        if len(collections) < 2:
-            collections = None
-
-        media_files = media_files.order_by("-created_at")
-        paginator, media_files = paginate(request, media_files, per_page=10)
+    paginator, videos = paginate(request, videos, per_page=10)
 
     return render_modal_workflow(
         request,
-        "wagtailmedia/chooser/chooser.html",
+        "cast/wagtail/video_chooser_chooser.html",
         None,
         {
-            "media_files": media_files,
-            "searchform": searchform,
-            "collections": collections,
+            "videos": videos,
+            # "searchform": searchform,
+            # "collections": collections,
             "uploadform": uploadform,
             "is_searching": False,
-            "pagination_template": pagination_template,
+            "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
         },
         json_data={
             "step": "chooser",

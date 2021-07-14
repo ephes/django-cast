@@ -28,24 +28,24 @@
         </tr>
     </thead>
     <tbody>
-        {% for media_file in media_files %}
+        {% for video in videos %}
             <tr>
                 <td class="title">
                     {% if choosing %}
-                        <h2><a href="{% url 'castmedia:media_chosen' media_file.id %}" class="media-choice">{{ media_file.title }}</a></h2>
+                        <h2><a href="{% url 'castmedia:media_chosen' video.id %}" class="media-choice">{{ video.title }}</a></h2>
                     {% else %}
-                        <h2><a href="{% url 'castmedia:edit' media_file.id %}">{{ media_file.title }}</a></h2>
+                        <h2><a href="{% url 'castmedia:video_edit' video.id %}">{{ video.title }}</a></h2>
                     {% endif %}
                 </td>
                 <td>
                     {% if choosing %}
-                        {{ media_file.filename }}
+                        {{ video.filename }}
                     {% else %}
-                        <a href="{{ media_file.url }}" class="nolink">{{ media_file.filename }}</a>
+                        <a href="{{ video.url }}" class="nolink">{{ video.filename }}</a>
                     {% endif %}
                 </td>
-                <td>{{ media_file.type }}</td>
-                <td><div class="human-readable-date" title="{{ media_file.created|date:"d M Y H:i" }}">{{ media_file.created|timesince }} ago</div></td>
+                <td>{{ video.type }}</td>
+                <td><div class="human-readable-date" title="{{ video.created|date:"d M Y H:i" }}">{{ video.created|timesince }} ago</div></td>
             </tr>
         {% endfor %}
     </tbody>
