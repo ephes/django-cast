@@ -262,7 +262,7 @@ def video_chosen(request, video_id):
         None,
         None,
         None,
-        json_data={"step": "media_chosen", "result": get_video_data(video)},
+        json_data={"step": "video_chosen", "result": get_video_data(video)},
     )
 
 

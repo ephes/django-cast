@@ -128,8 +128,8 @@ VIDEO_CHOOSER_MODAL_ONLOAD_HANDLERS = {
             autocomplete: {source: jsonData['tag_autocomplete_url']}
         });
     },
-    'media_chosen': function(modal, jsonData) {
-        modal.respond('mediaChosen', jsonData['result']);
+    'video_chosen': function(modal, jsonData) {
+        modal.respond('videoChosen', jsonData['result']);
         modal.close();
     },
     'select_format': function(modal) {
