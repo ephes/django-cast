@@ -43,15 +43,13 @@ def video_index(request):
         collections = None
 
     # Create response
-    print("fooobarbz")
-    print(request.headers.get("x-requested-with"))
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return render(
             request,
             "wagtailmedia/media/results.html",
             {
                 "ordering": ordering,
-                "media_files": media,
+                "videos": videos,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
             },
@@ -62,7 +60,7 @@ def video_index(request):
             "cast/wagtail/video_index.html",
             {
                 "ordering": ordering,
-                "media_files": media,
+                "videos": videos,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
                 "search_form": form,
@@ -90,6 +88,7 @@ def video_add(request):
         video = Video(user=request.user)
         form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
         if form.is_valid():
+            print("form is valid?!")
             form.save()
 
             # Reindex the media entry to make sure all tags are indexed
@@ -114,6 +113,7 @@ def video_add(request):
         video = Video(user=request.user)
         form = VideoForm(user=request.user, instance=video)
 
+    print("form errors: ", form.errors)
     return render(
         request,
         "cast/wagtail/video_add.html",
@@ -214,9 +214,9 @@ def video_chooser(request):
     videos = Video.objects.all().order_by(ordering)
 
     if permission_policy.user_has_permission(request.user, "add") or True:
-        uploadform = get_video_form()
+        upload_form = get_video_form()
     else:
-        uploadform = None
+        upload_form = None
 
     paginator, videos = paginate(request, videos, per_page=10)
 
@@ -226,9 +226,9 @@ def video_chooser(request):
         None,
         {
             "videos": videos,
-            # "searchform": searchform,
+            # "searchform": search_form,
             # "collections": collections,
-            "uploadform": uploadform,
+            "uploadform": upload_form,
             "is_searching": False,
             "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
         },
@@ -240,3 +240,62 @@ def video_chooser(request):
         },
     )
 
+
+def get_video_data(video):
+    """
+    helper function: given a video, return the data to pass back to the
+    chooser panel
+    """
+
+    return {
+        "id": video.id,
+        "title": video.title,
+        "edit_link": reverse("castmedia:video_edit", args=(video.id,)),
+    }
+
+
+@permission_checker.require("add")
+def video_chooser_upload(request):
+    VideoForm = get_video_form()
+
+    if request.method == "POST":
+        video = Video(user=request.user)
+        form = VideoForm(request.POST, request.FILES, instance=video, user=request.user, prefix="media-chooser-upload")
+
+        if form.is_valid():
+            form.save()
+
+            # Reindex the media entry to make sure all tags are indexed
+            for backend in get_search_backends():
+                backend.add(video)
+
+            return render_modal_workflow(
+                request,
+                None,
+                None,
+                None,
+                json_data={"step": "video_chosen", "result": get_video_data(video)},
+            )
+
+    ordering = "-created"
+    videos = Video.objects.all().order_by(ordering)
+
+    search_form = SearchForm()
+
+    paginator, videos = paginate(request, videos, per_page=10)
+
+    context = {
+        "videos": videos,
+        "searchform": search_form,
+        # "collections": collections,
+        "uploadform": form,
+        "is_searching": False,
+        "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
+    }
+    return render_modal_workflow(
+        request,
+        "cast/wagtail/video_chooser_chooser.html",
+        None,
+        context,
+        json_data={"step": "chooser"},
+    )

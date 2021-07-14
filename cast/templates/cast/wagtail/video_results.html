@@ -1,8 +1,8 @@
 {% load i18n wagtailadmin_tags %}
-{% if media_files %}
+{% if videos %}
     {% if is_searching %}
         <h2>
-        {% blocktrans count counter=media_files|length %}
+        {% blocktrans count counter=videos|length %}
             There is one match
         {% plural %}
             There are {{ counter }} matches
@@ -17,15 +17,15 @@
     {% include "wagtailadmin/shared/pagination_nav.html" with items=media_files is_searching=is_searching linkurl="castmedia:index" %}
 {% else %}
     {% if is_searching %}
-         <h2>{% blocktrans %}Sorry, no media files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
+         <h2>{% blocktrans %}Sorry, no videos files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
 
          {% search_other %}
     {% else %}
-        {% url 'castmedia:add_video' 'video' as wagtailmedia_add_video_url %}
+        {% url 'castmedia:add_video' as wagtailmedia_add_video_url %}
         {% if current_collection %}
-            <p>{% blocktrans %}You haven't uploaded any media files in this collection. You can upload <a href="{{ wagtailmedia_add_audio_url }}">audio</a> or <a href="{{ wagtailmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
+            <p>{% blocktrans %}You haven't uploaded any videos in this collection. You can upload <a href="{{ wagtailmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
         {% else %}
-            <p>{% blocktrans %}You haven't uploaded any media files. You can upload <a href="{{ wagtailmedia_add_audio_url }}">audio</a> or <a href="{{ wagtailmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
+            <p>{% blocktrans %}You haven't uploaded any videos. You can upload <a href="{{ wagtailmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
         {% endif %}
     {% endif %}
 {% endif %}

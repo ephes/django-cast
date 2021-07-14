@@ -1,4 +1,4 @@
-MEDIA_CHOOSER_MODAL_ONLOAD_HANDLERS = {
+VIDEO_CHOOSER_MODAL_ONLOAD_HANDLERS = {
     'chooser': function(modal, jsonData) {
         var searchUrl = $('form.media-search', modal.body).attr('action');
 

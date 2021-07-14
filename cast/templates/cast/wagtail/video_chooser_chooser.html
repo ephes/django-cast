@@ -25,29 +25,12 @@
             </ul>
         </form>
         <div id="search-results" class="listing media">
-            {% include "cast/wagtail/chooser/results.html" %}
+            {% include "cast/wagtail/video_results.html" %}
         </div>
     </section>
     {% if uploadform %}
-        <section id="upload-audio" class="{% if uploadform.errors and media_type == 'audio' %}active{% endif %} nice-padding">
-            <form class="media-upload" action="{% url 'wagtailmedia:chooser_upload' 'audio' %}" method="POST" enctype="multipart/form-data" novalidate>
-                {% csrf_token %}
-                <ul class="fields">
-                    {% for field in uploadform %}
-                        {% if field.is_hidden %}
-                            {{ field }}
-                        {% else %}
-                            {% include "wagtailadmin/shared/field_as_li.html" with field=field %}
-                        {% endif %}
-                    {% endfor %}
-                    <li>
-                        <button type="submit" class="button button-longrunning" data-clicked-text="{% trans 'Uploading…' %}"><span class="icon icon-spinner"></span><em>{% trans 'Upload' %}</em></button>
-                    </li>
-                </ul>
-            </form>
-        </section>
-        <section id="upload-video" class="{% if uploadform.errors and media_type == 'video' %}active{% endif %} nice-padding">
-            <form class="media-upload" action="{% url 'wagtailmedia:chooser_upload' 'video' %}" method="POST" enctype="multipart/form-data" novalidate>
+        <section id="upload-video" class="{% if uploadform.errors %}active{% endif %} nice-padding">
+            <form class="media-upload" action="{% url 'castmedia:video_chooser_upload' %}" method="POST" enctype="multipart/form-data" novalidate>
                 {% csrf_token %}
                 <ul class="fields">
                     {% for field in uploadform %}
