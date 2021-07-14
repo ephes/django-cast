@@ -46,7 +46,7 @@ def video_index(request):
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return render(
             request,
-            "wagtailmedia/media/results.html",
+            "cast/wagtail/video_chooser_results.html",
             {
                 "ordering": ordering,
                 "videos": videos,
@@ -252,6 +252,18 @@ def get_video_data(video):
         "title": video.title,
         "edit_link": reverse("castmedia:video_edit", args=(video.id,)),
     }
+
+
+def video_chosen(request, video_id):
+    video = get_object_or_404(Video, id=video_id)
+
+    return render_modal_workflow(
+        request,
+        None,
+        None,
+        None,
+        json_data={"step": "media_chosen", "result": get_video_data(video)},
+    )
 
 
 @permission_checker.require("add")

@@ -32,7 +32,7 @@
             <tr>
                 <td class="title">
                     {% if choosing %}
-                        <h2><a href="{% url 'castmedia:media_chosen' video.id %}" class="media-choice">{{ video.title }}</a></h2>
+                        <h2><a href="{% url 'castmedia:video_chosen' video.id %}" class="media-choice">{{ video.title }}</a></h2>
                     {% else %}
                         <h2><a href="{% url 'castmedia:video_edit' video.id %}">{{ video.title }}</a></h2>
                     {% endif %}
