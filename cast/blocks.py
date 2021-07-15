@@ -59,5 +59,11 @@ class VideoChooserBlock(ChooserBlock):
                 "preview": value_data["preview"],
             }
 
+    def get_context(self, video, parent_context=None):
+        print("get context: ", video)
+        context = super().get_context(video, parent_context=parent_context)
+        context["video"] = video
+        return context
+
     class Meta:
         icon = "media"
