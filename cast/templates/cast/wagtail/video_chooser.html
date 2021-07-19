@@ -5,6 +5,9 @@
     <span class="title">{{ video.title }}</span>
 {% endblock %}
 
+{% block unchosen_icon %}
+{% endblock %}
+
 {% block edit_chosen_item_url %}
   {% if video %}{% url 'castmedia:video_edit' video.id %}{% endif %}
 {% endblock %}

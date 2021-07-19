@@ -24,7 +24,7 @@ class VideoMenuItem(MenuItem):
 
 
 @hooks.register("register_admin_menu_item")
-def register_media_menu_item():
+def register_video_menu_item():
     return VideoMenuItem(
         _("Video"),
         reverse("castmedia:video_index"),

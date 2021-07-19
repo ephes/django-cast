@@ -13,20 +13,30 @@ class AdminVideoChooser(AdminChooser):
     choose_another_text = _("Choose another video item")
     link_to_chosen_text = _("Edit this video item")
 
+    # def get_value_data(self, value):
+    #     # FIXME why is this even necessary? Where is value coming from?
+    #     print("get_value_data: ", value)
+    #     if not isinstance(value, Video):
+    #         value = Video.objects.get(pk=value)
+    #     return {
+    #         "id": value.pk,
+    #         "edit_url": None,
+    #         "title": value.title,
+    #         "preview": None,
+    #     }
+
     def get_value_data(self, value):
-        # FIXME why is this even necessary? Where is value coming from?
-        if isinstance(value, Video):
-            return {
-                "id": value.pk,
-                "edit_url": None,
-                "title": value.title,
-                "preview": None,
-            }
+        print("get value data: ", value)
+        return value
 
     def render_html(self, name, value, attrs):
+        print("get instance and id: ", name, value, attrs)
         instance, value = self.get_instance_and_id(Video, value)
         original_field_html = super().render_html(name, value, attrs)
 
+        print("render html value: ", value)
+        # if value is None:
+        #     raise Exception("foobabaz")
         return render_to_string(
             "cast/wagtail/video_chooser.html",
             {
