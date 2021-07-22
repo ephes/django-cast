@@ -35,9 +35,9 @@
                     <ul class="fields">
                         {% for field in form %}
                             {% if field.name == 'file' %}
-                                {% include "wagtailmedia/media/_file_field_as_li.html" %}
+                                {% include "cast/wagtail/_file_field_as_li.html" %}
                             {% elif field.name == 'thumbnail' %}
-                                {% include "wagtailmedia/media/_thumbnail_field_as_li.html" %}
+                                {% include "cast/wagtail/_thumbnail_field_as_li.html" %}
                             {% else %}
                                 {% include "wagtailadmin/shared/field_as_li.html" %}
                             {% endif %}

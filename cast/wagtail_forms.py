@@ -2,11 +2,15 @@ from django import forms
 from django.forms.models import modelform_factory
 
 from wagtail.admin import widgets
+from wagtail.core.models import Collection
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 
-from wagtailmedia.permissions import permission_policy as media_permission_policy
-
 from .models import Video
+
+
+class FakePermissionPolicy:
+    def collections_user_has_permission_for(self, user, action):
+        return Collection.objects.all()
 
 
 class BaseVideoForm(BaseCollectionMemberForm):
@@ -17,7 +21,7 @@ class BaseVideoForm(BaseCollectionMemberForm):
             "poster": forms.ClearableFileInput,
         }
 
-    permission_policy = media_permission_policy
+    permission_policy = FakePermissionPolicy()
 
 
 def get_video_form():

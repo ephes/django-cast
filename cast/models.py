@@ -41,7 +41,6 @@ from slugify import slugify
 
 from . import appsettings
 from .blocks import GalleryBlock
-from .blocks import TestMediaBlock
 from .blocks import VideoChooserBlock
 
 
@@ -636,7 +635,6 @@ class Post(TimeStampedModel, Page):
             ("gallery", GalleryBlock(ImageChooserBlock())),
             ("embed", EmbedBlock()),
             ("video", VideoChooserBlock(template="cast/wagtail_video.html", icon="media")),
-            ("media", TestMediaBlock(icon="media")),
         ]
     )
 

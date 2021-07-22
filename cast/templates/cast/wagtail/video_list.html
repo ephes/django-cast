@@ -7,7 +7,7 @@
         <tr class="table-headers">
             <th>
                 {% if not is_searching %}
-                    <a href="{% url 'castmedia:index' %}{% if not ordering == "title" %}?ordering=title{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "title" %}teal{% endif %}">
+                    <a href="{% url 'castmedia:video_index' %}{% if not ordering == "title" %}?ordering=title{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "title" %}teal{% endif %}">
                         {% trans "Title" %}
                     </a>
                 {% else %}
@@ -18,7 +18,7 @@
             <th>{% trans "Type" %}</th>
             <th>
                 {% if not is_searching %}
-                    <a href="{% url 'castmedia:index' %}{% if not ordering == "-created" %}?ordering=-created{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "-created" %}teal{% endif %}">
+                    <a href="{% url 'castmedia:video_index' %}{% if not ordering == "-created" %}?ordering=-created{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "-created" %}teal{% endif %}">
                         {% trans "Uploaded" %}
                     </a>
                 {% else %}

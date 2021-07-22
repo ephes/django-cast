@@ -1,23 +1,22 @@
 from django.shortcuts import render
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
 
-from wagtail.core import hooks
-from wagtailmedia.utils import paginate
-from wagtail.admin.auth import permission_denied
+from wagtail.admin.forms.search import SearchForm
 from wagtail.admin.models import popular_tags_for_model
 from wagtail.admin.modal_workflow import render_modal_workflow
-from wagtailmedia.permissions import permission_policy
-from wagtail.admin.auth import PermissionPolicyChecker
-from wagtail.admin.forms.search import SearchForm
-
-from .models import Video
-
-permission_checker = PermissionPolicyChecker(permission_policy)
 
 
-@permission_checker.require_any("add", "change", "delete")
+DEFAULT_PAGE_KEY = "p"
+
+
+def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=20):
+    paginator = Paginator(items, per_page)
+    page = paginator.get_page(request.GET.get(page_key))
+    return paginator, page
+
 @vary_on_headers("X-Requested-With")
 def video_index(request):
     ordering = "-created"
@@ -35,12 +34,6 @@ def video_index(request):
 
     # Pagination
     paginator, media = paginate(request, videos)
-
-    collections = permission_policy.collections_user_has_any_permission_for(
-        request.user, ["add", "change"]
-    )
-    if len(collections) < 2:
-        collections = None
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -65,8 +58,8 @@ def video_index(request):
                 "is_searching": bool(query_string),
                 "search_form": form,
                 "popular_tags": popular_tags_for_model(Video),
-                "user_can_add": permission_policy.user_has_permission(request.user, "add"),
-                "collections": collections,
+                "user_can_add": True,
+                "collections": None,
                 "current_collection": None,
             },
         )
@@ -81,7 +74,6 @@ from .models import Video
 from .wagtail_forms import get_video_form
 
 
-@permission_checker.require("add")
 def video_add(request):
     VideoForm = get_video_form()
     if request.POST:
@@ -121,13 +113,9 @@ def video_add(request):
     )
 
 
-@permission_checker.require("change")
 def video_edit(request, video_id):
     VideoForm = get_video_form()
     video = get_object_or_404(Video, id=video_id)
-
-    if not permission_policy.user_has_permission_for_instance(request.user, "change", video):
-        return permission_denied(request)
 
     if request.POST:
         original_file = video.original
@@ -189,17 +177,13 @@ def video_edit(request, video_id):
             "video": video,
             "filesize": filesize,
             "form": form,
-            "user_can_delete": permission_policy.user_has_permission_for_instance(request.user, "delete", video),
+            "user_can_delete": True,
         },
     )
 
 
-@permission_checker.require("delete")
 def video_delete(request, video_id):
     video = get_object_or_404(Video, id=video_id)
-
-    if not permission_policy.user_has_permission_for_instance(request.user, "delete", video):
-        return permission_denied(request)
 
     if request.POST:
         video.delete()
@@ -213,10 +197,7 @@ def video_chooser(request):
     ordering = "-created"
     videos = Video.objects.all().order_by(ordering)
 
-    if permission_policy.user_has_permission(request.user, "add") or True:
-        upload_form = get_video_form()
-    else:
-        upload_form = None
+    upload_form = get_video_form()
 
     paginator, videos = paginate(request, videos, per_page=10)
 
@@ -226,8 +207,6 @@ def video_chooser(request):
         None,
         {
             "videos": videos,
-            # "searchform": search_form,
-            # "collections": collections,
             "uploadform": upload_form,
             "is_searching": False,
             "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
@@ -244,13 +223,13 @@ def video_chooser(request):
 def get_video_data(video):
     """
     helper function: given a video, return the data to pass back to the
-    chooser panel
+    chooser panel as the result of ModalWorkflow
     """
 
     return {
         "id": video.id,
         "title": video.title,
-        "edit_link": reverse("castmedia:video_edit", args=(video.id,)),
+        "edit_url": reverse("castmedia:video_edit", args=(video.id,)),
     }
 
 
@@ -266,7 +245,6 @@ def video_chosen(request, video_id):
     )
 
 
-@permission_checker.require("add")
 def video_chooser_upload(request):
     VideoForm = get_video_form()
 

@@ -3,8 +3,8 @@ from django.urls import path, include, reverse
 from django.utils.translation import gettext_lazy as _
 
 from wagtail.core import hooks
-from wagtail.core.permission_policies.collections import CollectionOwnershipPermissionPolicy
 from wagtail.admin.menu import MenuItem
+from wagtail.core.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from . import admin_urls
 from .models import Video
@@ -13,7 +13,7 @@ from .models import Video
 @hooks.register("register_admin_urls")
 def register_admin_urls():
     return [
-        path("video/", include((admin_urls, "wagtailmedia"), namespace="castmedia")),
+        path("video/", include((admin_urls, "castmedia"), namespace="castmedia"))
     ]
 
 

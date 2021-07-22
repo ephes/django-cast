@@ -80,7 +80,6 @@ THIRD_PARTY_APPS = [
     "wagtail_srcset",
     "modelcluster",
     "taggit",
-    "wagtailmedia",
 ]
 LOCAL_APPS = [
     # Your stuff: custom apps go here
