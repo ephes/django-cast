@@ -21,7 +21,13 @@ def get_last_request_position(access_log_path, last_request):
     last_ip = last_request.ip
     last_timestamp = last_request.timestamp
     candidates = []
-    with open(access_log_path) as f:
+    with open(access_log_path, "rb") as f:
+        for position, line in enumerate(f):
+            try:
+                line = line.decode("utf8")
+            except UnicodeDecodeError:
+                # ignore weird characters (should not happen that often)
+                continue
         for position, line in enumerate(f):
             if last_ip in line:
                 date_str = line.split("[")[1].split("]")[0]
