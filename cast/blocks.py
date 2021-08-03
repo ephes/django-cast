@@ -43,7 +43,5 @@ class VideoChooserBlock(ChooserBlock):
         return AdminVideoChooser()
 
     def get_form_state(self, value):
-        """crucial for wagtail > 2.12"""
-        value_data = self.widget.get_value_data(value)
-        return value_data
+        return self.widget.get_value_data(value)
 

@@ -20,40 +20,33 @@ class AdminVideoChooser(AdminChooser):
     link_to_chosen_text = _("Edit this video item")
 
     def get_value_data(self, value):
-        # FIXME why is this even necessary? Where is value coming from?
-        print("get_value_data: ", value)
         if value is None:
             return value
         if not isinstance(value, Video):
             value = Video.objects.get(pk=value)
         return {
             "id": value.pk,
-            "edit_url": reverse("castmedia:video_edit", args=[value.id]),
             "title": value.title,
-            "preview": None,
+            "edit_link": reverse("castmedia:video_edit", args=[value.id]),
         }
 
     def render_html(self, name, value, attrs):
-        print("get instance and id: ", name, value, attrs)
-        instance, value = self.get_instance_and_id(Video, value)
-        original_field_html = super().render_html(name, value, attrs)
+        value = value if value is not None else {}
+        original_field_html = super().render_html(name, value.get("id"), attrs)
 
-        print("render html value: ", value)
-        # if value is None:
-        #     raise Exception("foobabaz")
         return render_to_string(
             "cast/wagtail/video_chooser.html",
             {
                 "widget": self,
                 "original_field_html": original_field_html,
                 "attrs": attrs,
-                "value": value,
-                "video": instance,
+                "value": value != {},  # only used to identify blank values
+                "title": value.get("title", ""),
+                "edit_url": value.get("edit_url", ""),
             },
         )
 
     def render_js_init(self, id_, name, value):
-        print("video render_js_init: ", id_)
         return "createVideoChooser({0});".format(json.dumps(id_))
 
     class Media:
