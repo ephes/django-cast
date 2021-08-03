@@ -55,9 +55,14 @@ def access_log_to_buffer(access_log_path, start_position=0, chunk_size=None):
     them to an empty buffer. Return that buffer.
     """
     log_buffer = StringIO()
-    with open(access_log_path) as f:
+    with open(access_log_path, "rb") as f:
         line_count = 0
         for position, line in enumerate(f):
+            try:
+                line = line.decode("utf8")
+            except UnicodeDecodeError:
+                # ignore weird characters (should not happen that often)
+                continue
             if position > start_position:
                 log_buffer.write(line)
                 line_count += 1
