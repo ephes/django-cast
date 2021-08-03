@@ -1,8 +1,8 @@
 function createVideoChooser(id) {
-    var chooserElement = $('#' + id + '-chooser');
-    var videoTitle = chooserElement.find('.title');
-    var input = $('#' + id);
-    var editLink = chooserElement.find('.edit-link');
+    let chooserElement = $('#' + id + '-chooser');
+    let videoTitle = chooserElement.find('.title');
+    let input = $('#' + id);
+    let editLink = chooserElement.find('.edit-link');
 
     let state = null;
 
@@ -34,6 +34,18 @@ function createVideoChooser(id) {
                 },
             });
         },
+        getTextLabel: (opts) => {
+            if (!videoTitle.text()) return '';
+            let maxLength = opts && opts.maxLength,
+                result = videoTitle.text();
+            if (maxLength && result.length > maxLength) {
+                return result.substring(0, maxLength - 1) + '…';
+            }
+            return result;
+        },
+        focus: function() {
+            $('.action-choose', chooserElement).focus();
+        }
     };
 
     $('.action-choose', chooserElement).on('click', function() {
