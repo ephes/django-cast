@@ -1,5 +1,5 @@
-<h2>{{ video }}</h2>
-<video class="cast-video" preload="auto" controls poster="{{ video.poster.src }}">
-  <source src="{{ video.original }}" type="{{ video.get_mime_type }}">
+<h2>{{ block.value.title }}</h2>
+<video class="cast-video" preload="auto" controls poster="{{ block.value.poster.src }}">
+  <source src="{{ block.value.original.url }}" type="{{ block.value.get_mime_type }}">
   your browser does not support the video tag
 </video>
