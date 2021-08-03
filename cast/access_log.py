@@ -28,7 +28,6 @@ def get_last_request_position(access_log_path, last_request):
             except UnicodeDecodeError:
                 # ignore weird characters (should not happen that often)
                 continue
-        for position, line in enumerate(f):
             if last_ip in line:
                 date_str = line.split("[")[1].split("]")[0]
                 timestamp = strptime(date_str, "%d/%b/%Y:%H:%M:%S %z")
