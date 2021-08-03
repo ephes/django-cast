@@ -92,7 +92,7 @@ def video_add(request):
                 _("Video file '{0}' added.").format(video.title),
                 buttons=[
                     messages.button(
-                        reverse("castmedia:edit", args=(video.id,)), _("Edit")
+                        reverse("castmedia:video_edit", args=(video.id,)), _("Edit")
                     )
                 ],
             )
@@ -137,7 +137,7 @@ def video_edit(request, video_id):
                 _("Video file '{0}' updated").format(video.title),
                 buttons=[
                     messages.button(
-                        reverse("castmedia:edit", args=(video.id,)), _("Edit")
+                        reverse("castmedia:video_edit", args=(video.id,)), _("Edit")
                     )
                 ],
             )
