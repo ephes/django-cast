@@ -220,7 +220,7 @@ def file_instance(user, m4a_audio):
 
 @pytest.fixture()
 def blog(user):
-    return Blog.objects.create(user=user, title="testblog", slug="testblog")
+    return Blog.objects.create(author=user, title="testblog", slug="testblog")
 
 
 @pytest.fixture()
