@@ -18,7 +18,7 @@ class TestPostUpdate:
         update_url = reverse(
             "cast:post_update", kwargs={"blog_slug": blog.slug, "slug": post.slug}
         )
-        r = client.login(username=blog.user.username, password=blog.user._password)
+        r = client.login(username=blog.owner.username, password=blog.owner._password)
         r = client.get(update_url)
         assert r.status_code == 200
 
