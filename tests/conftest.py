@@ -29,10 +29,13 @@ from cast.models import (
     ChapterMark,
 )
 
-from .factories import UserFactory
-from .factories import BlogFactory
-from .factories import VideoFactory
-from .factories import GalleryFactory
+from .factories import (
+    UserFactory,
+    PostFactory,
+    BlogFactory,
+    VideoFactory,
+    GalleryFactory,
+)
 
 
 @pytest.fixture(scope="module")
@@ -249,13 +252,12 @@ def post_data():
 
 @pytest.fixture()
 def post(blog):
-    return Post.objects.create(
-        author=blog.user,
-        blog=blog,
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=timezone.now(),
-        content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",
     )
 
 

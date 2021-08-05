@@ -577,7 +577,6 @@ class PostPublishedManager(PageManager):
 
 class Post(TimeStampedModel, Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
-    # parent_blog = models.ForeignKey(Blog, null=True, on_delete=models.SET_NULL) FIXME update manually
     pub_date = models.DateTimeField(null=True, blank=True)
     visible_date = models.DateTimeField(default=timezone.now)
     podcast_audio = models.ForeignKey(
@@ -651,6 +650,10 @@ class Post(TimeStampedModel, Page):
     # managers
     objects = PageManager()
     published = PostPublishedManager()
+
+    @property
+    def blog(self):
+        return self.get_parent()
 
     @property
     def is_published(self):

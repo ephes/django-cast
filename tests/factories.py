@@ -40,15 +40,6 @@ class GalleryFactory(factory.django.DjangoModelFactory):
         model = Gallery
 
 
-class PostFactory(factory.django.DjangoModelFactory):
-    author = None
-    blog = None
-    published = None
-
-    class Meta:
-        model = Post
-
-
 class PageFactory(factory.django.DjangoModelFactory):
     class Meta:
         abstract = True
@@ -75,4 +66,10 @@ class BlogFactory(PageFactory):
 
     class Meta:
         model = Blog
+        django_get_or_create = ("slug",)
+
+
+class PostFactory(PageFactory):
+    class Meta:
+        model = Post
         django_get_or_create = ("slug",)
