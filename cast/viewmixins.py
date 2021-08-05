@@ -36,7 +36,7 @@ class PostChangeMixin:
         if len(form.cleaned_data["slug"]) == 0:
             post.slug = post.get_slug()
         blog = get_object_or_404(Blog, slug=self.blog_slug)
-        post.blog = blog
+        blog.add_child(instance=post)
         return super().form_valid(form)
 
     def form_invalid(self, form):
