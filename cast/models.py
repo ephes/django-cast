@@ -668,9 +668,9 @@ class Post(TimeStampedModel, Page):
     def __str__(self):
         return self.title
 
-    # def get_absolute_url(self):  #  FIXME
-    #     params = {"slug": self.slug, "blog_slug": self.blog.slug}
-    #     return reverse("cast:post_detail", kwargs=params)
+    def get_absolute_url(self):
+        params = {"slug": self.slug, "blog_slug": self.blog.slug}
+        return reverse("cast:post_detail", kwargs=params)
 
     def get_enclosure_url(self, audio_format):
         return getattr(self.podcast_audio, audio_format).url
