@@ -328,13 +328,12 @@ def unpublished_post(blog):
 
 @pytest.fixture()
 def podcast_episode(blog, audio):
-    return Post.objects.create(
-        author=blog.user,
-        blog=blog,
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
         title="test podast episode",
         slug="test-podcast-entry",
         pub_date=timezone.now(),
-        content="foobar in_all {% if include_detail %} only_in_detail {% endif %}",
         podcast_audio=audio,
     )
 
