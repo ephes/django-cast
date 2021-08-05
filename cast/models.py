@@ -542,7 +542,7 @@ class Blog(TimeStampedModel, Page):
         if self.author is not None:
             return self.author
         else:
-            return self.user.get_full_name()
+            return self.owner.get_full_name()
 
 
 # class BlogPage(Page):  # -> Post

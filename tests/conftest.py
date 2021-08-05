@@ -30,6 +30,7 @@ from cast.models import (
 )
 
 from .factories import UserFactory
+from .factories import BlogFactory
 from .factories import VideoFactory
 from .factories import GalleryFactory
 
@@ -220,7 +221,7 @@ def file_instance(user, m4a_audio):
 
 @pytest.fixture()
 def blog(user):
-    return Blog.objects.create(author=user, title="testblog", slug="testblog")
+    return BlogFactory(owner=user, title="testblog", slug="testblog")
 
 
 @pytest.fixture()

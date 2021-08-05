@@ -124,7 +124,7 @@ class TestBlogModel:
     @pytest.mark.django_db
     def test_blog_author_null(self, blog):
         blog.author = None
-        assert blog.author_name == blog.user.get_full_name()
+        assert blog.author_name == blog.owner.get_full_name()
 
     @pytest.mark.django_db
     def test_blog_author_not_null(self, blog):
