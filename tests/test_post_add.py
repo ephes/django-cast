@@ -16,7 +16,7 @@ class TestPostAdd:
 
     def test_get_post_add_authenticated(self, client, blog):
         create_url = reverse("cast:post_create", kwargs={"slug": blog.slug})
-        r = client.login(username=blog.user.username, password=blog.user._password)
+        r = client.login(username=blog.owner.username, password=blog.owner._password)
         r = client.get(create_url)
         assert r.status_code == 200
 
@@ -43,7 +43,7 @@ class TestPostAdd:
         assert "Sign In" in content
 
     def test_post_create_authenticated(self, client, blog):
-        user = blog.user
+        user = blog.owner
         r = client.login(username=user.username, password=user._password)
 
         create_url = reverse("cast:post_create", kwargs={"slug": blog.slug})
@@ -63,7 +63,7 @@ class TestPostAdd:
         assert Post.objects.get(slug=data["slug"]).title == data["title"]
 
     def test_post_create_authenticated_with_image(self, client, blog, image):
-        user = blog.user
+        user = blog.owner
 
         r = client.login(username=user.username, password=user._password)
 
