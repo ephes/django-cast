@@ -653,7 +653,13 @@ class Post(TimeStampedModel, Page):
 
     @property
     def blog(self):
-        return self.get_parent()
+        """
+        The get_parent() method returns wagtail parent page, which is not
+        necessarily a Blog model, but maybe the root page. If it's a Blog
+        it has a .blog attribute containing the model which has all the
+        attributes like blog.comments_enabled etc..
+        """
+        return self.get_parent().blog
 
     @property
     def is_published(self):

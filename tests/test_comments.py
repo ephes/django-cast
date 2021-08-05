@@ -17,7 +17,7 @@ class TestPostComments:
 
         content = r.content.decode("utf-8")
         assert post.title in content
-        assert "comment" not in content
+        assert 'class="comments' not in content
 
     def test_comment_form_included(self, client, post, comments_enabled):
         slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
@@ -28,7 +28,7 @@ class TestPostComments:
 
         content = r.content.decode("utf-8")
         assert post.title in content
-        assert "comment" in content
+        assert 'class="comments' in content
 
     def test_comment_in_comment_list(self, client, post, comment, comments_enabled):
         slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
@@ -76,5 +76,5 @@ class TestPostComments:
         rdata = r.json()
         assert rdata["success"]
 
-        comment = get_comments_model().objects.get(pk=rdata["object_id"])
+        comment = get_comments_model().objects.get(pk=rdata["comment_id"])
         assert comment.comment == data["comment"]
