@@ -16,6 +16,8 @@ from rest_framework.test import APIClient
 
 from django_comments import get_model as get_comments_model
 
+from wagtail.core.models import Site
+
 from cast import appsettings
 
 from cast.models import (
@@ -223,8 +225,14 @@ def file_instance(user, m4a_audio):
 
 
 @pytest.fixture()
-def blog(user):
-    return BlogFactory(owner=user, title="testblog", slug="testblog")
+def site():
+    return Site.objects.first()
+
+
+@pytest.fixture()
+def blog(user, site):
+    print(site.root_page)
+    return BlogFactory(owner=user, title="testblog", slug="testblog", parent=site.root_page)
 
 
 @pytest.fixture()
@@ -250,13 +258,17 @@ def post_data():
 
 @pytest.fixture()
 def post(blog):
-    return PostFactory(
+    print("in post fixture blog: ", blog.url)
+    post = PostFactory(
         owner=blog.owner,
         parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=timezone.now(),
     )
+    # post.set_url_path(post.blog)  # FIXME do we really have to do that manually?
+    print("in post fixture post: ", post.url)
+    return post
 
 
 @pytest.fixture()

@@ -1,8 +1,12 @@
 from __future__ import unicode_literals, absolute_import
 
-from django.conf.urls import url, include
-from rest_framework.documentation import include_docs_urls
+from django.conf.urls import url, include, re_path
 
+from wagtail.core import urls as wagtail_urls
+from wagtail.admin import urls as wagtailadmin_urls
+from wagtail.documents import urls as wagtaildocs_urls
+
+from rest_framework.documentation import include_docs_urls
 
 urlpatterns = [
     # allauth
@@ -14,4 +18,8 @@ urlpatterns = [
     url(r"^", include("cast.urls", namespace="cast")),
     # comments
     url(r"^posts/comments/", include("fluent_comments.urls")),
+    # wagtail
+    url(r"^cms/", include(wagtailadmin_urls)),
+    url(r"^documents/", include(wagtaildocs_urls)),
+    re_path(r"", include(wagtail_urls)),  # default is wagtail
 ]

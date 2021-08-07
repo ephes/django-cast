@@ -2,7 +2,7 @@ import factory
 
 from django.contrib.auth import get_user_model
 
-from wagtail.core.models import Page
+from wagtail.core.models import Page, Site
 
 from cast.models import Blog, Post, Image, Video, Gallery
 
@@ -46,13 +46,7 @@ class PageFactory(factory.django.DjangoModelFactory):
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
-
-        try:
-            parent = kwargs.pop("parent")
-        except KeyError:
-            # no parent, appending page to root
-            parent = Page.get_first_root_node()
-
+        parent = kwargs.pop("parent")
         page = model_class(*args, **kwargs)
         parent.add_child(instance=page)
 

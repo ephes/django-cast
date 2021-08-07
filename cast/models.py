@@ -507,10 +507,10 @@ class Blog(TimeStampedModel, Page):
     )
 
     # wagtail
-    intro = RichTextField(blank=True)
+    description = RichTextField(blank=True)
     template = "cast/blog_list_of_posts.html"
     content_panels = Page.content_panels + [
-        FieldPanel("intro", classname="full"),
+        FieldPanel("description", classname="full"),
         FieldPanel("email"),
     ]
 
@@ -667,10 +667,6 @@ class Post(TimeStampedModel, Page):
 
     def __str__(self):
         return self.title
-
-    def get_absolute_url(self):
-        params = {"slug": self.slug, "blog_slug": self.blog.slug}
-        return reverse("cast:post_detail", kwargs=params)
 
     def get_enclosure_url(self, audio_format):
         return getattr(self.podcast_audio, audio_format).url

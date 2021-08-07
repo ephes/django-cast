@@ -29,15 +29,20 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return self.object.get_absolute_url()
 
     def items(self):
-        queryset = Post.published.filter(blog=self.object).order_by("-visible_date")
+        queryset = Post.objects.live().descendant_of(self.object).order_by("-visible_date")
         return queryset
 
     def item_title(self, item):
         return item.title
 
     def item_description(self, item):
-        self.render_post(item, include_detail=True, javascript=False)
-        return item.description
+        # self.render_post(item, include_detail=True, javascript=False)
+        # return item.description
+        # FIXME render wagtail?
+        return ""
+
+    def item_link(self, item):
+        return item.url
 
 
 class ITunesElements:
