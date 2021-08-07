@@ -258,7 +258,6 @@ def post_data():
 
 @pytest.fixture()
 def post(blog):
-    print("in post fixture blog: ", blog.url)
     post = PostFactory(
         owner=blog.owner,
         parent=blog,
@@ -266,8 +265,6 @@ def post(blog):
         slug="test-entry",
         pub_date=timezone.now(),
     )
-    # post.set_url_path(post.blog)  # FIXME do we really have to do that manually?
-    print("in post fixture post: ", post.url)
     return post
 
 
