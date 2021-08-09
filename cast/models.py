@@ -753,6 +753,185 @@ class Post(TimeStampedModel, Page):
         return save_return
 
 
+class PodcastEpisode(TimeStampedModel, Page)
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
+    pub_date = models.DateTimeField(null=True, blank=True)
+    visible_date = models.DateTimeField(default=timezone.now)
+    podcast_audio = models.ForeignKey(
+        Audio, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts"
+    )
+    keywords = models.CharField(
+        _("keywords"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_(
+            """A comma-demlimitedlist of up to 12 words for iTunes
+            searches. Perhaps include misspellings of the title."""
+        ),
+    )
+    explicit = models.PositiveSmallIntegerField(
+        _("explicit"),
+        choices=Blog.EXPLICIT_CHOICES,
+        help_text=_("``Clean`` will put the clean iTunes graphic by it."),
+        default=1,
+    )
+    block = models.BooleanField(
+        _("block"),
+        default=False,
+        help_text=_(
+            "Check to block this episode from iTunes because <br />its "
+            "content might cause the entire show to be <br />removed from iTunes."
+            ""
+        ),
+    )
+    comments_enabled = models.BooleanField(
+        _("comments_enabled"),
+        default=True,
+        help_text=_("Whether comments are enabled for this post." ""),
+    )
+
+    images = models.ManyToManyField(Image, blank=True)
+    videos = models.ManyToManyField(Video, blank=True)
+    galleries = models.ManyToManyField(Gallery, blank=True)
+    audios = models.ManyToManyField(Audio, blank=True)
+
+    media_model_lookup = {
+        "image": Image,
+        "video": Video,
+        "gallery": Gallery,
+        "audio": Audio,
+    }
+
+    # wagtail
+    body = StreamField(
+        [
+            ("heading", blocks.CharBlock(classname="full title")),
+            ("paragraph", blocks.RichTextBlock()),
+            ("image", ImageChooserBlock(template="cast/wagtail_image.html")),
+            ("gallery", GalleryBlock(ImageChooserBlock())),
+            ("embed", EmbedBlock()),
+            ("video", VideoChooserBlock(template="cast/wagtail_video.html", icon="media")),
+        ]
+    )
+
+    search_fields = Page.search_fields + [
+        index.SearchField("body"),
+    ]
+
+    content_panels = Page.content_panels + [
+        FieldPanel("visible_date"),
+        StreamFieldPanel("body"),
+    ]
+    template = "cast/post.html"
+
+    # managers
+    objects = PageManager()
+    published = PostPublishedManager()
+
+    @property
+    def blog(self):
+        """
+        The get_parent() method returns wagtail parent page, which is not
+        necessarily a Blog model, but maybe the root page. If it's a Blog
+        it has a .blog attribute containing the model which has all the
+        attributes like blog.comments_enabled etc..
+        """
+        return self.get_parent().blog
+
+    @property
+    def is_published(self):
+        return self.pub_date is not None and self.pub_date < timezone.now()
+
+    def __str__(self):
+        return self.title
+
+    def get_enclosure_url(self, audio_format):
+        return getattr(self.podcast_audio, audio_format).url
+
+    def get_enclosure_size(self, audio_format):
+        return getattr(self.podcast_audio, audio_format).size
+
+    def get_slug(self):
+        return slugify(self.title)
+
+    @property
+    def media_lookup(self):
+        return {
+            "image": {i.pk: i for i in self.images.all()},
+            "video": {v.pk: v for v in self.videos.all()},
+            "gallery": {g.pk: g for g in self.galleries.all()},
+            "audio": {a.pk: a for a in self.audios.all()},
+        }
+
+    @property
+    def media_from_content(self):
+        regex = re.compile(r"{% (\w+) (\d+) %}")
+        groups = regex.findall(self.content)
+        media = []
+        for name, pk in groups:
+            media.append((name, int(pk)))
+        return media
+
+    @property
+    def media_attr_lookup(self):
+        return {
+            "image": self.images,
+            "video": self.videos,
+            "gallery": self.galleries,
+            "audio": self.audios,
+        }
+
+    def add_missing_media_objects(self):
+        media_attr_lookup = self.media_attr_lookup
+
+        media_lookup = self.media_lookup
+        model_lookup = self.media_model_lookup
+        for model_name, model_pk in self.media_from_content:
+            try:
+                media_lookup[model_name][model_pk]
+            except KeyError:
+                media_object = model_lookup[model_name].objects.get(pk=model_pk)
+                media_attr_lookup[model_name].add(media_object)
+                logger.info(
+                    "added: {} {} {}".format(model_name, model_pk, media_object)
+                )
+
+    def remove_obsolete_media_objects(self):
+        media_from_db = {k: set(v.keys()) for k, v in self.media_lookup.items()}
+
+        # media from content
+        media_content_lookup = defaultdict(set)
+        for model_name, model_pk in self.media_from_content:
+            media_content_lookup[model_name].add(model_pk)
+
+        # remove all PKs which are in db but not in content
+        media_attr_lookup = self.media_attr_lookup
+        for media_type, media_pks in media_from_db.items():
+            for media_pk in media_pks:
+                if media_pk not in media_content_lookup.get(media_type, set()):
+                    media_attr_lookup[media_type].remove(media_pk)
+
+    @property
+    def has_audio(self):
+        return self.audios.count() > 0 or self.podcast_audio is not None
+
+    @property
+    def comments_are_enabled(self):
+        return (
+            appsettings.CAST_COMMENTS_ENABLED
+            and self.blog.comments_enabled
+            and self.comments_enabled
+        )
+
+    def save(self, *args, **kwargs):
+        save_return = super().save(*args, **kwargs)
+        # self.add_missing_media_objects()  FIXME
+        # self.remove_obsolete_media_objects()  FIXME
+        return save_return
+
+
+
 class ChapterMark(models.Model):
     audio = models.ForeignKey(
         Audio, on_delete=models.CASCADE, related_name="chaptermarks"
