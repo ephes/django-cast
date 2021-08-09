@@ -121,6 +121,7 @@ class TestGeneratedFeeds:
 
     @pytest.mark.django_db
     def test_podcast_feed_contains_detail_information(self, client, podcast_episode):
+        # FIXME this test does not work until posts are rendered and preview / detail logic works again
         feed_url = reverse(
             "cast:podcast_feed_rss",
             kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
