@@ -92,13 +92,12 @@ class TestGeneratedFeeds:
             "cast:podcast_feed_rss",
             kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
         )
-
         r = client.get(feed_url)
         assert r.status_code == 200
 
         d = feedparser.parse(r.content)
         assert len(d.entries) == 1
-        assert Post.objects.filter(blog=podcast_episode.blog).count() == 2
+        assert Post.objects.live().descendant_of(podcast_episode.blog).count() == 2
 
     @pytest.mark.django_db
     def test_podcast_feed_contains_visible_date_as_pubdate(

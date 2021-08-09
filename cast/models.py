@@ -522,9 +522,7 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def last_build_date(self):
-        return (
-            Post.published.filter(blog=self).order_by("-visible_date")[1].visible_date
-        )
+        return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
 
     @property
     def itunes_categories_parsed(self):
@@ -745,6 +743,10 @@ class Post(TimeStampedModel, Page):
             and self.blog.comments_enabled
             and self.comments_enabled
         )
+
+    @property
+    def description(self):
+        return ""
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)

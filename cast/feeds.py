@@ -105,7 +105,7 @@ class ITunesElements:
         # Maybe add license later
         # year = timezone.now().year
         # haqe("copyright", "{0} {1}".format("insert license", year))
-        haqe("itunes:author", post.author.get_full_name())
+        haqe("itunes:author", post.owner.get_full_name())
         haqe("itunes:subtitle", post.description)
         haqe("itunes:summary", post.description)
         haqe("itunes:duration", post.podcast_audio.duration_str)
@@ -165,20 +165,19 @@ class PodcastFeed(RenderPostMixin, Feed):
         return blog.itunes_categories.split(",")
 
     def items(self, blog):
-        queryset = Post.published.podcast_episodes.filter(blog=self.object).order_by(
-            "-visible_date"
-        )
+        queryset = Post.objects.live().descendant_of(blog).filter(podcast_audio__isnull=False).order_by("-visible_date")
         return queryset
 
     def item_title(self, item):
         return item.title
 
     def item_description(self, item):
-        self.render_post(item, include_detail=True, javascript=False)
+        # self.render_post(item, include_detail=True, javascript=False)
+        # FIXME
         return item.description
 
     def item_link(self, item):
-        return item.get_absolute_url()
+        return item.get_full_url()
 
     def item_pubdate(self, item):
         return item.visible_date
