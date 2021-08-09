@@ -42,7 +42,7 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return ""
 
     def item_link(self, item):
-        return item.url
+        return item.get_url()
 
 
 class ITunesElements:
