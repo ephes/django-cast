@@ -231,7 +231,6 @@ def site():
 
 @pytest.fixture()
 def blog(user, site):
-    print(site.root_page)
     return BlogFactory(owner=user, title="testblog", slug="testblog", parent=site.root_page)
 
 
