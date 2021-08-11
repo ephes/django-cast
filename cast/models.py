@@ -533,7 +533,7 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def is_podcast(self):
-        return self.post_set.exclude(podcast_audio__isnull=True).count() > 0
+        return Post.objects.live().descendant_of(self).exclude(podcast_audio__isnull=True).count() > 0
 
     @property
     def author_name(self):

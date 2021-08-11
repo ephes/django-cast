@@ -30,7 +30,7 @@ urlpatterns = [
     # Uploads
     path("uploads/", include("filepond.urls", namespace="filepond")),
     # Cast
-    # path("cast/", include("cast.urls", namespace="cast")),
+    path("cast/", include("cast.urls", namespace="cast")),
     # Threadedcomments
     re_path(r"^show/comments/", include("fluent_comments.urls")),
     # Wagtail

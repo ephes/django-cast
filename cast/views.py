@@ -46,9 +46,9 @@ class PostsListView(RenderPostMixin, GetParamsMixin, FilterView):
         # self.blog is needed elsewhere
         self.blog = get_object_or_404(Blog, slug=self.kwargs["slug"])
         if not self.request.user.is_authenticated:
-            queryset = Post.published.filter(blog=self.blog).order_by("-visible_date")
+            queryset = Post.objects.live().descendant_of(self.blog).order_by("-visible_date")
         else:
-            queryset = Post.objects.filter(blog=self.blog).order_by("-created")
+            queryset = Post.objects.descendant_of(self.blog).order_by("-created")
         return queryset
 
     def get_selected_facet(self):
@@ -104,7 +104,8 @@ class PostsListView(RenderPostMixin, GetParamsMixin, FilterView):
         context = super().get_context_data(**kwargs)
         context["blog"] = self.blog
         for post in context[self.context_object_name]:
-            self.render_post(post, include_detail=False)
+            pass
+            # self.render_post(post, include_detail=False)
         return context
 
 
