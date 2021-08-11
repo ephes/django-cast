@@ -271,49 +271,46 @@ def post(blog):
 
 @pytest.fixture()
 def draft_post(blog):
-    return Post.objects.create(
-        author=blog.user,
-        blog=blog,
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=None,
-        content="foobar",
     )
 
 
 @pytest.fixture()
 def post_with_date(blog):
     visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2018, 1, 1, 8))
-    return Post.objects.create(
-        author=blog.user,
-        blog=blog,
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=timezone.now(),
         visible_date=visible_date,
-        content="foobar",
     )
 
 
 @pytest.fixture()
 def post_with_different_date(blog):
     visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
-    return Post.objects.create(
-        author=blog.user,
-        blog=blog,
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=timezone.now(),
         visible_date=visible_date,
-        content="foobar",
     )
 
 
 @pytest.fixture()
 def post_with_search(blog):
-    return Post.objects.create(
-        author=blog.user,
-        blog=blog,
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
         title="asdf",
         slug="test-entry",
         pub_date=timezone.now(),
@@ -324,13 +321,12 @@ def post_with_search(blog):
 
 @pytest.fixture()
 def unpublished_post(blog):
-    return Post.objects.create(
-        author=blog.user,
-        blog=blog,
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=None,
-        content="foobar",
     )
 
 
@@ -339,7 +335,7 @@ def podcast_episode(blog, audio):
     return PostFactory(
         owner=blog.owner,
         parent=blog,
-        title="test podast episode",
+        title="test podcast episode",
         slug="test-podcast-entry",
         pub_date=timezone.now(),
         podcast_audio=audio,
