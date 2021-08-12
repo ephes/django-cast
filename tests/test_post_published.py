@@ -33,14 +33,12 @@ class TestPublished:
         content = r.content.decode("utf-8")
         assert post.title not in content
 
-    def test_get_post_detail_not_published_authenticated(
-        self, client, unpublished_post
-    ):
+    def test_get_post_detail_not_published_authenticated(self, client, unpublished_post):
         post = unpublished_post
         slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
         detail_url = reverse("cast:post_detail", kwargs=slugs)
 
-        r = client.login(username=post.author.username, password="password")
+        r = client.login(username=post.owner.username, password="password")
 
         r = client.get(detail_url)
         assert r.status_code == 200
@@ -64,7 +62,7 @@ class TestPublished:
         post = unpublished_post
         blog_url = reverse("cast:post_list", kwargs={"slug": post.blog.slug})
 
-        r = client.login(username=post.author.username, password="password")
+        r = client.login(username=post.owner.username, password="password")
 
         r = client.get(blog_url)
         assert r.status_code == 200

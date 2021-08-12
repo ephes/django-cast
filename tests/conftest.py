@@ -300,7 +300,7 @@ def post_with_different_date(blog):
         owner=blog.owner,
         parent=blog,
         title="test entry",
-        slug="test-entry",
+        slug="test-entry-alt",
         pub_date=timezone.now(),
         visible_date=visible_date,
     )
@@ -312,10 +312,9 @@ def post_with_search(blog):
         owner=blog.owner,
         parent=blog,
         title="asdf",
-        slug="test-entry",
+        slug="test-entry-with-search",
         pub_date=timezone.now(),
         visible_date=timezone.now(),
-        content="bsdf",
     )
 
 

@@ -659,6 +659,9 @@ class Post(TimeStampedModel, Page):
         """
         return self.get_parent().blog
 
+    def get_absolute_url(self):
+        return self.get_full_url()
+
     @property
     def is_published(self):
         return self.pub_date is not None and self.pub_date < timezone.now()
