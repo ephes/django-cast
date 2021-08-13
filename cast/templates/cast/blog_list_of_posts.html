@@ -7,10 +7,10 @@
 <h1>{{ page.title }}</h1>
 <div class="intro">{{ page.description|richtext }}</div>
 
-{% for post in page.get_children %}
+{% for post in page.get_children.live.specific %}
   <h2><a href="{% pageurl post %}">{{ post.title }}</a></h2>
   <article>
-    {% for block in page.body %}
+    {% for block in post.body %}
       <section class="block-{{ block.block_type }}">
         {% include_block block %}
       </section>
