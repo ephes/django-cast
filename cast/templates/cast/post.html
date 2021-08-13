@@ -17,13 +17,7 @@
 {% block body_class %}template-blogpage{% endblock %}
 
 {% block content %}
-  <article>
-    {% for block in page.body %}
-      <section class="block-{{ block.block_type }}">
-        {% include_block block %}
-      </section>
-    {% endfor %}
-  </article>
+  {% include "cast/post_body.html" with render_detail=True %}
 
   {% render_comment_list for page %}
   {% render_comment_form for page %}

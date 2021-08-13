@@ -542,6 +542,10 @@ class Blog(TimeStampedModel, Page):
         else:
             return self.owner.get_full_name()
 
+    @property
+    def published_posts(self):
+        return Post.objects.live().descendant_of(self).order_by("-visible_date")
+
 
 # class BlogPage(Page):  # -> Post
 #     date = models.DateField("Post date")
@@ -560,6 +564,18 @@ class Blog(TimeStampedModel, Page):
 #         FieldPanel("date"),
 #         StreamFieldPanel("body"),
 #     ]
+
+
+class ContentBlock(blocks.StreamBlock):
+    heading = blocks.CharBlock(classname="full title")
+    paragraph = blocks.RichTextBlock()
+    image = ImageChooserBlock(template="cast/wagtail_image.html")
+    gallery = GalleryBlock(ImageChooserBlock())
+    embed = EmbedBlock()
+    video = VideoChooserBlock(template="cast/wagtail_video.html", icon="media")
+
+    class Meta:
+        icon = "form"
 
 
 class PostPublishedManager(PageManager):
@@ -626,12 +642,8 @@ class Post(TimeStampedModel, Page):
     # wagtail
     body = StreamField(
         [
-            ("heading", blocks.CharBlock(classname="full title")),
-            ("paragraph", blocks.RichTextBlock()),
-            ("image", ImageChooserBlock(template="cast/wagtail_image.html")),
-            ("gallery", GalleryBlock(ImageChooserBlock())),
-            ("embed", EmbedBlock()),
-            ("video", VideoChooserBlock(template="cast/wagtail_video.html", icon="media")),
+            ("overview", ContentBlock()),
+            ("detail", ContentBlock()),
         ]
     )
 
