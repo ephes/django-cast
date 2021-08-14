@@ -759,9 +759,10 @@ class Post(TimeStampedModel, Page):
             and self.comments_enabled
         )
 
-    @property
-    def description(self):
-        return ""
+    def get_context(self, *args, **kwargs):
+        context = super().get_context(*args, **kwargs)
+        context["render_detail"] = kwargs.get("render_detail", False)
+        return context
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)

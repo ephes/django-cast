@@ -9,15 +9,17 @@ from django.shortcuts import get_object_or_404
 
 from .models import Blog, Post, Audio
 
-from .viewmixins import RenderPostMixin
-
 logger = logging.getLogger(__name__)
 
 
-class LatestEntriesFeed(RenderPostMixin, Feed):
+POST_BODY_TEMPLATE = "cast/post_body.html"
+
+
+class LatestEntriesFeed(Feed):
     def get_object(self, request, *args, **kwargs):
         slug = kwargs["slug"]
         self.object = get_object_or_404(Blog, slug=slug)
+        self.request = request
 
     def title(self):
         return self.object.title
@@ -36,10 +38,9 @@ class LatestEntriesFeed(RenderPostMixin, Feed):
         return item.title
 
     def item_description(self, item):
-        # self.render_post(item, include_detail=True, javascript=False)
-        # return item.description
-        # FIXME render wagtail?
-        return ""
+        item.template = POST_BODY_TEMPLATE
+        item.description = item.serve(self.request, render_detail=True).render().content
+        return item.description
 
     def item_link(self, item):
         return item.get_full_url()
@@ -132,7 +133,7 @@ class RssITunesFeedGenerator(ITunesElements, Rss201rev2Feed):
         return rss_attrs
 
 
-class PodcastFeed(RenderPostMixin, Feed):
+class PodcastFeed(Feed):
     """
     A feed of podcasts for iTunes and other compatible podcatchers.
     """
@@ -150,6 +151,7 @@ class PodcastFeed(RenderPostMixin, Feed):
 
         slug = kwargs["slug"]
         self.object = get_object_or_404(Blog, slug=slug)
+        self.request = request  # need request for item.serve(request) later on
         return self.object
 
     def link(self):
@@ -172,8 +174,8 @@ class PodcastFeed(RenderPostMixin, Feed):
         return item.title
 
     def item_description(self, item):
-        # self.render_post(item, include_detail=True, javascript=False)
-        # FIXME
+        item.template = POST_BODY_TEMPLATE
+        item.description = item.serve(self.request, render_detail=True).render().rendered_content
         return item.description
 
     def item_link(self, item):
