@@ -258,7 +258,7 @@ def post_data():
 
 
 @pytest.fixture()
-def json_body():
+def body():
     return json.dumps([
         {
             "type": "overview",
@@ -282,13 +282,14 @@ def json_body():
 
 
 @pytest.fixture()
-def post(blog):
+def post(blog, body):
     post = PostFactory(
         owner=blog.owner,
         parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=timezone.now(),
+        body=body,
     )
     return post
 
@@ -354,7 +355,7 @@ def unpublished_post(blog):
 
 
 @pytest.fixture()
-def podcast_episode(blog, audio, json_body):
+def podcast_episode(blog, audio, body):
     return PostFactory(
         owner=blog.owner,
         parent=blog,
@@ -362,7 +363,7 @@ def podcast_episode(blog, audio, json_body):
         slug="test-podcast-entry",
         pub_date=timezone.now(),
         podcast_audio=audio,
-        body=json_body,
+        body=body,
     )
 
 

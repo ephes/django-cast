@@ -17,8 +17,7 @@ class TestPostDetail:
         assert post.title in content
 
     def test_get_post_detail_with_detail(self, client, post):
-        slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
-        detail_url = reverse("cast:post_detail", kwargs=slugs)
+        detail_url = post.get_url()
 
         r = client.get(detail_url)
         assert r.status_code == 200
