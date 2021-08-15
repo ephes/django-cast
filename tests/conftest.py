@@ -295,7 +295,7 @@ def post(blog, body):
 
 
 @pytest.fixture()
-def draft_post(blog):
+def unpublished_post(blog):
     post = PostFactory(
         owner=blog.owner,
         parent=blog,
@@ -306,6 +306,7 @@ def draft_post(blog):
     post.unpublish()
     post.refresh_from_db()
     return post
+
 
 @pytest.fixture()
 def post_with_date(blog):
@@ -342,17 +343,6 @@ def post_with_search(blog):
         slug="test-entry-with-search",
         pub_date=timezone.now(),
         visible_date=timezone.now(),
-    )
-
-
-@pytest.fixture()
-def unpublished_post(blog):
-    return PostFactory(
-        owner=blog.owner,
-        parent=blog,
-        title="test entry",
-        slug="test-entry",
-        pub_date=None,
     )
 
 
