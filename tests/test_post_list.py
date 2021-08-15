@@ -16,7 +16,7 @@ class TestPostList:
         assert post.title in content
 
     def test_get_post_list_without_draft(self, client, draft_post):
-        blog_url = reverse("cast:post_list", kwargs={"slug": draft_post.blog.slug})
+        blog_url = draft_post.blog.get_url()
 
         r = client.get(blog_url)
         assert r.status_code == 200

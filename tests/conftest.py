@@ -296,14 +296,16 @@ def post(blog, body):
 
 @pytest.fixture()
 def draft_post(blog):
-    return PostFactory(
+    post = PostFactory(
         owner=blog.owner,
         parent=blog,
         title="test entry",
         slug="test-entry",
         pub_date=None,
     )
-
+    post.unpublish()
+    post.refresh_from_db()
+    return post
 
 @pytest.fixture()
 def post_with_date(blog):
