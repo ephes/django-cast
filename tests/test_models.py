@@ -106,7 +106,7 @@ class TestAudioModel:
 
     @pytest.mark.django_db
     def test_audio_podlove_url(self, audio):
-        assert audio.podlove_url == "/api/audios/podlove/1"
+        assert audio.podlove_url == "/cast/api/audios/podlove/1"
 
 
 class TestFileModel:
