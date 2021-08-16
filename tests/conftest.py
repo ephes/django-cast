@@ -154,7 +154,7 @@ def m4a_audio(fixture_dir):
 # Models
 @pytest.fixture()
 def user():
-    user = UserFactory()
+    user = UserFactory(is_superuser=True)  # FIXME use proper wagtail edit permissions
     user._password = "password"
     return user
 

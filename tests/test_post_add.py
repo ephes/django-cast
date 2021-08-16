@@ -14,15 +14,16 @@ class TestPostAdd:
         # redirect to login
         assert r.status_code == 302
 
-    def test_get_post_add_authenticated(self, client, blog):
-        create_url = reverse("cast:post_create", kwargs={"slug": blog.slug})
-        r = client.login(username=blog.owner.username, password=blog.owner._password)
-        r = client.get(create_url)
+    def test_get_add_form_post_authenticated(self, client, blog):
+        add_url = reverse("wagtailadmin_pages:add_subpage", kwargs={"parent_page_id": blog.pk})
+        _ = client.login(username=blog.owner.username, password=blog.owner._password)
+        r = client.get(add_url, follow=True)
         assert r.status_code == 200
 
         content = r.content.decode("utf-8")
         assert "html" in content
-        assert "ckeditor" in content
+        # make sure we got the wagtail add subpage form and not the login form
+        assert '<body id="wagtail" class="  focus-outline-on">' in content
 
     def test_post_create_not_authenticated(self, client, blog):
         create_url = reverse("cast:post_create", kwargs={"slug": blog.slug})
