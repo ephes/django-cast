@@ -7,7 +7,7 @@ from cast.models import Post
 class TestPostAdd:
     pytestmark = pytest.mark.django_db
 
-    def test_add_post_not_authenticated(self, client, blog):
+    def test_get_add_form_post_not_authenticated(self, client, blog):
         add_url = reverse("wagtailadmin_pages:add_subpage", kwargs={"parent_page_id": blog.pk})
         r = client.get(add_url)
 
