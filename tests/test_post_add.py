@@ -7,10 +7,10 @@ from cast.models import Post
 class TestPostAdd:
     pytestmark = pytest.mark.django_db
 
-    def test_get_post_add_not_authenticated(self, client, blog):
-        create_url = reverse("cast:post_create", kwargs={"slug": blog.slug})
+    def test_add_post_not_authenticated(self, client, blog):
+        add_url = reverse("wagtailadmin_pages:add_subpage", kwargs={"parent_page_id": blog.pk})
+        r = client.get(add_url)
 
-        r = client.get(create_url)
         # redirect to login
         assert r.status_code == 302
 
