@@ -75,7 +75,7 @@ tox = "^3.14.5"
 django_extensions = "^3"
 coreapi-cli = "^1.0.9"
 nb-black = "*"
-coverage = {extras = ["toml"], version = "^5.5"}
+coverage = "^5.5"
 
 [tool.poetry.scripts]
 test = "commands:test"
