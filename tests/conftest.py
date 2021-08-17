@@ -231,13 +231,20 @@ def site():
 
 @pytest.fixture()
 def blog(user, site):
-    return BlogFactory(owner=user, title="testblog", slug="testblog", parent=site.root_page)
+    return BlogFactory(
+        owner=user, title="testblog", slug="testblog", parent=site.root_page
+    )
 
 
 @pytest.fixture()
 def blog_with_artwork(user, itunes_artwork, site):
-    return BlogFactory(owner=user, title="testblog", slug="testblog", itunes_artwork=itunes_artwork,
-                       parent=site.root_page)
+    return BlogFactory(
+        owner=user,
+        title="testblog",
+        slug="testblog",
+        itunes_artwork=itunes_artwork,
+        parent=site.root_page,
+    )
 
 
 @pytest.fixture()
@@ -258,27 +265,38 @@ def post_data():
 
 
 @pytest.fixture()
+def post_data_wagtail():
+    return {
+        "action-publish": "action-publish",
+        "body-0-deleted": "",
+        "body-0-order": "0",
+        "body-0-type": "overview",
+        "body-0-value-0-deleted": "",
+        "body-0-value-0-order": "0",
+        "body-0-value-0-type": "heading",
+        "body-0-value-0-value": "overview heading",
+        "body-0-value-count": "1",
+        "body-count": "1",
+        "slug": "new-post",
+        "title": "new post",
+        "visible_date": "2021-08-17 08:13",
+    }
+
+
+@pytest.fixture()
 def body():
-    return json.dumps([
-        {
-            "type": "overview",
-            "value": [
-                {
-                    "type": "heading",
-                    "value": "in_all heading",
-                }
-            ],
-        },
-        {
-            "type": "detail",
-            "value": [
-                {
-                    "type": "heading",
-                    "value": "only_in_detail heading",
-                }
-            ],
-        },
-    ])
+    return json.dumps(
+        [
+            {
+                "type": "overview",
+                "value": [{"type": "heading", "value": "in_all heading",}],
+            },
+            {
+                "type": "detail",
+                "value": [{"type": "heading", "value": "only_in_detail heading",}],
+            },
+        ]
+    )
 
 
 @pytest.fixture()
