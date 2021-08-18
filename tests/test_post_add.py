@@ -2,6 +2,8 @@ import pytest
 
 from django.urls import reverse
 
+from wagtail.images.models import Image
+
 from cast.models import Post
 
 
@@ -26,9 +28,7 @@ class TestPostAdd:
         # make sure we got the wagtail add subpage form and not the login form
         assert '<body id="wagtail" class="  focus-outline-on">' in content
 
-    def test_submit_add_form_post_not_authenticated(
-        self, client, post_data_wagtail, blog
-    ):
+    def test_submit_add_form_post_not_authenticated(self, client, post_data_wagtail, blog):
         add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
         r = client.post(add_url, post_data_wagtail)
 
@@ -47,52 +47,30 @@ class TestPostAdd:
         assert r.url == reverse("wagtailadmin_explore", args=(blog.id,))
 
         # make sure there was a post added to the database
-        assert (
-            Post.objects.get(slug=post_data_wagtail["slug"]).title
-            == post_data_wagtail["title"]
-        )
+        assert Post.objects.get(slug=post_data_wagtail["slug"]).title == post_data_wagtail["title"]
 
-    def test_submit_add_form_post_authenticated_with_image(self, client, post_data_wagtail, blog):
+    def test_submit_add_form_post_authenticated_with_image(self, client, post_data_wagtail, blog, wagtail_image):
         _ = client.login(username=blog.owner.username, password=blog.owner._password)
         add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
+        post_data_wagtail["body-0-value-0-type"] = "image"
+        post_data_wagtail["body-0-value-0-value"] = wagtail_image.id
+
         r = client.post(add_url, post_data_wagtail)
 
         # make sure we are redirected to blog index
         assert r.status_code == 302
         assert r.url == reverse("wagtailadmin_explore", args=(blog.id,))
 
+        post = Post.objects.get(slug=post_data_wagtail["slug"])
+
         # make sure there was a post added to the database
-        assert (
-            Post.objects.get(slug=post_data_wagtail["slug"]).title
-            == post_data_wagtail["title"]
-        )
+        assert post.title == post_data_wagtail["title"]
+
+        # make sure there was an image added
+        assert post.images.count() == 1
+        assert post.images.first() == wagtail_image
 
     # FIXME test post with media in content -> db link between media and post later
-    # def test_post_create_authenticated_with_image(self, client, blog, image):
-    #     user = blog.owner
-
-    #     r = client.login(username=user.username, password=user._password)
-
-    #     content = "with image: {{% image {} %}}".format(image.pk)
-    #     create_url = reverse("cast:post_create", kwargs={"slug": blog.slug})
-    #     data = {
-    #         "title": "test title",
-    #         "content": content,
-    #         "published": True,
-    #         "keywords": "",
-    #         "podcast_audio": "",
-    #         "explicit": "2",  # 2 -> no
-    #         "block": False,
-    #         "slug": "blog-slug",
-    #     }
-    #     r = client.post(create_url, data)
-    #     assert r.status_code == 302
-    #     bp = Post.objects.get(slug=data["slug"])
-    #     bis = list(bp.images.all())
-    #     assert bp.title == data["title"]
-    #     assert len(bis) == 1
-    #     assert bis[0].pk == image.pk
-
     # def test_post_create_authenticated_with_video(self, client, blog, video):
     #     user = video.user
     #     r = client.login(username=user.username, password=user._password)

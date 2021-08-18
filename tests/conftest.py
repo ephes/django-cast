@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 from django_comments import get_model as get_comments_model
 
 from wagtail.core.models import Site
+from wagtail.images.models import Image as WagtailImage
 
 from cast import appsettings
 
@@ -166,6 +167,14 @@ def image(user, image_1px):
     yield image
     # teardown
     os.unlink(image.original.path)
+
+
+@pytest.fixture()
+def wagtail_image(image_1px):
+    # without file attribute set, image chooser is broken
+    image = WagtailImage(file=image_1px)
+    image.save()
+    return image
 
 
 @pytest.fixture()

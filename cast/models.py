@@ -27,6 +27,7 @@ from wagtail.core.fields import RichTextField
 from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
+from wagtail.images.models import Image as WagtailImage
 from wagtail.search import index
 
 from taggit.managers import TaggableManager
@@ -627,13 +628,13 @@ class Post(TimeStampedModel, Page):
         help_text=_("Whether comments are enabled for this post." ""),
     )
 
-    images = models.ManyToManyField(Image, blank=True)
+    images = models.ManyToManyField(WagtailImage, blank=True)
     videos = models.ManyToManyField(Video, blank=True)
     galleries = models.ManyToManyField(Gallery, blank=True)
     audios = models.ManyToManyField(Audio, blank=True)
 
     media_model_lookup = {
-        "image": Image,
+        "image": WagtailImage,
         "video": Video,
         "gallery": Gallery,
         "audio": Audio,
@@ -700,12 +701,12 @@ class Post(TimeStampedModel, Page):
         }
 
     @property
-    def media_from_content(self):
-        regex = re.compile(r"{% (\w+) (\d+) %}")
-        groups = regex.findall(self.content)
+    def media_from_body(self):
         media = []
-        for name, pk in groups:
-            media.append((name, int(pk)))
+        for content_block in self.body:
+            for block in content_block.value:
+                if block.block_type in self.media_model_lookup:
+                    media.append((block.block_type, block.value.id))
         return media
 
     @property
@@ -722,7 +723,7 @@ class Post(TimeStampedModel, Page):
 
         media_lookup = self.media_lookup
         model_lookup = self.media_model_lookup
-        for model_name, model_pk in self.media_from_content:
+        for model_name, model_pk in self.media_from_body:
             try:
                 media_lookup[model_name][model_pk]
             except KeyError:
@@ -766,7 +767,7 @@ class Post(TimeStampedModel, Page):
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)
-        # self.add_missing_media_objects()  FIXME
+        self.add_missing_media_objects()
         # self.remove_obsolete_media_objects()  FIXME
         return save_return
 
