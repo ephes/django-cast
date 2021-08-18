@@ -52,6 +52,21 @@ class TestPostAdd:
             == post_data_wagtail["title"]
         )
 
+    def test_submit_add_form_post_authenticated_with_image(self, client, post_data_wagtail, blog):
+        _ = client.login(username=blog.owner.username, password=blog.owner._password)
+        add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
+        r = client.post(add_url, post_data_wagtail)
+
+        # make sure we are redirected to blog index
+        assert r.status_code == 302
+        assert r.url == reverse("wagtailadmin_explore", args=(blog.id,))
+
+        # make sure there was a post added to the database
+        assert (
+            Post.objects.get(slug=post_data_wagtail["slug"]).title
+            == post_data_wagtail["title"]
+        )
+
     # FIXME test post with media in content -> db link between media and post later
     # def test_post_create_authenticated_with_image(self, client, blog, image):
     #     user = blog.owner
