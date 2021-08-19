@@ -78,8 +78,9 @@ hints/*
 # tmp media
 tests/media/
 
-# local database
+# local databases
 db.sqlite3
+tests/test_database.sqlite3
 
 # virtualfish
 .venv
