@@ -90,7 +90,7 @@ class TestPostAdd:
         # make sure there was an video added
         assert post.videos.count() == 1
         assert post.videos.first() == video
-    
+
     def test_submit_add_form_post_authenticated_with_gallery(self, client, post_data_wagtail, blog, gallery):
         _ = client.login(username=blog.owner.username, password=blog.owner._password)
         add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
