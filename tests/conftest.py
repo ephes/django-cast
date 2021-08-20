@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 
 from django_comments import get_model as get_comments_model
 
-from wagtail.core.models import Site
+from wagtail.core.models import Site, Page, Collection
 from wagtail.images.models import Image as WagtailImage
 
 from cast import appsettings
@@ -38,6 +38,7 @@ from .factories import (
     BlogFactory,
     VideoFactory,
     GalleryFactory,
+    RootPageFactory,
 )
 
 
@@ -233,8 +234,48 @@ def file_instance(user, m4a_audio):
     os.unlink(_.original.path)
 
 
+
+@pytest.fixture()
+def root_page():
+    from django.contrib.contenttypes.models import ContentType
+    from wagtail.core.models.i18n import Locale
+    print("locale? ", Locale.objects.all())
+    locale = Locale.objects.create(language_code="en")
+    page_content_type, created = ContentType.objects.get_or_create(
+        model='page',
+        app_label='wagtailcore'
+    )
+    root = Page.objects.create(
+        title="Root",
+        slug='root',
+        content_type=page_content_type,
+        path='0001',
+        depth=1,
+        numchild=1,
+        url_path='/',
+    )
+    homepage = Page.objects.create(
+        title="Welcome to your new Wagtail site!",
+        slug='home',
+        content_type=page_content_type,
+        path='00010001',
+        depth=2,
+        numchild=0,
+        url_path='/home/',
+        locale=locale,
+    )
+    return homepage
+
+
 @pytest.fixture()
 def site():
+# def site(root_page):
+    # site = Site.objects.create(
+    #     hostname='localhost',
+    #     root_page_id=root_page.id,
+    #     is_default_site=True
+    # )
+    # return site
     return Site.objects.first()
 
 
@@ -424,9 +465,9 @@ def video(user):
 
 
 @pytest.fixture()
-def gallery(user, image):
+def gallery(user, wagtail_image):
     gallery = GalleryFactory(user=user)
-    gallery.images.add(image)
+    gallery.images.add(wagtail_image)
     return gallery
 
 

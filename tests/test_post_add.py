@@ -94,12 +94,19 @@ class TestPostAdd:
     def test_submit_add_form_post_authenticated_with_gallery(self, client, post_data_wagtail, blog, gallery):
         _ = client.login(username=blog.owner.username, password=blog.owner._password)
         add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
+
         post_data_wagtail["body-0-value-0-type"] = "gallery"
-        post_data_wagtail["body-0-value-0-value"] = gallery.id
+        post_data_wagtail["body-0-value-0-value-0-id"] = ""
+        post_data_wagtail["body-0-value-0-value-count"] = gallery.images.count()
+        post_data_wagtail["body-0-value-0-value-0-value"] = gallery.images.first().pk
+        post_data_wagtail["body-0-value-0-value-0-deleted"] = ""
+        post_data_wagtail["body-0-value-0-value-0-order"] = "0"
 
         r = client.post(add_url, post_data_wagtail)
 
         # make sure we are redirected to blog index
+        content = r.content.decode("utf8")
+        # print("content: ", content)
         assert r.status_code == 302
         assert r.url == reverse("wagtailadmin_explore", args=(blog.id,))
 
@@ -109,8 +116,10 @@ class TestPostAdd:
         assert post.title == post_data_wagtail["title"]
 
         # make sure there was an gallery added
-        assert post.galleries.count() == 1
-        assert post.galleries.first() == gallery
+        # assert post.galleries.count() == 1
+        assert post.images.count() == 1
+        assert post.images.first() == gallery.images.first()
+        # assert post.galleries.first() == gallery
 
     # FIXME test post with media in content -> db link between media and post later
     # def test_post_create_authenticated_with_gallery(self, client, blog, gallery):

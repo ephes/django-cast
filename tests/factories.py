@@ -7,6 +7,22 @@ from wagtail.core.models import Page, Site
 from cast.models import Blog, Post, Image, Video, Gallery
 
 
+class RootPageFactory(factory.django.DjangoModelFactory):
+    title = "Welcome to your new Wagtail site! (from page factory)"
+
+    class Meta:
+        model = Page
+        django_get_or_create = ("slug",)
+
+
+class SiteFactory(factory.django.DjangoModelFactory):
+    hostname = "localhost"
+
+    class Meta:
+        model = Site
+        django_get_or_create = ("hostname",)
+
+
 class UserFactory(factory.django.DjangoModelFactory):
     username = factory.Sequence(lambda n: "user-{0}".format(n))
     email = factory.Sequence(lambda n: "user-{0}@example.com".format(n))

@@ -278,7 +278,7 @@ class Video(CollectionMember, TimeStampedModel):
 
 class Gallery(TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
-    images = models.ManyToManyField(Image)
+    images = models.ManyToManyField(WagtailImage)
     post_context_key = "gallery"
 
     @property
@@ -705,8 +705,12 @@ class Post(TimeStampedModel, Page):
         media = []
         for content_block in self.body:
             for block in content_block.value:
-                if block.block_type in self.media_model_lookup:
-                    media.append((block.block_type, block.value.id))
+                if block.block_type == "gallery":
+                    for image in block.value:
+                        media.append(("image", image.id))
+                else:
+                    if block.block_type in self.media_model_lookup:
+                        media.append((block.block_type, block.value.id))
         return media
 
     @property
