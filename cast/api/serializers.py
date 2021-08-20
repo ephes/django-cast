@@ -55,7 +55,7 @@ class GallerySerializer(serializers.HyperlinkedModelSerializer):
 
     def create(self, validated_data):
         user = self.context["request"].user
-        gallery = Gallery.objects.create(user=user)
+        gallery = Gallery.objects.create()
         for image in validated_data["images"]:
             gallery.images.add(image)
         return gallery

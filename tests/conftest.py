@@ -38,7 +38,7 @@ from .factories import (
     BlogFactory,
     VideoFactory,
     GalleryFactory,
-    RootPageFactory,
+    get_root_page,
 )
 
 
@@ -69,9 +69,7 @@ def create_1pximage():
 @pytest.fixture()
 def image_1px():
     png = create_1pximage()
-    simple_png = SimpleUploadedFile(
-        name="test.png", content=png, content_type="image/png"
-    )
+    simple_png = SimpleUploadedFile(name="test.png", content=png, content_type="image/png")
     return simple_png
 
 
@@ -91,11 +89,9 @@ def read_test_mp4(fixture_dir):
 
 
 @pytest.fixture()
-def minimal_mp4(fixture_dir):
+def minimal_mp4(fixture_dir, root_page):
     mp4 = read_test_mp4(fixture_dir)
-    simple_mp4 = SimpleUploadedFile(
-        name="test.mp4", content=mp4, content_type="video/mp4"
-    )
+    simple_mp4 = SimpleUploadedFile(name="test.mp4", content=mp4, content_type="video/mp4")
     return simple_mp4
 
 
@@ -138,18 +134,14 @@ def read_test_m4a(fixture_dir):
 @pytest.fixture()
 def mp3_audio():
     mp3 = create_minimal_mp3()
-    simple_mp3 = SimpleUploadedFile(
-        name="test.mp3", content=mp3, content_type="audio/mpeg"
-    )
+    simple_mp3 = SimpleUploadedFile(name="test.mp3", content=mp3, content_type="audio/mpeg")
     return simple_mp3
 
 
 @pytest.fixture()
 def m4a_audio(fixture_dir):
     m4a = read_test_m4a(fixture_dir)
-    simple_m4a = SimpleUploadedFile(
-        name="test.m4a", content=m4a, content_type="audio/mp4"
-    )
+    simple_m4a = SimpleUploadedFile(name="test.m4a", content=m4a, content_type="audio/mp4")
     return simple_m4a
 
 
@@ -171,7 +163,8 @@ def image(user, image_1px):
 
 
 @pytest.fixture()
-def wagtail_image(image_1px):
+def wagtail_image(image_1px, root_page):
+    # root_page is needed because collections must not be empty
     # without file attribute set, image chooser is broken
     image = WagtailImage(file=image_1px)
     image.save()
@@ -179,7 +172,8 @@ def wagtail_image(image_1px):
 
 
 @pytest.fixture()
-def video_with_poster(user, minimal_mp4, image_1px):
+def video_with_poster(user, minimal_mp4, image_1px, root_page):
+    # root_page is needed because collections must not be empty
     video = Video(user=user, original=minimal_mp4, poster=image_1px)
     video.save()
     yield video
@@ -219,9 +213,7 @@ def chaptermarks(audio):
     ]
     results = []
     for start, title, href, image in cms:
-        results.append(
-            ChapterMark.objects.create(audio=audio, start=start, title=title)
-        )
+        results.append(ChapterMark.objects.create(audio=audio, start=start, title=title))
     return results
 
 
@@ -234,56 +226,20 @@ def file_instance(user, m4a_audio):
     os.unlink(_.original.path)
 
 
-
 @pytest.fixture()
 def root_page():
-    from django.contrib.contenttypes.models import ContentType
-    from wagtail.core.models.i18n import Locale
-    print("locale? ", Locale.objects.all())
-    locale = Locale.objects.create(language_code="en")
-    page_content_type, created = ContentType.objects.get_or_create(
-        model='page',
-        app_label='wagtailcore'
-    )
-    root = Page.objects.create(
-        title="Root",
-        slug='root',
-        content_type=page_content_type,
-        path='0001',
-        depth=1,
-        numchild=1,
-        url_path='/',
-    )
-    homepage = Page.objects.create(
-        title="Welcome to your new Wagtail site!",
-        slug='home',
-        content_type=page_content_type,
-        path='00010001',
-        depth=2,
-        numchild=0,
-        url_path='/home/',
-        locale=locale,
-    )
-    return homepage
+    return get_root_page()
 
 
 @pytest.fixture()
-def site():
-# def site(root_page):
-    # site = Site.objects.create(
-    #     hostname='localhost',
-    #     root_page_id=root_page.id,
-    #     is_default_site=True
-    # )
-    # return site
-    return Site.objects.first()
+def site(root_page):
+    site = Site.objects.create(hostname="localhost", root_page_id=root_page.id, is_default_site=True)
+    return site
 
 
 @pytest.fixture()
 def blog(user, site):
-    return BlogFactory(
-        owner=user, title="testblog", slug="testblog", parent=site.root_page
-    )
+    return BlogFactory(owner=user, title="testblog", slug="testblog", parent=site.root_page)
 
 
 @pytest.fixture()
@@ -310,7 +266,7 @@ def blog_with_itunes_categories(user, site):
 
 
 @pytest.fixture()
-def post_data():
+def post_data(root_page):
     return {"title": "foobar", "content": "blub", "explicit": "2", "pub_date": ""}
 
 
@@ -339,11 +295,21 @@ def body():
         [
             {
                 "type": "overview",
-                "value": [{"type": "heading", "value": "in_all heading",}],
+                "value": [
+                    {
+                        "type": "heading",
+                        "value": "in_all heading",
+                    }
+                ],
             },
             {
                 "type": "detail",
-                "value": [{"type": "heading", "value": "only_in_detail heading",}],
+                "value": [
+                    {
+                        "type": "heading",
+                        "value": "only_in_detail heading",
+                    }
+                ],
             },
         ]
     )
@@ -457,7 +423,8 @@ def img_templ():
 
 
 @pytest.fixture()
-def video(user):
+def video(user, root_page):
+    # root_page is needed because collections must not be empty
     video = VideoFactory.build()
     video.user = user
     video.save(poster=False)
@@ -465,8 +432,8 @@ def video(user):
 
 
 @pytest.fixture()
-def gallery(user, wagtail_image):
-    gallery = GalleryFactory(user=user)
+def gallery(wagtail_image):
+    gallery = GalleryFactory()
     gallery.images.add(wagtail_image)
     return gallery
 
@@ -521,9 +488,7 @@ def comments_not_enabled():
 @pytest.fixture()
 def comment(post):
     comment_model = get_comments_model()
-    instance = comment_model(
-        content_object=post, site_id=settings.SITE_ID, title="foobar", comment="bar baz"
-    )
+    instance = comment_model(content_object=post, site_id=settings.SITE_ID, title="foobar", comment="bar baz")
     instance.save()
     return instance
 
@@ -537,9 +502,7 @@ def access_log_path(fixture_dir):
 def last_request_dummy():
     class RequestDummy:
         def __init__(self):
-            self.timestamp = datetime.strptime(
-                "01/Dec/2018:06:55:44 +0100", "%d/%b/%Y:%H:%M:%S %z"
-            )
+            self.timestamp = datetime.strptime("01/Dec/2018:06:55:44 +0100", "%d/%b/%Y:%H:%M:%S %z")
             self.ip = "79.230.47.221"
 
     return RequestDummy()

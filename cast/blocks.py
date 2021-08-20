@@ -17,10 +17,6 @@ class GalleryBlock(ListBlock):
     class Meta:
         template = "cast/wagtail_gallery_block.html"
 
-    def __init__(self, child_block, **kwargs):
-        print("kwargs: ", kwargs)
-        super().__init__(child_block, **kwargs)
-
     def add_prev_next(self, gallery):
         for previous_image, current_image, next_image in previous_and_next(gallery):
             current_image.prev = (
@@ -29,13 +25,6 @@ class GalleryBlock(ListBlock):
             current_image.next = (
                 "false" if next_image is None else f"img-{next_image.pk}"
             )
-
-    def clean(self, value):
-        from wagtail.images.models import Image
-        print("images count: ", Image.objects.count()),
-        print("gallery block clean: ", value)
-        cleaned_value = super().clean(value)
-        return cleaned_value
 
     def get_context(self, gallery, parent_context=None):
         self.add_prev_next(gallery)

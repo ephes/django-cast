@@ -105,8 +105,6 @@ class TestPostAdd:
         r = client.post(add_url, post_data_wagtail)
 
         # make sure we are redirected to blog index
-        content = r.content.decode("utf8")
-        # print("content: ", content)
         assert r.status_code == 302
         assert r.url == reverse("wagtailadmin_explore", args=(blog.id,))
 
@@ -116,33 +114,6 @@ class TestPostAdd:
         assert post.title == post_data_wagtail["title"]
 
         # make sure there was an gallery added
-        # assert post.galleries.count() == 1
-        assert post.images.count() == 1
-        assert post.images.first() == gallery.images.first()
-        # assert post.galleries.first() == gallery
-
-    # FIXME test post with media in content -> db link between media and post later
-    # def test_post_create_authenticated_with_gallery(self, client, blog, gallery):
-    #     user = gallery.user
-    #     r = client.login(username=user.username, password="password")
-
-    #     content = "with gallery: {{% gallery {} %}}".format(gallery.pk)
-    #     create_url = reverse("cast:post_create", kwargs={"slug": blog.slug})
-    #     data = {
-    #         "title": "test title",
-    #         "content": content,
-    #         "published": True,
-    #         "keywords": "",
-    #         "podcast_audio": "",
-    #         "explicit": "2",  # 2 -> no
-    #         "block": False,
-    #         "slug": "blog-slug",
-    #     }
-    #     r = client.post(create_url, data)
-    #     assert r.status_code == 302
-    #     bp = Post.objects.get(slug=data["slug"])
-    #     bgs = list(bp.galleries.all())
-    #     assert bp.title == data["title"]
-    #     assert len(bgs) == 1
-    #     assert bgs[0].pk == gallery.pk
-    #     assert len(gallery.images.all()) == 1
+        assert post.galleries.count() == 1
+        assert post.galleries.first() == gallery
+        assert list(post.galleries.first().images.all()) == list(gallery.images.all())

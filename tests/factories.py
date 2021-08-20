@@ -1,18 +1,12 @@
 import factory
 
 from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
 
-from wagtail.core.models import Page, Site
+from wagtail.core.models.i18n import Locale
+from wagtail.core.models import Page, Site, Collection
 
 from cast.models import Blog, Post, Image, Video, Gallery
-
-
-class RootPageFactory(factory.django.DjangoModelFactory):
-    title = "Welcome to your new Wagtail site! (from page factory)"
-
-    class Meta:
-        model = Page
-        django_get_or_create = ("slug",)
 
 
 class SiteFactory(factory.django.DjangoModelFactory):
@@ -50,8 +44,6 @@ class VideoFactory(factory.django.DjangoModelFactory):
 
 
 class GalleryFactory(factory.django.DjangoModelFactory):
-    user = None
-
     class Meta:
         model = Gallery
 
@@ -65,7 +57,6 @@ class PageFactory(factory.django.DjangoModelFactory):
         parent = kwargs.pop("parent")
         page = model_class(*args, **kwargs)
         parent.add_child(instance=page)
-
         return page
 
 
@@ -83,3 +74,34 @@ class PostFactory(PageFactory):
     class Meta:
         model = Post
         django_get_or_create = ("slug",)
+
+
+def get_root_page():
+    locale, _ = Locale.objects.get_or_create(language_code="en")
+    page_content_type, _ = ContentType.objects.get_or_create(model="page", app_label="wagtailcore")
+    root, _ = Page.objects.get_or_create(
+        title="Root",
+        slug="root",
+        content_type=page_content_type,
+        path="0001",
+        depth=1,
+        numchild=1,
+        url_path="/",
+    )
+    homepage, _ = Page.objects.get_or_create(
+        title="Welcome to your new Wagtail site!",
+        slug="home",
+        content_type=page_content_type,
+        path="00010001",
+        depth=2,
+        numchild=0,
+        url_path="/home/",
+        locale=locale,
+    )
+    _ = Collection.objects.get_or_create(
+        name="Root",
+        path="0001",
+        depth=1,
+        numchild=0,
+    )
+    return homepage

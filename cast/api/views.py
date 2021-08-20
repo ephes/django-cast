@@ -136,7 +136,7 @@ class GalleryListView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Gallery.objects.all().filter(user=user)
+        qs = Gallery.objects.all()
         return qs.order_by("-created")
 
 

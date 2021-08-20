@@ -11,7 +11,7 @@ def image(context, pk):
         '<a href="{full}">'
         '  <img class="cast-image" src="{src}" srcset="{srcset}" sizes="100vw"></img>'
         "</a>"
-    ).format(srcset=image.get_srcset(), src=image.img_xs.url, full=image.img_full.url)
+    ).format(full="", srcset="", src="")
     return mark_safe(image_tag)
 
 
@@ -41,7 +41,8 @@ def audio(context, pk):
 
 
 def get_modal_trigger(gallery_key, image, prev_img, next_img):
-    srcset = image.get_srcset()
+    # srcset = image.get_srcset()
+    srcset = ""
     prev_id = "img-{}".format(prev_img.pk) if prev_img is not None else "false"
     next_id = "img-{}".format(next_img.pk) if next_img is not None else "false"
     thumbnail_tag = (
@@ -53,8 +54,8 @@ def get_modal_trigger(gallery_key, image, prev_img, next_img):
         prev=prev_id,
         next=next_id,
         srcset=srcset,
-        src=image.img_xs.url,
-        full=image.img_full.url,
+        src=image.file.url,
+        full=image.file.url,
     )
     return """
         <a src="#" class="cast-gallery-modal" data-toggle="modal" data-target="#galleryModal{key}">
@@ -66,16 +67,17 @@ def get_modal_trigger(gallery_key, image, prev_img, next_img):
 
 
 def get_image_thumb(image):
-    srcset = image.get_srcset()
+    # srcset = image.get_srcset()
+    srcset = ""
     thumbnail_tag = (
         '<img class="cast-gallery-thumbnail" src={src} ' 'srcset="{srcset}"</img>'
-    ).format(src=image.img_xs.url, srcset=srcset)
+    ).format(src="", srcset=srcset)
     return """
         <a href="{full}"">
             {thumbnail_tag}
         </a>
     """.format(
-        thumbnail_tag=thumbnail_tag, full=image.img_full.url
+        thumbnail_tag=thumbnail_tag, full=""
     )
 
 

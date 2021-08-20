@@ -50,15 +50,11 @@ logger = logging.getLogger(__name__)
 
 def image_spec_thumbnail(size):
     processors = [Transpose(), Thumbnail(size, size, crop=False)]
-    return ImageSpecField(
-        source="original", processors=processors, format="JPEG", options={"quality": 60}
-    )
+    return ImageSpecField(source="original", processors=processors, format="JPEG", options={"quality": 60})
 
 
 class Image(TimeStampedModel):
-    user = models.ForeignKey(
-        get_user_model(), on_delete=models.CASCADE, related_name="cast_images"
-    )
+    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, related_name="cast_images")
 
     original = models.ImageField(
         upload_to="cast_images/originals",
@@ -198,9 +194,7 @@ class Video(CollectionMember, TimeStampedModel):
 
     def _get_video_dimensions(self, video_url):
         ffprobe_cmd = 'ffprobe -i "{}"'.format(video_url)
-        result = subprocess.check_output(
-            ffprobe_cmd, shell=True, stderr=subprocess.STDOUT
-        )
+        result = subprocess.check_output(ffprobe_cmd, shell=True, stderr=subprocess.STDOUT)
         lines = result.decode("utf8").split("\n")
         return get_video_dimensions(lines)
 
@@ -213,8 +207,7 @@ class Video(CollectionMember, TimeStampedModel):
             video_url = self.original.path
         width, height = self._get_video_dimensions(video_url)
         poster_cmd = (
-            'ffmpeg -ss {seconds} -i "{video_path}" -vframes 1'
-            " -y -f image2 -s {width}x{height} {poster_path}"
+            'ffmpeg -ss {seconds} -i "{video_path}" -vframes 1' " -y -f image2 -s {width}x{height} {poster_path}"
         ).format(
             video_path=video_url,
             seconds=self.poster_seconds,
@@ -277,7 +270,6 @@ class Video(CollectionMember, TimeStampedModel):
 
 
 class Gallery(TimeStampedModel):
-    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     images = models.ManyToManyField(WagtailImage)
     post_context_key = "gallery"
 
@@ -348,11 +340,7 @@ class Audio(TimeStampedModel):
             -of default=noprint_wrappers=1:nokey=1  \
             '{audio_url}'
         """
-        result = (
-            subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
-            .decode()
-            .strip()
-        )
+        result = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode().strip()
         m = re.match(r"^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
         return timedelta(seconds=int(m["seconds"]), microseconds=int(m["microseconds"]))
 
@@ -475,9 +463,7 @@ class Blog(TimeStampedModel, Page):
     # podcast stuff
 
     # atm it's only used for podcast image
-    itunes_artwork = models.ForeignKey(
-        ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL
-    )
+    itunes_artwork = models.ForeignKey(ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL)
     itunes_categories = models.CharField(
         _("itunes_categories"),
         max_length=512,
@@ -594,9 +580,7 @@ class Post(TimeStampedModel, Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     pub_date = models.DateTimeField(null=True, blank=True)
     visible_date = models.DateTimeField(default=timezone.now)
-    podcast_audio = models.ForeignKey(
-        Audio, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts"
-    )
+    podcast_audio = models.ForeignKey(Audio, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts")
     keywords = models.CharField(
         _("keywords"),
         max_length=255,
@@ -700,17 +684,25 @@ class Post(TimeStampedModel, Page):
             "audio": {a.pk: a for a in self.audios.all()},
         }
 
+    def get_or_create_gallery(self, images):
+        gallery = Gallery.objects.filter(images__in=images).first()
+        if gallery is None:
+            gallery = Gallery.objects.create()
+            for image in images:
+                gallery.images.add(image)
+        return gallery
+
     @property
     def media_from_body(self):
         media = []
         for content_block in self.body:
             for block in content_block.value:
                 if block.block_type == "gallery":
-                    for image in block.value:
-                        media.append(("image", image.id))
+                    media_model = self.get_or_create_gallery(block.value)
                 else:
-                    if block.block_type in self.media_model_lookup:
-                        media.append((block.block_type, block.value.id))
+                    media_model = block.value
+                if block.block_type in self.media_model_lookup:
+                    media.append((block.block_type, media_model.id))
         return media
 
     @property
@@ -733,9 +725,7 @@ class Post(TimeStampedModel, Page):
             except KeyError:
                 media_object = model_lookup[model_name].objects.get(pk=model_pk)
                 media_attr_lookup[model_name].add(media_object)
-                logger.info(
-                    "added: {} {} {}".format(model_name, model_pk, media_object)
-                )
+                logger.info("added: {} {} {}".format(model_name, model_pk, media_object))
 
     def remove_obsolete_media_objects(self):
         media_from_db = {k: set(v.keys()) for k, v in self.media_lookup.items()}
@@ -758,11 +748,7 @@ class Post(TimeStampedModel, Page):
 
     @property
     def comments_are_enabled(self):
-        return (
-            appsettings.CAST_COMMENTS_ENABLED
-            and self.blog.comments_enabled
-            and self.comments_enabled
-        )
+        return appsettings.CAST_COMMENTS_ENABLED and self.blog.comments_enabled and self.comments_enabled
 
     def get_context(self, *args, **kwargs):
         context = super().get_context(*args, **kwargs)
@@ -777,9 +763,7 @@ class Post(TimeStampedModel, Page):
 
 
 class ChapterMark(models.Model):
-    audio = models.ForeignKey(
-        Audio, on_delete=models.CASCADE, related_name="chaptermarks"
-    )
+    audio = models.ForeignKey(Audio, on_delete=models.CASCADE, related_name="chaptermarks")
     start = models.TimeField(_("Start time of chaptermark"))
     title = models.CharField(max_length=255)
     link = models.URLField(max_length=2000, null=True, blank=True)
