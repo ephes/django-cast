@@ -27,7 +27,7 @@ from .serializers import (
 
 from ..forms import ImageForm, VideoForm
 
-from ..viewmixins import AddRequestUserMixin
+from ..views.viewmixins import AddRequestUserMixin
 from .viewmixins import FileUploadResponseMixin
 
 from ..models import Image, Video, Gallery, Audio, Request

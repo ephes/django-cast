@@ -5,7 +5,7 @@ from django.template import Template
 
 from django.shortcuts import get_object_or_404
 
-from .models import Blog
+from ..models import Blog
 
 logger = logging.getLogger(__name__)
 
