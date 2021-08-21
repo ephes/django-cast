@@ -290,29 +290,40 @@ def post_data_wagtail():
 
 
 @pytest.fixture()
-def body():
-    return json.dumps(
-        [
-            {
-                "type": "overview",
-                "value": [
-                    {
-                        "type": "heading",
-                        "value": "in_all heading",
-                    }
-                ],
-            },
-            {
-                "type": "detail",
-                "value": [
-                    {
-                        "type": "heading",
-                        "value": "only_in_detail heading",
-                    }
-                ],
-            },
-        ]
-    )
+def python_body():
+    return [
+        {
+            "type": "overview",
+            "value": [
+                {
+                    "type": "heading",
+                    "value": "in_all heading",
+                }
+            ],
+        },
+        {
+            "type": "detail",
+            "value": [
+                {
+                    "type": "heading",
+                    "value": "only_in_detail heading",
+                }
+            ],
+        },
+    ]
+
+
+@pytest.fixture()
+def body(python_body):
+    return json.dumps(python_body)
+
+
+@pytest.fixture()
+def body_with_gallery(python_body, gallery):
+    image_pks = [img.pk for img in gallery.images.all()]
+    gallery_body = python_body.copy()
+    gallery_body[0]["value"].append({"type": "gallery", "value": image_pks})
+    return json.dumps(gallery_body)
 
 
 @pytest.fixture()
@@ -325,6 +336,19 @@ def post(blog, body):
         pub_date=timezone.now(),
         body=body,
     )
+    return post
+
+@pytest.fixture()
+def post_with_gallery(blog, body_with_gallery, gallery):
+    post = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        body=body_with_gallery,
+    )
+    post.galleries.add(gallery)
     return post
 
 

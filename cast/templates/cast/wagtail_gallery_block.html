@@ -1,9 +1,8 @@
 {% load wagtail_srcset_tags %}
 
-<h1>hello world</h1>
-
 <div class="cast-gallery-container">
-{% for image in block.value %}
+{% for image in value %}
+  <h3>image: {{ image.pk }}</h3>
   <a
     src="#"
     class="cast-gallery-modal"
