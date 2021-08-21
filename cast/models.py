@@ -444,12 +444,6 @@ class HomePage(Page):
         return super().serve(request)
 
 
-class BlogIndexPage(Page):  # -> Blog
-    intro = RichTextField(blank=True)
-
-    content_panels = Page.content_panels + [FieldPanel("intro", classname="full")]
-
-
 class Blog(TimeStampedModel, Page):
     author = models.CharField(max_length=255, default=None, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
@@ -501,6 +495,8 @@ class Blog(TimeStampedModel, Page):
         FieldPanel("email"),
     ]
 
+    subpage_types = ["cast.Post"]
+
     def __str__(self):
         return self.title
 
@@ -532,25 +528,6 @@ class Blog(TimeStampedModel, Page):
     @property
     def published_posts(self):
         return Post.objects.live().descendant_of(self).order_by("-visible_date")
-
-
-# class BlogPage(Page):  # -> Post
-#     date = models.DateField("Post date")
-#     body = StreamField([
-#         ('heading', blocks.CharBlock(classname="full title")),
-#         ('paragraph', blocks.RichTextBlock()),
-#         ('image', ImageChooserBlock(template="cast/wagtail_image.html")),
-#         ('gallery', GalleryBlock(ImageChooserBlock())),
-#     ])
-
-#     search_fields = Page.search_fields + [
-#         index.SearchField("body"),
-#     ]
-
-#     content_panels = Page.content_panels + [
-#         FieldPanel("date"),
-#         StreamFieldPanel("body"),
-#     ]
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -641,6 +618,7 @@ class Post(TimeStampedModel, Page):
         StreamFieldPanel("body"),
     ]
     template = "cast/post.html"
+    parent_page_types = ["cast.Blog"]
 
     # managers
     objects = PageManager()
