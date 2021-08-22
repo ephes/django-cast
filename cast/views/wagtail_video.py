@@ -105,7 +105,6 @@ def add(request):
         video = Video(user=request.user)
         form = VideoForm(user=request.user, instance=video)
 
-    print("form errors: ", form.errors)
     return render(
         request,
         "cast/wagtail/video_add.html",
