@@ -1,5 +1,5 @@
 from .views import BlogsListView, BlogDetailView, PostsListView, PostDetailView, PostCreateView, PostUpdateView
-from .wagtail import (
+from .wagtail_video import (
     video_index,
     video_add,
     video_edit,

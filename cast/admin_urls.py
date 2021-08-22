@@ -1,6 +1,14 @@
 from django.urls import path
 
-from .wagtail_views import video_index, video_add, video_edit, video_delete, video_chooser, video_chooser_upload, video_chosen
+from .views.wagtail_video import (
+    video_index,
+    video_add,
+    video_edit,
+    video_delete,
+    video_chooser,
+    video_chooser_upload,
+    video_chosen,
+)
 
 
 urlpatterns = [
