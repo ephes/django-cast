@@ -154,6 +154,12 @@ def user():
 
 
 @pytest.fixture()
+def authenticated_client(client, user):
+    client.login(username=user.username, password=user._password)
+    return client
+
+
+@pytest.fixture()
 def image(user, image_1px):
     image = Image(user=user, original=image_1px)
     image.save()
