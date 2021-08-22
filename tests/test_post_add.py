@@ -16,6 +16,8 @@ class TestPostAdd:
 
         # redirect to login
         assert r.status_code == 302
+        login_url = reverse("wagtailadmin_login")
+        assert login_url in r.url
 
     def test_get_add_form_post_authenticated(self, client, blog):
         add_url = reverse("wagtailadmin_pages:add_subpage", args=(blog.id,))
