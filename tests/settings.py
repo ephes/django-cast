@@ -65,6 +65,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# only gets invoked for python manage.py test
 TEST_RUNNER = "cast.runner.PytestTestRunner"
 
 # STATIC FILE CONFIGURATION
