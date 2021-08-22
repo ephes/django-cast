@@ -18,7 +18,7 @@ def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=20):
     return paginator, page
 
 @vary_on_headers("X-Requested-With")
-def video_index(request):
+def index(request):
     ordering = "-created"
     videos = Video.objects.all().order_by(ordering)
 
@@ -74,7 +74,7 @@ from ..models import Video
 from ..wagtail_forms import get_video_form
 
 
-def video_add(request):
+def add(request):
     VideoForm = get_video_form()
     if request.POST:
         video = Video(user=request.user)
@@ -113,7 +113,7 @@ def video_add(request):
     )
 
 
-def video_edit(request, video_id):
+def edit(request, video_id):
     VideoForm = get_video_form()
     video = get_object_or_404(Video, id=video_id)
 
@@ -182,7 +182,7 @@ def video_edit(request, video_id):
     )
 
 
-def video_delete(request, video_id):
+def delete(request, video_id):
     video = get_object_or_404(Video, id=video_id)
 
     if request.POST:
@@ -193,7 +193,7 @@ def video_delete(request, video_id):
     return render(request, "cast/wagtail/video_confirm_delete.html", {"video": video})
 
 
-def video_chooser(request):
+def chooser(request):
     ordering = "-created"
     videos = Video.objects.all().order_by(ordering)
 
@@ -220,7 +220,7 @@ def video_chooser(request):
     )
 
 
-def get_video_data(video):
+def get_data(video):
     """
     helper function: given a video, return the data to pass back to the
     chooser panel as the result of ModalWorkflow
@@ -233,7 +233,7 @@ def get_video_data(video):
     }
 
 
-def video_chosen(request, video_id):
+def chosen(request, video_id):
     video = get_object_or_404(Video, id=video_id)
 
     return render_modal_workflow(
@@ -245,7 +245,7 @@ def video_chosen(request, video_id):
     )
 
 
-def video_chooser_upload(request):
+def chooser_upload(request):
     VideoForm = get_video_form()
 
     if request.method == "POST":
