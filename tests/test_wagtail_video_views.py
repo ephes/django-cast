@@ -28,8 +28,24 @@ class TestVideoIndex:
     # test for video in list of videos
 
 
-class TestVideoAdd:
+class TestVideoAddAuthenticated:
     pytestmark = pytest.mark.django_db
+    add_url = reverse("castmedia:video_add")
 
-    def test_add_video(self, client, video):
-        assert False
+    @pytest.fixture(autouse=True)
+    def login(self, client, user):
+        _ = client.login(username=user.username, password=user._password)
+        self.client = client
+        self.user = user
+
+    @pytest.fixture(autouse=True)
+    def setup_root_page(self, root_page):
+        # without this, there's no wagtail root page
+        self.root_page = root_page
+
+    def test_get_add_video(self):
+        r = self.client.get(self.add_url)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert "Uploading…" in content
