@@ -14,7 +14,6 @@ class TestVideoIndex:
         assert r.status_code == 302
         login_url = reverse("wagtailadmin_login")
         assert login_url in r.url
-        assert False
     
     def test_get_video_index(self, client, user):
         _ = client.login(username=user.username, password=user._password)
@@ -28,3 +27,9 @@ class TestVideoIndex:
 
     # test for video in list of videos
 
+
+class TestVideoAdd:
+    pytestmark = pytest.mark.django_db
+
+    def test_add_video(self, client, video):
+        assert False
