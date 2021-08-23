@@ -34,11 +34,6 @@ class TestVideoAdd:
     pytestmark = pytest.mark.django_db
     add_url = reverse("castmedia:video_add")
 
-    @pytest.fixture(autouse=True)
-    def setup_root_page(self, root_page):
-        # without this, there's no wagtail root page
-        self.root_page = root_page
-
     def test_get_add_video(self, authenticated_client):
         r = authenticated_client.get(self.add_url)
 

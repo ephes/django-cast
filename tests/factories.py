@@ -75,33 +75,3 @@ class PostFactory(PageFactory):
         model = Post
         django_get_or_create = ("slug",)
 
-
-def get_root_page():
-    locale, _ = Locale.objects.get_or_create(language_code="en")
-    page_content_type, _ = ContentType.objects.get_or_create(model="page", app_label="wagtailcore")
-    root, _ = Page.objects.get_or_create(
-        title="Root",
-        slug="root",
-        content_type=page_content_type,
-        path="0001",
-        depth=1,
-        numchild=1,
-        url_path="/",
-    )
-    homepage, _ = Page.objects.get_or_create(
-        title="Welcome to your new Wagtail site!",
-        slug="home",
-        content_type=page_content_type,
-        path="00010001",
-        depth=2,
-        numchild=0,
-        url_path="/home/",
-        locale=locale,
-    )
-    _ = Collection.objects.get_or_create(
-        name="Root",
-        path="0001",
-        depth=1,
-        numchild=0,
-    )
-    return homepage

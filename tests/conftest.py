@@ -40,28 +40,7 @@ from .factories import (
     BlogFactory,
     VideoFactory,
     GalleryFactory,
-    get_root_page,
 )
-
-
-@pytest.fixture(scope="session")
-def inject_before_django_db_setup():
-    tests_path = Path("tests")
-    test_db_path = tests_path / "test_database.sqlite3"
-    pristine_db_path = tests_path / "test_database.pristine.sqlite3"
-    from django.conf import settings
-    # print("before db setup: ", settings.DATABASES)
-    # shutil.copy(pristine_db_path, test_db_path)
-    # print("tests path: ", tests_path)
-    # print("inject_before django_db_setup")
-
-
-@pytest.fixture(scope="session")
-def django_db_setup(inject_before_django_db_setup, django_db_setup) -> None:
-    import django.db.backends.sqlite3.creation
-    from django.conf import settings
-    #print("after db setup: ", settings.DATABASES)
-    #print("after django_db_setup")
 
 
 @pytest.fixture(scope="module")
@@ -111,7 +90,7 @@ def read_test_mp4(fixture_dir):
 
 
 @pytest.fixture()
-def minimal_mp4(fixture_dir, root_page):
+def minimal_mp4(fixture_dir):
     mp4 = read_test_mp4(fixture_dir)
     simple_mp4 = SimpleUploadedFile(name="test.mp4", content=mp4, content_type="video/mp4")
     return simple_mp4
@@ -193,17 +172,14 @@ def image(user, image_1px):
 
 
 @pytest.fixture()
-def wagtail_image(image_1px, root_page):
-    # root_page is needed because collections must not be empty
-    # without file attribute set, image chooser is broken
+def wagtail_image(image_1px):
     image = WagtailImage(file=image_1px)
     image.save()
     return image
 
 
 @pytest.fixture()
-def video_with_poster(user, minimal_mp4, image_1px, root_page):
-    # root_page is needed because collections must not be empty
+def video_with_poster(user, minimal_mp4, image_1px):
     video = Video(user=user, original=minimal_mp4, poster=image_1px)
     video.save()
     yield video
@@ -257,13 +233,7 @@ def file_instance(user, m4a_audio):
 
 
 @pytest.fixture()
-def root_page():
-    return get_root_page()
-
-
-@pytest.fixture()
 def site():
-    # site = Site.objects.create(hostname="localhost", root_page_id=root_page.id, is_default_site=True)
     return Site.objects.first()
 
 
@@ -296,7 +266,7 @@ def blog_with_itunes_categories(user, site):
 
 
 @pytest.fixture()
-def post_data(root_page):
+def post_data():
     return {"title": "foobar", "content": "blub", "explicit": "2", "pub_date": ""}
 
 
@@ -478,8 +448,7 @@ def img_templ():
 
 
 @pytest.fixture()
-def video(user, root_page):
-    # root_page is needed because collections must not be empty
+def video(user):
     video = VideoFactory.build()
     video.user = user
     video.save(poster=False)
