@@ -2,6 +2,7 @@ import io
 import os
 import json
 import pytz
+import shutil
 import pytest
 
 from pathlib import Path
@@ -10,6 +11,7 @@ from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
 from django.test.client import RequestFactory
+from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from rest_framework.test import APIClient
@@ -40,6 +42,26 @@ from .factories import (
     GalleryFactory,
     get_root_page,
 )
+
+
+@pytest.fixture(scope="session")
+def inject_before_django_db_setup():
+    tests_path = Path("tests")
+    test_db_path = tests_path / "test_database.sqlite3"
+    pristine_db_path = tests_path / "test_database.pristine.sqlite3"
+    from django.conf import settings
+    # print("before db setup: ", settings.DATABASES)
+    # shutil.copy(pristine_db_path, test_db_path)
+    # print("tests path: ", tests_path)
+    # print("inject_before django_db_setup")
+
+
+@pytest.fixture(scope="session")
+def django_db_setup(inject_before_django_db_setup, django_db_setup) -> None:
+    import django.db.backends.sqlite3.creation
+    from django.conf import settings
+    #print("after db setup: ", settings.DATABASES)
+    #print("after django_db_setup")
 
 
 @pytest.fixture(scope="module")
@@ -147,9 +169,11 @@ def m4a_audio(fixture_dir):
 
 # Models
 @pytest.fixture()
-def user():
-    user = UserFactory(is_superuser=True)  # FIXME use proper wagtail edit permissions
+def user(settings):
+    user = UserFactory()  # FIXME use proper wagtail edit permissions
     user._password = "password"
+    group = Group.objects.get(name="Moderators")
+    group.user_set.add(user)
     return user
 
 
@@ -238,9 +262,9 @@ def root_page():
 
 
 @pytest.fixture()
-def site(root_page):
-    site = Site.objects.create(hostname="localhost", root_page_id=root_page.id, is_default_site=True)
-    return site
+def site():
+    # site = Site.objects.create(hostname="localhost", root_page_id=root_page.id, is_default_site=True)
+    return Site.objects.first()
 
 
 @pytest.fixture()
@@ -343,6 +367,7 @@ def post(blog, body):
         body=body,
     )
     return post
+
 
 @pytest.fixture()
 def post_with_gallery(blog, body_with_gallery, gallery):

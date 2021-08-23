@@ -12,7 +12,13 @@ USE_TZ = True
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "mbmcf(_0(y@^nlf6w#1nq%s7&nzcfvx#ok$iwu8)i^d+^96h*="
 
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": "tests/test_database.sqlite3"}}
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": "tests/test_database.sqlite3",
+        "TEST": {"NAME": "tests/test_database.sqlite3"},
+    },
+}
 
 ROOT_URLCONF = "tests.urls"
 

@@ -48,3 +48,4 @@ class TestVideoAdd:
 
     def test_post_add_video(self, authenticated_client):
         r = authenticated_client.post(self.add_url)
+        assert False
