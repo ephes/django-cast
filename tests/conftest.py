@@ -149,7 +149,7 @@ def m4a_audio(fixture_dir):
 # Models
 @pytest.fixture()
 def user(settings):
-    user = UserFactory()  # FIXME use proper wagtail edit permissions
+    user = UserFactory()
     user._password = "password"
     group = Group.objects.get(name="Moderators")
     group.user_set.add(user)
@@ -245,11 +245,7 @@ def blog(user, site):
 @pytest.fixture()
 def blog_with_artwork(user, itunes_artwork, site):
     return BlogFactory(
-        owner=user,
-        title="testblog",
-        slug="testblog",
-        itunes_artwork=itunes_artwork,
-        parent=site.root_page,
+        owner=user, title="testblog", slug="testblog", itunes_artwork=itunes_artwork, parent=site.root_page,
     )
 
 
@@ -257,11 +253,7 @@ def blog_with_artwork(user, itunes_artwork, site):
 def blog_with_itunes_categories(user, site):
     categories = {"foo": ["baz"]}
     return BlogFactory(
-        owner=user,
-        title="testblog",
-        slug="testblog",
-        itunes_categories=json.dumps(categories),
-        parent=site.root_page,
+        owner=user, title="testblog", slug="testblog", itunes_categories=json.dumps(categories), parent=site.root_page,
     )
 
 
@@ -292,24 +284,8 @@ def post_data_wagtail():
 @pytest.fixture()
 def python_body():
     return [
-        {
-            "type": "overview",
-            "value": [
-                {
-                    "type": "heading",
-                    "value": "in_all heading",
-                }
-            ],
-        },
-        {
-            "type": "detail",
-            "value": [
-                {
-                    "type": "heading",
-                    "value": "only_in_detail heading",
-                }
-            ],
-        },
+        {"type": "overview", "value": [{"type": "heading", "value": "in_all heading",}],},
+        {"type": "detail", "value": [{"type": "heading", "value": "only_in_detail heading",}],},
     ]
 
 
@@ -329,12 +305,7 @@ def body_with_gallery(python_body, gallery):
 @pytest.fixture()
 def post(blog, body):
     post = PostFactory(
-        owner=blog.owner,
-        parent=blog,
-        title="test entry",
-        slug="test-entry",
-        pub_date=timezone.now(),
-        body=body,
+        owner=blog.owner, parent=blog, title="test entry", slug="test-entry", pub_date=timezone.now(), body=body,
     )
     return post
 
@@ -355,13 +326,7 @@ def post_with_gallery(blog, body_with_gallery, gallery):
 
 @pytest.fixture()
 def unpublished_post(blog):
-    post = PostFactory(
-        owner=blog.owner,
-        parent=blog,
-        title="test entry",
-        slug="test-entry",
-        pub_date=None,
-    )
+    post = PostFactory(owner=blog.owner, parent=blog, title="test entry", slug="test-entry", pub_date=None,)
     post.unpublish()
     post.refresh_from_db()
     return post
