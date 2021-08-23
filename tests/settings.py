@@ -6,7 +6,7 @@ import environ
 ROOT_DIR = environ.Path(__file__) - 1
 APPS_DIR = ROOT_DIR.path("cast")
 
-DEBUG = True
+DEBUG = False
 USE_TZ = True
 
 # SECURITY WARNING: keep the secret key used in production secret!
