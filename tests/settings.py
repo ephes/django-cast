@@ -16,6 +16,8 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": "tests/test_database.sqlite3",
+        # if this is not set, an in memory database is used
+        # for tests by default _get_test_db_name
         "TEST": {"NAME": "tests/test_database.sqlite3"},
     },
 }
