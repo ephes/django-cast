@@ -106,3 +106,29 @@ class TestVideoAdd:
         actual_tags = set([t.name for t in video.tags.all()])
         expected_tags = set(post_data["tags"].split(","))
         assert actual_tags == expected_tags
+
+
+class TestVideoEdit:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_edit_video(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.video_edit)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert "Delete" in content
+
+    def test_post_edit_video(self, authenticated_client, video_urls):
+        video = video_urls.video
+        post_data = {
+            "title": "changed title",
+        }
+        r = authenticated_client.post(video_urls.video_edit, post_data)
+
+        # make sure we get redirected to video_index
+        assert r.status_code == 302
+        assert r.url == video_urls.video_index
+
+        # make sure title was changes
+        video.refresh_from_db()
+        assert video.title == post_data["title"]
