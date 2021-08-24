@@ -156,3 +156,25 @@ class TestVideoDelete:
         # make sure video was deleted
         with pytest.raises(Video.DoesNotExist):
             video.refresh_from_db()
+
+
+class TestVideoChosen:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_chosen_video_not_found(self, authenticated_client, video_urls):
+        video = video_urls.video
+        video.delete()
+        r = authenticated_client.get(video_urls.video_chosen)
+
+        assert r.status_code == 404
+
+
+    def test_get_chosen_video_success(self, authenticated_client, video_urls):
+        video = video_urls.video
+        r = authenticated_client.get(video_urls.video_chosen)
+
+        assert r.status_code == 200
+
+        # make sure returned data belongs to the right video instance
+        data = r.json()
+        assert data["result"]["title"] == video.title
