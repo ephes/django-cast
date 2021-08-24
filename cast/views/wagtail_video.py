@@ -97,7 +97,11 @@ def add(request):
         video = Video(user=request.user)
         form = VideoForm(user=request.user, instance=video)
 
-    return render(request, "cast/wagtail/video_add.html", {"form": form},)
+    return render(
+        request,
+        "cast/wagtail/video_add.html",
+        {"form": form},
+    )
 
 
 def edit(request, video_id):
@@ -150,7 +154,12 @@ def edit(request, video_id):
     return render(
         request,
         "cast/wagtail/video_edit.html",
-        {"video": video, "filesize": filesize, "form": form, "user_can_delete": True,},
+        {
+            "video": video,
+            "filesize": filesize,
+            "form": form,
+            "user_can_delete": True,
+        },
     )
 
 
@@ -192,19 +201,6 @@ def chooser(request):
     )
 
 
-def get_data(video):
-    """
-    helper function: given a video, return the data to pass back to the
-    chooser panel as the result of ModalWorkflow
-    """
-
-    return {
-        "id": video.id,
-        "title": video.title,
-        "edit_url": reverse("castmedia:video_edit", args=(video.id,)),
-    }
-
-
 def get_video_data(video):
     """
     helper function: given a video, return the json to pass back to the
@@ -221,7 +217,11 @@ def chosen(request, video_id):
     video = get_object_or_404(Video, id=video_id)
 
     return render_modal_workflow(
-        request, None, None, None, json_data={"step": "video_chosen", "result": get_video_data(video)},
+        request,
+        None,
+        None,
+        None,
+        json_data={"step": "video_chosen", "result": get_video_data(video)},
     )
 
 
@@ -240,7 +240,11 @@ def chooser_upload(request):
                 backend.add(video)
 
             return render_modal_workflow(
-                request, None, None, None, json_data={"step": "video_chosen", "result": get_video_data(video)},
+                request,
+                None,
+                None,
+                None,
+                json_data={"step": "video_chosen", "result": get_video_data(video)},
             )
 
     ordering = "-created"
@@ -259,5 +263,9 @@ def chooser_upload(request):
         "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
     }
     return render_modal_workflow(
-        request, "cast/wagtail/video_chooser_chooser.html", None, context, json_data={"step": "chooser"},
+        request,
+        "cast/wagtail/video_chooser_chooser.html",
+        None,
+        context,
+        json_data={"step": "chooser"},
     )
