@@ -189,3 +189,37 @@ class TestVideoChooser:
         assert r.status_code == 200
         content = r.content.decode("utf-8")
         assert video.title in content
+
+
+class TestVideoChooserUpload:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_video_in_chooser_upload(self, authenticated_client, video_urls):
+        video = video_urls.video
+        r = authenticated_client.get(video_urls.video_chooser_upload)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert video.title in content
+
+
+    def test_post_upload_video(self, authenticated_client, minimal_mp4):
+        upload_url = reverse(f"castmedia:video_chooser_upload")
+
+        minimal_mp4.seek(0)
+        post_data = {
+            "media-chooser-upload-title": "foobar",
+            "media-chooser-upload-tags": "foo,bar,baz",
+            "media-chooser-upload-original": minimal_mp4,
+        }
+        r = authenticated_client.post(upload_url, post_data)
+
+        assert r.status_code == 200
+
+        # make sure field were saved correctly
+        video = Video.objects.first()
+        assert video.title == post_data["media-chooser-upload-title"]
+
+        actual_tags = set([t.name for t in video.tags.all()])
+        expected_tags = set(post_data["media-chooser-upload-tags"].split(","))
+        assert actual_tags == expected_tags
