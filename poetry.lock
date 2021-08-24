@@ -307,6 +307,18 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "dj-inmemorystorage"
+version = "2.1.0"
+description = "A non-persistent in-memory data storage backend for Django."
+category = "dev"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+Django = ">=1.11"
+six = ">=1.10"
+
+[[package]]
 name = "django"
 version = "3.2.6"
 description = "A high-level Python Web framework that encourages rapid development and clean, pragmatic design."
@@ -2187,7 +2199,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "7ffcd13cabb1c7f023942c9c63d7e38c93cb6055c6a4d9f85b9b2b22240fb3aa"
+content-hash = "3e71eb6471cb2f3907576725599250dcd0bd15737434a43cbb581d3afe82d71c"
 
 [metadata.files]
 alabaster = [
@@ -2472,6 +2484,10 @@ defusedxml = [
 distlib = [
     {file = "distlib-0.3.2-py2.py3-none-any.whl", hash = "sha256:23e223426b28491b1ced97dc3bbe183027419dfc7982b4fa2f05d5f3ff10711c"},
     {file = "distlib-0.3.2.zip", hash = "sha256:106fef6dc37dd8c0e2c0a60d3fca3e77460a48907f335fa28420463a6f799736"},
+]
+dj-inmemorystorage = [
+    {file = "dj-inmemorystorage-2.1.0.tar.gz", hash = "sha256:1771801613414262803a1a1e97dafd2b7a563e78fbcbfa2b6f841c9d8e7b872a"},
+    {file = "dj_inmemorystorage-2.1.0-py2.py3-none-any.whl", hash = "sha256:81aa007a7cdb1899b3cd92404f656c82cd690a831b8698a43045f859d7276945"},
 ]
 django = [
     {file = "Django-3.2.6-py3-none-any.whl", hash = "sha256:7f92413529aa0e291f3be78ab19be31aefb1e1c9a52cd59e130f505f27a51f13"},

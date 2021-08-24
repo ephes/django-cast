@@ -39,7 +39,6 @@ class TestVideoEndpointsNotAuthenticated:
     pytestmark = pytest.mark.django_db
 
     def test_get_all(self, client, video_urls):
-
         for view_name, url in video_urls.urls.items():
             r = client.get(url)
 

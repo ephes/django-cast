@@ -166,9 +166,7 @@ def authenticated_client(client, user):
 def image(user, image_1px):
     image = Image(user=user, original=image_1px)
     image.save()
-    yield image
-    # teardown
-    os.unlink(image.original.path)
+    return image
 
 
 @pytest.fixture()
@@ -182,27 +180,19 @@ def wagtail_image(image_1px):
 def video_with_poster(user, minimal_mp4, image_1px):
     video = Video(user=user, original=minimal_mp4, poster=image_1px)
     video.save()
-    yield video
-    # teardown
-    os.unlink(video.original.path)
-    os.unlink(video.poster.path)
-    try:
-        os.unlink(video.poster_thumbnail.path)
-    except FileNotFoundError:
-        pass
+    return video
 
 
 @pytest.fixture()
 def itunes_artwork(image_1px):
     ia = ItunesArtWork(original=image_1px)
     ia.save()
-    yield ia
-    # teardown
-    os.unlink(ia.original.path)
+    return ia
 
 
 @pytest.fixture()
-def audio(user, m4a_audio):
+def audio(user, m4a_audio, settings):
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     audio = Audio(user=user, m4a=m4a_audio)
     audio.save()
     yield audio
@@ -225,11 +215,9 @@ def chaptermarks(audio):
 
 @pytest.fixture()
 def file_instance(user, m4a_audio):
-    _ = File(user=user, original=m4a_audio)
-    _.save()
-    yield _
-    # teardown
-    os.unlink(_.original.path)
+    file_instance = File(user=user, original=m4a_audio)
+    file_instance.save()
+    return file_instance
 
 
 @pytest.fixture()
