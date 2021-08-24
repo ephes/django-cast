@@ -403,6 +403,7 @@ def img_templ():
 @pytest.fixture()
 def video(user):
     video = VideoFactory.build()
+    video.title = "video title"
     video.user = user
     video.save(poster=False)
     return video

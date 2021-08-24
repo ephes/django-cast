@@ -23,6 +23,7 @@ def get_endpoint_urls_with_args(video):
 
 class VideoUrls:
     def __init__(self, video):
+        self.video = video
         self.urls = get_endpoint_urls_without_args()
         self.urls.update(get_endpoint_urls_with_args(video))
 
@@ -57,17 +58,19 @@ class TestAllVideoEndpoints:
 
 class TestVideoIndex:
     pytestmark = pytest.mark.django_db
-    index_url = reverse("castmedia:video_index")
 
     def test_get_video_index(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_index, follow=True)
+        r = authenticated_client.get(video_urls.video_index)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
+
+        # make sure it's the media results page
         assert "html" in content
         assert "media-results" in content
 
-    # test for video in list of videos
+        # make sure video_urls.video is included in results
+        assert video_urls.video.title in content
 
 
 class TestVideoAdd:
