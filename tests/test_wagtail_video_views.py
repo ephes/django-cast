@@ -88,7 +88,6 @@ class TestVideoAdd:
     def test_post_add_video(self, authenticated_client, minimal_mp4):
         add_url = reverse(f"castmedia:video_add")
 
-        minimal_mp4.seek(0)
         post_data = {
             "title": "foobar",
             "tags": "foo,bar,baz",
