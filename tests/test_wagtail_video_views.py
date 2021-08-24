@@ -168,7 +168,6 @@ class TestVideoChosen:
 
         assert r.status_code == 404
 
-
     def test_get_chosen_video_success(self, authenticated_client, video_urls):
         video = video_urls.video
         r = authenticated_client.get(video_urls.video_chosen)
@@ -178,3 +177,15 @@ class TestVideoChosen:
         # make sure returned data belongs to the right video instance
         data = r.json()
         assert data["result"]["title"] == video.title
+
+
+class TestVideoChooser:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_video_in_chooser(self, authenticated_client, video_urls):
+        video = video_urls.video
+        r = authenticated_client.get(video_urls.video_chooser)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert video.title in content
