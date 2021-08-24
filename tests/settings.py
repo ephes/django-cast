@@ -168,7 +168,7 @@ COMMENTS_APP = "fluent_comments"
 # For Django >= 3.2 - auto field
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# this provided a 70% speedup
+# This provided a 70% speedup
 # use a faster password hasher - dont do this in production, it's only for testing
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
