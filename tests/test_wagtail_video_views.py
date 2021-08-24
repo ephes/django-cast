@@ -74,6 +74,20 @@ class TestVideoIndex:
         # make sure video_urls.video is included in results
         assert video_urls.video.title in content
 
+    def test_get_video_index_ajax(self, authenticated_client, video_urls):
+        headers = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+        r = authenticated_client.get(video_urls.video_index, **headers)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+
+        # make sure it's the media results page
+        assert "table" in content
+        assert "listing" in content
+
+        # make sure video_urls.video is included in results
+        assert video_urls.video.title in content
+
 
 class TestVideoAdd:
     pytestmark = pytest.mark.django_db
@@ -202,15 +216,13 @@ class TestVideoChooserUpload:
         content = r.content.decode("utf-8")
         assert video.title in content
 
-
     def test_post_upload_video(self, authenticated_client, minimal_mp4):
         upload_url = reverse(f"castmedia:video_chooser_upload")
-
-        minimal_mp4.seek(0)
+        prefix = "media-chooser-upload"
         post_data = {
-            "media-chooser-upload-title": "foobar",
-            "media-chooser-upload-tags": "foo,bar,baz",
-            "media-chooser-upload-original": minimal_mp4,
+            f"{prefix}-title": "foobar",
+            f"{prefix}-tags": "foo,bar,baz",
+            f"{prefix}-original": minimal_mp4,
         }
         r = authenticated_client.post(upload_url, post_data)
 
@@ -218,8 +230,8 @@ class TestVideoChooserUpload:
 
         # make sure field were saved correctly
         video = Video.objects.first()
-        assert video.title == post_data["media-chooser-upload-title"]
+        assert video.title == post_data[f"{prefix}-title"]
 
         actual_tags = set([t.name for t in video.tags.all()])
-        expected_tags = set(post_data["media-chooser-upload-tags"].split(","))
+        expected_tags = set(post_data[f"{prefix}-tags"].split(","))
         assert actual_tags == expected_tags
