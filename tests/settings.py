@@ -177,3 +177,8 @@ PASSWORD_HASHERS = [
 # For tests which need to run over a file in filesystem
 # (ffprobe for audio duration etc) overwrite settings with fixture
 DEFAULT_FILE_STORAGE = "inmemorystorage.InMemoryStorage"
+
+# Use in memory cache for tests
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+}
