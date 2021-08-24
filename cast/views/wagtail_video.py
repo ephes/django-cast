@@ -79,7 +79,6 @@ def add(request):
         video = Video(user=request.user)
         form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
         if form.is_valid():
-            print("form is valid?!")
             form.save()
 
             # Reindex the media entry to make sure all tags are indexed

@@ -2,6 +2,8 @@ import pytest
 
 from django.urls import reverse
 
+from cast.models import Video
+
 
 def get_endpoint_urls_without_args():
     urls = {}
@@ -75,7 +77,6 @@ class TestVideoIndex:
 
 class TestVideoAdd:
     pytestmark = pytest.mark.django_db
-    add_url = reverse("castmedia:video_add")
 
     def test_get_add_video(self, authenticated_client, video_urls):
         r = authenticated_client.get(video_urls.video_add)
@@ -84,6 +85,25 @@ class TestVideoAdd:
         content = r.content.decode("utf-8")
         assert "Uploading…" in content
 
-    # def test_post_add_video(self, authenticated_client):
-    #     r = authenticated_client.post(self.add_url)
-    #     assert False
+    def test_post_add_video(self, authenticated_client, minimal_mp4):
+        add_url = reverse(f"castmedia:video_add")
+
+        minimal_mp4.seek(0)
+        post_data = {
+            "title": "foobar",
+            "tags": "foo,bar,baz",
+            "original": minimal_mp4,
+        }
+        r = authenticated_client.post(add_url, post_data)
+
+        # make sure we get redirected to video_index
+        assert r.status_code == 302
+        assert r.url == reverse(f"castmedia:video_index")
+
+        # make sure field were saved correctly
+        video = Video.objects.first()
+        assert video.title == post_data["title"]
+
+        actual_tags = set([t.name for t in video.tags.all()])
+        expected_tags = set(post_data["tags"].split(","))
+        assert actual_tags == expected_tags
