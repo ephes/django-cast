@@ -232,6 +232,18 @@ def get_data(video):
     }
 
 
+def get_video_data(video):
+    """
+    helper function: given a video, return the json to pass back to the
+    chooser panel - move to model FIXME
+    """
+    return {
+        "id": video.id,
+        "title": video.title,
+        "edit_link": reverse("castmedia:video_edit", args=(video.id,)),
+    }
+
+
 def chosen(request, video_id):
     video = get_object_or_404(Video, id=video_id)
 
@@ -277,7 +289,7 @@ def chooser_upload(request):
         "videos": videos,
         "searchform": search_form,
         # "collections": collections,
-        "uploadform": form,
+        "uploadform": VideoForm(),
         "is_searching": False,
         "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
     }

@@ -35,10 +35,10 @@ def video_urls(video):
     return VideoUrls(video)
 
 
-class TestVideoEndpointsNotAuthenticated:
+class TestAllVideoEndpoints:
     pytestmark = pytest.mark.django_db
 
-    def test_get_all(self, client, video_urls):
+    def test_get_all_not_authenticated(self, client, video_urls):
         for view_name, url in video_urls.urls.items():
             r = client.get(url)
 
@@ -46,6 +46,13 @@ class TestVideoEndpointsNotAuthenticated:
             assert r.status_code == 302
             login_url = reverse("wagtailadmin_login")
             assert login_url in r.url
+
+    def test_get_all_authenticated(self, authenticated_client, video_urls):
+        for view_name, url in video_urls.urls.items():
+            r = authenticated_client.get(url)
+
+            # assert we are not redirected to login
+            assert r.status_code == 200
 
 
 class TestVideoIndex:
