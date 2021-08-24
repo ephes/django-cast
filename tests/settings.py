@@ -174,5 +174,6 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
 
-#
+# For tests which need to run over a file in filesystem
+# (ffprobe for audio duration etc) overwrite settings with fixture
 DEFAULT_FILE_STORAGE = "inmemorystorage.InMemoryStorage"
