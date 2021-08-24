@@ -132,3 +132,27 @@ class TestVideoEdit:
         # make sure title was changes
         video.refresh_from_db()
         assert video.title == post_data["title"]
+
+
+class TestVideoDelete:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_delete_video(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.video_delete)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert "Are you sure you want to delete this video?" in content
+
+    def test_post_delete_video(self, authenticated_client, video_urls):
+        video = video_urls.video
+        # post data is necessary because of if request.POST
+        r = authenticated_client.post(video_urls.video_delete, {"delete": "yes"})
+
+        # make sure we get redirected to video_index
+        assert r.status_code == 302
+        assert r.url == video_urls.video_index
+
+        # make sure video was deleted
+        with pytest.raises(Video.DoesNotExist):
+            video.refresh_from_db()
