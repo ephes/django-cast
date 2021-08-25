@@ -153,7 +153,6 @@ class TestVideoAdd:
         expected_tags = set(post_data["tags"].split(","))
         assert actual_tags == expected_tags
 
-
     def test_post_add_video(self, authenticated_client, minimal_mp4):
         add_url = reverse(f"castmedia:video_add")
 
@@ -186,6 +185,13 @@ class TestVideoEdit:
         assert r.status_code == 200
         content = r.content.decode("utf-8")
         assert "Delete" in content
+
+    def test_post_edit_video_invalid_form(self, authenticated_client, video_urls):
+        post_data = {}
+        r = authenticated_client.post(video_urls.video_edit, post_data)
+
+        # make sure we dont get redirected to video_index
+        assert r.status_code == 200
 
     def test_post_edit_video(self, authenticated_client, video_urls):
         video = video_urls.video
