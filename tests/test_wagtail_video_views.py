@@ -5,6 +5,23 @@ from django.urls import reverse
 from cast.models import Video
 
 
+class TestPostWithVideoDetail:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_post_with_video_detail(self, client, post_with_video):
+        video = post_with_video.videos.first()
+        detail_url = post_with_video.get_url()
+
+        r = client.get(detail_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert "html" in content
+
+        # make sure video title included in rendered video block
+        assert video.title in content
+
+
 def get_endpoint_urls_without_args():
     urls = {}
     view_names = ["index", "add", "chooser", "chooser_upload"]

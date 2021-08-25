@@ -290,6 +290,13 @@ def body_with_gallery(python_body, gallery):
     return json.dumps(gallery_body)
 
 
+@pytest.fixture
+def body_with_video(python_body, video):
+    video_body = python_body.copy()
+    video_body[0]["value"].append({"type": "video", "value": video.id})
+    return json.dumps(video_body)
+
+
 @pytest.fixture()
 def post(blog, body):
     post = PostFactory(
@@ -309,6 +316,20 @@ def post_with_gallery(blog, body_with_gallery, gallery):
         body=body_with_gallery,
     )
     post.galleries.add(gallery)
+    return post
+
+
+@pytest.fixture()
+def post_with_video(blog, body_with_video, video):
+    post = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        body=body_with_video,
+    )
+    post.videos.add(video)
     return post
 
 
