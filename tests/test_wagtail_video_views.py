@@ -193,7 +193,7 @@ class TestVideoEdit:
         # make sure we dont get redirected to video_index
         assert r.status_code == 200
 
-    def test_post_edit_video(self, authenticated_client, video_urls):
+    def test_post_edit_video_title(self, authenticated_client, video_urls):
         video = video_urls.video
         post_data = {
             "title": "changed title",
@@ -207,6 +207,17 @@ class TestVideoEdit:
         # make sure title was changes
         video.refresh_from_db()
         assert video.title == post_data["title"]
+
+    def test_post_edit_video_original(self, authenticated_client, video_urls, minimal_mp4):
+        post_data = {
+            "title": "asdf",
+            "original": minimal_mp4,
+        }
+        r = authenticated_client.post(video_urls.video_edit, post_data)
+
+        # make sure we get redirected to video_index
+        assert r.status_code == 302
+        assert r.url == video_urls.video_index
 
 
 class TestVideoDelete:

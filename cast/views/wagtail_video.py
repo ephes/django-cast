@@ -108,8 +108,8 @@ def edit(request, video_id):
         original_file = video.original
         form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
         if form.is_valid():
-            if "file" in form.changed_data:
-                # if providing a new media file, delete the old one.
+            if "original" in form.changed_data:
+                # if providing a new video file, delete the old one.
                 # NB Doing this via original_file.delete() clears the file field,
                 # which definitely isn't what we want...
                 original_file.storage.delete(original_file.name)
