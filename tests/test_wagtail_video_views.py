@@ -293,6 +293,19 @@ class TestVideoChooserUpload:
         content = r.content.decode("utf-8")
         assert video.title in content
 
+    def test_post_upload_video_form_invalid(self, authenticated_client):
+        upload_url = reverse(f"castmedia:video_chooser_upload")
+        prefix = "media-chooser-upload"
+        post_data = {"foo": "bar"}
+        r = authenticated_client.post(upload_url, post_data)
+
+        assert r.status_code == 200
+
+        # make sure error is reported
+        messages = list(r.context["messages"])
+        assert len(messages) == 1
+        assert "The video could not be saved due to errors." == str(messages[0]).rstrip()
+
     def test_post_upload_video(self, authenticated_client, minimal_mp4):
         upload_url = reverse(f"castmedia:video_chooser_upload")
         prefix = "media-chooser-upload"

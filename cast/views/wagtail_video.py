@@ -229,6 +229,8 @@ def chooser_upload(request):
             return render_modal_workflow(
                 request, None, None, None, json_data={"step": "video_chosen", "result": get_video_data(video)},
             )
+        else:
+            messages.error(request, _("The video could not be saved due to errors."))
 
     ordering = "-created"
     videos = Video.objects.all().order_by(ordering)
