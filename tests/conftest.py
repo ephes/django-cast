@@ -319,7 +319,7 @@ def post_with_gallery(blog, body_with_gallery, gallery):
     return post
 
 
-@pytest.fixture()
+@pytest.fixture
 def post_with_video(blog, body_with_video, video):
     post = PostFactory(
         owner=blog.owner,

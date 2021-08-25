@@ -116,6 +116,44 @@ class TestVideoAdd:
         content = r.content.decode("utf-8")
         assert "Uploading…" in content
 
+    def test_post_add_video_invalid_form(self, authenticated_client):
+        add_url = reverse(f"castmedia:video_add")
+
+        post_data = {
+            "title": "foobar",
+            "tags": "foo,bar,baz",
+        }
+        r = authenticated_client.post(add_url, post_data)
+
+        # make sure we dont get redirected to video_index
+        assert r.status_code == 200
+
+        # make sure we didn't create a video
+        Video.objects.first() is None
+
+    def test_post_add_video(self, authenticated_client, minimal_mp4):
+        add_url = reverse(f"castmedia:video_add")
+
+        post_data = {
+            "title": "foobar",
+            "tags": "foo,bar,baz",
+            "original": minimal_mp4,
+        }
+        r = authenticated_client.post(add_url, post_data)
+
+        # make sure we get redirected to video_index
+        assert r.status_code == 302
+        assert r.url == reverse(f"castmedia:video_index")
+
+        # make sure field were saved correctly
+        video = Video.objects.first()
+        assert video.title == post_data["title"]
+
+        actual_tags = set([t.name for t in video.tags.all()])
+        expected_tags = set(post_data["tags"].split(","))
+        assert actual_tags == expected_tags
+
+
     def test_post_add_video(self, authenticated_client, minimal_mp4):
         add_url = reverse(f"castmedia:video_add")
 
