@@ -218,8 +218,13 @@ class TestVideoChooser:
         r = authenticated_client.get(video_urls.video_chooser)
 
         assert r.status_code == 200
+
+        # make sure existing video is in chooser
         content = r.content.decode("utf-8")
         assert video.title in content
+
+        # make sure prefix for form fields is set
+        assert "media-chooser-upload" in content
 
 
 class TestVideoChooserUpload:
