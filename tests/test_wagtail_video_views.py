@@ -187,7 +187,7 @@ class TestVideoEdit:
         assert "Delete" in content
 
     def test_post_edit_video_invalid_form(self, authenticated_client, video_urls):
-        post_data = {}
+        post_data = {"foo": "bar"}  # must not be empty because of if request.POST claus
         r = authenticated_client.post(video_urls.video_edit, post_data)
 
         # make sure we dont get redirected to video_index
