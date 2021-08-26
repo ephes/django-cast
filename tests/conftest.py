@@ -431,8 +431,16 @@ def video(user):
 
 
 @pytest.fixture
-def video_with_original(video, minimal_mp4):
-    video.original = minimal_mp4
+def video_without_original(video):
+    video.original = None
+    video.save()
+    return video
+
+
+@pytest.fixture
+def video_without_file(video):
+    video.original.delete()
+    video.original.name = "does_not_exist"
     video.save()
     return video
 

@@ -186,8 +186,20 @@ class TestVideoEdit:
         content = r.content.decode("utf-8")
         assert "Delete" in content
 
-    def test_get_edit_video_with_original(self, authenticated_client, video_with_original):
-        r = authenticated_client.get(video_urls.video_edit)
+    def test_get_edit_video_without_original(self, authenticated_client, video_without_original):
+        video = video_without_original
+        edit_url = reverse("castmedia:video_edit", args=(video.id,))
+        r = authenticated_client.get(edit_url)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert "Delete" in content
+
+    def test_get_edit_video_with_original_no_filesize(self, settings, authenticated_client, video_without_file):
+        settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+        video = video_without_file
+        edit_url = reverse("castmedia:video_edit", args=(video.id,))
+        r = authenticated_client.get(edit_url)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")

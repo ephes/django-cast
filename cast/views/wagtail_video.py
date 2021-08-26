@@ -144,7 +144,7 @@ def edit(request, video_id):
         messages.error(
             request,
             _("The file could not be found. Please change the source or delete the video file"),
-            buttons=[messages.button(reverse("castmedia:delete", args=(video.id,)), _("Delete"))],
+            buttons=[messages.button(reverse("castmedia:video_delete", args=(video.id,)), _("Delete"))],
         )
 
     return render(
