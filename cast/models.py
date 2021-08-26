@@ -29,6 +29,7 @@ from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image as WagtailImage
 from wagtail.search import index
+from wagtail.search.queryset import SearchableQuerySetMixin
 
 from taggit.managers import TaggableManager
 
@@ -164,7 +165,11 @@ def get_video_dimensions(lines):
     return width, height
 
 
-class Video(CollectionMember, TimeStampedModel):
+class VideoQuerySet(SearchableQuerySetMixin, models.QuerySet):
+    pass
+
+
+class Video(CollectionMember, index.Indexed, TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     title = models.CharField(default="", max_length=255)
     original = models.FileField(upload_to="cast_videos/")
@@ -183,6 +188,19 @@ class Video(CollectionMember, TimeStampedModel):
 
     admin_form_fields = ("title", "original", "poster", "tags")
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
+
+    objects = VideoQuerySet.as_manager()
+
+    search_fields = CollectionMember.search_fields + [
+        index.SearchField("title", partial_match=True, boost=10),
+        index.RelatedFields(
+            "tags",
+            [
+                index.SearchField("name", partial_match=True, boost=10),
+            ],
+        ),
+        index.FilterField("user"),
+    ]
 
     @property
     def filename(self):

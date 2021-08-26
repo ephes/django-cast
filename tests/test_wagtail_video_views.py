@@ -105,6 +105,32 @@ class TestVideoIndex:
         # make sure video_urls.video is included in results
         assert video_urls.video.title in content
 
+    def test_get_video_index_with_search(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.video_index, {"q": video_urls.video.title})
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+
+        # make sure it's the media results page
+        assert "html" in content
+        assert "media-results" in content
+
+        # make sure video_urls.video is included in results
+        assert video_urls.video.title in content
+
+    def test_get_video_index_with_search_invalid(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.video_index, {"q": " "})
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+
+        # make sure it's the media results page
+        assert "html" in content
+        assert "media-results" in content
+
+        # make sure video_urls.video is included in results
+        assert video_urls.video.title in content
+
 
 class TestVideoAdd:
     pytestmark = pytest.mark.django_db
