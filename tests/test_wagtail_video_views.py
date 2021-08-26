@@ -186,6 +186,13 @@ class TestVideoEdit:
         content = r.content.decode("utf-8")
         assert "Delete" in content
 
+    def test_get_edit_video_with_original(self, authenticated_client, video_with_original):
+        r = authenticated_client.get(video_urls.video_edit)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert "Delete" in content
+
     def test_post_edit_video_invalid_form(self, authenticated_client, video_urls):
         post_data = {"foo": "bar"}  # must not be empty because of if request.POST claus
         r = authenticated_client.post(video_urls.video_edit, post_data)

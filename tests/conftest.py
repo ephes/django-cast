@@ -430,6 +430,13 @@ def video(user):
     return video
 
 
+@pytest.fixture
+def video_with_original(video, minimal_mp4):
+    video.original = minimal_mp4
+    video.save()
+    return video
+
+
 @pytest.fixture()
 def gallery(wagtail_image):
     gallery = GalleryFactory()
