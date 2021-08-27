@@ -306,15 +306,14 @@ def body_with_image(python_body, wagtail_image):
 
 @pytest.fixture()
 def post(blog, body):
-    post = PostFactory(
+    return PostFactory(
         owner=blog.owner, parent=blog, title="test entry", slug="test-entry", pub_date=timezone.now(), body=body,
     )
-    return post
 
 
 @pytest.fixture()
 def post_with_gallery(blog, body_with_gallery, gallery):
-    post = PostFactory(
+    return PostFactory(
         owner=blog.owner,
         parent=blog,
         title="test entry",
@@ -322,13 +321,11 @@ def post_with_gallery(blog, body_with_gallery, gallery):
         pub_date=timezone.now(),
         body=body_with_gallery,
     )
-    post.galleries.add(gallery)
-    return post
 
 
 @pytest.fixture
 def post_with_video(blog, body_with_video, video):
-    post = PostFactory(
+    return PostFactory(
         owner=blog.owner,
         parent=blog,
         title="test entry",
@@ -336,9 +333,6 @@ def post_with_video(blog, body_with_video, video):
         pub_date=timezone.now(),
         body=body_with_video,
     )
-    post.videos.add(video)
-    return post
-
 
 @pytest.fixture
 def post_with_image(blog, body_with_image):
