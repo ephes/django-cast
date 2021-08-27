@@ -297,6 +297,13 @@ def body_with_video(python_body, video):
     return json.dumps(video_body)
 
 
+@pytest.fixture
+def body_with_image(python_body, wagtail_image):
+    image_body = python_body.copy()
+    image_body[0]["value"].append({"type": "image", "value": wagtail_image.id})
+    return json.dumps(image_body)
+
+
 @pytest.fixture()
 def post(blog, body):
     post = PostFactory(
@@ -331,6 +338,18 @@ def post_with_video(blog, body_with_video, video):
     )
     post.videos.add(video)
     return post
+
+
+@pytest.fixture
+def post_with_image(blog, body_with_image):
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        body=body_with_image,
+    )
 
 
 @pytest.fixture()
