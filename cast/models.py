@@ -560,6 +560,19 @@ class ContentBlock(blocks.StreamBlock):
         icon = "form"
 
 
+def sync_media_ids(source, target):
+    def diff_ids(source, target):
+        diff = {}
+        for key, values  in target.items():
+            already_in_source = source.get(key, set())
+            diff[key] = values - already_in_source
+        return diff
+
+    to_add = diff_ids(source, target)
+    to_remove = diff_ids(target, source)
+    return to_add, to_remove
+
+
 class PostPublishedManager(PageManager):
     use_for_related_fields = True
 
@@ -680,28 +693,6 @@ class Post(TimeStampedModel, Page):
             "audio": {a.pk: a for a in self.audios.all()},
         }
 
-    @staticmethod
-    def get_or_create_gallery(images):
-        gallery = Gallery.objects.filter(images__in=images).first()
-        if gallery is None:
-            gallery = Gallery.objects.create()
-            for image in images:
-                gallery.images.add(image)
-        return gallery
-
-    @property
-    def media_from_body(self):
-        media = []
-        for content_block in self.body:
-            for block in content_block.value:
-                if block.block_type == "gallery":
-                    media_model = self.get_or_create_gallery(block.value)
-                else:
-                    media_model = block.value
-                if block.block_type in self.media_model_lookup:
-                    media.append((block.block_type, media_model.id))
-        return media
-
     @property
     def media_attr_lookup(self):
         return {
@@ -710,34 +701,6 @@ class Post(TimeStampedModel, Page):
             "gallery": self.galleries,
             "audio": self.audios,
         }
-
-    def add_missing_media_objects(self):
-        media_attr_lookup = self.media_attr_lookup
-
-        media_lookup = self.media_lookup
-        model_lookup = self.media_model_lookup
-        for model_name, model_pk in self.media_from_body:
-            try:
-                media_lookup[model_name][model_pk]
-            except KeyError:
-                media_object = model_lookup[model_name].objects.get(pk=model_pk)
-                media_attr_lookup[model_name].add(media_object)
-                logger.info("added: {} {} {}".format(model_name, model_pk, media_object))
-
-    def remove_obsolete_media_objects(self):
-        media_from_db = {k: set(v.keys()) for k, v in self.media_lookup.items()}
-
-        # media from content
-        media_body_lookup = defaultdict(set)
-        for model_name, model_pk in self.media_from_body:
-            media_body_lookup[model_name].add(model_pk)
-
-        # remove all PKs which are in db but not in content
-        media_attr_lookup = self.media_attr_lookup
-        for media_type, media_pks in media_from_db.items():
-            for media_pk in media_pks:
-                if media_pk not in media_body_lookup.get(media_type, set()):
-                    media_attr_lookup[media_type].remove(media_pk)
 
     @property
     def has_audio(self):
@@ -752,10 +715,49 @@ class Post(TimeStampedModel, Page):
         context["render_detail"] = kwargs.get("render_detail", False)
         return context
 
+    @staticmethod
+    def get_or_create_gallery(images):
+        gallery = Gallery.objects.filter(images__in=images).first()
+        if gallery is None:
+            gallery = Gallery.objects.create()
+            for image in images:
+                gallery.images.add(image)
+        return gallery
+
+    @property
+    def media_ids_from_db(self):
+        return {k: set(v) for k, v in self.media_lookup.items()}
+
+    @property
+    def media_ids_from_body(self):
+        from_body = {}
+        for content_block in self.body:
+            for block in content_block.value:
+                if block.block_type == "gallery":
+                    media_model = self.get_or_create_gallery(block.value)
+                else:
+                    media_model = block.value
+                if block.block_type in self.media_model_lookup:
+                    from_body.setdefault(block.block_type, set()).add(media_model.id)
+        return from_body
+
+    def sync_media_ids(self):
+        media_attr_lookup = self.media_attr_lookup
+        to_add, to_remove = sync_media_ids(self.media_ids_from_db, self.media_ids_from_body)
+
+        # add new ids
+        for media_type, ids in to_add.items():
+            for media_id in ids:
+                media_attr_lookup[media_type].add(media_id)
+
+        # remove obsolete ids
+        for media_type, ids in to_remove.items():
+            for media_id in ids:
+                media_attr_lookup[media_type].remove(media_id)
+
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)
-        self.add_missing_media_objects()
-        # self.remove_obsolete_media_objects()  FIXME
+        self.sync_media_ids()
         return save_return
 
 
