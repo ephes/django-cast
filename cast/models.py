@@ -49,7 +49,7 @@ from .blocks import VideoChooserBlock
 logger = logging.getLogger(__name__)
 
 
-def image_spec_thumbnail(size):
+def image_spec_thumbnail(size):#
     processors = [Transpose(), Thumbnail(size, size, crop=False)]
     return ImageSpecField(source="original", processors=processors, format="JPEG", options={"quality": 60})
 
@@ -680,7 +680,8 @@ class Post(TimeStampedModel, Page):
             "audio": {a.pk: a for a in self.audios.all()},
         }
 
-    def get_or_create_gallery(self, images):
+    @staticmethod
+    def get_or_create_gallery(images):
         gallery = Gallery.objects.filter(images__in=images).first()
         if gallery is None:
             gallery = Gallery.objects.create()
@@ -727,15 +728,15 @@ class Post(TimeStampedModel, Page):
         media_from_db = {k: set(v.keys()) for k, v in self.media_lookup.items()}
 
         # media from content
-        media_content_lookup = defaultdict(set)
-        for model_name, model_pk in self.media_from_content:
-            media_content_lookup[model_name].add(model_pk)
+        media_body_lookup = defaultdict(set)
+        for model_name, model_pk in self.media_from_body:
+            media_body_lookup[model_name].add(model_pk)
 
         # remove all PKs which are in db but not in content
         media_attr_lookup = self.media_attr_lookup
         for media_type, media_pks in media_from_db.items():
             for media_pk in media_pks:
-                if media_pk not in media_content_lookup.get(media_type, set()):
+                if media_pk not in media_body_lookup.get(media_type, set()):
                     media_attr_lookup[media_type].remove(media_pk)
 
     @property
