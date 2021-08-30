@@ -6,6 +6,7 @@ import shutil
 import pytest
 
 from pathlib import Path
+from copy import deepcopy
 from datetime import datetime
 
 from django.conf import settings
@@ -285,21 +286,21 @@ def body(python_body):
 @pytest.fixture()
 def body_with_gallery(python_body, gallery):
     image_pks = [img.pk for img in gallery.images.all()]
-    gallery_body = python_body.copy()
+    gallery_body = deepcopy(python_body)
     gallery_body[0]["value"].append({"type": "gallery", "value": image_pks})
     return json.dumps(gallery_body)
 
 
 @pytest.fixture
 def body_with_video(python_body, video):
-    video_body = python_body.copy()
+    video_body = deepcopy(python_body)
     video_body[0]["value"].append({"type": "video", "value": video.id})
     return json.dumps(video_body)
 
 
 @pytest.fixture
 def body_with_image(python_body, wagtail_image):
-    image_body = python_body.copy()
+    image_body = deepcopy(python_body)
     image_body[0]["value"].append({"type": "image", "value": wagtail_image.id})
     return json.dumps(image_body)
 
@@ -312,7 +313,7 @@ def post(blog, body):
 
 
 @pytest.fixture()
-def post_with_gallery(blog, body_with_gallery, gallery):
+def post_with_gallery(blog, body_with_gallery):
     return PostFactory(
         owner=blog.owner,
         parent=blog,
@@ -324,7 +325,7 @@ def post_with_gallery(blog, body_with_gallery, gallery):
 
 
 @pytest.fixture
-def post_with_video(blog, body_with_video, video):
+def post_with_video(blog, body_with_video):
     return PostFactory(
         owner=blog.owner,
         parent=blog,

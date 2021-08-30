@@ -560,6 +560,23 @@ class ContentBlock(blocks.StreamBlock):
         icon = "form"
 
 
+def get_or_create_gallery(image_ids):
+    candidate_images = WagtailImage.objects.filter(id__in=image_ids)  # FIXME filter permissions
+    if candidate_images.count() == 0:
+        return None
+    gallery_to_image_ids = {}
+    # FIXME filter permissions - fetch only images / galleries that
+    # this user has permission to view
+    candidate_galleries = Gallery.objects.filter(images__in=image_ids).prefetch_related("images")
+    for gallery in candidate_galleries:
+        gallery_to_image_ids[frozenset(i.id for i in gallery.images.all())] = gallery
+    gallery = gallery_to_image_ids.get(frozenset(image_ids))
+    if gallery is None:
+        gallery = Gallery.objects.create()
+        gallery.images.add(*image_ids)
+    return gallery
+
+
 def sync_media_ids(source, target):
     def diff_ids(source, target):
         diff = {}
@@ -715,15 +732,6 @@ class Post(TimeStampedModel, Page):
         context["render_detail"] = kwargs.get("render_detail", False)
         return context
 
-    @staticmethod
-    def get_or_create_gallery(images):
-        gallery = Gallery.objects.filter(images__in=images).first()
-        if gallery is None:
-            gallery = Gallery.objects.create()
-            for image in images:
-                gallery.images.add(image)
-        return gallery
-
     @property
     def media_ids_from_db(self):
         return {k: set(v) for k, v in self.media_lookup.items()}
@@ -734,7 +742,9 @@ class Post(TimeStampedModel, Page):
         for content_block in self.body:
             for block in content_block.value:
                 if block.block_type == "gallery":
-                    media_model = self.get_or_create_gallery(block.value)
+                    image_ids = [i.id for i in block.value]
+                    print("block value: ", block.value)
+                    media_model = get_or_create_gallery(image_ids)
                 else:
                     media_model = block.value
                 if block.block_type in self.media_model_lookup:
