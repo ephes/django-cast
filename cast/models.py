@@ -296,7 +296,11 @@ class Gallery(TimeStampedModel):
         return set([i.pk for i in self.images.all()])
 
 
-class Audio(TimeStampedModel):
+class AudioQuerySet(SearchableQuerySetMixin, models.QuerySet):
+    pass
+
+
+class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     duration = models.DurationField(null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)
@@ -315,6 +319,11 @@ class Audio(TimeStampedModel):
     }
     audio_formats = list(mime_lookup.keys())
     title_lookup = {key: f"Audio {key.upper()}" for key in audio_formats}
+
+    admin_form_fields = ("title", "subtitle", "m4a", "mp3", "oga", "opus", "tags")
+    tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
+
+    objects = AudioQuerySet.as_manager()
 
     @property
     def uploaded_audio_files(self):

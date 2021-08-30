@@ -45,3 +45,19 @@ class VideoChooserBlock(ChooserBlock):
     def get_form_state(self, value):
         return self.widget.get_value_data(value)
 
+
+class AudioChooserBlock(ChooserBlock):
+    @cached_property
+    def target_model(self):
+        from .models import Audio
+        return Audio
+
+    @cached_property
+    def widget(self):
+        from .wagtail_widgets import AdminAudioChooser
+        return AdminAudioChooser()
+
+    def get_form_state(self, value):
+        return self.widget.get_value_data(value)
+
+

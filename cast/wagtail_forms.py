@@ -5,7 +5,7 @@ from wagtail.admin import widgets
 from wagtail.core.models import Collection
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 
-from .models import Video
+from .models import Video, Audio
 
 
 class FakePermissionPolicy:
@@ -38,3 +38,33 @@ def get_video_form():
         form=BaseVideoForm,
         fields=fields,
     )
+
+
+class BaseAudioForm(BaseCollectionMemberForm):
+    class Meta:
+        widgets = {
+            "tags": widgets.AdminTagWidget,
+            "m4a": forms.ClearableFileInput,
+            "mp3": forms.ClearableFileInput,
+            "oga": forms.ClearableFileInput,
+            "opus": forms.ClearableFileInput,
+        }
+
+    permission_policy = FakePermissionPolicy()
+
+
+def get_audio_form():
+    fields = Audio.admin_form_fields
+    if "collection" not in fields:
+        # force addition of the 'collection' field, because leaving it out can
+        # cause dubious results when multiple collections exist (e.g adding the
+        # media to the root collection where the user may not have permission) -
+        # and when only one collection exists, it will get hidden anyway.
+        fields = list(fields) + ["collection"]
+
+    return modelform_factory(
+        Audio,
+        form=BaseAudioForm,
+        fields=fields,
+    )
+
