@@ -1,8 +1,6 @@
 import pytest
 
-from django.db.utils import IntegrityError
-
-from cast.models import WagtailImage, Gallery
+from cast.models import Gallery
 from cast.models import sync_media_ids, get_or_create_gallery
 
 
