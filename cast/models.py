@@ -581,7 +581,7 @@ def get_or_create_gallery(image_ids):
 def sync_media_ids(source, target):
     def diff_ids(source, target):
         diff = {}
-        for key, values  in target.items():
+        for key, values in target.items():
             already_in_source = source.get(key, set())
             diff[key] = values - already_in_source
         return diff
