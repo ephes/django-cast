@@ -5,7 +5,7 @@ from cast.models import sync_media_ids, get_or_create_gallery
 
 
 @pytest.mark.parametrize(
-    "source, target, expected_to_add, expected_to_remove",
+    "from_database, from_body, expected_to_add, expected_to_remove",
     [
         # source, target, expected_to_add, expected_to_remove
         ({}, {}, {}, {}),
@@ -21,8 +21,8 @@ from cast.models import sync_media_ids, get_or_create_gallery
         ),
     ],
 )
-def test_sync_media_ids(source, target, expected_to_add, expected_to_remove):
-    assert sync_media_ids(source, target) == (expected_to_add, expected_to_remove)
+def test_sync_media_ids(from_database, from_body, expected_to_add, expected_to_remove):
+    assert sync_media_ids(from_database, from_body) == (expected_to_add, expected_to_remove)
 
 
 @pytest.mark.django_db()

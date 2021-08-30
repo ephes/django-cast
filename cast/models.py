@@ -578,16 +578,18 @@ def get_or_create_gallery(image_ids):
     return gallery
 
 
-def sync_media_ids(source, target):
-    def diff_ids(source, target):
-        diff = {}
-        for key, values in target.items():
-            already_in_source = source.get(key, set())
-            diff[key] = values - already_in_source
-        return diff
-
-    to_add = diff_ids(source, target)
-    to_remove = diff_ids(target, source)
+def sync_media_ids(from_database, from_body):
+    to_add, to_remove = {}, {}
+    all_media_types = set(from_database.keys()).union(from_body.keys())
+    for media_type in all_media_types:
+        in_database_ids = from_database.get(media_type, set())
+        in_body_ids = from_body.get(media_type, set())
+        ids_to_add = in_body_ids - in_database_ids
+        if len(ids_to_add) > 0:
+            to_add[media_type] = ids_to_add
+        ids_to_remove = in_database_ids - in_body_ids
+        if len(ids_to_remove) > 0:
+            to_remove[media_type] = ids_to_remove
     return to_add, to_remove
 
 
