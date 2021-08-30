@@ -29,7 +29,6 @@ def test_sync_media_ids(source, target, expected_to_add, expected_to_remove):
 
 @pytest.mark.django_db()
 def test_post_media_sync(post_with_gallery, python_body, body):
-    print(python_body)
     post = post_with_gallery
 
     # make sure gallery from body was added to post.galleries
@@ -39,7 +38,6 @@ def test_post_media_sync(post_with_gallery, python_body, body):
 
     # make sure removing gallery from body removes it from db
     post.body = body
-    print(body)
     post.save()
     gallery_ids_in_db = {g.id for g in post.galleries.all()}
     assert gallery_id not in gallery_ids_in_db
