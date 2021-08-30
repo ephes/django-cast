@@ -2,7 +2,6 @@ import io
 import os
 import json
 import pytz
-import shutil
 import pytest
 
 from pathlib import Path
