@@ -211,7 +211,7 @@ class TestAudioEdit:
         assert "Delete" in content
 
     def test_post_edit_audio_invalid_form(self, authenticated_client, audio_urls):
-        post_data = {"foo": "bar"}  # must not be empty because of if request.POST claus
+        post_data = {"duration": "bar"}
         r = authenticated_client.post(audio_urls.audio_edit, post_data)
 
         # make sure we dont get redirected to audio_index
