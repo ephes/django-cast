@@ -190,8 +190,8 @@ class TestAudioEdit:
         content = r.content.decode("utf-8")
         assert "Delete" in content
 
-    def test_get_edit_audio_without_original(self, authenticated_client, audio_without_original):
-        audio = audio_without_original
+    def test_get_edit_audio_without_m4a(self, authenticated_client, audio_without_m4a):
+        audio = audio_without_m4a
         edit_url = reverse("castmedia:audio_edit", args=(audio.id,))
         r = authenticated_client.get(edit_url)
 

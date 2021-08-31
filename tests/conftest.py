@@ -187,7 +187,10 @@ def audio(user, m4a_audio, settings):
     audio.save()
     yield audio
     # teardown
-    os.unlink(audio.m4a.path)
+    try:
+        os.unlink(audio.m4a.path)
+    except ValueError:
+        pass
 
 
 @pytest.fixture()
@@ -493,6 +496,13 @@ def video_without_original(video):
     video.original = None
     video.save()
     return video
+
+
+@pytest.fixture
+def audio_without_m4a(audio):
+    audio.m4a = None
+    audio.save()
+    return audio
 
 
 @pytest.fixture

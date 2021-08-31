@@ -135,9 +135,9 @@ def edit(request, audio_id):
     filesize = None
 
     # Get file size when there is a file associated with the Media object
-    if audio.original:
+    if audio.m4a:
         try:
-            filesize = audio.original.size
+            filesize = audio.m4a.size
         except OSError:
             # File doesn't exist
             pass
