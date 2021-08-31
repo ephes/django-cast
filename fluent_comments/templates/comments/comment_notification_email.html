@@ -15,9 +15,9 @@
 
 <body>
   <span class="preheader">Posted by: {{ comment.user_name|default:comment.user }}</span>
-  
+
   <div>
-    A new comment has been posted on your site "{{ site }}", to the page entitled 
+    A new comment has been posted on your site "{{ site }}", to the page entitled
     <a target="_blank" href="{{ request.scheme }}://{{ site.domain }}{{ content_object.get_absolute_url }}">{{ content_object }}</a>.
   </div>
 

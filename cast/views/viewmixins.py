@@ -1,11 +1,10 @@
 import logging
 
-from django.template import Context
-from django.template import Template
-
 from django.shortcuts import get_object_or_404
+from django.template import Context, Template
 
 from ..models import Blog
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +13,7 @@ class RenderPostMixin:
     def render_post(self, post, javascript=True, include_detail=False):
         content = "{}\n{}".format("{% load cast_extras %}", post.content)
         template = Template(content)
-        blog_context = Context(
-            {"javascript": javascript, "post": post, "include_detail": include_detail}
-        )
+        blog_context = Context({"javascript": javascript, "post": post, "include_detail": include_detail})
         blog_context.update(post.media_lookup)
         post.description = template.render(blog_context)
 

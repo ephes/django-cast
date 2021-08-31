@@ -26,9 +26,7 @@ class FacetChoicesMixin:
     @property
     def field(self):
         facet_count_choices = []
-        for year_month, count in sorted(
-            self.parent.facet_counts.get("year_month", {}).items()
-        ):
+        for year_month, count in sorted(self.parent.facet_counts.get("year_month", {}).items()):
             date_str = year_month.strftime("%Y-%m")
             label = f"{date_str} ({count})"
             facet_count_choices.append((date_str, label))
@@ -48,15 +46,11 @@ class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
 
 
 class PostFilter(django_filters.FilterSet):
-    search = django_filters.CharFilter(
-        field_name="title", method="fulltext_search", label="Search"
-    )
+    search = django_filters.CharFilter(field_name="title", method="fulltext_search", label="Search")
     date = django_filters.DateFromToRangeFilter(
         field_name="visible_date",
         label="Date",
-        widget=django_filters.widgets.DateRangeWidget(
-            attrs={"type": "date", "placeholder": "YYYY/MM/DD"}
-        ),
+        widget=django_filters.widgets.DateRangeWidget(attrs={"type": "date", "placeholder": "YYYY/MM/DD"}),
     )
     date_facets = DateFacetFilter(
         field_name="title",

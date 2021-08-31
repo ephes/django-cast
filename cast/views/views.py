@@ -1,24 +1,24 @@
 import logging
 
-from django.db import models
-from django.utils import timezone
-from django.shortcuts import get_object_or_404
-from django.db.models.functions import TruncMonth
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.views.generic import ListView, DetailView, CreateView, UpdateView
+from django.db import models
+from django.db.models.functions import TruncMonth
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
 from django_filters.views import FilterView
 
+from ..filters import PostFilter, parse_date_facets
 from ..forms import PostForm
-from ..filters import PostFilter
-from ..filters import parse_date_facets
 from ..models import Blog, Post
 from .viewmixins import (
-    RenderPostMixin,
     AddRequestUserMixin,
-    PostChangeMixin,
     GetParamsMixin,
+    PostChangeMixin,
+    RenderPostMixin,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +132,7 @@ class PostDetailView(RenderPostMixin, DetailView):
         return context
 
 
-class PostCreateView(
-    LoginRequiredMixin, PostChangeMixin, AddRequestUserMixin, CreateView
-):
+class PostCreateView(LoginRequiredMixin, PostChangeMixin, AddRequestUserMixin, CreateView):
     model = Post
     form_class = PostForm
     template_name = "cast/post_edit.html"
@@ -157,9 +155,7 @@ class PostCreateView(
         return context
 
 
-class PostUpdateView(
-    LoginRequiredMixin, PostChangeMixin, AddRequestUserMixin, UpdateView
-):
+class PostUpdateView(LoginRequiredMixin, PostChangeMixin, AddRequestUserMixin, UpdateView):
     model = Post
     form_class = PostForm
     template_name = "cast/post_edit.html"

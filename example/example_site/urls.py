@@ -1,24 +1,22 @@
-from django.urls import path
-from django.urls import re_path
-from django.contrib import admin
 from django.conf import settings
+from django.conf.urls import include, path, re_path, url
 from django.contrib import admin
-from django.conf.urls import include, url, re_path
 from django.views.generic import TemplateView
-from django.views.generic import RedirectView
 
 from wagtail.admin import urls as wagtailadmin_urls
 from wagtail.core import urls as wagtail_urls
 from wagtail.documents import urls as wagtaildocs_urls
 
-from rest_framework.documentation import include_docs_urls
 from rest_framework.authtoken import views as authtokenviews
+from rest_framework.documentation import include_docs_urls
 
 
 urlpatterns = [
     # path("", RedirectView.as_view(url="/about"), name="home"),
     path(
-        "about/", TemplateView.as_view(template_name="pages/about.html"), name="about",
+        "about/",
+        TemplateView.as_view(template_name="pages/about.html"),
+        name="about",
     ),
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),

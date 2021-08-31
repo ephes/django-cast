@@ -1,5 +1,6 @@
-import pytest
 from django.urls import reverse
+
+import pytest
 
 
 class TestPostList:
@@ -60,9 +61,7 @@ class TestPostListFilter:
         assert "html" in content
         assert date_to_find in content
 
-    def test_date_facet_filter_shown_exclusively(
-        self, client, post_with_date, post_with_different_date
-    ):
+    def test_date_facet_filter_shown_exclusively(self, client, post_with_date, post_with_different_date):
         blog_url = reverse("cast:post_list", kwargs={"slug": post_with_date.blog.slug})
         r = client.get(blog_url)
         assert r.status_code == 200

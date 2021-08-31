@@ -2,35 +2,30 @@ import logging
 
 from collections import OrderedDict
 
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse
 from django.views.generic import CreateView
 
-from django.contrib.auth.mixins import LoginRequiredMixin
-
-from django.urls import reverse
-
-from rest_framework import status
-from rest_framework import generics
-from rest_framework.response import Response
+from rest_framework import generics, status
 from rest_framework.decorators import api_view
-from rest_framework.serializers import ListSerializer
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
-
-from .serializers import (
-    ImageSerializer,
-    VideoSerializer,
-    GallerySerializer,
-    AudioSerializer,
-    AudioPodloveSerializer,
-    RequestSerializer,
-)
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.serializers import ListSerializer
 
 from ..forms import ImageForm, VideoForm
-
+from ..models import Audio, Gallery, Image, Request, Video
 from ..views.viewmixins import AddRequestUserMixin
+from .serializers import (
+    AudioPodloveSerializer,
+    AudioSerializer,
+    GallerySerializer,
+    ImageSerializer,
+    RequestSerializer,
+    VideoSerializer,
+)
 from .viewmixins import FileUploadResponseMixin
 
-from ..models import Image, Video, Gallery, Audio, Request
 
 logger = logging.getLogger(__name__)
 
@@ -51,17 +46,13 @@ def api_root(request):
     return Response(OrderedDict(root_api_urls))
 
 
-class ImageCreateView(
-    LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView
-):
+class ImageCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):
     model = Image
     form_class = ImageForm
     user_field_name = "user"
 
 
-class VideoCreateView(
-    LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView
-):
+class VideoCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):
     model = Video
     form_class = VideoForm
     user_field_name = "user"
@@ -135,7 +126,6 @@ class GalleryListView(generics.ListCreateAPIView):
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
-        user = self.request.user
         qs = Gallery.objects.all()
         return qs.order_by("-created")
 
@@ -154,15 +144,11 @@ class RequestListView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         """Allow for bulk create via many=True."""
-        serializer = self.get_serializer(
-            data=request.data, many=isinstance(request.data, list)
-        )
+        serializer = self.get_serializer(data=request.data, many=isinstance(request.data, list))
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
-        return Response(
-            serializer.data, status=status.HTTP_201_CREATED, headers=headers
-        )
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         """Use bulk_create for request lists, normal model serializer otherwise."""

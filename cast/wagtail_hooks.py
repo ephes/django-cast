@@ -1,13 +1,15 @@
+from django.urls import include, path, reverse
 from django.utils.html import format_html
-from django.urls import path, include, reverse
 from django.utils.translation import gettext_lazy as _
 
-from wagtail.core import hooks
 from wagtail.admin.menu import MenuItem
-from wagtail.core.permission_policies.collections import CollectionOwnershipPermissionPolicy
+from wagtail.core import hooks
+from wagtail.core.permission_policies.collections import (
+    CollectionOwnershipPermissionPolicy,
+)
 
 from . import admin_urls
-from .models import Video, Audio
+from .models import Audio, Video
 
 
 @hooks.register("register_admin_urls")
@@ -64,7 +66,7 @@ def register_audio_menu_item():
 
 
 @hooks.register("insert_editor_js")
-def editor_js():
+def editor_js_audio():
     return format_html(
         """
         <script>

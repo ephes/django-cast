@@ -1,6 +1,7 @@
 __version__ = "0.1.31"
 from pathlib import Path
 
+
 default_app_config = "cast.apps.CastConfig"
 
 
@@ -22,8 +23,9 @@ def podcast_same_audio_case(audio_model, file_name, context):
 
 def upload_handler(request):
     # Apps aren't loaded yet.
-    from . import models
     from filepond.forms import get_model_form
+
+    from . import models
 
     lookup = {}
     for ending in ("jpg", "jpeg", "png", "gif"):
@@ -41,9 +43,7 @@ def upload_handler(request):
     file_name = str(request.FILES["original"])
     ending = Path(file_name).suffix.split(".")[-1].lower()
     local_model, upload_field_name, user_field = lookup[ending]
-    form_class, context = get_model_form(
-        local_model, upload_field_name=upload_field_name, user_field=user_field
-    )
+    form_class, context = get_model_form(local_model, upload_field_name=upload_field_name, user_field=user_field)
     if local_model.__name__ == "Audio":
         context = podcast_same_audio_case(models.Audio, file_name, context)
     return form_class, context

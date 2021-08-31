@@ -1,10 +1,12 @@
-import pytz
-# import pandas as pd
-
-from io import StringIO
 from datetime import datetime
+from io import StringIO
+
+import pytz
 
 from .models import Request
+
+
+# import pandas as pd
 
 
 def get_last_request_position(access_log_path, last_request):
@@ -84,7 +86,7 @@ def parse_datetime(x):
     return dt.replace(tzinfo=pytz.FixedOffset(dt_tz))
 
 
-#def get_dataframe_from_position(access_log_path, start_position=0, chunk_size=None):
+# def get_dataframe_from_position(access_log_path, start_position=0, chunk_size=None):
 #    log_buffer = access_log_to_buffer(
 #        access_log_path, start_position=start_position, chunk_size=chunk_size
 #    )

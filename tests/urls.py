@@ -1,12 +1,13 @@
-from __future__ import unicode_literals, absolute_import
+from __future__ import absolute_import, unicode_literals
 
-from django.conf.urls import url, include, re_path
+from django.conf.urls import include, re_path, url
 
-from wagtail.core import urls as wagtail_urls
 from wagtail.admin import urls as wagtailadmin_urls
+from wagtail.core import urls as wagtail_urls
 from wagtail.documents import urls as wagtaildocs_urls
 
 from rest_framework.documentation import include_docs_urls
+
 
 urlpatterns = [
     # allauth

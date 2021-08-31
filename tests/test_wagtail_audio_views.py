@@ -1,6 +1,6 @@
-import pytest
-
 from django.urls import reverse
+
+import pytest
 
 from cast.models import Audio
 
@@ -143,7 +143,7 @@ class TestAudioAdd:
         assert "Uploading…" in content
 
     def test_post_add_audio_invalid_form(self, authenticated_client):
-        add_url = reverse(f"castmedia:audio_add")
+        add_url = reverse("castmedia:audio_add")
 
         post_data = {
             "title": "foobar",
@@ -158,7 +158,7 @@ class TestAudioAdd:
         Audio.objects.first() is None
 
     def test_post_add_audio(self, authenticated_client, minimal_mp4):
-        add_url = reverse(f"castmedia:audio_add")
+        add_url = reverse("castmedia:audio_add")
 
         post_data = {
             "title": "foobar",
@@ -169,29 +169,7 @@ class TestAudioAdd:
 
         # make sure we get redirected to audio_index
         assert r.status_code == 302
-        assert r.url == reverse(f"castmedia:audio_index")
-
-        # make sure field were saved correctly
-        audio = Audio.objects.first()
-        assert audio.title == post_data["title"]
-
-        actual_tags = set([t.name for t in audio.tags.all()])
-        expected_tags = set(post_data["tags"].split(","))
-        assert actual_tags == expected_tags
-
-    def test_post_add_audio(self, authenticated_client, minimal_mp4):
-        add_url = reverse(f"castmedia:audio_add")
-
-        post_data = {
-            "title": "foobar",
-            "tags": "foo,bar,baz",
-            "original": minimal_mp4,
-        }
-        r = authenticated_client.post(add_url, post_data)
-
-        # make sure we get redirected to audio_index
-        assert r.status_code == 302
-        assert r.url == reverse(f"castmedia:audio_index")
+        assert r.url == reverse("castmedia:audio_index")
 
         # make sure field were saved correctly
         audio = Audio.objects.first()
@@ -339,8 +317,7 @@ class TestAudioChooserUpload:
         assert audio.title in content
 
     def test_post_upload_audio_form_invalid(self, authenticated_client):
-        upload_url = reverse(f"castmedia:audio_chooser_upload")
-        prefix = "media-chooser-upload"
+        upload_url = reverse("castmedia:audio_chooser_upload")
         post_data = {"foo": "bar"}
         r = authenticated_client.post(upload_url, post_data)
 
@@ -352,7 +329,7 @@ class TestAudioChooserUpload:
         assert "The audio could not be saved due to errors." == str(messages[0]).rstrip()
 
     def test_post_upload_audio(self, authenticated_client, minimal_mp4):
-        upload_url = reverse(f"castmedia:audio_chooser_upload")
+        upload_url = reverse("castmedia:audio_chooser_upload")
         prefix = "media-chooser-upload"
         post_data = {
             f"{prefix}-title": "foobar",

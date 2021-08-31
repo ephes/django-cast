@@ -1,4 +1,12 @@
-from .views import BlogsListView, BlogDetailView, PostsListView, PostDetailView, PostCreateView, PostUpdateView
+from .views import (
+    BlogDetailView,
+    BlogsListView,
+    PostCreateView,
+    PostDetailView,
+    PostsListView,
+    PostUpdateView,
+)
+
 
 __ALL__ = [
     # old views

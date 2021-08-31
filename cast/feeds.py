@@ -1,13 +1,12 @@
 import logging
 
 from django.contrib.syndication.views import Feed
-
-from django.utils.feedgenerator import Atom1Feed, rfc2822_date, Rss201rev2Feed
-
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 
-from .models import Blog, Post, Audio
+from .models import Audio, Blog, Post
+
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ class ITunesElements:
             handler.endElement("itunes:category")
 
     def add_root_elements(self, handler):
-        """ Add additional elements to the blog object"""
+        """Add additional elements to the blog object"""
         super(ITunesElements, self).add_root_elements(handler)
         haqe = handler.addQuickElement
         blog = self.feed["blog"]
@@ -97,7 +96,7 @@ class ITunesElements:
         haqe("docs", "http://blogs.law.harvard.edu/tech/rss")
 
     def add_item_elements(self, handler, item):
-        """ Add additional elements to the post object"""
+        """Add additional elements to the post object"""
         super(ITunesElements, self).add_item_elements(handler, item)
         haqe = handler.addQuickElement
 
@@ -167,7 +166,9 @@ class PodcastFeed(Feed):
         return blog.itunes_categories.split(",")
 
     def items(self, blog):
-        queryset = Post.objects.live().descendant_of(blog).filter(podcast_audio__isnull=False).order_by("-visible_date")
+        queryset = (
+            Post.objects.live().descendant_of(blog).filter(podcast_audio__isnull=False).order_by("-visible_date")
+        )
         return queryset
 
     def item_title(self, item):

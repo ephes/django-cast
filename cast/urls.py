@@ -1,9 +1,9 @@
 from django.conf.urls import url
-from django.urls import path, include
+from django.urls import include, path
 
-from . import views
-from . import feeds
+from . import feeds, views
 from .dashboard_views import DashboardView
+
 
 app_name = "cast"
 urlpatterns = [

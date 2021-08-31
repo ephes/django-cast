@@ -1,9 +1,9 @@
-import pytest
-
 from datetime import timedelta
 
 from django.urls import reverse
 from django.utils import timezone
+
+import pytest
 
 from cast.models import Post
 

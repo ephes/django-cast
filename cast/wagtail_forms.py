@@ -2,10 +2,10 @@ from django import forms
 from django.forms.models import modelform_factory
 
 from wagtail.admin import widgets
-from wagtail.core.models import Collection
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
+from wagtail.core.models import Collection
 
-from .models import Video, Audio
+from .models import Audio, Video
 
 
 class FakePermissionPolicy:
@@ -67,4 +67,3 @@ def get_audio_form():
         form=BaseAudioForm,
         fields=fields,
     )
-

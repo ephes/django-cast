@@ -1,19 +1,21 @@
 import logging
 
 from django.contrib import admin
+
 from watson.admin import SearchAdmin
 
 from .models import (
-    Blog,
-    Post,
-    File,
-    Image,
-    Video,
     Audio,
-    Gallery,
-    ItunesArtWork,
+    Blog,
     ChapterMark,
+    File,
+    Gallery,
+    Image,
+    ItunesArtWork,
+    Post,
+    Video,
 )
+
 
 logger = logging.getLogger(__name__)
 

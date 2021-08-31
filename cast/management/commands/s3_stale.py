@@ -1,18 +1,13 @@
+from django.core.files.storage import default_storage, get_storage_class
 from django.core.management.base import BaseCommand
-from django.core.files.storage import default_storage
-from django.core.files.storage import get_storage_class
 
-from ...models import File
-from ...models import Image
-from ...models import Video
-
+from ...models import File, Image, Video
 from ...utils import storage_walk_paths
 
 
 class Command(BaseCommand):
     help = (
-        "show media files which are in the filesystem (s3, locale), "
-        "but not in database and optionally delete them"
+        "show media files which are in the filesystem (s3, locale), " "but not in database and optionally delete them"
     )
 
     def add_arguments(self, parser):

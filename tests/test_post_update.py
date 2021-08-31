@@ -1,23 +1,20 @@
-import pytest
 from django.urls import reverse
+
+import pytest
 
 
 class TestPostUpdate:
     pytestmark = pytest.mark.django_db
 
     def test_get_post_update_not_authenticated(self, client, blog, post):
-        update_url = reverse(
-            "cast:post_update", kwargs={"blog_slug": blog.slug, "slug": post.slug}
-        )
+        update_url = reverse("cast:post_update", kwargs={"blog_slug": blog.slug, "slug": post.slug})
 
         r = client.get(update_url)
         # redirect to login
         assert r.status_code == 302
 
     def test_get_post_update_authenticated(self, client, blog, post):
-        update_url = reverse(
-            "cast:post_update", kwargs={"blog_slug": blog.slug, "slug": post.slug}
-        )
+        update_url = reverse("cast:post_update", kwargs={"blog_slug": blog.slug, "slug": post.slug})
         r = client.login(username=blog.owner.username, password=blog.owner._password)
         r = client.get(update_url)
         assert r.status_code == 200

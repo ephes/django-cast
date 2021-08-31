@@ -1,9 +1,10 @@
 import os
-import requests
 
 from getpass import getpass
 
 from django.core.management.base import BaseCommand
+
+import requests
 
 
 class Command(BaseCommand):

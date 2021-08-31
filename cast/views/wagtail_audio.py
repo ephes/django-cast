@@ -1,16 +1,14 @@
-from django.urls import reverse
-from django.shortcuts import render
-from django.shortcuts import redirect
 from django.core.paginator import Paginator
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
 
 from wagtail.admin import messages
 from wagtail.admin.forms.search import SearchForm
-from wagtail.search.backends import get_search_backends
-from wagtail.admin.models import popular_tags_for_model
 from wagtail.admin.modal_workflow import render_modal_workflow
+from wagtail.admin.models import popular_tags_for_model
+from wagtail.search.backends import get_search_backends
 
 from ..models import Audio
 from ..wagtail_forms import get_audio_form
@@ -97,7 +95,11 @@ def add(request):
         audio = Audio(user=request.user)
         form = AudioForm(user=request.user, instance=audio)
 
-    return render(request, "cast/wagtail/audio_add.html", {"form": form},)
+    return render(
+        request,
+        "cast/wagtail/audio_add.html",
+        {"form": form},
+    )
 
 
 def edit(request, audio_id):
@@ -150,7 +152,12 @@ def edit(request, audio_id):
     return render(
         request,
         "cast/wagtail/audio_edit.html",
-        {"audio": audio, "filesize": filesize, "form": form, "user_can_delete": True,},
+        {
+            "audio": audio,
+            "filesize": filesize,
+            "form": form,
+            "user_can_delete": True,
+        },
     )
 
 
@@ -208,7 +215,11 @@ def chosen(request, audio_id):
     audio = get_object_or_404(Audio, id=audio_id)
 
     return render_modal_workflow(
-        request, None, None, None, json_data={"step": "audio_chosen", "result": get_audio_data(audio)},
+        request,
+        None,
+        None,
+        None,
+        json_data={"step": "audio_chosen", "result": get_audio_data(audio)},
     )
 
 
@@ -227,7 +238,11 @@ def chooser_upload(request):
                 backend.add(audio)
 
             return render_modal_workflow(
-                request, None, None, None, json_data={"step": "audio_chosen", "result": get_audio_data(audio)},
+                request,
+                None,
+                None,
+                None,
+                json_data={"step": "audio_chosen", "result": get_audio_data(audio)},
             )
         else:
             messages.error(request, _("The audio could not be saved due to errors."))
@@ -248,5 +263,9 @@ def chooser_upload(request):
         "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
     }
     return render_modal_workflow(
-        request, "cast/wagtail/audio_chooser_chooser.html", None, context, json_data={"step": "chooser"},
+        request,
+        "cast/wagtail/audio_chooser_chooser.html",
+        None,
+        context,
+        json_data={"step": "chooser"},
     )

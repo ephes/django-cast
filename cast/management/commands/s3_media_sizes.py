@@ -1,5 +1,5 @@
-from django.core.management.base import BaseCommand
 from django.core.files.storage import get_storage_class
+from django.core.management.base import BaseCommand
 
 from cast.utils import storage_walk_paths
 

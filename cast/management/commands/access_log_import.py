@@ -1,16 +1,19 @@
 import os
 import time
-import requests
 
-import dateutil.parser
-from pathlib import Path
 from collections import namedtuple
+from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
-from ...access_log import pandas_rows_to_dict
-from ...access_log import get_last_request_position
-from ...access_log import get_dataframe_from_position
+import dateutil.parser
+import requests
+
+from ...access_log import (
+    get_dataframe_from_position,
+    get_last_request_position,
+    pandas_rows_to_dict,
+)
 
 
 def insert_log_chunk(request_api_url, api_token, access_log_path, chunk_size=1000):
@@ -20,20 +23,14 @@ def insert_log_chunk(request_api_url, api_token, access_log_path, chunk_size=100
     result = requests.get(request_api_url, headers=headers)
     try:
         last_request_data = result.json()["results"][0]
-        last_request_data["timestamp"] = dateutil.parser.parse(
-            last_request_data["timestamp"]
-        )
-        last_request = namedtuple("Request", last_request_data.keys())(
-            *last_request_data.values()
-        )
+        last_request_data["timestamp"] = dateutil.parser.parse(last_request_data["timestamp"])
+        last_request = namedtuple("Request", last_request_data.keys())(*last_request_data.values())
     except IndexError:
         pass
     print("last_request: ", last_request)
     last_position = get_last_request_position(access_log_path, last_request)
     print("last_position: ", last_position)
-    df = get_dataframe_from_position(
-        access_log_path, start_position=last_position, chunk_size=chunk_size
-    )
+    df = get_dataframe_from_position(access_log_path, start_position=last_position, chunk_size=chunk_size)
     if df.shape[0] == 0:
         # no more lines
         return None, True
@@ -57,7 +54,5 @@ class Command(BaseCommand):
         now = time.time()
         done = False
         while not done:
-            result, done = insert_log_chunk(
-                request_api_url, api_token, access_log_path, chunk_size=20000
-            )
+            result, done = insert_log_chunk(request_api_url, api_token, access_log_path, chunk_size=20000)
         print("total: ", time.time() - now)

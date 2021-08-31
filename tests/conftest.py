@@ -1,45 +1,35 @@
 import io
-import os
 import json
-import pytz
-import pytest
+import os
 
-from pathlib import Path
 from copy import deepcopy
 from datetime import datetime
+from pathlib import Path
 
 from django.conf import settings
-from django.utils import timezone
-from django.test.client import RequestFactory
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test.client import RequestFactory
+from django.utils import timezone
 
-from rest_framework.test import APIClient
-
-from django_comments import get_model as get_comments_model
-
-from wagtail.core.models import Site, Page, Collection
+from wagtail.core.models import Site
 from wagtail.images.models import Image as WagtailImage
 
-from cast import appsettings
+import pytest
+import pytz
 
-from cast.models import (
-    Blog,
-    Post,
-    Image,
-    Audio,
-    Video,
-    File,
-    ItunesArtWork,
-    ChapterMark,
-)
+from django_comments import get_model as get_comments_model
+from rest_framework.test import APIClient
+
+from cast import appsettings
+from cast.models import Audio, ChapterMark, File, Image, ItunesArtWork, Video
 
 from .factories import (
-    UserFactory,
-    PostFactory,
     BlogFactory,
-    VideoFactory,
     GalleryFactory,
+    PostFactory,
+    UserFactory,
+    VideoFactory,
 )
 
 
@@ -233,7 +223,11 @@ def blog(user, site):
 @pytest.fixture()
 def blog_with_artwork(user, itunes_artwork, site):
     return BlogFactory(
-        owner=user, title="testblog", slug="testblog", itunes_artwork=itunes_artwork, parent=site.root_page,
+        owner=user,
+        title="testblog",
+        slug="testblog",
+        itunes_artwork=itunes_artwork,
+        parent=site.root_page,
     )
 
 
@@ -241,7 +235,11 @@ def blog_with_artwork(user, itunes_artwork, site):
 def blog_with_itunes_categories(user, site):
     categories = {"foo": ["baz"]}
     return BlogFactory(
-        owner=user, title="testblog", slug="testblog", itunes_categories=json.dumps(categories), parent=site.root_page,
+        owner=user,
+        title="testblog",
+        slug="testblog",
+        itunes_categories=json.dumps(categories),
+        parent=site.root_page,
     )
 
 
@@ -272,8 +270,24 @@ def post_data_wagtail():
 @pytest.fixture()
 def python_body():
     return [
-        {"type": "overview", "value": [{"type": "heading", "value": "in_all heading",}],},
-        {"type": "detail", "value": [{"type": "heading", "value": "only_in_detail heading",}],},
+        {
+            "type": "overview",
+            "value": [
+                {
+                    "type": "heading",
+                    "value": "in_all heading",
+                }
+            ],
+        },
+        {
+            "type": "detail",
+            "value": [
+                {
+                    "type": "heading",
+                    "value": "only_in_detail heading",
+                }
+            ],
+        },
     ]
 
 
@@ -314,7 +328,12 @@ def body_with_image(python_body, wagtail_image):
 @pytest.fixture()
 def post(blog, body):
     return PostFactory(
-        owner=blog.owner, parent=blog, title="test entry", slug="test-entry", pub_date=timezone.now(), body=body,
+        owner=blog.owner,
+        parent=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        body=body,
     )
 
 
@@ -368,7 +387,13 @@ def post_with_image(blog, body_with_image):
 
 @pytest.fixture()
 def unpublished_post(blog):
-    post = PostFactory(owner=blog.owner, parent=blog, title="test entry", slug="test-entry", pub_date=None,)
+    post = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=None,
+    )
     post.unpublish()
     post.refresh_from_db()
     return post

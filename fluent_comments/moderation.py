@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import logging
 
 from akismet import SpamStatus
-from django_comments.moderation import moderator, CommentModerator
+from django_comments.moderation import CommentModerator, moderator
 
 from fluent_comments import appsettings
 from fluent_comments.akismet import akismet_check
@@ -20,11 +20,11 @@ logger = logging.getLogger(__name__)
 # Akismet code originally based on django-comments-spamfighter.
 
 __all__ = (
-    'FluentCommentsModerator',
-    'moderate_model',
-    'get_model_moderator',
-    'comments_are_open',
-    'comments_are_moderated',
+    "FluentCommentsModerator",
+    "moderate_model",
+    "get_model_moderator",
+    "comments_are_open",
+    "comments_are_moderated",
 )
 
 
@@ -32,6 +32,7 @@ class FluentCommentsModerator(CommentModerator):
     """
     Moderation policy for fluent-comments.
     """
+
     auto_close_field = None
     auto_moderate_field = None
     enable_field = None
@@ -56,9 +57,12 @@ class FluentCommentsModerator(CommentModerator):
         # Akismet check
         if self.akismet_check:
             akismet_result = akismet_check(comment, content_object, request)
-            if self.akismet_check_action == 'delete' and akismet_result in (SpamStatus.ProbableSpam, SpamStatus.DefiniteSpam):
+            if self.akismet_check_action == "delete" and akismet_result in (
+                SpamStatus.ProbableSpam,
+                SpamStatus.DefiniteSpam,
+            ):
                 return False  # Akismet marked the comment as spam.
-            elif self.akismet_check_action == 'auto' and akismet_result == SpamStatus.DefiniteSpam:
+            elif self.akismet_check_action == "auto" and akismet_result == SpamStatus.DefiniteSpam:
                 return False  # Clearly spam
 
         return True
@@ -78,9 +82,15 @@ class FluentCommentsModerator(CommentModerator):
             akismet_result = akismet_check(comment, content_object, request)
             if akismet_result:
                 # Typically action=delete never gets here, unless the service was having problems.
-                if akismet_result in (SpamStatus.ProbableSpam, SpamStatus.DefiniteSpam) and \
-                       self.akismet_check_action in ('auto', 'soft_delete', 'delete'):
-                   comment.is_removed = True  # Set extra marker
+                if (
+                    akismet_result
+                    in (
+                        SpamStatus.ProbableSpam,
+                        SpamStatus.DefiniteSpam,
+                    )
+                    and self.akismet_check_action in ("auto", "soft_delete", "delete")
+                ):
+                    comment.is_removed = True  # Set extra marker
 
                 # SpamStatus.Unknown or action=moderate will end up in the moderation queue
                 return True
@@ -96,7 +106,7 @@ class FluentCommentsModerator(CommentModerator):
                 return True
 
         # Akismet check
-        if self.akismet_check and self.akismet_check_action not in ('soft_delete', 'delete'):
+        if self.akismet_check and self.akismet_check_action not in ("soft_delete", "delete"):
             # Return True if akismet marks this comment as spam and we want to moderate it.
             if akismet_check(comment, content_object, request):
                 return True
@@ -133,6 +143,7 @@ class AlwaysModerate(FluentCommentsModerator):
     A moderator class that will always mark the comment as moderated.
     This can be used in ``FLUENT_COMMENTS_DEFAULT_MODERATOR``.
     """
+
     def moderate(self, comment, content_object, request):
         # Still calling super in case Akismet marks the comment as spam.
         return super(AlwaysModerate, self).moderate(comment, content_object, request) or True
@@ -143,11 +154,9 @@ class AlwaysDeny(FluentCommentsModerator):
     A moderator that will deny any comments to be posted.
     This can be used in ``FLUENT_COMMENTS_DEFAULT_MODERATOR``.
     """
+
     def allow(self, comment, content_object, request):
-        logger.warning(
-            "Discarded comment on unregistered model '%s'",
-            content_object.__class__.__name__
-        )
+        logger.warning("Discarded comment on unregistered model '%s'", content_object.__class__.__name__)
         return False
 
 
@@ -162,11 +171,11 @@ def moderate_model(ParentModel, publication_date_field=None, enable_comments_fie
     :type enable_comments_field: str
     """
     attrs = {
-        'auto_close_field': publication_date_field,
-        'auto_moderate_field': publication_date_field,
-        'enable_field': enable_comments_field,
+        "auto_close_field": publication_date_field,
+        "auto_moderate_field": publication_date_field,
+        "enable_field": enable_comments_field,
     }
-    ModerationClass = type(ParentModel.__name__ + 'Moderator', (FluentCommentsModerator,), attrs)
+    ModerationClass = type(ParentModel.__name__ + "Moderator", (FluentCommentsModerator,), attrs)
     moderator.register(ParentModel, ModerationClass)
 
 

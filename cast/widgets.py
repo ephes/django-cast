@@ -1,12 +1,12 @@
 from itertools import chain
 
+from django.db.models.fields import BLANK_CHOICE_DASH
 from django.forms import Widget
 from django.forms.utils import flatatt
-from django.utils.http import urlencode
 from django.utils.encoding import force_str
+from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
-from django.db.models.fields import BLANK_CHOICE_DASH
 
 
 class DateFacetWidget(Widget):
@@ -41,11 +41,7 @@ class DateFacetWidget(Widget):
                 for option in option_label:
                     output.append(self.render_option(name, selected_choices, *option))
             else:
-                output.append(
-                    self.render_option(
-                        name, selected_choices, option_value, option_label
-                    )
-                )
+                output.append(self.render_option(name, selected_choices, option_value, option_label))
         return "\n".join(output)
 
     def render_option(self, name, selected_choices, option_value, option_label):

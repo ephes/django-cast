@@ -1,6 +1,6 @@
-import pytest
-
 from django.urls import reverse
+
+import pytest
 
 from django_comments import get_model as get_comments_model
 

@@ -1,17 +1,17 @@
 import json
 
 from django import forms
-from django.urls import reverse
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 
-from wagtail.core.telepath import register
-from wagtail.admin.widgets import AdminChooser
 from wagtail.admin.staticfiles import versioned_static
+from wagtail.admin.widgets import AdminChooser
+from wagtail.core.telepath import register
 from wagtail.core.widget_adapters import WidgetAdapter
 
-from .models import Video, Audio
+from .models import Audio, Video
 
 
 class AdminVideoChooser(AdminChooser):
@@ -57,19 +57,21 @@ class AdminVideoChooser(AdminChooser):
 
 
 class VideoChooserAdapter(WidgetAdapter):
-    js_constructor = 'cast.wagtail.VideoChooser'
+    js_constructor = "cast.wagtail.VideoChooser"
 
     def js_args(self, widget):
         return [
-            widget.render_html('__NAME__', None, attrs={'id': '__ID__'}),
-            widget.id_for_label('__ID__'),
+            widget.render_html("__NAME__", None, attrs={"id": "__ID__"}),
+            widget.id_for_label("__ID__"),
         ]
 
     @cached_property
     def media(self):
-        return forms.Media(js=[
-            versioned_static('js/cast/wagtail/video-chooser-telepath.js'),
-        ])
+        return forms.Media(
+            js=[
+                versioned_static("js/cast/wagtail/video-chooser-telepath.js"),
+            ]
+        )
 
 
 register(VideoChooserAdapter(), AdminVideoChooser)
@@ -118,19 +120,21 @@ class AdminAudioChooser(AdminChooser):
 
 
 class AudioChooserAdapter(WidgetAdapter):
-    js_constructor = 'cast.wagtail.AudioChooser'
+    js_constructor = "cast.wagtail.AudioChooser"
 
     def js_args(self, widget):
         return [
-            widget.render_html('__NAME__', None, attrs={'id': '__ID__'}),
-            widget.id_for_label('__ID__'),
+            widget.render_html("__NAME__", None, attrs={"id": "__ID__"}),
+            widget.id_for_label("__ID__"),
         ]
 
     @cached_property
     def media(self):
-        return forms.Media(js=[
-            versioned_static('js/cast/wagtail/audio-chooser-telepath.js'),
-        ])
+        return forms.Media(
+            js=[
+                versioned_static("js/cast/wagtail/audio-chooser-telepath.js"),
+            ]
+        )
 
 
 register(AudioChooserAdapter(), AdminAudioChooser)

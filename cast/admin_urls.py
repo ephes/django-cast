@@ -1,7 +1,8 @@
 from django.urls import path
 
-from .views import wagtail_video as video
 from .views import wagtail_audio as audio
+from .views import wagtail_video as video
+
 
 urlpatterns = [
     # video
@@ -12,7 +13,6 @@ urlpatterns = [
     path("video/chooser/", video.chooser, name="video_chooser"),
     path("video/chooser/upload/", video.chooser_upload, name="video_chooser_upload"),
     path("video/chooser/<int:video_id>/", video.chosen, name="video_chosen"),
-
     # audio
     path("audio", audio.index, name="audio_index"),
     path(r"audio/add/", audio.add, name="audio_add"),

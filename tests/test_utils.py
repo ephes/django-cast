@@ -1,6 +1,6 @@
-import pytest
-
 from django.core.files.storage import default_storage
+
+import pytest
 
 from cast.utils import storage_walk_paths
 

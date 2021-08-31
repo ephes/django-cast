@@ -1,5 +1,4 @@
 import pytest
-from django.urls import reverse
 
 
 class TestPostDetail:
@@ -27,7 +26,6 @@ class TestPostDetail:
 
     def test_post_detail_with_gallery(self, client, post_with_gallery):
         detail_url = post_with_gallery.get_url()
-        # print(post_with_gallery.body.raw_data)
 
         r = client.get(detail_url)
         assert r.status_code == 200

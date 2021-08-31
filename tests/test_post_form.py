@@ -1,6 +1,6 @@
-import pytest
-
 from django.utils import timezone
+
+import pytest
 
 from cast.forms import PostForm
 

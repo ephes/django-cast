@@ -7,15 +7,13 @@ class CaptchaFormMixin(object):
         Test that the 'captcha' field is really present.
         This could be broken by a bad FLUENT_COMMENTS_FIELD_ORDER configuration.
         """
-        if 'captcha' not in ordering:
+        if "captcha" not in ordering:
             raise ImproperlyConfigured(
                 "When using 'FLUENT_COMMENTS_FIELD_ORDER', "
-                "make sure the 'captcha' field included too to use '{}' form. ".format(
-                    self.__class__.__name__
-                )
+                "make sure the 'captcha' field included too to use '{}' form. ".format(self.__class__.__name__)
             )
         super(CaptchaFormMixin, self)._reorder_fields(ordering)
 
         # Avoid making captcha required for previews.
         if self.is_preview:
-            self.fields.pop('captcha')
+            self.fields.pop("captcha")

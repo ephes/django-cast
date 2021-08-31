@@ -378,4 +378,3 @@ function handleAudioInsert () {
 }
 
 $('#insert-audio').click(handleAudioInsert)
-

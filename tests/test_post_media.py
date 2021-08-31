@@ -1,4 +1,4 @@
-import pytest
+# import pytest
 
 # FIXME
 # @pytest.mark.django_db()

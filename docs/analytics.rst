@@ -44,7 +44,7 @@ django management commands locally - I named it '.analytics_env':
 Be sure that you are now able to run django management commands:
 
 .. code-block:: shell
-    
+
     env $(cat .analytics_env | xargs) ./manage.py
 
 
@@ -55,19 +55,19 @@ If you provide the right password for your analytics user, you should now
 be able to retrieve the api token for that user.
 
 .. code-block:: shell
-   
+
     env $(cat .analytics_env | xargs) ./manage.py get_api_token
 
 Don't forget to add the api token to your '.analytics_env':
 
 .. code-block:: shell
-    
+
     API_TOKEN=d387ca7e5d2bf4932f1e9e9c9c4caec808571b39
 
 You'll need to add two additional environment variables to your '.analytics_env':
 
 .. code-block:: shell
-   
+
     REQUEST_API_URL=https://your_domain_name.com/api/request/
     ACCESS_LOG_PATH=/var/log/caddy/your_domain_name.access.log
 
@@ -96,6 +96,6 @@ Make this script executable:
 And finally create a cronjob running every hour or something like this:
 
 .. code-block:: shell
-    
+
     crontab -e
     0 * * * * cd $HOME/your_project_dir && ./analytics_cron.sh

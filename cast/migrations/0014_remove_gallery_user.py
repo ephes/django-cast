@@ -6,12 +6,12 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cast', '0013_alter_gallery_images'),
+        ("cast", "0013_alter_gallery_images"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='gallery',
-            name='user',
+            model_name="gallery",
+            name="user",
         ),
     ]

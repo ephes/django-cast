@@ -4,7 +4,7 @@ from django import forms
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from .models import Post, Image, Video, ChapterMark
+from .models import ChapterMark, Image, Post, Video
 
 
 class MyDateTimeInput(forms.DateTimeInput):
@@ -23,36 +23,26 @@ class ChapterMarkForm(forms.ModelForm):
 
 class PostForm(forms.ModelForm):
     is_published = forms.BooleanField(required=False)
-    pub_date = forms.DateTimeField(
-        input_formats=["%Y-%m-%dT%H:%M", "%d.%m.%Y %H:%M:%S"]
-    )
+    pub_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M", "%d.%m.%Y %H:%M:%S"])
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["slug"].required = False
         self.fields["title"].widget.attrs["size"] = 80
         self.fields["pub_date"].required = False
-        self.fields["pub_date"].widget = forms.DateTimeInput(
-            attrs={"type": "datetime-local"}
-        )
+        self.fields["pub_date"].widget = forms.DateTimeInput(attrs={"type": "datetime-local"})
         self.fields["pub_date"].label = _("Publication date")
-        self.fields["pub_date"].help_text = _(
-            "Article will be published after this date/time."
-        )
+        self.fields["pub_date"].help_text = _("Article will be published after this date/time.")
 
         self.fields["visible_date"].required = False
         self.fields["visible_date"].widget = MyDateTimeInput(attrs={"type": "date"})
         self.fields["visible_date"].label = _("Visible date")
         self.fields["visible_date"].help_text = _("Date to be shown above article.")
 
-        self.fields["podcast_audio"].help_text = _(
-            "The audio object to be used as podcast episode."
-        )
+        self.fields["podcast_audio"].help_text = _("The audio object to be used as podcast episode.")
 
         if self.instance.podcast_audio:
-            self.fields["chaptermarks"] = forms.CharField(
-                widget=forms.Textarea, required=False
-            )
+            self.fields["chaptermarks"] = forms.CharField(widget=forms.Textarea, required=False)
 
     def _set_pub_date(self, cleaned_data):
         pub_date = cleaned_data.get("pub_date")

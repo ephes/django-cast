@@ -1,13 +1,9 @@
+from django.core.files.storage import default_storage, get_storage_class
 from django.core.management.base import BaseCommand
-from django.core.files.storage import default_storage
-from django.core.files.storage import get_storage_class
 
 
 class Command(BaseCommand):
-    help = (
-        "replace paths on s3 with local versions - useful for"
-        " compressed videos for example"
-    )
+    help = "replace paths on s3 with local versions - useful for" " compressed videos for example"
 
     def add_arguments(self, parser):
         parser.add_argument("paths", nargs="+", type=str)

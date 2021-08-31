@@ -1,8 +1,8 @@
 import pytest
 
-from cast.templatetags.cast_extras import video as video_tag
 from cast.templatetags.cast_extras import audio as audio_tag
 from cast.templatetags.cast_extras import gallery as gallery_tag
+from cast.templatetags.cast_extras import video as video_tag
 
 
 class TestVideoTag:

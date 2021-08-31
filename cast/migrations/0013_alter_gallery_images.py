@@ -6,14 +6,14 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('wagtailimages', '0023_add_choose_permissions'),
-        ('cast', '0012_alter_post_images'),
+        ("wagtailimages", "0023_add_choose_permissions"),
+        ("cast", "0012_alter_post_images"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='gallery',
-            name='images',
-            field=models.ManyToManyField(to='wagtailimages.Image'),
+            model_name="gallery",
+            name="images",
+            field=models.ManyToManyField(to="wagtailimages.Image"),
         ),
     ]

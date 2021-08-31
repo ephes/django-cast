@@ -1,56 +1,47 @@
-import os
-import re
-import uuid
 import json
 import logging
-import tempfile
+import os
+import re
 import subprocess
+import tempfile
+import uuid
 
 from datetime import timedelta
 from pathlib import Path
 from subprocess import check_output
-from collections import defaultdict
 
-from django.db import models
-from django.urls import reverse
-from django.utils import timezone
-from django.shortcuts import redirect
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
+from django.db import models
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from wagtail.core import blocks
-from wagtail.core.models import CollectionMember
-from wagtail.core.models import Page, PageManager
-from wagtail.core.fields import StreamField
-from wagtail.core.fields import RichTextField
 from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
+from wagtail.core import blocks
+from wagtail.core.fields import RichTextField, StreamField
+from wagtail.core.models import CollectionMember, Page, PageManager
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image as WagtailImage
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
+from imagekit.models import ImageSpecField
+from imagekit.processors import Thumbnail, Transpose
+from model_utils.models import TimeStampedModel
+from slugify import slugify
 from taggit.managers import TaggableManager
 
-from imagekit.models import ImageSpecField
-from imagekit.processors import Thumbnail
-from imagekit.processors import Transpose
-
-from model_utils.models import TimeStampedModel
-
-from slugify import slugify
-
 from . import appsettings
-from .blocks import GalleryBlock
-from .blocks import VideoChooserBlock
-from .blocks import AudioChooserBlock
+from .blocks import AudioChooserBlock, GalleryBlock, VideoChooserBlock
 
 
 logger = logging.getLogger(__name__)
 
 
-def image_spec_thumbnail(size):#
+def image_spec_thumbnail(size):  #
     processors = [Transpose(), Thumbnail(size, size, crop=False)]
     return ImageSpecField(source="original", processors=processors, format="JPEG", options={"quality": 60})
 

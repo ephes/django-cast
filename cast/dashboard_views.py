@@ -1,18 +1,20 @@
 import json
-import pytz  # noqa - will get used soon
 import logging
 
 from datetime import datetime, timedelta  # noqa - will get used soon
 
-from django.db.models import Count
-from django.views.generic import TemplateView
-from django.db.models.functions import TruncWeek
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Count
+from django.db.models.functions import TruncWeek
+from django.views.generic import TemplateView
 
 import plotly.graph_objs as go
+import pytz  # noqa - will get used soon
+
 from plotly.utils import PlotlyJSONEncoder
 
 from .models import Request
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +23,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = "cast/dashboard.html"
 
     def get_day_chart(self):
-        qs = (
-            Request.objects.extra(select={"day": "date(timestamp)"})
-            .values("day")
-            .annotate(hits=Count("pk"))
-        )
+        qs = Request.objects.extra(select={"day": "date(timestamp)"}).values("day").annotate(hits=Count("pk"))
         x, y = [], []
         for num, row in enumerate(qs, 1):
             # trace["x"].append(num)

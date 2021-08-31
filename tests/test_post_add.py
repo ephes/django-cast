@@ -1,8 +1,6 @@
-import pytest
-
 from django.urls import reverse
 
-from wagtail.images.models import Image
+import pytest
 
 from cast.models import Post
 

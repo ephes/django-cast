@@ -3,7 +3,7 @@ Useful third party services for production
 
 There are some services that might be useful or even required when you run a website. Being
 able to send mail for example is quite useful if you want to send newly registered users
-a confirmation link. 
+a confirmation link.
 
 Mailgun
 -------

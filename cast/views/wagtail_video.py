@@ -1,16 +1,14 @@
-from django.urls import reverse
-from django.shortcuts import render
-from django.shortcuts import redirect
 from django.core.paginator import Paginator
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
 
 from wagtail.admin import messages
 from wagtail.admin.forms.search import SearchForm
-from wagtail.search.backends import get_search_backends
-from wagtail.admin.models import popular_tags_for_model
 from wagtail.admin.modal_workflow import render_modal_workflow
+from wagtail.admin.models import popular_tags_for_model
+from wagtail.search.backends import get_search_backends
 
 from ..models import Video
 from ..wagtail_forms import get_video_form
@@ -97,7 +95,11 @@ def add(request):
         video = Video(user=request.user)
         form = VideoForm(user=request.user, instance=video)
 
-    return render(request, "cast/wagtail/video_add.html", {"form": form},)
+    return render(
+        request,
+        "cast/wagtail/video_add.html",
+        {"form": form},
+    )
 
 
 def edit(request, video_id):
@@ -150,7 +152,12 @@ def edit(request, video_id):
     return render(
         request,
         "cast/wagtail/video_edit.html",
-        {"video": video, "filesize": filesize, "form": form, "user_can_delete": True,},
+        {
+            "video": video,
+            "filesize": filesize,
+            "form": form,
+            "user_can_delete": True,
+        },
     )
 
 
@@ -208,7 +215,11 @@ def chosen(request, video_id):
     video = get_object_or_404(Video, id=video_id)
 
     return render_modal_workflow(
-        request, None, None, None, json_data={"step": "video_chosen", "result": get_video_data(video)},
+        request,
+        None,
+        None,
+        None,
+        json_data={"step": "video_chosen", "result": get_video_data(video)},
     )
 
 
@@ -227,7 +238,11 @@ def chooser_upload(request):
                 backend.add(video)
 
             return render_modal_workflow(
-                request, None, None, None, json_data={"step": "video_chosen", "result": get_video_data(video)},
+                request,
+                None,
+                None,
+                None,
+                json_data={"step": "video_chosen", "result": get_video_data(video)},
             )
         else:
             messages.error(request, _("The video could not be saved due to errors."))
@@ -248,5 +263,9 @@ def chooser_upload(request):
         "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
     }
     return render_modal_workflow(
-        request, "cast/wagtail/video_chooser_chooser.html", None, context, json_data={"step": "chooser"},
+        request,
+        "cast/wagtail/video_chooser_chooser.html",
+        None,
+        context,
+        json_data={"step": "chooser"},
     )

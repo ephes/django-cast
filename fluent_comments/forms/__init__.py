@@ -1,17 +1,17 @@
 from .base import AbstractCommentForm, CommentFormHelper
+from .compact import CompactCommentForm, CompactLabelsCommentForm
 from .default import DefaultCommentForm
-from .compact import CompactLabelsCommentForm, CompactCommentForm
-from .helper import CommentFormHelper, SubmitButton, PreviewButton, CompactLabelsCommentFormHelper
+from .helper import CommentFormHelper, CompactLabelsCommentFormHelper, PreviewButton, SubmitButton
 
 FluentCommentForm = DefaultCommentForm  # noqa, for backwards compatibility
 
 __all__ = (
-    'AbstractCommentForm',
-    'CommentFormHelper',
-    'DefaultCommentForm',
-    'CompactLabelsCommentFormHelper',
-    'CompactLabelsCommentForm',
-    'CompactCommentForm',
-    'SubmitButton',
-    'PreviewButton',
+    "AbstractCommentForm",
+    "CommentFormHelper",
+    "DefaultCommentForm",
+    "CompactLabelsCommentFormHelper",
+    "CompactLabelsCommentForm",
+    "CompactCommentForm",
+    "SubmitButton",
+    "PreviewButton",
 )

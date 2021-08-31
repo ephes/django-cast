@@ -1,4 +1,5 @@
-from .base import *
+from .base import *  # noqa
+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -11,12 +12,14 @@ ALLOWED_HOSTS = ["*"]
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-INSTALLED_APPS.extend(
-    ["django_extensions",]
+INSTALLED_APPS.extend(  # noqa
+    [
+        "django_extensions",
+    ]
 )
 
 
 try:
-    from .local import *
+    from .local import *  # noqa
 except ImportError:
     pass

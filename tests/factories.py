@@ -1,12 +1,10 @@
+from django.contrib.auth import get_user_model
+
+from wagtail.core.models import Site
+
 import factory
 
-from django.contrib.auth import get_user_model
-from django.contrib.contenttypes.models import ContentType
-
-from wagtail.core.models.i18n import Locale
-from wagtail.core.models import Page, Site, Collection
-
-from cast.models import Blog, Post, Image, Video, Gallery
+from cast.models import Blog, Gallery, Image, Post, Video
 
 
 class SiteFactory(factory.django.DjangoModelFactory):
@@ -74,4 +72,3 @@ class PostFactory(PageFactory):
     class Meta:
         model = Post
         django_get_or_create = ("slug",)
-

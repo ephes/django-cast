@@ -9,6 +9,7 @@ def override_appsettings(**settings):
     """
     Temporary override the appsettings.
     """
+
     def _dec(func):
         @wraps(func)
         def _inner(*args, **kwargs):
@@ -25,7 +26,9 @@ def override_appsettings(**settings):
 
             # reset caches
             _reset_setting_caches()
+
         return _inner
+
     return _dec
 
 
@@ -44,7 +47,7 @@ class MockedResponse(object):
         self.result = result
         self.headers = {}
         if definitive:
-            self.headers['X-Akismet-Pro-Tip'] = 'discard'
+            self.headers["X-Akismet-Pro-Tip"] = "discard"
 
     def json(self):
         return self.result

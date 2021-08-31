@@ -1,7 +1,8 @@
 # -*- coding: utf-8
-from __future__ import unicode_literals, absolute_import
+from __future__ import absolute_import, unicode_literals
 
 import environ
+
 
 ROOT_DIR = environ.Path(__file__) - 1
 APPS_DIR = ROOT_DIR.path("cast")
@@ -179,6 +180,4 @@ PASSWORD_HASHERS = [
 DEFAULT_FILE_STORAGE = "inmemorystorage.InMemoryStorage"
 
 # Use in memory cache for tests
-CACHES = {
-    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
-}
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}

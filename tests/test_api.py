@@ -1,15 +1,15 @@
-import pytest
-
 from datetime import timedelta
 
 from django.urls import reverse
 
+import pytest
+
 from .factories import UserFactory
 
-from cast.models import Request
-#from cast.access_log import pandas_rows_to_dict
-#from cast.access_log import get_last_request_position
-#from cast.access_log import get_dataframe_from_position
+
+# from cast.access_log import pandas_rows_to_dict
+# from cast.access_log import get_last_request_position
+# from cast.access_log import get_dataframe_from_position
 
 
 class TestBlogImage:
@@ -156,9 +156,7 @@ class TestPodcastAudio:
     @pytest.mark.django_db
     def test_podlove_detail_endpoint_without_authentication(self, api_client, audio):
         """Should be accessible without authentication."""
-        podlove_detail_url = reverse(
-            "cast:api:audio_podlove_detail", kwargs={"pk": audio.pk}
-        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         assert r.status_code == 200
 
@@ -171,21 +169,15 @@ class TestPodcastAudio:
         audio.duration = delta
         audio.save()
         assert "." in str(audio.duration)
-        podlove_detail_url = reverse(
-            "cast:api:audio_podlove_detail", kwargs={"pk": audio.pk}
-        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         assert "." not in r.json()["duration"]
 
     @pytest.mark.django_db
-    def test_podlove_detail_endpoint_chaptermarks(
-        self, api_client, audio, chaptermarks
-    ):
+    def test_podlove_detail_endpoint_chaptermarks(self, api_client, audio, chaptermarks):
         """Test whether chaptermarks get delivered via podlove endpoint."""
         print("chaptermarks: ", chaptermarks)
-        podlove_detail_url = reverse(
-            "cast:api:audio_podlove_detail", kwargs={"pk": audio.pk}
-        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         chapters = r.json()["chapters"]
         for chapter in chapters:
@@ -219,6 +211,7 @@ class TestRequest:
         # dont redirect to login page
         assert r.status_code == 200
         assert "results" in r.json()
+
 
 #    @pytest.mark.django_db
 #    def test_request_list_endpoint_non_bulk_insert(self, api_client, access_log_path):

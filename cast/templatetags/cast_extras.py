@@ -1,16 +1,15 @@
 from django import template
 from django.utils.safestring import mark_safe
 
+
 register = template.Library()
 
 
 @register.simple_tag(takes_context=True)
 def image(context, pk):
-    image = context["image"][pk]
+    _ = context["image"][pk]
     image_tag = (
-        '<a href="{full}">'
-        '  <img class="cast-image" src="{src}" srcset="{srcset}" sizes="100vw"></img>'
-        "</a>"
+        '<a href="{full}">' '  <img class="cast-image" src="{src}" srcset="{srcset}" sizes="100vw"></img>' "</a>"
     ).format(full="", srcset="", src="")
     return mark_safe(image_tag)
 
@@ -69,9 +68,9 @@ def get_modal_trigger(gallery_key, image, prev_img, next_img):
 def get_image_thumb(image):
     # srcset = image.get_srcset()
     srcset = ""
-    thumbnail_tag = (
-        '<img class="cast-gallery-thumbnail" src={src} ' 'srcset="{srcset}"</img>'
-    ).format(src="", srcset=srcset)
+    thumbnail_tag = ('<img class="cast-gallery-thumbnail" src={src} ' 'srcset="{srcset}"</img>').format(
+        src="", srcset=srcset
+    )
     return """
         <a href="{full}"">
             {thumbnail_tag}

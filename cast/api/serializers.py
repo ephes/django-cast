@@ -2,7 +2,8 @@ import logging
 
 from rest_framework import serializers
 
-from ..models import Image, Video, Gallery, Audio, Request
+from ..models import Audio, Gallery, Image, Request, Video
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +31,7 @@ class VideoSerializer(serializers.HyperlinkedModelSerializer):
 
 class AudioSerializer(serializers.HyperlinkedModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="cast:api:audio_detail")
-    podlove = serializers.HyperlinkedIdentityField(
-        view_name="cast:api:audio_podlove_detail"
-    )
+    podlove = serializers.HyperlinkedIdentityField(view_name="cast:api:audio_podlove_detail")
 
     class Meta:
         model = Audio
@@ -54,7 +53,6 @@ class GallerySerializer(serializers.HyperlinkedModelSerializer):
     images = serializers.PrimaryKeyRelatedField(many=True, queryset=Image.objects.all())
 
     def create(self, validated_data):
-        user = self.context["request"].user
         gallery = Gallery.objects.create()
         for image in validated_data["images"]:
             gallery.images.add(image)

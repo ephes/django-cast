@@ -1,7 +1,6 @@
 import pytest
 
-from cast.models import Gallery
-from cast.models import sync_media_ids, get_or_create_gallery
+from cast.models import Gallery, get_or_create_gallery, sync_media_ids
 
 
 @pytest.mark.parametrize(
@@ -47,13 +46,19 @@ def test_get_or_create_gallery_empty_image_ids():
 
 @pytest.mark.django_db()
 def test_get_or_create_gallery_invalid_image_id():
-    gallery = get_or_create_gallery([0,])
+    gallery = get_or_create_gallery(
+        [
+            0,
+        ]
+    )
     assert gallery is None
 
 
 @pytest.mark.django_db()
 def test_get_or_create_gallery_new_gallery(wagtail_image):
-    image_ids = [wagtail_image.pk,]
+    image_ids = [
+        wagtail_image.pk,
+    ]
     actual_gallery = get_or_create_gallery(image_ids)
     expected_gallery = Gallery.objects.filter(images__in=[wagtail_image]).first()
     assert actual_gallery == expected_gallery
@@ -62,7 +67,9 @@ def test_get_or_create_gallery_new_gallery(wagtail_image):
 
 @pytest.mark.django_db()
 def test_get_or_create_gallery_get_already_existing(wagtail_image):
-    image_ids = [wagtail_image.pk,]
+    image_ids = [
+        wagtail_image.pk,
+    ]
     expected_gallery = Gallery.objects.create()
     expected_gallery.images.add(*image_ids)
     actual_gallery = get_or_create_gallery(image_ids)
