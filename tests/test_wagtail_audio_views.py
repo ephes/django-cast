@@ -147,6 +147,7 @@ class TestAudioAdd:
 
         post_data = {
             "title": "foobar",
+            "duration": "invalid",
             "tags": "foo,bar,baz",
         }
         r = authenticated_client.post(add_url, post_data)

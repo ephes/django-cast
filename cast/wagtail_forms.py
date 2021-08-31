@@ -41,6 +41,8 @@ def get_video_form():
 
 
 class BaseAudioForm(BaseCollectionMemberForm):
+    duration = forms.DurationField()
+
     class Meta:
         widgets = {
             "tags": widgets.AdminTagWidget,
