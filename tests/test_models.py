@@ -76,6 +76,7 @@ class TestAudioModel:
 
     @pytest.mark.django_db
     def test_get_name(self, audio):
+        audio.title = None  # make sure name is provided by file
         assert audio.name == "test"
 
     @pytest.mark.django_db
@@ -86,6 +87,7 @@ class TestAudioModel:
 
     @pytest.mark.django_db
     def test_audio_str(self, audio):
+        audio.title = None  # make sure name is provided by file
         assert "1 - test" == str(audio)
 
     @pytest.mark.django_db
