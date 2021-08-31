@@ -193,7 +193,7 @@ def itunes_artwork(image_1px):
 @pytest.fixture()
 def audio(user, m4a_audio, settings):
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
-    audio = Audio(user=user, m4a=m4a_audio)
+    audio = Audio(user=user, m4a=m4a_audio, title="foobar audio")
     audio.save()
     yield audio
     # teardown
@@ -298,6 +298,13 @@ def body_with_video(python_body, video):
 
 
 @pytest.fixture
+def body_with_audio(python_body, audio):
+    audio_body = deepcopy(python_body)
+    audio_body[0]["value"].append({"type": "audio", "value": audio.id})
+    return json.dumps(audio_body)
+
+
+@pytest.fixture
 def body_with_image(python_body, wagtail_image):
     image_body = deepcopy(python_body)
     image_body[0]["value"].append({"type": "image", "value": wagtail_image.id})
@@ -333,6 +340,19 @@ def post_with_video(blog, body_with_video):
         pub_date=timezone.now(),
         body=body_with_video,
     )
+
+
+@pytest.fixture
+def post_with_audio(blog, body_with_audio):
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        body=body_with_audio,
+    )
+
 
 @pytest.fixture
 def post_with_image(blog, body_with_image):
