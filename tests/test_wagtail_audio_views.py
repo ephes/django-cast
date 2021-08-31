@@ -211,7 +211,7 @@ class TestAudioEdit:
         assert "Delete" in content
 
     def test_post_edit_audio_invalid_form(self, authenticated_client, audio_urls):
-        post_data = {"duration": "bar"}
+        post_data = {"duration": "invalid"}
         r = authenticated_client.post(audio_urls.audio_edit, post_data)
 
         # make sure we dont get redirected to audio_index
@@ -319,15 +319,10 @@ class TestAudioChooserUpload:
 
     def test_post_upload_audio_form_invalid(self, authenticated_client):
         upload_url = reverse("castmedia:audio_chooser_upload")
-        post_data = {"foo": "bar"}
+        post_data = {"duration": "invalid"}
         r = authenticated_client.post(upload_url, post_data)
 
         assert r.status_code == 200
-
-        # make sure error is reported
-        messages = list(r.context["messages"])
-        assert len(messages) == 1
-        assert "The audio could not be saved due to errors." == str(messages[0]).rstrip()
 
     def test_post_upload_audio(self, authenticated_client, minimal_mp4):
         upload_url = reverse("castmedia:audio_chooser_upload")
