@@ -199,9 +199,9 @@ class TestAudioEdit:
         content = r.content.decode("utf-8")
         assert "Delete" in content
 
-    def test_get_edit_audio_with_original_no_filesize(self, settings, authenticated_client, audio_without_file):
+    def test_get_edit_audio_with_original_no_filesize(self, settings, authenticated_client, audio_without_m4a):
         settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
-        audio = audio_without_file
+        audio = audio_without_m4a
         edit_url = reverse("castmedia:audio_edit", args=(audio.id,))
         r = authenticated_client.get(edit_url)
 
