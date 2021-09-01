@@ -315,6 +315,18 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     admin_form_fields = ("title", "subtitle", "m4a", "mp3", "oga", "opus", "tags")
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
+    search_fields = CollectionMember.search_fields + [
+        index.SearchField("title", partial_match=True, boost=10),
+        index.RelatedFields(
+            "tags",
+            [
+                index.SearchField("title", partial_match=True, boost=10),
+                index.SearchField("subtitle", partial_match=True, boost=5),
+            ],
+        ),
+        index.FilterField("user"),
+    ]
+
     objects = AudioQuerySet.as_manager()
 
     @property
