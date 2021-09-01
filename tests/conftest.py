@@ -185,12 +185,10 @@ def audio(user, m4a_audio, settings):
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     audio = Audio(user=user, m4a=m4a_audio, title="foobar audio")
     audio.save()
+    teardown_path = audio.m4a.path  # save path to unlink if audio.m4a is set to None
     yield audio
     # teardown
-    try:
-        os.unlink(audio.m4a.path)
-    except ValueError:
-        pass
+    os.unlink(teardown_path)
 
 
 @pytest.fixture()
