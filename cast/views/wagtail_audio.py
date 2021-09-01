@@ -107,13 +107,14 @@ def edit(request, audio_id):
     audio = get_object_or_404(Audio, id=audio_id)
 
     if request.POST:
-        original_file = audio.m4a
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user)
         if form.is_valid():
-            if "m4a" in form.changed_data:
+            changed_audio_files = set(form.changed_data).intersection(audio.audio_formats)
+            for file_format in changed_audio_files:
                 # if providing a new audio file, delete the old one.
                 # NB Doing this via original_file.delete() clears the file field,
                 # which definitely isn't what we want...
+                original_file = getattr(audio, file_format)
                 original_file.storage.delete(original_file.name)
             audio = form.save()
 

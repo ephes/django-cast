@@ -35,5 +35,11 @@
   {{ block.super }}
   <script src="{% static 'js/cast/gallery.js' %}"></script>
   <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+    {% if page.has_audio %}
+      <script src={% static 'js/cast/web-player/embed.js' %}></script>
+      {% for pk, audio in page.media_lookup.audio.items %}
+        <script>podlovePlayer("#audio_{{ audio.pk }}", "{{ audio.podlove_url }}");</script>
+      {% endfor %}
+  {% endif %}
 
 {% endblock javascript %}
