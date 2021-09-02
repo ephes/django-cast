@@ -246,6 +246,10 @@ class TestAudioEdit:
         assert r.status_code == 302
         assert r.url == audio_urls.audio_index
 
+        # teardown
+        audio = Audio.objects.first()
+        audio.m4a.delete()
+
 
 class TestAudioDelete:
     pytestmark = pytest.mark.django_db
@@ -327,13 +331,14 @@ class TestAudioChooserUpload:
 
         assert r.status_code == 200
 
-    def test_post_upload_audio(self, authenticated_client, minimal_mp4):
+    def test_post_upload_audio(self, authenticated_client, m4a_audio, settings):
+        settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
         upload_url = reverse("castmedia:audio_chooser_upload")
         prefix = "media-chooser-upload"
         post_data = {
             f"{prefix}-title": "foobar",
             f"{prefix}-tags": "foo,bar,baz",
-            f"{prefix}-original": minimal_mp4,
+            f"{prefix}-m4a": m4a_audio,
         }
         r = authenticated_client.post(upload_url, post_data)
 
@@ -346,3 +351,6 @@ class TestAudioChooserUpload:
         actual_tags = set([t.name for t in audio.tags.all()])
         expected_tags = set(post_data[f"{prefix}-tags"].split(","))
         assert actual_tags == expected_tags
+
+        # teardown
+        audio.m4a.delete()
