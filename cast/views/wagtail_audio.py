@@ -16,6 +16,8 @@ from ..wagtail_forms import get_audio_form
 
 DEFAULT_PAGE_KEY = "p"
 
+pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
+
 
 def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=20):
     paginator = Paginator(items, per_page)
@@ -179,7 +181,32 @@ def chooser(request):
 
     upload_form = get_audio_form()(prefix="media-chooser-upload")
 
-    paginator, audios = paginate(request, audios, per_page=10)
+    q = None
+    is_searching = False
+    if "q" in request.GET or "p" in request.GET:
+        search_form = SearchForm(request.GET)
+        if search_form.is_valid():
+            q = search_form.cleaned_data["q"]
+
+            audios = audios.search(q)
+            is_searching = True
+        else:
+            is_searching = False
+
+        paginator, audios = paginate(request, audios, per_page=10)
+        return render(
+            request,
+            "cast/wagtail/audio_chooser_results.html",
+            {
+                "audios": audios,
+                "query_string": q,
+                "is_searching": is_searching,
+                "pagination_template": pagination_template,
+            },
+        )
+    else:
+        search_form = SearchForm()
+        paginator, audios = paginate(request, audios, per_page=10)
 
     return render_modal_workflow(
         request,
@@ -188,6 +215,7 @@ def chooser(request):
         {
             "audios": audios,
             "uploadform": upload_form,
+            "searchform": search_form,
             "is_searching": False,
             "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
         },

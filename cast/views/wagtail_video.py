@@ -17,6 +17,9 @@ from ..wagtail_forms import get_video_form
 DEFAULT_PAGE_KEY = "p"
 
 
+pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
+
+
 def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=20):
     paginator = Paginator(items, per_page)
     page = paginator.get_page(request.GET.get(page_key))
@@ -178,7 +181,32 @@ def chooser(request):
 
     upload_form = get_video_form()(prefix="media-chooser-upload")
 
-    paginator, videos = paginate(request, videos, per_page=10)
+    q = None
+    is_searching = False
+    if "q" in request.GET or "p" in request.GET:
+        search_form = SearchForm(request.GET)
+        if search_form.is_valid():
+            q = search_form.cleaned_data["q"]
+
+            videos = videos.search(q)
+            is_searching = True
+        else:
+            is_searching = False
+
+        paginator, videos = paginate(request, videos, per_page=10)
+        return render(
+            request,
+            "cast/wagtail/video_chooser_results.html",
+            {
+                "videos": videos,
+                "query_string": q,
+                "is_searching": is_searching,
+                "pagination_template": pagination_template,
+            },
+        )
+    else:
+        search_form = SearchForm()
+        paginator, videos = paginate(request, videos, per_page=10)
 
     return render_modal_workflow(
         request,
@@ -186,9 +214,10 @@ def chooser(request):
         None,
         {
             "videos": videos,
+            "searchform": search_form,
             "uploadform": upload_form,
-            "is_searching": False,
-            "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
+            "is_searching": is_searching,
+            "pagination_template": pagination_template,
         },
         json_data={
             "step": "chooser",
@@ -260,7 +289,7 @@ def chooser_upload(request):
         # "collections": collections,
         "uploadform": VideoForm(),
         "is_searching": False,
-        "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
+        "pagination_template": pagination_template,
     }
     return render_modal_workflow(
         request,
