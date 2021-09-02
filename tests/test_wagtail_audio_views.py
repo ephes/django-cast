@@ -324,12 +324,14 @@ class TestAudioChooserUpload:
         content = r.content.decode("utf-8")
         assert audio.title in content
 
-    def test_post_upload_audio_form_invalid(self, authenticated_client):
+    def test_post_upload_audio_form_invalid(self, authenticated_client, m4a_audio):
+        m4a_audio.seek(m4a_audio.size)
         upload_url = reverse("castmedia:audio_chooser_upload")
-        post_data = {"duration": "invalid"}
+        post_data = {"media-chooser-upload-m4a": m4a_audio}
         r = authenticated_client.post(upload_url, post_data)
 
         assert r.status_code == 200
+        assert r.context["message"] == "The audio could not be saved due to errors."
 
     def test_post_upload_audio(self, authenticated_client, m4a_audio, settings):
         settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
