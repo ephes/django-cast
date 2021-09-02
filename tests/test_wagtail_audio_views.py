@@ -237,11 +237,9 @@ class TestAudioEdit:
         audio.refresh_from_db()
         assert audio.title == post_data["title"]
 
-    def test_post_edit_audio_original(self, authenticated_client, audio_urls, minimal_mp4):
-        post_data = {
-            "title": "asdf",
-            "original": minimal_mp4,
-        }
+    def test_post_edit_audio_m4a(self, authenticated_client, audio_urls, m4a_audio):
+        m4a_audio.seek(0)  # dunno why this is necessary :/
+        post_data = {"m4a": m4a_audio}
         r = authenticated_client.post(audio_urls.audio_edit, post_data)
 
         # make sure we get redirected to audio_index

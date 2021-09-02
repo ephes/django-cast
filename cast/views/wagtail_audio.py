@@ -106,7 +106,7 @@ def edit(request, audio_id):
     AudioForm = get_audio_form()
     audio = get_object_or_404(Audio, id=audio_id)
 
-    if request.POST:
+    if request.method == "POST":
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user)
         if form.is_valid():
             changed_audio_files = set(form.changed_data).intersection(audio.audio_formats)
