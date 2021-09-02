@@ -34,6 +34,9 @@ class AdminVideoChooser(AdminChooser):
         value = value if value is not None else {}
         original_field_html = super().render_html(name, value.get("id"), attrs)
 
+        print("value: ", value, name, attrs)
+        edit_url = value.get("edit_link", "")
+        print(f"edit_url: <{edit_url}>")
         return render_to_string(
             "cast/wagtail/video_chooser.html",
             {
