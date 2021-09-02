@@ -17,7 +17,7 @@ function createVideoChooser(id) {
             }
             input.val(newState.id);
             videoTitle.text(newState.title);
-            editLink.attr('href', newState.edit_url);
+            editLink.attr('href', newState.edit_link);
             chooserElement.removeClass('blank');
             state = newState;
         },
