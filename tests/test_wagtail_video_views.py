@@ -326,7 +326,7 @@ class TestVideoChooserUpload:
         # make sure error is reported
         messages = list(r.context["messages"])
         assert len(messages) == 1
-        assert "The video could not be saved due to errors." == str(messages[0]).rstrip()
+        assert str(messages[0]).rstrip() == "The video could not be saved due to errors."
 
     def test_post_upload_video(self, authenticated_client, minimal_mp4):
         upload_url = reverse("castmedia:video_chooser_upload")

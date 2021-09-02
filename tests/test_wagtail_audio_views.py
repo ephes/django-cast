@@ -142,18 +142,20 @@ class TestAudioAdd:
         content = r.content.decode("utf-8")
         assert "Uploading…" in content
 
-    def test_post_add_audio_invalid_form(self, authenticated_client):
+    def test_post_add_audio_invalid_form(self, authenticated_client, m4a_audio):
+        m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
         add_url = reverse("castmedia:audio_add")
 
         post_data = {
             "title": "foobar",
-            "duration": "invalid",
+            "m4a": m4a_audio,  # invalid
             "tags": "foo,bar,baz",
         }
         r = authenticated_client.post(add_url, post_data)
 
         # make sure we dont get redirected to audio_index
         assert r.status_code == 200
+        assert r.context["message"] == "The audio file could not be saved due to errors."
 
         # make sure we didn't create a audio
         Audio.objects.first() is None
@@ -215,8 +217,9 @@ class TestAudioEdit:
         content = r.content.decode("utf-8")
         assert "Delete" in content
 
-    def test_post_edit_audio_invalid_form(self, authenticated_client, audio_urls):
-        post_data = {"duration": "invalid"}
+    def test_post_edit_audio_invalid_form(self, authenticated_client, audio_urls, m4a_audio):
+        m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
+        post_data = {"m4a": m4a_audio}
         r = authenticated_client.post(audio_urls.audio_edit, post_data)
 
         # make sure we dont get redirected to audio_index
@@ -325,7 +328,7 @@ class TestAudioChooserUpload:
         assert audio.title in content
 
     def test_post_upload_audio_form_invalid(self, authenticated_client, m4a_audio):
-        m4a_audio.seek(m4a_audio.size)
+        m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
         upload_url = reverse("castmedia:audio_chooser_upload")
         post_data = {"media-chooser-upload-m4a": m4a_audio}
         r = authenticated_client.post(upload_url, post_data)
