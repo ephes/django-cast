@@ -216,7 +216,7 @@ def chooser(request):
             "videos": videos,
             "searchform": search_form,
             "uploadform": upload_form,
-            "is_searching": is_searching,
+            "is_searching": False,
             "pagination_template": pagination_template,
         },
         json_data={

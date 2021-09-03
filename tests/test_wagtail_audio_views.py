@@ -315,6 +315,14 @@ class TestAudioChooser:
         # make sure prefix for form fields is set
         assert "media-chooser-upload" in content
 
+    def test_get_audio_chooser_with_search(self, authenticated_client, audio_urls):
+        r = authenticated_client.get(audio_urls.audio_chooser, {"q": audio_urls.audio.title})
+
+        assert r.status_code == 200
+
+        # make sure searched audio is included in results
+        assert r.context["audios"][0] == audio_urls.audio
+
 
 class TestAudioChooserUpload:
     pytestmark = pytest.mark.django_db

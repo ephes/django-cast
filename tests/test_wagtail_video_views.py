@@ -304,6 +304,14 @@ class TestVideoChooser:
         # make sure prefix for form fields is set
         assert "media-chooser-upload" in content
 
+    def test_get_video_chooser_with_search(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.video_chooser, {"q": video_urls.video.title})
+
+        assert r.status_code == 200
+
+        # make sure searched video is included in results
+        assert r.context["videos"][0] == video_urls.video
+
 
 class TestVideoChooserUpload:
     pytestmark = pytest.mark.django_db
