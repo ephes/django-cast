@@ -217,7 +217,7 @@ def chooser(request):
             "uploadform": upload_form,
             "searchform": search_form,
             "is_searching": False,
-            "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
+            "pagination_template": pagination_template,
         },
         json_data={
             "step": "chooser",
