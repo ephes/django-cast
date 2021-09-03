@@ -15,7 +15,7 @@
 
     {% include "cast/wagtail/video_list.html" %}
 
-    {% include "wagtailadmin/shared/pagination_nav.html" with items=media_files is_searching=is_searching linkurl="castmedia:video_index" %}
+    {% include "wagtailadmin/shared/pagination_nav.html" with items=videos is_searching=is_searching linkurl="castmedia:video_index" %}
 {% else %}
     {% if is_searching %}
          <h2>{% blocktrans %}Sorry, no videos files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>

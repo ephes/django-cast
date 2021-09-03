@@ -41,13 +41,13 @@ def index(request):
         form = SearchForm(placeholder=_("Search media"))
 
     # Pagination
-    paginator, media = paginate(request, audios)
+    paginator, audios = paginate(request, audios)
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return render(
             request,
-            "cast/wagtail/audio_chooser_results.html",
+            "cast/wagtail/audio_results.html",
             {
                 "ordering": ordering,
                 "audios": audios,
@@ -181,8 +181,6 @@ def chooser(request):
 
     upload_form = get_audio_form()(prefix="media-chooser-upload")
 
-    q = None
-    is_searching = False
     if "q" in request.GET or "p" in request.GET:
         search_form = SearchForm(request.GET)
         if search_form.is_valid():
@@ -191,6 +189,7 @@ def chooser(request):
             audios = audios.search(q)
             is_searching = True
         else:
+            q = None
             is_searching = False
 
         paginator, audios = paginate(request, audios, per_page=10)

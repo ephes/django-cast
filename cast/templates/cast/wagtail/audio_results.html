@@ -15,7 +15,7 @@
 
     {% include "cast/wagtail/audio_list.html" %}
 
-    {% include "wagtailadmin/shared/pagination_nav.html" with items=media_files is_searching=is_searching linkurl="castmedia:audio_index" %}
+    {% include "wagtailadmin/shared/pagination_nav.html" with items=audios is_searching=is_searching linkurl="castmedia:audio_index" %}
 {% else %}
     {% if is_searching %}
          <h2>{% blocktrans %}Sorry, no audio files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>

@@ -42,13 +42,13 @@ def index(request):
         form = SearchForm(placeholder=_("Search media"))
 
     # Pagination
-    paginator, media = paginate(request, videos)
+    paginator, videos = paginate(request, videos)
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return render(
             request,
-            "cast/wagtail/video_chooser_results.html",
+            "cast/wagtail/video_results.html",
             {
                 "ordering": ordering,
                 "videos": videos,
@@ -181,8 +181,6 @@ def chooser(request):
 
     upload_form = get_video_form()(prefix="media-chooser-upload")
 
-    q = None
-    is_searching = False
     if "q" in request.GET or "p" in request.GET:
         search_form = SearchForm(request.GET)
         if search_form.is_valid():
@@ -191,6 +189,7 @@ def chooser(request):
             videos = videos.search(q)
             is_searching = True
         else:
+            q = None
             is_searching = False
 
         paginator, videos = paginate(request, videos, per_page=10)

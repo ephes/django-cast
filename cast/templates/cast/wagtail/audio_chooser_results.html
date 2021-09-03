@@ -16,5 +16,5 @@
 
     {% include pagination_template with items=audios is_ajax=1 %}
 {% else %}
-    <p>{% blocktrans %}Sorry, no media files match "<em>{{ query_string }}</em>"{% endblocktrans %}</p>
+    <p>{% blocktrans %}Sorry, no audio models match "<em>{{ query_string }}</em>"{% endblocktrans %}</p>
 {% endif %}
