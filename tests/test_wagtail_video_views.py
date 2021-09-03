@@ -312,6 +312,15 @@ class TestVideoChooser:
         # make sure searched video is included in results
         assert r.context["videos"][0] == video_urls.video
 
+    def test_get_video_chooser_with_search_invalid(self, authenticated_client, video_urls):
+        # {"p": "1"} (page 1) leads to the search form being invalid
+        r = authenticated_client.get(video_urls.video_chooser, {"p": "1"})
+
+        assert r.status_code == 200
+
+        # make sure searched video is included in results
+        assert r.context["videos"][0] == video_urls.video
+
 
 class TestVideoChooserUpload:
     pytestmark = pytest.mark.django_db

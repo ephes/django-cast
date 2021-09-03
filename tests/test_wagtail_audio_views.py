@@ -323,6 +323,15 @@ class TestAudioChooser:
         # make sure searched audio is included in results
         assert r.context["audios"][0] == audio_urls.audio
 
+    def test_get_audio_chooser_with_search_invalid(self, authenticated_client, audio_urls):
+        # {"p": "1"} (page 1) leads to the search form being invalid
+        r = authenticated_client.get(audio_urls.audio_chooser, {"p": "1"})
+
+        assert r.status_code == 200
+
+        # make sure searched audios is included in results
+        assert r.context["audios"][0] == audio_urls.audio
+
 
 class TestAudioChooserUpload:
     pytestmark = pytest.mark.django_db
