@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.urls import reverse
 
 import pytest
@@ -130,6 +132,29 @@ class TestVideoIndex:
 
         # make sure video_urls.video is included in results
         assert video_urls.video.title in content
+
+    def test_get_video_index_with_pagination(self, authenticated_client, user):
+        video_models = []
+        for i in range(1, 3):
+            video = Video(user=user, title=f"video {i}")
+            video.save()
+            video_models.append(video)
+        index_url = reverse("castmedia:video_index")
+        with patch("cast.views.wagtail_video.MENU_ITEM_PAGINATION", return_value=1):
+            r = authenticated_client.get(index_url, {"p": "1"})
+        videos = r.context["videos"]
+
+        # make sure we got last video from first page
+        assert len(videos) == 1
+        assert videos[0] == video_models[-1]
+
+        with patch("cast.views.wagtail_video.MENU_ITEM_PAGINATION", return_value=1):
+            r = authenticated_client.get(index_url, {"p": "2"})
+        videos = r.context["videos"]
+
+        # make sure we got first video from last page
+        assert len(videos) == 1
+        assert videos[0] == video_models[0]
 
 
 class TestVideoAdd:
@@ -320,6 +345,29 @@ class TestVideoChooser:
 
         # make sure searched video is included in results
         assert r.context["videos"][0] == video_urls.video
+
+    def test_get_video_chooser_with_pagination(self, authenticated_client, user):
+        video_models = []
+        for i in range(1, 3):
+            video = Video(user=user, title=f"video {i}")
+            video.save()
+            video_models.append(video)
+        chooser_url = reverse("castmedia:video_chooser")
+        with patch("cast.views.wagtail_video.CHOOSER_PAGINATION", return_value=1):
+            r = authenticated_client.get(chooser_url, {"p": "1"})
+        videos = r.context["videos"]
+
+        # make sure we got last video from first page
+        assert len(videos) == 1
+        assert videos[0] == video_models[-1]
+
+        with patch("cast.views.wagtail_video.CHOOSER_PAGINATION", return_value=1):
+            r = authenticated_client.get(chooser_url, {"p": "2"})
+        videos = r.context["videos"]
+
+        # make sure we got first video from last page
+        assert len(videos) == 1
+        assert videos[0] == video_models[0]
 
 
 class TestVideoChooserUpload:

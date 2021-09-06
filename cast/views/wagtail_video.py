@@ -10,6 +10,7 @@ from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.admin.models import popular_tags_for_model
 from wagtail.search.backends import get_search_backends
 
+from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..models import Video
 from ..wagtail_forms import get_video_form
 
@@ -42,7 +43,7 @@ def index(request):
         form = SearchForm(placeholder=_("Search media"))
 
     # Pagination
-    paginator, videos = paginate(request, videos)
+    paginator, videos = paginate(request, videos, per_page=MENU_ITEM_PAGINATION)
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -192,7 +193,7 @@ def chooser(request):
             q = None
             is_searching = False
 
-        paginator, videos = paginate(request, videos, per_page=10)
+        paginator, videos = paginate(request, videos, per_page=CHOOSER_PAGINATION)
         return render(
             request,
             "cast/wagtail/video_chooser_results.html",
@@ -205,7 +206,7 @@ def chooser(request):
         )
     else:
         search_form = SearchForm()
-        paginator, videos = paginate(request, videos, per_page=10)
+        paginator, videos = paginate(request, videos, per_page=CHOOSER_PAGINATION)
 
     return render_modal_workflow(
         request,

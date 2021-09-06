@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.urls import reverse
 
 import pytest
@@ -130,6 +132,29 @@ class TestAudioIndex:
 
         # make sure audio_urls.audio is included in results
         assert audio_urls.audio.title in content
+
+    def test_get_audio_index_with_pagination(self, authenticated_client, user):
+        audio_models = []
+        for i in range(1, 3):
+            audio = Audio(user=user, title=f"audio {i}")
+            audio.save()
+            audio_models.append(audio)
+        index_url = reverse("castmedia:audio_index")
+        with patch("cast.views.wagtail_audio.MENU_ITEM_PAGINATION", return_value=1):
+            r = authenticated_client.get(index_url, {"p": "1"})
+        audios = r.context["audios"]
+
+        # make sure we got last audio from first page
+        assert len(audios) == 1
+        assert audios[0] == audio_models[-1]
+
+        with patch("cast.views.wagtail_audio.MENU_ITEM_PAGINATION", return_value=1):
+            r = authenticated_client.get(index_url, {"p": "2"})
+        audios = r.context["audios"]
+
+        # make sure we got first audio from last page
+        assert len(audios) == 1
+        assert audios[0] == audio_models[0]
 
 
 class TestAudioAdd:
@@ -331,6 +356,29 @@ class TestAudioChooser:
 
         # make sure searched audios is included in results
         assert r.context["audios"][0] == audio_urls.audio
+
+    def test_get_audio_chooser_with_pagination(self, authenticated_client, user):
+        audio_models = []
+        for i in range(1, 3):
+            audio = Audio(user=user, title=f"audio {i}")
+            audio.save()
+            audio_models.append(audio)
+        chooser_url = reverse("castmedia:audio_chooser")
+        with patch("cast.views.wagtail_audio.CHOOSER_PAGINATION", return_value=1):
+            r = authenticated_client.get(chooser_url, {"p": "1"})
+        audios = r.context["audios"]
+
+        # make sure we got last audio from first page
+        assert len(audios) == 1
+        assert audios[0] == audio_models[-1]
+
+        with patch("cast.views.wagtail_audio.CHOOSER_PAGINATION", return_value=1):
+            r = authenticated_client.get(chooser_url, {"p": "2"})
+        audios = r.context["audios"]
+
+        # make sure we got first audio from last page
+        assert len(audios) == 1
+        assert audios[0] == audio_models[0]
 
 
 class TestAudioChooserUpload:

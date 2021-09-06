@@ -10,6 +10,7 @@ from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.admin.models import popular_tags_for_model
 from wagtail.search.backends import get_search_backends
 
+from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..models import Audio
 from ..wagtail_forms import get_audio_form
 
@@ -19,7 +20,7 @@ DEFAULT_PAGE_KEY = "p"
 pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
 
 
-def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=20):
+def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=MENU_ITEM_PAGINATION):
     paginator = Paginator(items, per_page)
     page = paginator.get_page(request.GET.get(page_key))
     return paginator, page
@@ -41,7 +42,7 @@ def index(request):
         form = SearchForm(placeholder=_("Search media"))
 
     # Pagination
-    paginator, audios = paginate(request, audios)
+    paginator, audios = paginate(request, audios, per_page=MENU_ITEM_PAGINATION)
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -192,7 +193,7 @@ def chooser(request):
             q = None
             is_searching = False
 
-        paginator, audios = paginate(request, audios, per_page=10)
+        paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
         return render(
             request,
             "cast/wagtail/audio_chooser_results.html",
@@ -205,7 +206,7 @@ def chooser(request):
         )
     else:
         search_form = SearchForm()
-        paginator, audios = paginate(request, audios, per_page=10)
+        paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
 
     return render_modal_workflow(
         request,
@@ -280,7 +281,7 @@ def chooser_upload(request):
 
     search_form = SearchForm()
 
-    paginator, audios = paginate(request, audios, per_page=10)
+    paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
 
     context = {
         "audios": audios,
