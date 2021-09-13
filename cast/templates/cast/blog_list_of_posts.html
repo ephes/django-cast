@@ -1,11 +1,34 @@
 {% extends "cast/cast_base.html" %}
 {% load wagtailcore_tags %}
+{% load crispy_forms_tags %}
 
 {% block body_class %}template-bloglistpage{% endblock %}
 
 {% block content %}
 <h1>{{ page.title }}</h1>
 <div class="intro">{{ page.description|richtext }}</div>
+
+{% block filters %}
+  <div id="accordion">
+    <div class="card">
+      <div class="card-header" id="headingOne">
+        <h5 class="mb-0">
+          <button class="btn btn-link" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+            Filters / Fulltext-Search
+          </button>
+        </h5>
+      </div>
+      <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
+        <div class="card-body">
+          <form action="" method="get">
+              {{ filter.form | crispy }}
+              <input class="btn btn-primary btn-lg" role="button" type="submit" />
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock filters %}
 
 {% for post in page.published_posts %}
   {% include "cast/post_body.html" with render_detail=False page=post %}
