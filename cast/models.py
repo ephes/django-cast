@@ -580,7 +580,6 @@ class Blog(TimeStampedModel, Page):
         # get selected facet if set and build the facet counting queryset
         facet_counts = {}
         selected_facet = self.get_selected_facet()
-        print("selected facet: ", selected_facet)
         if selected_facet is not None:
             facet_counts = {"year_month": {selected_facet: 1}}
         kwargs["facet_counts"] = facet_counts
@@ -596,7 +595,6 @@ class Blog(TimeStampedModel, Page):
         year_month_counts = {}
         for row in facet_queryset:
             year_month_counts[row["month"]] = row["n"]
-        print("year month counts: ", year_month_counts)
         return {"year_month": year_month_counts}
 
     def set_filter_context(self, context):
