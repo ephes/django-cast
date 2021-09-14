@@ -6,15 +6,13 @@ import pytest
 class TestPostList:
     pytestmark = pytest.mark.django_db
 
-    def test_get_post_list(self, client, post):
-        blog_url = reverse("cast:post_list", kwargs={"slug": post.blog.slug})
+    def test_post_in_blog_index(self, client, post):
+        blog_url = post.blog.get_url()
 
         r = client.get(blog_url)
         assert r.status_code == 200
 
-        content = r.content.decode("utf-8")
-        assert "html" in content
-        assert post.title in content
+        assert post in r.context["page"].published_posts
 
     def test_get_post_list_without_draft(self, client, unpublished_post):
         blog_url = unpublished_post.blog.get_url()
