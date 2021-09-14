@@ -22,17 +22,6 @@ class TestPostList:
 
         assert unpublished_post not in r.context["page"].published_posts
 
-    def test_get_post_list_without_draft_logged_in(self, client, user, unpublished_post):
-        blog_url = reverse("cast:post_list", kwargs={"slug": unpublished_post.blog.slug})
-
-        r = client.login(username=user.username, password=user._password)
-        r = client.get(blog_url)
-        assert r.status_code == 200
-
-        content = r.content.decode("utf-8")
-        assert "html" in content
-        assert unpublished_post.title in content
-
     def test_get_post_list_without_post_detail(self, client, post):
         blog_url = post.blog.get_url()
 
