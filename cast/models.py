@@ -556,6 +556,17 @@ class Blog(TimeStampedModel, Page):
         else:
             return self.owner.get_full_name()
 
+    def set_filter_context(self, context):
+        from .filters import PostFilter
+
+        context["filter"] = PostFilter()
+        print("filter: ", context["filter"])
+
+    def get_context(self, request, *args, **kwargs):
+        context = super().get_context(request, *args, **kwargs)
+        self.set_filter_context(context)
+        return context
+
     @property
     def published_posts(self):
         return Post.objects.live().descendant_of(self).order_by("-visible_date")
