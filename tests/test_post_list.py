@@ -22,7 +22,7 @@ class TestBlogIndex:
 
         assert unpublished_post not in r.context["page"].published_posts
 
-    def test_get_post_list_without_post_detail(self, client, post):
+    def test_post_overview_content_in_blog_index_but_not_detail(self, client, post):
         blog_url = post.blog.get_url()
 
         r = client.get(blog_url)
