@@ -14,15 +14,13 @@ class TestPostList:
 
         assert post in r.context["page"].published_posts
 
-    def test_get_post_list_without_draft(self, client, unpublished_post):
+    def test_unpublished_post_not_in_blog_index(self, client, unpublished_post):
         blog_url = unpublished_post.blog.get_url()
 
         r = client.get(blog_url)
         assert r.status_code == 200
 
-        content = r.content.decode("utf-8")
-        assert "html" in content
-        assert unpublished_post.title not in content
+        assert unpublished_post not in r.context["page"].published_posts
 
     def test_get_post_list_without_draft_logged_in(self, client, user, unpublished_post):
         blog_url = reverse("cast:post_list", kwargs={"slug": unpublished_post.blog.slug})
