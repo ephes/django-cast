@@ -33,11 +33,11 @@ class TestBlogIndex:
         assert "only_in_detail" not in content
 
 
-class TestPostListFilter:
+class TestBlogIndexFilter:
     pytestmark = pytest.mark.django_db
 
     def test_date_facet_filter_shown(self, client, post_with_date):
-        blog_url = reverse("cast:post_list", kwargs={"slug": post_with_date.blog.slug})
+        blog_url = post_with_date.blog.get_url()
         r = client.get(blog_url)
         assert r.status_code == 200
 
