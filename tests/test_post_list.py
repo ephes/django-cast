@@ -3,7 +3,7 @@ from django.urls import reverse
 import pytest
 
 
-class TestPostList:
+class TestBlogIndex:
     pytestmark = pytest.mark.django_db
 
     def test_post_in_blog_index(self, client, post):
