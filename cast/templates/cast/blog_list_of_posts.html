@@ -30,6 +30,7 @@
   </div>
 {% endblock filters %}
 
+Number of shown posts: {{ page.published_posts.count }}
 {% for post in page.published_posts %}
   {% include "cast/post_body.html" with render_detail=False page=post %}
 {% endfor %}

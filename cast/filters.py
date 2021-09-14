@@ -4,8 +4,6 @@ from datetime import datetime
 
 import django_filters
 
-from watson import search as watson
-
 from .models import Post
 from .widgets import DateFacetWidget
 
@@ -80,6 +78,23 @@ class PostFilter(django_filters.FilterSet):
         super().__init__(data=data, queryset=queryset, request=request, prefix=prefix)
         self.blog = blog
         self.facet_counts = facet_counts
+        print("post count in filterset: ", self.queryset.count())
+        print("post count in filterset qs: ", self.qs.count())
+
+    def filter_queryset(self, queryset):
+        """
+        Filter the queryset with the underlying form's `cleaned_data`. You must
+        call `is_valid()` or `errors` before calling this method.
+
+        This method should be overridden if additional filtering needs to be
+        applied to the queryset before it is cached.
+        """
+        for name, value in self.form.cleaned_data.items():
+            queryset = self.filters[name].filter(queryset, value)
+            # assert isinstance(queryset, models.QuerySet), \
+            #     "Expected '%s.%s' to return a QuerySet, but got a %s instead." \
+            #     % (type(self).__name__, name, type(queryset).__name__)
+        return queryset
 
     def fulltext_search(self, queryset, name, value):
-        return watson.filter(queryset, value)
+        return queryset.search(value)
