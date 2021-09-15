@@ -29,16 +29,6 @@ urlpatterns = [
     ),
     # Regular django views
     url(
-        regex=r"^(?P<slug>[^/]+)/add/$",
-        view=views.PostCreateView.as_view(),
-        name="post_create",
-    ),
-    url(
-        regex=r"^(?P<blog_slug>[^/]+)/(?P<slug>[^/]+)/$",
-        view=views.PostDetailView.as_view(),
-        name="post_detail",
-    ),
-    url(
         regex=r"^(?P<slug>[^/]+)_detail/$",
         view=views.BlogDetailView.as_view(),
         name="blog_detail",

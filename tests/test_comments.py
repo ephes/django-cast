@@ -9,20 +9,18 @@ class TestPostComments:
     pytestmark = pytest.mark.django_db
 
     def test_comment_form_not_included(self, client, post, comments_not_enabled):
-        slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
-        detail_url = reverse("cast:post_detail", kwargs=slugs)
-
+        detail_url = post.get_url()
         r = client.get(detail_url)
         assert r.status_code == 200
+
+        print("page comments enabled: ", r.context["page"].comments_enabled)
 
         content = r.content.decode("utf-8")
         assert post.title in content
         assert 'class="comments' not in content
 
     def test_comment_form_included(self, client, post, comments_enabled):
-        slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
-        detail_url = reverse("cast:post_detail", kwargs=slugs)
-
+        detail_url = post.get_url()
         r = client.get(detail_url)
         assert r.status_code == 200
 
@@ -31,9 +29,7 @@ class TestPostComments:
         assert 'class="comments' in content
 
     def test_comment_in_comment_list(self, client, post, comment, comments_enabled):
-        slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
-        detail_url = reverse("cast:post_detail", kwargs=slugs)
-
+        detail_url = post.get_url()
         r = client.get(detail_url)
         assert r.status_code == 200
 
@@ -42,8 +38,7 @@ class TestPostComments:
 
     def test_add_new_comment(self, client, post, comments_enabled):
         ajax_url = reverse("comments-post-comment-ajax")
-        slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
-        detail_url = reverse("cast:post_detail", kwargs=slugs)
+        detail_url = post.get_url()
 
         r = client.get(detail_url)
         content = r.content.decode("utf-8")
