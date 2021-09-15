@@ -556,24 +556,41 @@ class Blog(TimeStampedModel, Page):
         else:
             return self.owner.get_full_name()
 
-    def set_filter_context(self, request, context):
+    @property
+    def unfiltered_published_posts(self):
+        return Post.objects.live().descendant_of(self).order_by("-visible_date")
+
+    @property
+    def request(self):
+        if hasattr(self, "_request"):
+            return self._request
+
+        class StubRequest:
+            GET = {}
+
+        return StubRequest()
+
+    @request.setter
+    def request(self, value):
+        self._request = value
+
+    @property
+    def filterset(self):
         from .filters import PostFilter, get_facet_counts
 
-        published_posts_queryset = Post.objects.live().descendant_of(self).order_by("-visible_date")
+        get_params = self.request.GET
         kwargs = {
             "blog": self,
-            "queryset": published_posts_queryset,
-            "data": request.GET,
-            "request": request,
+            "queryset": self.unfiltered_published_posts,
+            "data": get_params,
         }
-        kwargs.update({"facet_counts": get_facet_counts(request, kwargs)})
-        self.filterset = PostFilter(**kwargs)
-        context["filter"] = self.filterset
-        return context
+        kwargs.update({"facet_counts": get_facet_counts(get_params, kwargs)})
+        return PostFilter(**kwargs)
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
-        self.set_filter_context(request, context)
+        self.request = request
+        context["filter"] = self.filterset
         return context
 
     @property

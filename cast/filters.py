@@ -2,6 +2,8 @@ import string
 
 from datetime import datetime
 
+from django.db import models
+
 import django_filters
 
 from .models import Post
@@ -18,30 +20,19 @@ def parse_date_facets(value):
     return year_month
 
 
-def get_selected_facet(request):
-    """Return the currently selected facet. Otherwise we would see
-    all date facets that are choosable if no date facet was selected
-    because in the final pass over the queryset facet_counts would be
-    empty and the selected facet would not be accepted because it's
-    not in the fields choices."""
-    data = request.GET or None
-    if data is None:
-        return None
-    date_facet = data.get("date_facets")
+def get_selected_facet(get_params):
+    date_facet = get_params.get("date_facets")
     if date_facet is None or len(date_facet) == 0:
         return None
-
     return parse_date_facets(date_facet)
 
 
-def get_facet_counts(request, kwargs):
-    from django.db import models
-
+def get_facet_counts(get_params, kwargs):
     kwargs = {k: v for k, v in kwargs.items()}  # copy kwargs to avoid overwriting
 
     # get selected facet if set and build the facet counting queryset
     facet_counts = {}
-    selected_facet = get_selected_facet(request)
+    selected_facet = get_selected_facet(get_params)
     if selected_facet is not None:
         facet_counts = {"year_month": {selected_facet: 1}}
     kwargs["facet_counts"] = facet_counts
