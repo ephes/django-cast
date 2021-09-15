@@ -1,23 +1,12 @@
 import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import models
-from django.db.models.functions import TruncMonth
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.generic import CreateView, DetailView, ListView, UpdateView
 
-from django_filters.views import FilterView
-
-from ..filters import PostFilter, parse_date_facets
 from ..forms import PostForm
 from ..models import Blog, Post
-from .viewmixins import (
-    AddRequestUserMixin,
-    GetParamsMixin,
-    PostChangeMixin,
-    RenderPostMixin,
-)
+from .viewmixins import AddRequestUserMixin, PostChangeMixin, RenderPostMixin
 
 
 logger = logging.getLogger(__name__)
@@ -33,80 +22,6 @@ class BlogDetailView(DetailView):
     model = Post
     template_name = "cast/blog_detail.html"
     context_object_name = "blog"
-
-
-class PostsListView(RenderPostMixin, GetParamsMixin, FilterView):
-    model = Post
-    template_name = "cast/post_list.html"
-    context_object_name = "posts"
-    paginate_by = 5
-    filterset_class = PostFilter
-
-    def get_queryset(self):
-        # self.blog is needed elsewhere
-        self.blog = get_object_or_404(Blog, slug=self.kwargs["slug"])
-        if not self.request.user.is_authenticated:
-            queryset = Post.objects.live().descendant_of(self.blog).order_by("-visible_date")
-        else:
-            queryset = Post.objects.descendant_of(self.blog).order_by("-created")
-        return queryset
-
-    def get_selected_facet(self):
-        """Return the currently selected facet. Otherwise we would see
-        all date facets that are choosable if no date facet was selected
-        because in the final pass over the queryset facet_counts would be
-        empty and the selected facet would not be accepted because it's
-        not in the fields choices."""
-        data = self.request.GET or None
-        if data is None:
-            return None
-        date_facet = data.get("date_facets")
-        if date_facet is None or len(date_facet) == 0:
-            return None
-        return parse_date_facets(date_facet)
-
-    def get_facet_counts(self, filterset_class, kwargs):
-        """This does a second pass over the queryset, yes. But facet counts
-        are really nice to have, so it's worth it :)."""
-        kwargs = {k: v for k, v in kwargs.items()}  # copy kwargs to avoid overwriting
-
-        # get selected facet if set and build the facet counting queryset
-        facet_counts = {}
-        selected_facet = self.get_selected_facet()
-        if selected_facet is not None:
-            facet_counts = {"year_month": {selected_facet: 1}}
-        kwargs["facet_counts"] = facet_counts
-        post_filter = filterset_class(**kwargs)
-        facet_queryset = (
-            post_filter.qs.order_by()
-            .annotate(month=TruncMonth("visible_date"))
-            .values("month")
-            .annotate(n=models.Count("pk"))
-        )
-
-        # build up the date facet counts for final filter pass
-        year_month_counts = {}
-        for row in facet_queryset:
-            year_month_counts[row["month"]] = row["n"]
-        return {"year_month": year_month_counts}
-
-    def get_filterset_kwargs(self, filterset_class):
-        """Collect kwargs for filterset class. Main point it to gather a list
-        of date facets with counts."""
-        kwargs = super().get_filterset_kwargs(filterset_class)
-        # need to keep self.blog - it's used elsewhere too
-        self.blog = get_object_or_404(Blog, slug=self.kwargs["slug"])
-        kwargs["blog"] = self.blog
-        kwargs["facet_counts"] = self.get_facet_counts(filterset_class, kwargs)
-        return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["blog"] = self.blog
-        for post in context[self.context_object_name]:
-            pass
-            # self.render_post(post, include_detail=False)
-        return context
 
 
 class PostDetailView(RenderPostMixin, DetailView):

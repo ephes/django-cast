@@ -44,11 +44,6 @@ urlpatterns = [
         name="post_detail",
     ),
     url(
-        regex=r"^(?P<slug>[^/]+)/$",
-        view=views.PostsListView.as_view(),
-        name="post_list",
-    ),
-    url(
         regex=r"^(?P<slug>[^/]+)_detail/$",
         view=views.BlogDetailView.as_view(),
         name="blog_detail",

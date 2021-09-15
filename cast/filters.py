@@ -36,7 +36,7 @@ def get_facet_counts(get_params, kwargs):
     if selected_facet is not None:
         facet_counts = {"year_month": {selected_facet: 1}}
     kwargs["facet_counts"] = facet_counts
-    post_filter = PostFilter(**kwargs)
+    post_filter = PostFilterset(**kwargs)
     facet_queryset = (
         post_filter.qs.order_by()
         .annotate(month=models.functions.TruncMonth("visible_date"))
@@ -76,7 +76,7 @@ class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
         return qs.filter(visible_date__year=year, visible_date__month=month)
 
 
-class PostFilter(django_filters.FilterSet):
+class PostFilterset(django_filters.FilterSet):
     search = django_filters.CharFilter(field_name="title", method="fulltext_search", label="Search")
     date = django_filters.DateFromToRangeFilter(
         field_name="visible_date",

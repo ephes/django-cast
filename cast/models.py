@@ -532,7 +532,8 @@ class Blog(TimeStampedModel, Page):
         return self.title
 
     def get_absolute_url(self):
-        return reverse("cast:post_list", kwargs={"slug": self.slug})
+        return self.get_url()
+        # return reverse("cast:post_list", kwargs={"slug": self.slug})
 
     @property
     def last_build_date(self):
@@ -576,9 +577,9 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def filterset(self):
-        from .filters import PostFilter
+        from .filters import PostFilterset
 
-        return PostFilter(data=self.request.GET, queryset=self.unfiltered_published_posts, fetch_facet_counts=True)
+        return PostFilterset(data=self.request.GET, queryset=self.unfiltered_published_posts, fetch_facet_counts=True)
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
