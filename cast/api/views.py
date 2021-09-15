@@ -15,7 +15,6 @@ from rest_framework.serializers import ListSerializer
 
 from ..forms import ImageForm, VideoForm
 from ..models import Audio, Gallery, Image, Request, Video
-from ..views.viewmixins import AddRequestUserMixin
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -24,7 +23,7 @@ from .serializers import (
     RequestSerializer,
     VideoSerializer,
 )
-from .viewmixins import FileUploadResponseMixin
+from .viewmixins import AddRequestUserMixin, FileUploadResponseMixin
 
 
 logger = logging.getLogger(__name__)
