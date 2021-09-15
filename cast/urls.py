@@ -1,7 +1,7 @@
 from django.conf.urls import url
 from django.urls import include, path
 
-from . import feeds, views
+from . import feeds
 from .dashboard_views import DashboardView
 
 
@@ -26,11 +26,5 @@ urlpatterns = [
         "<slug:slug>/feed/podcast/<audio_format>/atom.xml",
         view=feeds.AtomPodcastFeed(),
         name="podcast_feed_atom",
-    ),
-    # Regular django views
-    url(
-        regex=r"^(?P<slug>[^/]+)_detail/$",
-        view=views.BlogDetailView.as_view(),
-        name="blog_detail",
     ),
 ]
