@@ -556,69 +556,25 @@ class Blog(TimeStampedModel, Page):
         else:
             return self.owner.get_full_name()
 
-    def get_selected_facet(self):
-        """Return the currently selected facet. Otherwise we would see
-        all date facets that are choosable if no date facet was selected
-        because in the final pass over the queryset facet_counts would be
-        empty and the selected facet would not be accepted because it's
-        not in the fields choices."""
-        data = self.request.GET or None
-        if data is None:
-            return None
-        date_facet = data.get("date_facets")
-        if date_facet is None or len(date_facet) == 0:
-            return None
-        from .filters import parse_date_facets
-
-        return parse_date_facets(date_facet)
-
-    def get_facet_counts(self, filterset_class, kwargs):
-        from django.db.models.functions import TruncMonth
-
-        kwargs = {k: v for k, v in kwargs.items()}  # copy kwargs to avoid overwriting
-
-        # get selected facet if set and build the facet counting queryset
-        facet_counts = {}
-        selected_facet = self.get_selected_facet()
-        if selected_facet is not None:
-            facet_counts = {"year_month": {selected_facet: 1}}
-        kwargs["facet_counts"] = facet_counts
-        post_filter = filterset_class(**kwargs)
-        facet_queryset = (
-            post_filter.qs.order_by()
-            .annotate(month=TruncMonth("visible_date"))
-            .values("month")
-            .annotate(n=models.Count("pk"))
-        )
-
-        # build up the date facet counts for final filter pass
-        year_month_counts = {}
-        for row in facet_queryset:
-            year_month_counts[row["month"]] = row["n"]
-        return {"year_month": year_month_counts}
-
-    def set_filter_context(self, context):
-        from .filters import PostFilter
+    def set_filter_context(self, request, context):
+        from .filters import PostFilter, get_facet_counts
 
         published_posts_queryset = Post.objects.live().descendant_of(self).order_by("-visible_date")
         kwargs = {
             "blog": self,
             "queryset": published_posts_queryset,
-            "data": self.request.GET,
-            "request": self.request,
+            "data": request.GET,
+            "request": request,
         }
-        kwargs.update({"facet_counts": self.get_facet_counts(PostFilter, kwargs)})
+        kwargs.update({"facet_counts": get_facet_counts(request, kwargs)})
         self.filterset = PostFilter(**kwargs)
         context["filter"] = self.filterset
+        return context
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
-        self.set_filter_context(context)
+        self.set_filter_context(request, context)
         return context
-
-    def serve(self, request, *args, **kwargs):
-        self.request = request
-        return super().serve(request, *args, **kwargs)
 
     @property
     def published_posts(self):
