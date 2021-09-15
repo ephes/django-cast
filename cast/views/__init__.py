@@ -1,10 +1,4 @@
-from .views import (
-    BlogDetailView,
-    BlogsListView,
-    PostCreateView,
-    PostDetailView,
-    PostUpdateView,
-)
+from .views import BlogDetailView, BlogsListView, PostCreateView, PostDetailView
 
 
 __ALL__ = [
@@ -13,5 +7,4 @@ __ALL__ = [
     BlogDetailView,
     PostDetailView,
     PostCreateView,
-    PostUpdateView,
 ]

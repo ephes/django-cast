@@ -33,20 +33,6 @@ class TestPublished:
         content = r.content.decode("utf-8")
         assert post.title not in content
 
-    def test_get_post_detail_not_published_authenticated(self, client, unpublished_post):
-        post = unpublished_post
-        slugs = {"blog_slug": post.blog.slug, "slug": post.slug}
-        detail_url = reverse("cast:post_detail", kwargs=slugs)
-
-        r = client.login(username=post.owner.username, password="password")
-
-        r = client.get(detail_url)
-        assert r.status_code == 200
-
-        content = r.content.decode("utf-8")
-        assert "html" in content
-        assert post.title in content
-
     def test_published_manager_pub_date_null(self, post):
         assert Post.published.count() == 1
         post.pub_date = None

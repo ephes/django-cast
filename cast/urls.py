@@ -34,11 +34,6 @@ urlpatterns = [
         name="post_create",
     ),
     url(
-        regex=r"^(?P<blog_slug>[^/]+)/(?P<slug>[^/]+)/update/$",
-        view=views.PostUpdateView.as_view(),
-        name="post_update",
-    ),
-    url(
         regex=r"^(?P<blog_slug>[^/]+)/(?P<slug>[^/]+)/$",
         view=views.PostDetailView.as_view(),
         name="post_detail",

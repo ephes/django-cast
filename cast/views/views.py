@@ -2,7 +2,7 @@ import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
-from django.views.generic import CreateView, DetailView, ListView, UpdateView
+from django.views.generic import CreateView, DetailView, ListView
 
 from ..forms import PostForm
 from ..models import Blog, Post
@@ -67,36 +67,4 @@ class PostCreateView(LoginRequiredMixin, PostChangeMixin, AddRequestUserMixin, C
         context = super().get_context_data(**kwargs)
         # needed for back button
         context["blog_slug"] = self.kwargs["slug"]
-        return context
-
-
-class PostUpdateView(LoginRequiredMixin, PostChangeMixin, AddRequestUserMixin, UpdateView):
-    model = Post
-    form_class = PostForm
-    template_name = "cast/post_edit.html"
-    user_field_name = "author"
-    success_msg = "Entry updated!"
-
-    def get_initial_chaptermarks(self):
-        chaptermarks = []
-        if self.object.podcast_audio is not None:
-            for chapter_mark in self.object.podcast_audio.chaptermarks.all():
-                chaptermarks.append(chapter_mark.original_line)
-        return "\n".join(chaptermarks)
-
-    def get_initial(self):
-        initial = super().get_initial()
-        initial["is_published"] = self.object.is_published
-        initial["chaptermarks"] = self.get_initial_chaptermarks()
-        initial["pub_date"] = self.object.pub_date
-        return initial
-
-    def form_valid(self, form):
-        self.blog_slug = self.kwargs["blog_slug"]
-        return super().form_valid(form)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # needed for back button
-        context["blog_slug"] = self.kwargs["blog_slug"]
         return context
