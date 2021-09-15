@@ -92,7 +92,7 @@ class TestBlogIndexSearch:
 
     def test_fulltext_search_body(self, client, post, post_with_search):
         blog_url = post.blog.get_url()
-        blog_url_content = f"{blog_url}?search={post_with_search.title}"
+        blog_url_content = f"{blog_url}?search={post_with_search.query}"
         r = client.get(blog_url_content)
         assert r.status_code == 200
 

@@ -427,15 +427,22 @@ def post_with_different_date(blog):
 
 
 @pytest.fixture()
-def post_with_search(blog):
-    return PostFactory(
+def post_with_search(blog, python_body):
+    search_body = deepcopy(python_body)
+    query = "onlyinsearch"
+    search_body[-1]["value"][0]["value"] = f"{query} foobar"
+    body = json.dumps(search_body)
+    post = PostFactory(
         owner=blog.owner,
         parent=blog,
         title="asdf",
         slug="test-entry-with-search",
         pub_date=timezone.now(),
         visible_date=timezone.now(),
+        body=body,
     )
+    post.query = query
+    return post
 
 
 @pytest.fixture()
