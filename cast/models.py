@@ -576,16 +576,9 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def filterset(self):
-        from .filters import PostFilter, get_facet_counts
+        from .filters import PostFilter
 
-        get_params = self.request.GET
-        kwargs = {
-            "blog": self,
-            "queryset": self.unfiltered_published_posts,
-            "data": get_params,
-        }
-        kwargs.update({"facet_counts": get_facet_counts(get_params, kwargs)})
-        return PostFilter(**kwargs)
+        return PostFilter(data=self.request.GET, queryset=self.unfiltered_published_posts, fetch_facet_counts=True)
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)

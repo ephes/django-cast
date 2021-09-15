@@ -105,12 +105,14 @@ class PostFilter(django_filters.FilterSet):
         *,
         request=None,
         prefix=None,
-        blog=None,
-        facet_counts=None,
+        facet_counts={},
+        fetch_facet_counts=False,
     ):
         super().__init__(data=data, queryset=queryset, request=request, prefix=prefix)
-        self.blog = blog
         self.facet_counts = facet_counts
+        if fetch_facet_counts:
+            kwargs = {"queryset": queryset, "data": data}
+            self.facet_counts = get_facet_counts(data, kwargs)
 
     def fulltext_search(self, queryset, name, value):
         return queryset.search(value).get_queryset()

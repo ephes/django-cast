@@ -47,30 +47,6 @@ class TestPublished:
         assert "html" in content
         assert post.title in content
 
-    def test_get_post_not_published_not_authenticated(self, client, unpublished_post):
-        post = unpublished_post
-        blog_url = reverse("cast:post_list", kwargs={"slug": post.blog.slug})
-
-        r = client.get(blog_url)
-        assert r.status_code == 200
-
-        content = r.content.decode("utf-8")
-        assert "html" in content
-        assert post.title not in content
-
-    def test_get_post_not_published_authenticated(self, client, unpublished_post):
-        post = unpublished_post
-        blog_url = reverse("cast:post_list", kwargs={"slug": post.blog.slug})
-
-        r = client.login(username=post.owner.username, password="password")
-
-        r = client.get(blog_url)
-        assert r.status_code == 200
-
-        content = r.content.decode("utf-8")
-        assert "html" in content
-        assert post.title in content
-
     def test_published_manager_pub_date_null(self, post):
         assert Post.published.count() == 1
         post.pub_date = None
