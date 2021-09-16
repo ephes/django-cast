@@ -26,16 +26,16 @@ def get_selected_facet(get_params):
     return parse_date_facets(date_facet)
 
 
-def get_facet_counts(get_params, kwargs):
-    kwargs = {k: v for k, v in kwargs.items()}  # copy kwargs to avoid overwriting
+def get_facet_counts(filterset_data, queryset):
+    filterset_data = {k: v for k, v in filterset_data.items()}  # copy filterset_data to avoid overwriting
 
     # get selected facet if set and build the facet counting queryset
     facet_counts = {}
-    selected_facet = get_selected_facet(get_params)
+    selected_facet = get_selected_facet(filterset_data)
     if selected_facet is not None:
         facet_counts = {"year_month": {selected_facet: 1}}
-    kwargs["facet_counts"] = facet_counts
-    post_filter = PostFilterset(**kwargs)
+    filterset_data["facet_counts"] = facet_counts
+    post_filter = PostFilterset(queryset=queryset, data=filterset_data, facet_counts=facet_counts)
     facet_queryset = (
         post_filter.qs.order_by()
         .annotate(month=models.functions.TruncMonth("visible_date"))
@@ -109,8 +109,10 @@ class PostFilterset(django_filters.FilterSet):
         super().__init__(data=data, queryset=queryset, request=request, prefix=prefix)
         self.facet_counts = facet_counts
         if fetch_facet_counts:
-            kwargs = {"queryset": queryset, "data": data}
-            self.facet_counts = get_facet_counts(data, kwargs)
+            # avoid running into infinite recursion problems, because
+            # get_facet_counts will instantiate Postfilterset again
+            # -> and again -> and again ...
+            self.facet_counts = get_facet_counts(data, queryset)
 
     def fulltext_search(self, queryset, name, value):
         return queryset.search(value).get_queryset()
