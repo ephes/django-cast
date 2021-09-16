@@ -41,6 +41,8 @@ def get_video_form():
 
 
 class BaseAudioForm(BaseCollectionMemberForm):
+    chaptermarks = forms.CharField(widget=forms.Textarea, required=False)
+
     class Meta:
         widgets = {
             "tags": widgets.AdminTagWidget,
@@ -60,7 +62,9 @@ def get_audio_form():
         # cause dubious results when multiple collections exist (e.g adding the
         # media to the root collection where the user may not have permission) -
         # and when only one collection exists, it will get hidden anyway.
-        fields = list(fields) + ["collection"]
+        fields = list(fields) + [
+            "collection",
+        ]
 
     return modelform_factory(
         Audio,
