@@ -579,7 +579,7 @@ class Blog(TimeStampedModel, Page):
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
         self.request = request
-        context["filter"] = self.filterset
+        context["filterset"] = self.filterset
         return context
 
     @property
