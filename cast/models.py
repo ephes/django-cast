@@ -531,10 +531,6 @@ class Blog(TimeStampedModel, Page):
     def __str__(self):
         return self.title
 
-    def get_absolute_url(self):
-        return self.get_url()
-        # return reverse("cast:post_list", kwargs={"slug": self.slug})
-
     @property
     def last_build_date(self):
         return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
@@ -729,9 +725,6 @@ class Post(TimeStampedModel, Page):
         attributes like blog.comments_enabled etc..
         """
         return self.get_parent().blog
-
-    def get_absolute_url(self):
-        return self.get_full_url()
 
     @property
     def is_published(self):

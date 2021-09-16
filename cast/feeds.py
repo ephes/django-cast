@@ -27,7 +27,7 @@ class LatestEntriesFeed(Feed):
         return self.object.description
 
     def link(self):
-        return self.object.get_absolute_url()
+        return self.object.get_full_url()
 
     def items(self):
         queryset = Post.objects.live().descendant_of(self.object).order_by("-visible_date")
@@ -154,7 +154,7 @@ class PodcastFeed(Feed):
         return self.object
 
     def link(self):
-        return self.object.get_absolute_url()
+        return self.object.get_full_url()
 
     def title(self, blog):
         return self.object.title
@@ -224,7 +224,7 @@ class AtomPodcastFeed(PodcastFeed):
 
     def link(self):
         """atom link is still wrong, dunno why FIXME"""
-        return self.object.get_absolute_url()
+        return self.object.get_full_url()
 
 
 class RssPodcastFeed(PodcastFeed):
