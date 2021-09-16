@@ -560,21 +560,24 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def request(self):
-        if hasattr(self, "_request"):
-            return self._request
-
-        class StubRequest:
-            GET = {}
-
-        return StubRequest()
+        return getattr(self, "_request", None)
 
     @request.setter
     def request(self, value):
         self._request = value
 
     @property
+    def filterset_data(self):
+        if self.request is not None:
+            return self.request.GET
+        else:
+            return getattr(self, "_filterset_data", {})
+
+    @property
     def filterset(self):
-        return PostFilterset(data=self.request.GET, queryset=self.unfiltered_published_posts, fetch_facet_counts=True)
+        return PostFilterset(
+            data=self.filterset_data, queryset=self.unfiltered_published_posts, fetch_facet_counts=True
+        )
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
