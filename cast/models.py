@@ -36,6 +36,7 @@ from taggit.managers import TaggableManager
 
 from . import appsettings
 from .blocks import AudioChooserBlock, GalleryBlock, VideoChooserBlock
+from .filters import PostFilterset
 
 
 logger = logging.getLogger(__name__)
@@ -573,8 +574,6 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def filterset(self):
-        from .filters import PostFilterset
-
         return PostFilterset(data=self.request.GET, queryset=self.unfiltered_published_posts, fetch_facet_counts=True)
 
     def get_context(self, request, *args, **kwargs):
