@@ -134,7 +134,7 @@ def edit(request, audio_id):
         else:
             messages.error(request, _("The media could not be saved due to errors."))
     else:
-        form = AudioForm(instance=audio, user=request.user)
+        form = AudioForm(instance=audio, user=request.user, initial={"chaptermarks": audio.chapters_as_text})
 
     filesize = None
 

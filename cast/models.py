@@ -419,6 +419,13 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         return items
 
     @property
+    def chapters_as_text(self):
+        chaptermarks = []
+        for mark in self.chaptermarks.order_by("start"):
+            chaptermarks.append(mark.original_line)
+        return "\n".join(chaptermarks)
+
+    @property
     def podlove_url(self):
         return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})
 
