@@ -20,10 +20,10 @@ class Command(BaseCommand):
             else:
                 misc += size
         unit = 2 ** 20  # MB
-        print("video usage: {}".format(video / unit))
-        print("image usage: {}".format(image / unit))
-        print("misc  usage: {}".format(misc / unit))
-        print("total usage: {}".format(sum(paths.values()) / unit))
+        print(f"video usage: {video / unit}")
+        print(f"image usage: {image / unit}")
+        print(f"misc  usage: {misc / unit}")
+        print(f"total usage: {sum(paths.values()) / unit}")
 
     def handle(self, *args, **options):
         s3 = get_storage_class("storages.backends.s3boto3.S3Boto3Storage")()

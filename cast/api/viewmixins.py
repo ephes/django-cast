@@ -13,7 +13,7 @@ class FileUploadResponseMixin:
     def form_valid(self, form):
         model = form.save(commit=False)
         super().form_valid(form)
-        return HttpResponse("{}".format(model.pk), status=201)
+        return HttpResponse(f"{model.pk}", status=201)
 
 
 class AddRequestUserMixin:

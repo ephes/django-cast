@@ -203,7 +203,7 @@ class TestAudioAdd:
         audio = Audio.objects.first()
         assert audio.title == post_data["title"]
 
-        actual_tags = set([t.name for t in audio.tags.all()])
+        actual_tags = {t.name for t in audio.tags.all()}
         expected_tags = set(post_data["tags"].split(","))
         assert actual_tags == expected_tags
 
@@ -418,7 +418,7 @@ class TestAudioChooserUpload:
         audio = Audio.objects.first()
         assert audio.title == post_data[f"{prefix}-title"]
 
-        actual_tags = set([t.name for t in audio.tags.all()])
+        actual_tags = {t.name for t in audio.tags.all()}
         expected_tags = set(post_data[f"{prefix}-tags"].split(","))
         assert actual_tags == expected_tags
 

@@ -16,8 +16,8 @@ class SiteFactory(factory.django.DjangoModelFactory):
 
 
 class UserFactory(factory.django.DjangoModelFactory):
-    username = factory.Sequence(lambda n: "user-{0}".format(n))
-    email = factory.Sequence(lambda n: "user-{0}@example.com".format(n))
+    username = factory.Sequence(lambda n: f"user-{n}")
+    email = factory.Sequence(lambda n: f"user-{n}@example.com")
     password = factory.PostGenerationMethodCall("set_password", "password")
 
     class Meta:
@@ -60,8 +60,8 @@ class PageFactory(factory.django.DjangoModelFactory):
 
 class BlogFactory(PageFactory):
     author = None
-    title = factory.Sequence(lambda n: "blog-{0}".format(n))
-    slug = factory.Sequence(lambda n: "blog-{0}".format(n))
+    title = factory.Sequence(lambda n: f"blog-{n}")
+    slug = factory.Sequence(lambda n: f"blog-{n}")
 
     class Meta:
         model = Blog

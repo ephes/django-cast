@@ -70,7 +70,7 @@ class ITunesElements:
 
     def add_root_elements(self, handler):
         """Add additional elements to the blog object"""
-        super(ITunesElements, self).add_root_elements(handler)
+        super().add_root_elements(handler)
         haqe = handler.addQuickElement
         blog = self.feed["blog"]
 
@@ -97,7 +97,7 @@ class ITunesElements:
 
     def add_item_elements(self, handler, item):
         """Add additional elements to the post object"""
-        super(ITunesElements, self).add_item_elements(handler, item)
+        super().add_item_elements(handler, item)
         haqe = handler.addQuickElement
 
         post = item["post"]
@@ -120,14 +120,14 @@ class ITunesElements:
 
 class AtomITunesFeedGenerator(ITunesElements, Atom1Feed):
     def root_attributes(self):
-        atom_attrs = super(AtomITunesFeedGenerator, self).root_attributes()
+        atom_attrs = super().root_attributes()
         atom_attrs.update(self.namespace_attributes())
         return atom_attrs
 
 
 class RssITunesFeedGenerator(ITunesElements, Rss201rev2Feed):
     def rss_attributes(self):
-        rss_attrs = super(RssITunesFeedGenerator, self).rss_attributes()
+        rss_attrs = super().rss_attributes()
         rss_attrs.update(self.namespace_attributes())
         return rss_attrs
 

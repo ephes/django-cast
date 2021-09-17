@@ -86,8 +86,8 @@ class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("pk", "user")
 
     def save_model(self, request, obj, form, change):
-        logger.info("poster: {}".format(obj.poster))
-        logger.info("form: {}".format(form.cleaned_data))
+        logger.info(f"poster: {obj.poster}")
+        logger.info(f"form: {form.cleaned_data}")
         if change and not form.cleaned_data["poster"]:
             logger.info("poster was cleared")
             obj.calc_poster = False

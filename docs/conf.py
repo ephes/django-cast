@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # complexity documentation build configuration file, created by
 # sphinx-quickstart on Tue Jul  9 22:26:36 2013.
@@ -51,8 +50,8 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = u"Django Cast"
-copyright = u"2019, Jochen Wersdörfer"
+project = "Django Cast"
+copyright = "2019, Jochen Wersdörfer"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -196,7 +195,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-    ("index", "django-cast.tex", u"Django Cast Documentation", u"Jochen Wersdörfer", "manual"),
+    ("index", "django-cast.tex", "Django Cast Documentation", "Jochen Wersdörfer", "manual"),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -224,7 +223,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [("index", "django-cast", u"Django Cast Documentation", [u"Jochen Wersdörfer"], 1)]
+man_pages = [("index", "django-cast", "Django Cast Documentation", ["Jochen Wersdörfer"], 1)]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
@@ -239,8 +238,8 @@ texinfo_documents = [
     (
         "index",
         "django-cast",
-        u"Django Cast Documentation",
-        u"Jochen Wersdörfer",
+        "Django Cast Documentation",
+        "Jochen Wersdörfer",
         "django-cast",
         "One line description of project.",
         "Miscellaneous",

@@ -103,7 +103,7 @@ class Image(TimeStampedModel):
             width = self.original_width if size is None else size
             url = img.url
             sources.append(url)
-            sources.append("{}w,".format(width))
+            sources.append(f"{width}w,")
         return " ".join(sources)
 
     @property
@@ -206,7 +206,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         return "video"
 
     def _get_video_dimensions(self, video_url):
-        ffprobe_cmd = 'ffprobe -i "{}"'.format(video_url)
+        ffprobe_cmd = f'ffprobe -i "{video_url}"'
         result = subprocess.check_output(ffprobe_cmd, shell=True, stderr=subprocess.STDOUT)
         lines = result.decode("utf8").split("\n")
         return get_video_dimensions(lines)
@@ -214,7 +214,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     def _create_poster(self):
         """Moved into own method to make it mockable in tests."""
         fp, tmp_path = tempfile.mkstemp(prefix="poster_", suffix=".jpg")
-        logger.info("original url: {}".format(self.original.url))
+        logger.info(f"original url: {self.original.url}")
         video_url = self.original.url
         if not video_url.startswith("http"):
             video_url = self.original.path
@@ -288,7 +288,7 @@ class Gallery(TimeStampedModel):
 
     @property
     def image_ids(self):
-        return set([i.pk for i in self.images.all()])
+        return {i.pk for i in self.images.all()}
 
 
 class AudioQuerySet(SearchableQuerySetMixin, models.QuerySet):

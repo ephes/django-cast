@@ -47,7 +47,7 @@ class AdminVideoChooser(AdminChooser):
         )
 
     def render_js_init(self, id_, name, value):
-        return "createVideoChooser({0});".format(json.dumps(id_))
+        return f"createVideoChooser({json.dumps(id_)});"
 
     class Media:
         js = [
@@ -110,7 +110,7 @@ class AdminAudioChooser(AdminChooser):
         )
 
     def render_js_init(self, id_, name, value):
-        return "createAudioChooser({0});".format(json.dumps(id_))
+        return f"createAudioChooser({json.dumps(id_)});"
 
     class Media:
         js = [

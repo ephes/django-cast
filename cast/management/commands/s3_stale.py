@@ -51,7 +51,7 @@ class Command(BaseCommand):
             if path not in paths_from_models:
                 print(path)
                 stale_s3[path] = size
-        print("stale s3 size: {} Mb".format(sum(stale_s3.values()) / 2 ** 20))
+        print(f"stale s3 size: {sum(stale_s3.values()) / 2 ** 20} Mb")
 
         print("stale locale")
         locale_paths = self.get_paths(default_storage)
@@ -60,7 +60,7 @@ class Command(BaseCommand):
             if path not in paths_from_models:
                 print(path)
                 stale_locale[path] = size
-        print("stale locale size: {} Mb".format(sum(stale_locale.values()) / 2 ** 20))
+        print(f"stale locale size: {sum(stale_locale.values()) / 2 ** 20} Mb")
 
         if options["delete"]:
             # for path in stale_s3.keys():

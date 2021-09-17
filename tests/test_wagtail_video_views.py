@@ -200,7 +200,7 @@ class TestVideoAdd:
         video = Video.objects.first()
         assert video.title == post_data["title"]
 
-        actual_tags = set([t.name for t in video.tags.all()])
+        actual_tags = {t.name for t in video.tags.all()}
         expected_tags = set(post_data["tags"].split(","))
         assert actual_tags == expected_tags
 
@@ -409,6 +409,6 @@ class TestVideoChooserUpload:
         video = Video.objects.first()
         assert video.title == post_data[f"{prefix}-title"]
 
-        actual_tags = set([t.name for t in video.tags.all()])
+        actual_tags = {t.name for t in video.tags.all()}
         expected_tags = set(post_data[f"{prefix}-tags"].split(","))
         assert actual_tags == expected_tags
