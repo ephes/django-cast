@@ -1,5 +1,7 @@
 import pytest
 
+from cast import appsettings
+
 
 class TestBlogIndex:
     pytestmark = pytest.mark.django_db
@@ -100,3 +102,50 @@ class TestBlogIndexSearch:
         posts = r.context["page"].published_posts
         assert len(posts) == 1
         assert posts[0].pk == post_with_search.pk
+
+
+@pytest.fixture()
+def post_list_paginate_by_1():
+    previous = appsettings.POST_LIST_PAGINATION
+    appsettings.POST_LIST_PAGINATION = 1
+    yield appsettings.POST_LIST_PAGINATION
+    appsettings.POST_LIST_PAGINATION = previous
+
+
+class TestBlogIndexPagination:
+    pytestmark = pytest.mark.django_db
+
+    def test_one_post_is_not_paginated(self, client, post):
+        blog_url = post.blog.get_url()
+        r = client.get(blog_url)
+        assert r.status_code == 200
+
+        # make sure list of posts is not paginated
+        assert r.context["is_paginated"] is False
+
+    def test_two_posts_are_paginated_with_pagination_1(self, client, post, post_with_search, post_list_paginate_by_1):
+        blog_url = post.blog.get_url()
+        r = client.get(blog_url)
+        assert r.status_code == 200
+
+        # make sure posts queryset is paginated and len(posts) == 1
+        assert r.context["is_paginated"] is True
+        assert len(r.context["posts"]) == 1
+
+    def test_invalid_page_param(self, client, post):
+        blog_url = post.blog.get_url()
+        blog_url_with_invalid_page = f"{blog_url}?page=foo"
+        r = client.get(blog_url_with_invalid_page)
+        assert r.status_code == 404
+
+    def test_page_param_last(self, client, post):
+        blog_url = post.blog.get_url()
+        blog_url_with_last_page = f"{blog_url}?page=last"
+        r = client.get(blog_url_with_last_page)
+        assert r.status_code == 200
+
+    def test_invalid_page_number(self, client, post):
+        blog_url = post.blog.get_url()
+        blog_url_with_invalid_pagenum = f"{blog_url}?page=666"
+        r = client.get(blog_url_with_invalid_pagenum)
+        assert r.status_code == 404

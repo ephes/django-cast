@@ -31,8 +31,8 @@
 {% endblock filters %}
 
 Number of shown posts: {{ page.published_posts.count }}
-{% for post in page.published_posts %}
+{% for post in posts %}
   {% include "cast/post_body.html" with render_detail=False page=post %}
 {% endfor %}
-
+<p>{% include "pagination.html" %}</p>
 {% endblock content %}

@@ -12,7 +12,9 @@ from subprocess import check_output
 
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
+from django.core.paginator import InvalidPage, Paginator
 from django.db import models
+from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -579,15 +581,50 @@ class Blog(TimeStampedModel, Page):
             data=self.filterset_data, queryset=self.unfiltered_published_posts, fetch_facet_counts=True
         )
 
+    @property
+    def published_posts(self):
+        return self.filterset.qs
+
+    def paginate_queryset(self, context):
+        paginator = Paginator(self.published_posts, appsettings.POST_LIST_PAGINATION)
+        page = self.request.GET.get("page", False) or 1
+        try:
+            page_number = int(page)
+        except ValueError:
+            if page == "last":
+                page_number = paginator.num_pages
+            else:
+                raise Http404(_("Page is not “last”, nor can it be converted to an int."))
+        try:
+            page = paginator.page(page_number)
+        except InvalidPage as e:
+            raise Http404(
+                _("Invalid page (%(page_number)s): %(message)s") % {"page_number": page_number, "message": str(e)}
+            )
+        pagination_context = {
+            "paginator": paginator,
+            "page_obj": page,
+            "is_paginated": page.has_other_pages(),
+            "object_list": page.object_list,
+        }
+        context.update(pagination_context)
+        return context
+
+    def get_other_get_params(self):
+        get_copy = self.request.GET.copy()
+        parameters = get_copy.pop("page", True) and get_copy.urlencode()
+        if len(parameters) > 0:
+            parameters = f"&{parameters}"
+        return parameters
+
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
         self.request = request
         context["filterset"] = self.filterset
+        context["parameters"] = self.get_other_get_params()
+        context = self.paginate_queryset(context)
+        context["posts"] = context["object_list"]  # convenience
         return context
-
-    @property
-    def published_posts(self):
-        return self.filterset.qs
 
 
 class ContentBlock(blocks.StreamBlock):
