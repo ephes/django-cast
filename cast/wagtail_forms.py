@@ -1,12 +1,13 @@
 from django import forms
+from django.core.exceptions import ValidationError
 from django.forms.models import modelform_factory
+from django.utils.translation import gettext_lazy as _
 
 from wagtail.admin import widgets
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.core.models import Collection
 
-from .forms import ChapterMarkForm
-from .models import Audio, Video
+from .models import Audio, ChapterMark, Video
 
 
 class FakePermissionPolicy:
@@ -41,10 +42,51 @@ def get_video_form():
     )
 
 
-class BaseAudioForm(BaseCollectionMemberForm):
-    chaptermarks = forms.CharField(widget=forms.Textarea, required=False)
+class ChapterMarkForm(forms.ModelForm):
+    class Meta:
+        model = ChapterMark
+        fields = ("start", "title", "link", "image")
+
+
+class ChapterMarksField(forms.CharField):
+    def parse_chaptermark_line(self, line):
+        def raise_line_validation_error():
+            raise ValidationError(
+                _(f"Invalid chaptermark line: {line}"),
+                code="invalid",
+                params={"line": line},
+            )
+
+        splitted = line.split()
+        if len(splitted) < 2:
+            raise_line_validation_error()
+        start, *parts = splitted
+        title = " ".join(parts)
+        form = ChapterMarkForm({"start": start, "title": title})
+        if form.is_valid():
+            return form.save(commit=False)
+        else:
+            raise_line_validation_error()
+
+    def to_python(self, value):
+        if value is None:
+            return []
+        chaptermarks = []
+        for line in value.split("\n"):
+            if len(line) == 0:
+                # skip empty lines
+                continue
+            chaptermarks.append(self.parse_chaptermark_line(line))
+        return chaptermarks
+
+
+class AudioForm(BaseCollectionMemberForm):
+    chaptermarks = ChapterMarksField(widget=forms.Textarea, required=False)
+    permission_policy = FakePermissionPolicy()
 
     class Meta:
+        model = Audio
+        fields = list(Audio.admin_form_fields) + ["collection"]
         widgets = {
             "tags": widgets.AdminTagWidget,
             "m4a": forms.ClearableFileInput,
@@ -53,56 +95,14 @@ class BaseAudioForm(BaseCollectionMemberForm):
             "opus": forms.ClearableFileInput,
         }
 
-    permission_policy = FakePermissionPolicy()
+    def save_chaptermarks(self, audio):
+        chaptermarks = self.cleaned_data.get("chaptermarks", [])
+        for cm in chaptermarks:
+            cm.audio = audio
+            cm.save()
 
-    def _clean_chaptermarks(self, cleaned_data):
-        print("audio instance: ", self.instance)
-        print("cleaned data: ", cleaned_data.get("chaptermarks"))
-        errors = []
-        lines = cleaned_data.get("chaptermarks", "").split("\n")
-        if len(lines) > 0:
-            self.instance.chaptermarks.all().delete()
-        for line in lines:
-            splitted = line.split()
-            if len(splitted) < 2:
-                continue
-            start, *parts = splitted
-            title = " ".join(parts)
-            row = {
-                "audio": self.instance.pk,
-                "start": start,
-                "title": title,
-                # "link": None,
-                # "image": None
-            }
-            form = ChapterMarkForm(row)
-            if form.is_valid():
-                form.save()
-            else:
-                errors.append(form.errors)
-            # TODO:
-            # * image/link handling + tests
-        if len(errors) > 0:
-            self.add_error("chaptermarks", errors)
-        return cleaned_data
-
-    def clean(self):
-        cleaned_data = super().clean()
-        self._clean_chaptermarks(cleaned_data)
-        return cleaned_data
-
-
-def get_audio_form():
-    fields = Audio.admin_form_fields
-    if "collection" not in fields:
-        # force addition of the 'collection' field, because leaving it out can
-        # cause dubious results when multiple collections exist (e.g adding the
-        # media to the root collection where the user may not have permission) -
-        # and when only one collection exists, it will get hidden anyway.
-        fields = list(fields) + ["collection"]
-
-    return modelform_factory(
-        Audio,
-        form=BaseAudioForm,
-        fields=fields,
-    )
+    def save(self, commit=True):
+        audio = super().save(commit=commit)
+        if commit:
+            self.save_chaptermarks(audio)
+        return audio

@@ -12,7 +12,7 @@ from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..models import Audio
-from ..wagtail_forms import get_audio_form
+from ..wagtail_forms import AudioForm
 
 
 DEFAULT_PAGE_KEY = "p"
@@ -75,7 +75,6 @@ def index(request):
 
 
 def add(request):
-    AudioForm = get_audio_form()
     if request.POST:
         audio = Audio(user=request.user)
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user)
@@ -106,7 +105,6 @@ def add(request):
 
 
 def edit(request, audio_id):
-    AudioForm = get_audio_form()
     audio = get_object_or_404(Audio, id=audio_id)
 
     if request.method == "POST":
@@ -180,7 +178,7 @@ def chooser(request):
     ordering = "-created"
     audios = Audio.objects.all().order_by(ordering)
 
-    upload_form = get_audio_form()(prefix="media-chooser-upload")
+    upload_form = AudioForm(prefix="media-chooser-upload")
 
     if "q" in request.GET or "p" in request.GET:
         search_form = SearchForm(request.GET)
@@ -253,8 +251,6 @@ def chosen(request, audio_id):
 
 
 def chooser_upload(request):
-    AudioForm = get_audio_form()
-
     if request.method == "POST":
         audio = Audio(user=request.user)
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user, prefix="media-chooser-upload")

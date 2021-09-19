@@ -1,16 +1,17 @@
 import pytest
 
-from cast.forms import ChapterMarkForm
+from cast.models import Audio
+from cast.wagtail_forms import AudioForm, ChapterMarkForm
 
 
 class TestChapterMarkForm:
-    @pytest.mark.django_db
+    pytestmark = pytest.mark.django_db
+
     def test_add_chapter_mark_form(self, audio):
         row = {"audio": audio.pk, "start": "01:01:01.123", "title": "foo bar baz"}
         form = ChapterMarkForm(row)
         assert form.is_valid()
 
-    @pytest.mark.django_db
     def test_add_chapter_mark_form_invalid_url(self, audio):
         row = {
             "audio": audio.pk,
@@ -20,3 +21,71 @@ class TestChapterMarkForm:
         }
         form = ChapterMarkForm(row)
         assert not form.is_valid()
+
+
+class TestAudioForm:
+    pytestmark = pytest.mark.django_db
+
+    def test_chaptermarks_not_set(self):
+        form = AudioForm({})
+        assert form.is_valid()
+        assert form.cleaned_data["chaptermarks"] == []
+
+    def test_chaptermarks_empty(self):
+        form = AudioForm({"chaptermarks": ""})
+        assert form.is_valid()
+        assert form.cleaned_data["chaptermarks"] == []
+
+    def test_chaptermarks_invalid_line(self):
+        broken_line = "00:12:24.409Dokumentation"
+        chaptermarks = "\n".join(
+            [
+                "00:00:28.433 News aus der Szene",
+                "00:02:40.964 Packaging",
+                broken_line,
+            ]
+        )
+        print(chaptermarks)
+        form = AudioForm({"chaptermarks": chaptermarks})
+        assert form.is_valid() is False
+        assert broken_line in form.errors["chaptermarks"][0]
+
+    def test_chaptermarks_invalid_start(self):
+        invalid_start = "invalid Dokumentation"
+        chaptermarks = "\n".join(
+            [
+                "00:00:28.433 News aus der Szene",
+                "00:02:40.964 Packaging",
+                invalid_start,
+            ]
+        )
+        print(chaptermarks)
+        form = AudioForm({"chaptermarks": chaptermarks})
+        assert form.is_valid() is False
+        assert invalid_start in form.errors["chaptermarks"][0]
+
+    def test_chaptermarks_happy_path(self, user):
+        expected_first_title = "News aus der Szene"
+        chaptermarks = "\n".join(
+            [
+                f"00:00:28.433 {expected_first_title}",
+                "00:02:40.964 Packaging",
+                "00:12:24.409 Dokumentation",
+            ]
+        )
+
+        # make sure audio form is valid
+        audio = Audio(user=user)
+        form = AudioForm({"chaptermarks": chaptermarks}, instance=audio)
+        assert form.is_valid()
+        cleaned_chaptermarks = form.cleaned_data["chaptermarks"]
+        assert cleaned_chaptermarks[0].title == expected_first_title
+
+        # make sure chaptermarks are not saved on commit=False
+        audio = form.save(commit=False)
+        assert audio.chaptermarks.count() == 0
+
+        # make sure chaptermarks are saved in db on form.save()
+        audio = form.save(commit=True)
+        assert audio.chaptermarks.count() == 3
+        assert audio.chaptermarks.order_by("start").first().title == expected_first_title
