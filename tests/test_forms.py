@@ -45,7 +45,6 @@ class TestAudioForm:
                 broken_line,
             ]
         )
-        print(chaptermarks)
         form = AudioForm({"chaptermarks": chaptermarks})
         assert form.is_valid() is False
         assert broken_line in form.errors["chaptermarks"][0]
@@ -59,7 +58,6 @@ class TestAudioForm:
                 invalid_start,
             ]
         )
-        print(chaptermarks)
         form = AudioForm({"chaptermarks": chaptermarks})
         assert form.is_valid() is False
         assert invalid_start in form.errors["chaptermarks"][0]
