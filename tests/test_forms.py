@@ -1,6 +1,6 @@
 import pytest
 
-from cast.models import Audio
+from cast.models import Audio, ChapterMark
 from cast.wagtail_forms import AudioForm, ChapterMarkForm
 
 
@@ -87,3 +87,14 @@ class TestAudioForm:
         audio = form.save(commit=True)
         assert audio.chaptermarks.count() == 3
         assert audio.chaptermarks.order_by("start").first().title == expected_first_title
+
+    def test_old_chaptermarks_are_removed(self, audio):
+        ChapterMark.objects.create(audio=audio, start="00:00:28.433", title="old chaptermark")
+        assert audio.chaptermarks.count() == 1
+
+        form = AudioForm({}, instance=audio)
+        assert form.is_valid()
+
+        # assert old chaptermark was removed
+        audio = form.save(commit=True)
+        assert audio.chaptermarks.count() == 0

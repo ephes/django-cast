@@ -48,26 +48,27 @@ class ChapterMarkForm(forms.ModelForm):
         fields = ("start", "title", "link", "image")
 
 
+def parse_chaptermark_line(line):
+    def raise_line_validation_error():
+        raise ValidationError(
+            _(f"Invalid chaptermark line: {line}"),
+            code="invalid",
+            params={"line": line},
+        )
+
+    splitted = line.split()
+    if len(splitted) < 2:
+        raise_line_validation_error()
+    start, *parts = splitted
+    title = " ".join(parts)
+    form = ChapterMarkForm({"start": start, "title": title})
+    if form.is_valid():
+        return form.save(commit=False)
+    else:
+        raise_line_validation_error()
+
+
 class ChapterMarksField(forms.CharField):
-    def parse_chaptermark_line(self, line):
-        def raise_line_validation_error():
-            raise ValidationError(
-                _(f"Invalid chaptermark line: {line}"),
-                code="invalid",
-                params={"line": line},
-            )
-
-        splitted = line.split()
-        if len(splitted) < 2:
-            raise_line_validation_error()
-        start, *parts = splitted
-        title = " ".join(parts)
-        form = ChapterMarkForm({"start": start, "title": title})
-        if form.is_valid():
-            return form.save(commit=False)
-        else:
-            raise_line_validation_error()
-
     def to_python(self, value):
         if value is None:
             return []
@@ -76,7 +77,7 @@ class ChapterMarksField(forms.CharField):
             if len(line) == 0:
                 # skip empty lines
                 continue
-            chaptermarks.append(self.parse_chaptermark_line(line))
+            chaptermarks.append(parse_chaptermark_line(line))
         return chaptermarks
 
 
@@ -96,6 +97,10 @@ class AudioForm(BaseCollectionMemberForm):
         }
 
     def save_chaptermarks(self, audio):
+        # only save if chaptermarks from form and from audio are
+        # different - maybe only update old chaptermarks, but overwrite
+        # all for now..
+        audio.chaptermarks.all().delete()
         chaptermarks = self.cleaned_data.get("chaptermarks", [])
         for cm in chaptermarks:
             cm.audio = audio
