@@ -96,10 +96,20 @@ class AudioForm(BaseCollectionMemberForm):
             "opus": forms.ClearableFileInput,
         }
 
+    def get_chaptermarks_from_field_or_files(self, audio):
+        chaptermarks = self.cleaned_data.get("chaptermarks", [])
+        if len(chaptermarks) > 0:
+            # from field
+            return chaptermarks
+        else:
+            # from files
+            return chaptermarks
+
     def save_chaptermarks(self, audio):
         # only save if chaptermarks from form and from audio are
         # different - maybe only update old chaptermarks, but overwrite
         # all for now..
+        chaptermarks = self.get_chaptermarks_from_field_or_files(audio)
         audio.chaptermarks.all().delete()
         chaptermarks = self.cleaned_data.get("chaptermarks", [])
         for cm in chaptermarks:
@@ -107,6 +117,7 @@ class AudioForm(BaseCollectionMemberForm):
             cm.save()
 
     def save(self, commit=True):
+        print("cleaned data: ", self.cleaned_data)
         audio = super().save(commit=commit)
         if commit:
             self.save_chaptermarks(audio)
