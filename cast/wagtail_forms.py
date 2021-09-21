@@ -106,9 +106,11 @@ class AudioForm(BaseCollectionMemberForm):
             return chaptermarks
 
     def save_chaptermarks(self, audio):
-        # only save if chaptermarks from form and from audio are
-        # different - maybe only update old chaptermarks, but overwrite
-        # all for now..
+        # Chapter marks should be saved following this logic:
+        #  1. If there are manually added chapter marks in the form, just use them
+        #  2. If the form has no chapter marks, but an audio file was changed or
+        #     added, look for chapter marks in the audio content
+        #  3. Sync changed chapter marks back to database
         chaptermarks = self.get_chaptermarks_from_field_or_files(audio)
         audio.chaptermarks.all().delete()
         chaptermarks = self.cleaned_data.get("chaptermarks", [])

@@ -2,6 +2,8 @@ from datetime import timedelta
 
 import pytest
 
+from cast.models import ChapterMark, sync_chapter_marks
+
 
 class TestImageModel:
     @pytest.mark.django_db
@@ -191,3 +193,48 @@ class TestChapterMarkModel:
         chaptermark = chaptermarks[0]
         chaptermark.image = image
         assert chaptermark.original_line == f"00:01:01.234 introduction  {image}"
+
+
+def start_strings_to_chaptermarks(audio, start_strings):
+    chaptermarks = []
+    for start_string in start_strings:
+        cm = ChapterMark(audio=audio, start=start_string, title="foobar")
+        cm.full_clean()  # convert string to datetime.time
+        chaptermarks.append(cm)
+    return chaptermarks
+
+
+def chaptermarks_are_equal(actual, expected):
+    if len(actual) != len(expected):
+        return False
+    attributes_to_compare = ["start", "title"]
+    for a, b in zip(actual, expected):
+        for attr in attributes_to_compare:
+            if getattr(a, attr) != getattr(b, attr):
+                return False
+    return True
+
+
+@pytest.mark.parametrize(
+    "from_database, from_cms, expected_to_add, expected_to_update, expected_to_remove",
+    [
+        # from_database, from_cms, expected_to_add, expected_to_update, expected_to_remove
+        ([], [], [], [], []),
+        ([], ["0:0"], ["0:0"], [], []),  # add chaptermark
+        (["0:0"], ["0:0"], [], ["0:0"], []),  # update chaptermark
+        (["0:0"], [], [], [], ["0:0"]),  # remove chaptermark
+        # add, update and remove together
+        (["0:0", "0:2"], ["0:0", "0:1"], ["0:1"], ["0:0"], ["0:2"]),
+    ],
+)
+@pytest.mark.django_db
+def test_sync_chapter_marks(from_database, from_cms, expected_to_add, expected_to_update, expected_to_remove, audio):
+    args = []
+    for start_string_list in [from_database, from_cms, expected_to_add, expected_to_update, expected_to_remove]:
+        args.append(start_strings_to_chaptermarks(audio, start_string_list))
+    from_database, from_cms, expected_to_add, expected_to_update, expected_to_remove = args
+    actual_to_add, actual_to_update, actual_to_remove = sync_chapter_marks(from_database, from_cms)
+    for actual, expected in zip(
+        [actual_to_add, actual_to_update, actual_to_remove], [expected_to_add, expected_to_update, expected_to_remove]
+    ):
+        assert chaptermarks_are_equal(actual, expected)

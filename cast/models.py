@@ -858,9 +858,18 @@ class Post(TimeStampedModel, Page):
         return save_return
 
 
+def sync_chapter_marks(from_database, from_cms):
+    start_from_database = {cm.start for cm in from_database}
+    start_from_cms = {cm.start for cm in from_cms}
+    to_add = [cm for cm in from_cms if cm.start not in start_from_database]
+    to_update = [cm for cm in from_cms if cm.start in start_from_database]
+    to_remove = [cm for cm in from_database if cm.start not in start_from_cms]
+    return to_add, to_update, to_remove
+
+
 class ChapterMark(models.Model):
     audio = models.ForeignKey(Audio, on_delete=models.CASCADE, related_name="chaptermarks")
-    start = models.TimeField(_("Start time of chaptermark"))
+    start = models.TimeField(_("Start time of chaptermark"), unique=True)
     title = models.CharField(max_length=255)
     link = models.URLField(max_length=2000, null=True, blank=True)
     image = models.URLField(max_length=2000, null=True, blank=True)
