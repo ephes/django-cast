@@ -174,19 +174,18 @@ class TestPostModel:
 
 
 class TestChapterMarkModel:
-    @pytest.mark.django_db
+    pytestmark = pytest.mark.django_db
+
     def test_chaptermark_original_line(self, chaptermarks):
         chaptermark = chaptermarks[0]
         assert chaptermark.original_line == "00:01:01.234 introduction  "
 
-    @pytest.mark.django_db
     def test_chaptermark_original_line_link(self, chaptermarks):
         link = "http://foobar.com"
         chaptermark = chaptermarks[0]
         chaptermark.link = link
         assert chaptermark.original_line == f"00:01:01.234 introduction {link} "
 
-    @pytest.mark.django_db
     def test_chaptermark_original_line_image(self, chaptermarks):
         image = "http://foobar.com/blub.jpg"
         chaptermark = chaptermarks[0]
