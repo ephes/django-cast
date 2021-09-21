@@ -6,7 +6,7 @@ from cast.models import Gallery, get_or_create_gallery, sync_media_ids
 @pytest.mark.parametrize(
     "from_database, from_body, expected_to_add, expected_to_remove",
     [
-        # source, target, expected_to_add, expected_to_remove
+        # from_database, from_body, expected_to_add, expected_to_remove
         ({}, {}, {}, {}),
         ({}, {"video": {1}}, {"video": {1}}, {}),  # add video
         ({"video": {1}}, {}, {}, {"video": {1}}),  # remove video
