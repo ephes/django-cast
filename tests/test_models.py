@@ -221,10 +221,10 @@ def chaptermarks_are_equal(actual, expected):
         # from_database, from_cms, expected_to_add, expected_to_update, expected_to_remove
         ([], [], [], [], []),
         ([], ["0:0"], ["0:0"], [], []),  # add chaptermark
-        (["0:0"], ["0:0"], [], ["0:0"], []),  # update chaptermark
+        (["0:0"], ["0:0"], [], [], []),  # update chaptermark -> empty because equal
         (["0:0"], [], [], [], ["0:0"]),  # remove chaptermark
         # add, update and remove together
-        (["0:0", "0:2"], ["0:0", "0:1"], ["0:1"], ["0:0"], ["0:2"]),
+        (["0:0", "0:2"], ["0:0", "0:1"], ["0:1"], [], ["0:2"]),
     ],
 )
 @pytest.mark.django_db
@@ -238,3 +238,13 @@ def test_sync_chapter_marks(from_database, from_cms, expected_to_add, expected_t
         [actual_to_add, actual_to_update, actual_to_remove], [expected_to_add, expected_to_update, expected_to_remove]
     ):
         assert chaptermarks_are_equal(actual, expected)
+
+
+@pytest.mark.django_db
+def test_sync_chapter_marks_update_changed_chaptermarks(audio):
+    cm1 = ChapterMark(audio=audio, start="0:0", title="foobar")
+    cm1.full_clean()
+    cm2 = ChapterMark(audio=audio, start="0:0", title="changed")
+    cm2.full_clean()
+    actual_to_add, actual_to_update, actual_to_remove = sync_chapter_marks([cm1], [cm2])
+    assert len(actual_to_update) == 1
