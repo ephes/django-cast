@@ -861,8 +861,12 @@ class Post(TimeStampedModel, Page):
 def sync_chapter_marks(from_database, from_cms):
     start_from_database = {cm.start for cm in from_database}
     start_from_cms = {cm.start for cm in from_cms}
-    to_add = [cm for cm in from_cms if cm.start not in start_from_database]
-    to_update = [cm for cm in from_cms if cm.start in start_from_database]
+    to_add, to_update = [], []
+    for cm in from_cms:
+        if cm.start not in start_from_database:
+            to_add.append(cm)
+        else:
+            to_update.append(cm)
     to_remove = [cm for cm in from_database if cm.start not in start_from_cms]
     return to_add, to_update, to_remove
 
