@@ -873,7 +873,7 @@ def sync_chapter_marks(from_database, from_cms):
 
 class ChapterMark(models.Model):
     audio = models.ForeignKey(Audio, on_delete=models.CASCADE, related_name="chaptermarks")
-    start = models.TimeField(_("Start time of chaptermark"), unique=True)
+    start = models.TimeField(_("Start time of chaptermark"))
     title = models.CharField(max_length=255)
     link = models.URLField(max_length=2000, null=True, blank=True)
     image = models.URLField(max_length=2000, null=True, blank=True)
