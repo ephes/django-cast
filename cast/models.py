@@ -866,10 +866,23 @@ def sync_chapter_marks(from_database, from_cms):
         if cm.start not in start_from_database:
             to_add.append(cm)
         else:
-            if cm.has_changed(start_from_database[cm.start]):
+            cm_from_db = start_from_database[cm.start]
+            if cm.has_changed(cm_from_db):
+                cm.pk = cm_from_db.pk  # to be able to just call cm.save() later on
                 to_update.append(cm)
     to_remove = [cm for cm in from_database if cm.start not in start_from_cms]
     return to_add, to_update, to_remove
+
+
+class ChapterMarkManager(models.Manager):
+    @staticmethod
+    def sync_chaptermarks(from_cms):
+        from_db = list(from_cms[0].audio.chaptermarks.all())
+        to_add, to_update, to_remove = sync_chapter_marks(from_db, from_cms)
+        for cm in to_add + to_update:
+            cm.save()
+        for cm in to_remove():
+            cm.delete()
 
 
 class ChapterMark(models.Model):
@@ -878,6 +891,8 @@ class ChapterMark(models.Model):
     title = models.CharField(max_length=255)
     link = models.URLField(max_length=2000, null=True, blank=True)
     image = models.URLField(max_length=2000, null=True, blank=True)
+
+    objects = ChapterMarkManager()
 
     class Meta:
         unique_together = (("audio", "start"),)
