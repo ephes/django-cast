@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 from cast.models import Audio, ChapterMark
@@ -98,3 +100,21 @@ class TestAudioForm:
         # assert old chaptermark was removed
         audio = form.save(commit=True)
         assert audio.chaptermarks.count() == 0
+
+    def test_chaptermarks_from_file(self, audio):
+        chaptermarks_from_file = [
+            {
+                "id": 1,
+                "time_base": "1/1000",
+                "start": 155343,
+                "start_time": "155.343000",
+                "end": 617117,
+                "end_time": "617.117000",
+                "tags": {"title": "News aus der Szene"},
+            }
+        ]
+        audio.get_chaptermarks_from_file = MagicMock(chaptermarks_from_file)
+        form = AudioForm({"m4a": "foobar"}, instance=audio)
+        assert form.is_valid()
+        assert form.save()
+        assert False

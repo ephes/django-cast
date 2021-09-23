@@ -102,7 +102,8 @@ class AudioForm(BaseCollectionMemberForm):
             # from field
             return chaptermarks
         else:
-            # from files
+            # from changed files
+            print("right position")
             return chaptermarks
 
     def save_chaptermarks(self, audio):
