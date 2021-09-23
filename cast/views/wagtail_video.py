@@ -11,8 +11,8 @@ from wagtail.admin.models import popular_tags_for_model
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
+from ..forms import get_video_form
 from ..models import Video
-from ..wagtail_forms import get_video_form
 
 
 DEFAULT_PAGE_KEY = "p"

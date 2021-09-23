@@ -1,124 +1,15 @@
+from datetime import datetime
+
 from django import forms
-from django.utils import timezone
+from django.core.exceptions import ValidationError
+from django.forms.models import modelform_factory
 from django.utils.translation import gettext_lazy as _
 
-from .models import ChapterMark, Image, Post, Video
+from wagtail.admin import widgets
+from wagtail.admin.forms.collections import BaseCollectionMemberForm
+from wagtail.core.models import Collection
 
-
-class MyDateTimeInput(forms.DateTimeInput):
-    def render(self, *args, **kwargs):
-        value = kwargs.get("value")
-        if value is not None and not isinstance(value, str):
-            kwargs["value"] = str(value.date())
-        return super().render(*args, **kwargs)
-
-
-class ChapterMarkForm(forms.ModelForm):
-    class Meta:
-        model = ChapterMark
-        fields = ("audio", "start", "title", "link", "image")
-
-
-class PostForm(forms.ModelForm):
-    is_published = forms.BooleanField(required=False)
-    pub_date = forms.DateTimeField(input_formats=["%Y-%m-%dT%H:%M", "%d.%m.%Y %H:%M:%S"])
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["slug"].required = False
-        self.fields["title"].widget.attrs["size"] = 80
-        self.fields["pub_date"].required = False
-        self.fields["pub_date"].widget = forms.DateTimeInput(attrs={"type": "datetime-local"})
-        self.fields["pub_date"].label = _("Publication date")
-        self.fields["pub_date"].help_text = _("Article will be published after this date/time.")
-
-        self.fields["visible_date"].required = False
-        self.fields["visible_date"].widget = MyDateTimeInput(attrs={"type": "date"})
-        self.fields["visible_date"].label = _("Visible date")
-        self.fields["visible_date"].help_text = _("Date to be shown above article.")
-
-        self.fields["podcast_audio"].help_text = _("The audio object to be used as podcast episode.")
-
-        if self.instance.podcast_audio:
-            self.fields["chaptermarks"] = forms.CharField(widget=forms.Textarea, required=False)
-
-    def _set_pub_date(self, cleaned_data):
-        pub_date = cleaned_data.get("pub_date")
-        old_pub_date = self.initial.get("pub_date")
-        is_published = cleaned_data.get("is_published")
-        # Handle special cases where new pub_date should not be set
-        if old_pub_date is None:
-            if pub_date is None and is_published:
-                # No pub_date yet, but is_published was set to True
-                cleaned_data["pub_date"] = timezone.now()
-        else:
-            if pub_date is None:
-                # Keep old pub_date if nothing has changed
-                cleaned_data["pub_date"] = old_pub_date
-        # default is to set cleaned_data["pub_date"] to the new value
-        return cleaned_data
-
-    def _set_visible_date(self, cleaned_data):
-        # dunno why this is necessary. 2019-02-26 jochen
-        # visible_date is neither None in tests nor in notebook, but using
-        # browser it raises null constraint error :/ wtf?
-        visible_date = cleaned_data.get("visible_date")
-        if visible_date is None:
-            cleaned_data["visible_date"] = timezone.now()
-        return cleaned_data
-
-    def _clean_chaptermarks(self, cleaned_data):
-        audio = self.instance.podcast_audio
-        if audio:
-            errors = []
-            lines = cleaned_data.get("chaptermarks", "").split("\n")
-            if len(lines) > 0:
-                audio.chaptermarks.all().delete()
-            for line in lines:
-                splitted = line.split()
-                if len(splitted) < 2:
-                    continue
-                start, *parts = splitted
-                title = " ".join(parts)
-                row = {
-                    "audio": audio.pk,
-                    "start": start,
-                    "title": title,
-                    # "link": None,
-                    # "image": None
-                }
-                form = ChapterMarkForm(row)
-                if form.is_valid():
-                    form.save()
-                else:
-                    errors.append(form.errors)
-                # TODO:
-                # * image/link handling + tests
-            if len(errors) > 0:
-                self.add_error("chaptermarks", errors)
-        return cleaned_data
-
-    def clean(self):
-        cleaned_data = super().clean()
-        cleaned_data = self._set_pub_date(cleaned_data)
-        cleaned_data = self._set_visible_date(cleaned_data)
-        cleaned_data = self._clean_chaptermarks(cleaned_data)
-        return cleaned_data
-
-    class Meta:
-        model = Post
-        fields = [
-            "title",
-            # "content",
-            "pub_date",
-            "visible_date",
-            "is_published",
-            "podcast_audio",
-            "keywords",
-            "explicit",
-            "block",
-            "slug",
-        ]
+from .models import Audio, ChapterMark, Image, Video
 
 
 class ImageForm(forms.ModelForm):
@@ -131,3 +22,142 @@ class VideoForm(forms.ModelForm):
     class Meta:
         model = Video
         fields = ["original"]
+
+
+class FakePermissionPolicy:
+    def collections_user_has_permission_for(self, user, action):
+        return Collection.objects.all()
+
+
+class BaseVideoForm(BaseCollectionMemberForm):
+    class Meta:
+        widgets = {
+            "tags": widgets.AdminTagWidget,
+            "original": forms.FileInput,
+            "poster": forms.ClearableFileInput,
+        }
+
+    permission_policy = FakePermissionPolicy()
+
+
+def get_video_form():
+    fields = Video.admin_form_fields
+    if "collection" not in fields:
+        # force addition of the 'collection' field, because leaving it out can
+        # cause dubious results when multiple collections exist (e.g adding the
+        # media to the root collection where the user may not have permission) -
+        # and when only one collection exists, it will get hidden anyway.
+        fields = list(fields) + ["collection"]
+
+    return modelform_factory(
+        Video,
+        form=BaseVideoForm,
+        fields=fields,
+    )
+
+
+class ChapterMarkForm(forms.ModelForm):
+    class Meta:
+        model = ChapterMark
+        fields = ("start", "title", "link", "image")
+
+
+class FFProbeStartField(forms.TimeField):
+    def to_python(self, value):
+        try:
+            # utcfromtimestamp, super important!
+            return datetime.utcfromtimestamp(float(value)).time()
+        except (ValueError):
+            raise ValidationError(
+                _(f"Invalid chaptermark start: {value}"),
+                code="invalid",
+                params={"start": value},
+            )
+
+
+class FFProbeChapterMarkForm(forms.ModelForm):
+    start = FFProbeStartField()
+
+    class Meta:
+        model = ChapterMark
+        fields = ("start", "title")
+
+
+def parse_chaptermark_line(line):
+    def raise_line_validation_error():
+        raise ValidationError(
+            _(f"Invalid chaptermark line: {line}"),
+            code="invalid",
+            params={"line": line},
+        )
+
+    splitted = line.split()
+    if len(splitted) < 2:
+        raise_line_validation_error()
+    start, *parts = splitted
+    title = " ".join(parts)
+    form = ChapterMarkForm({"start": start, "title": title})
+    if form.is_valid():
+        return form.save(commit=False)
+    else:
+        raise_line_validation_error()
+
+
+class ChapterMarksField(forms.CharField):
+    def to_python(self, value):
+        if value is None:
+            return []
+        chaptermarks = []
+        for line in value.split("\n"):
+            if len(line) == 0:
+                # skip empty lines
+                continue
+            chaptermarks.append(parse_chaptermark_line(line))
+        return chaptermarks
+
+
+class AudioForm(BaseCollectionMemberForm):
+    chaptermarks = ChapterMarksField(widget=forms.Textarea, required=False)
+    permission_policy = FakePermissionPolicy()
+
+    class Meta:
+        model = Audio
+        fields = list(Audio.admin_form_fields) + ["collection"]
+        widgets = {
+            "tags": widgets.AdminTagWidget,
+            "m4a": forms.ClearableFileInput,
+            "mp3": forms.ClearableFileInput,
+            "oga": forms.ClearableFileInput,
+            "opus": forms.ClearableFileInput,
+        }
+
+    def get_chaptermarks_from_field_or_files(self, audio):
+        chaptermarks = self.cleaned_data.get("chaptermarks", [])
+        if len(chaptermarks) == 0:
+            # get chaptermarks from one of the changed files
+            changed_audio_formats = [af for af in audio.audio_formats if self.cleaned_data.get(af) is not None]
+            if len(changed_audio_formats) == 0:
+                return []
+            chaptermark_data = audio.get_chaptermark_data_from_file(changed_audio_formats[0])
+            for data in chaptermark_data:
+                form = FFProbeChapterMarkForm(data)
+                if form.is_valid():
+                    chaptermarks.append(form.save(commit=False))
+        return chaptermarks
+
+    def save_chaptermarks(self, audio):
+        # Chapter marks should be saved following this logic:
+        #  1. If there are manually added chapter marks in the form, just use them
+        #  2. If the form has no chapter marks, but an audio file was changed or
+        #     added, look for chapter marks in the audio content
+        #  3. Sync changed chapter marks back to database
+        chaptermarks = self.get_chaptermarks_from_field_or_files(audio)
+        for cm in chaptermarks:
+            cm.audio = audio
+        ChapterMark.objects.sync_chaptermarks(audio, chaptermarks)
+
+    def save(self, commit=True):
+        audio = super().save(commit=commit)
+        if commit:
+            self.save_chaptermarks(audio)
+        return audio

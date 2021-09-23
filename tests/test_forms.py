@@ -2,8 +2,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from cast.forms import AudioForm, ChapterMarkForm
 from cast.models import Audio, ChapterMark
-from cast.wagtail_forms import AudioForm, ChapterMarkForm
 
 
 class TestChapterMarkForm:

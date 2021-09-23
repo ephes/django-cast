@@ -2,7 +2,7 @@ from django.utils import timezone
 
 import pytest
 
-from cast.forms import PostForm
+from cast.old_forms import PostForm
 
 
 class TestPostForm:
