@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import wagtail_audio as audio
+from .views import audio as audio
 from .views import wagtail_video as video
 
 
