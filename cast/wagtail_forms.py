@@ -52,8 +52,15 @@ class ChapterMarkForm(forms.ModelForm):
 
 class FFProbeStartField(forms.TimeField):
     def to_python(self, value):
-        # utcfromtimestamp, super important!
-        return datetime.utcfromtimestamp(float(value)).time()
+        try:
+            # utcfromtimestamp, super important!
+            return datetime.utcfromtimestamp(float(value)).time()
+        except (ValueError):
+            raise ValidationError(
+                _(f"Invalid chaptermark start: {value}"),
+                code="invalid",
+                params={"start": value},
+            )
 
 
 class FFProbeChapterMarkForm(forms.ModelForm):
