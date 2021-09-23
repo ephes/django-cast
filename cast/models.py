@@ -425,6 +425,34 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
             chaptermarks.append(mark.original_line)
         return "\n".join(chaptermarks)
 
+    @staticmethod
+    def clean_ffprobe_chaptermarks(ffprobe_data):
+        cleaned = []
+        for item in ffprobe_data:
+            start = item["start_time"]
+            title = item["tags"]["title"]
+            cleaned.append({"start": start, "title": title})
+        return cleaned
+
+    def get_chaptermark_data_from_file(self, audio_format):
+        file_url = getattr(self, audio_format).url
+        if file_url.startswith("http"):
+            file_path = file_url
+        else:
+            file_path = Path("..") / file_url
+        command = [
+            "ffprobe",
+            "-i",
+            str(file_path),
+            "-print_format",
+            "json",
+            "-show_chapters",
+            "-loglevel",
+            "error",
+        ]
+        ffprobe_data = json.loads(subprocess.run(command, check=True, stdout=subprocess.PIPE).stdout)
+        return self.clean_ffprobe_chaptermarks(ffprobe_data)
+
     @property
     def podlove_url(self):
         return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})

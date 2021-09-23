@@ -102,19 +102,14 @@ class TestAudioForm:
         assert audio.chaptermarks.count() == 0
 
     def test_chaptermarks_from_file(self, audio):
-        chaptermarks_from_file = [
-            {
-                "id": 1,
-                "time_base": "1/1000",
-                "start": 155343,
-                "start_time": "155.343000",
-                "end": 617117,
-                "end_time": "617.117000",
-                "tags": {"title": "News aus der Szene"},
-            }
-        ]
-        audio.get_chaptermarks_from_file = MagicMock(chaptermarks_from_file)
+        expected_title = "News aus der Szene"
+        chaptermarks_from_file = [{"start": "155.343000", "title": expected_title}]
+        audio.get_chaptermark_data_from_file = MagicMock(return_value=chaptermarks_from_file)
         form = AudioForm({"m4a": "foobar"}, instance=audio)
         assert form.is_valid()
         assert form.save()
-        assert False
+
+        # make sure chaptermark was saved with correct attributes
+        saved_chaptermark = audio.chaptermarks.first()
+        assert saved_chaptermark.title == expected_title
+        assert str(saved_chaptermark.start) == "00:02:35.343000"  # == "155.343000"

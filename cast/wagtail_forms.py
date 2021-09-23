@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.forms.models import modelform_factory
@@ -46,6 +48,20 @@ class ChapterMarkForm(forms.ModelForm):
     class Meta:
         model = ChapterMark
         fields = ("start", "title", "link", "image")
+
+
+class FFProbeStartField(forms.TimeField):
+    def to_python(self, value):
+        # utcfromtimestamp, super important!
+        return datetime.utcfromtimestamp(float(value)).time()
+
+
+class FFProbeChapterMarkForm(forms.ModelForm):
+    start = FFProbeStartField()
+
+    class Meta:
+        model = ChapterMark
+        fields = ("start", "title")
 
 
 def parse_chaptermark_line(line):
@@ -98,13 +114,18 @@ class AudioForm(BaseCollectionMemberForm):
 
     def get_chaptermarks_from_field_or_files(self, audio):
         chaptermarks = self.cleaned_data.get("chaptermarks", [])
-        if len(chaptermarks) > 0:
-            # from field
-            return chaptermarks
-        else:
-            # from changed files
-            print("right position")
-            return chaptermarks
+        if len(chaptermarks) == 0:
+            # get chaptermarks from one of the changed files
+            changed_audio_formats = [af for af in audio.audio_formats if self.cleaned_data.get(af) is not None]
+            if len(changed_audio_formats) == 0:
+                return []
+            chaptermark_data = audio.get_chaptermark_data_from_file(changed_audio_formats[0])
+            for data in chaptermark_data:
+                form = FFProbeChapterMarkForm(data)
+                if form.is_valid():
+                    print("form cleaned: ", form.cleaned_data)
+                    chaptermarks.append(form.save(commit=False))
+        return chaptermarks
 
     def save_chaptermarks(self, audio):
         # Chapter marks should be saved following this logic:
