@@ -428,22 +428,22 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     @staticmethod
     def clean_ffprobe_chaptermarks(ffprobe_data):
         cleaned = []
-        for item in ffprobe_data:
+        for item in ffprobe_data["chapters"]:
             start = item["start_time"]
             title = item["tags"]["title"]
             cleaned.append({"start": start, "title": title})
         return cleaned
 
     def get_chaptermark_data_from_file(self, audio_format):
-        file_url = getattr(self, audio_format).url
-        if file_url.startswith("http"):
-            file_path = file_url
-        else:
-            file_path = Path("..") / file_url
+        file_field = getattr(self, audio_format)
+        url = file_field.url
+        if not url.startswith("http"):
+            # use path from local filesystem
+            url = file_field.path
         command = [
             "ffprobe",
             "-i",
-            str(file_path),
+            str(url),
             "-print_format",
             "json",
             "-show_chapters",
@@ -858,7 +858,6 @@ class Post(TimeStampedModel, Page):
             for block in content_block.value:
                 if block.block_type == "gallery":
                     image_ids = [i.id for i in block.value]
-                    print("block value: ", block.value)
                     media_model = get_or_create_gallery(image_ids)
                 else:
                     media_model = block.value
