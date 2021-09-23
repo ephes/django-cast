@@ -123,7 +123,6 @@ class AudioForm(BaseCollectionMemberForm):
             for data in chaptermark_data:
                 form = FFProbeChapterMarkForm(data)
                 if form.is_valid():
-                    print("form cleaned: ", form.cleaned_data)
                     chaptermarks.append(form.save(commit=False))
         return chaptermarks
 
@@ -139,7 +138,6 @@ class AudioForm(BaseCollectionMemberForm):
         ChapterMark.objects.sync_chaptermarks(audio, chaptermarks)
 
     def save(self, commit=True):
-        print("cleaned data: ", self.cleaned_data)
         audio = super().save(commit=commit)
         if commit:
             self.save_chaptermarks(audio)
