@@ -876,12 +876,12 @@ def sync_chapter_marks(from_database, from_cms):
 
 class ChapterMarkManager(models.Manager):
     @staticmethod
-    def sync_chaptermarks(from_cms):
-        from_db = list(from_cms[0].audio.chaptermarks.all())
+    def sync_chaptermarks(audio, from_cms):
+        from_db = list(audio.chaptermarks.all())
         to_add, to_update, to_remove = sync_chapter_marks(from_db, from_cms)
         for cm in to_add + to_update:
             cm.save()
-        for cm in to_remove():
+        for cm in to_remove:
             cm.delete()
 
 

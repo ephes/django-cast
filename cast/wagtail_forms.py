@@ -114,7 +114,7 @@ class AudioForm(BaseCollectionMemberForm):
         chaptermarks = self.get_chaptermarks_from_field_or_files(audio)
         for cm in chaptermarks:
             cm.audio = audio
-        ChapterMark.objects.sync_chaptermarks(chaptermarks)
+        ChapterMark.objects.sync_chaptermarks(audio, chaptermarks)
 
     def save(self, commit=True):
         print("cleaned data: ", self.cleaned_data)
