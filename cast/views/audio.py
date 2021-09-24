@@ -111,12 +111,16 @@ def edit(request, audio_id):
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user)
         if form.is_valid():
             changed_audio_files = set(form.changed_data).intersection(audio.audio_formats)
+            if len(changed_audio_files) > 0:
+                # FIXME butt ugly
+                old_audio = get_object_or_404(Audio, id=audio_id)
             for file_format in changed_audio_files:
                 # if providing a new audio file, delete the old one.
                 # NB Doing this via original_file.delete() clears the file field,
                 # which definitely isn't what we want...
-                original_file = getattr(audio, file_format)
-                original_file.storage.delete(original_file.name)
+                original_file = getattr(old_audio, file_format)
+                if original_file.name != "":
+                    original_file.storage.delete(original_file.name)
             audio = form.save()
 
             # Reindex the media entry to make sure all tags are indexed

@@ -188,7 +188,10 @@ def audio(user, m4a_audio, settings):
     teardown_path = audio.m4a.path  # save path to unlink if audio.m4a is set to None
     yield audio
     # teardown
-    os.unlink(teardown_path)
+    try:
+        os.unlink(teardown_path)
+    except FileNotFoundError:
+        pass
 
 
 @pytest.fixture()

@@ -431,12 +431,17 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         for item in ffprobe_data["chapters"]:
             start = item["start_time"]
             title = item["tags"]["title"]
+            if title == "":
+                continue
             cleaned.append({"start": start, "title": title})
         return cleaned
 
     def get_chaptermark_data_from_file(self, audio_format):
         file_field = getattr(self, audio_format)
-        url = file_field.url
+        try:
+            url = file_field.url
+        except ValueError:
+            return []
         if not url.startswith("http"):
             # use path from local filesystem
             url = file_field.path

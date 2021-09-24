@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pytest
 
-from cast.models import ChapterMark, sync_chapter_marks
+from cast.models import Audio, ChapterMark, sync_chapter_marks
 
 
 class TestImageModel:
@@ -111,6 +111,50 @@ class TestAudioModel:
     @pytest.mark.django_db
     def test_audio_podlove_url(self, audio):
         assert audio.podlove_url == "/cast/api/audios/podlove/1"
+
+    @pytest.mark.django_db
+    def test_audio_get_chaptermark_data_from_file_empty_on_value_error(self, audio):
+        assert audio.get_chaptermark_data_from_file("mp3") == []
+
+    def test_audio_test_clean_ffprobe_chaptermarks(self):
+        ffprobe_chaptermarks = {
+            "chapters": [
+                {
+                    "id": 0,
+                    "time_base": "1/1000",
+                    "start": 0,
+                    "start_time": "0.000000",
+                    "end": 155343,
+                    "end_time": "155.343000",
+                    # chapter marks with empty title should be filtered
+                    "tags": {"title": ""},
+                },
+                {
+                    "id": 1,
+                    "time_base": "1/1000",
+                    "start": 155343,
+                    "start_time": "155.343000",
+                    "end": 617117,
+                    "end_time": "617.117000",
+                    "tags": {"title": "News aus der Szene"},
+                },
+                {
+                    "id": 2,
+                    "time_base": "1/1000",
+                    "start": 617117,
+                    "start_time": "617.117000",
+                    "end": 1266062,
+                    "end_time": "1266.062000",
+                    "tags": {"title": "Django Async"},
+                },
+            ]
+        }
+        cleaned_chaptermarks = Audio.clean_ffprobe_chaptermarks(ffprobe_chaptermarks)
+        assert len(cleaned_chaptermarks) == 2
+        assert cleaned_chaptermarks == [
+            {"start": "155.343000", "title": "News aus der Szene"},
+            {"start": "617.117000", "title": "Django Async"},
+        ]
 
 
 class TestFileModel:

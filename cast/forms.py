@@ -132,10 +132,16 @@ class AudioForm(BaseCollectionMemberForm):
         }
 
     def get_chaptermarks_from_field_or_files(self, audio):
-        chaptermarks = self.cleaned_data.get("chaptermarks", [])
+        chaptermarks = self.cleaned_data["chaptermarks"]
         if len(chaptermarks) == 0:
             # get chaptermarks from one of the changed files
-            changed_audio_formats = [af for af in audio.audio_formats if self.cleaned_data.get(af) is not None]
+            changed_audio_formats = []
+            for audio_format in audio.audio_formats:
+                form_file = self.cleaned_data.get(audio_format)
+                if form_file is None:
+                    continue
+                if form_file != getattr(audio, audio_format):
+                    changed_audio_formats.append(audio_format)
             if len(changed_audio_formats) == 0:
                 return []
             chaptermark_data = audio.get_chaptermark_data_from_file(changed_audio_formats[0])
