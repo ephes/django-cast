@@ -48,7 +48,7 @@ def index(request):
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return render(
             request,
-            "cast/wagtail/audio_results.html",
+            "cast/audio/results.html",
             {
                 "ordering": ordering,
                 "audios": audios,
@@ -59,7 +59,7 @@ def index(request):
     else:
         return render(
             request,
-            "cast/wagtail/audio_index.html",
+            "cast/audio/index.html",
             {
                 "ordering": ordering,
                 "audios": audios,
@@ -99,7 +99,7 @@ def add(request):
 
     return render(
         request,
-        "cast/wagtail/audio_add.html",
+        "cast/audio/add.html",
         {"form": form},
     )
 
@@ -157,7 +157,7 @@ def edit(request, audio_id):
 
     return render(
         request,
-        "cast/wagtail/audio_edit.html",
+        "cast/audio/edit.html",
         {
             "audio": audio,
             "filesize": filesize,
@@ -175,7 +175,7 @@ def delete(request, audio_id):
         messages.success(request, _("Audio '{0}' deleted.").format(audio.title))
         return redirect("castmedia:audio_index")
 
-    return render(request, "cast/wagtail/audio_confirm_delete.html", {"audio": audio})
+    return render(request, "cast/audio/confirm_delete.html", {"audio": audio})
 
 
 def chooser(request):
@@ -198,7 +198,7 @@ def chooser(request):
         paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
         return render(
             request,
-            "cast/wagtail/audio_chooser_results.html",
+            "cast/audio/chooser_results.html",
             {
                 "audios": audios,
                 "query_string": q,
@@ -212,7 +212,7 @@ def chooser(request):
 
     return render_modal_workflow(
         request,
-        "cast/wagtail/audio_chooser_chooser.html",
+        "cast/audio/chooser_chooser.html",
         None,
         {
             "audios": audios,
@@ -293,7 +293,7 @@ def chooser_upload(request):
     }
     return render_modal_workflow(
         request,
-        "cast/wagtail/audio_chooser_chooser.html",
+        "cast/audio/chooser_chooser.html",
         None,
         context,
         json_data={"step": "chooser"},

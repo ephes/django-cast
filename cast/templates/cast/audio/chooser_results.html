@@ -12,7 +12,7 @@
         <h2>{% trans "Latest audio" %}</h2>
     {% endif %}
 
-    {% include "cast/wagtail/audio_list.html" with choosing=1 %}
+    {% include "cast/audio/list.html" with choosing=1 %}
 
     {% include pagination_template with items=audios is_ajax=1 %}
 {% else %}

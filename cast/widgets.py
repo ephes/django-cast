@@ -98,7 +98,7 @@ class AdminAudioChooser(AdminChooser):
         original_field_html = super().render_html(name, value.get("id"), attrs)
 
         return render_to_string(
-            "cast/wagtail/audio_chooser.html",
+            "cast/audio/chooser.html",
             {
                 "widget": self,
                 "original_field_html": original_field_html,

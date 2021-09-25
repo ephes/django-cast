@@ -1,4 +1,4 @@
-{% load i18n wagtailadmin_tags %}
+d{% load i18n wagtailadmin_tags %}
 
 {% if audios %}
     {% if is_searching %}
@@ -13,7 +13,7 @@
         {% search_other %}
     {% endif %}
 
-    {% include "cast/wagtail/audio_list.html" %}
+    {% include "cast/audio/list.html" %}
 
     {% include "wagtailadmin/shared/pagination_nav.html" with items=audios is_searching=is_searching linkurl="castmedia:audio_index" %}
 {% else %}
