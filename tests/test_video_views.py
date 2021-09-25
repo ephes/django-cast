@@ -140,7 +140,7 @@ class TestVideoIndex:
             video.save()
             video_models.append(video)
         index_url = reverse("castmedia:video_index")
-        with patch("cast.views.wagtail_video.MENU_ITEM_PAGINATION", return_value=1):
+        with patch("cast.views.video.MENU_ITEM_PAGINATION", return_value=1):
             r = authenticated_client.get(index_url, {"p": "1"})
         videos = r.context["videos"]
 
@@ -148,7 +148,7 @@ class TestVideoIndex:
         assert len(videos) == 1
         assert videos[0] == video_models[-1]
 
-        with patch("cast.views.wagtail_video.MENU_ITEM_PAGINATION", return_value=1):
+        with patch("cast.views.video.MENU_ITEM_PAGINATION", return_value=1):
             r = authenticated_client.get(index_url, {"p": "2"})
         videos = r.context["videos"]
 
@@ -353,7 +353,7 @@ class TestVideoChooser:
             video.save()
             video_models.append(video)
         chooser_url = reverse("castmedia:video_chooser")
-        with patch("cast.views.wagtail_video.CHOOSER_PAGINATION", return_value=1):
+        with patch("cast.views.video.CHOOSER_PAGINATION", return_value=1):
             r = authenticated_client.get(chooser_url, {"p": "1"})
         videos = r.context["videos"]
 
@@ -361,7 +361,7 @@ class TestVideoChooser:
         assert len(videos) == 1
         assert videos[0] == video_models[-1]
 
-        with patch("cast.views.wagtail_video.CHOOSER_PAGINATION", return_value=1):
+        with patch("cast.views.video.CHOOSER_PAGINATION", return_value=1):
             r = authenticated_client.get(chooser_url, {"p": "2"})
         videos = r.context["videos"]
 
