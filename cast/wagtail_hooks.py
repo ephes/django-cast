@@ -8,15 +8,15 @@ from wagtail.core.permission_policies.collections import (
     CollectionOwnershipPermissionPolicy,
 )
 
-from .admin_urls import audio_urls, video_urls
+from .admin_urls import audio, video
 from .models import Audio, Video
 
 
 @hooks.register("register_admin_urls")
 def register_admin_urls():
     return [
-        path("audio/", include((audio_urls, "castaudio"), namespace="castaudio")),
-        path("media/", include((video_urls, "castmedia"), namespace="castmedia")),
+        path("audio/", include((audio, "castaudio"), namespace="castaudio")),
+        path("media/", include((video, "castmedia"), namespace="castmedia")),
     ]
 
 
