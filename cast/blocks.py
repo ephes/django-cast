@@ -35,7 +35,7 @@ class VideoChooserBlock(ChooserBlock):
 
     @cached_property
     def widget(self):
-        from .wagtail_widgets import AdminVideoChooser
+        from .widgets import AdminVideoChooser
 
         return AdminVideoChooser()
 
@@ -52,7 +52,7 @@ class AudioChooserBlock(ChooserBlock):
 
     @cached_property
     def widget(self):
-        from .wagtail_widgets import AdminAudioChooser
+        from .widgets import AdminAudioChooser
 
         return AdminAudioChooser()
 

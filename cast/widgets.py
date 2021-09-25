@@ -1,65 +1,140 @@
-from itertools import chain
+import json
 
-from django.db.models.fields import BLANK_CHOICE_DASH
-from django.forms import Widget
-from django.forms.utils import flatatt
-from django.utils.encoding import force_str
-from django.utils.http import urlencode
-from django.utils.safestring import mark_safe
-from django.utils.translation import gettext as _
+from django import forms
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.functional import cached_property
+from django.utils.translation import gettext_lazy as _
+
+from wagtail.admin.staticfiles import versioned_static
+from wagtail.admin.widgets import AdminChooser
+from wagtail.core.telepath import register
+from wagtail.core.widget_adapters import WidgetAdapter
+
+from .models import Audio, Video
 
 
-class DateFacetWidget(Widget):
-    def __init__(self, attrs=None, choices=()):
-        super().__init__(attrs)
+class AdminVideoChooser(AdminChooser):
+    choose_one_text = _("Choose a video item")
+    choose_another_text = _("Choose another video item")
+    link_to_chosen_text = _("Edit this video item")
 
-        self.choices = choices
-
-    def value_from_datadict(self, data, files, name):
-        value = super().value_from_datadict(data, files, name)
-        self.data = data
-        return value
-
-    def render(self, name, value, attrs=None, choices=(), renderer=None):
-        if not hasattr(self, "data"):
-            self.data = {}
+    def get_value_data(self, value):
         if value is None:
-            value = ""
-        final_attrs = self.build_attrs(self.attrs, extra_attrs=attrs)
-        output = ["<div%s>" % flatatt(final_attrs)]
-        options = self.render_options(choices, [value], name)
-        if options:
-            output.append(options)
-        output.append("</div>")
-        return mark_safe("\n".join(output))
-
-    def render_options(self, choices, selected_choices, name):
-        selected_choices = {force_str(v) for v in selected_choices}
-        output = []
-        for option_value, option_label in chain(self.choices, choices):
-            if isinstance(option_label, (list, tuple)):
-                for option in option_label:
-                    output.append(self.render_option(name, selected_choices, *option))
-            else:
-                output.append(self.render_option(name, selected_choices, option_value, option_label))
-        return "\n".join(output)
-
-    def render_option(self, name, selected_choices, option_value, option_label):
-        option_value = force_str(option_value)
-        if option_label == BLANK_CHOICE_DASH[0][1]:
-            option_label = _("All")
-        data = self.data.copy()
-        data[name] = option_value
-        selected = data == self.data or option_value in selected_choices
-        try:
-            url = data.urlencode()
-        except AttributeError:
-            url = urlencode(data)
-        return self.option_string() % {
-            "attrs": selected and ' class="selected"' or "",
-            "query_string": url,
-            "label": force_str(option_label),
+            return value
+        if not isinstance(value, Video):
+            value = Video.objects.get(pk=value)
+        return {
+            "id": value.pk,
+            "title": value.title,
+            "edit_link": reverse("castmedia:video_edit", args=[value.id]),
         }
 
-    def option_string(self):
-        return '<div class="cast-date-facet-item"><a%(attrs)s href="?%(query_string)s">%(label)s</a></div>'
+    def render_html(self, name, value, attrs):
+        value = value if value is not None else {}
+        original_field_html = super().render_html(name, value.get("id"), attrs)
+
+        return render_to_string(
+            "cast/wagtail/video_chooser.html",
+            {
+                "widget": self,
+                "original_field_html": original_field_html,
+                "attrs": attrs,
+                "value": value != {},  # only used to identify blank values
+                "title": value.get("title", ""),
+                "edit_url": value.get("edit_url", ""),
+            },
+        )
+
+    def render_js_init(self, id_, name, value):
+        return f"createVideoChooser({json.dumps(id_)});"
+
+    class Media:
+        js = [
+            "js/cast/wagtail/video-chooser-modal.js",
+            "js/cast/wagtail/video-chooser.js",
+        ]
+
+
+class VideoChooserAdapter(WidgetAdapter):
+    js_constructor = "cast.wagtail.VideoChooser"
+
+    def js_args(self, widget):
+        return [
+            widget.render_html("__NAME__", None, attrs={"id": "__ID__"}),
+            widget.id_for_label("__ID__"),
+        ]
+
+    @cached_property
+    def media(self):
+        return forms.Media(
+            js=[
+                versioned_static("js/cast/wagtail/video-chooser-telepath.js"),
+            ]
+        )
+
+
+register(VideoChooserAdapter(), AdminVideoChooser)
+
+
+class AdminAudioChooser(AdminChooser):
+    choose_one_text = _("Choose a audio item")
+    choose_another_text = _("Choose another audio item")
+    link_to_chosen_text = _("Edit this audio item")
+
+    def get_value_data(self, value):
+        if value is None:
+            return value
+        if not isinstance(value, Audio):
+            value = Audio.objects.get(pk=value)
+        return {
+            "id": value.pk,
+            "title": value.title,
+            "edit_link": reverse("castmedia:audio_edit", args=[value.id]),
+        }
+
+    def render_html(self, name, value, attrs):
+        value = value if value is not None else {}
+        original_field_html = super().render_html(name, value.get("id"), attrs)
+
+        return render_to_string(
+            "cast/wagtail/audio_chooser.html",
+            {
+                "widget": self,
+                "original_field_html": original_field_html,
+                "attrs": attrs,
+                "value": value != {},  # only used to identify blank values
+                "title": value.get("title", ""),
+                "edit_url": value.get("edit_url", ""),
+            },
+        )
+
+    def render_js_init(self, id_, name, value):
+        return f"createAudioChooser({json.dumps(id_)});"
+
+    class Media:
+        js = [
+            "js/cast/wagtail/audio-chooser-modal.js",
+            "js/cast/wagtail/audio-chooser.js",
+        ]
+
+
+class AudioChooserAdapter(WidgetAdapter):
+    js_constructor = "cast.wagtail.AudioChooser"
+
+    def js_args(self, widget):
+        return [
+            widget.render_html("__NAME__", None, attrs={"id": "__ID__"}),
+            widget.id_for_label("__ID__"),
+        ]
+
+    @cached_property
+    def media(self):
+        return forms.Media(
+            js=[
+                versioned_static("js/cast/wagtail/audio-chooser-telepath.js"),
+            ]
+        )
+
+
+register(AudioChooserAdapter(), AdminAudioChooser)
