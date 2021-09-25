@@ -14,7 +14,7 @@ def previous_and_next(iterable):
 
 class GalleryBlock(ListBlock):
     class Meta:
-        template = "cast/wagtail_gallery_block.html"
+        template = "cast/gallery.html"
 
     def add_prev_next(self, gallery):
         for previous_image, current_image, next_image in previous_and_next(gallery):
