@@ -27,7 +27,7 @@ class AdminVideoChooser(AdminChooser):
         return {
             "id": value.pk,
             "title": value.title,
-            "edit_link": reverse("castmedia:video_edit", args=[value.id]),
+            "edit_link": reverse("castvideo:edit", args=[value.id]),
         }
 
     def render_html(self, name, value, attrs):
@@ -35,7 +35,7 @@ class AdminVideoChooser(AdminChooser):
         original_field_html = super().render_html(name, value.get("id"), attrs)
 
         return render_to_string(
-            "cast/wagtail/video_chooser.html",
+            "cast/video/chooser.html",
             {
                 "widget": self,
                 "original_field_html": original_field_html,

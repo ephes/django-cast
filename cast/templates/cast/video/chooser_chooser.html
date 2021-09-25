@@ -14,7 +14,7 @@
 
 <div class="tab-content">
     <section id="search" class="{% if not uploadform.errors %}active {% endif %}nice-padding">
-        <form class="media-search search-bar" action="{% url 'castmedia:video_chooser' %}" method="GET" novalidate>
+        <form class="media-search search-bar" action="{% url 'castvideo:chooser' %}" method="GET" novalidate>
             <ul class="fields">
                 {% for field in searchform %}
                     {% include "wagtailadmin/shared/field_as_li.html" with field=field %}
@@ -25,12 +25,12 @@
             </ul>
         </form>
         <div id="search-results" class="listing media">
-            {% include "cast/wagtail/video_chooser_results.html" %}
+            {% include "cast/video/chooser_results.html" %}
         </div>
     </section>
     {% if uploadform %}
         <section id="upload-video" class="{% if uploadform.errors %}active{% endif %} nice-padding">
-            <form class="media-upload" action="{% url 'castmedia:video_chooser_upload' %}" method="POST" enctype="multipart/form-data" novalidate>
+            <form class="media-upload" action="{% url 'castvideo:chooser_upload' %}" method="POST" enctype="multipart/form-data" novalidate>
                 {% csrf_token %}
                 <ul class="fields">
                     {% for field in uploadform %}

@@ -28,8 +28,7 @@ def get_endpoint_urls_without_args():
     urls = {}
     view_names = ["index", "add", "chooser", "chooser_upload"]
     for view_name in view_names:
-        video_view_name = f"video_{view_name}"
-        urls[video_view_name] = reverse(f"castmedia:{video_view_name}")
+        urls[view_name] = reverse(f"castvideo:{view_name}")
     return urls
 
 
@@ -37,8 +36,7 @@ def get_endpoint_urls_with_args(video):
     urls = {}
     view_names = ["edit", "delete", "chosen"]
     for view_name in view_names:
-        video_view_name = f"video_{view_name}"
-        urls[video_view_name] = reverse(f"castmedia:{video_view_name}", args=(video.id,))
+        urls[view_name] = reverse(f"castvideo:{view_name}", args=(video.id,))
     return urls
 
 
@@ -80,8 +78,8 @@ class TestAllVideoEndpoints:
 class TestVideoIndex:
     pytestmark = pytest.mark.django_db
 
-    def test_get_video_index(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_index)
+    def test_get_index(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.index)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -93,9 +91,9 @@ class TestVideoIndex:
         # make sure video_urls.video is included in results
         assert video_urls.video.title in content
 
-    def test_get_video_index_ajax(self, authenticated_client, video_urls):
+    def test_get_index_ajax(self, authenticated_client, video_urls):
         headers = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
-        r = authenticated_client.get(video_urls.video_index, **headers)
+        r = authenticated_client.get(video_urls.index, **headers)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -107,8 +105,8 @@ class TestVideoIndex:
         # make sure video_urls.video is included in results
         assert video_urls.video.title in content
 
-    def test_get_video_index_with_search(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_index, {"q": video_urls.video.title})
+    def test_get_index_with_search(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.index, {"q": video_urls.video.title})
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -120,8 +118,8 @@ class TestVideoIndex:
         # make sure video_urls.video is included in results
         assert video_urls.video.title in content
 
-    def test_get_video_index_with_search_invalid(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_index, {"q": " "})
+    def test_get_index_with_search_invalid(self, authenticated_client, video_urls):
+        r = authenticated_client.get(video_urls.index, {"q": " "})
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -133,13 +131,13 @@ class TestVideoIndex:
         # make sure video_urls.video is included in results
         assert video_urls.video.title in content
 
-    def test_get_video_index_with_pagination(self, authenticated_client, user):
+    def test_get_index_with_pagination(self, authenticated_client, user):
         video_models = []
         for i in range(1, 3):
             video = Video(user=user, title=f"video {i}")
             video.save()
             video_models.append(video)
-        index_url = reverse("castmedia:video_index")
+        index_url = reverse("castvideo:index")
         with patch("cast.views.video.MENU_ITEM_PAGINATION", return_value=1):
             r = authenticated_client.get(index_url, {"p": "1"})
         videos = r.context["videos"]
@@ -161,14 +159,14 @@ class TestVideoAdd:
     pytestmark = pytest.mark.django_db
 
     def test_get_add_video(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_add)
+        r = authenticated_client.get(video_urls.add)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
         assert "Uploading…" in content
 
     def test_post_add_video_invalid_form(self, authenticated_client):
-        add_url = reverse("castmedia:video_add")
+        add_url = reverse("castvideo:add")
 
         post_data = {
             "title": "foobar",
@@ -176,14 +174,14 @@ class TestVideoAdd:
         }
         r = authenticated_client.post(add_url, post_data)
 
-        # make sure we dont get redirected to video_index
+        # make sure we dont get redirected to index
         assert r.status_code == 200
 
         # make sure we didn't create a video
         Video.objects.first() is None
 
     def test_post_add_video(self, authenticated_client, minimal_mp4):
-        add_url = reverse("castmedia:video_add")
+        add_url = reverse("castvideo:add")
 
         post_data = {
             "title": "foobar",
@@ -192,9 +190,9 @@ class TestVideoAdd:
         }
         r = authenticated_client.post(add_url, post_data)
 
-        # make sure we get redirected to video_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == reverse("castmedia:video_index")
+        assert r.url == reverse("castvideo:index")
 
         # make sure field were saved correctly
         video = Video.objects.first()
@@ -209,7 +207,7 @@ class TestVideoEdit:
     pytestmark = pytest.mark.django_db
 
     def test_get_edit_video(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_edit)
+        r = authenticated_client.get(video_urls.edit)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -217,7 +215,7 @@ class TestVideoEdit:
 
     def test_get_edit_video_without_original(self, authenticated_client, video_without_original):
         video = video_without_original
-        edit_url = reverse("castmedia:video_edit", args=(video.id,))
+        edit_url = reverse("castvideo:edit", args=(video.id,))
         r = authenticated_client.get(edit_url)
 
         assert r.status_code == 200
@@ -227,7 +225,7 @@ class TestVideoEdit:
     def test_get_edit_video_with_original_no_filesize(self, settings, authenticated_client, video_without_file):
         settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
         video = video_without_file
-        edit_url = reverse("castmedia:video_edit", args=(video.id,))
+        edit_url = reverse("castvideo:edit", args=(video.id,))
         r = authenticated_client.get(edit_url)
 
         assert r.status_code == 200
@@ -236,9 +234,9 @@ class TestVideoEdit:
 
     def test_post_edit_video_invalid_form(self, authenticated_client, video_urls):
         post_data = {"foo": "bar"}  # must not be empty because of if request.POST claus
-        r = authenticated_client.post(video_urls.video_edit, post_data)
+        r = authenticated_client.post(video_urls.edit, post_data)
 
-        # make sure we dont get redirected to video_index
+        # make sure we dont get redirected to index
         assert r.status_code == 200
 
     def test_post_edit_video_title(self, authenticated_client, video_urls):
@@ -246,11 +244,11 @@ class TestVideoEdit:
         post_data = {
             "title": "changed title",
         }
-        r = authenticated_client.post(video_urls.video_edit, post_data)
+        r = authenticated_client.post(video_urls.edit, post_data)
 
-        # make sure we get redirected to video_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == video_urls.video_index
+        assert r.url == video_urls.index
 
         # make sure title was changes
         video.refresh_from_db()
@@ -261,18 +259,18 @@ class TestVideoEdit:
             "title": "asdf",
             "original": minimal_mp4,
         }
-        r = authenticated_client.post(video_urls.video_edit, post_data)
+        r = authenticated_client.post(video_urls.edit, post_data)
 
-        # make sure we get redirected to video_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == video_urls.video_index
+        assert r.url == video_urls.index
 
 
 class TestVideoDelete:
     pytestmark = pytest.mark.django_db
 
     def test_get_delete_video(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_delete)
+        r = authenticated_client.get(video_urls.delete)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -281,11 +279,11 @@ class TestVideoDelete:
     def test_post_delete_video(self, authenticated_client, video_urls):
         video = video_urls.video
         # post data is necessary because of if request.POST
-        r = authenticated_client.post(video_urls.video_delete, {"delete": "yes"})
+        r = authenticated_client.post(video_urls.delete, {"delete": "yes"})
 
-        # make sure we get redirected to video_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == video_urls.video_index
+        assert r.url == video_urls.index
 
         # make sure video was deleted
         with pytest.raises(Video.DoesNotExist):
@@ -298,13 +296,13 @@ class TestVideoChosen:
     def test_get_chosen_video_not_found(self, authenticated_client, video_urls):
         video = video_urls.video
         video.delete()
-        r = authenticated_client.get(video_urls.video_chosen)
+        r = authenticated_client.get(video_urls.chosen)
 
         assert r.status_code == 404
 
     def test_get_chosen_video_success(self, authenticated_client, video_urls):
         video = video_urls.video
-        r = authenticated_client.get(video_urls.video_chosen)
+        r = authenticated_client.get(video_urls.chosen)
 
         assert r.status_code == 200
 
@@ -318,7 +316,7 @@ class TestVideoChooser:
 
     def test_get_video_in_chooser(self, authenticated_client, video_urls):
         video = video_urls.video
-        r = authenticated_client.get(video_urls.video_chooser)
+        r = authenticated_client.get(video_urls.chooser)
 
         assert r.status_code == 200
 
@@ -330,7 +328,7 @@ class TestVideoChooser:
         assert "media-chooser-upload" in content
 
     def test_get_video_chooser_with_search(self, authenticated_client, video_urls):
-        r = authenticated_client.get(video_urls.video_chooser, {"q": video_urls.video.title})
+        r = authenticated_client.get(video_urls.chooser, {"q": video_urls.video.title})
 
         assert r.status_code == 200
 
@@ -339,7 +337,7 @@ class TestVideoChooser:
 
     def test_get_video_chooser_with_search_invalid(self, authenticated_client, video_urls):
         # {"p": "1"} (page 1) leads to the search form being invalid
-        r = authenticated_client.get(video_urls.video_chooser, {"p": "1"})
+        r = authenticated_client.get(video_urls.chooser, {"p": "1"})
 
         assert r.status_code == 200
 
@@ -352,7 +350,7 @@ class TestVideoChooser:
             video = Video(user=user, title=f"video {i}")
             video.save()
             video_models.append(video)
-        chooser_url = reverse("castmedia:video_chooser")
+        chooser_url = reverse("castvideo:chooser")
         with patch("cast.views.video.CHOOSER_PAGINATION", return_value=1):
             r = authenticated_client.get(chooser_url, {"p": "1"})
         videos = r.context["videos"]
@@ -375,14 +373,14 @@ class TestVideoChooserUpload:
 
     def test_get_video_in_chooser_upload(self, authenticated_client, video_urls):
         video = video_urls.video
-        r = authenticated_client.get(video_urls.video_chooser_upload)
+        r = authenticated_client.get(video_urls.chooser_upload)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
         assert video.title in content
 
     def test_post_upload_video_form_invalid(self, authenticated_client):
-        upload_url = reverse("castmedia:video_chooser_upload")
+        upload_url = reverse("castvideo:chooser_upload")
         post_data = {"foo": "bar"}
         r = authenticated_client.post(upload_url, post_data)
 
@@ -394,7 +392,7 @@ class TestVideoChooserUpload:
         assert str(messages[0]).rstrip() == "The video could not be saved due to errors."
 
     def test_post_upload_video(self, authenticated_client, minimal_mp4):
-        upload_url = reverse("castmedia:video_chooser_upload")
+        upload_url = reverse("castvideo:chooser_upload")
         prefix = "media-chooser-upload"
         post_data = {
             f"{prefix}-title": "foobar",

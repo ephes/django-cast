@@ -16,7 +16,7 @@ from .models import Audio, Video
 def register_admin_urls():
     return [
         path("audio/", include((audio, "castaudio"), namespace="castaudio")),
-        path("media/", include((video, "castmedia"), namespace="castmedia")),
+        path("media/", include((video, "castvideo"), namespace="castvideo")),
     ]
 
 
@@ -30,7 +30,7 @@ class VideoMenuItem(MenuItem):
 def register_video_menu_item():
     return VideoMenuItem(
         _("Video"),
-        reverse("castmedia:video_index"),
+        reverse("castvideo:index"),
         name="video",
         classnames="icon icon-media",
         order=300,
@@ -45,7 +45,7 @@ def editor_js():
             window.chooserUrls.videoChooser = '{0}';
         </script>
         """,
-        reverse("castmedia:video_chooser"),
+        reverse("castvideo:chooser"),
     )
 
 

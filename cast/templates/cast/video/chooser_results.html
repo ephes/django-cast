@@ -12,7 +12,7 @@
         <h2>{% trans "Latest video" %}</h2>
     {% endif %}
 
-    {% include "cast/wagtail/video_list.html" with choosing=1 %}
+    {% include "cast/video/list.html" with choosing=1 %}
 
     {% include pagination_template with items=videos is_ajax=1 %}
 {% else %}

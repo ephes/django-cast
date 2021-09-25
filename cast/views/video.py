@@ -49,7 +49,7 @@ def index(request):
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
         return render(
             request,
-            "cast/wagtail/video_results.html",
+            "cast/video/results.html",
             {
                 "ordering": ordering,
                 "videos": videos,
@@ -60,7 +60,7 @@ def index(request):
     else:
         return render(
             request,
-            "cast/wagtail/video_index.html",
+            "cast/video/index.html",
             {
                 "ordering": ordering,
                 "videos": videos,
@@ -90,9 +90,9 @@ def add(request):
             messages.success(
                 request,
                 _("Video file '{0}' added.").format(video.title),
-                buttons=[messages.button(reverse("castmedia:video_edit", args=(video.id,)), _("Edit"))],
+                buttons=[messages.button(reverse("castvideo:edit", args=(video.id,)), _("Edit"))],
             )
-            return redirect("castmedia:video_index")
+            return redirect("castvideo:index")
         else:
             messages.error(request, _("The video file could not be saved due to errors."))
     else:
@@ -101,7 +101,7 @@ def add(request):
 
     return render(
         request,
-        "cast/wagtail/video_add.html",
+        "cast/video/add.html",
         {"form": form},
     )
 
@@ -128,9 +128,9 @@ def edit(request, video_id):
             messages.success(
                 request,
                 _("Video file '{0}' updated").format(video.title),
-                buttons=[messages.button(reverse("castmedia:video_edit", args=(video.id,)), _("Edit"))],
+                buttons=[messages.button(reverse("castvideo:edit", args=(video.id,)), _("Edit"))],
             )
-            return redirect("castmedia:video_index")
+            return redirect("castvideo:index")
         else:
             messages.error(request, _("The media could not be saved due to errors."))
     else:
@@ -150,12 +150,12 @@ def edit(request, video_id):
         messages.error(
             request,
             _("The file could not be found. Please change the source or delete the video file"),
-            buttons=[messages.button(reverse("castmedia:video_delete", args=(video.id,)), _("Delete"))],
+            buttons=[messages.button(reverse("castvideo:delete", args=(video.id,)), _("Delete"))],
         )
 
     return render(
         request,
-        "cast/wagtail/video_edit.html",
+        "cast/video/edit.html",
         {
             "video": video,
             "filesize": filesize,
@@ -171,9 +171,9 @@ def delete(request, video_id):
     if request.POST:
         video.delete()
         messages.success(request, _("Video '{0}' deleted.").format(video.title))
-        return redirect("castmedia:video_index")
+        return redirect("castvideo:index")
 
-    return render(request, "cast/wagtail/video_confirm_delete.html", {"video": video})
+    return render(request, "cast/video/confirm_delete.html", {"video": video})
 
 
 def chooser(request):
@@ -196,7 +196,7 @@ def chooser(request):
         paginator, videos = paginate(request, videos, per_page=CHOOSER_PAGINATION)
         return render(
             request,
-            "cast/wagtail/video_chooser_results.html",
+            "cast/video/chooser_results.html",
             {
                 "videos": videos,
                 "query_string": q,
@@ -210,7 +210,7 @@ def chooser(request):
 
     return render_modal_workflow(
         request,
-        "cast/wagtail/video_chooser_chooser.html",
+        "cast/video/chooser_chooser.html",
         None,
         {
             "videos": videos,
@@ -236,7 +236,7 @@ def get_video_data(video):
     return {
         "id": video.id,
         "title": video.title,
-        "edit_link": reverse("castmedia:video_edit", args=(video.id,)),
+        "edit_link": reverse("castvideo:edit", args=(video.id,)),
     }
 
 
@@ -293,7 +293,7 @@ def chooser_upload(request):
     }
     return render_modal_workflow(
         request,
-        "cast/wagtail/video_chooser_chooser.html",
+        "cast/video/chooser_chooser.html",
         None,
         context,
         json_data={"step": "chooser"},

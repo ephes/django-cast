@@ -13,18 +13,18 @@
         {% search_other %}
     {% endif %}
 
-    {% include "cast/wagtail/video_list.html" %}
+    {% include "cast/video/list.html" %}
 
-    {% include "wagtailadmin/shared/pagination_nav.html" with items=videos is_searching=is_searching linkurl="castmedia:video_index" %}
+    {% include "wagtailadmin/shared/pagination_nav.html" with items=videos is_searching=is_searching linkurl="castvideo:index" %}
 {% else %}
     {% if is_searching %}
          <h2>{% blocktrans %}Sorry, no videos files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
 
          {% search_other %}
     {% else %}
-        {% url 'castmedia:add_video' as castmedia_add_video_url %}
+        {% url 'castvideo:add_video' as castmedia_add_video_url %}
         {% if current_collection %}
-            <p>{% blocktrans %}You haven't uploaded any videos in this collection. You can upload <a href="{{ castmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
+            <p>{% blocktrans %}You haven't uploaded any videos in this collection. You can upload <a href="{{ castmedia_add_url }}">video</a> files.{% endblocktrans %}</p>
         {% else %}
             <p>{% blocktrans %}You haven't uploaded any videos. You can upload <a href="{{ castmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
         {% endif %}
