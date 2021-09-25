@@ -8,14 +8,15 @@ from wagtail.core.permission_policies.collections import (
     CollectionOwnershipPermissionPolicy,
 )
 
-from . import admin_urls
+from .admin_urls import audio_urls, video_urls
 from .models import Audio, Video
 
 
 @hooks.register("register_admin_urls")
 def register_admin_urls():
     return [
-        path("media/", include((admin_urls, "castmedia"), namespace="castmedia")),
+        path("audio/", include((audio_urls, "castaudio"), namespace="castaudio")),
+        path("media/", include((video_urls, "castmedia"), namespace="castmedia")),
     ]
 
 
@@ -58,7 +59,7 @@ class AudioMenuItem(MenuItem):
 def register_audio_menu_item():
     return AudioMenuItem(
         _("Audio"),
-        reverse("castmedia:audio_index"),
+        reverse("castaudio:index"),
         name="audio",
         classnames="icon icon-media",
         order=300,
@@ -73,5 +74,5 @@ def editor_js_audio():
             window.chooserUrls.audioChooser = '{0}';
         </script>
         """,
-        reverse("castmedia:audio_chooser"),
+        reverse("castaudio:chooser"),
     )

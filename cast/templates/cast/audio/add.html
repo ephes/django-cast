@@ -29,7 +29,7 @@
     {% include "wagtailadmin/shared/header.html" with title=add_str icon="media" %}
 
     <div class="nice-padding">
-        <form action="{% block action %}{% url 'castmedia:audio_add' %}{% endblock %}" method="POST" enctype="multipart/form-data" novalidate>
+        <form action="{% block action %}{% url 'castaudio:add' %}{% endblock %}" method="POST" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
             <ul class="fields">
                 {% for field in form %}

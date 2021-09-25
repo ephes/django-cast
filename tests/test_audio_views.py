@@ -28,8 +28,7 @@ def get_endpoint_urls_without_args():
     urls = {}
     view_names = ["index", "add", "chooser", "chooser_upload"]
     for view_name in view_names:
-        audio_view_name = f"audio_{view_name}"
-        urls[audio_view_name] = reverse(f"castmedia:{audio_view_name}")
+        urls[view_name] = reverse(f"castaudio:{view_name}")
     return urls
 
 
@@ -37,8 +36,7 @@ def get_endpoint_urls_with_args(audio):
     urls = {}
     view_names = ["edit", "delete", "chosen"]
     for view_name in view_names:
-        audio_view_name = f"audio_{view_name}"
-        urls[audio_view_name] = reverse(f"castmedia:{audio_view_name}", args=(audio.id,))
+        urls[view_name] = reverse(f"castaudio:{view_name}", args=(audio.id,))
     return urls
 
 
@@ -62,6 +60,7 @@ class TestAllAudioEndpoints:
 
     def test_get_all_not_authenticated(self, client, audio_urls):
         for view_name, url in audio_urls.urls.items():
+            print("view_name, url: ", view_name, url)
             r = client.get(url)
 
             # redirect to login
@@ -71,6 +70,7 @@ class TestAllAudioEndpoints:
 
     def test_get_all_authenticated(self, authenticated_client, audio_urls):
         for view_name, url in audio_urls.urls.items():
+            print("viewname url: ", view_name, url)
             r = authenticated_client.get(url)
 
             # assert we are not redirected to login
@@ -80,8 +80,8 @@ class TestAllAudioEndpoints:
 class TestAudioIndex:
     pytestmark = pytest.mark.django_db
 
-    def test_get_audio_index(self, authenticated_client, audio_urls):
-        r = authenticated_client.get(audio_urls.audio_index)
+    def test_get_index(self, authenticated_client, audio_urls):
+        r = authenticated_client.get(audio_urls.index)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -93,9 +93,9 @@ class TestAudioIndex:
         # make sure audio_urls.audio is included in results
         assert audio_urls.audio.title in content
 
-    def test_get_audio_index_ajax(self, authenticated_client, audio_urls):
+    def test_get_index_ajax(self, authenticated_client, audio_urls):
         headers = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
-        r = authenticated_client.get(audio_urls.audio_index, **headers)
+        r = authenticated_client.get(audio_urls.index, **headers)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -107,8 +107,8 @@ class TestAudioIndex:
         # make sure audio_urls.audio is included in results
         assert audio_urls.audio.title in content
 
-    def test_get_audio_index_with_search(self, authenticated_client, audio_urls):
-        r = authenticated_client.get(audio_urls.audio_index, {"q": audio_urls.audio.title})
+    def test_get_index_with_search(self, authenticated_client, audio_urls):
+        r = authenticated_client.get(audio_urls.index, {"q": audio_urls.audio.title})
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -120,8 +120,8 @@ class TestAudioIndex:
         # make sure audio_urls.audio is included in results
         assert audio_urls.audio.title in content
 
-    def test_get_audio_index_with_search_invalid(self, authenticated_client, audio_urls):
-        r = authenticated_client.get(audio_urls.audio_index, {"q": " "})
+    def test_get_index_with_search_invalid(self, authenticated_client, audio_urls):
+        r = authenticated_client.get(audio_urls.index, {"q": " "})
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -133,13 +133,13 @@ class TestAudioIndex:
         # make sure audio_urls.audio is included in results
         assert audio_urls.audio.title in content
 
-    def test_get_audio_index_with_pagination(self, authenticated_client, user):
+    def test_get_index_with_pagination(self, authenticated_client, user):
         audio_models = []
         for i in range(1, 3):
             audio = Audio(user=user, title=f"audio {i}")
             audio.save()
             audio_models.append(audio)
-        index_url = reverse("castmedia:audio_index")
+        index_url = reverse("castaudio:index")
         with patch("cast.views.audio.MENU_ITEM_PAGINATION", return_value=1):
             r = authenticated_client.get(index_url, {"p": "1"})
         audios = r.context["audios"]
@@ -161,7 +161,7 @@ class TestAudioAdd:
     pytestmark = pytest.mark.django_db
 
     def test_get_add_audio(self, authenticated_client, audio_urls):
-        r = authenticated_client.get(audio_urls.audio_add)
+        r = authenticated_client.get(audio_urls.add)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -169,7 +169,7 @@ class TestAudioAdd:
 
     def test_post_add_audio_invalid_form(self, authenticated_client, m4a_audio):
         m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
-        add_url = reverse("castmedia:audio_add")
+        add_url = reverse("castaudio:add")
 
         post_data = {
             "title": "foobar",
@@ -178,7 +178,7 @@ class TestAudioAdd:
         }
         r = authenticated_client.post(add_url, post_data)
 
-        # make sure we dont get redirected to audio_index
+        # make sure we dont get redirected to index
         assert r.status_code == 200
         assert r.context["message"] == "The audio file could not be saved due to errors."
 
@@ -186,7 +186,7 @@ class TestAudioAdd:
         Audio.objects.first() is None
 
     def test_post_add_audio(self, authenticated_client, minimal_mp4):
-        add_url = reverse("castmedia:audio_add")
+        add_url = reverse("castaudio:add")
 
         post_data = {
             "title": "foobar",
@@ -195,9 +195,9 @@ class TestAudioAdd:
         }
         r = authenticated_client.post(add_url, post_data)
 
-        # make sure we get redirected to audio_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == reverse("castmedia:audio_index")
+        assert r.url == reverse("castaudio:index")
 
         # make sure field were saved correctly
         audio = Audio.objects.first()
@@ -212,7 +212,7 @@ class TestAudioEdit:
     pytestmark = pytest.mark.django_db
 
     def test_get_edit_audio(self, authenticated_client, audio_urls):
-        r = authenticated_client.get(audio_urls.audio_edit)
+        r = authenticated_client.get(audio_urls.edit)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -220,7 +220,7 @@ class TestAudioEdit:
 
     def test_get_edit_audio_without_m4a(self, authenticated_client, audio_without_m4a):
         audio = audio_without_m4a
-        edit_url = reverse("castmedia:audio_edit", args=(audio.id,))
+        edit_url = reverse("castaudio:edit", args=(audio.id,))
         r = authenticated_client.get(edit_url)
 
         assert r.status_code == 200
@@ -235,7 +235,7 @@ class TestAudioEdit:
         audio.m4a.name = "foobar"
         audio.save()
 
-        edit_url = reverse("castmedia:audio_edit", args=(audio.id,))
+        edit_url = reverse("castaudio:edit", args=(audio.id,))
         r = authenticated_client.get(edit_url)
 
         assert r.status_code == 200
@@ -245,9 +245,9 @@ class TestAudioEdit:
     def test_post_edit_audio_invalid_form(self, authenticated_client, audio_urls, m4a_audio):
         m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
         post_data = {"m4a": m4a_audio}
-        r = authenticated_client.post(audio_urls.audio_edit, post_data)
+        r = authenticated_client.post(audio_urls.edit, post_data)
 
-        # make sure we dont get redirected to audio_index
+        # make sure we dont get redirected to index
         assert r.status_code == 200
 
     def test_post_edit_audio_title(self, authenticated_client, audio_urls):
@@ -255,11 +255,11 @@ class TestAudioEdit:
         post_data = {
             "title": "changed title",
         }
-        r = authenticated_client.post(audio_urls.audio_edit, post_data)
+        r = authenticated_client.post(audio_urls.edit, post_data)
 
-        # make sure we get redirected to audio_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == audio_urls.audio_index
+        assert r.url == audio_urls.index
 
         # make sure title was changes
         audio.refresh_from_db()
@@ -268,11 +268,11 @@ class TestAudioEdit:
     def test_post_edit_audio_m4a(self, authenticated_client, audio_urls, m4a_audio):
         m4a_audio.seek(0)  # dunno why this is necessary :/
         post_data = {"m4a": m4a_audio}
-        r = authenticated_client.post(audio_urls.audio_edit, post_data)
+        r = authenticated_client.post(audio_urls.edit, post_data)
 
-        # make sure we get redirected to audio_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == audio_urls.audio_index
+        assert r.url == audio_urls.index
 
         # teardown
         audio = Audio.objects.first()
@@ -283,7 +283,7 @@ class TestAudioDelete:
     pytestmark = pytest.mark.django_db
 
     def test_get_delete_audio(self, authenticated_client, audio_urls):
-        r = authenticated_client.get(audio_urls.audio_delete)
+        r = authenticated_client.get(audio_urls.delete)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -292,11 +292,11 @@ class TestAudioDelete:
     def test_post_delete_audio(self, authenticated_client, audio_urls):
         audio = audio_urls.audio
         # post data is necessary because of if request.POST
-        r = authenticated_client.post(audio_urls.audio_delete, {"delete": "yes"})
+        r = authenticated_client.post(audio_urls.delete, {"delete": "yes"})
 
-        # make sure we get redirected to audio_index
+        # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == audio_urls.audio_index
+        assert r.url == audio_urls.index
 
         # make sure audio was deleted
         with pytest.raises(Audio.DoesNotExist):
@@ -309,13 +309,13 @@ class TestAudioChosen:
     def test_get_chosen_audio_not_found(self, authenticated_client, audio_urls):
         audio = audio_urls.audio
         audio.delete()
-        r = authenticated_client.get(audio_urls.audio_chosen)
+        r = authenticated_client.get(audio_urls.chosen)
 
         assert r.status_code == 404
 
     def test_get_chosen_audio_success(self, authenticated_client, audio_urls):
         audio = audio_urls.audio
-        r = authenticated_client.get(audio_urls.audio_chosen)
+        r = authenticated_client.get(audio_urls.chosen)
 
         assert r.status_code == 200
 
@@ -329,7 +329,7 @@ class TestAudioChooser:
 
     def test_get_audio_in_chooser(self, authenticated_client, audio_urls):
         audio = audio_urls.audio
-        r = authenticated_client.get(audio_urls.audio_chooser)
+        r = authenticated_client.get(audio_urls.chooser)
 
         assert r.status_code == 200
 
@@ -340,30 +340,30 @@ class TestAudioChooser:
         # make sure prefix for form fields is set
         assert "media-chooser-upload" in content
 
-    def test_get_audio_chooser_with_search(self, authenticated_client, audio_urls):
-        r = authenticated_client.get(audio_urls.audio_chooser, {"q": audio_urls.audio.title})
+    def test_get_chooser_with_search(self, authenticated_client, audio_urls):
+        r = authenticated_client.get(audio_urls.chooser, {"q": audio_urls.audio.title})
 
         assert r.status_code == 200
 
         # make sure searched audio is included in results
         assert r.context["audios"][0] == audio_urls.audio
 
-    def test_get_audio_chooser_with_search_invalid(self, authenticated_client, audio_urls):
+    def test_get_chooser_with_search_invalid(self, authenticated_client, audio_urls):
         # {"p": "1"} (page 1) leads to the search form being invalid
-        r = authenticated_client.get(audio_urls.audio_chooser, {"p": "1"})
+        r = authenticated_client.get(audio_urls.chooser, {"p": "1"})
 
         assert r.status_code == 200
 
         # make sure searched audios is included in results
         assert r.context["audios"][0] == audio_urls.audio
 
-    def test_get_audio_chooser_with_pagination(self, authenticated_client, user):
+    def test_get_chooser_with_pagination(self, authenticated_client, user):
         audio_models = []
         for i in range(1, 3):
             audio = Audio(user=user, title=f"audio {i}")
             audio.save()
             audio_models.append(audio)
-        chooser_url = reverse("castmedia:audio_chooser")
+        chooser_url = reverse("castaudio:chooser")
         with patch("cast.views.audio.CHOOSER_PAGINATION", return_value=1):
             r = authenticated_client.get(chooser_url, {"p": "1"})
         audios = r.context["audios"]
@@ -386,7 +386,7 @@ class TestAudioChooserUpload:
 
     def test_get_audio_in_chooser_upload(self, authenticated_client, audio_urls):
         audio = audio_urls.audio
-        r = authenticated_client.get(audio_urls.audio_chooser_upload)
+        r = authenticated_client.get(audio_urls.chooser_upload)
 
         assert r.status_code == 200
         content = r.content.decode("utf-8")
@@ -394,7 +394,7 @@ class TestAudioChooserUpload:
 
     def test_post_upload_audio_form_invalid(self, authenticated_client, m4a_audio):
         m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
-        upload_url = reverse("castmedia:audio_chooser_upload")
+        upload_url = reverse("castaudio:chooser_upload")
         post_data = {"media-chooser-upload-m4a": m4a_audio}
         r = authenticated_client.post(upload_url, post_data)
 
@@ -403,7 +403,7 @@ class TestAudioChooserUpload:
 
     def test_post_upload_audio(self, authenticated_client, m4a_audio, settings):
         settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
-        upload_url = reverse("castmedia:audio_chooser_upload")
+        upload_url = reverse("castaudio:chooser_upload")
         prefix = "media-chooser-upload"
         post_data = {
             f"{prefix}-title": "foobar",

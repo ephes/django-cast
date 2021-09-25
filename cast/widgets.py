@@ -90,7 +90,7 @@ class AdminAudioChooser(AdminChooser):
         return {
             "id": value.pk,
             "title": value.title,
-            "edit_link": reverse("castmedia:audio_edit", args=[value.id]),
+            "edit_link": reverse("castaudio:edit", args=[value.id]),
         }
 
     def render_html(self, name, value, attrs):

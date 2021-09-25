@@ -30,7 +30,7 @@
         <div class="row row-flush nice-padding">
 
             <div class="col10 divider-after">
-                <form action="{% url 'castmedia:audio_edit' audio.id %}" method="POST" enctype="multipart/form-data" novalidate>
+                <form action="{% url 'castaudio:edit' audio.id %}" method="POST" enctype="multipart/form-data" novalidate>
                     {% csrf_token %}
                     <ul class="fields">
                         {% for field in form %}
@@ -45,7 +45,7 @@
                         <li>
                             <input class="button" type="submit" value="{% trans 'Save' %}" />
                             {% if user_can_delete %}
-                                <a href="{% url 'castmedia:audio_delete' audio.id %}" class="button button-secondary no">{% trans "Delete" %}</a>
+                                <a href="{% url 'castaudio:delete' audio.id %}" class="button button-secondary no">{% trans "Delete" %}</a>
                             {% endif %}
                         </li>
                     </ul>

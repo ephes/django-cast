@@ -88,9 +88,9 @@ def add(request):
             messages.success(
                 request,
                 _("Audio file '{0}' added.").format(audio.title),
-                buttons=[messages.button(reverse("castmedia:audio_edit", args=(audio.id,)), _("Edit"))],
+                buttons=[messages.button(reverse("castaudio:edit", args=(audio.id,)), _("Edit"))],
             )
-            return redirect("castmedia:audio_index")
+            return redirect("castaudio:index")
         else:
             messages.error(request, _("The audio file could not be saved due to errors."))
     else:
@@ -130,9 +130,9 @@ def edit(request, audio_id):
             messages.success(
                 request,
                 _("Audio file '{0}' updated").format(audio.title),
-                buttons=[messages.button(reverse("castmedia:audio_edit", args=(audio.id,)), _("Edit"))],
+                buttons=[messages.button(reverse("castaudio:edit", args=(audio.id,)), _("Edit"))],
             )
-            return redirect("castmedia:audio_index")
+            return redirect("castaudio:index")
         else:
             messages.error(request, _("The media could not be saved due to errors."))
     else:
@@ -152,7 +152,7 @@ def edit(request, audio_id):
         messages.error(
             request,
             _("The file could not be found. Please change the source or delete the audio file"),
-            buttons=[messages.button(reverse("castmedia:audio_delete", args=(audio.id,)), _("Delete"))],
+            buttons=[messages.button(reverse("castaudio:delete", args=(audio.id,)), _("Delete"))],
         )
 
     return render(
@@ -173,7 +173,7 @@ def delete(request, audio_id):
     if request.POST:
         audio.delete()
         messages.success(request, _("Audio '{0}' deleted.").format(audio.title))
-        return redirect("castmedia:audio_index")
+        return redirect("castaudio:index")
 
     return render(request, "cast/audio/confirm_delete.html", {"audio": audio})
 
@@ -238,7 +238,7 @@ def get_audio_data(audio):
     return {
         "id": audio.id,
         "title": audio.title,
-        "edit_link": reverse("castmedia:audio_edit", args=(audio.id,)),
+        "edit_link": reverse("castaudio:edit", args=(audio.id,)),
     }
 
 
