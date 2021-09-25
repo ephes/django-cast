@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
                 [
                     ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
                     ("paragraph", wagtail.core.blocks.RichTextBlock()),
-                    ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/wagtail_image.html")),
+                    ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image/image.html")),
                     ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                     ("embed", wagtail.embeds.blocks.EmbedBlock()),
                 ]

@@ -51,10 +51,10 @@ class Migration(migrations.Migration):
                 [
                     ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
                     ("paragraph", wagtail.core.blocks.RichTextBlock()),
-                    ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/wagtail_image.html")),
+                    ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image.html")),
                     ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                     ("embed", wagtail.embeds.blocks.EmbedBlock()),
-                    ("video", cast.blocks.VideoChooserBlock(template="cast/wagtail_video.html")),
+                    ("video", cast.blocks.VideoChooserBlock(template="cast/video/video.html")),
                 ]
             ),
         ),

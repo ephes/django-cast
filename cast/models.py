@@ -492,7 +492,7 @@ class HomePage(Page):
         [
             ("heading", blocks.CharBlock(classname="full title")),
             ("paragraph", blocks.RichTextBlock()),
-            ("image", ImageChooserBlock(template="cast/wagtail_image.html")),
+            ("image", ImageChooserBlock(template="cast/image/image.html")),
             ("gallery", GalleryBlock(ImageChooserBlock())),
         ]
     )
@@ -670,11 +670,11 @@ class Blog(TimeStampedModel, Page):
 class ContentBlock(blocks.StreamBlock):
     heading = blocks.CharBlock(classname="full title")
     paragraph = blocks.RichTextBlock()
-    image = ImageChooserBlock(template="cast/wagtail_image.html")
+    image = ImageChooserBlock(template="cast/image/image.html")
     gallery = GalleryBlock(ImageChooserBlock())
     embed = EmbedBlock()
-    video = VideoChooserBlock(template="cast/wagtail_video.html", icon="media")
-    audio = AudioChooserBlock(template="cast/wagtail_audio.html", icon="media")
+    video = VideoChooserBlock(template="cast/video/video.html", icon="media")
+    audio = AudioChooserBlock(template="cast/audio/audio.html", icon="media")
 
     class Meta:
         icon = "form"

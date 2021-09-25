@@ -27,16 +27,16 @@ class Migration(migrations.Migration):
                             [
                                 ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
                                 ("paragraph", wagtail.core.blocks.RichTextBlock()),
-                                ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/wagtail_image.html")),
+                                ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image.html")),
                                 ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                                 ("embed", wagtail.embeds.blocks.EmbedBlock()),
                                 (
                                     "video",
-                                    cast.blocks.VideoChooserBlock(icon="media", template="cast/wagtail_video.html"),
+                                    cast.blocks.VideoChooserBlock(icon="media", template="cast/video/video.html"),
                                 ),
                                 (
                                     "audio",
-                                    cast.blocks.AudioChooserBlock(icon="media", template="cast/wagtail_audio.html"),
+                                    cast.blocks.AudioChooserBlock(icon="media", template="cast/audio/audio.html"),
                                 ),
                             ]
                         ),
@@ -47,16 +47,16 @@ class Migration(migrations.Migration):
                             [
                                 ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
                                 ("paragraph", wagtail.core.blocks.RichTextBlock()),
-                                ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/wagtail_image.html")),
+                                ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image.html")),
                                 ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                                 ("embed", wagtail.embeds.blocks.EmbedBlock()),
                                 (
                                     "video",
-                                    cast.blocks.VideoChooserBlock(icon="media", template="cast/wagtail_video.html"),
+                                    cast.blocks.VideoChooserBlock(icon="media", template="cast/video/video.html"),
                                 ),
                                 (
                                     "audio",
-                                    cast.blocks.AudioChooserBlock(icon="media", template="cast/wagtail_audio.html"),
+                                    cast.blocks.AudioChooserBlock(icon="media", template="cast/audio/audio.html"),
                                 ),
                             ]
                         ),
