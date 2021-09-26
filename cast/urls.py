@@ -2,7 +2,7 @@ from django.conf.urls import url
 from django.urls import include, path
 
 from . import feeds
-from .dashboard_views import DashboardView
+from .views.dashboard import DashboardView
 
 
 app_name = "cast"

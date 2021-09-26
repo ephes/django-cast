@@ -13,7 +13,7 @@ import pytz  # noqa - will get used soon
 
 from plotly.utils import PlotlyJSONEncoder
 
-from .models import Request
+from cast.models import Request
 
 
 logger = logging.getLogger(__name__)
