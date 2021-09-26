@@ -426,6 +426,23 @@ python-versions = ">=3.5"
 Django = ">=2.2"
 
 [[package]]
+name = "django-fluent-comments"
+version = "3.0"
+description = "A modern, ajax-based appearance for django_comments"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+django-contrib-comments = ">=2.0.0"
+django-crispy-forms = ">=1.9.2"
+django-tag-parser = ">=3.2"
+python-akismet = ">=0.4.1"
+
+[package.extras]
+threadedcomments = ["django-threadedcomments (>=1.2)"]
+
+[[package]]
 name = "django-imagekit"
 version = "4.0.2"
 description = "Automated image processing for Django models."
@@ -554,7 +571,7 @@ python-versions = "*"
 [package.extras]
 html5lib = ["beautifulsoup4 (>=4.4.1,<5)", "html5lib (>=0.999,<=1.0.1)"]
 lxml = ["lxml (>=4.2.0,<5)"]
-testing = ["tox (>=2.3.1)", "markov_draftjs (==0.1.1)", "memory-profiler (==0.47)", "psutil (==5.4.1)", "coverage (>=4.1.0)", "flake8 (>=3.2.0)", "isort (==4.2.5)", "beautifulsoup4 (>=4.4.1,<5)", "html5lib (>=0.999,<=1.0.1)", "lxml (>=4.2.0,<5)"]
+testing = ["tox (>=2.3.1)", "markov-draftjs (==0.1.1)", "memory-profiler (==0.47)", "psutil (==5.4.1)", "coverage (>=4.1.0)", "flake8 (>=3.2.0)", "isort (==4.2.5)", "beautifulsoup4 (>=4.4.1,<5)", "html5lib (>=0.999,<=1.0.1)", "lxml (>=4.2.0,<5)"]
 
 [[package]]
 name = "entrypoints"
@@ -2204,7 +2221,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "3e71eb6471cb2f3907576725599250dcd0bd15737434a43cbb581d3afe82d71c"
+content-hash = "50fca919f0714399f0798d37f9f925dadca534900d48aed7dd79e68e5b17b398"
 
 [metadata.files]
 alabaster = [
@@ -2491,6 +2508,10 @@ django-filter = [
     {file = "django-filter-2.4.0.tar.gz", hash = "sha256:84e9d5bb93f237e451db814ed422a3a625751cbc9968b484ecc74964a8696b06"},
     {file = "django_filter-2.4.0-py3-none-any.whl", hash = "sha256:e00d32cebdb3d54273c48f4f878f898dced8d5dfaad009438fe61ebdf535ace1"},
 ]
+django-fluent-comments = [
+    {file = "django-fluent-comments-3.0.tar.gz", hash = "sha256:f7d0bc19281d0d8e45e4d932b0695c5573cb741619104cb754895d256c1a1633"},
+    {file = "django_fluent_comments-3.0-py2.py3-none-any.whl", hash = "sha256:4387ac81ba5eeea79f143d3930e9a275104ad7551196d5cfb4af1b66481c2a44"},
+]
 django-imagekit = [
     {file = "django-imagekit-4.0.2.tar.gz", hash = "sha256:6ec0afb77cdf52cd453c9fc2c10ef350d111edfd6ce53c5977aa8a0e22cee00c"},
     {file = "django_imagekit-4.0.2-py2.py3-none-any.whl", hash = "sha256:304c3379f6a5cac387e47ace11195a603ad3cb01e3e951b45489824d25b00359"},
@@ -2535,6 +2556,7 @@ docutils = [
     {file = "docutils-0.16.tar.gz", hash = "sha256:c2de3a60e9e7d07be26b7f2b00ca0309c207e06c100f9cc2a94931fc75a478fc"},
 ]
 draftjs-exporter = [
+    {file = "draftjs_exporter-2.1.7-py3-none-any.whl", hash = "sha256:d415a9964690a2cddb66a31ef32dd46c277e9b80434b94e39e3043188ed83e33"},
     {file = "draftjs_exporter-2.1.7.tar.gz", hash = "sha256:5839cbc29d7bce2fb99837a404ca40c3a07313f2a20e2700de7ad6aa9a9a18fb"},
 ]
 entrypoints = [

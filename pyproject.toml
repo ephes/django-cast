@@ -26,11 +26,9 @@ classifiers = [
 ]
 include = [
     "cast",
-    "fluent_comments",
 ]
 packages = [
     {include = "cast"},
-    {include = "fluent_comments"},
 ]
 
 [tool.poetry.dependencies]
@@ -58,6 +56,7 @@ django-crispy-forms = "*"
 python-akismet = "*"
 django-tag-parser = "*"
 django-contrib-comments = "*"
+django-fluent-comments = "^3.0"
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^4"
