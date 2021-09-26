@@ -26,12 +26,10 @@ from wagtail.core.fields import RichTextField, StreamField
 from wagtail.core.models import CollectionMember, Page, PageManager
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
-from wagtail.images.models import Image as WagtailImage
+from wagtail.images.models import Image
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
-from imagekit.models import ImageSpecField
-from imagekit.processors import Thumbnail, Transpose
 from model_utils.models import TimeStampedModel
 from slugify import slugify
 from taggit.managers import TaggableManager
@@ -42,81 +40,6 @@ from .filters import PostFilterset
 
 
 logger = logging.getLogger(__name__)
-
-
-def image_spec_thumbnail(size):  #
-    processors = [Transpose(), Thumbnail(size, size, crop=False)]
-    return ImageSpecField(source="original", processors=processors, format="JPEG", options={"quality": 60})
-
-
-class Image(TimeStampedModel):
-    user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, related_name="cast_images")
-
-    original = models.ImageField(
-        upload_to="cast_images/originals",
-        height_field="original_height",
-        width_field="original_width",
-    )
-    original_height = models.PositiveIntegerField(blank=True, null=True)
-    original_width = models.PositiveIntegerField(blank=True, null=True)
-
-    img_full = ImageSpecField(
-        source="original",
-        processors=[Transpose()],
-        format="JPEG",
-        options={"quality": 60},
-    )
-
-    IMAGE_SIZES = {
-        "img_full": None,
-        "img_xl": 2200,
-        "img_lg": 1100,
-        "img_md": 768,
-        "img_sm": 500,
-        "img_xs": 300,
-    }
-
-    img_xl = image_spec_thumbnail(IMAGE_SIZES["img_xl"])
-    img_lg = image_spec_thumbnail(IMAGE_SIZES["img_lg"])
-    img_md = image_spec_thumbnail(IMAGE_SIZES["img_md"])
-    img_sm = image_spec_thumbnail(IMAGE_SIZES["img_sm"])
-    img_xs = image_spec_thumbnail(IMAGE_SIZES["img_xs"])
-
-    sizes = [(v, k) for k, v in IMAGE_SIZES.items()]
-
-    post_context_key = "image"
-
-    def get_all_paths(self):
-        paths = set()
-        paths.add(self.original.name)
-        for size, attr_name in self.sizes:
-            paths.add(getattr(self, attr_name).name)
-        return paths
-
-    def __str__(self):
-        return self.original.name
-
-    def get_srcset(self):
-        sources = []
-        for size, attr_name in self.sizes:
-            img = getattr(self, attr_name)
-            width = self.original_width if size is None else size
-            url = img.url
-            sources.append(url)
-            sources.append(f"{width}w,")
-        return " ".join(sources)
-
-    @property
-    def srcset(self):
-        return self.get_srcset()
-
-    @property
-    def thumbnail_src(self):
-        return self.img_xs.url
-
-    @property
-    def full_src(self):
-        return self.img_full.url
 
 
 class ItunesArtWork(TimeStampedModel):
@@ -171,12 +94,12 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     poster = models.ImageField(upload_to="cast_videos/poster/", null=True, blank=True)
     poster_seconds = models.FloatField(default=1)
 
-    poster_thumbnail = ImageSpecField(
-        source="poster",
-        processors=[Thumbnail(300, 300, crop=False)],
-        format="JPEG",
-        options={"quality": 60},
-    )
+    # poster_thumbnail = ImageSpecField(
+    #     source="poster",
+    #     processors=[Thumbnail(300, 300, crop=False)],
+    #     format="JPEG",
+    #     options={"quality": 60},
+    # )
 
     post_context_key = "video"
     calc_poster = True
@@ -253,11 +176,11 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         paths.add(self.original.name)
         if self.poster:
             paths.add(self.poster.name)
-            try:
-                if self.poster_thumbnail:
-                    paths.add(self.poster_thumbnail.name)
-            except (FileNotFoundError, OSError):
-                pass
+            # try:
+            #     if self.poster_thumbnail:
+            #         paths.add(self.poster_thumbnail.name)
+            # except (FileNotFoundError, OSError):
+            #     pass
         return paths
 
     def get_mime_type(self):
@@ -283,7 +206,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
 
 class Gallery(TimeStampedModel):
-    images = models.ManyToManyField(WagtailImage)
+    images = models.ManyToManyField(Image)
     post_context_key = "gallery"
 
     @property
@@ -681,7 +604,7 @@ class ContentBlock(blocks.StreamBlock):
 
 
 def get_or_create_gallery(image_ids):
-    candidate_images = WagtailImage.objects.filter(id__in=image_ids)  # FIXME filter permissions
+    candidate_images = Image.objects.filter(id__in=image_ids)  # FIXME filter permissions
     if candidate_images.count() == 0:
         return None
     filtered_image_ids = [ci.id for ci in candidate_images]
@@ -760,13 +683,13 @@ class Post(TimeStampedModel, Page):
         help_text=_("Whether comments are enabled for this post." ""),
     )
 
-    images = models.ManyToManyField(WagtailImage, blank=True)
+    images = models.ManyToManyField(Image, blank=True)
     videos = models.ManyToManyField(Video, blank=True)
     galleries = models.ManyToManyField(Gallery, blank=True)
     audios = models.ManyToManyField(Audio, blank=True)
 
     media_model_lookup = {
-        "image": WagtailImage,
+        "image": Image,
         "video": Video,
         "gallery": Gallery,
         "audio": Audio,

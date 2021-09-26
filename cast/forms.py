@@ -9,13 +9,7 @@ from wagtail.admin import widgets
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.core.models import Collection
 
-from .models import Audio, ChapterMark, Image, Video
-
-
-class ImageForm(forms.ModelForm):
-    class Meta:
-        model = Image
-        fields = ["original"]
+from .models import Audio, ChapterMark, Video
 
 
 class VideoForm(forms.ModelForm):

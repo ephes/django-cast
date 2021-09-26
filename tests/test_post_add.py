@@ -49,11 +49,11 @@ class TestPostAdd:
         # make sure there was a post added to the database
         assert Post.objects.get(slug=post_data_wagtail["slug"]).title == post_data_wagtail["title"]
 
-    def test_submit_add_form_post_authenticated_with_image(self, client, post_data_wagtail, blog, wagtail_image):
+    def test_submit_add_form_post_authenticated_with_image(self, client, post_data_wagtail, blog, image):
         _ = client.login(username=blog.owner.username, password=blog.owner._password)
         add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
         post_data_wagtail["body-0-value-0-type"] = "image"
-        post_data_wagtail["body-0-value-0-value"] = wagtail_image.id
+        post_data_wagtail["body-0-value-0-value"] = image.id
 
         r = client.post(add_url, post_data_wagtail)
 
@@ -68,7 +68,7 @@ class TestPostAdd:
 
         # make sure there was an image added
         assert post.images.count() == 1
-        assert post.images.first() == wagtail_image
+        assert post.images.first() == image
 
     def test_submit_add_form_post_authenticated_with_video(self, client, post_data_wagtail, blog, video):
         _ = client.login(username=blog.owner.username, password=blog.owner._password)

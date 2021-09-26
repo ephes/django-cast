@@ -13,13 +13,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ListSerializer
 
-from ..forms import ImageForm, VideoForm
-from ..models import Audio, Gallery, Image, Request, Video
+from ..forms import VideoForm
+from ..models import Audio, Request, Video
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
-    GallerySerializer,
-    ImageSerializer,
     RequestSerializer,
     VideoSerializer,
 )
@@ -45,12 +43,6 @@ def api_root(request):
     return Response(OrderedDict(root_api_urls))
 
 
-class ImageCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):
-    model = Image
-    form_class = ImageForm
-    user_field_name = "user"
-
-
 class VideoCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):
     model = Video
     form_class = VideoForm
@@ -61,23 +53,6 @@ class StandardResultsSetPagination(PageNumberPagination):
     page_size = 40
     page_size_query_param = "pageSize"
     max_page_size = 10000
-
-
-class ImageListView(generics.ListCreateAPIView):
-    serializer_class = ImageSerializer
-    pagination_class = StandardResultsSetPagination
-    permission_classes = (IsAuthenticated,)
-
-    def get_queryset(self):
-        user = self.request.user
-        qs = Image.objects.all().filter(user=user)
-        return qs.order_by("-created")
-
-
-class ImageDetailView(generics.RetrieveDestroyAPIView):
-    queryset = Image.objects.all()
-    serializer_class = ImageSerializer
-    permission_classes = (IsAuthenticated,)
 
 
 class VideoListView(generics.ListCreateAPIView):
@@ -117,22 +92,6 @@ class AudioDetailView(generics.RetrieveDestroyAPIView):
 class AudioPodloveDetailView(generics.RetrieveAPIView):
     queryset = Audio.objects.all()
     serializer_class = AudioPodloveSerializer
-
-
-class GalleryListView(generics.ListCreateAPIView):
-    serializer_class = GallerySerializer
-    pagination_class = StandardResultsSetPagination
-    permission_classes = (IsAuthenticated,)
-
-    def get_queryset(self):
-        qs = Gallery.objects.all()
-        return qs.order_by("-created")
-
-
-class GalleryDetailView(generics.RetrieveDestroyAPIView):
-    queryset = Gallery.objects.all()
-    serializer_class = GallerySerializer
-    permission_classes = (IsAuthenticated,)
 
 
 class RequestListView(generics.ListCreateAPIView):

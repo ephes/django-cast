@@ -28,9 +28,6 @@ def upload_handler(request):
     from . import models
 
     lookup = {}
-    for ending in ("jpg", "jpeg", "png", "gif"):
-        lookup[ending] = (models.Image, "original", "user")
-
     for ending in ("wav", "webm", "ogg", "mp3", "m4a", "opus"):
         upload_field_name = ending
         if ending == "ogg":

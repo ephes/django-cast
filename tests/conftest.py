@@ -13,7 +13,7 @@ from django.test.client import RequestFactory
 from django.utils import timezone
 
 from wagtail.core.models import Site
-from wagtail.images.models import Image as WagtailImage
+from wagtail.images.models import Image
 
 import pytest
 import pytz
@@ -22,7 +22,7 @@ from django_comments import get_model as get_comments_model
 from rest_framework.test import APIClient
 
 from cast import appsettings
-from cast.models import Audio, ChapterMark, File, Image, ItunesArtWork, Video
+from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
 
 from .factories import (
     BlogFactory,
@@ -153,15 +153,8 @@ def authenticated_client(client, user):
 
 
 @pytest.fixture()
-def image(user, image_1px):
-    image = Image(user=user, original=image_1px)
-    image.save()
-    return image
-
-
-@pytest.fixture()
-def wagtail_image(image_1px):
-    image = WagtailImage(file=image_1px)
+def image(image_1px):
+    image = Image(file=image_1px)
     image.save()
     return image
 
@@ -323,9 +316,9 @@ def body_with_audio(python_body, audio):
 
 
 @pytest.fixture
-def body_with_image(python_body, wagtail_image):
+def body_with_image(python_body, image):
     image_body = deepcopy(python_body)
-    image_body[0]["value"].append({"type": "image", "value": wagtail_image.id})
+    image_body[0]["value"].append({"type": "image", "value": image.id})
     return json.dumps(image_body)
 
 
@@ -522,9 +515,9 @@ def video_without_file(video):
 
 
 @pytest.fixture()
-def gallery(wagtail_image):
+def gallery(image):
     gallery = GalleryFactory()
-    gallery.images.add(wagtail_image)
+    gallery.images.add(image)
     return gallery
 
 

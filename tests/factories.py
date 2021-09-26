@@ -4,7 +4,7 @@ from wagtail.core.models import Site
 
 import factory
 
-from cast.models import Blog, Gallery, Image, Post, Video
+from cast.models import Blog, Gallery, Post, Video
 
 
 class SiteFactory(factory.django.DjangoModelFactory):
@@ -23,14 +23,6 @@ class UserFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = get_user_model()
         django_get_or_create = ("username",)
-
-
-class ImageFactory(factory.django.DjangoModelFactory):
-    user = None
-    original = factory.django.ImageField(color="blue")
-
-    class Meta:
-        model = Image
 
 
 class VideoFactory(factory.django.DjangoModelFactory):

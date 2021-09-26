@@ -4,13 +4,12 @@ from django.contrib import admin
 
 from watson.admin import SearchAdmin
 
-from .models import (
+from .models import (  # Image,
     Audio,
     Blog,
     ChapterMark,
     File,
     Gallery,
-    Image,
     ItunesArtWork,
     Post,
     Video,
@@ -43,12 +42,12 @@ class PostModelAdmin(AdminUserMixin, SearchAdmin):
 admin.site.register(Post, PostModelAdmin)
 
 
-class ImageModelAdmin(AdminUserMixin, admin.ModelAdmin):
-    list_display = ("pk", "original", "user")
-    fields = ("user", "original")
-
-
-admin.site.register(Image, ImageModelAdmin)
+# class ImageModelAdmin(AdminUserMixin, admin.ModelAdmin):
+#     list_display = ("pk", "original", "user")
+#     fields = ("user", "original")
+#
+#
+# admin.site.register(Image, ImageModelAdmin)
 
 
 class ItunesArtWorkModelAdmin(AdminUserMixin, admin.ModelAdmin):

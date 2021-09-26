@@ -55,8 +55,6 @@ THIRD_PARTY_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
-    "imagekit",
-    "ckeditor",
     "django_filters",
     "watson",
     "ckeditor_uploader",

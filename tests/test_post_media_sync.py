@@ -55,20 +55,20 @@ def test_get_or_create_gallery_invalid_image_id():
 
 
 @pytest.mark.django_db()
-def test_get_or_create_gallery_new_gallery(wagtail_image):
+def test_get_or_create_gallery_new_gallery(image):
     image_ids = [
-        wagtail_image.pk,
+        image.pk,
     ]
     actual_gallery = get_or_create_gallery(image_ids)
-    expected_gallery = Gallery.objects.filter(images__in=[wagtail_image]).first()
+    expected_gallery = Gallery.objects.filter(images__in=[image]).first()
     assert actual_gallery == expected_gallery
     assert image_ids == [i.id for i in expected_gallery.images.all()]
 
 
 @pytest.mark.django_db()
-def test_get_or_create_gallery_get_already_existing(wagtail_image):
+def test_get_or_create_gallery_get_already_existing(image):
     image_ids = [
-        wagtail_image.pk,
+        image.pk,
     ]
     expected_gallery = Gallery.objects.create()
     expected_gallery.images.add(*image_ids)

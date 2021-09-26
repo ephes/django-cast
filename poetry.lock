@@ -350,17 +350,6 @@ requests = "*"
 requests-oauthlib = ">=0.3.0"
 
 [[package]]
-name = "django-appconf"
-version = "1.0.5"
-description = "A helper class for handling configuration defaults of packaged apps gracefully."
-category = "main"
-optional = false
-python-versions = ">=3.6"
-
-[package.dependencies]
-django = "*"
-
-[[package]]
 name = "django-ckeditor"
 version = "6.1.0"
 description = "Django admin CKEditor integration."
@@ -449,23 +438,6 @@ python-akismet = ">=0.4.1"
 
 [package.extras]
 threadedcomments = ["django-threadedcomments (>=1.2)"]
-
-[[package]]
-name = "django-imagekit"
-version = "4.0.2"
-description = "Automated image processing for Django models."
-category = "main"
-optional = false
-python-versions = "*"
-
-[package.dependencies]
-django-appconf = ">=0.5"
-pilkit = ">=0.2.0"
-six = "*"
-
-[package.extras]
-async = ["django-celery (>=3.0)"]
-async_rq = ["django-rq (>=0.6.0)"]
 
 [[package]]
 name = "django-js-asset"
@@ -1249,14 +1221,6 @@ name = "pickleshare"
 version = "0.7.5"
 description = "Tiny 'shelve'-like database with concurrency support"
 category = "dev"
-optional = false
-python-versions = "*"
-
-[[package]]
-name = "pilkit"
-version = "2.0"
-description = "A collection of utilities and processors for the Python Imaging Libary."
-category = "main"
 optional = false
 python-versions = "*"
 
@@ -2229,7 +2193,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "ead149387a40e065a73900c196dcf012eedff7720c5c236cfc17a479c248e9ce"
+content-hash = "73b970af1267c7f637c75919fdd7d63d87c840b05396d20cb20ccc72eda19d2e"
 
 [metadata.files]
 alabaster = [
@@ -2484,10 +2448,6 @@ django = [
 django-allauth = [
     {file = "django-allauth-0.45.0.tar.gz", hash = "sha256:6d46be0e1480316ccd45476db3aefb39db70e038d2a543112d314b76bb999a4e"},
 ]
-django-appconf = [
-    {file = "django-appconf-1.0.5.tar.gz", hash = "sha256:be3db0be6c81fa84742000b89a81c016d70ae66a7ccb620cdef592b1f1a6aaa4"},
-    {file = "django_appconf-1.0.5-py3-none-any.whl", hash = "sha256:ae9f864ee1958c815a965ed63b3fba4874eec13de10236ba063a788f9a17389d"},
-]
 django-ckeditor = [
     {file = "django-ckeditor-6.1.0.tar.gz", hash = "sha256:f0d108f67a81a04e26d8de11255fe314f51026eaf8eb0534a807512ae3c21620"},
     {file = "django_ckeditor-6.1.0-py2.py3-none-any.whl", hash = "sha256:346b26b9d60dc8a88524d0eaaf406f4e91a4b3c22d208ae87aa032bf500b251c"},
@@ -2519,10 +2479,6 @@ django-filter = [
 django-fluent-comments = [
     {file = "django-fluent-comments-3.0.tar.gz", hash = "sha256:f7d0bc19281d0d8e45e4d932b0695c5573cb741619104cb754895d256c1a1633"},
     {file = "django_fluent_comments-3.0-py2.py3-none-any.whl", hash = "sha256:4387ac81ba5eeea79f143d3930e9a275104ad7551196d5cfb4af1b66481c2a44"},
-]
-django-imagekit = [
-    {file = "django-imagekit-4.0.2.tar.gz", hash = "sha256:6ec0afb77cdf52cd453c9fc2c10ef350d111edfd6ce53c5977aa8a0e22cee00c"},
-    {file = "django_imagekit-4.0.2-py2.py3-none-any.whl", hash = "sha256:304c3379f6a5cac387e47ace11195a603ad3cb01e3e951b45489824d25b00359"},
 ]
 django-js-asset = [
     {file = "django-js-asset-1.2.2.tar.gz", hash = "sha256:c163ae80d2e0b22d8fb598047cd0dcef31f81830e127cfecae278ad574167260"},
@@ -2800,9 +2756,6 @@ pexpect = [
 pickleshare = [
     {file = "pickleshare-0.7.5-py2.py3-none-any.whl", hash = "sha256:9649af414d74d4df115d5d718f82acb59c9d418196b7b4290ed47a12ce62df56"},
     {file = "pickleshare-0.7.5.tar.gz", hash = "sha256:87683d47965c1da65cdacaf31c8441d12b8044cdec9aca500cd78fc2c683afca"},
-]
-pilkit = [
-    {file = "pilkit-2.0.tar.gz", hash = "sha256:ddb30c2f0198a147e56b151476c3bb9fe045fbfd5b0a0fa2a3148dba62d1559f"},
 ]
 pillow = [
     {file = "Pillow-8.3.2-cp310-cp310-macosx_10_10_universal2.whl", hash = "sha256:c691b26283c3a31594683217d746f1dad59a7ae1d4cfc24626d7a064a11197d4"},
