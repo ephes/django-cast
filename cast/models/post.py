@@ -18,10 +18,8 @@ from slugify import slugify
 
 from cast import appsettings
 from cast.blocks import AudioChooserBlock, GalleryBlock, VideoChooserBlock
-from cast.models import Video, get_or_create_gallery
-from cast.models.audio import Audio
+from cast.models import get_or_create_gallery
 from cast.models.blog import Blog
-from cast.models.gallery import Gallery
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -67,7 +65,9 @@ class Post(TimeStampedModel, Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     pub_date = models.DateTimeField(null=True, blank=True)
     visible_date = models.DateTimeField(default=timezone.now)
-    podcast_audio = models.ForeignKey(Audio, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts")
+    podcast_audio = models.ForeignKey(
+        "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="posts"
+    )
     keywords = models.CharField(
         _("keywords"),
         max_length=255,
@@ -100,16 +100,9 @@ class Post(TimeStampedModel, Page):
     )
 
     images = models.ManyToManyField(Image, blank=True)
-    videos = models.ManyToManyField(Video, blank=True)
-    galleries = models.ManyToManyField(Gallery, blank=True)
-    audios = models.ManyToManyField(Audio, blank=True)
-
-    media_model_lookup = {
-        "image": Image,
-        "video": Video,
-        "gallery": Gallery,
-        "audio": Audio,
-    }
+    videos = models.ManyToManyField("cast.Video", blank=True)
+    galleries = models.ManyToManyField("cast.Gallery", blank=True)
+    audios = models.ManyToManyField("cast.Audio", blank=True)
 
     # wagtail
     body = StreamField(
@@ -133,6 +126,19 @@ class Post(TimeStampedModel, Page):
     # managers
     objects = PageManager()
     published = PostPublishedManager()
+
+    @property
+    def media_model_lookup(self):
+        from .audio import Audio
+        from .gallery import Gallery
+        from .video import Video
+
+        return {
+            "image": Image,
+            "video": Video,
+            "gallery": Gallery,
+            "audio": Audio,
+        }
 
     @property
     def blog(self):
