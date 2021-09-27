@@ -746,12 +746,16 @@ class Post(TimeStampedModel, Page):
 
     @property
     def media_lookup(self):
-        return {
-            "image": {i.pk: i for i in self.images.all()},
-            "video": {v.pk: v for v in self.videos.all()},
-            "gallery": {g.pk: g for g in self.galleries.all()},
-            "audio": {a.pk: a for a in self.audios.all()},
-        }
+        try:
+            return {
+                "image": {i.pk: i for i in self.images.all()},
+                "video": {v.pk: v for v in self.videos.all()},
+                "gallery": {g.pk: g for g in self.galleries.all()},
+                "audio": {a.pk: a for a in self.audios.all()},
+            }
+        except ValueError:
+            # post ist not yet saved
+            pass
 
     @property
     def media_attr_lookup(self):
@@ -763,8 +767,17 @@ class Post(TimeStampedModel, Page):
         }
 
     @property
+    def audio_in_body(self):
+        audio_blocks = []
+        for block in self.body:
+            for content_block in block.value:
+                if content_block.block_type == "audio":
+                    audio_blocks.append(content_block)
+        return len(audio_blocks) > 0
+
+    @property
     def has_audio(self):
-        return self.audios.count() > 0 or self.podcast_audio is not None
+        return self.audio_in_body or self.audios.count() > 0 or self.podcast_audio is not None
 
     @property
     def comments_are_enabled(self):
