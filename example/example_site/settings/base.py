@@ -57,12 +57,10 @@ THIRD_PARTY_APPS = [
     "allauth.socialaccount",
     "django_filters",
     "watson",
-    "ckeditor_uploader",
     "rest_framework",
     "rest_framework.authtoken",
     "cast.apps.CastConfig",
     "fluent_comments",
-    "filepond",  # uploading files via filepond
     "threadedcomments",
     "django_comments",
     "wagtail.contrib.forms",

@@ -350,17 +350,6 @@ requests = "*"
 requests-oauthlib = ">=0.3.0"
 
 [[package]]
-name = "django-ckeditor"
-version = "6.1.0"
-description = "Django admin CKEditor integration."
-category = "main"
-optional = false
-python-versions = "*"
-
-[package.dependencies]
-django-js-asset = ">=1.2.2"
-
-[[package]]
 name = "django-contrib-comments"
 version = "2.1.0"
 description = "The code formerly known as django.contrib.comments."
@@ -404,14 +393,6 @@ python-versions = ">=3.6"
 Django = ">=2.2"
 
 [[package]]
-name = "django-filepond"
-version = "0.1.2"
-description = "Django support for the fjavascript file upload library filepond"
-category = "main"
-optional = false
-python-versions = "*"
-
-[[package]]
 name = "django-filter"
 version = "2.4.0"
 description = "Django-filter is a reusable Django application for allowing users to filter querysets dynamically."
@@ -438,14 +419,6 @@ python-akismet = ">=0.4.1"
 
 [package.extras]
 threadedcomments = ["django-threadedcomments (>=1.2)"]
-
-[[package]]
-name = "django-js-asset"
-version = "1.2.2"
-description = "script tag with additional attributes for django.forms.Media"
-category = "main"
-optional = false
-python-versions = "*"
 
 [[package]]
 name = "django-model-utils"
@@ -2193,7 +2166,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "73b970af1267c7f637c75919fdd7d63d87c840b05396d20cb20ccc72eda19d2e"
+content-hash = "d29e8ffecf8a8dccf424a8c48110caa3073e1f9fbc75f5f65d7e6e002d6e7e16"
 
 [metadata.files]
 alabaster = [
@@ -2448,10 +2421,6 @@ django = [
 django-allauth = [
     {file = "django-allauth-0.45.0.tar.gz", hash = "sha256:6d46be0e1480316ccd45476db3aefb39db70e038d2a543112d314b76bb999a4e"},
 ]
-django-ckeditor = [
-    {file = "django-ckeditor-6.1.0.tar.gz", hash = "sha256:f0d108f67a81a04e26d8de11255fe314f51026eaf8eb0534a807512ae3c21620"},
-    {file = "django_ckeditor-6.1.0-py2.py3-none-any.whl", hash = "sha256:346b26b9d60dc8a88524d0eaaf406f4e91a4b3c22d208ae87aa032bf500b251c"},
-]
 django-contrib-comments = [
     {file = "django-contrib-comments-2.1.0.tar.gz", hash = "sha256:d82f1d04690550df026553053903deec0c52dc54212e1b79241b08f0355cff2c"},
     {file = "django_contrib_comments-2.1.0-py3-none-any.whl", hash = "sha256:e02c7341ea1f4bcdfa347851dbf5e632d3e591d84b4f77de2f90b93398897f3c"},
@@ -2468,10 +2437,6 @@ django-extensions = [
     {file = "django-extensions-3.1.3.tar.gz", hash = "sha256:5f0fea7bf131ca303090352577a9e7f8bfbf5489bd9d9c8aea9401db28db34a0"},
     {file = "django_extensions-3.1.3-py3-none-any.whl", hash = "sha256:50de8977794a66a91575dd40f87d5053608f679561731845edbd325ceeb387e3"},
 ]
-django-filepond = [
-    {file = "django-filepond-0.1.2.tar.gz", hash = "sha256:f0d2de5e86872d82efb861cca475861574f9875df879edcb9755d6fb0fceda1f"},
-    {file = "django_filepond-0.1.2-py2.py3-none-any.whl", hash = "sha256:b88c9b733d748f1c32e416cff1704ac9a440a4cc96c089fd0150737bfb24d1aa"},
-]
 django-filter = [
     {file = "django-filter-2.4.0.tar.gz", hash = "sha256:84e9d5bb93f237e451db814ed422a3a625751cbc9968b484ecc74964a8696b06"},
     {file = "django_filter-2.4.0-py3-none-any.whl", hash = "sha256:e00d32cebdb3d54273c48f4f878f898dced8d5dfaad009438fe61ebdf535ace1"},
@@ -2479,10 +2444,6 @@ django-filter = [
 django-fluent-comments = [
     {file = "django-fluent-comments-3.0.tar.gz", hash = "sha256:f7d0bc19281d0d8e45e4d932b0695c5573cb741619104cb754895d256c1a1633"},
     {file = "django_fluent_comments-3.0-py2.py3-none-any.whl", hash = "sha256:4387ac81ba5eeea79f143d3930e9a275104ad7551196d5cfb4af1b66481c2a44"},
-]
-django-js-asset = [
-    {file = "django-js-asset-1.2.2.tar.gz", hash = "sha256:c163ae80d2e0b22d8fb598047cd0dcef31f81830e127cfecae278ad574167260"},
-    {file = "django_js_asset-1.2.2-py2.py3-none-any.whl", hash = "sha256:8ec12017f26eec524cab436c64ae73033368a372970af4cf42d9354fcb166bdd"},
 ]
 django-model-utils = [
     {file = "django-model-utils-4.1.1.tar.gz", hash = "sha256:eb5dd05ef7d7ce6bc79cae54ea7c4a221f6f81e2aad7722933aee66489e7264b"},

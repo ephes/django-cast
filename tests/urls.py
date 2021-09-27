@@ -10,8 +10,6 @@ from rest_framework.documentation import include_docs_urls
 urlpatterns = [
     # allauth
     url(r"^accounts/", include("allauth.urls")),
-    # CKEditor upload
-    url(r"^ckeditor/", include("ckeditor_uploader.urls")),
     # rest framework docs/schema urls
     url(r"^docs/", include_docs_urls(title="cast API service")),
     url(r"^cast/", include("cast.urls", namespace="cast")),

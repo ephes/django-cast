@@ -33,12 +33,9 @@ INSTALLED_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
-    "ckeditor",
-    "ckeditor_uploader",  # File upload for ckeditor
     "django_filters",
     "watson",  # Fulltext search
     "crispy_forms",  # Form layouts
-    "filepond",  # uploads
     "fluent_comments",  # must be before django_comments
     "threadedcomments",
     "django_comments",

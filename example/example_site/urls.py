@@ -26,8 +26,6 @@ urlpatterns = [
     url(r"^api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     url(r"^docs/", include_docs_urls(title="My Blog API service")),
     path("ckeditor/", include("ckeditor_uploader.urls")),
-    # Uploads
-    path("uploads/", include("filepond.urls", namespace="filepond")),
     # Cast
     path("cast/", include("cast.urls", namespace="cast")),
     # Threadedcomments
