@@ -89,7 +89,6 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def last_build_date(self):
-
         return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
 
     @property
@@ -112,7 +111,6 @@ class Blog(TimeStampedModel, Page):
 
     @property
     def unfiltered_published_posts(self):
-
         return Post.objects.live().descendant_of(self).order_by("-visible_date")
 
     @property
