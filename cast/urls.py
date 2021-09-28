@@ -1,4 +1,3 @@
-from django.conf.urls import url
 from django.urls import include, path
 
 from . import feeds
@@ -8,9 +7,10 @@ from .views.dashboard import DashboardView
 app_name = "cast"
 urlpatterns = [
     # API
-    url(r"^api/", include("cast.api.urls", namespace="api")),
+    # url(r"^api/", include("cast.api.urls", namespace="api")),
+    path("api/", include("cast.api.urls", namespace="api")),
     # Dashboard
-    url(r"^dashboard/", view=DashboardView.as_view(), name="dashboard"),
+    path("dashboard/", view=DashboardView.as_view(), name="dashboard"),
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",

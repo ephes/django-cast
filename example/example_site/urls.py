@@ -1,7 +1,6 @@
 from django.conf import settings
-from django.conf.urls import include, re_path, url
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 from django.views.generic import TemplateView
 
 from wagtail.admin import urls as wagtailadmin_urls
@@ -22,18 +21,17 @@ urlpatterns = [
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
     # Cast
-    url(r"^api/api-token-auth/", authtokenviews.obtain_auth_token),
-    url(r"^api-auth/", include("rest_framework.urls", namespace="rest_framework")),
-    url(r"^docs/", include_docs_urls(title="My Blog API service")),
-    path("ckeditor/", include("ckeditor_uploader.urls")),
+    path("api/api-token-auth/", authtokenviews.obtain_auth_token),
+    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+    path("docs/", include_docs_urls(title="My Blog API service")),
     # Cast
     path("cast/", include("cast.urls", namespace="cast")),
     # Threadedcomments
-    re_path(r"^show/comments/", include("fluent_comments.urls")),
+    path("show/comments/", include("fluent_comments.urls")),
     # Wagtail
-    url(r"^cms/", include(wagtailadmin_urls)),
-    url(r"^documents/", include(wagtaildocs_urls)),
-    re_path(r"", include(wagtail_urls)),  # default is wagtail
+    path("cms/", include(wagtailadmin_urls)),
+    path("documents/", include(wagtaildocs_urls)),
+    path("", include(wagtail_urls)),  # default is wagtail
 ]
 
 

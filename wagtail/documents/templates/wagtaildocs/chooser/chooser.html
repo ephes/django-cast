@@ -1,0 +1,34 @@
+{% load i18n wagtailadmin_tags %}
+{% trans "Choose a document" as  choose_str %}
+{% include "wagtailadmin/shared/header.html" with title=choose_str tabbed=1 merged=1 icon="doc-full-inverse" %}
+
+{{ uploadform.media.js }}
+{{ uploadform.media.css }}
+
+{% if uploadform %}
+    <ul class="tab-nav merged" data-tab-nav>
+        <li class="{% if not uploadform.errors %}active {% endif %}"><a href="#search">{% trans "Search" %}</a></li>
+        <li class="{% if uploadform.errors %}active {% endif %}"><a href="#upload">{% trans "Upload" %}</a></li>
+    </ul>
+{% endif %}
+
+<div class="tab-content">
+    <section id="search" class="{% if not uploadform.errors %}active {% endif %}nice-padding">
+        <form class="document-search search-bar" action="{% url 'wagtaildocs:chooser_results' %}" method="GET" novalidate>
+            <ul class="fields">
+                {% for field in searchform %}
+                    {% include "wagtailadmin/shared/field_as_li.html" with field=field %}
+                {% endfor %}
+                {% if collections %}
+                    {% include "wagtailadmin/shared/collection_chooser.html" %}
+                {% endif %}
+            </ul>
+        </form>
+        <div id="search-results" class="listing documents">
+            {% include "wagtaildocs/chooser/results.html" %}
+        </div>
+    </section>
+    {% if uploadform %}
+        {% include "wagtaildocs/chooser/upload_form.html" with form=uploadform %}
+    {% endif %}
+</div>
