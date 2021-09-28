@@ -1,0 +1,20 @@
+{% load threadedcomments_tags %}{# This file is used by the unittests #}
+
+{% for comment in comment_list|fill_tree|annotate_tree %}
+
+{% if comment.open %}
+    <ul>
+{% else %}
+    </li>
+{% endif %}
+
+<li{% if comment.last %} class="last"{% endif %}>
+
+{{ comment.tree_path }}{% if comment.added_path %} ADDED {% endif %}
+
+{% for close in comment.close %}
+    </li>
+    </ul>
+{% endfor %}
+
+{% endfor %}
