@@ -1,8 +1,13 @@
+from unittest.mock import patch
+
 from django.urls import reverse
 
 import pytest
 
 from django_comments import get_model as get_comments_model
+from django_comments import signals
+
+from cast.moderation import Moderator
 
 
 class TestPostComments:
@@ -12,8 +17,6 @@ class TestPostComments:
         detail_url = post.get_url()
         r = client.get(detail_url)
         assert r.status_code == 200
-
-        print("page comments enabled: ", r.context["page"].comments_enabled)
 
         content = r.content.decode("utf-8")
         assert post.title in content
@@ -73,3 +76,31 @@ class TestPostComments:
 
         comment = get_comments_model().objects.get(pk=rdata["comment_id"])
         assert comment.comment == data["comment"]
+
+
+class StubComment:
+    name = "asdf"
+    title = "foobar"
+    comment = "some spammy comment"
+    text = "blub bla"
+    is_removed = False
+    is_public = True
+
+
+class StubRequest:
+    pass
+
+
+class StubPost:
+    pass
+
+
+class TestCommentModeration:
+    @patch("fluent_comments.receivers.default_moderator", new=Moderator(StubPost))
+    def test_moderated_comment_marked_is_removed(self):
+        # default_moderator.return_value = Moderator(StubPost)
+        post = StubPost()
+        comment = StubComment()
+        comment.content_object = post
+        signals.comment_will_be_posted.send(sender=StubComment, comment=comment, request=StubRequest())
+        assert comment.is_removed

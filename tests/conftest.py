@@ -15,6 +15,7 @@ from django.utils import timezone
 from wagtail.core.models import Site
 from wagtail.images.models import Image
 
+import fluent_comments
 import pytest
 import pytz
 
@@ -566,6 +567,30 @@ def comments_not_enabled():
     appsettings.CAST_COMMENTS_ENABLED = False
     yield appsettings.CAST_COMMENTS_ENABLED
     appsettings.CAST_COMMENTS_ENABLED = previous
+
+
+@pytest.fixture()
+def fluent_comments_appsettings():
+    saved_settings = {attr: value for attr, value in fluent_comments.appsettings.__dict__.items()}
+    yield fluent_comments.appsettings
+    # fluent_comments.appsettings.__dict__ is read only
+    for attr, value in saved_settings.items():
+        setattr(fluent_comments.appsettings, attr, value)
+    # remove added settings
+    for attr, value in fluent_comments.appsettings.__dict__.items():
+        if attr not in saved_settings:
+            delattr(fluent_comments.appsettings, attr)
+    # add removed settings
+    for attr, value in saved_settings.items():
+        if attr not in fluent_comments.appsettings.__dict__:
+            setattr(fluent_comments.appsettings, attr)
+
+
+@pytest.fixture()
+def fluent_comments_default_moderator():
+    saved_default_moderator = fluent_comments.receivers.default_moderator
+    yield fluent_comments.receivers.default_moderator
+    fluent_comments.receivers.default_moderator = saved_default_moderator
 
 
 @pytest.fixture()
