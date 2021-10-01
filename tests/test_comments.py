@@ -78,29 +78,48 @@ class TestPostComments:
         assert comment.comment == data["comment"]
 
 
-class StubComment:
-    name = "asdf"
-    title = "foobar"
-    comment = "some spammy comment"
-    text = "blub bla"
-    is_removed = False
-    is_public = True
-
-
-class StubRequest:
-    pass
-
-
-class StubPost:
-    pass
-
-
 class TestCommentModeration:
-    @patch("fluent_comments.receivers.default_moderator", new=Moderator(StubPost))
+    @classmethod
+    def setup_class(cls):
+        class Stub:
+            pass
+
+        class StubComment:
+            name = "name"
+            title = "foobar title"
+            comment = "some comment"
+            is_removed = False
+            is_public = True
+
+        class PredictSpam:
+            def predict(self, message):
+                return "spam"
+
+        class PredictHam:
+            def predict(self, message):
+                return "ham"
+
+        cls.post = Stub()
+        cls.stub_class = Stub
+        cls.comment_class = StubComment
+        cls.comment = StubComment()
+        cls.comment.content_object = cls.post
+        cls.request = Stub()
+        cls.predict_spam = PredictSpam()
+        cls.predict_ham = PredictHam()
+
     def test_moderated_comment_marked_is_removed(self):
-        # default_moderator.return_value = Moderator(StubPost)
-        post = StubPost()
-        comment = StubComment()
-        comment.content_object = post
-        signals.comment_will_be_posted.send(sender=StubComment, comment=comment, request=StubRequest())
-        assert comment.is_removed
+        with patch(
+            "fluent_comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=self.predict_spam)
+        ):
+            signals.comment_will_be_posted.send(sender=self.comment_class, comment=self.comment, request=self.request)
+            assert self.comment.is_removed
+            assert not self.comment.is_public
+
+    def test_moderated_comment_is_not_marked_is_removed(self):
+        with patch(
+            "fluent_comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=self.predict_ham)
+        ):
+            signals.comment_will_be_posted.send(sender=self.comment_class, comment=self.comment, request=self.request)
+            assert self.comment.is_public
+            assert not self.comment.is_removed
