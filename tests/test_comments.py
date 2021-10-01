@@ -108,6 +108,13 @@ class TestCommentModeration:
         cls.predict_spam = PredictSpam()
         cls.predict_ham = PredictHam()
 
+    @pytest.mark.django_db
+    def test_spamfilter_is_none(self):
+        with patch("fluent_comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=None)):
+            signals.comment_will_be_posted.send(sender=self.comment_class, comment=self.comment, request=self.request)
+            assert self.comment.is_public
+            assert not self.comment.is_removed
+
     def test_moderated_comment_marked_is_removed(self):
         with patch(
             "fluent_comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=self.predict_spam)

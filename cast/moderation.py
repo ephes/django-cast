@@ -1,11 +1,16 @@
 from fluent_comments.moderation import FluentCommentsModerator
 
+from .models import SpamFilter
+
 
 class Moderator(FluentCommentsModerator):
     def __init__(self, model, spamfilter=None):
         super().__init__(model)
         # Allow spamfilter to be set for tests
-        self.spamfilter = spamfilter
+        if spamfilter is not None:
+            self.spamfilter = spamfilter
+        else:
+            self.spamfilter = SpamFilter.default
 
     def allow(self, comment, content_object, request):
         """
@@ -17,7 +22,10 @@ class Moderator(FluentCommentsModerator):
 
     def moderate(self, comment, content_object, request):
         message = f"{comment.name} {comment.title} {comment.comment}"
-        predicted_label = self.spamfilter.predict(message)
+        if self.spamfilter is not None:
+            predicted_label = self.spamfilter.predict(message)
+        else:
+            predicted_label = "unknown"
         if predicted_label == "spam":
             comment.is_removed, comment.is_public = True, False
             return True
