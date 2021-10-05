@@ -56,7 +56,6 @@ THIRD_PARTY_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "django_filters",
-    "watson",
     "rest_framework",
     "rest_framework.authtoken",
     "cast.apps.CastConfig",

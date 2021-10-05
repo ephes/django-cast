@@ -2,8 +2,6 @@ import logging
 
 from django.contrib import admin
 
-from watson.admin import SearchAdmin
-
 from .models import (  # Image,
     Audio,
     Blog,
@@ -31,7 +29,7 @@ class BlogModelAdmin(AdminUserMixin, admin.ModelAdmin):
 admin.site.register(Blog, BlogModelAdmin)
 
 
-class PostModelAdmin(AdminUserMixin, SearchAdmin):
+class PostModelAdmin(AdminUserMixin):
     list_display = ("title", "owner", "blog")
     search_fields = ("title",)
 

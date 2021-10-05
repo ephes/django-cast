@@ -487,14 +487,6 @@ python-versions = ">=3.6"
 Django = ">=2.2"
 
 [[package]]
-name = "django-watson"
-version = "1.5.5"
-description = "Full-text multi-table search application for Django. Easy to install and use, with good performance."
-category = "main"
-optional = false
-python-versions = "*"
-
-[[package]]
 name = "djangorestframework"
 version = "3.12.4"
 description = "Web APIs for Django, made easy."
@@ -2168,7 +2160,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "4c7202dc5890595fa99d2ee4ad696da71a79ca6d1337a6918596da6e70bbf611"
+content-hash = "55712ab5458fc274feef3020fcc563b0809e31a6bb60ea9fceb0ebea942af3df"
 
 [metadata.files]
 alabaster = [
@@ -2456,9 +2448,6 @@ django-threadedcomments = [
 django-treebeard = [
     {file = "django-treebeard-4.5.1.tar.gz", hash = "sha256:80150017725239702054e5fa64dc66e383dc13ac262c8d47ee5a82cb005969da"},
     {file = "django_treebeard-4.5.1-py3-none-any.whl", hash = "sha256:7c2b1cdb1e9b46d595825186064a1228bc4d00dbbc186db5b0b9412357fba91c"},
-]
-django-watson = [
-    {file = "django-watson-1.5.5.tar.gz", hash = "sha256:456123d1601f275ef222d9ccbb3b73e7dcb70f1370e4d45651aa2d359ee6e0e3"},
 ]
 djangorestframework = [
     {file = "djangorestframework-3.12.4-py3-none-any.whl", hash = "sha256:6d1d59f623a5ad0509fe0d6bfe93cbdfe17b8116ebc8eda86d45f6e16e819aaf"},
