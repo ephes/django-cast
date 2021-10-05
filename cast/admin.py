@@ -36,14 +36,6 @@ class PostModelAdmin(AdminUserMixin, admin.ModelAdmin):
 admin.site.register(Post, PostModelAdmin)
 
 
-# class ImageModelAdmin(AdminUserMixin, admin.ModelAdmin):
-#     list_display = ("pk", "original", "user")
-#     fields = ("user", "original")
-#
-#
-# admin.site.register(Image, ImageModelAdmin)
-
-
 class ItunesArtWorkModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("pk", "original")
     fields = ("original",)
