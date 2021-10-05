@@ -66,7 +66,19 @@ def test_predict_label(train, message, expected_label):
 
 
 @pytest.mark.django_db()
-def test_model_serialization():
+def test_model_default_serialization():
+    class StubModel:
+        foo = "blub"
+
+    spamfilter = SpamFilter(name="stub model", model=StubModel())
+    with pytest.raises(TypeError):
+        # StubModel is not json serializable -> TypeError
+        # makes sure return super().default(obj) for ModelEncoder is called
+        spamfilter.save()
+
+
+@pytest.mark.django_db()
+def test_model_naive_bayes_serialization():
     train = [
         ("spam", "foo bar baz"),
         ("ham", "asdf bsdf csdf"),
@@ -75,7 +87,6 @@ def test_model_serialization():
     spamfilter = SpamFilter(name="naive bayes", model=model)
     spamfilter.save()
 
-    # spamfilter.refresh_from_db()
-    spamfilter = SpamFilter.objects.get(name="naive bayes")
+    spamfilter.refresh_from_db()
     model_from_db = spamfilter.model
     assert model_from_db == model

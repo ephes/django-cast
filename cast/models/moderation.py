@@ -20,6 +20,9 @@ def regex_tokenize(message):
 class NaiveBayes:
     def __init__(self, tokenize=regex_tokenize):
         self.tokenize = tokenize
+        self.prior_probabilities = {}
+        self.word_label_counts = {}
+        self.number_of_words = {}
 
     @classmethod
     def build_model_from_counts(cls, prior_probabilities={}, word_label_counts={}):
@@ -88,28 +91,29 @@ class NaiveBayes:
             "word_label_counts": self.word_label_counts,
         }
 
-    def json(self):
-        return json.dumps(self.dict())
+    def __eq__(self, other):
+        return (
+            self.prior_probabilities == other.prior_probabilities and self.word_label_counts == other.word_label_counts
+        )
 
 
 class ModelEncoder(DjangoJSONEncoder):
     def default(self, obj):
         if isinstance(obj, NaiveBayes):
-            return obj.json()
+            return obj.dict()
         return super().default(obj)
 
 
 class ModelDecoder(json.JSONDecoder):
     def __init__(self, *args, **kwargs):
+        kwargs["object_hook"] = self.model_decode
         super().__init__(*args, **kwargs)
-        self.object_hook = self.model_decode
 
     @staticmethod
     def model_decode(obj):
-        print(obj)
-        print("obj: ", obj)
         if obj.get("class") == "NaiveBayes":
-            return NaiveBayes.from_dict(**obj)
+            del obj["class"]
+            return NaiveBayes.build_model_from_counts(**obj)
         return obj
 
 
