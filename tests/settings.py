@@ -34,7 +34,6 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "django_filters",
-    "watson",  # Fulltext search
     "crispy_forms",  # Form layouts
     "fluent_comments",  # must be before django_comments
     "threadedcomments",
