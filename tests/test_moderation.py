@@ -1,6 +1,6 @@
 import pytest
 
-from cast.models.moderation import NaiveBayes
+from cast.models.moderation import NaiveBayes, SpamFilter
 
 
 @pytest.mark.parametrize(
@@ -63,3 +63,19 @@ def test_predict_label(train, message, expected_label):
     model = NaiveBayes().fit(train)
     label = model.predict_label(message)
     assert label == expected_label
+
+
+@pytest.mark.django_db()
+def test_model_serialization():
+    train = [
+        ("spam", "foo bar baz"),
+        ("ham", "asdf bsdf csdf"),
+    ]
+    model = NaiveBayes().fit(train)
+    spamfilter = SpamFilter(name="naive bayes", model=model)
+    spamfilter.save()
+
+    # spamfilter.refresh_from_db()
+    spamfilter = SpamFilter.objects.get(name="naive bayes")
+    model_from_db = spamfilter.model
+    assert model_from_db == model

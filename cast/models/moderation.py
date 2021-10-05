@@ -1,7 +1,9 @@
+import json
 import re
 
 from collections import defaultdict
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 from model_utils.models import TimeStampedModel
@@ -18,6 +20,14 @@ def regex_tokenize(message):
 class NaiveBayes:
     def __init__(self, tokenize=regex_tokenize):
         self.tokenize = tokenize
+
+    @classmethod
+    def build_model_from_counts(cls, prior_probabilities={}, word_label_counts={}):
+        model = cls()
+        model.prior_probabilities = prior_probabilities
+        model.word_label_counts = word_label_counts
+        model.number_of_words = cls.get_number_of_words(model.word_label_counts)
+        return model
 
     def get_label_counts(self, messages):
         label_counts = defaultdict(int)
@@ -36,7 +46,8 @@ class NaiveBayes:
                 counts[word][label] += 1
         return counts
 
-    def get_number_of_words(self, word_label_counts):
+    @classmethod
+    def get_number_of_words(cls, word_label_counts):
         number_of_words = defaultdict(int)
         for word, counts in word_label_counts.items():
             for label, count in counts.items():
@@ -44,10 +55,10 @@ class NaiveBayes:
         return number_of_words
 
     def fit(self, messages):
-        self.prior_probabilities = self.get_prior_probabilities(self.get_label_counts(messages))
-        self.word_label_counts = self.get_word_label_counts(messages)
-        self.number_of_words = self.get_number_of_words(self.word_label_counts)
-        return self
+        return self.build_model_from_counts(
+            prior_probabilities=self.get_prior_probabilities(self.get_label_counts(messages)),
+            word_label_counts=self.get_word_label_counts(messages),
+        )
 
     def update_probabilities(self, probabilities, counts_per_label, number_of_words):
         updated_probabilites = {}
@@ -70,10 +81,41 @@ class NaiveBayes:
             return None
         return sorted(((prob, label) for label, prob in probabilities.items()), reverse=True)[0][1]
 
+    def dict(self):
+        return {
+            "class": "NaiveBayes",
+            "prior_probabilities": self.prior_probabilities,
+            "word_label_counts": self.word_label_counts,
+        }
+
+    def json(self):
+        return json.dumps(self.dict())
+
+
+class ModelEncoder(DjangoJSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, NaiveBayes):
+            return obj.json()
+        return super().default(obj)
+
+
+class ModelDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.object_hook = self.model_decode
+
+    @staticmethod
+    def model_decode(obj):
+        print(obj)
+        print("obj: ", obj)
+        if obj.get("class") == "NaiveBayes":
+            return NaiveBayes.from_dict(**obj)
+        return obj
+
 
 class SpamFilter(TimeStampedModel):
     name = models.CharField(unique=True, max_length=128)
-    model = models.JSONField(verbose_name="Spamfilter Model", default=dict)
+    model = models.JSONField(verbose_name="Spamfilter Model", default=dict, encoder=ModelEncoder, decoder=ModelDecoder)
 
     @classmethod
     @property
