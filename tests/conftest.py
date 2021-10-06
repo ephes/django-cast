@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import shutil
 
 from copy import deepcopy
 from datetime import datetime
@@ -42,6 +43,17 @@ def api_client():
 def fixture_dir():
     curdir = os.path.dirname(os.path.realpath(__file__))
     return os.path.join(curdir, "fixtures")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def remove_stale_media_files():
+    # runs before test starts
+    yield
+    # runs after test ends
+    # cannot use function scoped settings fixture, so import settings
+    from django.conf import settings
+
+    shutil.rmtree(settings.MEDIA_ROOT)
 
 
 # Image testing stuff
