@@ -53,7 +53,7 @@ def remove_stale_media_files():
     # cannot use function scoped settings fixture, so import settings
     from django.conf import settings
 
-    shutil.rmtree(settings.MEDIA_ROOT)
+    shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
 
 
 # Image testing stuff
