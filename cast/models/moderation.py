@@ -18,39 +18,34 @@ def regex_tokenize(message):
 
 
 class NaiveBayes:
-    def __init__(self, tokenize=regex_tokenize):
+    def __init__(self, tokenize=regex_tokenize, prior_probabilities={}, word_label_counts=None):
         self.tokenize = tokenize
-        self.prior_probabilities = {}
-        self.word_label_counts = {}
-        self.number_of_words = {}
+        self.prior_probabilities = prior_probabilities
+        if word_label_counts is None:
+            self.word_label_counts = defaultdict(lambda: defaultdict(int))
+        else:
+            self.word_label_counts = word_label_counts
+        self.number_of_words = self.get_number_of_words(self.word_label_counts)
 
-    @classmethod
-    def build_model_from_counts(cls, prior_probabilities={}, word_label_counts={}):
-        model = cls()
-        model.prior_probabilities = prior_probabilities
-        model.word_label_counts = word_label_counts
-        model.number_of_words = cls.get_number_of_words(model.word_label_counts)
-        return model
-
-    def get_label_counts(self, messages):
+    @staticmethod
+    def get_label_counts(messages):
         label_counts = defaultdict(int)
         for label, text in messages:
             label_counts[label] += 1
         return label_counts
 
-    def get_prior_probabilities(self, label_counts):
+    def set_prior_probabilities(self, label_counts):
         number_of_messages = sum(label_counts.values())
-        return {label: count / number_of_messages for label, count in label_counts.items()}
+        self.prior_probabilities = {label: count / number_of_messages for label, count in label_counts.items()}
 
-    def get_word_label_counts(self, messages):
-        counts = defaultdict(lambda: defaultdict(int))
+    def set_word_label_counts(self, messages):
+        counts = self.word_label_counts
         for label, text in messages:
             for word in self.tokenize(text):
                 counts[word][label] += 1
-        return counts
 
-    @classmethod
-    def get_number_of_words(cls, word_label_counts):
+    @staticmethod
+    def get_number_of_words(word_label_counts):
         number_of_words = defaultdict(int)
         for word, counts in word_label_counts.items():
             for label, count in counts.items():
@@ -58,18 +53,19 @@ class NaiveBayes:
         return number_of_words
 
     def fit(self, messages):
-        return self.build_model_from_counts(
-            prior_probabilities=self.get_prior_probabilities(self.get_label_counts(messages)),
-            word_label_counts=self.get_word_label_counts(messages),
-        )
+        self.set_prior_probabilities(self.get_label_counts(messages))
+        self.set_word_label_counts(messages)
+        self.number_of_words = self.get_number_of_words(self.word_label_counts)
+        return self
 
-    def update_probabilities(self, probabilities, counts_per_label, number_of_words):
-        updated_probabilites = {}
+    @staticmethod
+    def update_probabilities(probabilities, counts_per_label, number_of_words):
+        updated_probabilities = {}
         for label, prior_probability in probabilities.items():
             word_count = counts_per_label.get(label, 0.5)
             word_probability = word_count / number_of_words[label]
-            updated_probabilites[label] = prior_probability * word_probability
-        return updated_probabilites
+            updated_probabilities[label] = prior_probability * word_probability
+        return updated_probabilities
 
     def predict(self, message):
         probabilities = dict(self.prior_probabilities)
@@ -113,7 +109,7 @@ class ModelDecoder(json.JSONDecoder):
     def model_decode(obj):
         if obj.get("class") == "NaiveBayes":
             del obj["class"]
-            return NaiveBayes.build_model_from_counts(**obj)
+            return NaiveBayes(**obj)
         return obj
 
 
