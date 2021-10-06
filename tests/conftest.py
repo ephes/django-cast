@@ -589,6 +589,16 @@ def comment(post):
 
 
 @pytest.fixture()
+def comment_spam(post):
+    comment_model = get_comments_model()
+    instance = comment_model(
+        content_object=post, site_id=settings.SITE_ID, title="blub", comment="asdf bsdf", is_removed=True
+    )
+    instance.save()
+    return instance
+
+
+@pytest.fixture()
 def access_log_path(fixture_dir):
     return Path(fixture_dir) / "access.log"
 

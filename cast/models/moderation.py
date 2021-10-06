@@ -118,6 +118,32 @@ class SpamFilter(TimeStampedModel):
     model = models.JSONField(verbose_name="Spamfilter Model", default=dict, encoder=ModelEncoder, decoder=ModelDecoder)
 
     @classmethod
+    def comment_to_message(cls, comment):
+        return f"{comment.name} {comment.title} {comment.comment}"
+
+    @classmethod
+    def get_training_data_comments(cls):
+        from django_comments import get_model as get_comments_model
+
+        Comment = get_comments_model()
+        train = []
+        for comment in Comment.objects.all():
+            label = "spam" if comment.is_removed else "ham"
+            message = cls.comment_to_message(comment)
+            train.append((label, message))
+        return train
+
+    def retrain_from_scratch(self):
+        """
+        Retrain on all comments for now. Later on there might be
+        different spamfilters for different blogs/sites..
+        """
+        train = SpamFilter.get_training_data_comments()
+        model = NaiveBayes().fit(train)
+        self.model = model
+        self.save()
+
+    @classmethod
     @property
     def default(cls):
         return cls.objects.first()

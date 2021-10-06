@@ -10,6 +10,7 @@ from .models import (  # Image,
     Gallery,
     ItunesArtWork,
     Post,
+    SpamFilter,
     Video,
 )
 
@@ -88,3 +89,18 @@ class GalleryModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 admin.site.register(Gallery, GalleryModelAdmin)
+
+
+@admin.action(description="Retrain model from scratch using marked comments")
+def retrain(modeladmin, request, queryset):
+    for spamfilter in queryset:
+        spamfilter.retrain_from_scratch()
+
+
+class SpamfilterModelAdmin(admin.ModelAdmin):
+    list_display = ("pk", "name")
+    fields = ("name",)
+    actions = [retrain]
+
+
+admin.site.register(SpamFilter, SpamfilterModelAdmin)

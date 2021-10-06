@@ -90,3 +90,18 @@ def test_model_naive_bayes_serialization():
     spamfilter.refresh_from_db()
     model_from_db = spamfilter.model
     assert model_from_db == model
+
+
+@pytest.mark.django_db()
+def test_spamfilter_retrain_from_scratch(comment, comment_spam):
+    """
+    Make sure data from comments is used when retraining
+    spamfilter from scratch.
+    """
+    model = NaiveBayes().fit([])
+    spamfilter = SpamFilter(name="naive bayes", model=model)
+    spamfilter.save()
+    assert spamfilter.model.prior_probabilities == {}
+
+    spamfilter.retrain_from_scratch()
+    assert spamfilter.model.prior_probabilities == {"ham": 0.5, "spam": 0.5}
