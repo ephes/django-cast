@@ -81,6 +81,7 @@ tests/media/
 # local databases
 db.sqlite3
 tests/test_database.sqlite3
+tests/test_database.sqlite3-journal
 
 # virtualfish
 .venv
