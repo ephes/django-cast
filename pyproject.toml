@@ -57,6 +57,7 @@ python-akismet = "*"
 django-tag-parser = "*"
 django-contrib-comments = "*"
 django-fluent-comments = "^3.0"
+l18n = { git = "https://github.com/ephes/l18n", branch = "develop" }
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^4"

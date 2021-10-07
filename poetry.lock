@@ -936,10 +936,17 @@ description = "Internationalization for pytz timezones and territories"
 category = "main"
 optional = false
 python-versions = "*"
+develop = false
 
 [package.dependencies]
 pytz = ">=2020.1"
 six = "*"
+
+[package.source]
+type = "git"
+url = "https://github.com/ephes/l18n"
+reference = "develop"
+resolved_reference = "5d784895810b49e57aa380b25fdaedd2ac5db006"
 
 [[package]]
 name = "markdown"
@@ -2172,7 +2179,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "81a5c18b70195f80347dd5579264acd393d20993b3256c1d0d14686a8ea150c2"
+content-hash = "d6b9ce928cc02eda5e78c552c5ec8619bc34ed4c3ea2af38a0ab50b363d50bcf"
 
 [metadata.files]
 alabaster = [
@@ -2593,9 +2600,7 @@ keyring = [
     {file = "keyring-23.2.1-py3-none-any.whl", hash = "sha256:bd2145a237ed70c8ce72978b497619ddfcae640b6dcf494402d5143e37755c6e"},
     {file = "keyring-23.2.1.tar.gz", hash = "sha256:6334aee6073db2fb1f30892697b1730105b5e9a77ce7e61fca6b435225493efe"},
 ]
-l18n = [
-    {file = "l18n-2020.6.1.tar.gz", hash = "sha256:ea7a65b2f0935b14601a3295f2c5e5e8b54126dd1e6a7fef4e44d2b8dd5b695a"},
-]
+l18n = []
 markdown = [
     {file = "Markdown-3.3.4-py3-none-any.whl", hash = "sha256:96c3ba1261de2f7547b46a00ea8463832c921d3f9d6aba3f255a6f71386db20c"},
     {file = "Markdown-3.3.4.tar.gz", hash = "sha256:31b5b491868dcc87d6c24b7e3d19a0d730d59d3e46f4eea6430a321bed387a49"},
