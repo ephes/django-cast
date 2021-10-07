@@ -56,9 +56,24 @@ def access_log_to_buffer(access_log_path, start_position=0, chunk_size=None):
     them to an empty buffer. Return that buffer.
     """
     log_buffer = StringIO()
-    with open(access_log_path) as f:
+    weird_log_lines = [
+        "<script >alert(String.fromCharCode(88,83,83))</script>",
+    ]
+    with open(access_log_path, "rb") as f:
         line_count = 0
         for position, line in enumerate(f):
+            try:
+                line = line.decode("utf8")
+            except UnicodeDecodeError:
+                # ignore weird characters (should not happen that often)
+                continue
+            should_continue = False
+            for wll in weird_log_lines:
+                if wll in line:
+                    # ignore weird js cracking attempts etc
+                    should_continue = True
+            if should_continue:
+                continue
             if position > start_position:
                 log_buffer.write(line)
                 line_count += 1
