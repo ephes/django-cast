@@ -27,12 +27,10 @@ classifiers = [
 include = [
     "cast",
     "threadedcomments",
-    "wagtail",
 ]
 packages = [
     {include = "cast"},
     {include = "threadedcomments"},
-    {include = "wagtail"},
 ]
 
 [tool.poetry.dependencies]
@@ -94,7 +92,6 @@ clean = "commands:clean"
 [tool.black]
 line-length = 119
 extend-exclude = '''
-^/wagtail
 ^/threadedcomments
 '''
 

@@ -1,2 +1,0 @@
-Django>=3.2,<3.3
-wagtail==2.15a0
