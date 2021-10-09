@@ -4,5 +4,6 @@ ffmpeg -i 2021-06-28_dinos.mp4 -codec copy 2021-06-28_dinos_new.mp4
 # how to start jupyter notebook as long as we dont have a
 # cleaned up package structure
 
-set -gx DJANGO_ALLOW_ASYNC_UNSAFE true
-python ../example/manage.py shell_plus --settings example_site.settings.dev --notebook
+# set -gx DJANGO_ALLOW_ASYNC_UNSAFE true
+# python ../example/manage.py shell_plus --settings example_site.settings.dev --notebook
+python example/manage.py shell_plus --notebook
