@@ -17,6 +17,17 @@ def regex_tokenize(message):
     return standard_tokenizer(message.lower())
 
 
+def normalize(probabilities):
+    try:
+        factor = 1.0 / float(sum(probabilities.values()))
+    except ZeroDivisionError:
+        # not possible to scale -> skip
+        return probabilities
+    for name, value in probabilities.items():
+        probabilities[name] *= factor
+    return probabilities
+
+
 class NaiveBayes:
     def __init__(self, tokenize=regex_tokenize, prior_probabilities={}, word_label_counts=None):
         self.tokenize = tokenize
@@ -71,7 +82,7 @@ class NaiveBayes:
         probabilities = dict(self.prior_probabilities)
         for word in self.tokenize(message):
             counts_per_label = self.word_label_counts.get(word, {})
-            probabilities = self.update_probabilities(probabilities, counts_per_label, self.number_of_words)
+            probabilities = normalize(self.update_probabilities(probabilities, counts_per_label, self.number_of_words))
         return probabilities
 
     def predict_label(self, message):

@@ -1,6 +1,6 @@
 import pytest
 
-from cast.models.moderation import NaiveBayes, SpamFilter
+from cast.models.moderation import NaiveBayes, SpamFilter, normalize
 
 
 @pytest.mark.parametrize(
@@ -49,7 +49,7 @@ def test_predict(message, expected_probabilities):
     ]
     model = NaiveBayes().fit(train)
     probabilities = model.predict(message)
-    assert probabilities == expected_probabilities
+    assert probabilities == normalize(expected_probabilities)
 
 
 @pytest.mark.parametrize(
