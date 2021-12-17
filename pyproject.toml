@@ -35,7 +35,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.9"
-django = "^3.2"
+django = "*"
 Pillow = "^8"
 django-filter = "*"
 coreapi = "^2.3"
@@ -51,11 +51,11 @@ plotly = "^5"
 wagtail_srcset = "^0.1"
 markdown = "^3.2.1"
 django-crispy-forms = "*"
-python-akismet = "*"
 django-tag-parser = "*"
 django-contrib-comments = "*"
 django-fluent-comments = "^3.0"
 l18n = { git = "https://github.com/ephes/l18n", branch = "develop" }
+python-akismet = { git = "https://github.com/Nekmo/python-akismet", branch = "master" }  # newlines
 
 [tool.poetry.dev-dependencies]
 Sphinx = "^4"
