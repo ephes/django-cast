@@ -5,24 +5,24 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+      - id: check-added-large-files
       - id: check-yaml
-      # - id: check-added-large-files  # skip until wagtail is removed again
+      - id: check-toml
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.2.0
     hooks:
       - id: pyupgrade
-        args: [--py39-plus]
+        args: [--py310-plus]
   - repo: https://github.com/adamchainz/django-upgrade
     rev: 1.11.0
     hooks:
       - id: django-upgrade
-        args: [--target-version, "3.2"]
+        args: [--target-version, "4.1"]
   - repo: https://github.com/psf/black
     rev: 22.10.0
     hooks:
       - id: black
-        language_version: python3.9
-
+        language_version: python3.11
   - repo: https://github.com/timothycrosley/isort
     # isort config is in setup.cfg
     rev: 5.10.1
@@ -35,3 +35,8 @@ repos:
     hooks:
       - id: flake8
         language_version: python3
+  - repo: https://github.com/rtts/djhtml
+    rev: "v1.5.2"  # replace with the latest tag on GitHub
+    hooks:
+      - id: djhtml
+        args: [-t, "2"]
