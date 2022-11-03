@@ -2,21 +2,14 @@
 {% load wagtailadmin_tags i18n %}
 {% block titletag %}{% blocktrans with title=audio.title %}Delete {{ title }}{% endblocktrans %}{% endblock %}
 {% block content %}
-    {% trans "Delete audio" as del_str %}
-    {% include "wagtailadmin/shared/header.html" with title=del_str subtitle=audio.title icon="media" %}
+  {% trans "Delete audio" as del_str %}
+  {% include "wagtailadmin/shared/header.html" with title=del_str subtitle=audio.title icon="media" %}
 
-    <div class="nice-padding">
-        {% usage_count_enabled as uc_enabled %}
-        {% if uc_enabled %}
-            <div class="usagecount">
-                <a href="{{ audio.usage_url }}">{% blocktrans count usage_count=audio.get_usage.count %}Used {{ usage_count }} time{% plural %}Used {{ usage_count }} times{% endblocktrans %}</a>
-            </div>
-        {% endif %}
-
-        <p>{% trans "Are you sure you want to delete this audio?" %}</p>
-        <form action="{% url 'castaudio:delete' audio.id %}" method="POST" novalidate>
-            {% csrf_token %}
-            <input type="submit" value='{% trans "Yes, delete" %}' class="button serious" />
-        </form>
-    </div>
+  <div class="nice-padding">
+    <p>{% trans "Are you sure you want to delete this audio?" %}</p>
+    <form action="{% url 'castaudio:delete' audio.id %}" method="POST" novalidate>
+      {% csrf_token %}
+      <input type="submit" value='{% trans "Yes, delete" %}' class="button serious" />
+    </form>
+  </div>
 {% endblock %}
