@@ -4,73 +4,65 @@
 {% block titletag %}{% blocktrans with title=audio.title %}Editing {{ title }}{% endblocktrans %}{% endblock %}
 
 {% block extra_js %}
-    {{ block.super }}
-    {{ form.media.js }}
+  {{ block.super }}
+  {{ form.media.js }}
 
-    {% url 'wagtailadmin_tag_autocomplete' as autocomplete_url %}
-    <script>
-        $(function() {
-            $('#id_tags').tagit({
-                autocomplete: {source: "{{ autocomplete_url|addslashes }}"}
-            });
-        });
-    </script>
+  {% url 'wagtailadmin_tag_autocomplete' as autocomplete_url %}
+  <script>
+    $(function() {
+      $('#id_tags').tagit({
+        autocomplete: {source: "{{ autocomplete_url|addslashes }}"}
+      });
+    });
+  </script>
 {% endblock %}
 
 {% block extra_css %}
-    {{ block.super }}
-    {{ form.media.css }}
+  {{ block.super }}
+  {{ form.media.css }}
 {% endblock %}
 
 {% block content %}
-    {% trans "Editing" as editing_str %}
-    {% include "wagtailadmin/shared/header.html" with title=editing_str subtitle=audio.title icon="media" usage_object=audio %}
+  {% trans "Editing" as editing_str %}
+  {% include "wagtailadmin/shared/header.html" with title=editing_str subtitle=audio.title icon="media" usage_object=audio %}
 
-    {% block form_row %}
-        <div class="row row-flush nice-padding">
+  {% block form_row %}
+    <div class="row row-flush nice-padding">
 
-            <div class="col10 divider-after">
-                <form action="{% url 'castaudio:edit' audio.id %}" method="POST" enctype="multipart/form-data" novalidate>
-                    {% csrf_token %}
-                    <ul class="fields">
-                        {% for field in form %}
-                            {% if field.name == 'file' %}
-                                {% include "cast/wagtail/_file_field_as_li.html" %}
-                            {% elif field.name == 'thumbnail' %}
-                                {% include "cast/wagtail/_thumbnail_field_as_li.html" %}
-                            {% else %}
-                                {% include "wagtailadmin/shared/field_as_li.html" %}
-                            {% endif %}
-                        {% endfor %}
-                        <li>
-                            <input class="button" type="submit" value="{% trans 'Save' %}" />
-                            {% if user_can_delete %}
-                                <a href="{% url 'castaudio:delete' audio.id %}" class="button button-secondary no">{% trans "Delete" %}</a>
-                            {% endif %}
-                        </li>
-                    </ul>
-                </form>
-            </div>
-            <div class="col2">
-                <dl>
-                    {% block media_stats %}
-                        {% if audio.m4a %}
-                            <dt>{% trans "Filesize" %}</dt>
-                            <dd>{% if filesize %}{{ filesize|filesizeformat }}{% else %}{% trans "File not found" %}{% endif %}</dd>
-                        {% endif %}
-
-                        {% usage_count_enabled as uc_enabled %}
-                        {% if uc_enabled %}
-                            <dt>{% trans "Usage" %}</dt>
-                            <dd>
-                                <a href="{{ audio.usage_url }}">{% blocktrans count usage_count=audio.get_usage.count %}Used {{ usage_count }} time{% plural %}Used {{ usage_count }} times{% endblocktrans %}</a>
-                            </dd>
-                        {% endif %}
-                    {% endblock %}
-                </dl>
-            </div>
-        </div>
-    {% endblock %}
-
+      <div class="col10 divider-after">
+        <form action="{% url 'castaudio:edit' audio.id %}" method="POST" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          <ul class="fields">
+            {% for field in form %}
+              {% if field.name == 'file' %}
+                {% include "cast/wagtail/_file_field_as_li.html" %}
+              {% elif field.name == 'thumbnail' %}
+                {% include "cast/wagtail/_thumbnail_field_as_li.html" %}
+              {% else %}
+                {% include "wagtailadmin/shared/field_as_li.html" %}
+              {% endif %}
+            {% endfor %}
+            <li>
+              <input class="button" type="submit" value="{% trans 'Save' %}" />
+              {% if user_can_delete %}
+                <a href="{% url 'castaudio:delete' audio.id %}" class="button button-secondary no">{% trans "Delete" %}</a>
+              {% endif %}
+            </li>
+          </ul>
+        </form>
+      </div>
+      <div class="col2">
+        <dl>
+          {% block media_stats %}
+            {% if audio.m4a %}
+              <dt>{% trans "Filesize" %}</dt>
+              <dd>{% if filesize %}{{ filesize|filesizeformat }}{% else %}{% trans "File not found" %}{% endif %}</dd>
+            {% endif %}
+          {% endblock %}
+        </dl>
+      </div>
     </div>
+  {% endblock %}
+
+  </div>
 {% endblock %}
