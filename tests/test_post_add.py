@@ -1,6 +1,5 @@
-from django.urls import reverse
-
 import pytest
+from django.urls import reverse
 
 from cast.models import Post
 
@@ -26,7 +25,7 @@ class TestPostAdd:
         content = r.content.decode("utf-8")
         assert "html" in content
         # make sure we got the wagtail add subpage form and not the login form
-        assert '<body id="wagtail" class="page-editor create model-post  focus-outline-on">' in content
+        assert '<body id="wagtail" class="  ">' in content
 
     def test_submit_add_form_post_not_authenticated(self, client, post_data_wagtail, blog):
         add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
