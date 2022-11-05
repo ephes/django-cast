@@ -8,25 +8,22 @@ from django.http import Http404
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-
+from model_utils.models import TimeStampedModel
+from slugify import slugify
 from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
-from wagtail.core import blocks
 from wagtail.core.fields import RichTextField, StreamField
-from wagtail.core.models import Page, PageManager
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image
-from wagtail.search import index
-
-from model_utils.models import TimeStampedModel
-from slugify import slugify
 
 from cast import appsettings
 from cast.blocks import AudioChooserBlock, GalleryBlock, VideoChooserBlock
 from cast.filters import PostFilterset
 from cast.models import get_or_create_gallery
 from cast.models.itunes import ItunesArtWork
-
+from wagtail.core import blocks
+from wagtail.core.models import Page, PageManager
+from wagtail.search import index
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +273,7 @@ class Post(TimeStampedModel, Page):
 
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
-        StreamFieldPanel("body"),
+        FieldPanel("body"),
     ]
     template = "cast/post.html"
     parent_page_types = ["cast.Blog"]
