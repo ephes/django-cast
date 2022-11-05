@@ -264,7 +264,8 @@ class Post(TimeStampedModel, Page):
         [
             ("overview", ContentBlock()),
             ("detail", ContentBlock()),
-        ]
+        ],
+        use_json_field=True,
     )
 
     search_fields = Page.search_fields + [
@@ -410,7 +411,8 @@ class HomePage(Page):
             ("paragraph", blocks.RichTextBlock()),
             ("image", ImageChooserBlock(template="cast/image/image.html")),
             ("gallery", GalleryBlock(ImageChooserBlock())),
-        ]
+        ],
+        use_json_field=True,
     )
     alias_for_page = models.ForeignKey(
         "wagtailcore.Page",
