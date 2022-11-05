@@ -1,93 +1,94 @@
-[tool.poetry]
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
 name = "django-cast"
-version = "0.1.35"
-description = "Just another blogging / podcasting package"
-authors = ["Jochen Wersdörfer <jochen@wersdoerfer.de>", "Dominik Geldmacher <oryon@cyberise.de>"]
-license = "BSD-4-Clause"
-readme = "README.rst"
-repository = "https://github.com/ephes/django-cast"
-documentation = "https://django-cast.readthedocs.io/en/latest/"
+authors = [
+    {name = "Jochen Wersdörfer", email = "jochen-wagtailsrcset@wersdoerfer.de"},
+    {name = "Dominik Geldmacher", email = "oryon@cyberise.de"},
+]
+dynamic = ["version", "description"]
+requires-python = ">=3.7"
 keywords = [
-    "blog", "podcast", "video", "audio"
+    "blog",
+    "podcast",
+    "video",
+    "audio"
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
     "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: Django :: 3.1",
+    "Framework :: Django :: 4.1",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: BSD License",
-    "Operating System :: OS Independent",
-    "Natural Language :: English",
-    "Programming Language :: Python",
+    "Topic :: Internet",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
-include = [
-    "cast",
-    "threadedcomments",
+
+dependencies = [
+    "coreapi",
+    "django",
+    "django-allauth",
+    "django-crispy-forms",
+    "django-contrib-comments",
+    "django-environ",
+    "django-filter",
+    "django-fluent-comments",
+    "django-model-utils",
+    "django-tag-parser",
+    "django-threadedcomments",
+    "feedparser",
+    "markdown",
+    "plotly",
+    "python-akismet",
+    "python-slugify",
+    "wagtail",
+    "wagtail_srcset",
 ]
-packages = [
-    {include = "cast"},
-    {include = "threadedcomments"},
+
+[project.optional-dependencies]
+test = [
+    "factory_boy",
+    "dj-inmemorystorage",
+    "pytest >= 6",
+    "pytest-cov >= 3",
+    "pytest-django",
+    "pytest-randomly",
+]
+doc = [
+    "sphinx-rtd-theme",
+]
+dev = [
+    "black",
+    "flake8",
+    "django-environ",
+    "django_extensions",
+    "isort",
+    "jupyter",
+    "nb-black",
+    "tox",
+    "typer",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-django = "*"
-Pillow = "*"
-django-filter = "*"
-coreapi = "*"
-djangorestframework = "*"
-python-slugify = "*"
-django-model-utils = "*"
-django-environ = "*"
-django-allauth = "*"
-wagtail = "*"
-django-threadedcomments = "*"
-feedparser = "*"
-plotly = "*"
-wagtail_srcset = "*"
-markdown = "*"
-django-crispy-forms = "*"
-django-tag-parser = "*"
-django-contrib-comments = "*"
-django-fluent-comments = "*"
-l18n = { git = "https://github.com/ephes/l18n", branch = "develop" }
-python-akismet = { git = "https://github.com/Nekmo/python-akismet", branch = "master" }  # newlines
+[project.urls]
+Documentation = "https://django-cast.readthedocs.io/en/latest/"
+Source = "https://github.com/ephes/django-cast"
 
-[tool.poetry.dev-dependencies]
-Sphinx = "*"
-sphinx-rtd-theme = "*"
-twine = "*"
-flake8 = "*"
-black = "*"
-typer = "*"
-jupyter = "*"
-ipdb = "*"
-pytest = "*"
-factory_boy = "*"
-pytest-django = "*"
-tox = "*"
-django_extensions = "*"
-coreapi-cli = "*"
-nb-black = "*"
-coverage = "*"
-pytest-xdist = "*"
-dj-inmemorystorage = "*"
-pytest-randomly = "*"
+[tool.flit.module]
+name = "cast"
 
-[tool.poetry.scripts]
-test = "commands:test"
-lint = "commands:flake8"
-autoformat = "commands:black"
-show_coverage = "commands:coverage"
-docs = "commands:docs"
-notebook = "commands:notebook"
-clean-build = "commands:clean_build"
-clean-pyc = "commands:clean_pyc"
-clean = "commands:clean"
+[tool.isort]
+profile = "black"
 
 [tool.black]
 line-length = 119
@@ -95,6 +96,11 @@ extend-exclude = '''
 ^/threadedcomments
 '''
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+minversion = "6.0"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::django.utils.deprecation.RemovedInDjango50Warning",
+    "ignore::DeprecationWarning",
+]
