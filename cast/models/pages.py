@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from slugify import slugify
-from wagtail.admin.edit_handlers import FieldPanel, StreamFieldPanel
+from wagtail.admin.edit_handlers import FieldPanel
 from wagtail.core.fields import RichTextField, StreamField
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
@@ -425,7 +425,7 @@ class HomePage(Page):
 
     content_panels = Page.content_panels + [
         FieldPanel("alias_for_page"),
-        StreamFieldPanel("body"),
+        FieldPanel("body"),
     ]
 
     def serve(self, request):
