@@ -19,7 +19,7 @@ class Command(BaseCommand):
                 image += size
             else:
                 misc += size
-        unit = 2 ** 20  # MB
+        unit = 2**20  # MB
         print(f"video usage: {video / unit}")
         print(f"image usage: {image / unit}")
         print(f"misc  usage: {misc / unit}")
@@ -31,5 +31,5 @@ class Command(BaseCommand):
         for path in storage_walk_paths(s3):
             size = s3.size(path)
             paths[path] = size
-            print(path, size / 2 ** 20)
+            print(path, size / 2**20)
         self.show_usage(paths)
