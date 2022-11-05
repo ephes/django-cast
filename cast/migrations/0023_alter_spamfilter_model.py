@@ -7,13 +7,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cast', '0022_alter_spamfilter_model'),
+        ("cast", "0022_alter_spamfilter_model"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='spamfilter',
-            name='model',
-            field=models.JSONField(decoder=cast.models.moderation.ModelDecoder, default=dict, encoder=cast.models.moderation.ModelEncoder, verbose_name='Spamfilter Model'),
+            model_name="spamfilter",
+            name="model",
+            field=models.JSONField(
+                decoder=cast.models.moderation.ModelDecoder,
+                default=dict,
+                encoder=cast.models.moderation.ModelEncoder,
+                verbose_name="Spamfilter Model",
+            ),
         ),
     ]

@@ -11,16 +11,59 @@ import wagtail.images.blocks
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cast', '0019_alter_chaptermark_start'),
+        ("cast", "0019_alter_chaptermark_start"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='post',
-            name='body',
-            field=wagtail.core.fields.StreamField([('overview', wagtail.core.blocks.StreamBlock([('heading', wagtail.core.blocks.CharBlock(form_classname='full title')), ('paragraph', wagtail.core.blocks.RichTextBlock()), ('image', wagtail.images.blocks.ImageChooserBlock(template='cast/image/image.html')), ('gallery', cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())), ('embed', wagtail.embeds.blocks.EmbedBlock()), ('video', cast.blocks.VideoChooserBlock(icon='media', template='cast/video/video.html')), ('audio', cast.blocks.AudioChooserBlock(icon='media', template='cast/audio/audio.html'))])), ('detail', wagtail.core.blocks.StreamBlock([('heading', wagtail.core.blocks.CharBlock(form_classname='full title')), ('paragraph', wagtail.core.blocks.RichTextBlock()), ('image', wagtail.images.blocks.ImageChooserBlock(template='cast/image/image.html')), ('gallery', cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())), ('embed', wagtail.embeds.blocks.EmbedBlock()), ('video', cast.blocks.VideoChooserBlock(icon='media', template='cast/video/video.html')), ('audio', cast.blocks.AudioChooserBlock(icon='media', template='cast/audio/audio.html'))]))]),
+            model_name="post",
+            name="body",
+            field=wagtail.core.fields.StreamField(
+                [
+                    (
+                        "overview",
+                        wagtail.core.blocks.StreamBlock(
+                            [
+                                ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
+                                ("paragraph", wagtail.core.blocks.RichTextBlock()),
+                                ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image/image.html")),
+                                ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
+                                ("embed", wagtail.embeds.blocks.EmbedBlock()),
+                                (
+                                    "video",
+                                    cast.blocks.VideoChooserBlock(icon="media", template="cast/video/video.html"),
+                                ),
+                                (
+                                    "audio",
+                                    cast.blocks.AudioChooserBlock(icon="media", template="cast/audio/audio.html"),
+                                ),
+                            ]
+                        ),
+                    ),
+                    (
+                        "detail",
+                        wagtail.core.blocks.StreamBlock(
+                            [
+                                ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
+                                ("paragraph", wagtail.core.blocks.RichTextBlock()),
+                                ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image/image.html")),
+                                ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
+                                ("embed", wagtail.embeds.blocks.EmbedBlock()),
+                                (
+                                    "video",
+                                    cast.blocks.VideoChooserBlock(icon="media", template="cast/video/video.html"),
+                                ),
+                                (
+                                    "audio",
+                                    cast.blocks.AudioChooserBlock(icon="media", template="cast/audio/audio.html"),
+                                ),
+                            ]
+                        ),
+                    ),
+                ]
+            ),
         ),
         migrations.DeleteModel(
-            name='Image',
+            name="Image",
         ),
     ]
