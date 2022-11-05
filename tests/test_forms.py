@@ -83,7 +83,7 @@ class TestAudioForm:
 
         # make sure chaptermarks are not saved on commit=False
         audio = form.save(commit=False)
-        assert audio.chaptermarks.count() == 0
+        assert ChapterMark.objects.count() == 0
 
         # make sure chaptermarks are saved in db on form.save()
         audio = form.save(commit=True)
