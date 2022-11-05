@@ -104,3 +104,10 @@ filterwarnings = [
     "ignore::django.utils.deprecation.RemovedInDjango50Warning",
     "ignore::DeprecationWarning",
 ]
+addopts = [
+    "-ra",
+    "--reuse-db",
+    "-p no:warnings",
+    "--no-migrations",
+    "--randomly-seed=1234",
+]
