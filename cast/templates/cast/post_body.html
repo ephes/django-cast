@@ -1,6 +1,13 @@
 {% load wagtailcore_tags %}
 
 <article>
+  <header>
+    <h2><a href="{% pageurl page %}">{{ page.title }}</a></h2>
+    <a href="{% pageurl page %}">
+      <time date-time="{{ page.post.visible_date|date:"c" }}">{{ page.post.visible_date|date}}</time>
+    </a>
+    <span class="author">{{ page.owner.username | title}}</span>
+  </header>
   <h2><a href="{% pageurl page %}">{{ page.title }}</a></h2>
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
