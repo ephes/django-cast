@@ -1,38 +1,51 @@
 {% extends "cast/cast_base.html" %}
 {% load wagtailcore_tags %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block body_class %}template-bloglistpage{% endblock %}
 
 {% block content %}
-<h1>{{ page.title }}</h1>
-<div class="intro">{{ page.description|richtext }}</div>
+  <h1>{{ page.title }}</h1>
+  <div class="intro">{{ page.description|richtext }}</div>
 
-{% block filters %}
-  <div id="accordion">
-    <div class="card">
-      <div class="card-header" id="headingOne">
-        <h5 class="mb-0">
-          <button class="btn btn-link" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-            Filters / Fulltext-Search
-          </button>
-        </h5>
-      </div>
-      <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
-        <div class="card-body">
-          <form action="" method="get">
+  {% block filters %}
+    <div id="accordion">
+      <div class="card">
+        <div class="card-header" id="headingOne">
+          <h5 class="mb-0">
+            <button class="btn btn-link" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+              Filters / Fulltext-Search
+            </button>
+          </h5>
+        </div>
+        <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
+          <div class="card-body">
+            <form action="" method="get">
               {{ filterset.form | crispy }}
               <input class="btn btn-primary btn-lg" role="button" type="submit" />
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-{% endblock filters %}
+  {% endblock filters %}
 
-Number of shown posts: {{ page.published_posts.count }}
-{% for post in posts %}
-  {% include "cast/post_body.html" with render_detail=False page=post %}
-{% endfor %}
-<p>{% include "pagination.html" %}</p>
+  Number of shown posts: {{ page.published_posts.count }}
+  {% for post in posts %}
+    {% include "cast/post_body.html" with render_detail=False page=post %}
+  {% endfor %}
+  <p>{% include "pagination.html" %}</p>
 {% endblock content %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script src="{% static 'js/cast/gallery.js' %}"></script>
+  {% if page.has_audio %}
+    <script src={% static 'js/cast/web-player/embed.js' %}></script>
+    {% for pk, audio in page.media_lookup.audio.items %}
+      <script>podlovePlayer("#audio_{{ audio.pk }}", "{{ audio.podlove_url }}");</script>
+    {% endfor %}
+  {% endif %}
+
+{% endblock javascript %}
