@@ -8,7 +8,6 @@
     </a>
     <span class="author">{{ page.owner.username | title}}</span>
   </header>
-  <h2><a href="{% pageurl page %}">{{ page.title }}</a></h2>
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
       <section class="block-{{ block.block_type }}">
