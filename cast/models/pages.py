@@ -8,22 +8,23 @@ from django.http import Http404
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.cache import cache_page
 from model_utils.models import TimeStampedModel
 from slugify import slugify
 from wagtail.admin.edit_handlers import FieldPanel
+from wagtail.core import blocks
 from wagtail.core.fields import RichTextField, StreamField
+from wagtail.core.models import Page, PageManager
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image
+from wagtail.search import index
 
 from cast import appsettings
 from cast.blocks import AudioChooserBlock, GalleryBlock, VideoChooserBlock
 from cast.filters import PostFilterset
 from cast.models import get_or_create_gallery
 from cast.models.itunes import ItunesArtWork
-from wagtail.core import blocks
-from wagtail.core.models import Page, PageManager
-from wagtail.search import index
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,10 @@ class Blog(TimeStampedModel, Page):
         context = self.paginate_queryset(context)
         context["posts"] = context["object_list"]  # convenience
         return context
+
+    @cache_page(5 * 60)
+    def serve(self, request):
+        return super().serve(request)
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -397,6 +402,10 @@ class Post(TimeStampedModel, Page):
         for media_type, ids in to_remove.items():
             for media_id in ids:
                 media_attr_lookup[media_type].remove(media_id)
+
+    @cache_page(5 * 60)
+    def serve(self, request):
+        return super().serve(request)
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)
