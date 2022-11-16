@@ -1,8 +1,8 @@
 from django.urls import include, path
+from django.views.decorators.cache import cache_page
 
 from . import feeds
 from .views.dashboard import DashboardView
-
 
 app_name = "cast"
 urlpatterns = [
@@ -14,7 +14,7 @@ urlpatterns = [
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",
-        view=feeds.LatestEntriesFeed(),
+        view=cache_page(5 * 60)(feeds.LatestEntriesFeed()),
         name="latest_entries_feed",
     ),
     path(
