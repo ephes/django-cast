@@ -7,7 +7,6 @@ from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 
 from .models import Audio, Blog, Post
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +37,7 @@ class LatestEntriesFeed(Feed):
 
     def item_description(self, item):
         item.template = POST_BODY_TEMPLATE
-        item.description = item.serve(self.request, render_detail=True).render().content
+        item.description = item.serve(self.request, render_detail=True).rendered_content
         return item.description
 
     def item_link(self, item):
