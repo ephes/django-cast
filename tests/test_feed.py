@@ -1,12 +1,11 @@
 from datetime import datetime
 from time import mktime
 
-from django.http import Http404
-from django.urls import reverse
-
 import feedparser
 import pytest
 import pytz
+from django.http import Http404
+from django.urls import reverse
 
 from cast.feeds import ITunesElements, PodcastFeed
 from cast.models import Post
@@ -46,9 +45,18 @@ class TestFeedCreation:
         assert "itunes:category" in dummy_handler.ee
 
 
+@pytest.fixture
+def use_dummy_cache_backend(settings):
+    settings.CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
+        }
+    }
+
+
 class TestGeneratedFeeds:
     @pytest.mark.django_db
-    def test_get_latest_entries_feed(self, client, post):
+    def test_get_latest_entries_feed(self, client, post, use_dummy_cache_backend):
         feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
 
         r = client.get(feed_url)
