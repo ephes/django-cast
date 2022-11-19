@@ -4,7 +4,6 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.forms.models import modelform_factory
 from django.utils.translation import gettext_lazy as _
-
 from wagtail.admin import widgets
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.core.models import Collection
@@ -61,7 +60,7 @@ class FFProbeStartField(forms.TimeField):
         try:
             # utcfromtimestamp, super important!
             return datetime.utcfromtimestamp(float(value)).time()
-        except (ValueError):
+        except ValueError:
             raise ValidationError(
                 _(f"Invalid chaptermark start: {value}"),
                 code="invalid",
