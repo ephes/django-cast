@@ -67,7 +67,7 @@ class TestGeneratedFeeds:
         assert post.title in content
 
     @pytest.mark.django_db
-    def test_get_podcast_m4a_feed_rss(self, client, podcast_episode):
+    def test_get_podcast_m4a_feed_rss(self, client, podcast_episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",
             kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
@@ -95,7 +95,7 @@ class TestGeneratedFeeds:
         assert podcast_episode.title in content
 
     @pytest.mark.django_db
-    def test_podcast_feed_contains_only_podcasts(self, client, post, podcast_episode):
+    def test_podcast_feed_contains_only_podcasts(self, client, post, podcast_episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",
             kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
@@ -108,7 +108,9 @@ class TestGeneratedFeeds:
         assert Post.objects.live().descendant_of(podcast_episode.blog).count() == 2
 
     @pytest.mark.django_db
-    def test_podcast_feed_contains_visible_date_as_pubdate(self, client, podcast_episode_with_different_visible_date):
+    def test_podcast_feed_contains_visible_date_as_pubdate(
+        self, client, podcast_episode_with_different_visible_date, use_dummy_cache_backend
+    ):
         podcast_episode = podcast_episode_with_different_visible_date
         feed_url = reverse(
             "cast:podcast_feed_rss",

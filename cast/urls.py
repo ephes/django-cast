@@ -19,12 +19,12 @@ urlpatterns = [
     ),
     path(
         "<slug:slug>/feed/podcast/<audio_format>/rss.xml",
-        view=feeds.RssPodcastFeed(),
+        view=cache_page(5 * 60)(feeds.RssPodcastFeed()),
         name="podcast_feed_rss",
     ),
     path(
         "<slug:slug>/feed/podcast/<audio_format>/atom.xml",
-        view=feeds.AtomPodcastFeed(),
+        view=cache_page(5 * 60)(feeds.AtomPodcastFeed()),
         name="podcast_feed_atom",
     ),
 ]
