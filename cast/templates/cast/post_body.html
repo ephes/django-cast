@@ -13,6 +13,7 @@
       <section class="block-{{ block.block_type }}">
         {% include_block block %}
       </section>
+      {% block detail_link %}{% endblock %}
     {% endif %}
   {% endfor %}
 </article>
