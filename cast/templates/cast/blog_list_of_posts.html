@@ -37,35 +37,36 @@
         {% endif %}
       </div>
     {% endblock feeds %}
+  </div>
 
-    {% block filters %}
-      <div id="accordion">
-        <div class="card">
-          <div class="card-header" id="headingOne">
-            <h5 class="mb-0">
-              <button class="btn btn-link" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-                Filters / Fulltext-Search
-              </button>
-            </h5>
-          </div>
-          <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
-            <div class="card-body">
-              <form action="" method="get">
-                {{ filterset.form | crispy }}
-                <input class="btn btn-primary btn-lg" role="button" type="submit" />
-              </form>
-            </div>
+  {% block filters %}
+    <div id="accordion">
+      <div class="card">
+        <div class="card-header" id="headingOne">
+          <h5 class="mb-0">
+            <button class="btn btn-link" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+              Filters / Fulltext-Search
+            </button>
+          </h5>
+        </div>
+        <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
+          <div class="card-body">
+            <form action="" method="get">
+              {{ filterset.form | crispy }}
+              <input class="btn btn-primary btn-lg" role="button" type="submit" />
+            </form>
           </div>
         </div>
       </div>
-    {% endblock filters %}
-    <hr class="my-4">
+    </div>
+  {% endblock filters %}
+  <hr class="my-4">
 
 
-    {% for post in posts %}
-      {% include "cast/post_body.html" with render_detail=False page=post %}
-    {% endfor %}
-    <p>{% include "pagination.html" %}</p>
+  {% for post in posts %}
+    {% include "cast/post_body.html" with render_detail=False page=post %}
+  {% endfor %}
+  <p>{% include "pagination.html" %}</p>
 {% endblock content %}
 
 {% block javascript %}
