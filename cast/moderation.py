@@ -23,7 +23,7 @@ class Moderator(FluentCommentsModerator):
     def moderate(self, comment, content_object, request):
         message = SpamFilter.comment_to_message(comment)
         if self.spamfilter is not None:
-            predicted_label = self.spamfilter.predict(message)
+            predicted_label = self.spamfilter.model.predict(message)
         else:
             predicted_label = "unknown"
         if predicted_label == "spam":
