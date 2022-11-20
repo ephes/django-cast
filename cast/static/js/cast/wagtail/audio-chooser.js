@@ -35,9 +35,9 @@ function createAudioChooser(id) {
             });
         },
         getTextLabel: (opts) => {
-            if (!videoTitle.text()) return '';
+            if (!audioTitle.text()) return '';
             let maxLength = opts && opts.maxLength,
-                result = videoTitle.text();
+                result = audioTitle.text();
             if (maxLength && result.length > maxLength) {
                 return result.substring(0, maxLength - 1) + '…';
             }
