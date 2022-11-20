@@ -68,6 +68,7 @@
 
   {% for post in posts %}
     {% include "cast/post_body.html" with render_detail=False page=post %}
+    <hr class="my-4">
   {% endfor %}
 
   <p>{% include "pagination.html" %}</p>
