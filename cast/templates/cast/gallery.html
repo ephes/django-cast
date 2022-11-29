@@ -7,7 +7,7 @@
       class="cast-gallery-modal"
       data-toggle="modal"
       data-target="#galleryModal-{{ block.id }}"
-      data-full="{{ image.src }}"
+      data-full="{{ image.file.url }}"
     >
       {% srcset_image image max-120x80 as thumbnail %}
       <img
@@ -19,6 +19,7 @@
         srcset="{{ thumbnail.srcset }}"
         data-prev="{{ image.prev }}"
         data-next="{{ image.next }}"
+        loading="lazy"
       />
     </a>
   {% endfor %}
@@ -33,10 +34,10 @@
           </button>
         </div>
         <div class="modal-body cast-gallery-body">
-          <a href=""{{ image.file.url }}"><img class="modal-image cast-image" src="" srcset="" sizes="100vw"></img></a>
-            </div>
-            <div class="modal-footer cast-gallery-footer">
-              </div>
-              </div>
-              </div>
-              </div>
+          <a><img class="modal-image cast-image" src="" srcset="" sizes="100vw"></img></a>
+        </div>
+        <div class="modal-footer cast-gallery-footer">
+        </div>
+      </div>
+    </div>
+  </div>
