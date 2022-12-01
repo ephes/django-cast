@@ -355,7 +355,13 @@ class Post(TimeStampedModel, Page):
 
     @property
     def has_audio(self):
-        return self.audio_in_body or self.audios.count() > 0 or self.podcast_audio is not None
+        audios_count = 0
+        try:
+            audios_count = self.audios.count()
+        except ValueError:
+            # will be raised on wagtail preview because page_ptr is not set
+            pass
+        return self.audio_in_body or audios_count > 0 or self.podcast_audio is not None
 
     @property
     def comments_are_enabled(self):
