@@ -1,9 +1,7 @@
 from unittest.mock import patch
 
-from django.urls import reverse
-
 import pytest
-
+from django.urls import reverse
 from django_comments import get_model as get_comments_model
 from django_comments import signals
 
@@ -45,6 +43,7 @@ class TestPostComments:
 
         r = client.get(detail_url)
         content = r.content.decode("utf-8")
+        security_hash, timestamp = None, None
         for line in content.split("\n"):
             if "security_hash" in line:
                 for part in line.split("input"):
@@ -92,21 +91,27 @@ class TestCommentModeration:
             is_public = True
 
         class PredictSpam:
-            def predict(self, message):
+            @staticmethod
+            def predict_label(_):
                 return "spam"
 
         class PredictHam:
-            def predict(self, message):
+            @staticmethod
+            def predict_label(_):
                 return "ham"
 
-        cls.post = Stub()
+        class SpamFilter:
+            def __init__(self, model):
+                self.model = model
+
+        cls.post = post = Stub()
         cls.stub_class = Stub
         cls.comment_class = StubComment
-        cls.comment = StubComment()
-        cls.comment.content_object = cls.post
+        cls.comment = comment = StubComment()
+        comment.content_object = post
         cls.request = Stub()
-        cls.predict_spam = PredictSpam()
-        cls.predict_ham = PredictHam()
+        cls.predict_spam = SpamFilter(PredictSpam())
+        cls.predict_ham = SpamFilter(PredictHam())
 
     @pytest.mark.django_db
     def test_spamfilter_is_none(self):
