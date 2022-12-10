@@ -1,8 +1,7 @@
 from unittest.mock import patch
 
-from django.urls import reverse
-
 import pytest
+from django.urls import reverse
 
 from cast.models import Audio
 
@@ -20,8 +19,9 @@ class TestPostWithAudioDetail:
         content = r.content.decode("utf-8")
         assert "html" in content
 
-        # make sure audio title included in rendered audio block
-        assert audio.title in content
+        # make sure audio is included in rendered audio block
+        assert "block-audio" in content
+        assert f"audio_{audio.pk}" in content
 
 
 def get_endpoint_urls_without_args():
