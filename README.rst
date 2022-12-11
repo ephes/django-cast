@@ -44,14 +44,10 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
     INSTALLED_APPS = (
         ...
         "django.contrib.sites",
-        "imagekit",
-        "ckeditor",
-        "ckeditor_uploader",
         "crispy_forms",
         "django_filters",
         "rest_framework",
         "rest_framework.authtoken",
-        "filepond.apps.FilepondConfig",
         "cast.apps.CastConfig",
         "watson",
         "fluent_comments",
@@ -65,19 +61,6 @@ Add django-cast and some dependencies to your ``INSTALLED_APPS``:
 Add required settings:
 
 .. code-block:: python
-
-    # CKEditor
-    CKEDITOR_UPLOAD_PATH = "uploads/ckeditor/"
-    CKEDITOR_IMAGE_BACKEND = "pillow"
-    AWS_QUERYSTRING_AUTH = False
-    X_FRAME_OPTIONS = "SAMEORIGIN"
-    CKEDITOR_CONFIGS = {
-            "default": {
-            "removePlugins": "stylesheetparser",
-            "allowedContent": True,
-            "enterMode": 2,
-        },
-    }
 
     # REST
     REST_FRAMEWORK = {
@@ -113,7 +96,6 @@ Add Django Cast's URL patterns:
         # Cast urls
         path("api/api-token-auth/", authtokenviews.obtain_auth_token),
         path("docs/", include_docs_urls(title="API service")),
-        path("ckeditor/", include("ckeditor_uploader.urls")),
         # Uploads
         path("uploads/", include("filepond.urls", namespace="filepond")),
         # Cast
@@ -184,7 +166,6 @@ Tools used in rendering this package:
 * djangorestframework_
 * django-model-utils_
 * django-crispy-forms_
-* django-ckeditor_
 * Cookiecutter_
 * `cookiecutter-djangopackage`_
 * jquery_
@@ -199,7 +180,6 @@ Tools used in rendering this package:
 .. _`django-threadedcomments`: https://github.com/HonzaKral/django-threadedcomments
 .. _`django-fluent-comments`: https://github.com/django-fluent/django-fluent-comments
 .. _`django-model-utils`: https://github.com/jazzband/django-model-utils
-.. _`django-ckeditor`: https://github.com/django-ckeditor/django-ckeditor
 .. _`django-crispy-forms`: https://github.com/django-crispy-forms/django-crispy-forms
 .. _`django-imagekit`: https://github.com/matthewwithanm/django-imagekit
 .. _`djangorestframework`: https://www.django-rest-framework.org

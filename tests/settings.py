@@ -1,6 +1,5 @@
 import environ
 
-
 ROOT_DIR = environ.Path(__file__) - 1
 APPS_DIR = ROOT_DIR.path("cast")
 
@@ -142,19 +141,6 @@ TEMPLATES[0]["OPTIONS"]["loaders"] = [
         ],
     ]
 ]
-
-# CKEditor
-CKEDITOR_UPLOAD_PATH = "uploads/ckeditor/"
-CKEDITOR_IMAGE_BACKEND = "pillow"
-AWS_QUERYSTRING_AUTH = False
-X_FRAME_OPTIONS = "SAMEORIGIN"
-CKEDITOR_CONFIGS = {
-    "default": {
-        "removePlugins": "stylesheetparser",
-        "allowedContent": True,
-        "enterMode": 2,
-    }
-}
 
 # Comments
 COMMENTS_APP = "fluent_comments"
