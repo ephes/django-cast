@@ -69,6 +69,17 @@ class TestBlogIndexFilter:
         assert date_to_find in content
         assert different_date_to_find not in content  # attention
 
+    def test_date_facet_garbage(self, client, post_with_date):
+        blog_url = post_with_date.blog.get_url()
+        blog_url = f"{blog_url}?date_facets=garbage"
+        r = client.get(blog_url)
+        assert r.status_code == 200
+
+        date_to_find = post_with_date.visible_date.strftime("%Y-%m")
+        content = r.content.decode("utf-8")
+        assert "html" in content
+        assert date_to_find in content
+
 
 class TestBlogIndexSearch:
     pytestmark = pytest.mark.django_db

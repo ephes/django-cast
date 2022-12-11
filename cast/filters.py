@@ -1,8 +1,8 @@
 import string
-
 from datetime import datetime
 from itertools import chain
 
+import django_filters
 from django.db import models
 from django.db.models.fields import BLANK_CHOICE_DASH
 from django.forms import Widget
@@ -11,8 +11,6 @@ from django.utils.encoding import force_str
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
-
-import django_filters
 
 
 class DateFacetWidget(Widget):
@@ -172,7 +170,11 @@ class PostFilterset(django_filters.FilterSet):
             # avoid running into infinite recursion problems, because
             # get_facet_counts will instantiate Postfilterset again
             # -> and again -> and again ...
-            self.facet_counts = get_facet_counts(data, queryset)
+            try:
+                self.facet_counts = get_facet_counts(data, queryset)
+            except ValueError:
+                self.facet_counts = {}
 
-    def fulltext_search(self, queryset, name, value):
+    @staticmethod
+    def fulltext_search(queryset, name, value):
         return queryset.search(value).get_queryset()
