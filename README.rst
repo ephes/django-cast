@@ -96,8 +96,6 @@ Add Django Cast's URL patterns:
         # Cast urls
         path("api/api-token-auth/", authtokenviews.obtain_auth_token),
         path("docs/", include_docs_urls(title="API service")),
-        # Uploads
-        path("uploads/", include("filepond.urls", namespace="filepond")),
         # Cast
         path("cast/", include("cast.urls", namespace="cast")),
         # Threadedcomments
@@ -107,15 +105,13 @@ Add Django Cast's URL patterns:
 
 
 The api token auth urls and the docs urls are both necessary to provide api endpoints
-with the right namespace. The `django-filepond <https://github.com/ephes/django-filepond>`_
-app is used to dispatch uploads to the right media models.
+with the right namespace.
 
 Features Overview
 *****************
 
 * Support for responsive images / video / audio media objects
 * Use django template syntax for posts allowing you to use custom template tags for galleries etc. for example
-* Good looking file uploads via filepond_
 * Chaptermarks for podcast Episodes
 * Fulltext search via django-watson_
 * Faceted navigation via django-filter_
@@ -155,7 +151,6 @@ Credits
 Tools used in rendering this package:
 
 * django-imagekit_
-* filepond_
 * django-filter_
 * django-watson_
 * django-contrib-comments_
@@ -173,7 +168,6 @@ Tools used in rendering this package:
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`cookiecutter-djangopackage`: https://github.com/pydanny/cookiecutter-djangopackage
-.. _`filepond`: https://pqina.nl/filepond/
 .. _`django-watson`: https://github.com/etianen/django-watson
 .. _`django-filter`: https://github.com/carltongibson/django-filter
 .. _`django-contrib-comments`: https://github.com/django/django-contrib-comments
