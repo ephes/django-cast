@@ -1,13 +1,10 @@
 import json
 import re
-
 from collections import defaultdict
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
-
 from model_utils.models import TimeStampedModel
-
 
 token_pattern = re.compile(r"(?u)\b\w\w+\b")
 standard_tokenizer = token_pattern.findall
@@ -139,7 +136,7 @@ class SpamFilter(TimeStampedModel):
         Comment = get_comments_model()
         train = []
         for comment in Comment.objects.all():
-            label = "spam" if comment.is_removed else "ham"
+            label = "ham" if (comment.is_public and not comment.is_removed) else "spam"
             message = cls.comment_to_message(comment)
             train.append((label, message))
         return train
