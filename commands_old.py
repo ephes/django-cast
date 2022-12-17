@@ -1,11 +1,9 @@
 import subprocess
 import webbrowser
-
 from functools import wraps
 from pathlib import Path
 
 import typer
-
 
 app = typer.Typer()
 
