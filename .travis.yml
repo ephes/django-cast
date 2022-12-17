@@ -1,21 +1,21 @@
 # Config file for automatic testing at travis-ci.org
 
 language: python
-dist: buster
+dist: bullseye
 
 python:
-  - "3.8"
+  - "3.11"
 
 before_install:
   - sudo apt-get -qq update
   - sudo apt-get install -y ffmpeg
-  - pip install poetry
+  - pip install flit
 
 matrix:
   fast_finish: true
 
 # command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
-install: poetry install -v
+install: flit install -s
 
 # command to run tests using coverage, e.g. python setup.py test
 script: coverage run --source cast runtests.py
