@@ -76,6 +76,7 @@ dev = [
     "django_extensions",
     "isort",
     "jupyter",
+    "mypy",
     "nb-black",
     "rich",
     "tox",
