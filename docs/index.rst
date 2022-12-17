@@ -1,20 +1,12 @@
-.. Django Cast documentation master file, created by
-   sphinx-quickstart on Sat Dec 17 14:30:18 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Django Cast
+===========
 
-Welcome to Django Cast's documentation!
-=======================================
+Welcome to the Django Cast documentation! Django Cast is blogging / podcasting
+package for Django based on `Wagtail <https://wagtail.org/>`_.
+
+This documentation is still in development, and will be patchy while Django Cast is
+in alpha.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
