@@ -13,10 +13,19 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 
 ## Key Features
 - Sharp responsive images via [wagtail-srcset](https://github.com/ephes/wagtail_srcset)
+- Wagtail as CMS makes it possible to let non-technical people manage the content (blogposts, podcast episodes, ...)
 - Podcast support: this packages powers [python-podcast.de](https://python-podcast.de/show) since 2018
 - Video support - not as sophisticated as image / audio support, but it works 🤗
-- Comments via [django-fluent-comments](https://github.com/django-fluent/django-fluent-comments) and an integrated moderating spam filter
+- Comments via [django-fluent-comments](https://github.com/django-fluent/django-fluent-comments) and a build in moderating spam filter
+- Full-text search via [django-watson](https://github.com/etianen/django-watson)
 
 ## Deployment
 
 See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/installation).
+
+## Roadmap
+
+Although switching to Wagtail was a big step, there is still a lot to do. Things that are on the roadmap:
+- Improve the documentation
+- Code blocks for the Wagtail page editor
+- Design improvements for the default theme (it's still bootstrap 4 atm)
