@@ -21,7 +21,7 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 
 ## Deployment
 
-See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/installation).
+See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/installation.html).
 
 ## Roadmap
 
@@ -33,4 +33,4 @@ Although switching to Wagtail was a big step, there is still a lot to do. Things
 
 ## Contributing
 
-If you'd like to contribute, please read [our contributing docs](https://django-cast.readthedocs.io/en/develop/contributing).
+If you'd like to contribute, please read [our contributing docs](https://django-cast.readthedocs.io/en/develop/contributing.html).
