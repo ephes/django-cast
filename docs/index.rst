@@ -10,3 +10,5 @@ fill since Django Cast switched to Wagtail.
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   installation
