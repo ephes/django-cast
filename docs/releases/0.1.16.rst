@@ -1,0 +1,4 @@
+0.1.16 (2019-03-23)
++++++++++++++++++++
+
+* Finally, rtfd is working again, including screencast

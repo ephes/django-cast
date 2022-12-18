@@ -1,0 +1,4 @@
+0.1.26 (2019-05-23)
++++++++++++++++++++
+
+* Bugfix: i18n should now work, finally!!1 duh

@@ -1,0 +1,6 @@
+0.1.23 (2019-05-16)
++++++++++++++++++++
+
+* Comment en/disabling per site/blog/post
+* Fix duration extraction and small issues with the installation docs @jnns
+* Support for comments by @oryon-dominik

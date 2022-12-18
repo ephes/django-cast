@@ -1,0 +1,4 @@
+0.1.11 (2019-03-21)
++++++++++++++++++++
+
+* Fixed requirements for package

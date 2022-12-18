@@ -1,0 +1,4 @@
+0.1.30 (2020-10-25)
++++++++++++++++++++
+* fixed some logfile parsing bug
+* tried to add wagtail but removed it again

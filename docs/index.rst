@@ -13,3 +13,4 @@ fill since Django Cast switched to Wagtail.
 
    installation
    contributing
+   releases/index

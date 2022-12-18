@@ -1,0 +1,6 @@
+0.1.22 (2019-04-28)
++++++++++++++++++++
+
+* Use proper time field for chaptermark start instead of char
+* Improved test coverage
+* Improved video dimension handling for handbrake generated portrait videos

@@ -1,0 +1,4 @@
+0.1.13 (2019-03-22)
++++++++++++++++++++
+
+* Release to update read the docs

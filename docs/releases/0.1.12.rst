@@ -1,0 +1,4 @@
+0.1.12 (2019-03-22)
++++++++++++++++++++
+
+* Improved installation documentation

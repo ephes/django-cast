@@ -1,0 +1,3 @@
+0.1.29 (2020-01-03)
++++++++++++++++++++
+* Use poetry instead of requirements.txt and setup.py
