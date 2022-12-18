@@ -12,3 +12,4 @@ fill since Django Cast switched to Wagtail.
    :caption: Contents:
 
    installation
+   contributing

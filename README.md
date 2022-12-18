@@ -26,6 +26,11 @@ See [the deployment documentation](https://django-cast.readthedocs.io/en/develop
 ## Roadmap
 
 Although switching to Wagtail was a big step, there is still a lot to do. Things that are on the roadmap:
+
 - Improve the documentation
 - Code blocks for the Wagtail page editor
 - Design improvements for the default theme (it's still bootstrap 4 atm)
+
+## Contributing
+
+If you'd like to contribute, please read [our contributing docs](https://django-cast.readthedocs.io/en/develop/contributing).
