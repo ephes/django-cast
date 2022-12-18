@@ -19,4 +19,4 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 
 ## Deployment
 
-See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/).
+See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/installation).
