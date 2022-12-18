@@ -1,6 +1,8 @@
 0.2.0 (2022-12-18)
 +++++++++++++++++++
 
+This release took a long time. I can't even remember when exactly I started working on this. Some years ago I guess 😁.
+
 * CMS based on wagtail instead of custom template tags
 * Using flit instead of poetry
 * Updates of bootstrap / jquery etc
