@@ -13,4 +13,5 @@ fill since Django Cast switched to Wagtail.
 
    installation
    contributing
+   spamfilter
    releases/index
