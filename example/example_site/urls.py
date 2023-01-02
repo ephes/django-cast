@@ -24,7 +24,7 @@ urlpatterns = [
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
     # Cast
-    path("api/api-token-auth/", authtokenviews.obtain_auth_token),
+    path("api/api-token-auth/", authtokenviews.obtain_auth_token, name="api-token-auth"),
     path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
     path("docs/", include_docs_urls(title="My Blog API service")),
     # Cast

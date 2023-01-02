@@ -148,6 +148,28 @@ class TestRequest:
         assert "results" in r.json()
 
 
+class TestCommentTraining:
+    @classmethod
+    def setup_class(cls):
+        cls.url = reverse("cast:api:comment_training_data")
+
+    @pytest.mark.django_db
+    def test_comment_training_endpoint_without_authentication(self, api_client):
+        """Check for permission denied if trying to access the endpoint without being authenticated."""
+        r = api_client.get(self.url, format="json")
+        assert r.status_code == 403
+
+    @pytest.mark.django_db
+    def test_comment_training_endpoint_with_authentication(self, api_client):
+        """Check for result when accessing the endpoint being logged in."""
+        user = UserFactory()
+        api_client.login(username=user.username, password="password")
+        r = api_client.get(self.url, format="json")
+        # dont redirect to login page
+        assert r.status_code == 200
+        assert r.json() == []
+
+
 #    @pytest.mark.django_db
 #    def test_request_list_endpoint_non_bulk_insert(self, api_client, access_log_path):
 #        user = UserFactory()

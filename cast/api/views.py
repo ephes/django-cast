@@ -2,6 +2,7 @@ import logging
 from collections import OrderedDict
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import JsonResponse
 from django.urls import reverse
 from django.views.generic import CreateView
 from rest_framework import generics, status
@@ -10,9 +11,10 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ListSerializer
+from rest_framework.views import APIView
 
 from ..forms import VideoForm
-from ..models import Audio, Request, Video
+from ..models import Audio, Request, SpamFilter, Video
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -36,6 +38,7 @@ def api_root(request):
         ("videos", request.build_absolute_uri(reverse("cast:api:video_list"))),
         ("audios", request.build_absolute_uri(reverse("cast:api:audio_list"))),
         ("requests", request.build_absolute_uri(reverse("cast:api:request_list"))),
+        ("comment_training_data", request.build_absolute_uri(reverse("cast:api:comment_training_data"))),
     )
     return Response(OrderedDict(root_api_urls))
 
@@ -112,3 +115,11 @@ class RequestListView(generics.ListCreateAPIView):
             Request.objects.bulk_create(requests)
         else:
             serializer.save()
+
+
+class CommentTrainingDataView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        train = SpamFilter.get_training_data_comments()
+        return JsonResponse(train, safe=False)  # safe=False allows serializing lists

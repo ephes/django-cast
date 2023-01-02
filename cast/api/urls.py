@@ -27,4 +27,6 @@ urlpatterns = [
     ),
     # request
     path("requests/", views.RequestListView.as_view(), name="request_list"),
+    # comment training data
+    path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment_training_data"),
 ]
