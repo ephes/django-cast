@@ -1,15 +1,20 @@
 from datetime import timedelta
 
+import pytest
 from django.urls import reverse
 
-import pytest
-
 from .factories import UserFactory
-
 
 # from cast.access_log import pandas_rows_to_dict
 # from cast.access_log import get_last_request_position
 # from cast.access_log import get_dataframe_from_position
+
+
+def test_api_root(api_client):
+    """Test that the API root returns a 200."""
+    url = reverse("cast:api:root")
+    r = api_client.get(url)
+    assert r.status_code == 200
 
 
 class TestBlogVideo:

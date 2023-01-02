@@ -1,11 +1,9 @@
 import logging
-
 from collections import OrderedDict
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse
 from django.views.generic import CreateView
-
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
@@ -23,7 +21,6 @@ from .serializers import (
 )
 from .viewmixins import AddRequestUserMixin, FileUploadResponseMixin
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -34,8 +31,8 @@ def api_root(request):
     If you add any object types, add them here!
     """
     root_api_urls = (
-        ("images", request.build_absolute_uri(reverse("cast:api:image_list"))),
-        ("galleries", request.build_absolute_uri(reverse("cast:api:gallery_list"))),
+        # ("images", request.build_absolute_uri(reverse("cast:api:image_list"))),
+        # ("galleries", request.build_absolute_uri(reverse("cast:api:gallery_list"))),
         ("videos", request.build_absolute_uri(reverse("cast:api:video_list"))),
         ("audios", request.build_absolute_uri(reverse("cast:api:audio_list"))),
         ("requests", request.build_absolute_uri(reverse("cast:api:request_list"))),
