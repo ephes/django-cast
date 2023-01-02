@@ -2,6 +2,7 @@ import json
 import re
 from collections import defaultdict
 
+from bs4 import BeautifulSoup
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from model_utils.models import TimeStampedModel
@@ -127,10 +128,28 @@ class SpamFilter(TimeStampedModel):
 
     @classmethod
     def comment_to_message(cls, comment):
-        return f"{comment.name} {comment.title} {comment.comment}"
+        return f"{comment.name} {comment.email} {comment.title} {comment.comment}"
+
+    @staticmethod
+    def post_to_message(post):
+        html_blocks = []
+        for block in post.body:
+            html_blocks.append(block.render())
+        soup = BeautifulSoup("\n".join(html_blocks))
+        body_text = soup.get_text()
+        return "ham", f"{post.title} {body_text}"
 
     @classmethod
-    def get_training_data_comments(cls):
+    def get_training_data_posts(cls):
+        from cast.models import Post
+
+        train = []
+        for post in Post.objects.all():
+            train.append(cls.post_to_message(post))
+        return train
+
+    @classmethod
+    def get_training_data_comments(cls, include_posts=True):
         """
         Get all comments from database and label them as spam or ham.
 
@@ -145,14 +164,16 @@ class SpamFilter(TimeStampedModel):
             label = "ham" if (comment.is_public and not comment.is_removed) else "spam"
             message = cls.comment_to_message(comment)
             train.append((label, message))
+        if include_posts:
+            train.extend(cls.get_training_data_posts())
         return train
 
-    def retrain_from_scratch(self):
+    def retrain_from_scratch(self, include_posts=True):
         """
         Retrain on all comments for now. Later on there might be
-        different spamfilters for different blogs/sites..
+        different spam filters for different blogs/sites..
         """
-        train = SpamFilter.get_training_data_comments()
+        train = SpamFilter.get_training_data_comments(include_posts=include_posts)
         model = NaiveBayes().fit(train)
         self.model = model
         self.save()
