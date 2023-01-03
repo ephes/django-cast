@@ -35,6 +35,7 @@ class NaiveBayes:
         else:
             self.word_label_counts = word_label_counts
         self.number_of_words = self.get_number_of_words(self.word_label_counts)
+        self.number_of_all_words = 0
 
     @staticmethod
     def get_label_counts(messages):
@@ -65,14 +66,15 @@ class NaiveBayes:
         self.set_prior_probabilities(self.get_label_counts(messages))
         self.set_word_label_counts(messages)
         self.number_of_words = self.get_number_of_words(self.word_label_counts)
+        self.number_of_all_words = sum(self.number_of_words.values())
         return self
 
     @staticmethod
-    def update_probabilities(probabilities, counts_per_label, number_of_words):
+    def update_probabilities(probabilities, counts_per_label, number_of_all_words):
         updated_probabilities = {}
         for label, prior_probability in probabilities.items():
             word_count = counts_per_label.get(label, 0.5)
-            word_probability = word_count / number_of_words[label]
+            word_probability = word_count / number_of_all_words
             updated_probabilities[label] = prior_probability * word_probability
         return updated_probabilities
 
@@ -80,7 +82,9 @@ class NaiveBayes:
         probabilities = dict(self.prior_probabilities)
         for word in self.tokenize(message):
             counts_per_label = self.word_label_counts.get(word, {})
-            probabilities = normalize(self.update_probabilities(probabilities, counts_per_label, self.number_of_words))
+            probabilities = normalize(
+                self.update_probabilities(probabilities, counts_per_label, self.number_of_all_words)
+            )
         return probabilities
 
     def predict_label(self, message):
