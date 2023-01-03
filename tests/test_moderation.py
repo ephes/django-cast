@@ -124,5 +124,5 @@ def test_spamfilter_retrain_from_scratch(comment, comment_spam):
     spamfilter.save()
     assert spamfilter.model.prior_probabilities == {}
 
-    spamfilter.retrain_from_scratch(include_posts=False)
+    spamfilter.retrain_from_scratch()
     assert spamfilter.model.prior_probabilities == {"ham": 0.5, "spam": 0.5}
