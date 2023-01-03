@@ -1,4 +1,5 @@
 import json
+import random
 import re
 from collections import defaultdict
 
@@ -146,6 +147,102 @@ def get_training_data_from_comments():
         message = comment_to_message(comment)
         train.append((label, message))
     return train
+
+
+def flatten(items):
+    """Flatten a list of lists into one list."""
+    return [item for sublist in items for item in sublist]
+
+
+def precision_recall_f1(result):
+    tp = result["true_positive"]
+    fp = result["false_positive"]
+    fn = result["false_negative"]
+    precision = tp / (tp + fp)
+    recall = tp / (tp + fn)
+    f1 = 2 * (precision * recall) / (precision + recall)
+    return precision, recall, f1
+
+
+def show_result(label_results):
+    for label, result in label_results.items():
+        precision, recall, f1 = precision_recall_f1(result)
+        print(f"{label: >4} f1: {f1:.3f} precision: {precision:.3f} recall: {recall:.3f}")
+
+
+class Evaluation:
+    def __init__(self, model_class=NaiveBayes, num_folds=3):
+        self.model_class = model_class
+        self.num_folds = num_folds
+
+    @staticmethod
+    def split_into_labels(messages):
+        data_per_label = defaultdict(list)
+        for label, message in messages:
+            data_per_label[label].append((label, message))
+        return data_per_label
+
+    @staticmethod
+    def split_into_folds(messages, folds):
+        k, m = divmod(len(messages), folds)
+        return [messages[i * k + min(i, m) : (i + 1) * k + min(i + 1, m)] for i in range(folds)]  # noqa: E203
+
+    def stratified_split_into_folds(self, messages):
+        data_per_label = self.split_into_labels(messages)
+        labeled_folds = []
+        for label, labeled_messages in data_per_label.items():
+            random.shuffle(labeled_messages)
+            labeled_folds.append(self.split_into_folds(labeled_messages, self.num_folds))
+        folds = []
+        for nested_fold in zip(*labeled_folds):
+            folds.append(flatten(nested_fold))
+        return folds
+
+    @staticmethod
+    def generate_train_test(folds):
+        for i, n in enumerate(folds):
+            all_but_n = flatten(folds[:i]) + flatten(folds[i + 1 :])  # noqa: E203
+            yield n, all_but_n
+
+    @staticmethod
+    def generate_outcomes(model, test_messages):
+        outcomes = (("true", "false"), ("positive", "negative"))
+        possible_results = [f"{a}_{b}" for b in outcomes[1] for a in outcomes[0]]
+        result_template = dict.fromkeys(possible_results, 0)
+
+        labels = set(model.prior_probabilities)
+        label_results = {label: dict(result_template) for label in labels}
+
+        for label, message in test_messages:
+            predicted = model.predict_label(message)
+            if label == predicted:
+                label_results[label]["true_positive"] += 1
+            else:
+                label_results[label]["false_negative"] += 1
+                label_results[predicted]["false_positive"] += 1
+        return label_results
+
+    @staticmethod
+    def calc_performance(results):
+        performance = {}
+        for label, result in results.items():
+            precision, recall, f1 = precision_recall_f1(result)
+            performance[label] = {"precision": precision, "recall": recall, "f1": f1}
+        return performance
+
+    def evaluate(self, messages):
+        folds = self.stratified_split_into_folds(messages)
+        results = None
+        for test, train in self.generate_train_test(folds):
+            model = self.model_class().fit(train)
+            label_result = self.generate_outcomes(model, test)
+            if results is None:
+                results = label_result
+            else:
+                for label, counts in label_result.items():
+                    for name, count in counts.items():
+                        results[label][name] += count
+        return self.calc_performance(results)
 
 
 class SpamFilter(TimeStampedModel):
