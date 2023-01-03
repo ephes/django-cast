@@ -26,8 +26,10 @@ def normalize(probabilities):
 
 
 class NaiveBayes:
-    def __init__(self, tokenize=regex_tokenize, prior_probabilities={}, word_label_counts=None):
+    def __init__(self, tokenize=regex_tokenize, prior_probabilities=None, word_label_counts=None):
         self.tokenize = tokenize
+        if prior_probabilities is None:
+            prior_probabilities = {}
         self.prior_probabilities = prior_probabilities
         if word_label_counts is None:
             self.word_label_counts = defaultdict(lambda: defaultdict(int))
