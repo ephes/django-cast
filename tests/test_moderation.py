@@ -1,6 +1,11 @@
 import pytest
 
-from cast.models.moderation import NaiveBayes, SpamFilter, normalize
+from cast.models.moderation import (
+    NaiveBayes,
+    SpamFilter,
+    get_training_data_from_comments,
+    normalize,
+)
 
 
 @pytest.mark.parametrize(
@@ -124,5 +129,5 @@ def test_spamfilter_retrain_from_scratch(comment, comment_spam):
     spamfilter.save()
     assert spamfilter.model.prior_probabilities == {}
 
-    spamfilter.retrain_from_scratch()
+    spamfilter.retrain_from_scratch(get_training_data_from_comments())
     assert spamfilter.model.prior_probabilities == {"ham": 0.5, "spam": 0.5}

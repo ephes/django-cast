@@ -14,7 +14,7 @@ from rest_framework.serializers import ListSerializer
 from rest_framework.views import APIView
 
 from ..forms import VideoForm
-from ..models import Audio, Request, SpamFilter, Video
+from ..models import Audio, Request, Video, get_training_data_from_comments
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -121,5 +121,5 @@ class CommentTrainingDataView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request):
-        train = SpamFilter.get_training_data_comments()
+        train = get_training_data_from_comments()
         return JsonResponse(train, safe=False)  # safe=False allows serializing lists

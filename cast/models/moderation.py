@@ -4,6 +4,7 @@ from collections import defaultdict
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
+from django_comments import get_model as get_comments_model
 from model_utils.models import TimeStampedModel
 
 token_pattern = re.compile(r"(?u)\b\w\w+\b")
@@ -127,38 +128,36 @@ class ModelDecoder(json.JSONDecoder):
         return obj
 
 
+def comment_to_message(comment):
+    return f"{comment.name} {comment.email} {comment.title} {comment.comment}"
+
+
+def get_training_data_from_comments():
+    """
+    Get all comments from database and label them as spam or ham.
+
+    If a comment is public and not removed, it is ham. In all other
+    cases it is labeled as spam.
+    """
+    comment_model = get_comments_model()
+    train = []
+    for comment in comment_model.objects.all():
+        label = "ham" if (comment.is_public and not comment.is_removed) else "spam"
+        message = comment_to_message(comment)
+        train.append((label, message))
+    return train
+
+
 class SpamFilter(TimeStampedModel):
     name = models.CharField(unique=True, max_length=128)
     model = models.JSONField(verbose_name="Spamfilter Model", default=dict, encoder=ModelEncoder, decoder=ModelDecoder)
+    # performance = models.JSONField(verbose_name="Performance Indicators", default=dict)
 
-    @classmethod
-    def comment_to_message(cls, comment):
-        return f"{comment.name} {comment.email} {comment.title} {comment.comment}"
-
-    @classmethod
-    def get_training_data_comments(cls):
-        """
-        Get all comments from database and label them as spam or ham.
-
-        If a comment is public and not removed, it is ham. In all other
-        cases it is labeled as spam.
-        """
-        from django_comments import get_model as get_comments_model
-
-        comment_model = get_comments_model()
-        train = []
-        for comment in comment_model.objects.all():
-            label = "ham" if (comment.is_public and not comment.is_removed) else "spam"
-            message = cls.comment_to_message(comment)
-            train.append((label, message))
-        return train
-
-    def retrain_from_scratch(self):
+    def retrain_from_scratch(self, train):
         """
         Retrain on all comments for now. Later on there might be
         different spam filters for different blogs/sites..
         """
-        train = SpamFilter.get_training_data_comments()
         model = NaiveBayes().fit(train)
         self.model = model
         self.save()
