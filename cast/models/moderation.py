@@ -232,6 +232,7 @@ class Evaluation:
 class SpamFilter(TimeStampedModel):
     name = models.CharField(unique=True, max_length=128)
     model = models.JSONField(verbose_name="Spamfilter Model", default=dict, encoder=ModelEncoder, decoder=ModelDecoder)
+    performance = models.JSONField(verbose_name="Spamfilter Performance Indicators", default=dict)
 
     @classmethod
     def comment_to_message(cls, comment):
@@ -256,6 +257,7 @@ class SpamFilter(TimeStampedModel):
         """
         model = NaiveBayes().fit(train)
         self.model = model
+        self.performance = Evaluation().evaluate(train)
         self.save()
 
     @classmethod

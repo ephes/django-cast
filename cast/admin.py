@@ -83,6 +83,15 @@ def retrain(modeladmin, request, queryset):
 
 @admin.register(SpamFilter)
 class SpamfilterModelAdmin(admin.ModelAdmin):
-    list_display = ("pk", "name")
+    readonly_fields = ["spam", "ham"]
+    list_display = ["pk", "name"] + readonly_fields
     fields = ("name",)
     actions = [retrain]
+
+    @staticmethod
+    def spam(obj):
+        return obj.performance["spam"]
+
+    @staticmethod
+    def ham(obj):
+        return obj.performance["ham"]
