@@ -141,12 +141,11 @@ class SpamFilter(TimeStampedModel):
             train.append((label, message))
         return train
 
-    def retrain_from_scratch(self):
+    def retrain_from_scratch(self, train):
         """
         Retrain on all comments for now. Later on there might be
         different spamfilters for different blogs/sites..
         """
-        train = SpamFilter.get_training_data_comments()
         model = NaiveBayes().fit(train)
         self.model = model
         self.save()

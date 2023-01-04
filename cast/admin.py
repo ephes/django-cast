@@ -14,7 +14,6 @@ from .models import (  # Image,
     Video,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -23,51 +22,40 @@ class AdminUserMixin:
         return {"user": request.user, "author": request.user}
 
 
+@admin.register(Blog)
 class BlogModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("title", "owner")
 
 
-admin.site.register(Blog, BlogModelAdmin)
-
-
+@admin.register(Post)
 class PostModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("title", "owner", "blog")
 
 
-admin.site.register(Post, PostModelAdmin)
-
-
+@admin.register(ItunesArtWork)
 class ItunesArtWorkModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("pk", "original")
     fields = ("original",)
 
 
-admin.site.register(ItunesArtWork, ItunesArtWorkModelAdmin)
-
-
+@admin.register(File)
 class FileModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("original", "user")
     fields = ("user", "original")
 
 
-admin.site.register(File, FileModelAdmin)
-
-
+@admin.register(Audio)
 class AudioAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus")
     fields = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus")
 
 
-admin.site.register(Audio, AudioAdmin)
-
-
+@admin.register(ChapterMark)
 class ChapterMarkModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("start", "title", "link", "image", "audio")
 
 
-admin.site.register(ChapterMark, ChapterMarkModelAdmin)
-
-
+@admin.register(Video)
 class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("pk", "user")
 
@@ -80,27 +68,21 @@ class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):
         super().save_model(request, obj, form, change)
 
 
-admin.site.register(Video, VideoModelAdmin)
-
-
+@admin.register(Gallery)
 class GalleryModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("pk",)
     fields = ("user", "images")
 
 
-admin.site.register(Gallery, GalleryModelAdmin)
-
-
 @admin.action(description="Retrain model from scratch using marked comments")
 def retrain(modeladmin, request, queryset):
     for spamfilter in queryset:
-        spamfilter.retrain_from_scratch()
+        train = spamfilter.get_training_data_comments()
+        spamfilter.retrain_from_scratch(train)
 
 
+@admin.register(SpamFilter)
 class SpamfilterModelAdmin(admin.ModelAdmin):
     list_display = ("pk", "name")
     fields = ("name",)
     actions = [retrain]
-
-
-admin.site.register(SpamFilter, SpamfilterModelAdmin)
