@@ -34,8 +34,8 @@ def api_root(request):
     If you add any object types, add them here!
     """
     root_api_urls = (
-        ("images", request.build_absolute_uri(reverse("cast:api:image_list"))),
-        ("galleries", request.build_absolute_uri(reverse("cast:api:gallery_list"))),
+        # ("images", request.build_absolute_uri(reverse("cast:api:image_list"))),
+        # ("galleries", request.build_absolute_uri(reverse("cast:api:gallery_list"))),
         ("videos", request.build_absolute_uri(reverse("cast:api:video_list"))),
         ("audios", request.build_absolute_uri(reverse("cast:api:audio_list"))),
         ("requests", request.build_absolute_uri(reverse("cast:api:request_list"))),

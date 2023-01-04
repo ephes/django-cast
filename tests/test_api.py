@@ -12,6 +12,12 @@ from .factories import UserFactory
 # from cast.access_log import get_dataframe_from_position
 
 
+def test_api_root(api_client):
+    url = reverse("cast:api:root")
+    r = api_client.get(url)
+    assert r.status_code == 200
+
+
 class TestBlogVideo:
     @classmethod
     def setup_class(cls):

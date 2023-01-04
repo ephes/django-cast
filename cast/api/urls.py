@@ -12,7 +12,7 @@ urlpatterns = [
     path("schema/", schema_view),
     path("", views.api_root, name="root"),
     # video
-    path("videos/?", views.VideoListView.as_view(), name="video_list"),
+    path("videos/", views.VideoListView.as_view(), name="video_list"),
     re_path(r"^videos/(?P<pk>\d+)/?$", views.VideoDetailView.as_view(), name="video_detail"),
     path(
         "upload_video/",
@@ -20,7 +20,7 @@ urlpatterns = [
         name="upload_video",
     ),
     # audio
-    path("audio/?", views.AudioListView.as_view(), name="audio_list"),
+    path("audios/", views.AudioListView.as_view(), name="audio_list"),
     re_path(r"^audios/(?P<pk>\d+)/?$", views.AudioDetailView.as_view(), name="audio_detail"),
     re_path(
         r"^audios/podlove/(?P<pk>\d+)/?$",
@@ -28,5 +28,5 @@ urlpatterns = [
         name="audio_podlove_detail",
     ),
     # request
-    path("request/?", views.RequestListView.as_view(), name="request_list"),
+    path("request/", views.RequestListView.as_view(), name="request_list"),
 ]
