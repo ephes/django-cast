@@ -1,9 +1,7 @@
 from django.urls import path, re_path
-
 from rest_framework.schemas import get_schema_view
 
 from . import views
-
 
 app_name = "api"
 schema_view = get_schema_view(title="Cast API")
@@ -29,4 +27,6 @@ urlpatterns = [
     ),
     # request
     path("request/", views.RequestListView.as_view(), name="request_list"),
+    # comment training data
+    path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment-training-data"),
 ]

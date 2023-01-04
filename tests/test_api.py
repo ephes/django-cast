@@ -1,11 +1,9 @@
 from datetime import timedelta
 
+import pytest
 from django.urls import reverse
 
-import pytest
-
 from .factories import UserFactory
-
 
 # from cast.access_log import pandas_rows_to_dict
 # from cast.access_log import get_last_request_position
@@ -147,6 +145,27 @@ class TestRequest:
         # dont redirect to login page
         assert r.status_code == 200
         assert "results" in r.json()
+
+
+class TestCommentTrainingData:
+    @classmethod
+    def setup_class(cls):
+        cls.url = reverse("cast:api:comment-training-data")
+
+    @pytest.mark.django_db
+    def test_get_comment_training_data_without_authentication(self, api_client):
+        """Should not be accessible without authentication."""
+        r = api_client.get(self.url, format="json")
+        assert r.status_code == 403
+
+    @pytest.mark.django_db
+    def test_get_comment_training_data_with_authentication(self, api_client):
+        """Check for list result when accessing the training data endpoint being logged in."""
+        user = UserFactory()
+        api_client.login(username=user.username, password="password")
+        r = api_client.get(self.url, format="json")
+        assert r.status_code == 200
+        assert r.json() == []
 
 
 #    @pytest.mark.django_db
