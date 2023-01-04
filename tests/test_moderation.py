@@ -20,15 +20,15 @@ def test_initial_probabilities(train, expected_initial_probabilities):
     "probabilities, counts_per_label, number_of_words, expected",
     [
         ({}, {}, {}, {}),
-        ({"spam": 1}, {"spam": 10}, {"spam": 100}, {"spam": 0.1}),
+        ({"spam": 1}, {"spam": 10}, 100, {"spam": 0.1}),
         (
             {"spam": 1, "ham": 0.5},
             {"spam": 10, "ham": 5},
-            {"spam": 100, "ham": 50},
-            {"spam": 0.1, "ham": 0.05},
+            100,
+            {"spam": 0.1, "ham": 0.025},
         ),
         # no word count -> make sure probability is > 0
-        ({"spam": 1}, {}, {"spam": 100}, {"spam": 0.005}),
+        ({"spam": 1}, {}, 100, {"spam": 0.005}),
     ],
 )
 def test_predict_word_probabilities(probabilities, counts_per_label, number_of_words, expected):
@@ -39,7 +39,7 @@ def test_predict_word_probabilities(probabilities, counts_per_label, number_of_w
 
 @pytest.mark.parametrize(
     "message, expected_probabilities",
-    [("foo", {"ham": (1 / 3) * (0.5 / 2), "spam": (2 / 3) * (2 / 5)})],
+    [("foo", {"ham": (1 / 3) * (0.5 / 6), "spam": (2 / 3) * (2 / 6)})],
 )
 def test_predict(message, expected_probabilities):
     train = [
@@ -48,8 +48,10 @@ def test_predict(message, expected_probabilities):
         ("ham", "asdf csdf"),
     ]
     model = NaiveBayes().fit(train)
+    expected_probabilities = normalize(expected_probabilities)
     probabilities = model.predict(message)
-    assert probabilities == normalize(expected_probabilities)
+    for label, probability in probabilities.items():
+        assert probability == pytest.approx(expected_probabilities[label])
 
 
 @pytest.mark.parametrize(
@@ -63,6 +65,25 @@ def test_predict_label(train, message, expected_label):
     model = NaiveBayes().fit(train)
     label = model.predict_label(message)
     assert label == expected_label
+
+
+def test_lots_of_unknown_tokens_lead_to_ham_if_spam_has_more_words():
+    """
+    There was a bug calculating the probabilities of unknown tokens:
+
+    The probability for unknown tokens was calculated as 0.5 / number_of_words_in_class.
+    Since there are much more tokens in spam than in ham, the probability for unknown
+    tokens was much higher for ham than for spam. This lead to comments with lots of unknown tokens
+    to be classified as ham. Doh.
+    """
+    train = [
+        ("spam", " ".join([str(i) for i in range(100)])),
+        ("ham", "asdf bsdf"),
+    ]
+    model = NaiveBayes().fit(train)
+    message = "foo bar baz 87"  # should be spam because of 87
+    predicted_label = model.predict_label(message)
+    assert predicted_label == "spam"
 
 
 @pytest.mark.django_db()
