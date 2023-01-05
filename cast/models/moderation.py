@@ -27,8 +27,10 @@ def normalize(probabilities):
 
 
 class NaiveBayes:
-    def __init__(self, tokenize=regex_tokenize, prior_probabilities={}, word_label_counts=None):
+    def __init__(self, tokenize=regex_tokenize, prior_probabilities=None, word_label_counts=None):
         self.tokenize = tokenize
+        if prior_probabilities is None:
+            prior_probabilities = {}
         self.prior_probabilities = prior_probabilities
         if word_label_counts is None:
             self.word_label_counts = defaultdict(lambda: defaultdict(int))
@@ -253,7 +255,7 @@ class SpamFilter(TimeStampedModel):
     def retrain_from_scratch(self, train):
         """
         Retrain on all comments for now. Later on there might be
-        different spamfilters for different blogs/sites..
+        different spam filters for different blogs/sites..
         """
         model = NaiveBayes().fit(train)
         self.model = model

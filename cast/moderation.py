@@ -1,6 +1,6 @@
 from fluent_comments.moderation import FluentCommentsModerator
 
-from .models import SpamFilter
+from .models import SpamFilter, comment_to_message
 
 
 class Moderator(FluentCommentsModerator):
@@ -21,7 +21,7 @@ class Moderator(FluentCommentsModerator):
         return True
 
     def moderate(self, comment, content_object, request):
-        message = SpamFilter.comment_to_message(comment)
+        message = comment_to_message(comment)
         if self.spamfilter is not None:
             predicted_label = self.spamfilter.model.predict_label(message)
         else:

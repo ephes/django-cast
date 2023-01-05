@@ -85,6 +85,7 @@ class TestCommentModeration:
 
         class StubComment:
             name = "name"
+            email = "foo@example.com"
             title = "foobar title"
             comment = "some comment"
             is_removed = False

@@ -11,6 +11,7 @@ from .factories import UserFactory
 
 
 def test_api_root(api_client):
+    """Test that the API root returns a 200."""
     url = reverse("cast:api:root")
     r = api_client.get(url)
     assert r.status_code == 200
