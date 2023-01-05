@@ -244,9 +244,9 @@ class SpamFilter(TimeStampedModel):
     def get_training_data_comments(cls):
         from django_comments import get_model as get_comments_model
 
-        Comment = get_comments_model()
+        comment_class = get_comments_model()
         train = []
-        for comment in Comment.objects.all():
+        for comment in comment_class.objects.all():
             label = "ham" if (comment.is_public and not comment.is_removed) else "spam"
             message = cls.comment_to_message(comment)
             train.append((label, message))
