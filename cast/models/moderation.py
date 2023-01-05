@@ -248,7 +248,7 @@ class Evaluation:
 class SpamFilter(TimeStampedModel):
     name = models.CharField(unique=True, max_length=128)
     model = models.JSONField(verbose_name="Spamfilter Model", default=dict, encoder=ModelEncoder, decoder=ModelDecoder)
-    # performance = models.JSONField(verbose_name="Performance Indicators", default=dict)
+    performance = models.JSONField(verbose_name="Performance Indicators", default=dict)
 
     def retrain_from_scratch(self, train):
         """
@@ -257,6 +257,8 @@ class SpamFilter(TimeStampedModel):
         """
         model = NaiveBayes().fit(train)
         self.model = model
+        evaluator = Evaluation(model_class=NaiveBayes, num_folds=3)
+        self.performance = evaluator.evaluate(train)
         self.save()
 
     @classmethod
