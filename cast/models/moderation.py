@@ -27,9 +27,7 @@ def normalize(probabilities):
 
 
 class NaiveBayes:
-    def __init__(
-        self, tokenize=regex_tokenize, prior_probabilities=None, word_label_counts=None, number_of_all_words=None
-    ):
+    def __init__(self, tokenize=regex_tokenize, prior_probabilities=None, word_label_counts=None):
         self.tokenize = tokenize
         if prior_probabilities is None:
             prior_probabilities = {}
@@ -39,7 +37,7 @@ class NaiveBayes:
         else:
             self.word_label_counts = word_label_counts
         self.number_of_words = self.get_number_of_words(self.word_label_counts)
-        self.number_of_all_words = number_of_all_words
+        self.number_of_all_words = sum(self.number_of_words.values())
 
     @staticmethod
     def get_label_counts(messages):
@@ -102,7 +100,6 @@ class NaiveBayes:
             "class": "NaiveBayes",
             "prior_probabilities": self.prior_probabilities,
             "word_label_counts": self.word_label_counts,
-            "number_of_all_words": self.number_of_all_words,
         }
 
     def __eq__(self, other):
