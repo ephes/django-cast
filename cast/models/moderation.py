@@ -129,12 +129,15 @@ class ModelDecoder(json.JSONDecoder):
 
 
 class Evaluation:
+    """Simple cross validation evaluation."""
+
     def __init__(self, model_class=NaiveBayes, num_folds=3):
         self.model_class = model_class
         self.num_folds = num_folds
 
     @staticmethod
     def split_into_labels(messages):
+        """Split messages into a dict of labels and labeled messages."""
         data_per_label = defaultdict(list)
         for label, text in messages:
             data_per_label[label].append((label, text))
@@ -153,6 +156,7 @@ class Evaluation:
         return folds
 
     def stratified_split_into_folds(self, messages):
+        """Split the messages in a stratified way into num_folds folds."""
         data_per_label = self.split_into_labels(messages)
         labeled_folds = []
         for label, labeled_messages in data_per_label.items():
@@ -167,6 +171,7 @@ class Evaluation:
 
     @staticmethod
     def generate_train_test(folds):
+        """From a list of n cross-validation folds, generate n train and test sets."""
         for i, n in enumerate(folds):
             all_but_n = []
             for j, m in enumerate(folds):
@@ -176,6 +181,7 @@ class Evaluation:
 
     @staticmethod
     def evaluate_model(model, test_messages):
+        """Build a confusion matrix for the model on the test messages."""
         outcomes = (("true", "false"), ("positive", "negative"))
         possible_results = [f"{a}_{b}" for b in outcomes[1] for a in outcomes[0]]
         result_template = dict.fromkeys(possible_results, 0)
@@ -194,6 +200,7 @@ class Evaluation:
 
     @staticmethod
     def get_precision_recall_f1(result):
+        """Actual implementation of precision, recall and f1 from tp, fp, fn."""
         tp = result["true_positive"]
         fp = result["false_positive"]
         fn = result["false_negative"]
@@ -203,6 +210,7 @@ class Evaluation:
         return precision, recall, f1
 
     def calc_performance(self, results):
+        """Calc precision, recall and f1 for each label."""
         performance = {}
         for label, result in results.items():
             precision, recall, f1 = self.get_precision_recall_f1(result)
@@ -215,7 +223,8 @@ class Evaluation:
 
     def evaluate(self, messages):
         """
-        Evaluate the model on the given messages.
+        Evaluate the model on the given messages. Use stratified cross validation
+        to determine precision, recall and f1 score.
         """
         folds = self.stratified_split_into_folds(messages)
         results = None
@@ -232,6 +241,17 @@ class Evaluation:
 
 
 class SpamFilter(TimeStampedModel):
+    """
+    A Django model that stores a trained spam filter.
+
+    The model itself is stored in the model JSONField. There's a second JSONField
+    where some performance indicators like precision, recall and f1 are stored.
+
+    There are some helper methods to generate training data from comments and
+    retrain the model from scratch for example when a significant amount of
+    new training data was added.
+    """
+
     name = models.CharField(unique=True, max_length=128)
     model = models.JSONField(verbose_name="Spamfilter Model", default=dict, encoder=ModelEncoder, decoder=ModelDecoder)
     performance = models.JSONField(verbose_name="Spamfilter Performance Indicators", default=dict)
@@ -242,6 +262,9 @@ class SpamFilter(TimeStampedModel):
 
     @classmethod
     def get_training_data_comments(cls):
+        """
+        Keep this as a classmethod in SpamFilter to make it available for all code importing SpamFilter.
+        """
         from django_comments import get_model as get_comments_model
 
         comment_class = get_comments_model()
