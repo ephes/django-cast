@@ -258,7 +258,7 @@ class SpamFilter(TimeStampedModel):
 
     @classmethod
     def comment_to_message(cls, comment):
-        return f"{comment.name} {comment.title} {comment.comment}"
+        return f"{comment.name} {comment.email} {comment.title} {comment.comment}"
 
     @classmethod
     def get_training_data_comments(cls):
