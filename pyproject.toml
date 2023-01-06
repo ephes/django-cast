@@ -9,7 +9,7 @@ authors = [
     {name = "Dominik Geldmacher", email = "oryon@cyberise.de"},
 ]
 dynamic = ["version", "description"]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 keywords = [
     "blog",
     "podcast",
@@ -27,7 +27,6 @@ classifiers = [
     "Environment :: Web Environment",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
