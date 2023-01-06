@@ -33,7 +33,6 @@ Although switching to Wagtail was a big step, there is still a lot to do. Things
 - Improve the documentation
 - Code blocks for the Wagtail page editor
 - Design improvements for the default theme (it's still bootstrap 4 atm)
-- Make spam filter threshold configurable
 - Add tags for posts (TIL, etc.) and navigation
 - Update the [Podlove Web Player](https://podlove.org/podlove-web-player/) version
 
