@@ -116,3 +116,26 @@ class TestPostAdd:
         assert post.galleries.count() == 1
         assert post.galleries.first() == gallery
         assert list(post.galleries.first().images.all()) == list(gallery.images.all())
+
+    def test_submit_add_form_post_authenticated_with_code(self, client, post_data_wagtail, blog):
+        _ = client.login(username=blog.owner.username, password=blog.owner._password)
+        add_url = reverse("wagtailadmin_pages:add", args=("cast", "post", blog.id))
+        post_data_wagtail["body-0-value-0-type"] = "code"
+        post_data_wagtail["body-0-value-0-value-language"] = "python"
+        post_data_wagtail["body-0-value-0-value-source"] = 'def hello_world():\n    print("Hello World!")'
+
+        r = client.post(add_url, post_data_wagtail)
+
+        # make sure we are redirected to blog index
+        assert r.status_code == 302
+        assert r.url == reverse("wagtailadmin_explore", args=(blog.id,))
+
+        post = Post.objects.get(slug=post_data_wagtail["slug"])
+
+        # make sure there was a post added to the database
+        assert post.title == post_data_wagtail["title"]
+
+        # make sure there was a code block added
+        assert post.body.raw_data[0]["value"][0]["value"]["language"] == "python"
+        assert "hello_world" in post.body.raw_data[0]["value"][0]["value"]["source"]
+        assert "highlight" in str(post.body)
