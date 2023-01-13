@@ -1,9 +1,8 @@
 from django.urls import include, path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-
+from wagtail import hooks
 from wagtail.admin.menu import MenuItem
-from wagtail.core import hooks
 from wagtail.core.permission_policies.collections import (
     CollectionOwnershipPermissionPolicy,
 )
