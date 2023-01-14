@@ -18,12 +18,13 @@ def test_api_root(api_client):
 
 
 class TestBlogVideo:
+    pytestmark = pytest.mark.django_db
+
     @classmethod
     def setup_class(cls):
         cls.list_url = reverse("cast:api:video_list")
         cls.detail_url = reverse("cast:api:video_detail", kwargs={"pk": 1})
 
-    @pytest.mark.django_db
     def test_video_list_endpoint_without_authentication(self, api_client):
         """Check for not authenticated status code if trying to access the list
         endpoint without being authenticated.
@@ -31,7 +32,6 @@ class TestBlogVideo:
         r = api_client.get(self.list_url, format="json")
         assert r.status_code == 403
 
-    @pytest.mark.django_db
     def test_video_detail_endpoint_without_authentication(self, api_client):
         """Check for not authenticated status code if trying to access the
         detail endpoint without being authenticated.
@@ -39,7 +39,6 @@ class TestBlogVideo:
         r = api_client.get(self.detail_url, format="json")
         assert r.status_code == 403
 
-    @pytest.mark.django_db
     def test_video_list_endpoint_with_authentication(self, api_client):
         """Check for list result when accessing the list endpoint
         being logged in.
@@ -53,12 +52,13 @@ class TestBlogVideo:
 
 
 class TestBlogAudio:
+    pytestmark = pytest.mark.django_db
+
     @classmethod
     def setup_class(cls):
         cls.list_url = reverse("cast:api:audio_list")
         cls.detail_url = reverse("cast:api:audio_detail", kwargs={"pk": 1})
 
-    @pytest.mark.django_db
     def test_audio_list_endpoint_without_authentication(self, api_client):
         """Check for not authenticated status code if trying to access the list
         endpoint without being authenticated.
@@ -66,7 +66,6 @@ class TestBlogAudio:
         r = api_client.get(self.list_url, format="json")
         assert r.status_code == 403
 
-    @pytest.mark.django_db
     def test_audio_detail_endpoint_without_authentication(self, api_client):
         """Check for not authenticated status code if trying to access the
         detail endpoint without being authenticated.
@@ -74,7 +73,6 @@ class TestBlogAudio:
         r = api_client.get(self.detail_url, format="json")
         assert r.status_code == 403
 
-    @pytest.mark.django_db
     def test_audio_list_endpoint_with_authentication(self, api_client):
         """Check for list result when accessing the list endpoint
         being logged in.
@@ -88,14 +86,14 @@ class TestBlogAudio:
 
 
 class TestPodcastAudio:
-    @pytest.mark.django_db
+    pytestmark = pytest.mark.django_db
+
     def test_podlove_detail_endpoint_without_authentication(self, api_client, audio):
         """Should be accessible without authentication."""
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         assert r.status_code == 200
 
-    @pytest.mark.django_db
     def test_podlove_detail_endpoint_duration(self, api_client, audio):
         """Test whether microseconds get stripped away from duration via api - they have
         to be for podlove player to work.
@@ -108,7 +106,6 @@ class TestPodcastAudio:
         r = api_client.get(podlove_detail_url, format="json")
         assert "." not in r.json()["duration"]
 
-    @pytest.mark.django_db
     def test_podlove_detail_endpoint_includes_link_to_episode(self, api_client, podcast_episode):
         """Test whether the podlove detail endpoint includes a link to the episode."""
         audio = podcast_episode.podcast_audio
@@ -130,7 +127,6 @@ class TestPodcastAudio:
         assert "link" in podlove_data
         assert podlove_data["link"] == podcast_episode.full_url
 
-    @pytest.mark.django_db
     def test_podlove_detail_endpoint_chaptermarks(self, api_client, audio, chaptermarks):
         """Test whether chaptermarks get delivered via podlove endpoint."""
         print("chaptermarks: ", chaptermarks)
@@ -147,17 +143,17 @@ class TestPodcastAudio:
 
 
 class TestRequest:
+    pytestmark = pytest.mark.django_db
+
     @classmethod
     def setup_class(cls):
         cls.list_url = reverse("cast:api:request_list")
 
-    @pytest.mark.django_db
     def test_request_list_endpoint_without_authentication(self, api_client):
         """Should not be accessible without authentication."""
         r = api_client.get(self.list_url, format="json")
         assert r.status_code == 403
 
-    @pytest.mark.django_db
     def test_request_list_endpoint_with_authentication(self, api_client):
         """Check for list result when accessing the list endpoint
         being logged in.
@@ -171,17 +167,17 @@ class TestRequest:
 
 
 class TestCommentTrainingData:
+    pytestmark = pytest.mark.django_db
+
     @classmethod
     def setup_class(cls):
         cls.url = reverse("cast:api:comment-training-data")
 
-    @pytest.mark.django_db
     def test_get_comment_training_data_without_authentication(self, api_client):
         """Should not be accessible without authentication."""
         r = api_client.get(self.url, format="json")
         assert r.status_code == 403
 
-    @pytest.mark.django_db
     def test_get_comment_training_data_with_authentication(self, api_client):
         """Check for list result when accessing the training data endpoint being logged in."""
         user = UserFactory()
