@@ -50,6 +50,7 @@ dependencies = [
     "feedparser",
     "markdown",
     "plotly",
+    "Pygments",
     "python-akismet",
     "python-slugify",
     "wagtail",
