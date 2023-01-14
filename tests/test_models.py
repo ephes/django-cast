@@ -94,6 +94,23 @@ class TestAudioModel:
         assert audio.podlove_url == "/cast/api/audios/podlove/1"
 
     @pytest.mark.django_db
+    def test_get_episode_url_from_audio(self, podcast_episode):
+        audio = podcast_episode.podcast_audio
+
+        # happy path - audio has episode and episode_id is set
+        audio.set_episode_id(podcast_episode.pk)
+        assert "http" in audio.episode_url
+
+        # happy path - audio is only used by one episode
+        del audio._episode_id
+        assert "http" in audio.episode_url
+
+        # sad path - audio is used by multiple episodes
+        podcast_episode.podcast_audio = None
+        podcast_episode.save()
+        assert audio.episode_url is None
+
+    @pytest.mark.django_db
     def test_audio_get_chaptermark_data_from_file_empty_on_value_error(self, audio):
         assert audio.get_chaptermark_data_from_file("mp3") == []
 

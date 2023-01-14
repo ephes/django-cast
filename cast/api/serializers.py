@@ -4,7 +4,6 @@ from rest_framework import serializers
 
 from ..models import Audio, Request, Video
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -31,10 +30,11 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     audio = serializers.ListField()
     chapters = serializers.ListField()
     duration = serializers.CharField(source="duration_str")
+    link = serializers.URLField(source="episode_url")
 
     class Meta:
         model = Audio
-        fields = ("title", "subtitle", "audio", "duration", "chapters")
+        fields = ("title", "subtitle", "audio", "duration", "chapters", "link")
 
 
 class RequestSerializer(serializers.ModelSerializer):

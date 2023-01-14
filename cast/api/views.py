@@ -93,6 +93,17 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
     queryset = Audio.objects.all()
     serializer_class = AudioPodloveSerializer
 
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if (episode_id := request.query_params.get("episode_id")) is not None:
+            try:
+                episode_id = int(episode_id)
+                instance.set_episode_id(episode_id)
+            except (ValueError, TypeError):
+                pass
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
 
 class RequestListView(generics.ListCreateAPIView):
     queryset = Request.objects.all().order_by("-timestamp")

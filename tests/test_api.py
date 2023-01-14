@@ -109,6 +109,28 @@ class TestPodcastAudio:
         assert "." not in r.json()["duration"]
 
     @pytest.mark.django_db
+    def test_podlove_detail_endpoint_includes_link_to_episode(self, api_client, podcast_episode):
+        """Test whether the podlove detail endpoint includes a link to the episode."""
+        audio = podcast_episode.podcast_audio
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+
+        r = api_client.get(podlove_detail_url, format="json")
+        assert r.status_code == 200
+
+        # link is always included, might be empty
+        assert "link" in r.json()
+
+        # explicitly set episode_id FIXME: only works if there are multiple episodes for audio
+        podlove_detail_url_with_episode_id = f"{podlove_detail_url}?episode_id={podcast_episode.pk}"
+
+        r = api_client.get(podlove_detail_url_with_episode_id, format="json")
+        assert r.status_code == 200
+
+        podlove_data = r.json()
+        assert "link" in podlove_data
+        assert podlove_data["link"] == podcast_episode.full_url
+
+    @pytest.mark.django_db
     def test_podlove_detail_endpoint_chaptermarks(self, api_client, audio, chaptermarks):
         """Test whether chaptermarks get delivered via podlove endpoint."""
         print("chaptermarks: ", chaptermarks)
