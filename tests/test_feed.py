@@ -11,8 +11,15 @@ from cast.feeds import ITunesElements, PodcastFeed
 from cast.models import Post
 
 
+def test_unknown_audio_format():
+    pf = PodcastFeed()
+    with pytest.raises(Http404):
+        pf.set_audio_format("foobar")
+
+
 class TestFeedCreation:
-    @pytest.mark.django_db
+    pytestmark = pytest.mark.django_db
+
     def test_add_artwork_true(self, dummy_handler, blog_with_artwork):
         ie = ITunesElements()
         ie.feed = {"title": "foobar", "link": "bar"}
@@ -21,7 +28,6 @@ class TestFeedCreation:
         assert "image" in dummy_handler.se
         assert "image" in dummy_handler.ee
 
-    @pytest.mark.django_db
     def test_add_artwork_false(self, dummy_handler, blog):
         ie = ITunesElements()
         ie.feed = {"title": "foobar", "link": "bar"}
@@ -30,12 +36,6 @@ class TestFeedCreation:
         assert "image" not in dummy_handler.se
         assert "image" not in dummy_handler.ee
 
-    def test_unknown_audio_format(self):
-        pf = PodcastFeed()
-        with pytest.raises(Http404):
-            pf.set_audio_format("foobar")
-
-    @pytest.mark.django_db
     def test_itunes_categories(self, dummy_handler, blog_with_itunes_categories):
         blog = blog_with_itunes_categories
         ie = ITunesElements()
@@ -55,7 +55,8 @@ def use_dummy_cache_backend(settings):
 
 
 class TestGeneratedFeeds:
-    @pytest.mark.django_db
+    pytestmark = pytest.mark.django_db
+
     def test_get_latest_entries_feed(self, client, post, use_dummy_cache_backend):
         feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
 
@@ -66,7 +67,6 @@ class TestGeneratedFeeds:
         assert "xml" in content
         assert post.title in content
 
-    @pytest.mark.django_db
     def test_get_podcast_m4a_feed_rss(self, client, podcast_episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",
@@ -80,7 +80,6 @@ class TestGeneratedFeeds:
         assert "rss" in content
         assert podcast_episode.title in content
 
-    @pytest.mark.django_db
     def test_get_podcast_m4a_feed_atom(self, client, podcast_episode):
         feed_url = reverse(
             "cast:podcast_feed_atom",
@@ -94,7 +93,6 @@ class TestGeneratedFeeds:
         assert "feed" in content
         assert podcast_episode.title in content
 
-    @pytest.mark.django_db
     def test_podcast_feed_contains_only_podcasts(self, client, post, podcast_episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",
@@ -107,7 +105,6 @@ class TestGeneratedFeeds:
         assert len(d.entries) == 1
         assert Post.objects.live().descendant_of(podcast_episode.blog).count() == 2
 
-    @pytest.mark.django_db
     def test_podcast_feed_contains_visible_date_as_pubdate(
         self, client, podcast_episode_with_different_visible_date, use_dummy_cache_backend
     ):
@@ -125,7 +122,6 @@ class TestGeneratedFeeds:
         date_from_feed = pytz.utc.localize(date_from_feed)
         assert date_from_feed == podcast_episode.visible_date
 
-    @pytest.mark.django_db
     def test_podcast_feed_contains_detail_information(self, client, podcast_episode):
         feed_url = reverse(
             "cast:podcast_feed_rss",
