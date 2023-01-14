@@ -11,7 +11,7 @@ class TestPostAdd:
         add_url = reverse("wagtailadmin_pages:add_subpage", args=(blog.id,))
         r = client.get(add_url)
 
-        # redirect to login
+        # redirect to log in
         assert r.status_code == 302
         login_url = reverse("wagtailadmin_login")
         assert login_url in r.url
@@ -112,7 +112,7 @@ class TestPostAdd:
         # make sure there was a post added to the database
         assert post.title == post_data_wagtail["title"]
 
-        # make sure there was an gallery added
+        # make sure there was a gallery added
         assert post.galleries.count() == 1
         assert post.galleries.first() == gallery
         assert list(post.galleries.first().images.all()) == list(gallery.images.all())
