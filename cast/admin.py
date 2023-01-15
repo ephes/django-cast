@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class AdminUserMixin:
-    def get_changeform_initial_data(self, request):
+    @staticmethod
+    def get_changeform_initial_data(request):
         return {"user": request.user, "author": request.user}
 
 
@@ -75,7 +76,7 @@ class GalleryModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 @admin.action(description="Retrain model from scratch using marked comments")
-def retrain(modeladmin, request, queryset):
+def retrain(_modeladmin, _request, queryset):
     for spamfilter in queryset:
         train = spamfilter.get_training_data_comments()
         spamfilter.retrain_from_scratch(train)
