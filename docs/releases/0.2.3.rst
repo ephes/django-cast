@@ -5,3 +5,4 @@ Split up post in episodes and posts.
 
 * Fixed [codecov](https://codecov.io) badge
 * More information about the release process, so I don't have to guess every time I publish a new release
+* Added mypy to pre-commit hooks and fixed some issues
