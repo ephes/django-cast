@@ -48,8 +48,22 @@ repos:
         args: [--no-strict-optional,
                --ignore-missing-imports]
         additional_dependencies:
+          - dj-inmemorystorage
+          - django-allauth
+          - django-crispy-forms
           - django-debug-toolbar
           - django-environ
           - django_extensions
+          - django-filter
+          - django-fluent-comments
+          - django-modelcluster
+          - django-model-utils
           - django-stubs[compatible-mypy]
+          - django-taggit
+          - django-threadedcomments
           - psycopg2
+          - Pygments
+          - python-slugify
+          - wagtail
+          - wagtail_srcset
+          - types-python-slugify

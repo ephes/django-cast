@@ -1,7 +1,8 @@
 from django.core.files.storage import default_storage, get_storage_class
 from django.core.management.base import BaseCommand
+from wagtail.images.models import Image
 
-from ...models import File, Image, Video
+from ...models import File, Video
 from ...utils import storage_walk_paths
 
 
