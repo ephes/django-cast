@@ -46,7 +46,6 @@ dependencies = [
     "django-model-utils",
     "django-tag-parser",
     "django-threadedcomments",
-    "django-watson",
     "feedparser",
     "markdown",
     "plotly",
