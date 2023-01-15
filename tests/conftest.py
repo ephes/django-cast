@@ -4,7 +4,6 @@ import os
 import shutil
 from copy import deepcopy
 from datetime import datetime
-from pathlib import Path
 
 import pytest
 import pytz
@@ -605,18 +604,3 @@ def comment_spam(post):
     )
     instance.save()
     return instance
-
-
-@pytest.fixture()
-def access_log_path(fixture_dir):
-    return Path(fixture_dir) / "access.log"
-
-
-@pytest.fixture()
-def last_request_dummy():
-    class RequestDummy:
-        def __init__(self):
-            self.timestamp = datetime.strptime("01/Dec/2018:06:55:44 +0100", "%d/%b/%Y:%H:%M:%S %z")
-            self.ip = "79.230.47.221"
-
-    return RequestDummy()
