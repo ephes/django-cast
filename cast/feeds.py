@@ -1,9 +1,12 @@
 import logging
+from datetime import datetime
 
 from django.contrib.syndication.views import Feed
-from django.http import Http404
+from django.db.models import QuerySet
+from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
+from django.utils.safestring import SafeText
 
 from .models import Audio, Blog, Post
 
@@ -14,38 +17,43 @@ POST_BODY_TEMPLATE = "cast/post_body.html"
 
 
 class LatestEntriesFeed(Feed):
-    def get_object(self, request, *args, **kwargs):
+    object: Blog
+    request: HttpRequest
+
+    def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
         slug = kwargs["slug"]
         self.object = get_object_or_404(Blog, slug=slug)
         self.request = request
 
-    def title(self):
+    def title(self) -> str:
         return self.object.title
 
-    def description(self):
+    def description(self) -> str:
         return self.object.description
 
-    def link(self):
+    def link(self) -> str:
         return self.object.get_full_url()
 
-    def items(self):
+    def items(self) -> QuerySet[Post]:
         queryset = Post.objects.live().descendant_of(self.object).order_by("-visible_date")
         return queryset
 
-    def item_title(self, item):
+    def item_title(self, item) -> SafeText:
         return item.title
 
-    def item_description(self, item):
+    def item_description(self, item) -> SafeText:
         item.template = POST_BODY_TEMPLATE
         item.description = item.serve(self.request, render_detail=True).rendered_content
         return item.description
 
-    def item_link(self, item):
+    def item_link(self, item) -> SafeText:
         return item.get_full_url()
 
 
 class ITunesElements:
-    def add_artwork(self, blog, handler):
+    feed: dict
+
+    def add_artwork(self, blog: Blog, handler) -> None:
         if blog.itunes_artwork is None:
             return
 
@@ -57,7 +65,7 @@ class ITunesElements:
         haqe("title", self.feed["title"])
         handler.endElement("image")
 
-    def add_itunes_categories(self, blog, handler):
+    def add_itunes_categories(self, blog: Blog, handler) -> None:
         itunes_categories = blog.itunes_categories_parsed
         if len(itunes_categories) == 0:
             return
@@ -136,10 +144,15 @@ class PodcastFeed(Feed):
     A feed of podcasts for iTunes and other compatible podcatchers.
     """
 
-    def set_audio_format(self, audio_format):
+    audio_format: str
+    mime_type: str
+    object: Blog
+    request: HttpRequest
+
+    def set_audio_format(self, audio_format: str) -> None:
         format_to_mime = Audio.mime_lookup
         if audio_format not in format_to_mime:
-            raise Http404("unkown audio format")
+            raise Http404("unknown audio format")
         else:
             self.audio_format = audio_format
             self.mime_type = format_to_mime[audio_format]
@@ -152,19 +165,19 @@ class PodcastFeed(Feed):
         self.request = request  # need request for item.serve(request) later on
         return self.object
 
-    def link(self):
+    def link(self) -> str:
         return self.object.get_full_url()
 
-    def title(self, blog):
+    def title(self, blog: Blog) -> str:
         return self.object.title
 
-    def categories(self, blog):
+    def categories(self, blog: Blog) -> tuple[str]:
         return (blog.keywords.split(",")[0],)
 
-    def itunes_categories(self, blog):
+    def itunes_categories(self, blog: Blog) -> list[str]:
         return blog.itunes_categories.split(",")
 
-    def items(self, blog):
+    def items(self, blog: Blog) -> QuerySet[Post]:
         queryset = (
             Post.objects.live().descendant_of(blog).filter(podcast_audio__isnull=False).order_by("-visible_date")
         )
@@ -181,28 +194,28 @@ class PodcastFeed(Feed):
     def item_link(self, item):
         return item.get_full_url()
 
-    def item_pubdate(self, item):
+    def item_pubdate(self, item) -> datetime:
         return item.visible_date
 
-    def item_updateddate(self, item):
+    def item_updateddate(self, item: Post) -> datetime:
         return item.modified
 
     # def item_categories(self, post):
     #    return self.categories(self.blog)
 
-    def item_enclosure_url(self, item):
+    def item_enclosure_url(self, item: Post) -> str:
         return item.get_enclosure_url(self.audio_format)
 
-    def item_enclosure_length(self, item):
+    def item_enclosure_length(self, item: Post) -> int:
         return item.get_enclosure_size(self.audio_format)
 
-    def item_enclosure_mime_type(self, item):
+    def item_enclosure_mime_type(self, item: Post) -> str:
         return self.mime_type
 
-    def item_keywords(self, item):
+    def item_keywords(self, item: Post) -> str:
         return item.keywords
 
-    def feed_extra_kwargs(self, obj):
+    def feed_extra_kwargs(self, obj) -> dict:
         return {"blog": self.object}
 
     def item_extra_kwargs(self, item):
@@ -212,16 +225,16 @@ class PodcastFeed(Feed):
 class AtomPodcastFeed(PodcastFeed):
     feed_type = AtomITunesFeedGenerator
 
-    def subtitle(self, blog):
+    def subtitle(self, blog: Blog) -> str:
         return blog.description
 
-    def author_name(self, blog):
+    def author_name(self, blog: Blog) -> str:
         return blog.author_name
 
     def author_email(self, blog):
         return blog.email
 
-    def link(self):
+    def link(self) -> str:
         """atom link is still wrong, dunno why FIXME"""
         return self.object.get_full_url()
 
@@ -229,9 +242,9 @@ class AtomPodcastFeed(PodcastFeed):
 class RssPodcastFeed(PodcastFeed):
     feed_type = RssITunesFeedGenerator
 
-    def item_guid(self, post):
+    def item_guid(self, post: Post) -> None:
         "ITunesElements can't add isPermaLink attr unless None is returned here."
         return None
 
-    def description(self, blog):
+    def description(self, blog: Blog) -> str:
         return blog.description
