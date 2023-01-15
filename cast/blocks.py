@@ -2,6 +2,7 @@ from collections.abc import Iterable
 from itertools import chain, islice, tee
 from typing import TYPE_CHECKING, Union
 
+from django.db.models import QuerySet
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
 from pygments import highlight
@@ -42,12 +43,12 @@ class GalleryBlock(ListBlock):
         template: str = "cast/gallery.html"
 
     @staticmethod
-    def add_prev_next(gallery: Gallery) -> None:
+    def add_prev_next(gallery: QuerySet[Gallery]) -> None:
         for previous_image, current_image, next_image in previous_and_next(gallery):
             current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
             current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
 
-    def get_context(self, gallery: Gallery, parent_context: dict | None = None) -> dict:
+    def get_context(self, gallery: QuerySet[Gallery], parent_context: dict | None = None) -> dict:
         self.add_prev_next(gallery)
         return super().get_context(gallery, parent_context=parent_context)
 
