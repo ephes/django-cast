@@ -7,9 +7,9 @@ from . import appsettings
 
 
 class CastConfig(AppConfig):
-    name = "cast"
+    name: str = "cast"
 
-    def ready(self):
+    def ready(self) -> None:
         if not appsettings.DELETE_WAGTAIL_IMAGES:
             # Have a way to deactivate wagtails post_delete_file_cleanup
             # which deletes the file physically when developing against S3

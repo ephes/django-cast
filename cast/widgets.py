@@ -1,11 +1,11 @@
 import json
+from typing import Union
 
 from django import forms
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
-
 from wagtail.admin.staticfiles import versioned_static
 from wagtail.admin.widgets import AdminChooser
 from wagtail.core.telepath import register
@@ -19,11 +19,12 @@ class AdminVideoChooser(AdminChooser):
     choose_another_text = _("Choose another video item")
     link_to_chosen_text = _("Edit this video item")
 
-    def get_value_data(self, value):
+    def get_value_data(self, value: Video | int | None) -> dict | None:
         if value is None:
             return value
         if not isinstance(value, Video):
             value = Video.objects.get(pk=value)
+        assert isinstance(value, Video)
         return {
             "id": value.pk,
             "title": value.title,
@@ -82,11 +83,12 @@ class AdminAudioChooser(AdminChooser):
     choose_another_text = _("Choose another audio item")
     link_to_chosen_text = _("Edit this audio item")
 
-    def get_value_data(self, value):
+    def get_value_data(self, value: Union["Video", int, None]) -> dict | None:
         if value is None:
             return value
         if not isinstance(value, Audio):
             value = Audio.objects.get(pk=value)
+        assert isinstance(value, Audio)
         return {
             "id": value.pk,
             "title": value.title,
