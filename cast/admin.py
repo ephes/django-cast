@@ -81,7 +81,7 @@ class GalleryModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 @admin.action(description="Retrain model from scratch using marked comments")
-def retrain(_modeladmin: admin.ModelAdmin, _request: "HttpRequest", queryset: QuerySet[SpamFilter]):
+def retrain(_modeladmin: admin.ModelAdmin, _request: "HttpRequest", queryset: QuerySet[SpamFilter]) -> None:
     for spamfilter in queryset:
         train = spamfilter.get_training_data_comments()
         spamfilter.retrain_from_scratch(train)
