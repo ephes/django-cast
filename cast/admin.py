@@ -2,7 +2,7 @@ import logging
 
 from django.contrib import admin
 
-from .models import (  # Image,
+from .models import (
     Audio,
     Blog,
     ChapterMark,
