@@ -36,6 +36,17 @@ class BlogModelAdmin(AdminUserMixin, admin.ModelAdmin):
 @admin.register(Post)
 class PostModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("title", "owner", "blog")
+    fields = (
+        "visible_date",
+        "title",
+        "slug",
+        "seo_title",
+        "search_description",
+        "podcast_audio",
+        "keywords",
+        "explicit",
+        "block",
+    )
 
 
 @admin.register(ItunesArtWork)
