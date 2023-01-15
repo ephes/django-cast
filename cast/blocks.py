@@ -1,8 +1,17 @@
 from itertools import chain, islice, tee
 
 from django.utils.functional import cached_property
-
-from wagtail.core.blocks import ChooserBlock, ListBlock
+from django.utils.safestring import mark_safe
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import get_lexer_by_name
+from wagtail.core.blocks import (
+    CharBlock,
+    ChooserBlock,
+    ListBlock,
+    StructBlock,
+    TextBlock,
+)
 
 
 def previous_and_next(iterable):
@@ -58,3 +67,16 @@ class AudioChooserBlock(ChooserBlock):
 
     def get_form_state(self, value):
         return self.widget.get_value_data(value)
+
+
+class CodeBlock(StructBlock):
+    language = CharBlock(help_text="The language of the code block")
+    source = TextBlock(rows=8, help_text="The source code of the block")
+
+    def render_basic(self, value, context=None):
+        if value:
+            lexer = get_lexer_by_name(value["language"], stripall=True)
+            highlighted = highlight(value["source"], lexer, HtmlFormatter())
+            return mark_safe(highlighted)
+        else:
+            return ""

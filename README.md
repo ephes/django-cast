@@ -20,7 +20,6 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 - Video support - not as sophisticated as image / audio support, but it works 🤗
 - Comments via [django-fluent-comments](https://github.com/django-fluent/django-fluent-comments)
   and a build in moderating spam filter
-- Full-text search via [django-watson](https://github.com/etianen/django-watson)
 
 ## Deployment
 

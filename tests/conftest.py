@@ -2,25 +2,20 @@ import io
 import json
 import os
 import shutil
-
 from copy import deepcopy
 from datetime import datetime
-from pathlib import Path
 
+import pytest
+import pytz
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.client import RequestFactory
 from django.utils import timezone
-
-from wagtail.core.models import Site
-from wagtail.images.models import Image
-
-import pytest
-import pytz
-
 from django_comments import get_model as get_comments_model
 from rest_framework.test import APIClient
+from wagtail.core.models import Site
+from wagtail.images.models import Image
 
 from cast import appsettings
 from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
@@ -467,6 +462,19 @@ def podcast_episode(blog, audio, body):
 
 
 @pytest.fixture()
+def podcast_episode_with_same_audio(blog, audio, body):
+    return PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="test podcast episode 2",
+        slug="test-podcast-entry2",
+        pub_date=timezone.now(),
+        podcast_audio=audio,
+        body=body,
+    )
+
+
+@pytest.fixture()
 def podcast_episode_with_different_visible_date(blog, audio):
     visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
     return PostFactory(
@@ -596,18 +604,3 @@ def comment_spam(post):
     )
     instance.save()
     return instance
-
-
-@pytest.fixture()
-def access_log_path(fixture_dir):
-    return Path(fixture_dir) / "access.log"
-
-
-@pytest.fixture()
-def last_request_dummy():
-    class RequestDummy:
-        def __init__(self):
-            self.timestamp = datetime.strptime("01/Dec/2018:06:55:44 +0100", "%d/%b/%Y:%H:%M:%S %z")
-            self.ip = "79.230.47.221"
-
-    return RequestDummy()

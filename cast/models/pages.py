@@ -20,7 +20,7 @@ from wagtail.images.models import Image
 from wagtail.search import index
 
 from cast import appsettings
-from cast.blocks import AudioChooserBlock, GalleryBlock, VideoChooserBlock
+from cast.blocks import AudioChooserBlock, CodeBlock, GalleryBlock, VideoChooserBlock
 from cast.filters import PostFilterset
 from cast.models import get_or_create_gallery
 from cast.models.itunes import ItunesArtWork
@@ -180,6 +180,7 @@ class Blog(TimeStampedModel, Page):
 class ContentBlock(blocks.StreamBlock):
     heading = blocks.CharBlock(classname="full title")
     paragraph = blocks.RichTextBlock()
+    code = CodeBlock(icon="code")
     image = ImageChooserBlock(template="cast/image/image.html")
     gallery = GalleryBlock(ImageChooserBlock())
     embed = EmbedBlock()

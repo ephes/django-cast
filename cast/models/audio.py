@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import subprocess
-
 from datetime import timedelta
 from pathlib import Path
 
@@ -10,14 +9,11 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-
+from model_utils.models import TimeStampedModel
+from taggit.managers import TaggableManager
 from wagtail.core.models import CollectionMember
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
-
-from model_utils.models import TimeStampedModel
-from taggit.managers import TaggableManager
-
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +184,30 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         ]
         ffprobe_data = json.loads(subprocess.run(command, check=True, stdout=subprocess.PIPE).stdout)
         return self.clean_ffprobe_chaptermarks(ffprobe_data)
+
+    def set_episode_id(self, episode_id):
+        """Set the episode id for this audio file to be able to return audio.episode_url in api."""
+        self._episode_id = episode_id
+
+    def get_episode(self, episode_id=None):
+        episodes = self.posts.all()
+        if episode_id is not None:
+            episodes = episodes.filter(pk=episode_id)
+        episodes = list(episodes)
+        if len(episodes) == 1:
+            return episodes[0]
+        return None
+
+    @property
+    def episode_url(self):
+        """Return the url to the episode this audio file belongs to."""
+        episode_id = None
+        if hasattr(self, "_episode_id"):
+            episode_id = self._episode_id
+        episode = self.get_episode(episode_id)
+        if episode is not None:
+            return episode.full_url
+        return None
 
     @property
     def podlove_url(self):

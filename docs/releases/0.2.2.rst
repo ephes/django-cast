@@ -1,0 +1,10 @@
+0.2.2 (2023-01-15)
++++++++++++++++++++
+
+Podlove Player share sheet and code blocks for Wagtail.
+
+* Fixed share sheet of Podlove Player
+* Added code blocks for Wagtail
+* Refactoring removing some of the @pytest.mark.django_db decorators
+* Removed all the request analytics stuff (switched using plausible...)
+* Removed django-watson dependency since it is not used anymore
