@@ -81,6 +81,8 @@ dev = [
     "rich",
     "tox",
     "typer",
+    "types-python-slugify",
+    "types-requests",
 ]
 
 [project.urls]

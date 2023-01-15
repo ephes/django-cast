@@ -10,7 +10,7 @@ class Moderator(FluentCommentsModerator):
         if spamfilter is not None:
             self.spamfilter = spamfilter
         else:
-            self.spamfilter = SpamFilter.default
+            self.spamfilter = SpamFilter.get_default()
 
     def allow(self, comment, content_object, request):
         """

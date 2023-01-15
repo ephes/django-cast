@@ -286,6 +286,5 @@ class SpamFilter(TimeStampedModel):
         self.save()
 
     @classmethod
-    @property
-    def default(cls):  # noqa
+    def get_default(cls):
         return cls.objects.first()

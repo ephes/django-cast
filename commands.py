@@ -65,7 +65,7 @@ def env_with_pythonpath():
 @cli.command()
 def mypy():
     """Run Mypy (configured in pyproject.toml)"""
-    subprocess.call(["mypy", "cast"])
+    subprocess.run(["mypy", "cast"])
 
 
 @cli.command()

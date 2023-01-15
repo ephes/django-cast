@@ -84,7 +84,7 @@ def retrain(modeladmin, request, queryset):
 @admin.register(SpamFilter)
 class SpamfilterModelAdmin(admin.ModelAdmin):
     readonly_fields = ["spam", "ham"]
-    list_display = ["pk", "name"] + readonly_fields
+    list_display = ["pk", "name"] + readonly_fields  # type: ignore
     fields = ("name",)
     actions = [retrain]
 

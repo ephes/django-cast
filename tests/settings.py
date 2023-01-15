@@ -132,7 +132,7 @@ TEMPLATES = [
 # TEMPLATE LOADERS
 # ------------------------------------------------------------------------------
 # Keep templates in memory so tests run faster
-TEMPLATES[0]["OPTIONS"]["loaders"] = [
+TEMPLATES[0]["OPTIONS"]["loaders"] = [  # type: ignore
     [
         "django.template.loaders.cached.Loader",
         [
