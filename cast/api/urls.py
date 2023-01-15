@@ -25,8 +25,6 @@ urlpatterns = [
         views.AudioPodloveDetailView.as_view(),
         name="audio_podlove_detail",
     ),
-    # request
-    path("request/", views.RequestListView.as_view(), name="request_list"),
     # comment training data
     path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment-training-data"),
 ]

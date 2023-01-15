@@ -2,15 +2,12 @@ from django.urls import include, path
 from django.views.decorators.cache import cache_page
 
 from . import feeds
-from .views.dashboard import DashboardView
 
 app_name = "cast"
 urlpatterns = [
     # API
     # url(r"^api/", include("cast.api.urls", namespace="api")),
     path("api/", include("cast.api.urls", namespace="api")),
-    # Dashboard
-    path("dashboard/", view=DashboardView.as_view(), name="dashboard"),
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",

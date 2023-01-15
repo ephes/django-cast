@@ -5,22 +5,16 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.urls import reverse
 from django.views.generic import CreateView
-from rest_framework import generics, status
+from rest_framework import generics
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.serializers import ListSerializer
 from rest_framework.views import APIView
 
 from ..forms import VideoForm
-from ..models import Audio, Request, SpamFilter, Video
-from .serializers import (
-    AudioPodloveSerializer,
-    AudioSerializer,
-    RequestSerializer,
-    VideoSerializer,
-)
+from ..models import Audio, SpamFilter, Video
+from .serializers import AudioPodloveSerializer, AudioSerializer, VideoSerializer
 from .viewmixins import AddRequestUserMixin, FileUploadResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -37,7 +31,6 @@ def api_root(request):
         # ("galleries", request.build_absolute_uri(reverse("cast:api:gallery_list"))),
         ("videos", request.build_absolute_uri(reverse("cast:api:video_list"))),
         ("audios", request.build_absolute_uri(reverse("cast:api:audio_list"))),
-        ("requests", request.build_absolute_uri(reverse("cast:api:request_list"))),
         ("comment_training_data", request.build_absolute_uri(reverse("cast:api:comment-training-data"))),
     )
     return Response(OrderedDict(root_api_urls))
@@ -103,29 +96,6 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
                 pass
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
-
-
-class RequestListView(generics.ListCreateAPIView):
-    queryset = Request.objects.all().order_by("-timestamp")
-    serializer_class = RequestSerializer
-    pagination_class = StandardResultsSetPagination
-    permission_classes = (IsAuthenticated,)
-
-    def create(self, request, *args, **kwargs):
-        """Allow for bulk create via many=True."""
-        serializer = self.get_serializer(data=request.data, many=isinstance(request.data, list))
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-
-    def perform_create(self, serializer):
-        """Use bulk_create for request lists, normal model serializer otherwise."""
-        if isinstance(serializer, ListSerializer):
-            requests = [Request(**d) for d in serializer.validated_data]
-            Request.objects.bulk_create(requests)
-        else:
-            serializer.save()
 
 
 class CommentTrainingDataView(APIView):
