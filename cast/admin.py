@@ -1,4 +1,5 @@
 import logging
+from typing import TYPE_CHECKING
 
 from django.contrib import admin
 
@@ -14,12 +15,15 @@ from .models import (
     Video,
 )
 
+if TYPE_CHECKING:
+    from django.forms import Form
+    from django.http import HttpRequest
+
 logger = logging.getLogger(__name__)
 
 
 class AdminUserMixin:
-    @staticmethod
-    def get_changeform_initial_data(request):
+    def get_changeform_initial_data(self, request: "HttpRequest") -> dict:
         return {"user": request.user, "author": request.user}
 
 
@@ -60,7 +64,7 @@ class ChapterMarkModelAdmin(AdminUserMixin, admin.ModelAdmin):
 class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("pk", "user")
 
-    def save_model(self, request, obj, form, change):
+    def save_model(self, request: "HttpRequest", obj: Video, form: "Form", change) -> None:
         logger.info(f"poster: {obj.poster}")
         logger.info(f"form: {form.cleaned_data}")
         if change and not form.cleaned_data["poster"]:
@@ -85,7 +89,8 @@ def retrain(_modeladmin, _request, queryset):
 @admin.register(SpamFilter)
 class SpamfilterModelAdmin(admin.ModelAdmin):
     readonly_fields = ["spam", "ham"]
-    list_display = ["pk", "name"] + readonly_fields  # type: ignore
+    # list_display = ["pk", "name"] + readonly_fields  # type: ignore
+    list_display = tuple(["pk", "name"] + readonly_fields)
     fields = ("name",)
     actions = [retrain]
 
