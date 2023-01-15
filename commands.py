@@ -82,7 +82,7 @@ def coverage():
     """
     Run and show coverage.
     """
-    subprocess.call(["coverage", "run", "-m", "pytest"], env=env_with_pythonpath())
+    subprocess.call(["coverage", "run", "--branch", "-m", "pytest"], env=env_with_pythonpath())
     subprocess.call(["coverage", "html"])
     if platform.system() == "Darwin":
         subprocess.call(["open", "htmlcov/index.html"])
