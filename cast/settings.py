@@ -1,0 +1,1 @@
+../tests/settings.py

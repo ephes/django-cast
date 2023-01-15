@@ -40,3 +40,16 @@ repos:
     hooks:
       - id: djhtml
         args: [-t, "2"]
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: 'v0.991'  # Use the sha / tag you want to point at
+    hooks:
+      - id: mypy
+        exclude: "[a-zA-Z]*/(migrations)/(.)*"
+        args: [--no-strict-optional,
+               --ignore-missing-imports]
+        additional_dependencies:
+          - django-debug-toolbar
+          - django-environ
+          - django_extensions
+          - django-stubs[compatible-mypy]
+          - psycopg2
