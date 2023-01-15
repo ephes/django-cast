@@ -99,7 +99,7 @@ def parse_chaptermark_line(line: str) -> ChapterMark | None:
 
 
 class ChapterMarksField(forms.CharField):
-    def to_python(self, value: None | str) -> list[ChapterMark]:
+    def to_python(self, value: None | str) -> list:
         if value is None:
             return []
         chaptermarks = []
@@ -126,7 +126,7 @@ class AudioForm(BaseCollectionMemberForm):
             "opus": forms.ClearableFileInput,
         }
 
-    def get_chaptermarks_from_field_or_files(self, audio):
+    def get_chaptermarks_from_field_or_files(self, audio: Audio) -> list[ChapterMark]:
         chaptermarks = self.cleaned_data["chaptermarks"]
         if len(chaptermarks) == 0:
             # get chaptermarks from one of the changed files
@@ -146,7 +146,7 @@ class AudioForm(BaseCollectionMemberForm):
                     chaptermarks.append(form.save(commit=False))
         return chaptermarks
 
-    def save_chaptermarks(self, audio):
+    def save_chaptermarks(self, audio: Audio) -> None:
         # Chapter marks should be saved following this logic:
         #  1. If there are manually added chapter marks in the form, just use them
         #  2. If the form has no chapter marks, but an audio file was changed or
@@ -157,7 +157,7 @@ class AudioForm(BaseCollectionMemberForm):
             cm.audio = audio
         ChapterMark.objects.sync_chaptermarks(audio, chaptermarks)
 
-    def save(self, commit=True):
+    def save(self, commit=True) -> Audio:
         audio = super().save(commit=commit)
         if commit:
             self.save_chaptermarks(audio)
