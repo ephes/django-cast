@@ -97,9 +97,6 @@ profile = "black"
 
 [tool.black]
 line-length = 119
-extend-exclude = '''
-^/threadedcomments
-'''
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
