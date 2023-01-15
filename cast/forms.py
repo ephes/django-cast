@@ -77,7 +77,7 @@ class FFProbeChapterMarkForm(forms.ModelForm):
         fields = ("start", "title")
 
 
-def parse_chaptermark_line(line):
+def parse_chaptermark_line(line: str) -> ChapterMark | None:
     def raise_line_validation_error():
         raise ValidationError(
             _(f"Invalid chaptermark line: {line}"),
@@ -85,20 +85,21 @@ def parse_chaptermark_line(line):
             params={"line": line},
         )
 
-    splitted = line.split()
-    if len(splitted) < 2:
+    line_parts = line.split()
+    if len(line_parts) < 2:
         raise_line_validation_error()
-    start, *parts = splitted
+    start, *parts = line_parts
     title = " ".join(parts)
     form = ChapterMarkForm({"start": start, "title": title})
     if form.is_valid():
         return form.save(commit=False)
     else:
         raise_line_validation_error()
+        return None
 
 
 class ChapterMarksField(forms.CharField):
-    def to_python(self, value):
+    def to_python(self, value: None | str) -> list[ChapterMark]:
         if value is None:
             return []
         chaptermarks = []
