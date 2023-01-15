@@ -96,10 +96,23 @@ class TestAudioModel:
         del audio._episode_id
         assert "http" in audio.episode_url
 
-        # sad path - audio is used by multiple episodes
+        # sad path - audio is not used by any episode
         podcast_episode.podcast_audio = None
         podcast_episode.save()
         assert audio.episode_url is None
+
+    def test_get_episode_url_from_audio_with_multiple_episodes(self, podcast_episode, podcast_episode_with_same_audio):
+        audio = podcast_episode.podcast_audio
+
+        # sad path - audio is used by multiple episodes
+        assert audio.episode_url is None
+
+        # happy path - audio is used by multiple episodes but episode_id is set
+        audio.set_episode_id(podcast_episode.pk)
+        assert audio.episode_url == podcast_episode.full_url
+
+        audio.set_episode_id(podcast_episode_with_same_audio.pk)
+        assert audio.episode_url == podcast_episode_with_same_audio.full_url
 
     def test_audio_get_chaptermark_data_from_file_empty_on_value_error(self, audio):
         assert audio.get_chaptermark_data_from_file("mp3") == []
