@@ -5,3 +5,4 @@ Podlove Player share sheet and code blocks for Wagtail.
 
 * Fixed share sheet of Podlove Player
 * Added code blocks for Wagtail
+* Refactoring removing some of the @pytest.mark.django_db decorators
