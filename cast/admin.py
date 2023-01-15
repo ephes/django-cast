@@ -2,6 +2,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.contrib import admin
+from django.db.models import QuerySet
 
 from .models import (
     Audio,
@@ -80,7 +81,7 @@ class GalleryModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 @admin.action(description="Retrain model from scratch using marked comments")
-def retrain(_modeladmin, _request, queryset):
+def retrain(_modeladmin: admin.ModelAdmin, _request: "HttpRequest", queryset: QuerySet[SpamFilter]):
     for spamfilter in queryset:
         train = spamfilter.get_training_data_comments()
         spamfilter.retrain_from_scratch(train)
@@ -94,9 +95,9 @@ class SpamfilterModelAdmin(admin.ModelAdmin):
     actions = [retrain]
 
     @staticmethod
-    def spam(obj):
+    def spam(obj: SpamFilter) -> dict:
         return obj.performance["spam"]
 
     @staticmethod
-    def ham(obj):
+    def ham(obj: SpamFilter) -> dict:
         return obj.performance["ham"]
