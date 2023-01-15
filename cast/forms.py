@@ -2,6 +2,7 @@ from datetime import datetime
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import QuerySet
 from django.forms.models import modelform_factory
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin import widgets
@@ -18,7 +19,7 @@ class VideoForm(forms.ModelForm):
 
 
 class FakePermissionPolicy:
-    def collections_user_has_permission_for(self, user, action):
+    def collections_user_has_permission_for(self, _user, _action) -> QuerySet[Collection]:
         return Collection.objects.all()
 
 
@@ -33,14 +34,14 @@ class BaseVideoForm(BaseCollectionMemberForm):
     permission_policy = FakePermissionPolicy()
 
 
-def get_video_form():
+def get_video_form() -> type[forms.ModelForm]:
     fields = Video.admin_form_fields
     if "collection" not in fields:
         # force addition of the 'collection' field, because leaving it out can
-        # cause dubious results when multiple collections exist (e.g adding the
+        # cause dubious results when multiple collections exist (e.g. adding the
         # media to the root collection where the user may not have permission) -
         # and when only one collection exists, it will get hidden anyway.
-        fields = list(fields) + ["collection"]
+        fields = tuple(list(fields) + ["collection"])  # type: ignore
 
     return modelform_factory(
         Video,
