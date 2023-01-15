@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, time
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -57,7 +57,7 @@ class ChapterMarkForm(forms.ModelForm):
 
 
 class FFProbeStartField(forms.TimeField):
-    def to_python(self, value):
+    def to_python(self, value) -> time:
         try:
             # utcfromtimestamp, super important!
             return datetime.utcfromtimestamp(float(value)).time()
