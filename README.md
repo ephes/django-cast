@@ -20,6 +20,8 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 - Video support - not as sophisticated as image / audio support, but it works 🤗
 - Comments via [django-fluent-comments](https://github.com/django-fluent/django-fluent-comments)
   and a built-in moderating spam filter
+- Code blocks for the Wagtail page editor
+
 
 ## Deployment
 
@@ -30,10 +32,11 @@ See [the deployment documentation](https://django-cast.readthedocs.io/en/develop
 Although switching to Wagtail was a big step, there is still a lot to do. Things that are on the roadmap:
 
 - Improve the documentation
-- Code blocks for the Wagtail page editor
+- Update the [Podlove Web Player](https://podlove.org/podlove-web-player/) version
 - Design improvements for the default theme (it's still bootstrap 4 atm)
 - Add tags for posts (TIL, etc.) and navigation
-- Update the [Podlove Web Player](https://podlove.org/podlove-web-player/) version
+- Collaborators for podcast episodes
+- Transcripts for podcast episodes
 
 ## Contributing
 
