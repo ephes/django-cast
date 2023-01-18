@@ -7,7 +7,7 @@ from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
-from pygments.lexers import get_lexer_by_name
+from pygments.lexers import ClassNotFound, get_lexer_by_name
 from wagtail.core.blocks import (
     CharBlock,
     ChooserBlock,
@@ -93,7 +93,10 @@ class CodeBlock(StructBlock):
 
     def render_basic(self, value: None | dict, context=None) -> str:
         if value is not None:
-            lexer = get_lexer_by_name(value["language"], stripall=True)
+            try:
+                lexer = get_lexer_by_name(value["language"], stripall=True)
+            except (ClassNotFound, KeyError):
+                lexer = get_lexer_by_name("text", stripall=True)
             highlighted = highlight(value["source"], lexer, HtmlFormatter())
             return mark_safe(highlighted)
         else:
