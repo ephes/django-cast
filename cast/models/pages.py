@@ -389,7 +389,7 @@ class Post(TimeStampedModel, Page):
         return save_return
 
 
-class Episode(Post):
+class Episode(Post):  # type: ignore
     template = "cast/post.html"
 
     podcast_audio = models.ForeignKey(
