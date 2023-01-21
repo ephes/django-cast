@@ -8,6 +8,7 @@ from .models import (
     Audio,
     Blog,
     ChapterMark,
+    Episode,
     File,
     Gallery,
     ItunesArtWork,
@@ -35,6 +36,18 @@ class BlogModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 @admin.register(Post)
 class PostModelAdmin(AdminUserMixin, admin.ModelAdmin):
+    list_display = ("title", "owner", "blog")
+    fields = (
+        "visible_date",
+        "title",
+        "slug",
+        "seo_title",
+        "search_description",
+    )
+
+
+@admin.register(Episode)
+class EpisodeModelAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("title", "owner", "blog")
     fields = (
         "visible_date",
