@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 from django.utils.safestring import SafeText
 
-from .models import Audio, Blog, Post
+from .models import Audio, Blog, Episode, Post
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ class PodcastFeed(Feed):
 
     def items(self, blog: Blog) -> QuerySet[Post]:
         queryset = (
-            Post.objects.live().descendant_of(blog).filter(podcast_audio__isnull=False).order_by("-visible_date")
+            Episode.objects.live().descendant_of(blog).filter(podcast_audio__isnull=False).order_by("-visible_date")
         )
         return queryset
 

@@ -190,7 +190,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         self._episode_id = episode_id
 
     def get_episode(self, episode_id=None):
-        episodes = self.posts.all()
+        episodes = self.episodes.all()
         if episode_id is not None:
             episodes = episodes.filter(pk=episode_id)
         episodes = list(episodes)

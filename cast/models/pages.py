@@ -79,7 +79,7 @@ class Blog(TimeStampedModel, Page):
         FieldPanel("email"),
     ]
 
-    subpage_types = ["cast.Post"]
+    subpage_types = ["cast.Post", "cast.Episode"]
 
     def __str__(self):
         return self.title
@@ -221,34 +221,6 @@ class Post(TimeStampedModel, Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     pub_date = models.DateTimeField(null=True, blank=True)
     visible_date = models.DateTimeField(default=timezone.now)
-    podcast_audio = models.ForeignKey(
-        "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="posts"
-    )
-    keywords = models.CharField(
-        _("keywords"),
-        max_length=255,
-        blank=True,
-        default="",
-        help_text=_(
-            """A comma-demlimitedlist of up to 12 words for iTunes
-            searches. Perhaps include misspellings of the title."""
-        ),
-    )
-    explicit = models.PositiveSmallIntegerField(
-        _("explicit"),
-        choices=Blog.EXPLICIT_CHOICES,
-        help_text=_("``Clean`` will put the clean iTunes graphic by it."),
-        default=1,
-    )
-    block = models.BooleanField(
-        _("block"),
-        default=False,
-        help_text=_(
-            "Check to block this episode from iTunes because <br />its "
-            "content might cause the entire show to be <br />removed from iTunes."
-            ""
-        ),
-    )
     comments_enabled = models.BooleanField(
         _("comments_enabled"),
         default=True,
@@ -362,7 +334,13 @@ class Post(TimeStampedModel, Page):
         except ValueError:
             # will be raised on wagtail preview because page_ptr is not set
             pass
-        return self.audio_in_body or audios_count > 0 or self.podcast_audio is not None
+        if self.audio_in_body or audios_count > 0:
+            return True
+        else:
+            if isinstance(self.specific, Episode):
+                return self.specific.podcast_audio is not None
+            else:
+                return False
 
     @property
     def comments_are_enabled(self):
@@ -409,6 +387,37 @@ class Post(TimeStampedModel, Page):
         save_return = super().save(*args, **kwargs)
         self.sync_media_ids()
         return save_return
+
+
+class Episode(Post):
+    podcast_audio = models.ForeignKey(
+        "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="episodes"
+    )
+    keywords = models.CharField(
+        _("keywords"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_(
+            """A comma-demlimitedlist of up to 12 words for iTunes
+            searches. Perhaps include misspellings of the title."""
+        ),
+    )
+    explicit = models.PositiveSmallIntegerField(
+        _("explicit"),
+        choices=Blog.EXPLICIT_CHOICES,
+        help_text=_("``Clean`` will put the clean iTunes graphic by it."),
+        default=1,
+    )
+    block = models.BooleanField(
+        _("block"),
+        default=False,
+        help_text=_(
+            "Check to block this episode from iTunes because <br />its "
+            "content might cause the entire show to be <br />removed from iTunes."
+            ""
+        ),
+    )
 
 
 class HomePage(Page):

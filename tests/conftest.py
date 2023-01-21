@@ -22,6 +22,7 @@ from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
 
 from .factories import (
     BlogFactory,
+    EpisodeFactory,
     GalleryFactory,
     PostFactory,
     UserFactory,
@@ -342,6 +343,18 @@ def post(blog, body):
 
 
 @pytest.fixture()
+def episode(blog, body):
+    return EpisodeFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="test entry",
+        slug="test-entry",
+        pub_date=timezone.now(),
+        body=body,
+    )
+
+
+@pytest.fixture()
 def post_with_gallery(blog, body_with_gallery):
     return PostFactory(
         owner=blog.owner,
@@ -450,7 +463,7 @@ def post_with_search(blog, python_body):
 
 @pytest.fixture()
 def podcast_episode(blog, audio, body):
-    return PostFactory(
+    return EpisodeFactory(
         owner=blog.owner,
         parent=blog,
         title="test podcast episode",
@@ -463,7 +476,7 @@ def podcast_episode(blog, audio, body):
 
 @pytest.fixture()
 def podcast_episode_with_same_audio(blog, audio, body):
-    return PostFactory(
+    return EpisodeFactory(
         owner=blog.owner,
         parent=blog,
         title="test podcast episode 2",
@@ -477,7 +490,7 @@ def podcast_episode_with_same_audio(blog, audio, body):
 @pytest.fixture()
 def podcast_episode_with_different_visible_date(blog, audio):
     visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
-    return PostFactory(
+    return EpisodeFactory(
         owner=blog.owner,
         parent=blog,
         title="test podast episode",

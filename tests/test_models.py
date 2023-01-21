@@ -189,9 +189,12 @@ class TestPostModel:
     def test_post_has_audio(self, post):
         assert post.has_audio is False
 
-    def test_post_has_audio_true(self, post, audio):
-        post.podcast_audio = audio
-        assert post.has_audio is True
+    def test_episode_has_audio(self, episode):
+        assert episode.has_audio is False
+
+    def test_episode_has_audio_true(self, episode, audio):
+        episode.podcast_audio = audio
+        assert episode.has_audio is True
 
     def test_post_comments_enabled(self, post, comments_enabled):
         post.comments_enabled = True
