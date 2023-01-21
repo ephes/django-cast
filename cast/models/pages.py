@@ -421,6 +421,15 @@ class Episode(Post):
         ),
     )
 
+    content_panels = Page.content_panels + [
+        FieldPanel("visible_date"),
+        FieldPanel("body"),
+        FieldPanel("keywords"),
+        FieldPanel("explicit"),
+        FieldPanel("block"),
+        FieldPanel("podcast_audio"),
+    ]
+
 
 class HomePage(Page):
     body = StreamField(
