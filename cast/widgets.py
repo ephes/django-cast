@@ -1,5 +1,5 @@
 import json
-from typing import Union
+from typing import Optional, Union
 
 from django import forms
 from django.template.loader import render_to_string
@@ -19,7 +19,7 @@ class AdminVideoChooser(AdminChooser):
     choose_another_text = _("Choose another video item")
     link_to_chosen_text = _("Edit this video item")
 
-    def get_value_data(self, value: Video | int | None) -> dict | None:
+    def get_value_data(self, value: Optional[Union[Video, int]]) -> Optional[dict]:
         if value is None:
             return value
         if not isinstance(value, Video):
@@ -83,7 +83,7 @@ class AdminAudioChooser(AdminChooser):
     choose_another_text = _("Choose another audio item")
     link_to_chosen_text = _("Edit this audio item")
 
-    def get_value_data(self, value: Union["Video", int, None]) -> dict | None:
+    def get_value_data(self, value: Optional[Union["Video", int]]) -> Optional[dict]:
         if value is None:
             return value
         if not isinstance(value, Audio):

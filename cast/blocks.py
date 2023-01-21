@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from django.db.models import QuerySet
 from django.utils.functional import cached_property
@@ -48,7 +48,7 @@ class GalleryBlock(ListBlock):
             current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
             current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
 
-    def get_context(self, gallery: QuerySet[Gallery], parent_context: dict | None = None) -> dict:
+    def get_context(self, gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> dict:
         self.add_prev_next(gallery)
         return super().get_context(gallery, parent_context=parent_context)
 
@@ -66,7 +66,7 @@ class VideoChooserBlock(ChooserBlock):
 
         return AdminVideoChooser()
 
-    def get_form_state(self, value: Union["Video", int, None]) -> dict | None:
+    def get_form_state(self, value: Optional[Union["Video", int]]) -> Optional[dict]:
         return self.widget.get_value_data(value)
 
 
@@ -83,7 +83,7 @@ class AudioChooserBlock(ChooserBlock):
 
         return AdminAudioChooser()
 
-    def get_form_state(self, value: Union["Video", int, None]) -> dict | None:
+    def get_form_state(self, value: Optional[Union["Video", int]]) -> Optional[dict]:
         return self.widget.get_value_data(value)
 
 
@@ -91,7 +91,7 @@ class CodeBlock(StructBlock):
     language = CharBlock(help_text="The language of the code block")
     source = TextBlock(rows=8, help_text="The source code of the block")
 
-    def render_basic(self, value: None | dict, context=None) -> str:
+    def render_basic(self, value: Optional[dict], context=None) -> str:
         if value is not None:
             try:
                 lexer = get_lexer_by_name(value["language"], stripall=True)

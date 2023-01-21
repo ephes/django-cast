@@ -1,4 +1,5 @@
 from datetime import datetime, time
+from typing import Optional
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -77,7 +78,7 @@ class FFProbeChapterMarkForm(forms.ModelForm):
         fields = ("start", "title")
 
 
-def parse_chaptermark_line(line: str) -> ChapterMark | None:
+def parse_chaptermark_line(line: str) -> Optional[ChapterMark]:
     def raise_line_validation_error():
         raise ValidationError(
             _(f"Invalid chaptermark line: {line}"),
@@ -99,7 +100,7 @@ def parse_chaptermark_line(line: str) -> ChapterMark | None:
 
 
 class ChapterMarksField(forms.CharField):
-    def to_python(self, value: None | str) -> list:
+    def to_python(self, value: Optional[str]) -> list:
         if value is None:
             return []
         chaptermarks = []

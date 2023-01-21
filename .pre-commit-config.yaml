@@ -12,7 +12,7 @@ repos:
     rev: v3.3.1
     hooks:
       - id: pyupgrade
-        args: [--py310-plus]
+        args: [--py39-plus]
   - repo: https://github.com/adamchainz/django-upgrade
     rev: 1.12.0
     hooks:
