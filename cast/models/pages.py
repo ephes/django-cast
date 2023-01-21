@@ -390,6 +390,8 @@ class Post(TimeStampedModel, Page):
 
 
 class Episode(Post):
+    template = "cast/post.html"
+
     podcast_audio = models.ForeignKey(
         "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="episodes"
     )
