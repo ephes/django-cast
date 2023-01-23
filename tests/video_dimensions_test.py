@@ -471,7 +471,7 @@ Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'Michaelsbergschaukel.mp4':
         assert width == 1080
         assert height == 1920
 
-    def test_video_from_handbrake_landscape(self):
+    def test_video_from_handbrake_landscape_2(self):
         ffmpeg_output = """
 ffprobe version 4.1.3 Copyright (c) 2007-2019 the FFmpeg developers
   built with Apple LLVM version 10.0.1 (clang-1001.0.46.4)
