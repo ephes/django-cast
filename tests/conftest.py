@@ -36,8 +36,8 @@ def api_client():
 
 @pytest.fixture()
 def fixture_dir():
-    curdir = os.path.dirname(os.path.realpath(__file__))
-    return os.path.join(curdir, "fixtures")
+    current_directory = os.path.dirname(os.path.realpath(__file__))
+    return os.path.join(current_directory, "fixtures")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -52,7 +52,7 @@ def remove_stale_media_files():
 
 
 # Image testing stuff
-def create_1pximage():
+def create_1_px_image():
     # This is a 1x1 black png
     png = (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00"
@@ -66,16 +66,16 @@ def create_1pximage():
 
 @pytest.fixture()
 def image_1px():
-    png = create_1pximage()
+    png = create_1_px_image()
     simple_png = SimpleUploadedFile(name="test.png", content=png, content_type="image/png")
     return simple_png
 
 
 @pytest.fixture()
 def image_1px_io():
-    png = create_1pximage()
+    png = create_1_px_image()
     bio_file = io.BytesIO(png)
-    bio_file.name = "testimage.png"
+    bio_file.name = "test_image.png"
     bio_file.seek(0)
     return bio_file
 
@@ -106,7 +106,7 @@ def small_jpeg_io():
     rgb = create_small_rgb()
     im_io = io.BytesIO()
     rgb.save(im_io, format="JPEG", quality=60, optimize=True, progressive=True)
-    im_io.name = "testimage.jpg"
+    im_io.name = "test_image.jpg"
     im_io.seek(0)
     return im_io
 
@@ -198,7 +198,7 @@ def audio(user, m4a_audio, settings):
 def chaptermarks(audio):
     cms = [
         ("00:01:01.234", "introduction", "", ""),
-        ("00:03:05.567", "coughing", "http://google.com", ""),
+        ("00:03:05.567", "coughing", "https://google.com", ""),
         ("00:02:05.567", "wrong order", "", ""),
     ]
     results = []
@@ -221,15 +221,15 @@ def site():
 
 @pytest.fixture()
 def blog(user, site):
-    return BlogFactory(owner=user, title="testblog", slug="testblog", parent=site.root_page)
+    return BlogFactory(owner=user, title="test blog", slug="test_blog", parent=site.root_page)
 
 
 @pytest.fixture()
 def blog_with_artwork(user, itunes_artwork, site):
     return BlogFactory(
         owner=user,
-        title="testblog",
-        slug="testblog",
+        title="test blog",
+        slug="test_blog",
         itunes_artwork=itunes_artwork,
         parent=site.root_page,
     )
@@ -240,8 +240,8 @@ def blog_with_itunes_categories(user, site):
     categories = {"foo": ["baz"]}
     return BlogFactory(
         owner=user,
-        title="testblog",
-        slug="testblog",
+        title="test blog",
+        slug="test_blog",
         itunes_categories=json.dumps(categories),
         parent=site.root_page,
     )
@@ -444,7 +444,7 @@ def post_with_different_date(blog):
 @pytest.fixture()
 def post_with_search(blog, python_body):
     search_body = deepcopy(python_body)
-    query = "onlyinsearch"
+    query = "only_in_search"
     search_body[-1]["value"][0]["value"] = f"{query} foobar"
     body = json.dumps(search_body)
     post = PostFactory(
@@ -492,7 +492,7 @@ def podcast_episode_with_different_visible_date(blog, audio):
     return EpisodeFactory(
         owner=blog.owner,
         parent=blog,
-        title="test podast episode",
+        title="test podcast episode",
         slug="test-podcast-entry",
         pub_date=timezone.now(),
         visible_date=visible_date,
