@@ -91,7 +91,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
             paths.add(field.name)
         return paths
 
-    def _get_audio_duration(self, audio_url):
+    @staticmethod
+    def _get_audio_duration(audio_url):
         # Taken from: http://trac.ffmpeg.org/wiki/FFprobeTips
         cmd = f"""
         ffprobe  \
