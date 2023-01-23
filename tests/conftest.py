@@ -7,7 +7,6 @@ from datetime import datetime
 
 import pytest
 import pytz
-from django.conf import settings
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.client import RequestFactory
@@ -602,7 +601,7 @@ def comments_not_enabled():
 
 
 @pytest.fixture()
-def comment(post):
+def comment(post, settings):
     comment_model = get_comments_model()
     instance = comment_model(content_object=post, site_id=settings.SITE_ID, title="foobar", comment="bar baz")
     instance.save()
@@ -610,7 +609,7 @@ def comment(post):
 
 
 @pytest.fixture()
-def comment_spam(post):
+def comment_spam(post, settings):
     comment_model = get_comments_model()
     instance = comment_model(
         content_object=post, site_id=settings.SITE_ID, title="blub", comment="asdf bsdf", is_removed=True
