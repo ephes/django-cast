@@ -2,8 +2,10 @@ import json
 import logging
 import re
 import subprocess
+from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
 from django.contrib.auth import get_user_model
 from django.db import models
@@ -14,6 +16,9 @@ from taggit.managers import TaggableManager
 from wagtail.core.models import CollectionMember
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
+
+if TYPE_CHECKING:
+    from .pages import Episode
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +38,16 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     oga = models.FileField(upload_to="cast_audio/", null=True, blank=True)
     opus = models.FileField(upload_to="cast_audio/", null=True, blank=True)
 
-    mime_lookup = {
+    mime_lookup: dict[str, str] = {
         "mp3": "audio/mpeg",
         "m4a": "audio/mp4",
         "oga": "audio/ogg",
         "opus": "audio/opus",
     }
-    audio_formats = list(mime_lookup.keys())
-    title_lookup = {key: f"Audio {key.upper()}" for key in audio_formats}
+    audio_formats: list[str] = list(mime_lookup.keys())
+    title_lookup: dict[str, str] = {key: f"Audio {key.upper()}" for key in audio_formats}
 
-    admin_form_fields = ("title", "subtitle", "m4a", "mp3", "oga", "opus", "tags")
+    admin_form_fields: tuple[str, ...] = ("title", "subtitle", "m4a", "mp3", "oga", "opus", "tags")
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     search_fields = CollectionMember.search_fields + [
@@ -60,39 +65,39 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     objects = AudioQuerySet.as_manager()
 
     @property
-    def uploaded_audio_files(self):
+    def uploaded_audio_files(self) -> Iterable[tuple[str, models.FileField]]:
         for name in self.audio_formats:
             field = getattr(self, name)
             if field.name is not None and len(field.name) > 0:
                 yield name, field
 
     @property
-    def file_formats(self):
+    def file_formats(self) -> str:
         return " ".join([n for n, f in self.uploaded_audio_files])
 
-    def get_audio_file_names(self):
+    def get_audio_file_names(self) -> set[str]:
         audio_file_names = set()
         for audio_format, field in self.uploaded_audio_files:
             audio_file_names.add(Path(field.name).stem)
         return audio_file_names
 
     @property
-    def name(self):
+    def name(self) -> str:
         if self.title is not None:
             return self.title
         return ",".join([_ for _ in self.get_audio_file_names()])
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.pk} - {self.name}"
 
-    def get_all_paths(self):
+    def get_all_paths(self) -> set[str]:
         paths = set()
         for name, field in self.uploaded_audio_files:
             paths.add(field.name)
         return paths
 
     @staticmethod
-    def _get_audio_duration(audio_url):
+    def _get_audio_duration(audio_url) -> timedelta:
         # Taken from: http://trac.ffmpeg.org/wiki/FFprobeTips
         cmd = f"""
         ffprobe  \
@@ -104,34 +109,36 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         """
         result = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode().strip()
         m = re.match(r"^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
+        if m is None:
+            raise ValueError(f"Could not parse duration: {result}")
         return timedelta(seconds=int(m["seconds"]), microseconds=int(m["microseconds"]))
 
-    def create_duration(self):
+    def create_duration(self) -> None:
         for name, field in self.uploaded_audio_files:
-            audio_url = field.url
+            audio_url = field.url  # type: ignore
             if not audio_url.startswith("http"):
-                audio_url = field.path
+                audio_url = field.path  # type: ignore
             duration = self._get_audio_duration(audio_url)
             if duration is not None:
                 self.duration = duration
                 break
 
     @property
-    def audio(self):
+    def audio(self) -> list[dict[str, str]]:
         items = []
         for name, field in self.uploaded_audio_files:
             items.append(
                 {
-                    "url": field.url,
+                    "url": field.url,  # type: ignore
                     "mimeType": self.mime_lookup[name],
-                    "size": field.size,
+                    "size": field.size,  # type: ignore
                     "title": self.title_lookup[name],
                 }
             )
         return items
 
     @property
-    def chapters(self):
+    def chapters(self) -> list[dict[str, str]]:
         items = []
         # chapter marks have to be ordered by start for
         # podlove web player - dunno why, 2019-04-19 jochen
@@ -147,14 +154,14 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         return items
 
     @property
-    def chapters_as_text(self):
+    def chapters_as_text(self) -> str:
         chaptermarks = []
         for mark in self.chaptermarks.order_by("start"):
             chaptermarks.append(mark.original_line)
         return "\n".join(chaptermarks)
 
     @staticmethod
-    def clean_ffprobe_chaptermarks(ffprobe_data):
+    def clean_ffprobe_chaptermarks(ffprobe_data: dict) -> list[dict[str, str]]:
         cleaned = []
         for item in ffprobe_data["chapters"]:
             start = item["start_time"]
@@ -164,7 +171,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
             cleaned.append({"start": start, "title": title})
         return cleaned
 
-    def get_chaptermark_data_from_file(self, audio_format):
+    def get_chaptermark_data_from_file(self, audio_format: str) -> list[dict[str, str]]:
         file_field = getattr(self, audio_format)
         try:
             url = file_field.url
@@ -186,11 +193,11 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         ffprobe_data = json.loads(subprocess.run(command, check=True, stdout=subprocess.PIPE).stdout)
         return self.clean_ffprobe_chaptermarks(ffprobe_data)
 
-    def set_episode_id(self, episode_id):
+    def set_episode_id(self, episode_id: int) -> None:
         """Set the episode id for this audio file to be able to return audio.episode_url in api."""
         self._episode_id = episode_id
 
-    def get_episode(self, episode_id=None):
+    def get_episode(self, episode_id=None) -> Optional["Episode"]:
         episodes = self.episodes.all()
         if episode_id is not None:
             episodes = episodes.filter(pk=episode_id)
@@ -200,7 +207,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         return None
 
     @property
-    def episode_url(self):
+    def episode_url(self) -> Optional[str]:
         """Return the url to the episode this audio file belongs to."""
         episode_id = None
         if hasattr(self, "_episode_id"):
@@ -211,25 +218,26 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         return None
 
     @property
-    def podlove_url(self):
+    def podlove_url(self) -> str:
         return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})
 
     @property
-    def duration_str(self):
+    def duration_str(self) -> str:
         dur = str(self.duration)
         return dur.split(".")[0]
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs) -> None:
         generate_duration = kwargs.pop("duration", True)
-        result = super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
         if generate_duration and self.duration is None:
             logger.info("save audio duration")
             self.create_duration()
-            result = super().save(*args, **kwargs)
-        return result
+            super().save(*args, **kwargs)
 
 
-def sync_chapter_marks(from_database, from_cms):
+def sync_chapter_marks(
+    from_database: list["ChapterMark"], from_cms: list["ChapterMark"]
+) -> tuple[list["ChapterMark"], list["ChapterMark"], list["ChapterMark"]]:
     start_from_database = {cm.start: cm for cm in from_database}
     start_from_cms = {cm.start for cm in from_cms}
     to_add, to_update = [], []
@@ -247,8 +255,8 @@ def sync_chapter_marks(from_database, from_cms):
 
 class ChapterMarkManager(models.Manager):
     @staticmethod
-    def sync_chaptermarks(audio, from_cms):
-        from_db = list(audio.chaptermarks.all())
+    def sync_chaptermarks(audio: Audio, from_cms: list["ChapterMark"]) -> None:
+        from_db: list["ChapterMark"] = list(audio.chaptermarks.all())
         to_add, to_update, to_remove = sync_chapter_marks(from_db, from_cms)
         for cm in to_add + to_update:
             cm.save()
@@ -268,14 +276,14 @@ class ChapterMark(models.Model):
     class Meta:
         unique_together = (("audio", "start"),)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.pk} {self.start} {self.title}"
 
-    def has_changed(self, other):
+    def has_changed(self, other: "ChapterMark") -> bool:
         return self.title != other.title
 
     @property
-    def original_line(self):
+    def original_line(self) -> str:
         link = ""
         if self.link is not None:
             link = self.link
