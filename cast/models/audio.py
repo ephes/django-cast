@@ -249,10 +249,15 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
 
     def save(self, *args, **kwargs) -> None:
         generate_duration = kwargs.pop("duration", True)
+        cache_file_sizes = kwargs.pop("cache_file_sizes", True)
+        # FIXME why is this necessary? Cannot move super save to end of method...
         super().save(*args, **kwargs)
         if generate_duration and self.duration is None:
             logger.info("save audio duration")
             self.create_duration()
+            super().save(*args, **kwargs)
+        if cache_file_sizes:
+            self.size_to_metadata()
             super().save(*args, **kwargs)
 
 
