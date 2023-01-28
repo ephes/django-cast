@@ -115,10 +115,25 @@ class TestAudioModel:
             {"start": "617.117000", "title": "Django Async"},
         ]
 
-    def test_audio_file_size_is_cached(self, audio):
+    def test_write_audio_file_size_to_cache(self, audio):
         expected_size = audio.m4a.size
         audio.size_to_metadata()
         assert audio.data["size"]["m4a"] == expected_size
+
+    def test_read_audio_file_size_from_cache(self, audio):
+        # when size is not in cache, it should be read from file
+        expected_file_size = audio.m4a.size
+        audio.data = {}
+        assert audio.get_file_size("m4a") == expected_file_size
+
+        # when size is in cache, it should be read from cache
+        expected_cache_size = 123
+        audio.data = {"size": {"m4a": expected_cache_size}}
+        assert audio.get_file_size("m4a") == expected_cache_size
+
+        # when file field is null, return 0
+        audio.mp3 = None
+        assert audio.get_file_size("mp3") == 0
 
 
 class TestChapterMarkModel:

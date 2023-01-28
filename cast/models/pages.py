@@ -289,8 +289,8 @@ class Post(TimeStampedModel, Page):
     def get_enclosure_url(self, audio_format):
         return getattr(self.podcast_audio, audio_format).url
 
-    def get_enclosure_size(self, audio_format):
-        return getattr(self.podcast_audio, audio_format).size
+    def get_enclosure_size(self, audio_format: str) -> int:
+        return self.podcast_audio.get_file_size(audio_format)
 
     def get_slug(self):
         return slugify(self.title)

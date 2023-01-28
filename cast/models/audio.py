@@ -133,7 +133,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
                 {
                     "url": field.url,  # type: ignore
                     "mimeType": self.mime_lookup[name],
-                    "size": field.size,  # type: ignore
+                    "size": self.get_file_size(name),
                     "title": self.title_lookup[name],
                 }
             )
@@ -233,6 +233,19 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         for audio_format, field in self.uploaded_audio_files:
             assert hasattr(field, "size"), f"field {field} has no size attribute"
             self.data["size"][audio_format] = field.size
+
+    def get_file_size(self, audio_format: str) -> int:
+        """Return the file size of the given audio format."""
+        cached_size = self.data.get("size", {}).get(audio_format)
+        if cached_size is not None:
+            return cached_size
+        file_field = getattr(self, audio_format)
+        try:
+            assert hasattr(file_field, "size"), f"field {file_field} has no size attribute"
+            return file_field.size
+        except ValueError:
+            # file_field is null
+            return 0
 
     def save(self, *args, **kwargs) -> None:
         generate_duration = kwargs.pop("duration", True)
