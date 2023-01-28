@@ -10,3 +10,5 @@ Split up post in episodes and posts.
 * Fixed a little issue raising an exception when an unknown language is set for a code block
 * Split up post page model in episodes and posts
 * Renamed test files to make the names easier searchable
+* Use a JSONField for the audio model to cache file sizes
+* Removed to warnings showing up running migrations
