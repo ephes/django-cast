@@ -505,7 +505,6 @@ Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'Tripptrappkuckuck.mp4':
       handler_name    : SoundHandler
         """
         width, height = get_video_dimensions(ffmpeg_output.split("\n"))
-        print("width x height: ", width, height)
         assert width == 1920
         assert height == 1080
 
@@ -514,6 +513,5 @@ Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'Tripptrappkuckuck.mp4':
            foo bar baz
         """
         width, height = get_video_dimensions(ffmpeg_output.split("\n"))
-        print("width x height: ", width, height)
-        assert width == None
-        assert height == None
+        assert width is None
+        assert height is None
