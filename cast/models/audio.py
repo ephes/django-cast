@@ -231,8 +231,12 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     def size_to_metadata(self) -> None:
         self.data["size"] = self.data.get("size", {})
         for audio_format, field in self.uploaded_audio_files:
-            assert hasattr(field, "size"), f"field {field} has no size attribute"
-            self.data["size"][audio_format] = field.size
+            try:
+                assert hasattr(field, "size"), f"field {field} has no size attribute"
+                self.data["size"][audio_format] = field.size
+            except FileNotFoundError:
+                # file does not exist -> do not cache
+                pass
 
     def get_file_size(self, audio_format: str) -> int:
         """Return the file size of the given audio format."""
