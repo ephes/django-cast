@@ -160,3 +160,6 @@ DEFAULT_FILE_STORAGE = "inmemorystorage.InMemoryStorage"
 
 # Use in memory cache for tests
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# Wagtail
+WAGTAILADMIN_BASE_URL = "/cms"
