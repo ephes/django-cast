@@ -60,20 +60,18 @@ class TestAllAudioEndpoints:
 
     def test_get_all_not_authenticated(self, client, audio_urls):
         for view_name, url in audio_urls.urls.items():
-            print("view_name, url: ", view_name, url)
             r = client.get(url)
 
-            # redirect to login
+            # redirect to log in
             assert r.status_code == 302
             login_url = reverse("wagtailadmin_login")
             assert login_url in r.url
 
     def test_get_all_authenticated(self, authenticated_client, audio_urls):
         for view_name, url in audio_urls.urls.items():
-            print("viewname url: ", view_name, url)
             r = authenticated_client.get(url)
 
-            # assert we are not redirected to login
+            # assert we are not redirected to log in
             assert r.status_code == 200
 
 
@@ -178,12 +176,12 @@ class TestAudioAdd:
         }
         r = authenticated_client.post(add_url, post_data)
 
-        # make sure we dont get redirected to index
+        # make sure we don't get redirected to index
         assert r.status_code == 200
         assert r.context["message"] == "The audio file could not be saved due to errors."
 
-        # make sure we didn't create a audio
-        Audio.objects.first() is None
+        # make sure we didn't create an audio
+        assert Audio.objects.first() is None
 
     def test_post_add_audio(self, authenticated_client, minimal_mp4):
         add_url = reverse("castaudio:add")
@@ -247,7 +245,7 @@ class TestAudioEdit:
         post_data = {"m4a": m4a_audio}
         r = authenticated_client.post(audio_urls.edit, post_data)
 
-        # make sure we dont get redirected to index
+        # make sure we don't get redirected to index
         assert r.status_code == 200
 
     def test_post_edit_audio_title(self, authenticated_client, audio_urls):
@@ -266,7 +264,7 @@ class TestAudioEdit:
         assert audio.title == post_data["title"]
 
     def test_post_edit_audio_m4a(self, authenticated_client, audio_urls, m4a_audio):
-        m4a_audio.seek(0)  # dunno why this is necessary :/
+        m4a_audio.seek(0)  # don't know why this is necessary :/
         post_data = {"m4a": m4a_audio}
         r = authenticated_client.post(audio_urls.edit, post_data)
 
