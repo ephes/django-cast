@@ -38,6 +38,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     oga = models.FileField(upload_to="cast_audio/", null=True, blank=True)
     opus = models.FileField(upload_to="cast_audio/", null=True, blank=True)
 
+    data = models.JSONField("Metadata", blank=True, default=dict)
+
     mime_lookup: dict[str, str] = {
         "mp3": "audio/mpeg",
         "m4a": "audio/mp4",
@@ -225,6 +227,12 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     def duration_str(self) -> str:
         dur = str(self.duration)
         return dur.split(".")[0]
+
+    def size_to_metadata(self) -> None:
+        self.data["size"] = self.data.get("size", {})
+        for audio_format, field in self.uploaded_audio_files:
+            assert hasattr(field, "size"), f"field {field} has no size attribute"
+            self.data["size"][audio_format] = field.size
 
     def save(self, *args, **kwargs) -> None:
         generate_duration = kwargs.pop("duration", True)

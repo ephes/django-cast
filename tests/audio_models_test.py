@@ -115,6 +115,11 @@ class TestAudioModel:
             {"start": "617.117000", "title": "Django Async"},
         ]
 
+    def test_audio_file_size_is_cached(self, audio):
+        expected_size = audio.m4a.size
+        audio.size_to_metadata()
+        assert audio.data["size"]["m4a"] == expected_size
+
 
 class TestChapterMarkModel:
     pytestmark = pytest.mark.django_db
