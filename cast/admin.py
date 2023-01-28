@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 from django.contrib import admin
 from django.db.models import QuerySet
+from django.utils.translation import gettext_lazy as _
 
 from .models import (
     Audio,
@@ -74,10 +75,18 @@ class FileModelAdmin(AdminUserMixin, admin.ModelAdmin):
     fields = ("user", "original")
 
 
+@admin.action(description=_("Cache file  sizes"))
+def cache_file_sizes(_modeladmin: admin.ModelAdmin, _request: "HttpRequest", queryset: QuerySet[Audio]) -> None:
+    for audio in queryset:
+        audio.size_to_metadata()
+        audio.save()
+
+
 @admin.register(Audio)
 class AudioAdmin(AdminUserMixin, admin.ModelAdmin):
     list_display = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus")
-    fields = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus")
+    fields = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus", "data")
+    actions = [cache_file_sizes]
 
 
 @admin.register(ChapterMark)
