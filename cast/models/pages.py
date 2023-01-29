@@ -390,7 +390,7 @@ class Post(TimeStampedModel, Page):
 
 
 class Episode(Post):  # type: ignore
-    template = "cast/post.html"
+    template = "cast/episode.html"
 
     podcast_audio = models.ForeignKey(
         "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="episodes"
@@ -429,6 +429,11 @@ class Episode(Post):  # type: ignore
         FieldPanel("block"),
         FieldPanel("podcast_audio"),
     ]
+
+    def get_context(self, request, *args, **kwargs) -> dict:
+        context = super().get_context(request, *args, **kwargs)
+        context["episode"] = self
+        return context
 
 
 class HomePage(Page):

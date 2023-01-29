@@ -1,0 +1,19 @@
+{% extends "cast/post.html" %}
+
+{% block meta %}
+  {{ block.super }}
+  {% if episode.podcast_audio %}
+    <!-- Twitter Player Card -->
+    <!-- Implement in your own template for now -->
+  {% endif %}
+{% endblock %}
+
+{% block css %}
+  {{ block.super }}
+{% endblock %}
+
+{% block content %}
+  <h1>das hier doch auch?</h1>
+  {{ block.super }}
+  foobarbaz
+{% endblock %}
