@@ -464,9 +464,12 @@ class Episode(Post):  # type: ignore
     def get_context(self, request, *args, **kwargs) -> dict:
         context = super().get_context(request, *args, **kwargs)
         context["episode"] = self
-        player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": self.blog.slug})
-        player_url = request.build_absolute_uri(player_url)
-        context["player_url"] = player_url
+        if hasattr(request, "build_absolute_uri"):
+            player_url = reverse(
+                "cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": self.blog.slug}
+            )
+            player_url = request.build_absolute_uri(player_url)
+            context["player_url"] = player_url
         return context
 
 
