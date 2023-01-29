@@ -7,6 +7,8 @@ from django.db import models
 from django.http import Http404
 from django.shortcuts import redirect
 from django.utils import timezone
+from django.utils.html import escape
+from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from slugify import slugify
@@ -206,6 +208,22 @@ def sync_media_ids(from_database, from_body):
     return to_add, to_remove
 
 
+class PlaceholderRequest:
+    """Just a fake request to please the serve method"""
+
+    is_preview = False
+    headers: dict[str, str] = {}
+    META: dict = {}
+    port = 80
+    host = f"https://localhost:{port}"
+
+    def get_host(self):
+        return self.host
+
+    def get_port(self):
+        return self.port
+
+
 class PostPublishedManager(PageManager):
     use_for_related_fields = True
 
@@ -250,6 +268,7 @@ class Post(TimeStampedModel, Page):
         FieldPanel("body"),
     ]
     template = "cast/post.html"
+    body_template = "cast/post_body.html"
     parent_page_types = ["cast.Blog"]
 
     # managers
@@ -382,6 +401,17 @@ class Post(TimeStampedModel, Page):
         for media_type, ids in to_remove.items():
             for media_id in ids:
                 media_attr_lookup[media_type].remove(media_id)
+
+    def get_description(self, request=PlaceholderRequest(), render_detail=False, escape_html=True) -> SafeText:
+        """
+        Get a description for the feed or twitter player card. Needs to be
+        a method because the feed is able to pass the actual request object.
+        """
+        self.template = self.body_template
+        description = self.serve(request, render_detail=render_detail).rendered_content.replace("\n", "")
+        if escape_html:
+            description = escape(description)
+        return description
 
     def save(self, *args, **kwargs):
         save_return = super().save(*args, **kwargs)

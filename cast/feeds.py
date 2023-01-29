@@ -13,9 +13,6 @@ from .models import Audio, Blog, Episode, Post
 logger = logging.getLogger(__name__)
 
 
-POST_BODY_TEMPLATE = "cast/post_body.html"
-
-
 class LatestEntriesFeed(Feed):
     object: Blog
     request: HttpRequest
@@ -42,8 +39,7 @@ class LatestEntriesFeed(Feed):
         return item.title
 
     def item_description(self, item) -> SafeText:
-        item.template = POST_BODY_TEMPLATE
-        item.description = item.serve(self.request, render_detail=True).rendered_content
+        item.description = item.get_description(request=self.request, render_detail=True, escape_html=False)
         return item.description
 
     def item_link(self, item) -> SafeText:
@@ -187,8 +183,7 @@ class PodcastFeed(Feed):
         return item.title
 
     def item_description(self, item):
-        item.template = POST_BODY_TEMPLATE
-        item.description = item.serve(self.request, render_detail=True).render().rendered_content
+        item.description = item.get_description(request=self.request, render_detail=True, escape_html=False)
         return item.description
 
     def item_link(self, item):
