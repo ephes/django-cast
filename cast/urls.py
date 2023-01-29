@@ -2,6 +2,7 @@ from django.urls import include, path
 from django.views.decorators.cache import cache_page
 
 from . import feeds
+from .views import meta
 
 app_name = "cast"
 urlpatterns = [
@@ -24,4 +25,6 @@ urlpatterns = [
         view=cache_page(5 * 60)(feeds.AtomPodcastFeed()),
         name="podcast_feed_atom",
     ),
+    # Meta views like twitter player cards etc
+    path("<slug:blog_slug>/<slug:episode_slug>/twitter-player/", view=meta.twitter_player, name="twitter-player"),
 ]

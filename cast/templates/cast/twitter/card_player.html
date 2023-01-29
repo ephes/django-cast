@@ -1,0 +1,48 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    <div id="pwp5-{{ episode.uuid }}" style="width:200px">
+      <root style="max-width:250px;min-width:250px;" class="p-4 flex justify-left ">
+        <play-button></play-button>
+      </root>
+
+    </div>
+
+  </body>
+
+  <script type="text/javascript" src="{% static 'js/cast/web-player/pwp_embed.5.js' %}"></script>
+  <script>
+
+    podlovePlayer('#pwp5-{{ episode.uuid }}', {
+      "version": 5,
+      "show": {
+        "title": '{{ episode.blog.title }}',
+        "url": '{{ episode.blog.full_url }}',
+      },
+
+      "duration": '{{ episode.podcast_audio.duration_str }}',
+      "audio": [{
+        "url": "{{ episode.podcast_audio.m4a.url }}",
+        "mimeType": "audio/mp4",
+      }]
+    },
+      {
+        "version": 5,
+        "base":"{% static 'js/cast/web-player' %}",
+
+        "theme": {
+          "tokens": {
+            "brandLightest": "#3c6f97",
+            "contrast":  "#fff",
+            "brandDark":  "#fff",
+            "brand": "#fff",
+          }
+        },
+      });
+  </script>
+</html>
