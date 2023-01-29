@@ -6,6 +6,7 @@ from django.core.paginator import InvalidPage, Paginator
 from django.db import models
 from django.http import Http404
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
 from django.utils.safestring import SafeText
@@ -463,6 +464,9 @@ class Episode(Post):  # type: ignore
     def get_context(self, request, *args, **kwargs) -> dict:
         context = super().get_context(request, *args, **kwargs)
         context["episode"] = self
+        player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": self.blog.slug})
+        player_url = request.build_absolute_uri(player_url)
+        context["player_url"] = player_url
         return context
 
 
