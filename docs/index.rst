@@ -13,6 +13,7 @@ fill since Django Cast switched to Wagtail.
 
    installation
    contributing
+   features
    spamfilter
    social-media
    releases/index
