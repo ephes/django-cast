@@ -47,7 +47,6 @@ dependencies = [
     "django-tag-parser",
     "django-threadedcomments",
     "markdown",
-    "plotly",
     "Pygments",
     "python-akismet",
     "python-slugify",
