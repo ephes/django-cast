@@ -46,7 +46,6 @@ dependencies = [
     "django-model-utils",
     "django-tag-parser",
     "django-threadedcomments",
-    "feedparser",
     "markdown",
     "plotly",
     "Pygments",
@@ -59,6 +58,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     "factory_boy",
+    "feedparser",
     "dj-inmemorystorage",
     "pytest >= 6",
     "pytest-cov >= 3",
