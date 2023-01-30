@@ -11,4 +11,4 @@ def test_twitter_player(client, podcast_episode):
 
     content = r.content.decode("utf-8")
     assert str(episode.uuid) in content
-    assert "pwp_embed.5.js" in content
+    assert "embed.5.js" in content
