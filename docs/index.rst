@@ -14,6 +14,6 @@ fill since Django Cast switched to Wagtail.
    installation
    contributing
    spamfilter
-   socialmedia
+   social-media
    releases/index
    release
