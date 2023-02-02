@@ -1,10 +1,5 @@
-from datetime import timedelta
-
 import pytest
 from django.urls import reverse
-from django.utils import timezone
-
-from cast.models import Post
 
 
 class TestPublished:
@@ -30,21 +25,3 @@ class TestPublished:
 
         content = r.content.decode("utf-8")
         assert post.title not in content
-
-    def test_published_manager_pub_date_null(self, post):
-        assert Post.published.count() == 1
-        post.pub_date = None
-        post.save()
-        assert Post.objects.count() == 1
-        assert Post.published.count() == 0
-
-    def test_published_manager_future_pubdate(self, post):
-        assert Post.published.count() == 1
-        post.pub_date = timezone.now() + timedelta(seconds=10)
-        post.save()
-        assert Post.objects.count() == 1
-        assert Post.published.count() == 0
-        post.pub_date = timezone.now()
-        post.save()
-        assert Post.objects.count() == 1
-        assert Post.published.count() == 1

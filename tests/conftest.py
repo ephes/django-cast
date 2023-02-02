@@ -249,7 +249,7 @@ def blog_with_itunes_categories(user, site):
 
 @pytest.fixture()
 def post_data():
-    return {"title": "foobar", "content": "blub", "explicit": "2", "pub_date": ""}
+    return {"title": "foobar", "content": "blub", "explicit": "2"}
 
 
 @pytest.fixture()
@@ -336,7 +336,6 @@ def post(blog, body):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=timezone.now(),
         body=body,
     )
 
@@ -348,7 +347,6 @@ def episode(blog, body):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=timezone.now(),
         body=body,
     )
 
@@ -360,7 +358,6 @@ def post_with_gallery(blog, body_with_gallery):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=timezone.now(),
         body=body_with_gallery,
     )
 
@@ -372,7 +369,6 @@ def post_with_video(blog, body_with_video):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=timezone.now(),
         body=body_with_video,
     )
 
@@ -384,7 +380,6 @@ def post_with_audio(blog, body_with_audio):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=timezone.now(),
         body=body_with_audio,
     )
 
@@ -396,7 +391,6 @@ def post_with_image(blog, body_with_image):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=timezone.now(),
         body=body_with_image,
     )
 
@@ -408,7 +402,6 @@ def unpublished_post(blog):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=None,
     )
     post.unpublish()
     post.refresh_from_db()
@@ -423,7 +416,6 @@ def post_with_date(blog):
         parent=blog,
         title="test entry",
         slug="test-entry",
-        pub_date=timezone.now(),
         visible_date=visible_date,
     )
 
@@ -436,7 +428,6 @@ def post_with_different_date(blog):
         parent=blog,
         title="test entry",
         slug="test-entry-alt",
-        pub_date=timezone.now(),
         visible_date=visible_date,
     )
 
@@ -452,7 +443,6 @@ def post_with_search(blog, python_body):
         parent=blog,
         title="asdf",
         slug="test-entry-with-search",
-        pub_date=timezone.now(),
         visible_date=timezone.now(),
         body=body,
     )
@@ -467,7 +457,6 @@ def podcast_episode(blog, audio, body):
         parent=blog,
         title="test podcast episode",
         slug="test-podcast-entry",
-        pub_date=timezone.now(),
         podcast_audio=audio,
         body=body,
     )
@@ -480,7 +469,6 @@ def podcast_episode_with_same_audio(blog, audio, body):
         parent=blog,
         title="test podcast episode 2",
         slug="test-podcast-entry2",
-        pub_date=timezone.now(),
         podcast_audio=audio,
         body=body,
     )
@@ -494,7 +482,6 @@ def podcast_episode_with_different_visible_date(blog, audio):
         parent=blog,
         title="test podcast episode",
         slug="test-podcast-entry",
-        pub_date=timezone.now(),
         visible_date=visible_date,
         podcast_audio=audio,
     )

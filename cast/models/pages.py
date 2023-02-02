@@ -225,20 +225,8 @@ class PlaceholderRequest:
         return self.port
 
 
-class PostPublishedManager(PageManager):
-    use_for_related_fields = True
-
-    def get_queryset(self):
-        return super().get_queryset().filter(pub_date__lte=timezone.now())
-
-    @property
-    def podcast_episodes(self):
-        return self.get_queryset().filter(podcast_audio__isnull=False)
-
-
 class Post(TimeStampedModel, Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
-    pub_date = models.DateTimeField(null=True, blank=True)
     visible_date = models.DateTimeField(default=timezone.now)
     comments_enabled = models.BooleanField(
         _("comments_enabled"),
@@ -274,7 +262,6 @@ class Post(TimeStampedModel, Page):
 
     # managers
     objects = PageManager()
-    published = PostPublishedManager()
 
     @property
     def media_model_lookup(self):
@@ -298,10 +285,6 @@ class Post(TimeStampedModel, Page):
         attributes like blog.comments_enabled etc..
         """
         return self.get_parent().blog
-
-    @property
-    def is_published(self):
-        return self.pub_date is not None and self.pub_date < timezone.now()
 
     def __str__(self):
         return self.title
