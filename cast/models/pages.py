@@ -225,7 +225,7 @@ class PlaceholderRequest:
         return self.port
 
 
-class Post(TimeStampedModel, Page):
+class Post(Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     visible_date = models.DateTimeField(default=timezone.now)
     comments_enabled = models.BooleanField(

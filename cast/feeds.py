@@ -193,7 +193,7 @@ class PodcastFeed(Feed):
         return item.visible_date
 
     def item_updateddate(self, item: Post) -> datetime:
-        return item.modified
+        return item.last_published_at
 
     # def item_categories(self, post):
     #    return self.categories(self.blog)
