@@ -11,7 +11,6 @@ from django.utils import timezone
 from django.utils.html import escape
 from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
-from model_utils.models import TimeStampedModel
 from slugify import slugify
 from wagtail.admin.edit_handlers import FieldPanel
 from wagtail.core import blocks
@@ -31,7 +30,7 @@ from cast.models.itunes import ItunesArtWork
 logger = logging.getLogger(__name__)
 
 
-class Blog(TimeStampedModel, Page):
+class Blog(Page):
     author = models.CharField(max_length=255, default=None, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     email = models.EmailField(null=True, default=None, blank=True)
