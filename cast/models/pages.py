@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 
 class Blog(Page):
+    # move author field into Podcast. This is used to have a First Author Name / Second Author Name
+    # string in the feed.
     author = models.CharField(max_length=255, default=None, null=True, blank=True)
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     email = models.EmailField(null=True, default=None, blank=True)
