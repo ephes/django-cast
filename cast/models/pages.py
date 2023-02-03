@@ -1,10 +1,13 @@
 import json
 import logging
 import uuid
+from collections.abc import Mapping
+from typing import Optional
 
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
-from django.http import Http404
+from django.db.models import QuerySet
+from django.http import Http404, HttpRequest
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -87,41 +90,41 @@ class Blog(Page):
         return self.title
 
     @property
-    def last_build_date(self):
+    def last_build_date(self) -> timezone.datetime:
         return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
 
     @property
-    def itunes_categories_parsed(self):
+    def itunes_categories_parsed(self) -> dict[str, list[str]]:
         try:
             return json.loads(self.itunes_categories)
         except json.decoder.JSONDecodeError:
             return {}
 
     @property
-    def is_podcast(self):
+    def is_podcast(self) -> bool:
         return Post.objects.live().descendant_of(self).exclude(podcast_audio__isnull=True).count() > 0
 
     @property
-    def author_name(self):
+    def author_name(self) -> str:
         if self.author is not None:
             return self.author
         else:
             return self.owner.get_full_name()
 
     @property
-    def unfiltered_published_posts(self):
+    def unfiltered_published_posts(self) -> QuerySet["Post"]:
         return Post.objects.live().descendant_of(self).order_by("-visible_date")
 
     @property
-    def request(self):
+    def request(self) -> Optional[HttpRequest]:
         return getattr(self, "_request", None)
 
     @request.setter
-    def request(self, value):
+    def request(self, value: HttpRequest) -> None:
         self._request = value
 
     @property
-    def filterset_data(self):
+    def filterset_data(self) -> Mapping:
         if self.request is not None:
             return self.request.GET
         else:
