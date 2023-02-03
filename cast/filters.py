@@ -71,8 +71,8 @@ class DateFacetWidget(Widget):
 
 def parse_date_facets(value):
     """Split into function, because it needs to be imported by the post list view."""
-    # clean up value a little bit, because otherwise sql-injection
-    # search requests are spamming the logfile with garbage -> analytics wont work
+    # clean up value a bit, because otherwise sql-injection
+    # search requests are spamming the logfile with garbage -> analytics won't work
     allowed = set(string.digits + "-")
     value = "".join([c for c in value if c in allowed])
     year_month = datetime.strptime(value, "%Y-%m")
@@ -168,7 +168,7 @@ class PostFilterset(django_filters.FilterSet):
         self.facet_counts = facet_counts
         if fetch_facet_counts:
             # avoid running into infinite recursion problems, because
-            # get_facet_counts will instantiate Postfilterset again
+            # get_facet_counts will instantiate PostFilterset again
             # -> and again -> and again ...
             try:
                 self.facet_counts = get_facet_counts(data, queryset)
