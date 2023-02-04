@@ -53,7 +53,7 @@ class Blog(Page):
         FieldPanel("email"),
     ]
 
-    subpage_types = ["cast.Post", "cast.Episode"]
+    subpage_types = ["cast.Post"]
 
     def __str__(self):
         return self.title
@@ -175,7 +175,9 @@ class Podcast(Blog):
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
+
     template = "cast/blog_list_of_posts.html"
+    subpage_types = ["cast.Post", "cast.Episode"]
 
     @property
     def itunes_categories_parsed(self) -> dict[str, list[str]]:
@@ -263,7 +265,7 @@ class Post(Page):
     ]
     template = "cast/post.html"
     body_template = "cast/post_body.html"
-    parent_page_types = ["cast.Blog"]
+    parent_page_types = ["cast.Blog", "cast.Podcast"]
 
     # managers
     objects = PageManager()
@@ -439,7 +441,7 @@ class Episode(Post):  # type: ignore
     )
 
     template = "cast/episode.html"
-    parent_page_types = ["cast.Podcast", "cast.Blog"]
+    parent_page_types = ["cast.Podcast"]
 
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
