@@ -23,6 +23,7 @@ from .factories import (
     BlogFactory,
     EpisodeFactory,
     GalleryFactory,
+    PodcastFactory,
     PostFactory,
     UserFactory,
     VideoFactory,
@@ -225,20 +226,25 @@ def blog(user, site):
 
 
 @pytest.fixture()
-def blog_with_artwork(user, itunes_artwork, site):
-    return BlogFactory(
+def podcast(user, site):
+    return PodcastFactory(owner=user, title="test podcast", slug="test_podcast", parent=site.root_page)
+
+
+@pytest.fixture()
+def podcast_with_artwork(user, itunes_artwork, site):
+    return PodcastFactory(
         owner=user,
-        title="test blog",
-        slug="test_blog",
+        title="test podcast",
+        slug="test_podcast",
         itunes_artwork=itunes_artwork,
         parent=site.root_page,
     )
 
 
 @pytest.fixture()
-def blog_with_itunes_categories(user, site):
+def podcast_with_itunes_categories(user, site):
     categories = {"foo": ["baz"]}
-    return BlogFactory(
+    return PodcastFactory(
         owner=user,
         title="test blog",
         slug="test_blog",
@@ -341,10 +347,21 @@ def post(blog, body):
 
 
 @pytest.fixture()
-def episode(blog, body):
+def post_in_podcast(podcast, body):
+    return PostFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="test entry",
+        slug="test-entry",
+        body=body,
+    )
+
+
+@pytest.fixture()
+def episode(podcast, body):
     return EpisodeFactory(
-        owner=blog.owner,
-        parent=blog,
+        owner=podcast.owner,
+        parent=podcast,
         title="test entry",
         slug="test-entry",
         body=body,
@@ -451,10 +468,10 @@ def post_with_search(blog, python_body):
 
 
 @pytest.fixture()
-def podcast_episode(blog, audio, body):
+def podcast_episode(podcast, audio, body):
     return EpisodeFactory(
-        owner=blog.owner,
-        parent=blog,
+        owner=podcast.owner,
+        parent=podcast,
         title="test podcast episode",
         slug="test-podcast-entry",
         podcast_audio=audio,
@@ -475,11 +492,11 @@ def podcast_episode_with_same_audio(blog, audio, body):
 
 
 @pytest.fixture()
-def podcast_episode_with_different_visible_date(blog, audio):
+def podcast_episode_with_different_visible_date(podcast, audio):
     visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2019, 1, 1, 8))
     return EpisodeFactory(
-        owner=blog.owner,
-        parent=blog,
+        owner=podcast.owner,
+        parent=podcast,
         title="test podcast episode",
         slug="test-podcast-entry",
         visible_date=visible_date,

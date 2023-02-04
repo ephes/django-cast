@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 from django.utils.safestring import SafeText
 
-from .models import Audio, Blog, Episode, Post
+from .models import Audio, Blog, Episode, Podcast, Post
 
 logger = logging.getLogger(__name__)
 
@@ -49,20 +49,20 @@ class LatestEntriesFeed(Feed):
 class ITunesElements:
     feed: dict
 
-    def add_artwork(self, blog: Blog, handler) -> None:
-        if blog.itunes_artwork is None:
+    def add_artwork(self, podcast: Podcast, handler) -> None:
+        if podcast.itunes_artwork is None:
             return
 
         haqe = handler.addQuickElement
-        itunes_artwork_url = blog.itunes_artwork.original.url
+        itunes_artwork_url = podcast.itunes_artwork.original.url
         handler.addQuickElement("itunes:image", attrs={"href": itunes_artwork_url})
         handler.startElement("image", {})
         haqe("url", itunes_artwork_url)
         haqe("title", self.feed["title"])
         handler.endElement("image")
 
-    def add_itunes_categories(self, blog: Blog, handler) -> None:
-        itunes_categories = blog.itunes_categories_parsed
+    def add_itunes_categories(self, podcast: Podcast, handler) -> None:
+        itunes_categories = podcast.itunes_categories_parsed
         if len(itunes_categories) == 0:
             return
         for category, subcategories in itunes_categories.items():
@@ -142,7 +142,7 @@ class PodcastFeed(Feed):
 
     audio_format: str
     mime_type: str
-    object: Blog
+    object: Podcast
     request: HttpRequest
 
     def set_audio_format(self, audio_format: str) -> None:
@@ -157,7 +157,7 @@ class PodcastFeed(Feed):
         self.set_audio_format(kwargs["audio_format"])
 
         slug = kwargs["slug"]
-        self.object = get_object_or_404(Blog, slug=slug)
+        self.object = get_object_or_404(Podcast, slug=slug)
         self.request = request  # need request for item.serve(request) later on
         return self.object
 
@@ -168,7 +168,10 @@ class PodcastFeed(Feed):
         return self.object.title
 
     def categories(self, blog: Blog) -> tuple[str]:
-        return (blog.keywords.split(",")[0],)
+        if hasattr(blog, "categories"):
+            return (blog.keywords.split(",")[0],)
+        else:
+            return ("",)
 
     def itunes_categories(self, blog: Blog) -> list[str]:
         return blog.itunes_categories.split(",")

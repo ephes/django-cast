@@ -63,13 +63,6 @@ class Blog(Page):
         return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
 
     @property
-    def itunes_categories_parsed(self) -> dict[str, list[str]]:
-        try:
-            return json.loads(self.itunes_categories)
-        except json.decoder.JSONDecodeError:
-            return {}
-
-    @property
     def is_podcast(self) -> bool:
         return Post.objects.live().descendant_of(self).exclude(podcast_audio__isnull=True).count() > 0
 
@@ -183,6 +176,13 @@ class Podcast(Blog):
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
     template = "cast/blog_list_of_posts.html"
+
+    @property
+    def itunes_categories_parsed(self) -> dict[str, list[str]]:
+        try:
+            return json.loads(self.itunes_categories)
+        except json.decoder.JSONDecodeError:
+            return {}
 
 
 class ContentBlock(blocks.StreamBlock):

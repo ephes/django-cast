@@ -20,26 +20,26 @@ def test_unknown_audio_format():
 class TestFeedCreation:
     pytestmark = pytest.mark.django_db
 
-    def test_add_artwork_true(self, dummy_handler, blog_with_artwork):
+    def test_add_artwork_true(self, dummy_handler, podcast_with_artwork):
         ie = ITunesElements()
         ie.feed = {"title": "foobar", "link": "bar"}
-        ie.add_artwork(blog_with_artwork, dummy_handler)
+        ie.add_artwork(podcast_with_artwork, dummy_handler)
         assert "itunes:image" in dummy_handler.aqe
         assert "image" in dummy_handler.se
         assert "image" in dummy_handler.ee
 
-    def test_add_artwork_false(self, dummy_handler, blog):
+    def test_add_artwork_false(self, dummy_handler, podcast):
         ie = ITunesElements()
         ie.feed = {"title": "foobar", "link": "bar"}
-        ie.add_artwork(blog, dummy_handler)
+        ie.add_artwork(podcast, dummy_handler)
         assert "itunes:image" not in dummy_handler.aqe
         assert "image" not in dummy_handler.se
         assert "image" not in dummy_handler.ee
 
-    def test_itunes_categories(self, dummy_handler, blog_with_itunes_categories):
-        blog = blog_with_itunes_categories
+    def test_itunes_categories(self, dummy_handler, podcast_with_itunes_categories):
+        podcast = podcast_with_itunes_categories
         ie = ITunesElements()
-        ie.add_itunes_categories(blog, dummy_handler)
+        ie.add_itunes_categories(podcast, dummy_handler)
         assert dummy_handler.se["itunes:category"]["text"] == "foo"
         assert dummy_handler.aqe["itunes:category"][-1]["text"] == "baz"
         assert "itunes:category" in dummy_handler.ee
@@ -103,7 +103,10 @@ class TestGeneratedFeeds:
 
         d = feedparser.parse(r.content)
         assert len(d.entries) == 1
-        assert Post.objects.live().descendant_of(podcast_episode.blog).count() == 2
+        print(podcast_episode)
+        print(podcast_episode.blog)
+        print(podcast_episode.podcast)
+        assert Post.objects.live().descendant_of(podcast_episode.blog).count() == 1
 
     def test_podcast_feed_contains_visible_date_as_pubdate(
         self, client, podcast_episode_with_different_visible_date, use_dummy_cache_backend
@@ -111,7 +114,7 @@ class TestGeneratedFeeds:
         podcast_episode = podcast_episode_with_different_visible_date
         feed_url = reverse(
             "cast:podcast_feed_rss",
-            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+            kwargs={"slug": podcast_episode.podcast.slug, "audio_format": "m4a"},
         )
 
         r = client.get(feed_url)
@@ -125,7 +128,7 @@ class TestGeneratedFeeds:
     def test_podcast_feed_contains_detail_information(self, client, podcast_episode):
         feed_url = reverse(
             "cast:podcast_feed_rss",
-            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+            kwargs={"slug": podcast_episode.podcast.slug, "audio_format": "m4a"},
         )
 
         r = client.get(feed_url)
