@@ -45,39 +45,6 @@ class Blog(Page):
         help_text=_("Whether comments are enabled for this blog." ""),
     )
 
-    # podcast stuff
-
-    # atm it's only used for podcast image
-    itunes_artwork = models.ForeignKey(ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL)
-    itunes_categories = models.CharField(
-        _("itunes_categories"),
-        max_length=512,
-        blank=True,
-        default="",
-        help_text=_(
-            "A json dict of itunes categories pointing to lists "
-            "of subcategories. Taken from this list "
-            "https://validator.w3.org/feed/docs/error/InvalidItunesCategory.html"
-        ),
-    )
-    EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
-    keywords = models.CharField(
-        _("keywords"),
-        max_length=255,
-        blank=True,
-        default="",
-        help_text=_(
-            """A comma-delimitedlist of up to 12 words for iTunes
-            searches. Perhaps include misspellings of the title."""
-        ),
-    )
-    explicit = models.PositiveSmallIntegerField(
-        _("explicit"),
-        default=1,
-        choices=EXPLICIT_CHOICES,
-        help_text=_("``Clean`` will put the clean iTunes graphic by it."),
-    )
-
     # wagtail
     description = RichTextField(blank=True)
     template = "cast/blog_list_of_posts.html"
@@ -182,6 +149,40 @@ class Blog(Page):
         context = self.paginate_queryset(context)
         context["posts"] = context["object_list"]  # convenience
         return context
+
+
+class Podcast(Blog):
+    # atm it's only used for podcast image
+    itunes_artwork = models.ForeignKey(ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL)
+    itunes_categories = models.CharField(
+        _("itunes_categories"),
+        max_length=512,
+        blank=True,
+        default="",
+        help_text=_(
+            "A json dict of itunes categories pointing to lists "
+            "of subcategories. Taken from this list "
+            "https://validator.w3.org/feed/docs/error/InvalidItunesCategory.html"
+        ),
+    )
+    keywords = models.CharField(
+        _("keywords"),
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_(
+            """A comma-delimitedlist of up to 12 words for iTunes
+            searches. Perhaps include misspellings of the title."""
+        ),
+    )
+    EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
+    explicit = models.PositiveSmallIntegerField(
+        _("explicit"),
+        default=1,
+        choices=EXPLICIT_CHOICES,
+        help_text=_("``Clean`` will put the clean iTunes graphic by it."),
+    )
+    template = "cast/blog_list_of_posts.html"
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -408,8 +409,6 @@ class Post(Page):
 
 
 class Episode(Post):  # type: ignore
-    template = "cast/episode.html"
-
     podcast_audio = models.ForeignKey(
         "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="episodes"
     )
@@ -425,7 +424,7 @@ class Episode(Post):  # type: ignore
     )
     explicit = models.PositiveSmallIntegerField(
         _("explicit"),
-        choices=Blog.EXPLICIT_CHOICES,
+        choices=Podcast.EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
         default=1,
     )
@@ -438,6 +437,9 @@ class Episode(Post):  # type: ignore
             ""
         ),
     )
+
+    template = "cast/episode.html"
+    parent_page_types = ["cast.Podcast", "cast.Blog"]
 
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
@@ -453,11 +455,21 @@ class Episode(Post):  # type: ignore
         context["episode"] = self
         if hasattr(request, "build_absolute_uri"):
             player_url = reverse(
-                "cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": self.blog.slug}
+                "cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": self.podcast.slug}
             )
             player_url = request.build_absolute_uri(player_url)
             context["player_url"] = player_url
         return context
+
+    @property
+    def podcast(self):
+        """
+        The get_parent() method returns wagtail parent page, which is not
+        necessarily a Blog model, but maybe the root page. If it's a Blog
+        it has a .blog attribute containing the model which has all the
+        attributes like blog.comments_enabled etc..
+        """
+        return self.get_parent().specific
 
 
 class HomePage(Page):
