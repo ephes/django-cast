@@ -34,9 +34,13 @@ logger = logging.getLogger(__name__)
 
 
 class Blog(Page):
-    # move author field into Podcast. This is used to have a First Author Name / Second Author Name
-    # string in the feed.
-    author = models.CharField(max_length=255, default=None, null=True, blank=True)
+    author = models.CharField(
+        max_length=255,
+        default=None,
+        null=True,
+        blank=True,
+        help_text=_("Freeform text that will be used in the feed."),
+    )
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     email = models.EmailField(null=True, default=None, blank=True)
     comments_enabled = models.BooleanField(
@@ -54,6 +58,7 @@ class Blog(Page):
     ]
 
     subpage_types = ["cast.Post"]
+    is_podcast = False
 
     def __str__(self):
         return self.title
@@ -61,10 +66,6 @@ class Blog(Page):
     @property
     def last_build_date(self) -> timezone.datetime:
         return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
-
-    @property
-    def is_podcast(self) -> bool:
-        return Post.objects.live().descendant_of(self).exclude(podcast_audio__isnull=True).count() > 0
 
     @property
     def author_name(self) -> str:
@@ -178,6 +179,7 @@ class Podcast(Blog):
 
     template = "cast/blog_list_of_posts.html"
     subpage_types = ["cast.Post", "cast.Episode"]
+    is_podcast = True
 
     @property
     def itunes_categories_parsed(self) -> dict[str, list[str]]:
