@@ -44,6 +44,7 @@ class Blog(Page):
     content_panels = Page.content_panels + [
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
+        FieldPanel("author"),
     ]
 
     subpage_types = ["cast.Post"]
