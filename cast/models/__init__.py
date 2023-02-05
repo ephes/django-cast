@@ -1,9 +1,10 @@
 from .audio import Audio, ChapterMark, sync_chapter_marks
 from .file import File
 from .gallery import Gallery, get_or_create_gallery
+from .index_pages import Blog, Podcast
 from .itunes import ItunesArtWork
 from .moderation import SpamFilter
-from .pages import Blog, Episode, HomePage, Podcast, Post, sync_media_ids
+from .pages import Episode, HomePage, Post, sync_media_ids
 from .video import Video, get_video_dimensions
 
 __all__ = [
