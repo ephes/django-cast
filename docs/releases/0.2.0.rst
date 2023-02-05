@@ -1,5 +1,5 @@
 0.2.0 (2022-12-18)
-+++++++++++++++++++
+------------------
 
 This release took a long time. I can't even remember when exactly I started working on this. Some years ago I guess 😁.
 

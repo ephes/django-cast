@@ -1,5 +1,6 @@
+*******************
 Comment Spam Filter
-===================
+*******************
 
 There's a simple
 `Naive Bayes-based <https://en.wikipedia.org/wiki/Naive_Bayes_classifier>`_

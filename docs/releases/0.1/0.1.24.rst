@@ -1,5 +1,5 @@
 0.1.24 (2019-05-22)
-+++++++++++++++++++
+-------------------
 
 * Use blog.email as itunes:email instead of blog.user.email
 * Added author field to have user editable author name

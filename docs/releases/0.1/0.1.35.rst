@@ -1,3 +1,4 @@
 0.1.35 (2020-10-25)
-+++++++++++++++++++++++
+-------------------
+
 * last package released that is based on `master` branch

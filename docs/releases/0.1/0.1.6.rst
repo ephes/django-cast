@@ -1,5 +1,5 @@
 0.1.6 (2019-02-28)
-++++++++++++++++++
+------------------
 
 * Use filepond for media uploads (images video)
 * Improved portrait video support

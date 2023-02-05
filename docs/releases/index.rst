@@ -1,8 +1,9 @@
+********
 Releases
-========
+********
 
 Versions
---------
+========
 
 .. toctree::
    :maxdepth: 1
@@ -50,6 +51,6 @@ Versions
    0.1/0.1.0
 
 Versioning Policy
------------------
+=================
 
 To be defined 😅.

@@ -1,7 +1,7 @@
 0.2.4 (2023-02-06)
-++++++++++++++++++
+------------------
 
-* Some documentation fixes
+* Some documentation enhancements/fixes
 * Removed pub_date field from Post model (this is now handled by wagtail)
 * Removed inheriting from TimestampedModel in Post and Blog models
 * Split blog and podcast models

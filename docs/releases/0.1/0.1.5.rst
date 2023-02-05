@@ -1,5 +1,5 @@
 0.1.5 (2018-11-21)
-++++++++++++++++++
+------------------
 
 * basic feed support (rss/atom) for podcasts
 * travis now runs tests with ffprobe, too

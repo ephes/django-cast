@@ -1,3 +1,4 @@
 0.1.31 (never released)
-+++++++++++++++++++++++
+-----------------------
+
 * Trying to use vuepress for documentation

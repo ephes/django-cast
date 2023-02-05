@@ -1,8 +1,9 @@
+************
 Social Media
-============
+************
 
 Twitter
--------
+=======
 
 If you share a link to a detail page of an episode, there will
 be a `Twitter Player Card <https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/player-card>`_

@@ -1,5 +1,5 @@
 0.1.17 (2019-04-15)
-+++++++++++++++++++
+-------------------
 
 * Added chaptermarks feature
 * Duration is now displayed correctly in podlove player

@@ -1,5 +1,5 @@
 0.1.19 (2019-04-24)
-+++++++++++++++++++
+-------------------
 
 * Added fulltext search
 * Added filtering by date + some faceted navigation support
