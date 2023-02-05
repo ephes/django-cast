@@ -18,9 +18,9 @@ Blog
 Blog / Podcast Author
 ~~~~~~~~~~~~~~~~~~~~~
 
-You can define a custom `CharField` field named `author` on a Blog-Page
-using the Wagtail or Django-Admin interface. This field is then used to
-populate following attributes in the feed:
+If you set the custom `CharField` field named `author` on a Blog-Page
+using the Wagtail or Django-Admin interface, the content of this field
+is then used to populate following attributes in the feed:
 
 - `itunes:author`
 - `itunes:name`
