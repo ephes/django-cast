@@ -74,7 +74,6 @@ class Post(Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     visible_date = models.DateTimeField(default=timezone.now)
     comments_enabled = models.BooleanField(
-        _("comments_enabled"),
         default=True,
         help_text=_("Whether comments are enabled for this post." ""),
     )
@@ -253,7 +252,6 @@ class Episode(Post):  # type: ignore
         "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="episodes"
     )
     keywords = models.CharField(
-        _("keywords"),
         max_length=255,
         blank=True,
         default="",
@@ -264,13 +262,11 @@ class Episode(Post):  # type: ignore
     )
     EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
     explicit = models.PositiveSmallIntegerField(
-        _("explicit"),
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
         default=1,
     )
     block = models.BooleanField(
-        _("block"),
         default=False,
         help_text=_(
             "Check to block this episode from iTunes because <br />its "
