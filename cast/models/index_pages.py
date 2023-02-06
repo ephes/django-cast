@@ -84,22 +84,25 @@ class Blog(Page):
             return getattr(self, "_filterset_data", {})
 
     @property
-    def filterset(self):
+    def filterset(self) -> PostFilterset:
         return PostFilterset(
             data=self.filterset_data, queryset=self.unfiltered_published_posts, fetch_facet_counts=True
         )
 
     @property
-    def published_posts(self):
+    def published_posts(self) -> models.QuerySet[Post]:
         return self.filterset.qs
 
-    def paginate_queryset(self, context):
+    def paginate_queryset(self, context) -> dict[str, Any]:
         paginator = Paginator(self.published_posts, appsettings.POST_LIST_PAGINATION)
-        page = self.request.GET.get("page", False) or 1
+        page_from_url = "1"
+        if self.request is not None:
+            if "page" in self.request.GET:
+                page_from_url = self.request.GET["page"]
         try:
-            page_number = int(page)
+            page_number = int(page_from_url)
         except ValueError:
-            if page == "last":
+            if page_from_url == "last":
                 page_number = paginator.num_pages
             else:
                 raise Http404(_("Page is not “last”, nor can it be converted to an int."))
@@ -118,9 +121,11 @@ class Blog(Page):
         context.update(pagination_context)
         return context
 
-    def get_other_get_params(self):
+    def get_other_get_params(self) -> str:
+        if self.request is None:
+            return ""
         get_copy = self.request.GET.copy()
-        parameters = get_copy.pop("page", True) and get_copy.urlencode()
+        parameters = get_copy.pop("page", "") and get_copy.urlencode()
         if len(parameters) > 0:
             parameters = f"&{parameters}"
         return parameters
