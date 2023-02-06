@@ -133,12 +133,6 @@ class Post(Page):
     def __str__(self):
         return self.title
 
-    def get_enclosure_url(self, audio_format):
-        return getattr(self.podcast_audio, audio_format).url
-
-    def get_enclosure_size(self, audio_format: str) -> int:
-        return self.podcast_audio.get_file_size(audio_format)
-
     def get_slug(self):
         return slugify(self.title)
 
@@ -307,6 +301,14 @@ class Episode(Post):  # type: ignore
         attributes like blog.comments_enabled etc..
         """
         return self.get_parent().specific
+
+    def get_enclosure_url(self, audio_format):
+        return getattr(self.podcast_audio, audio_format).url
+
+    def get_enclosure_size(self, audio_format: str) -> int:
+        if self.podcast_audio is None:
+            return 0
+        return self.podcast_audio.get_file_size(audio_format)
 
 
 class HomePage(Page):
