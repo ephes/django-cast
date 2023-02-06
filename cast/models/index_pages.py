@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.edit_handlers import FieldPanel
 from wagtail.core.fields import RichTextField
-from wagtail.core.models import Page
+from wagtail.core.models import Page, PageManager
 
 from cast import appsettings
 from cast.filters import PostFilterset
@@ -170,6 +170,9 @@ class Podcast(Blog):
     template = "cast/blog_list_of_posts.html"
     subpage_types = ["cast.Post", "cast.Episode"]
     is_podcast = True
+
+    objects: PageManager = PageManager()
+    aliases_homepage: Any  # don't know why this is needed FIXME
 
     @property
     def itunes_categories_parsed(self) -> dict[str, list[str]]:
