@@ -2,6 +2,8 @@ import json
 import random
 import re
 from collections import defaultdict
+from collections.abc import Callable, Iterator
+from typing import Any, Optional
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
@@ -11,11 +13,15 @@ token_pattern = re.compile(r"(?u)\b\w\w+\b")
 standard_tokenizer = token_pattern.findall
 
 
-def regex_tokenize(message):
+def regex_tokenize(message: str) -> list[str]:
     return standard_tokenizer(message.lower())
 
 
-def normalize(probabilities):
+Probabilities = dict[str, float]
+Counts = dict[str, int]
+
+
+def normalize(probabilities: Probabilities) -> Probabilities:
     try:
         factor = 1.0 / float(sum(probabilities.values()))
     except ZeroDivisionError:
@@ -26,45 +32,53 @@ def normalize(probabilities):
     return probabilities
 
 
+Messages = list[tuple[str, str]]
+
+
 class NaiveBayes:
-    def __init__(self, tokenize=regex_tokenize, prior_probabilities=None, word_label_counts=None):
+    def __init__(
+        self,
+        tokenize: Callable = regex_tokenize,
+        prior_probabilities: Optional[Probabilities] = None,
+        word_label_counts: Optional[dict[str, Counts]] = None,
+    ):
         self.tokenize = tokenize
         if prior_probabilities is None:
             prior_probabilities = {}
         self.prior_probabilities = prior_probabilities
         if word_label_counts is None:
-            self.word_label_counts = defaultdict(lambda: defaultdict(int))
+            self.word_label_counts: dict[str, Counts] = defaultdict(lambda: defaultdict(int))
         else:
             self.word_label_counts = word_label_counts
         self.number_of_words = self.get_number_of_words(self.word_label_counts)
         self.number_of_all_words = sum(self.number_of_words.values())
 
     @staticmethod
-    def get_label_counts(messages):
-        label_counts = defaultdict(int)
+    def get_label_counts(messages: Messages) -> Counts:
+        label_counts: Counts = defaultdict(int)
         for label, text in messages:
             label_counts[label] += 1
         return label_counts
 
-    def set_prior_probabilities(self, label_counts):
+    def set_prior_probabilities(self, label_counts: Counts) -> None:
         number_of_messages = sum(label_counts.values())
         self.prior_probabilities = {label: count / number_of_messages for label, count in label_counts.items()}
 
-    def set_word_label_counts(self, messages):
+    def set_word_label_counts(self, messages: Messages) -> None:
         counts = self.word_label_counts
         for label, text in messages:
             for word in self.tokenize(text):
                 counts[word][label] += 1
 
     @staticmethod
-    def get_number_of_words(word_label_counts):
-        number_of_words = defaultdict(int)
+    def get_number_of_words(word_label_counts: dict[str, Counts]) -> Counts:
+        number_of_words: Counts = defaultdict(int)
         for word, counts in word_label_counts.items():
             for label, count in counts.items():
                 number_of_words[label] += 1
         return number_of_words
 
-    def fit(self, messages):
+    def fit(self, messages: Messages) -> "NaiveBayes":
         self.set_prior_probabilities(self.get_label_counts(messages))
         self.set_word_label_counts(messages)
         self.number_of_words = self.get_number_of_words(self.word_label_counts)
@@ -72,7 +86,7 @@ class NaiveBayes:
         return self
 
     @staticmethod
-    def update_probabilities(probabilities, counts_per_label, number_of_all_words):
+    def update_probabilities(probabilities: Probabilities, counts_per_label: Counts, number_of_all_words: int):
         updated_probabilities = {}
         for label, prior_probability in probabilities.items():
             word_count = counts_per_label.get(label, 0.5)
@@ -80,7 +94,7 @@ class NaiveBayes:
             updated_probabilities[label] = prior_probability * word_probability
         return updated_probabilities
 
-    def predict(self, message):
+    def predict(self, message: str) -> Probabilities:
         probabilities = dict(self.prior_probabilities)
         for word in self.tokenize(message):
             counts_per_label = self.word_label_counts.get(word, {})
@@ -89,7 +103,7 @@ class NaiveBayes:
             )
         return probabilities
 
-    def predict_label(self, message):
+    def predict_label(self, message: str) -> Optional[str]:
         probabilities = self.predict(message)
         if len(probabilities) == 0:
             return None
@@ -102,14 +116,14 @@ class NaiveBayes:
             "word_label_counts": self.word_label_counts,
         }
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         return (
             self.prior_probabilities == other.prior_probabilities and self.word_label_counts == other.word_label_counts
         )
 
 
 class ModelEncoder(DjangoJSONEncoder):
-    def default(self, obj):
+    def default(self, obj: Any) -> dict:
         if isinstance(obj, NaiveBayes):
             return obj.dict()
         return super().default(obj)
@@ -128,15 +142,18 @@ class ModelDecoder(json.JSONDecoder):
         return obj
 
 
+Performance = dict[str, float]
+
+
 class Evaluation:
     """Simple cross validation evaluation."""
 
-    def __init__(self, model_class=NaiveBayes, num_folds=3):
+    def __init__(self, model_class: type = NaiveBayes, num_folds: int = 3):
         self.model_class = model_class
         self.num_folds = num_folds
 
     @staticmethod
-    def split_into_labels(messages):
+    def split_into_labels(messages: Messages) -> dict[str, Messages]:
         """Split messages into a dict of labels and labeled messages."""
         data_per_label = defaultdict(list)
         for label, text in messages:
@@ -144,7 +161,7 @@ class Evaluation:
         return data_per_label
 
     @staticmethod
-    def split_into_folds(messages, num_folds):
+    def split_into_folds(messages: Messages, num_folds: int) -> list[Messages]:
         """
         Split the messages into num_folds folds.
         """
@@ -155,7 +172,7 @@ class Evaluation:
             folds.append(messages[i * fold_size : (i + 1) * fold_size])  # noqa: E203
         return folds
 
-    def stratified_split_into_folds(self, messages):
+    def stratified_split_into_folds(self, messages: Messages) -> list[Messages]:
         """Split the messages in a stratified way into num_folds folds."""
         data_per_label = self.split_into_labels(messages)
         labeled_folds = []
@@ -170,7 +187,7 @@ class Evaluation:
         return folds
 
     @staticmethod
-    def generate_train_test(folds):
+    def generate_train_test(folds: list[Messages]) -> Iterator[tuple[Messages, Messages]]:
         """From a list of n cross-validation folds, generate n train and test sets."""
         for i, n in enumerate(folds):
             all_but_n = []
@@ -180,7 +197,7 @@ class Evaluation:
             yield all_but_n, n
 
     @staticmethod
-    def evaluate_model(model, test_messages):
+    def evaluate_model(model: Any, test_messages: Messages) -> dict[str, Counts]:
         """Build a confusion matrix for the model on the test messages."""
         outcomes = (("true", "false"), ("positive", "negative"))
         possible_results = [f"{a}_{b}" for b in outcomes[1] for a in outcomes[0]]
@@ -199,7 +216,7 @@ class Evaluation:
         return label_results
 
     @staticmethod
-    def get_precision_recall_f1(result):
+    def get_precision_recall_f1(result: Counts) -> tuple[float, float, float]:
         """Actual implementation of precision, recall and f1 from tp, fp, fn."""
         tp = result["true_positive"]
         fp = result["false_positive"]
@@ -209,7 +226,7 @@ class Evaluation:
         f1 = 2 * precision * recall / (precision + recall)
         return precision, recall, f1
 
-    def calc_performance(self, results):
+    def calc_performance(self, results: dict[str, Counts]) -> dict[str, Performance]:
         """Calc precision, recall and f1 for each label."""
         performance = {}
         for label, result in results.items():
@@ -221,7 +238,7 @@ class Evaluation:
             }
         return performance
 
-    def evaluate(self, messages):
+    def evaluate(self, messages: Messages) -> dict[str, Performance]:
         """
         Evaluate the model on the given messages. Use stratified cross validation
         to determine precision, recall and f1 score.
@@ -237,6 +254,8 @@ class Evaluation:
                 for label, counts in label_results.items():
                     for name, count in counts.items():
                         results[label][name] += count
+        if results is None:
+            raise ValueError("No results")
         return self.calc_performance(results)
 
 
@@ -257,11 +276,11 @@ class SpamFilter(TimeStampedModel):
     performance = models.JSONField(verbose_name="Spamfilter Performance Indicators", default=dict)
 
     @classmethod
-    def comment_to_message(cls, comment):
+    def comment_to_message(cls, comment: Any) -> str:
         return f"{comment.name} {comment.email} {comment.title} {comment.comment}"
 
     @classmethod
-    def get_training_data_comments(cls):
+    def get_training_data_comments(cls) -> Messages:
         """
         Keep this as a classmethod in SpamFilter to make it available for all code importing SpamFilter.
         """
@@ -275,7 +294,7 @@ class SpamFilter(TimeStampedModel):
             train.append((label, message))
         return train
 
-    def retrain_from_scratch(self, train):
+    def retrain_from_scratch(self, train: Messages) -> None:
         """
         Retrain on all comments for now. Later on there might be
         different spam filters for different blogs/sites..
@@ -286,5 +305,5 @@ class SpamFilter(TimeStampedModel):
         self.save()
 
     @classmethod
-    def get_default(cls):
+    def get_default(cls) -> "SpamFilter":
         return cls.objects.first()
