@@ -130,7 +130,7 @@ class Blog(Page):
             parameters = f"&{parameters}"
         return parameters
 
-    def get_context(self, request, *args, **kwargs):
+    def get_context(self, request, *args, **kwargs) -> dict[str, Any]:
         context = super().get_context(request, *args, **kwargs)
         self.request = request
         context["filterset"] = self.filterset
