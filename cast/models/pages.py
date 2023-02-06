@@ -1,8 +1,9 @@
 import logging
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import models
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -23,24 +24,30 @@ from cast import appsettings
 from cast.blocks import AudioChooserBlock, CodeBlock, GalleryBlock, VideoChooserBlock
 from cast.models import get_or_create_gallery
 
+if TYPE_CHECKING:
+    from .index_pages import Blog, ContextDict, Podcast
+
 logger = logging.getLogger(__name__)
 
 
 class ContentBlock(blocks.StreamBlock):
-    heading = blocks.CharBlock(classname="full title")
-    paragraph = blocks.RichTextBlock()
-    code = CodeBlock(icon="code")
-    image = ImageChooserBlock(template="cast/image/image.html")
-    gallery = GalleryBlock(ImageChooserBlock())
-    embed = EmbedBlock()
-    video = VideoChooserBlock(template="cast/video/video.html", icon="media")
-    audio = AudioChooserBlock(template="cast/audio/audio.html", icon="media")
+    heading: blocks.CharBlock = blocks.CharBlock(classname="full title")
+    paragraph: blocks.RichTextBlock = blocks.RichTextBlock()
+    code: CodeBlock = CodeBlock(icon="code")
+    image: ImageChooserBlock = ImageChooserBlock(template="cast/image/image.html")
+    gallery: GalleryBlock = GalleryBlock(ImageChooserBlock())
+    embed: EmbedBlock = EmbedBlock()
+    video: VideoChooserBlock = VideoChooserBlock(template="cast/video/video.html", icon="media")
+    audio: AudioChooserBlock = AudioChooserBlock(template="cast/audio/audio.html", icon="media")
 
     class Meta:
         icon = "form"
 
 
-def sync_media_ids(from_database, from_body):
+TypeToIdSet = dict[str, set[int]]
+
+
+def sync_media_ids(from_database: TypeToIdSet, from_body: TypeToIdSet) -> tuple[TypeToIdSet, TypeToIdSet]:
     to_add, to_remove = {}, {}
     all_media_types = set(from_database.keys()).union(from_body.keys())
     for media_type in all_media_types:
@@ -61,13 +68,13 @@ class PlaceholderRequest:
     is_preview = False
     headers: dict[str, str] = {}
     META: dict = {}
-    port = 80
-    host = f"https://localhost:{port}"
+    port: int = 80
+    host: str = f"https://localhost:{port}"
 
-    def get_host(self):
+    def get_host(self) -> str:
         return self.host
 
-    def get_port(self):
+    def get_port(self) -> int:
         return self.port
 
 
@@ -106,10 +113,10 @@ class Post(Page):
     parent_page_types = ["cast.Blog", "cast.Podcast"]
 
     # managers
-    objects = PageManager()
+    objects: PageManager = PageManager()
 
     @property
-    def media_model_lookup(self):
+    def media_model_lookup(self) -> dict[str, type[models.Model]]:
         from .audio import Audio
         from .gallery import Gallery
         from .video import Video
@@ -122,7 +129,7 @@ class Post(Page):
         }
 
     @property
-    def blog(self):
+    def blog(self) -> "Blog":
         """
         The get_parent() method returns wagtail parent page, which is not
         necessarily a Blog model, but maybe the root page. If it's a Blog
@@ -131,27 +138,28 @@ class Post(Page):
         """
         return self.get_parent().blog
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.title
 
-    def get_slug(self):
+    def get_slug(self) -> str:
         return slugify(self.title)
 
     @property
-    def media_lookup(self):
+    def media_lookup(self) -> TypeToIdSet:
         try:
             return {
-                "image": {i.pk: i for i in self.images.all()},
-                "video": {v.pk: v for v in self.videos.all()},
-                "gallery": {g.pk: g for g in self.galleries.all()},
-                "audio": {a.pk: a for a in self.audios.all()},
+                "image": {i.pk: i for i in self.images.all()},  # type: ignore
+                "video": {v.pk: v for v in self.videos.all()},  # type: ignore
+                "gallery": {g.pk: g for g in self.galleries.all()},  # type: ignore
+                "audio": {a.pk: a for a in self.audios.all()},  # type: ignore
             }
         except ValueError:
             # post ist not yet saved
             pass
+        return {}
 
     @property
-    def media_attr_lookup(self):
+    def media_attr_lookup(self) -> "ContextDict":
         return {
             "image": self.images,
             "video": self.videos,
@@ -160,7 +168,7 @@ class Post(Page):
         }
 
     @property
-    def audio_in_body(self):
+    def audio_in_body(self) -> bool:
         audio_blocks = []
         for block in self.body:
             for content_block in block.value:
@@ -169,7 +177,7 @@ class Post(Page):
         return len(audio_blocks) > 0
 
     @property
-    def has_audio(self):
+    def has_audio(self) -> bool:
         audios_count = 0
         try:
             audios_count = self.audios.count()
@@ -185,21 +193,21 @@ class Post(Page):
                 return False
 
     @property
-    def comments_are_enabled(self):
+    def comments_are_enabled(self) -> bool:
         return appsettings.CAST_COMMENTS_ENABLED and self.blog.comments_enabled and self.comments_enabled
 
-    def get_context(self, *args, **kwargs):
+    def get_context(self, *args, **kwargs) -> "ContextDict":
         context = super().get_context(*args, **kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
         return context
 
     @property
-    def media_ids_from_db(self):
+    def media_ids_from_db(self) -> TypeToIdSet:
         return {k: set(v) for k, v in self.media_lookup.items()}
 
     @property
-    def media_ids_from_body(self):
-        from_body = {}
+    def media_ids_from_body(self) -> TypeToIdSet:
+        from_body: TypeToIdSet = {}
         for content_block in self.body:
             for block in content_block.value:
                 if block.block_type == "gallery":
@@ -211,7 +219,7 @@ class Post(Page):
                     from_body.setdefault(block.block_type, set()).add(media_model.id)
         return from_body
 
-    def sync_media_ids(self):
+    def sync_media_ids(self) -> None:
         media_attr_lookup = self.media_attr_lookup
         to_add, to_remove = sync_media_ids(self.media_ids_from_db, self.media_ids_from_body)
 
@@ -236,7 +244,7 @@ class Post(Page):
             description = escape(description)
         return description
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs) -> None:
         save_return = super().save(*args, **kwargs)
         self.sync_media_ids()
         return save_return
@@ -285,7 +293,7 @@ class Episode(Post):
     objects: PageManager = PageManager()
     aliases_homepage: Any  # FIXME: why is this needed?
 
-    def get_context(self, request, *args, **kwargs) -> dict:
+    def get_context(self, request, *args, **kwargs) -> "ContextDict":
         context = super().get_context(request, *args, **kwargs)
         context["episode"] = self
         if hasattr(request, "build_absolute_uri"):
@@ -297,7 +305,7 @@ class Episode(Post):
         return context
 
     @property
-    def podcast(self):
+    def podcast(self) -> "Podcast":
         """
         The get_parent() method returns wagtail parent page, which is not
         necessarily a Blog model, but maybe the root page. If it's a Blog
@@ -306,7 +314,7 @@ class Episode(Post):
         """
         return self.get_parent().specific
 
-    def get_enclosure_url(self, audio_format):
+    def get_enclosure_url(self, audio_format: str) -> str:
         return getattr(self.podcast_audio, audio_format).url
 
     def get_enclosure_size(self, audio_format: str) -> int:
@@ -341,7 +349,7 @@ class HomePage(Page):
         FieldPanel("body"),
     ]
 
-    def serve(self, request, *args, **kwargs):
+    def serve(self, request, *args, **kwargs) -> HttpResponse:
         if self.alias_for_page is not None:
             return redirect(self.alias_for_page.url, permanent=False)
         return super().serve(request, *args, **kwargs)
