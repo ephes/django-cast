@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Any
 
 from django.db import models
 from django.shortcuts import redirect
@@ -241,7 +242,7 @@ class Post(Page):
         return save_return
 
 
-class Episode(Post):  # type: ignore
+class Episode(Post):
     podcast_audio = models.ForeignKey(
         "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="episodes"
     )
@@ -250,7 +251,7 @@ class Episode(Post):  # type: ignore
         blank=True,
         default="",
         help_text=_(
-            """A comma-demlimitedlist of up to 12 words for iTunes
+            """A comma-delimited-list of up to 12 words for iTunes
             searches. Perhaps include misspellings of the title."""
         ),
     )
@@ -280,6 +281,9 @@ class Episode(Post):  # type: ignore
         FieldPanel("block"),
         FieldPanel("podcast_audio"),
     ]
+
+    objects: PageManager = PageManager()
+    aliases_homepage: Any  # FIXME: why is this needed?
 
     def get_context(self, request, *args, **kwargs) -> dict:
         context = super().get_context(request, *args, **kwargs)
@@ -322,7 +326,7 @@ class HomePage(Page):
         use_json_field=True,
     )
     alias_for_page = models.ForeignKey(
-        "wagtailcore.Page",
+        Page,
         related_name="aliases_homepage",
         null=True,
         blank=True,
@@ -337,7 +341,7 @@ class HomePage(Page):
         FieldPanel("body"),
     ]
 
-    def serve(self, request):
+    def serve(self, request, *args, **kwargs):
         if self.alias_for_page is not None:
             return redirect(self.alias_for_page.url, permanent=False)
-        return super().serve(request)
+        return super().serve(request, *args, **kwargs)
