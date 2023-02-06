@@ -22,6 +22,9 @@ from .pages import Post
 logger = logging.getLogger(__name__)
 
 
+ContextDict = dict[str, Any]
+
+
 class Blog(Page):
     author = models.CharField(
         max_length=255,
@@ -93,7 +96,7 @@ class Blog(Page):
     def published_posts(self) -> models.QuerySet[Post]:
         return self.filterset.qs
 
-    def paginate_queryset(self, context) -> dict[str, Any]:
+    def paginate_queryset(self, context: ContextDict) -> ContextDict:
         paginator = Paginator(self.published_posts, appsettings.POST_LIST_PAGINATION)
         page_from_url = "1"
         if self.request is not None:
@@ -130,7 +133,7 @@ class Blog(Page):
             parameters = f"&{parameters}"
         return parameters
 
-    def get_context(self, request, *args, **kwargs) -> dict[str, Any]:
+    def get_context(self, request: HttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         self.request = request
         context["filterset"] = self.filterset
