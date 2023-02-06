@@ -216,7 +216,8 @@ class Post(Page):
                 else:
                     media_model = block.value
                 if block.block_type in self.media_model_lookup:
-                    from_body.setdefault(block.block_type, set()).add(media_model.id)
+                    if media_model is not None:
+                        from_body.setdefault(block.block_type, set()).add(media_model.id)
         return from_body
 
     def sync_media_ids(self) -> None:

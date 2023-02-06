@@ -1,8 +1,9 @@
+from collections.abc import Iterable
+from typing import Optional
+
 from django.db import models
-
-from wagtail.images.models import Image
-
 from model_utils.models import TimeStampedModel
+from wagtail.images.models import Image
 
 
 class Gallery(TimeStampedModel):
@@ -10,11 +11,11 @@ class Gallery(TimeStampedModel):
     post_context_key = "gallery"
 
     @property
-    def image_ids(self):
+    def image_ids(self) -> set[int]:
         return {i.pk for i in self.images.all()}
 
 
-def get_or_create_gallery(image_ids):
+def get_or_create_gallery(image_ids: Iterable[int]) -> Optional[Gallery]:
     candidate_images = Image.objects.filter(id__in=image_ids)  # FIXME filter permissions
     if candidate_images.count() == 0:
         return None
