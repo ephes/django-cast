@@ -2,3 +2,4 @@
 ------------------
 
 * Some documentation enhancements/fixes
+* Some type annotation enhancements/fixes
