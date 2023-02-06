@@ -145,13 +145,13 @@ class Post(Page):
         return slugify(self.title)
 
     @property
-    def media_lookup(self) -> TypeToIdSet:
+    def media_lookup(self) -> dict[str, dict[int, Any]]:
         try:
             return {
-                "image": {i.pk: i for i in self.images.all()},  # type: ignore
-                "video": {v.pk: v for v in self.videos.all()},  # type: ignore
-                "gallery": {g.pk: g for g in self.galleries.all()},  # type: ignore
-                "audio": {a.pk: a for a in self.audios.all()},  # type: ignore
+                "image": {i.pk: i for i in self.images.all()},
+                "video": {v.pk: v for v in self.videos.all()},
+                "gallery": {g.pk: g for g in self.galleries.all()},
+                "audio": {a.pk: a for a in self.audios.all()},
             }
         except ValueError:
             # post ist not yet saved
