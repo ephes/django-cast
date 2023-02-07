@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 class AdminUserMixin:
-    def get_changeform_initial_data(self, request: "HttpRequest") -> dict:
+    @staticmethod
+    def get_changeform_initial_data(request: "HttpRequest") -> dict:
         return {"user": request.user, "author": request.user}
 
 
