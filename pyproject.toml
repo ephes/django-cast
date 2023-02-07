@@ -120,3 +120,21 @@ exclude = "[a-zA-Z]*/(migrations)/(.)*"  # ignore migrations
 
 [tool.django-stubs]
 django_settings_module = "cast.settings"
+
+[tool.coverage.run]
+branch = true
+source = ["cast"]
+omit = [
+    "cast/migrations/*",
+    "cast/runner.py",
+    "cast/settings.py",
+]
+command_line = "runtests.py tests"
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
