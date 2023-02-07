@@ -2,22 +2,19 @@ import logging
 import os
 import subprocess
 import tempfile
-
 from pathlib import Path
 from subprocess import check_output
+from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
+from model_utils.models import TimeStampedModel
+from taggit.managers import TaggableManager
 from wagtail.core.models import CollectionMember
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
-
-from model_utils.models import TimeStampedModel
-from taggit.managers import TaggableManager
-
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +23,15 @@ class VideoQuerySet(SearchableQuerySetMixin, models.QuerySet):
     pass
 
 
-def get_video_dimensions(lines):
-    """Has it's own function to be easier to test."""
+def get_video_dimensions(lines: list[str]) -> tuple[Optional[int], Optional[int]]:
+    """Has its own function to be easier to test."""
 
-    def get_width_height(video_type, line):
-        dim_col = line.split(", ")[3]
-        if video_type != "h264":
+    def get_width_height(my_video_type, my_line) -> tuple[int, int]:
+        dim_col = my_line.split(", ")[3]
+        if my_video_type != "h264":
             dim_col = dim_col.split(" ")[0]
-        return map(int, dim_col.split("x"))
+        dim_x, dim_y = tuple(map(int, dim_col.split("x")))
+        return dim_x, dim_y
 
     width, height = None, None
     video_types = ("SAR", "hevc", "h264")
@@ -77,7 +75,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     admin_form_fields = ("title", "original", "poster", "tags")
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
-    objects = VideoQuerySet.as_manager()
+    objects: models.Manager["Video"] = VideoQuerySet.as_manager()
 
     search_fields = CollectionMember.search_fields + [
         index.SearchField("title", partial_match=True, boost=10),
@@ -91,20 +89,21 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     ]
 
     @property
-    def filename(self):
+    def filename(self) -> str:
         return Path(self.original.name).name
 
     @property
-    def type(self):
+    def type(self) -> str:
         return "video"
 
-    def _get_video_dimensions(self, video_url):
+    @staticmethod
+    def _get_video_dimensions(video_url: str) -> tuple[Optional[int], Optional[int]]:
         ffprobe_cmd = f'ffprobe -i "{video_url}"'
         result = subprocess.check_output(ffprobe_cmd, shell=True, stderr=subprocess.STDOUT)
         lines = result.decode("utf8").split("\n")
         return get_video_dimensions(lines)
 
-    def _create_poster(self):
+    def _create_poster(self) -> None:
         """Moved into own method to make it mockable in tests."""
         fp, tmp_path = tempfile.mkstemp(prefix="poster_", suffix=".jpg")
         logger.info(f"original url: {self.original.url}")
@@ -130,7 +129,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         logger.info(self.pk)
         logger.info(self.poster)
 
-    def create_poster(self):
+    def create_poster(self) -> None:
         if self.poster or not self.calc_poster:
             # poster is not null
             logger.info("skip creating poster")
@@ -141,7 +140,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 logger.info(e)
                 logger.info("create poster failed")
 
-    def get_all_paths(self):
+    def get_all_paths(self) -> set[str]:
         paths = set()
         paths.add(self.original.name)
         if self.poster:
@@ -153,7 +152,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             #     pass
         return paths
 
-    def get_mime_type(self):
+    def get_mime_type(self) -> str:
         ending = self.original.name.split(".")[-1].lower()
         return {
             "mp4": "video/mp4",
@@ -161,7 +160,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             "avi": "video/x-msvideo",
         }.get(ending, "video/mp4")
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs) -> "Video":
         generate_poster = kwargs.pop("poster", True)
         # need to save original first - django file handling is driving me nuts
         result = super().save(*args, **kwargs)

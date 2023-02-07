@@ -50,7 +50,6 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     title_lookup: dict[str, str] = {key: f"Audio {key.upper()}" for key in audio_formats}
 
     admin_form_fields: tuple[str, ...] = ("title", "subtitle", "m4a", "mp3", "oga", "opus", "tags")
-    tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     search_fields = CollectionMember.search_fields + [
         index.SearchField("title", partial_match=True, boost=10),
@@ -64,7 +63,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         index.FilterField("user"),
     ]
 
-    objects = AudioQuerySet.as_manager()
+    objects: models.Manager["Audio"] = AudioQuerySet.as_manager()
+    tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     @property
     def uploaded_audio_files(self) -> Iterable[tuple[str, models.FileField]]:

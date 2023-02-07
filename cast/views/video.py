@@ -1,9 +1,10 @@
-from django.core.paginator import Paginator
+from django.core.paginator import Page, Paginator
+from django.db.models import QuerySet
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
-
 from wagtail.admin import messages
 from wagtail.admin.forms.search import SearchForm
 from wagtail.admin.modal_workflow import render_modal_workflow
@@ -14,14 +15,15 @@ from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import get_video_form
 from ..models import Video
 
-
 DEFAULT_PAGE_KEY = "p"
 
 
 pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
 
 
-def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=20):
+def paginate(
+    request: HttpRequest, items: QuerySet[Video], page_key: str = DEFAULT_PAGE_KEY, per_page: int = 20
+) -> tuple[Paginator, Page]:
     paginator = Paginator(items, per_page)
     page = paginator.get_page(request.GET.get(page_key))
     return paginator, page
