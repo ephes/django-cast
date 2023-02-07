@@ -39,7 +39,6 @@ def index(request):
         form = NonEmptySearchForm(request.GET, placeholder=_("Search video files"))
         if form.is_valid():
             query_string = form.cleaned_data["q"]
-            print("search for: ", f"<{query_string}>")
             videos = videos.search(query_string)
     else:
         form = NonEmptySearchForm(placeholder=_("Search media"))
