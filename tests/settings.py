@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     "wagtail.admin",
     "wagtail.core",
     "wagtail_srcset",
-    "cast",
+    "cast.apps.CastConfig",
 ]
 
 SITE_ID = 1
@@ -149,17 +149,14 @@ COMMENTS_APP = "fluent_comments"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # This provided a 70% speedup
-# use a faster password hasher - dont do this in production, it's only for testing
+# use a faster password hasher - don't do this in production, it's only for testing
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
-
-# For tests which need to run over a file in filesystem
-# (ffprobe for audio duration etc) overwrite settings with fixture
-DEFAULT_FILE_STORAGE = "inmemorystorage.InMemoryStorage"
 
 # Use in memory cache for tests
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
 # Wagtail
 WAGTAILADMIN_BASE_URL = "/cms"
+WAGTAILIMAGES_MAX_UPLOAD_SIZE = 30 * 1024 * 1024
