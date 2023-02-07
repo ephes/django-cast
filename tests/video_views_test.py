@@ -129,6 +129,7 @@ class TestVideoIndex:
         assert "media-results" in content
 
         # make sure video_urls.video is included in results
+        print(content)
         assert video_urls.video.title in content
 
     def test_get_index_with_pagination(self, authenticated_client, user):

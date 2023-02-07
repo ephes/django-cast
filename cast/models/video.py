@@ -74,7 +74,6 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     admin_form_fields = ("title", "original", "poster", "tags")
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
-
     objects: models.Manager["Video"] = VideoQuerySet.as_manager()
 
     search_fields = CollectionMember.search_fields + [

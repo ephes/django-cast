@@ -3,17 +3,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
-
 from wagtail.admin import messages
-from wagtail.admin.forms.search import SearchForm
 from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.admin.models import popular_tags_for_model
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
-from ..forms import AudioForm
+from ..forms import AudioForm, NonEmptySearchForm
 from ..models import Audio
-
 
 DEFAULT_PAGE_KEY = "p"
 
@@ -34,12 +31,12 @@ def index(request):
     # Search
     query_string = None
     if "q" in request.GET:
-        form = SearchForm(request.GET, placeholder=_("Search audio files"))
+        form = NonEmptySearchForm(request.GET, placeholder=_("Search audio files"))
         if form.is_valid():
             query_string = form.cleaned_data["q"]
             audios = audios.search(query_string)
     else:
-        form = SearchForm(placeholder=_("Search media"))
+        form = NonEmptySearchForm(placeholder=_("Search media"))
 
     # Pagination
     paginator, audios = paginate(request, audios, per_page=MENU_ITEM_PAGINATION)
@@ -185,7 +182,7 @@ def chooser(request):
     upload_form = AudioForm(prefix="media-chooser-upload")
 
     if "q" in request.GET or "p" in request.GET:
-        search_form = SearchForm(request.GET)
+        search_form = NonEmptySearchForm(request.GET)
         if search_form.is_valid():
             q = search_form.cleaned_data["q"]
 
@@ -207,7 +204,7 @@ def chooser(request):
             },
         )
     else:
-        search_form = SearchForm()
+        search_form = NonEmptySearchForm()
         paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
 
     return render_modal_workflow(
@@ -279,7 +276,7 @@ def chooser_upload(request):
     ordering = "-created"
     audios = Audio.objects.all().order_by(ordering)
 
-    search_form = SearchForm()
+    search_form = NonEmptySearchForm()
 
     paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
 

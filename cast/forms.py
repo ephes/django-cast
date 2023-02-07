@@ -8,7 +8,8 @@ from django.forms.models import modelform_factory
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin import widgets
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
-from wagtail.core.models import Collection
+from wagtail.admin.forms.search import SearchForm
+from wagtail.models import Collection
 
 from .models import Audio, ChapterMark, Video
 
@@ -165,3 +166,22 @@ class AudioForm(BaseCollectionMemberForm):
         if commit:
             self.save_chaptermarks(audio)
         return audio
+
+
+class NonEmptySearchForm(SearchForm):
+    """
+    A simple search form that takes a single search term.
+
+    It raises an ValidationError if the search term is empty
+    or only consists of spaces. Needed after SearchForm changed
+    behaviour in Wagtail 4.2.
+    """
+
+    def clean_q(self):
+        """
+        Make sure the search term is not empty.
+        """
+        query = self.cleaned_data["q"].strip()
+        if not query:
+            raise forms.ValidationError(_("Please enter a search term"))
+        return query
