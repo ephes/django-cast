@@ -8,13 +8,7 @@ from django.utils.safestring import mark_safe
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
-from wagtail.core.blocks import (
-    CharBlock,
-    ChooserBlock,
-    ListBlock,
-    StructBlock,
-    TextBlock,
-)
+from wagtail.blocks import CharBlock, ChooserBlock, ListBlock, StructBlock, TextBlock
 
 from .models import Gallery
 

@@ -11,13 +11,13 @@ from django.utils.html import escape
 from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
 from slugify import slugify
-from wagtail.admin.edit_handlers import FieldPanel
-from wagtail.core import blocks
-from wagtail.core.fields import StreamField
-from wagtail.core.models import Page, PageManager
+from wagtail import blocks
+from wagtail.admin.panels import FieldPanel
 from wagtail.embeds.blocks import EmbedBlock
+from wagtail.fields import StreamField
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image
+from wagtail.models import Page, PageManager
 from wagtail.search import index
 
 from cast import appsettings

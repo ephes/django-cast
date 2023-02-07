@@ -9,9 +9,9 @@ from django.http import Http404, HttpRequest
 from django.http.request import QueryDict
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from wagtail.admin.edit_handlers import FieldPanel
-from wagtail.core.fields import RichTextField
-from wagtail.core.models import Page, PageManager
+from wagtail.admin.panels import FieldPanel
+from wagtail.fields import RichTextField
+from wagtail.models import Page, PageManager
 
 from cast import appsettings
 from cast.filters import PostFilterset

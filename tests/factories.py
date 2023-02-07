@@ -1,6 +1,6 @@
 import factory
 from django.contrib.auth import get_user_model
-from wagtail.core.models import Site
+from wagtail.models import Site
 
 from cast.models import Blog, Episode, Gallery, Podcast, Post, Video
 

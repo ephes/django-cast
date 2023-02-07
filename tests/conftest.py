@@ -13,8 +13,8 @@ from django.test.client import RequestFactory
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
 from rest_framework.test import APIClient
-from wagtail.core.models import Site
 from wagtail.images.models import Image
+from wagtail.models import Site
 
 from cast import appsettings
 from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
