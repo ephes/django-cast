@@ -1,6 +1,12 @@
 import pytest
 
-from cast.admin import SpamfilterModelAdmin, VideoModelAdmin, cache_file_sizes, retrain
+from cast.admin import (
+    AdminUserMixin,
+    SpamfilterModelAdmin,
+    VideoModelAdmin,
+    cache_file_sizes,
+    retrain,
+)
 from cast.models import SpamFilter, Video
 
 
@@ -66,3 +72,12 @@ def test_cache_file_sizes():
     spy = SpyAudio()
     cache_file_sizes(None, None, [spy])
     assert spy.cached
+
+
+def test_admin_user_mixin():
+    class SpyRequest:
+        user = "foobar"
+
+    aum = AdminUserMixin()
+    initial_data = aum.get_changeform_initial_data(SpyRequest())
+    assert initial_data == {"user": SpyRequest.user, "author": SpyRequest.user}
