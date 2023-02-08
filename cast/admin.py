@@ -83,7 +83,7 @@ class FileModelAdmin(AdminUserMixin, admin.ModelAdmin):
     fields = ("user", "original")
 
 
-@admin.action(description="Cache file  sizes")
+@admin.action(description="Cache file sizes")
 def cache_file_sizes(_modeladmin: admin.ModelAdmin, _request: "HttpRequest", queryset: QuerySet[Audio]) -> None:
     for audio in queryset:
         audio.size_to_metadata()
