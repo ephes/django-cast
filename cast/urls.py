@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.urls import include, path
 from django.views.decorators.cache import cache_page
 
@@ -5,7 +7,7 @@ from . import feeds
 from .views import meta
 
 app_name = "cast"
-urlpatterns = [
+urlpatterns: list[Any] = [
     # API
     # url(r"^api/", include("cast.api.urls", namespace="api")),
     path("api/", include("cast.api.urls", namespace="api")),
