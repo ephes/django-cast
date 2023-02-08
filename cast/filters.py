@@ -21,14 +21,17 @@ from wagtail.models import PageQuerySet
 
 
 class DateFacetWidget(Widget):
+    data: QueryDict
+
     def __init__(self, attrs: Optional[dict[str, str]] = None):
         super().__init__(attrs)
         self.choices: list[tuple[str, str]] = []
 
-    def value_from_datadict(
+    def value_from_datadict(  # type: ignore[override]
         self, data: Mapping[str, Iterable[Any]], files: MultiValueDict[str, UploadedFile], name: str
     ) -> str:
-        value = super().value_from_datadict(data, files, name)
+        data_for_super = cast(dict[str, Any], data)  # make mypy happy
+        value = super().value_from_datadict(data_for_super, files, name)
         self.data: QueryDict = cast(QueryDict, data)
         return value
 
@@ -97,7 +100,7 @@ def get_selected_facet(get_params: dict) -> Optional[datetime]:
 
 
 def get_facet_counts(
-    filterset_data_orig: Optional[dict], queryset: Optional[models.QuerySet]
+    filterset_data_orig: Optional[QueryDict], queryset: Optional[models.QuerySet]
 ) -> dict[str, dict[datetime, int]]:
     if filterset_data_orig is None:
         filterset_data = {}
@@ -110,7 +113,8 @@ def get_facet_counts(
     if selected_facet is not None:
         facet_counts = {"year_month": {selected_facet: 1}}
     filterset_data["facet_counts"] = facet_counts  # type: ignore
-    post_filter = PostFilterset(queryset=queryset, data=filterset_data, facet_counts=facet_counts)
+    filterset_data_as_query_dict = cast(QueryDict, filterset_data)  # make mypy happy
+    post_filter = PostFilterset(queryset=queryset, data=filterset_data_as_query_dict, facet_counts=facet_counts)
     facet_queryset = (
         post_filter.qs.order_by()
         .annotate(month=TruncMonth("visible_date"))
@@ -128,6 +132,9 @@ def get_facet_counts(
 class FacetChoicesMixin:
     """Just a way to pass the facet counts to the field which displays the choice."""
 
+    parent: "PostFilterset"
+    extra: dict[str, Any]
+
     @property
     def field(self) -> Field:
         facet_count_choices = []
@@ -136,7 +143,8 @@ class FacetChoicesMixin:
             label = f"{date_str} ({count})"
             facet_count_choices.append((date_str, label))
         self.extra["choices"] = facet_count_choices
-        return super().field
+        super_filter = cast(django_filters.filters.ChoiceFilter, super())  # make mypy happy
+        return super_filter.field
 
 
 class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
@@ -173,7 +181,7 @@ class PostFilterset(django_filters.FilterSet):
 
     def __init__(
         self,
-        data: Optional[dict] = None,
+        data: Optional[QueryDict] = None,
         queryset: Optional[models.QuerySet] = None,
         *,
         facet_counts: dict = {},

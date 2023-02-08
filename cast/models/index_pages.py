@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
@@ -80,11 +80,11 @@ class Blog(Page):
         self._request = value
 
     @property
-    def filterset_data(self) -> Union[QueryDict, dict]:
+    def filterset_data(self) -> QueryDict:
         if self.request is not None:
             return self.request.GET
         else:
-            return getattr(self, "_filterset_data", {})
+            return getattr(self, "_filterset_data", QueryDict())
 
     @property
     def filterset(self) -> PostFilterset:
