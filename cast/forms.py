@@ -177,7 +177,7 @@ class NonEmptySearchForm(SearchForm):
     behaviour in Wagtail 4.2.
     """
 
-    def clean_q(self):
+    def clean_q(self) -> str:
         """
         Make sure the search term is not empty.
         """
