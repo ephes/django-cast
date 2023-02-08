@@ -96,7 +96,7 @@ class ITunesElements:
             pass
         generator = "Django Web Framework / django-cast"
         haqe("generator", generator)
-        haqe("docs", "http://blogs.law.harvard.edu/tech/rss")
+        haqe("docs", "https://blogs.law.harvard.edu/tech/rss")
 
     def add_item_elements(self, handler, item):
         """Add additional elements to the post object"""
@@ -207,7 +207,7 @@ class PodcastFeed(Feed):
     def item_enclosure_length(self, item: Post) -> int:
         return item.get_enclosure_size(self.audio_format)
 
-    def item_enclosure_mime_type(self, item: Post) -> str:
+    def item_enclosure_mime_type(self, _item: Post) -> str:
         return self.mime_type
 
     def item_keywords(self, item: Post) -> str:
@@ -240,8 +240,8 @@ class AtomPodcastFeed(PodcastFeed):
 class RssPodcastFeed(PodcastFeed):
     feed_type = RssITunesFeedGenerator
 
-    def item_guid(self, post: Post) -> None:
-        "ITunesElements can't add isPermaLink attr unless None is returned here."
+    def item_guid(self, _post: Post) -> None:
+        """ITunesElements can't add isPermaLink attr unless None is returned here."""
         return None
 
     def description(self, blog: Blog) -> str:

@@ -21,7 +21,8 @@ class VideoForm(forms.ModelForm):
 
 
 class FakePermissionPolicy:
-    def collections_user_has_permission_for(self, _user, _action) -> QuerySet[Collection]:
+    @staticmethod
+    def collections_user_has_permission_for(_user, _action) -> QuerySet[Collection]:
         return Collection.objects.all()
 
 

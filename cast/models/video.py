@@ -159,7 +159,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             "avi": "video/x-msvideo",
         }.get(ending, "video/mp4")
 
-    def save(self, *args, **kwargs) -> "Video":
+    def save(self, *args, **kwargs) -> Optional["Video"]:
         generate_poster = kwargs.pop("poster", True)
         # need to save original first - django file handling is driving me nuts
         result = super().save(*args, **kwargs)

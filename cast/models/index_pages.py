@@ -82,7 +82,7 @@ class Blog(Page):
     @property
     def filterset_data(self) -> QueryDict:
         if self.request is not None:
-            return self.request.GET
+            return self.request.GET.copy()
         else:
             filterset_data = getattr(self, "_filterset_data", None)
             if filterset_data is None:

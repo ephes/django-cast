@@ -184,11 +184,11 @@ class PostFilterset(django_filters.FilterSet):
         data: Optional[QueryDict] = None,
         queryset: Optional[models.QuerySet] = None,
         *,
-        facet_counts: dict = {},
+        facet_counts: Optional[dict] = None,
         fetch_facet_counts: bool = False,
     ):
         super().__init__(data=data, queryset=queryset)
-        self.facet_counts = facet_counts
+        self.facet_counts = facet_counts if facet_counts is not None else {}
         if fetch_facet_counts:
             # avoid running into infinite recursion problems, because
             # get_facet_counts will instantiate PostFilterset again
