@@ -12,7 +12,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from taggit.managers import TaggableManager
-from wagtail.models import CollectionMember
+from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
@@ -73,8 +73,8 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     calc_poster = True
 
     admin_form_fields = ("title", "original", "poster", "tags")
+    objects: PageManager["Video"] = VideoQuerySet.as_manager()
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
-    objects: models.Manager["Video"] = VideoQuerySet.as_manager()
 
     search_fields = CollectionMember.search_fields + [
         index.SearchField("title", partial_match=True, boost=10),

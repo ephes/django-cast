@@ -1,6 +1,8 @@
+from typing import Any
+
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -13,6 +15,7 @@ from wagtail.search.backends import get_search_backends
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm, get_video_form
 from ..models import Video
+from . import AuthenticatedHttpRequest
 
 DEFAULT_PAGE_KEY = "p"
 
@@ -29,7 +32,7 @@ def paginate(
 
 
 @vary_on_headers("X-Requested-With")
-def index(request):
+def index(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
     videos = Video.objects.all().order_by(ordering)
 
@@ -76,11 +79,11 @@ def index(request):
         )
 
 
-def add(request):
+def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     VideoForm = get_video_form()
     if request.POST:
         video = Video(user=request.user)
-        form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
+        form = VideoForm(request.POST, request.FILES, instance=video)
         if form.is_valid():
             form.save()
 
@@ -98,7 +101,7 @@ def add(request):
             messages.error(request, _("The video file could not be saved due to errors."))
     else:
         video = Video(user=request.user)
-        form = VideoForm(user=request.user, instance=video)
+        form = VideoForm(instance=video)
 
     return render(
         request,
@@ -107,13 +110,13 @@ def add(request):
     )
 
 
-def edit(request, video_id):
+def edit(request: HttpRequest, video_id: int) -> HttpResponse:
     VideoForm = get_video_form()
     video = get_object_or_404(Video, id=video_id)
 
     if request.POST:
         original_file = video.original
-        form = VideoForm(request.POST, request.FILES, instance=video, user=request.user)
+        form = VideoForm(request.POST, request.FILES, instance=video)
         if form.is_valid():
             if "original" in form.changed_data:
                 # if providing a new video file, delete the old one.
@@ -135,7 +138,7 @@ def edit(request, video_id):
         else:
             messages.error(request, _("The media could not be saved due to errors."))
     else:
-        form = VideoForm(instance=video, user=request.user)
+        form = VideoForm(instance=video)
 
     filesize = None
 
@@ -166,7 +169,7 @@ def edit(request, video_id):
     )
 
 
-def delete(request, video_id):
+def delete(request: HttpRequest, video_id: int) -> HttpResponse:
     video = get_object_or_404(Video, id=video_id)
 
     if request.POST:
@@ -177,7 +180,7 @@ def delete(request, video_id):
     return render(request, "cast/video/confirm_delete.html", {"video": video})
 
 
-def chooser(request):
+def chooser(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
     videos = Video.objects.all().order_by(ordering)
 
@@ -229,7 +232,7 @@ def chooser(request):
     )
 
 
-def get_video_data(video):
+def get_video_data(video: Video) -> dict[str, Any]:
     """
     helper function: given a video, return the json to pass back to the
     chooser panel - move to model FIXME
@@ -241,7 +244,7 @@ def get_video_data(video):
     }
 
 
-def chosen(request, video_id):
+def chosen(request: HttpRequest, video_id: int) -> HttpResponse:
     video = get_object_or_404(Video, id=video_id)
 
     return render_modal_workflow(
@@ -253,12 +256,12 @@ def chosen(request, video_id):
     )
 
 
-def chooser_upload(request):
+def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     VideoForm = get_video_form()
 
     if request.method == "POST":
         video = Video(user=request.user)
-        form = VideoForm(request.POST, request.FILES, instance=video, user=request.user, prefix="media-chooser-upload")
+        form = VideoForm(request.POST, request.FILES, instance=video, prefix="media-chooser-upload")
 
         if form.is_valid():
             form.save()
