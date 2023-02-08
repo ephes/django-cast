@@ -1,3 +1,4 @@
+from django.http import HttpRequest
 from django.urls import include, path, reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
@@ -10,7 +11,7 @@ from .models import Audio, Video
 
 
 @hooks.register("register_admin_urls")
-def register_admin_urls():
+def register_admin_urls() -> list:
     return [
         path("audio/", include((audio, "castaudio"), namespace="castaudio")),
         path("media/", include((video, "castvideo"), namespace="castvideo")),
@@ -18,13 +19,13 @@ def register_admin_urls():
 
 
 class VideoMenuItem(MenuItem):
-    def is_shown(self, request):
+    def is_shown(self, request: HttpRequest) -> bool:
         permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
         return permission_policy.user_has_any_permission(request.user, ["add", "change", "delete"])
 
 
 @hooks.register("register_admin_menu_item")
-def register_video_menu_item():
+def register_video_menu_item() -> VideoMenuItem:
     return VideoMenuItem(
         _("Video"),
         reverse("castvideo:index"),
@@ -35,7 +36,7 @@ def register_video_menu_item():
 
 
 @hooks.register("insert_editor_js")
-def editor_js():
+def editor_js() -> str:
     return format_html(
         """
         <script>
@@ -47,13 +48,13 @@ def editor_js():
 
 
 class AudioMenuItem(MenuItem):
-    def is_shown(self, request):
+    def is_shown(self, request: HttpRequest) -> bool:
         permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
         return permission_policy.user_has_any_permission(request.user, ["add", "change", "delete"])
 
 
 @hooks.register("register_admin_menu_item")
-def register_audio_menu_item():
+def register_audio_menu_item() -> AudioMenuItem:
     return AudioMenuItem(
         _("Audio"),
         reverse("castaudio:index"),
@@ -64,7 +65,7 @@ def register_audio_menu_item():
 
 
 @hooks.register("insert_editor_js")
-def editor_js_audio():
+def editor_js_audio() -> str:
     return format_html(
         """
         <script>
