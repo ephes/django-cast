@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from django.contrib.auth.models import User
 from django.core.paginator import Page, Paginator
+from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,14 +15,7 @@ from wagtail.search.backends import get_search_backends
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import AudioForm, NonEmptySearchForm
 from ..models import Audio
-
-if TYPE_CHECKING:
-    from django.paginator import _SupportsPagination
-
-
-class AuthenticatedHttpRequest(HttpRequest):
-    user: User
-
+from . import AuthenticatedHttpRequest
 
 DEFAULT_PAGE_KEY = "p"
 
@@ -31,7 +24,7 @@ pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
 
 def paginate(
     request: HttpRequest,
-    items: "_SupportsPagination[Any]",
+    items: QuerySet[Audio],
     page_key: str = DEFAULT_PAGE_KEY,
     per_page: int = MENU_ITEM_PAGINATION,
 ) -> tuple[Paginator, Page]:
