@@ -101,7 +101,7 @@ def parse_chaptermark_line(line: str) -> Optional[ChapterMark]:
 
 
 class ChapterMarksField(forms.CharField):
-    def to_python(self, value: Optional[str]) -> list[ChapterMark]:  # type: ignore
+    def to_python(self, value: Optional[str]) -> list[ChapterMark]:  # type: ignore[override]
         if value is None:
             return []
         chaptermarks = []
