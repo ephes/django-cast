@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.db.models.fields import BLANK_CHOICE_DASH
 from django.db.models.functions import TruncMonth
-from django.forms import Widget
+from django.forms import Field, Widget
 from django.forms.renderers import BaseRenderer
 from django.forms.utils import flatatt
 from django.http import QueryDict
@@ -129,7 +129,7 @@ class FacetChoicesMixin:
     """Just a way to pass the facet counts to the field which displays the choice."""
 
     @property
-    def field(self):  # FIXME add type annotation
+    def field(self) -> Field:
         facet_count_choices = []
         for year_month, count in sorted(self.parent.facet_counts.get("year_month", {}).items()):
             date_str = year_month.strftime("%Y-%m")
