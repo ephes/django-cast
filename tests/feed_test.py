@@ -7,7 +7,7 @@ import pytz
 from django.http import Http404
 from django.urls import reverse
 
-from cast.feeds import ITunesElements, PodcastFeed
+from cast.feeds import AtomITunesFeedGenerator, ITunesElements, PodcastFeed
 from cast.models import Post
 
 
@@ -138,3 +138,54 @@ class TestGeneratedFeeds:
         content = d.entries[0]["content"][0]["value"]
         assert "in_all" in content
         assert "only_in_detail" in content
+
+
+def test_itunes_elements_add_root_elements_index_error(mocker):
+    class MockedHandler:
+        def addQuickElement(self, name, content=None, attrs=None):
+            if name == "lastBuildDate":
+                raise IndexError
+
+        def startElement(self, name, attrs):
+            pass
+
+        def endElement(self, name):
+            pass
+
+    mocker.patch("cast.feeds.ITunesElements.add_artwork")
+    mocker.patch("cast.feeds.rfc2822_date")
+    atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
+    atom_itunes_feed_generator.feed = mocker.MagicMock()
+    handler = MockedHandler()
+    add_returned = atom_itunes_feed_generator.add_root_elements(handler)
+    assert add_returned is None
+
+
+def test_itunes_elements_add_item_elements_post_block(mocker):
+    mocker.patch("cast.feeds.Atom1Feed.add_item_elements")
+    post = mocker.MagicMock()
+    post.block = True
+    handler = mocker.MagicMock()
+    atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
+    atom_itunes_feed_generator.add_item_elements(handler, {"post": post})
+    assert handler.called_once_with("itunes:block", "yes")
+
+
+def test_podcast_feed_categories_and_keywords():
+    class MockedBlog:
+        categories = True
+        keywords = "foo, bar, baz"
+        itunes_categories = "one,two,three"
+
+    podcast_feed = PodcastFeed()
+
+    blog = MockedBlog()
+    # test categories -> first category
+    categories = podcast_feed.categories(blog)
+    assert categories == ("foo",)
+
+    # itunes_categories -> split itunes_categories
+    assert podcast_feed.itunes_categories(blog) == blog.itunes_categories.split(",")
+
+    # item_keywords -> item.keywords
+    assert podcast_feed.item_keywords(blog) == blog.keywords
