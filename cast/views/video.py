@@ -27,7 +27,7 @@ def paginate(
     request: HttpRequest, items: QuerySet[Video], page_key: str = DEFAULT_PAGE_KEY, per_page: int = 20
 ) -> tuple[Paginator, Page]:
     paginator = Paginator(items, per_page)
-    page = paginator.get_page(request.GET.get(page_key))
+    page = paginator.get_page(request.GET.get(page_key, 0))
     return paginator, page
 
 
@@ -80,10 +80,10 @@ def index(request: HttpRequest) -> HttpResponse:
 
 
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
-    VideoForm = get_video_form()
+    video_form = get_video_form()
     if request.POST:
         video = Video(user=request.user)
-        form = VideoForm(request.POST, request.FILES, instance=video)
+        form = video_form(request.POST, request.FILES, instance=video)
         if form.is_valid():
             form.save()
 
@@ -101,7 +101,7 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
             messages.error(request, _("The video file could not be saved due to errors."))
     else:
         video = Video(user=request.user)
-        form = VideoForm(instance=video)
+        form = video_form(instance=video)
 
     return render(
         request,
@@ -111,12 +111,12 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
 
 
 def edit(request: HttpRequest, video_id: int) -> HttpResponse:
-    VideoForm = get_video_form()
+    video_form = get_video_form()
     video = get_object_or_404(Video, id=video_id)
 
     if request.POST:
         original_file = video.original
-        form = VideoForm(request.POST, request.FILES, instance=video)
+        form = video_form(request.POST, request.FILES, instance=video)
         if form.is_valid():
             if "original" in form.changed_data:
                 # if providing a new video file, delete the old one.
@@ -138,7 +138,7 @@ def edit(request: HttpRequest, video_id: int) -> HttpResponse:
         else:
             messages.error(request, _("The media could not be saved due to errors."))
     else:
-        form = VideoForm(instance=video)
+        form = video_form(instance=video)
 
     filesize = None
 
