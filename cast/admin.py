@@ -2,6 +2,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.contrib import admin
+from django.contrib.admin import ModelAdmin
 from django.db.models import QuerySet
 
 from .models import (
@@ -32,19 +33,19 @@ class AdminUserMixin:
 
 
 @admin.register(Blog)
-class BlogModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class BlogModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("title", "owner")
     fields = ("author", "email", "comments_enabled")
 
 
 @admin.register(Podcast)
-class PodcastModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class PodcastModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("title", "owner")
     fields = ("itunes_artwork", "itunes_categories", "explicit", "keywords")
 
 
 @admin.register(Post)
-class PostModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class PostModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("title", "owner", "blog")
     fields = (
         "visible_date",
@@ -56,7 +57,7 @@ class PostModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 @admin.register(Episode)
-class EpisodeModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class EpisodeModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("title", "owner", "blog")
     fields = (
         "visible_date",
@@ -72,43 +73,44 @@ class EpisodeModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 @admin.register(ItunesArtWork)
-class ItunesArtWorkModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class ItunesArtWorkModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("pk", "original")
     fields = ("original",)
 
 
 @admin.register(File)
-class FileModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class FileModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("original", "user")
     fields = ("user", "original")
 
 
 @admin.action(description="Cache file sizes")
-def cache_file_sizes(_modeladmin: admin.ModelAdmin, _request: "HttpRequest", queryset: QuerySet[Audio]) -> None:
+def cache_file_sizes(_modeladmin: ModelAdmin, _request: "HttpRequest", queryset: QuerySet[Audio]) -> None:
     for audio in queryset:
         audio.size_to_metadata()
         audio.save()
 
 
 @admin.register(Audio)
-class AudioAdmin(AdminUserMixin, admin.ModelAdmin):
+class AudioAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus")
     fields = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus", "data")
     actions = [cache_file_sizes]
 
 
 @admin.register(ChapterMark)
-class ChapterMarkModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class ChapterMarkModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("start", "title", "link", "image", "audio")
 
 
 @admin.register(Video)
-class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class VideoModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("pk", "user")
 
-    def save_model(self, request: "HttpRequest", obj: Video, form: "Form", change) -> None:
+    def save_model(self, request: "HttpRequest", obj: Video, form: "Form", change: bool) -> None:
         logger.info(f"poster: {obj.poster}")
         logger.info(f"form: {form.cleaned_data}")
+        print("if in save_model: ", change, not form.cleaned_data["poster"])
         if change and not form.cleaned_data["poster"]:
             logger.info("poster was cleared")
             obj.calc_poster = False
@@ -116,20 +118,20 @@ class VideoModelAdmin(AdminUserMixin, admin.ModelAdmin):
 
 
 @admin.register(Gallery)
-class GalleryModelAdmin(AdminUserMixin, admin.ModelAdmin):
+class GalleryModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("pk",)
     fields = ("user", "images")
 
 
 @admin.action(description="Retrain model from scratch using marked comments")
-def retrain(_modeladmin: admin.ModelAdmin, _request: "HttpRequest", queryset: QuerySet[SpamFilter]) -> None:
+def retrain(_modeladmin: ModelAdmin, _request: "HttpRequest", queryset: QuerySet[SpamFilter]) -> None:
     for spamfilter in queryset:
         train = spamfilter.get_training_data_comments()
         spamfilter.retrain_from_scratch(train)
 
 
 @admin.register(SpamFilter)
-class SpamfilterModelAdmin(admin.ModelAdmin):
+class SpamfilterModelAdmin(ModelAdmin):
     readonly_fields = ["spam", "ham"]
     list_display = tuple(["pk", "name"] + readonly_fields)
     fields = ("name",)
