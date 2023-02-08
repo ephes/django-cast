@@ -31,7 +31,7 @@ class AdminVideoChooser(AdminChooser):
             "edit_link": reverse("castvideo:edit", args=[value.id]),
         }
 
-    def render_html(self, name, value, attrs):
+    def render_html(self, name: str, value: Optional[dict], attrs: dict) -> str:
         value = value if value is not None else {}
         original_field_html = super().render_html(name, value.get("id"), attrs)
 
@@ -47,7 +47,7 @@ class AdminVideoChooser(AdminChooser):
             },
         )
 
-    def render_js_init(self, id_, name, value):
+    def render_js_init(self, id_: int, name: str, value: Optional[dict]) -> str:
         return f"createVideoChooser({json.dumps(id_)});"
 
     class Media:
@@ -60,14 +60,14 @@ class AdminVideoChooser(AdminChooser):
 class VideoChooserAdapter(WidgetAdapter):
     js_constructor = "cast.wagtail.VideoChooser"
 
-    def js_args(self, widget):
+    def js_args(self, widget: AdminVideoChooser) -> list:
         return [
             widget.render_html("__NAME__", None, attrs={"id": "__ID__"}),
             widget.id_for_label("__ID__"),
         ]
 
     @cached_property
-    def media(self):
+    def media(self) -> forms.Media:
         return forms.Media(
             js=[
                 versioned_static("js/cast/wagtail/video-chooser-telepath.js"),
@@ -95,7 +95,7 @@ class AdminAudioChooser(AdminChooser):
             "edit_link": reverse("castaudio:edit", args=[value.id]),
         }
 
-    def render_html(self, name, value, attrs):
+    def render_html(self, name: str, value: Optional[dict], attrs: dict) -> str:
         value = value if value is not None else {}
         original_field_html = super().render_html(name, value.get("id"), attrs)
 
@@ -111,7 +111,7 @@ class AdminAudioChooser(AdminChooser):
             },
         )
 
-    def render_js_init(self, id_, name, value):
+    def render_js_init(self, id_, name: str, value: Optional[dict]) -> str:
         return f"createAudioChooser({json.dumps(id_)});"
 
     class Media:
@@ -124,14 +124,14 @@ class AdminAudioChooser(AdminChooser):
 class AudioChooserAdapter(WidgetAdapter):
     js_constructor = "cast.wagtail.AudioChooser"
 
-    def js_args(self, widget):
+    def js_args(self, widget: AdminAudioChooser) -> list:
         return [
             widget.render_html("__NAME__", None, attrs={"id": "__ID__"}),
             widget.id_for_label("__ID__"),
         ]
 
     @cached_property
-    def media(self):
+    def media(self) -> forms.Media:
         return forms.Media(
             js=[
                 versioned_static("js/cast/wagtail/audio-chooser-telepath.js"),
