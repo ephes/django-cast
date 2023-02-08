@@ -3,9 +3,7 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from wagtail import hooks
 from wagtail.admin.menu import MenuItem
-from wagtail.core.permission_policies.collections import (
-    CollectionOwnershipPermissionPolicy,
-)
+from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from .admin_urls import audio, video
 from .models import Audio, Video
