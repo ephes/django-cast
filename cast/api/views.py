@@ -1,7 +1,9 @@
 import logging
 from collections import OrderedDict
+from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import QuerySet
 from django.http import JsonResponse
 from django.urls import reverse
 from django.views.generic import CreateView
@@ -9,6 +11,7 @@ from rest_framework import generics
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -21,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(["GET"])
-def api_root(request):
+def api_root(request: Request) -> Response:
     """
     Show API contents.
     If you add any object types, add them here!
@@ -36,7 +39,7 @@ def api_root(request):
     return Response(OrderedDict(root_api_urls))
 
 
-class VideoCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):
+class VideoCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):  # type: ignore
     model = Video
     form_class = VideoForm
     user_field_name = "user"
@@ -53,7 +56,7 @@ class VideoListView(generics.ListCreateAPIView):
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Video]:
         user = self.request.user
         qs = Video.objects.all().filter(user=user)
         return qs.order_by("-created")
@@ -70,7 +73,7 @@ class AudioListView(generics.ListCreateAPIView):
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Audio]:
         user = self.request.user
         qs = Audio.objects.all().filter(user=user)
         return qs.order_by("-created")
@@ -86,7 +89,7 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
     queryset = Audio.objects.all()
     serializer_class = AudioPodloveSerializer
 
-    def retrieve(self, request, *args, **kwargs):
+    def retrieve(self, request: Request, *args, **kwargs) -> Response:
         instance = self.get_object()
         if (episode_id := request.query_params.get("episode_id")) is not None:
             try:
@@ -102,7 +105,7 @@ class CommentTrainingDataView(APIView):
     permission_classes = (IsAuthenticated,)
 
     @staticmethod
-    def get(request, format=None):
+    def get(request, _format: Any = None) -> JsonResponse:
         """
         Return training data for comment classification.
         """

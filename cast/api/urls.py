@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.urls import path, re_path
 from rest_framework.schemas import get_schema_view
 
@@ -6,7 +8,7 @@ from . import views
 app_name = "api"
 schema_view = get_schema_view(title="Cast API")
 
-urlpatterns = [
+urlpatterns: list[Any] = [
     path("schema/", schema_view),
     path("", views.api_root, name="root"),
     # video
