@@ -9,7 +9,6 @@ from .views import meta
 app_name = "cast"
 urlpatterns: list[Any] = [
     # API
-    # url(r"^api/", include("cast.api.urls", namespace="api")),
     path("api/", include("cast.api.urls", namespace="api")),
     # Feeds
     path(

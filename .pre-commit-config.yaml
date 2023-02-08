@@ -59,6 +59,7 @@ repos:
           - django-modelcluster
           - django-model-utils
           - django-stubs[compatible-mypy]
+          - django-stubs-ext
           - django-taggit
           - django-threadedcomments
           - psycopg2

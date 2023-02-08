@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from taggit.managers import TaggableManager
-from wagtail.models import CollectionMember
+from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
@@ -63,7 +63,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         index.FilterField("user"),
     ]
 
-    objects: models.Manager["Audio"] = AudioQuerySet.as_manager()
+    objects: PageManager["Audio"] = AudioQuerySet.as_manager()
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     @property

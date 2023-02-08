@@ -1,4 +1,8 @@
-from django.core.paginator import Paginator
+from typing import TYPE_CHECKING, Any
+
+from django.contrib.auth.models import User
+from django.core.paginator import Page, Paginator
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -12,19 +16,32 @@ from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import AudioForm, NonEmptySearchForm
 from ..models import Audio
 
+if TYPE_CHECKING:
+    from django.paginator import _SupportsPagination
+
+
+class AuthenticatedHttpRequest(HttpRequest):
+    user: User
+
+
 DEFAULT_PAGE_KEY = "p"
 
 pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
 
 
-def paginate(request, items, page_key=DEFAULT_PAGE_KEY, per_page=MENU_ITEM_PAGINATION):
-    paginator = Paginator(items, per_page)
+def paginate(
+    request: HttpRequest,
+    items: "_SupportsPagination[Any]",
+    page_key: str = DEFAULT_PAGE_KEY,
+    per_page: int = MENU_ITEM_PAGINATION,
+) -> tuple[Paginator, Page]:
+    paginator: Paginator = Paginator(items, per_page)
     page = paginator.get_page(request.GET.get(page_key))
     return paginator, page
 
 
 @vary_on_headers("X-Requested-With")
-def index(request):
+def index(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
     audios = Audio.objects.all().order_by(ordering)
 
@@ -71,7 +88,7 @@ def index(request):
         )
 
 
-def add(request):
+def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     if request.POST:
         audio = Audio(user=request.user)
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user)
@@ -101,7 +118,7 @@ def add(request):
     )
 
 
-def edit(request, audio_id):
+def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
     audio = get_object_or_404(Audio, id=audio_id)
 
     if request.method == "POST":
@@ -164,7 +181,7 @@ def edit(request, audio_id):
     )
 
 
-def delete(request, audio_id):
+def delete(request: HttpRequest, audio_id: int) -> HttpResponse:
     audio = get_object_or_404(Audio, id=audio_id)
 
     if request.POST:
@@ -175,7 +192,7 @@ def delete(request, audio_id):
     return render(request, "cast/audio/confirm_delete.html", {"audio": audio})
 
 
-def chooser(request):
+def chooser(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
     audios = Audio.objects.all().order_by(ordering)
 
@@ -227,7 +244,7 @@ def chooser(request):
     )
 
 
-def get_audio_data(audio):
+def get_audio_data(audio: Audio) -> dict[str, Any]:
     """
     helper function: given a audio, return the json to pass back to the
     chooser panel - move to model FIXME
@@ -239,7 +256,7 @@ def get_audio_data(audio):
     }
 
 
-def chosen(request, audio_id):
+def chosen(request, audio_id: int) -> HttpResponse:
     audio = get_object_or_404(Audio, id=audio_id)
 
     return render_modal_workflow(
@@ -251,7 +268,7 @@ def chosen(request, audio_id):
     )
 
 
-def chooser_upload(request):
+def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     if request.method == "POST":
         audio = Audio(user=request.user)
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user, prefix="media-chooser-upload")
