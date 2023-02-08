@@ -3,6 +3,8 @@ from datetime import timedelta
 import pytest
 from django.urls import reverse
 
+from cast.api.views import AudioPodloveDetailView
+
 from .factories import UserFactory
 
 
@@ -136,6 +138,16 @@ class TestPodcastAudio:
         assert len(chapters) == 3
         # assert reordering
         assert chapters[-1]["title"] == "coughing"
+
+    def test_podlove_detail_retrieve_with_value_error(self, mocker):
+        class MockRequest:
+            query_params = {"episode_id": "foo"}
+
+        mocker.patch("cast.api.views.AudioPodloveDetailView.get_object")
+        mocker.patch("cast.api.views.AudioPodloveDetailView.get_serializer")
+        podlove_view = AudioPodloveDetailView()
+        response = podlove_view.retrieve(MockRequest())
+        assert response.status_code == 200
 
 
 class TestCommentTrainingData:
