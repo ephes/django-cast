@@ -2,5 +2,6 @@
 ------------------
 
 * Some documentation enhancements/fixes
-* Some type annotation enhancements/fixes
+* Wagtail 4.2 compatibility
+* Nearly complete type annotations
 * Moved coverage config into pyproject.toml
