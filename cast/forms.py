@@ -1,5 +1,5 @@
 from datetime import datetime, time
-from typing import Optional
+from typing import Optional, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -44,7 +44,7 @@ def get_video_form() -> type[forms.ModelForm]:
         # cause dubious results when multiple collections exist (e.g. adding the
         # media to the root collection where the user may not have permission) -
         # and when only one collection exists, it will get hidden anyway.
-        fields = tuple(list(fields) + ["collection"])  # type: ignore
+        fields = cast(tuple[str, str, str, str], tuple(list(fields) + ["collection"]))
 
     return modelform_factory(
         Video,
@@ -80,7 +80,7 @@ class FFProbeChapterMarkForm(forms.ModelForm):
         fields = ("start", "title")
 
 
-def parse_chaptermark_line(line: str) -> Optional[ChapterMark]:
+def parse_chaptermark_line(line: str) -> ChapterMark:
     def raise_line_validation_error():
         raise ValidationError(
             _(f"Invalid chaptermark line: {line}"),
@@ -97,8 +97,7 @@ def parse_chaptermark_line(line: str) -> Optional[ChapterMark]:
     if form.is_valid():
         return form.save(commit=False)
     else:
-        raise_line_validation_error()
-        return None
+        return raise_line_validation_error()
 
 
 class ChapterMarksField(forms.CharField):
@@ -110,9 +109,7 @@ class ChapterMarksField(forms.CharField):
             if len(line) == 0:
                 # skip empty lines
                 continue
-            chaptermark = parse_chaptermark_line(line)
-            if chaptermark is not None:
-                chaptermarks.append(chaptermark)
+            chaptermarks.append(parse_chaptermark_line(line))
         return chaptermarks
 
 

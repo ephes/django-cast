@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cast.forms import AudioForm, ChapterMarkForm
+from cast.forms import AudioForm, ChapterMarkForm, get_video_form
 from cast.models import Audio, ChapterMark
 
 
@@ -116,3 +116,9 @@ class TestAudioForm:
         saved_chaptermark = audio.chaptermarks.first()
         assert saved_chaptermark.title == expected_title
         assert str(saved_chaptermark.start) == "00:02:35.343000"  # == "155.343000"
+
+
+def test_get_video_form_collection_not_added_if_in_admin_form_fields(mocker):
+    mocker.patch("cast.forms.Video.admin_form_fields", ("title", "original", "poster", "tags", "collection"))
+    video_form = get_video_form()
+    assert "collection" in video_form._meta.fields
