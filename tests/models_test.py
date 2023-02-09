@@ -1,6 +1,8 @@
 import pytest
 from django.http.request import QueryDict
 
+from cast.models.pages import Episode, HomePage, Post
+
 
 class TestVideoModel:
     pytestmark = pytest.mark.django_db
@@ -130,3 +132,69 @@ class TestPostModel:
         post.comments_enabled = False
         post.blog.comments_enabled = True
         assert not post.comments_are_enabled
+
+    def test_post_media_lookup_value_error(self):
+        assert Post().media_lookup == {}
+
+    def test_post_has_audio_value_error(self):
+        assert Post().has_audio is False
+
+    def test_media_ids_from_body(self):
+        class Block:
+            block_type = "image"
+            value = None
+
+        class ContentBlock:
+            value = (Block(),)
+
+        block = ContentBlock()
+        post = Post()
+        assert post._media_ids_from_body([block]) == {}
+
+    def test_get_description_escape(self, mocker):
+        class Rendered:
+            rendered_content = "<h1>foo</h1>"
+
+        mocker.patch("cast.models.Post.serve", return_value=Rendered())
+        post = Post()
+        description = post.get_description(escape_html=True)
+        assert "&lt" in description
+
+
+class TestEpisodeModel:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_context_without_absolute_url(self, mocker):
+        class Request:
+            pass
+
+        mocker.patch("cast.models.Post.get_context", return_value={})
+        episode = Episode()
+        context = episode.get_context(Request())
+        assert "player_url" not in context
+
+    def test_get_enclosure_size_podcast_is_none(self):
+        episode = Episode()
+        assert episode.get_enclosure_size("mp3") == 0
+
+
+def test_placeholder_request():
+    from cast.models.pages import PlaceholderRequest
+
+    request = PlaceholderRequest()
+    assert "localhost" in request.get_host()
+    assert request.get_port() == 80
+
+
+@pytest.mark.django_db
+def test_homepage_serve(episode, mocker):
+    mocker.patch("cast.models.pages.Page.serve", return_value="foobar")
+    homepage = HomePage()
+
+    # without alias
+    assert homepage.serve(None) == "foobar"
+
+    # with alias
+    homepage.alias_for_page = episode
+    r = homepage.serve(None)
+    assert r.status_code == 302

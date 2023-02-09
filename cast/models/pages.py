@@ -205,10 +205,9 @@ class Post(Page):
     def media_ids_from_db(self) -> TypeToIdSet:
         return {k: set(v) for k, v in self.media_lookup.items()}
 
-    @property
-    def media_ids_from_body(self) -> TypeToIdSet:
+    def _media_ids_from_body(self, body: StreamField) -> TypeToIdSet:
         from_body: TypeToIdSet = {}
-        for content_block in self.body:
+        for content_block in body:
             for block in content_block.value:
                 if block.block_type == "gallery":
                     image_ids = [i.id for i in block.value]
@@ -219,6 +218,10 @@ class Post(Page):
                     if media_model is not None:
                         from_body.setdefault(block.block_type, set()).add(media_model.id)
         return from_body
+
+    @property
+    def media_ids_from_body(self) -> TypeToIdSet:
+        return self._media_ids_from_body(self.body)
 
     def sync_media_ids(self) -> None:
         media_attr_lookup = self.media_attr_lookup
