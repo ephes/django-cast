@@ -111,6 +111,16 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     )
 
 
+def delete_old_audio_files(audio: Audio, changed_audio_files: set[str]) -> None:
+    for file_format in changed_audio_files:
+        # if providing a new audio file, delete the old one.
+        # NB Doing this via original_file.delete() clears the file field,
+        # which definitely isn't what we want...
+        original_file = getattr(audio, file_format)
+        if original_file.name != "":
+            original_file.storage.delete(original_file.name)
+
+
 def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
     audio = get_object_or_404(Audio, id=audio_id)
 
@@ -121,13 +131,7 @@ def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
             if len(changed_audio_files) > 0:
                 # FIXME butt ugly
                 old_audio = get_object_or_404(Audio, id=audio_id)
-            for file_format in changed_audio_files:
-                # if providing a new audio file, delete the old one.
-                # NB Doing this via original_file.delete() clears the file field,
-                # which definitely isn't what we want...
-                original_file = getattr(old_audio, file_format)
-                if original_file.name != "":
-                    original_file.storage.delete(original_file.name)
+                delete_old_audio_files(old_audio, changed_audio_files)
             audio = form.save()
 
             # Reindex the media entry to make sure all tags are indexed

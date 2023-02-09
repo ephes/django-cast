@@ -4,6 +4,7 @@ import pytest
 from django.urls import reverse
 
 from cast.models import Audio
+from cast.views.audio import delete_old_audio_files
 
 
 class TestPostWithAudioDetail:
@@ -275,6 +276,16 @@ class TestAudioEdit:
         # teardown
         audio = Audio.objects.first()
         audio.m4a.delete()
+
+    def test_delete_old_audio_files_skip_if_empty(self):
+        class File:
+            name = ""
+
+        class OldAudio:
+            mp3 = File()
+
+        audio = OldAudio()
+        assert delete_old_audio_files(audio, {"mp3"}) is None
 
 
 class TestAudioDelete:
