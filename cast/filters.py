@@ -54,7 +54,7 @@ class DateFacetWidget(Widget):
         for option_value, option_label in self.choices:
             if isinstance(option_label, (list, tuple)):
                 for option in option_label:
-                    output.append(self.render_option(name, selected_choices_set, *option))
+                    output.append(self.render_option(name, selected_choices_set, option_value, option))
             else:
                 output.append(self.render_option(name, selected_choices_set, option_value, option_label))
         return "\n".join(output)
