@@ -5,7 +5,7 @@ import subprocess
 from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 from django.contrib.auth import get_user_model
 from django.db import models
@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 
 class AudioQuerySet(SearchableQuerySetMixin, models.QuerySet):
     pass
+
+
+@runtime_checkable
+class FileField(Protocol):
+    """Just to make mypy happy about field.url and field.path"""
+
+    url: str
+    path: str
 
 
 class Audio(CollectionMember, index.Indexed, TimeStampedModel):
@@ -117,24 +125,26 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
 
     def create_duration(self) -> None:
         for name, field in self.uploaded_audio_files:
-            audio_url = field.url  # type: ignore
+            if not isinstance(field, FileField):
+                continue
+            audio_url = field.url
             if not audio_url.startswith("http"):
-                audio_url = field.path  # type: ignore
-            duration = self._get_audio_duration(audio_url)
-            if duration is not None:
-                self.duration = duration
-                break
+                audio_url = field.path
+            self.duration = self._get_audio_duration(audio_url)
+            break
 
     @property
     def audio(self) -> list[dict[str, str]]:
         items = []
         for name, field in self.uploaded_audio_files:
+            if not isinstance(field, FileField):
+                continue
             items.append(
                 {
-                    "url": field.url,  # type: ignore
+                    "url": field.url,
                     "mimeType": self.mime_lookup[name],
-                    "size": self.get_file_size(name),
-                    "title": self.title_lookup[name],
+                    "size": str(self.get_file_size(name)),
+                    "title": str(self.title_lookup[name]),
                 }
             )
         return items

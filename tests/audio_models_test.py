@@ -34,11 +34,60 @@ class TestAudioModel:
         duration = audio._get_audio_duration(audio.m4a.path)
         assert duration == timedelta(microseconds=700000)
 
+    def test_audio_duration_no_match(self, mocker):
+        mocker.patch("cast.models.audio.subprocess.check_output", return_value=b"foobar")
+        with pytest.raises(ValueError):
+            Audio._get_audio_duration("https://example.com/test.m4a")
+
     def test_audio_create_duration(self, audio):
         duration = "00:01:01.00"
         audio._get_audio_duration = lambda x: duration
         audio.create_duration()
         assert audio.duration == duration
+
+    def test_audio_create_duration_no_duration(self, audio, mocker):
+        class Field:
+            url = "https://example.com/to.mp3"
+            path = "/tmp/to.mp3"
+
+        field = Field()
+        get_audio_duration = mocker.patch("cast.models.audio.Audio._get_audio_duration", return_value="duration")
+        mocker.patch("cast.models.audio.Audio.uploaded_audio_files", [("mp3", field)])
+        audio.create_duration()
+        get_audio_duration.assert_called_once_with(field.url)
+
+    def test_audio_create_duration_no_file_field(self, audio, mocker):
+        class Field:  # not a FileField
+            foo = "bar"
+
+        field = Field()
+        get_audio_duration = mocker.patch("cast.models.audio.Audio._get_audio_duration", return_value="duration")
+        mocker.patch("cast.models.audio.Audio.uploaded_audio_files", [("mp3", field)])
+        audio.create_duration()
+        assert get_audio_duration.call_count == 0
+
+    def test_audio_audio_without_file_fields(self, audio, mocker):
+        class Field:  # not a FileField
+            foo = "bar"
+
+        field = Field()
+        mocker.patch("cast.models.audio.Audio.uploaded_audio_files", [("mp3", field)])
+        assert audio.audio == []
+
+    def test_audio_get_chaptermark_data_from_file_https_not_in_url(self, audio, mocker):
+        class RunReturn:
+            stdout = '{"foo": "bar"}'
+
+        class Field:
+            url = "https://example.com/to.mp3"
+            path = "/tmp/to.mp3"
+
+        field = Field()
+        mocker.patch("cast.models.audio.getattr", return_value=field)
+        run = mocker.patch("cast.models.audio.subprocess.run", return_value=RunReturn())
+        mocker.patch("cast.models.audio.Audio.clean_ffprobe_chaptermarks")
+        _ = audio.get_chaptermark_data_from_file("mp3")
+        assert field.url == run.call_args[0][0][2]
 
     def test_audio_podlove_url(self, audio):
         assert audio.podlove_url == "/cast/api/audios/podlove/1"
@@ -115,6 +164,20 @@ class TestAudioModel:
             {"start": "617.117000", "title": "Django Async"},
         ]
 
+    def test_chapters_as_text_chaptermarks_not_empty(self, audio, mocker):
+        class Mark:
+            original_line = "original line"
+
+        mark = Mark()
+
+        class ChapterMarks:
+            @staticmethod
+            def order_by(_order):
+                return [mark]
+
+        mocker.patch("cast.models.audio.Audio.chaptermarks", ChapterMarks())
+        assert mark.original_line in audio.chapters_as_text
+
     def test_write_audio_file_size_to_cache(self, audio):
         expected_size = audio.m4a.size
         audio.size_to_metadata()
@@ -134,6 +197,12 @@ class TestAudioModel:
         # when file field is null, return 0
         audio.mp3 = None
         assert audio.get_file_size("mp3") == 0
+
+    def test_save_without_cache_file_sizes(self, audio, mocker):
+        mocker.patch("cast.models.audio.TimeStampedModel.save")
+        audio.data = expected_data = {}
+        audio.save(generate_duration=False, cache_file_sizes=False)
+        assert audio.data == expected_data
 
 
 class TestChapterMarkModel:
