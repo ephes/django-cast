@@ -2,6 +2,7 @@ import pytest
 from django.http.request import QueryDict
 
 from cast.models.pages import Episode, HomePage, Post
+from cast.models.video import Video
 
 
 class TestVideoModel:
@@ -198,3 +199,20 @@ def test_homepage_serve(episode, mocker):
     homepage.alias_for_page = episode
     r = homepage.serve(None)
     assert r.status_code == 302
+
+
+@pytest.mark.django_db
+def test_video_create_poster_video_url_without_http(mocker):
+    mocker.patch("cast.models.video.tempfile.mkstemp", return_value=(1, "foo"))
+    mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
+    check_output = mocker.patch("cast.models.video.check_output", side_effect=ValueError())
+
+    class Original:
+        url = "https://example.com/video.mp4"
+
+    video = Video()
+    mocker.patch.object(video, "original", Original())
+    with pytest.raises(ValueError):
+        video._create_poster()
+    command = check_output.call_args_list[0][0][0]
+    assert "example" in command
