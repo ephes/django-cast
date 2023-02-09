@@ -1,6 +1,6 @@
 import pytest
 
-from cast.models.moderation import NaiveBayes, SpamFilter, normalize
+from cast.models.moderation import Evaluation, NaiveBayes, SpamFilter, normalize
 
 
 @pytest.mark.parametrize(
@@ -127,3 +127,56 @@ def test_spamfilter_retrain_from_scratch(comment, comment_spam):
     train = SpamFilter.get_training_data_comments()
     spamfilter.retrain_from_scratch(train)
     assert spamfilter.model.prior_probabilities == {"ham": 0.5, "spam": 0.5}
+
+
+def test_evaluate_model_non_empty_test_messages():
+    class Model:
+        prior_probabilities = {"spam": 0.5, "ham": 0.5}
+
+        @staticmethod
+        def predict_label(message):
+            return "spam"
+
+    messages = [("spam", "foo bar baz"), ("ham", "asdf bsdf csdf")]
+    label_results = Evaluation.evaluate_model(Model(), messages)
+    assert label_results["spam"]["true_positive"] == 1  # first message is tp
+    assert label_results["spam"]["false_positive"] == 1  # second message is fp
+
+
+def test_get_precision_recall_f1():
+    counts = {
+        "ham": {"true_positive": 1, "true_negative": 1, "false_positive": 1, "false_negative": 1},
+    }
+    precision, recall, f1 = Evaluation.get_precision_recall_f1(counts["ham"])
+    assert (precision, recall, f1) == (0.5, 0.5, 0.5)
+
+
+def test_calc_performance():
+    counts = {
+        "spam": {"true_positive": 1, "true_negative": 1, "false_positive": 1, "false_negative": 1},
+        "ham": {"true_positive": 1, "true_negative": 1, "false_positive": 1, "false_negative": 1},
+    }
+    performance = Evaluation().calc_performance(counts)
+    assert tuple(performance["spam"].values()) == (0.5, 0.5, 0.5)
+    assert tuple(performance["ham"].values()) == (0.5, 0.5, 0.5)
+
+
+def test_evaluate_with_some_messages():
+    class Model:
+        prior_probabilities = {"spam": 0.5, "ham": 0.5}
+
+        @staticmethod
+        def predict_label(message):
+            return "spam"
+
+        def fit(self, _train):
+            return self
+
+    messages = [("spam", "foo bar baz"), ("ham", "asdf bsdf csdf")]
+    evaluation = Evaluation(model_class=Model, num_folds=1)
+    performance = evaluation.evaluate(messages)
+    assert performance["spam"]["precision"] == 0.5
+
+    messages = []
+    with pytest.raises(ValueError):
+        evaluation.evaluate(messages)

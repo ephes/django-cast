@@ -223,12 +223,16 @@ class Evaluation:
         fn = result["false_negative"]
         precision = tp / (tp + fp) if tp + fp > 0 else 0
         recall = tp / (tp + fn) if tp + fn > 0 else 0
-        f1 = 2 * precision * recall / (precision + recall)
+        try:
+            f1 = 2 * precision * recall / (precision + recall)
+        except ZeroDivisionError:
+            f1 = 0
         return precision, recall, f1
 
     def calc_performance(self, results: dict[str, Counts]) -> dict[str, Performance]:
         """Calc precision, recall and f1 for each label."""
         performance = {}
+        print("results: ", results)
         for label, result in results.items():
             precision, recall, f1 = self.get_precision_recall_f1(result)
             performance[label] = {
@@ -247,13 +251,7 @@ class Evaluation:
         results = None
         for train, test in self.generate_train_test(folds):
             model = self.model_class().fit(train)
-            label_results = self.evaluate_model(model, test)
-            if results is None:
-                results = label_results
-            else:
-                for label, counts in label_results.items():
-                    for name, count in counts.items():
-                        results[label][name] += count
+            results = self.evaluate_model(model, test)
         if results is None:
             raise ValueError("No results")
         return self.calc_performance(results)
