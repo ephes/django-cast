@@ -1,4 +1,5 @@
 import pytest
+from django.http.request import QueryDict
 
 
 class TestVideoModel:
@@ -63,6 +64,35 @@ class TestBlogModel:
     def test_blog_author_not_null(self, blog):
         blog.author = "Foobar"
         assert blog.author_name == blog.author
+
+    def test_filterset_data_request_is_none(self, blog):
+        blog.request = None
+
+        # blog._filterset_data is None
+        blog._filterset_data = None
+        assert blog.filterset_data == QueryDict()
+
+        # blog._filterset_data is not None
+        blog._filterset_data = QueryDict()
+        assert blog.filterset_data == QueryDict()
+
+    def test_paginate_queryset_request_is_none(self, blog):
+        blog.request = None
+        context = blog.paginate_queryset({})
+        assert context["page_obj"].number == 1
+
+    def test_get_other_get_params_request_is_none(self, blog):
+        blog.request = None
+        assert blog.get_other_get_params() == ""
+
+    def test_get_other_get_params_len_parameters_gt_0(self, blog):
+        class Request:
+            GET = QueryDict("foo=bar&bar=foo&page=3")
+
+        request = Request()
+        blog.request = request
+        params = blog.get_other_get_params()
+        assert params == "&foo=bar&bar=foo"
 
 
 class TestPostModel:
