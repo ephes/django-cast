@@ -26,6 +26,10 @@ ContextDict = dict[str, Any]
 
 
 class Blog(Page):
+    """
+    This is the index page for a blog. It contains a list of posts.
+    """
+
     author = models.CharField(
         max_length=255,
         default=None,
