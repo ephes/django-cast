@@ -1,7 +1,10 @@
 0.2.5 (2023-02-13)
 ------------------
 
+Coverage reached 100%!
+
 * Some documentation enhancements/fixes
 * Wagtail 4.2 compatibility
 * Nearly complete type annotations
+* Added a few more tests -> 100% coverage 🥳
 * Moved coverage config into pyproject.toml
