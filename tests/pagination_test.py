@@ -38,7 +38,6 @@ def test_pagination_template_is_paginated_long(simple_request):
     }
     r = render(simple_request, "pagination.html", context)
     html = r.content.decode("utf-8").strip()
-    print(html)
     assert "page=1" in html  # first page
     assert "page=500" in html  # last page
 
