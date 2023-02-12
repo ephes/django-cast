@@ -137,8 +137,9 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     def audio(self) -> list[dict[str, str]]:
         items = []
         for name, field in self.uploaded_audio_files:
-            if not isinstance(field, FileField):
-                continue
+            if TYPE_CHECKING:
+                if not isinstance(field, FileField):
+                    continue
             items.append(
                 {
                     "url": field.url,
