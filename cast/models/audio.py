@@ -137,12 +137,11 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     def audio(self) -> list[dict[str, str]]:
         items = []
         for name, field in self.uploaded_audio_files:
-            if TYPE_CHECKING:
-                if not isinstance(field, FileField):
-                    continue
+            if not hasattr(field, "url"):
+                continue
             items.append(
                 {
-                    "url": field.url,
+                    "url": field.url,  # type: ignore
                     "mimeType": self.mime_lookup[name],
                     "size": str(self.get_file_size(name)),
                     "title": str(self.title_lookup[name]),
