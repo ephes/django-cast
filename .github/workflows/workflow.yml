@@ -18,7 +18,8 @@ jobs:
     - name: Generate coverage report
       run: |
         pip install --upgrade pip
-        pip install -r requirements/develop.txt
+        pip install flit
+        flit install -s
         pytest --cov=./ --cov-report=xml
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
