@@ -8,3 +8,4 @@ Coverage reached 100%!
 * Nearly complete type annotations
 * Added a few more tests -> 100% coverage 🥳
 * Moved coverage config into pyproject.toml
+* Fixed pagination #66
