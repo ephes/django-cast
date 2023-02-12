@@ -20,6 +20,7 @@ jobs:
         pip install --upgrade pip
         pip install flit
         flit install -s
+        python manage.py migrate
         pytest --cov=./ --cov-report=xml
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
