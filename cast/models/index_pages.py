@@ -129,6 +129,7 @@ class Blog(Page):
             "page_obj": page,
             "is_paginated": page.has_other_pages(),
             "object_list": page.object_list,
+            "page_range": page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1),  # type: ignore
         }
         context.update(pagination_context)
         return context
