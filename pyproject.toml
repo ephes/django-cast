@@ -38,7 +38,7 @@ dependencies = [
     "coreapi",
     "django",
     "django-allauth",
-    "django-crispy-forms",
+    "django-crispy-forms < 2.0.0",
     "django-contrib-comments",
     "django-environ",
     "django-filter",
