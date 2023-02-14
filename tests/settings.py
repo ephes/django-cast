@@ -160,3 +160,7 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"
 # Wagtail
 WAGTAILADMIN_BASE_URL = "/cms"
 WAGTAILIMAGES_MAX_UPLOAD_SIZE = 30 * 1024 * 1024
+
+# crispy forms
+CRISPY_TEMPLATE_PACK = "bootstrap4"
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
