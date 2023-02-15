@@ -1,5 +1,5 @@
 0.2.6 (2023-02-20)
 ------------------
 
-...
-* Added badge for supported Python versions.
+*  Added badge for supported Python versions
+*  Added some pagination documentation
