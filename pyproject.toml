@@ -36,9 +36,10 @@ classifiers = [
 
 dependencies = [
     "coreapi",
+    "crispy-bootstrap4",
     "django",
     "django-allauth",
-    "django-crispy-forms < 2.0.0",
+    "django-crispy-forms",
     "django-contrib-comments",
     "django-environ",
     "django-filter",
