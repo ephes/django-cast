@@ -156,6 +156,3 @@ PASSWORD_HASHERS = [
 
 # Use in memory cache for tests
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
-
-# crispy forms
-CRISPY_TEMPLATE_PACK = "uni_form"

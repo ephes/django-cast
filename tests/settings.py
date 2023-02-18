@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "django_filters",
     "crispy_forms",  # Form layouts
+    "crispy_bootstrap4",
     "fluent_comments",  # must be before django_comments
     "threadedcomments",
     "django_comments",

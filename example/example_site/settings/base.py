@@ -50,6 +50,7 @@ DJANGO_APPS = [
 ]
 THIRD_PARTY_APPS = [
     "crispy_forms",
+    "crispy_bootstrap4",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
@@ -75,7 +76,7 @@ THIRD_PARTY_APPS = [
     "modelcluster",
     "taggit",
 ]
-LOCAL_APPS = [
+LOCAL_APPS: list = [
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -115,6 +116,13 @@ TEMPLATES = [
 
 # See: http://django-crispy-forms.readthedocs.io/en/latest/install.html#template-packs
 CRISPY_TEMPLATE_PACK = "bootstrap4"
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
+
+CRISPY_CLASS_CONVERTERS = {
+    "textinput": "textinput textInput",
+    "fileinput": "fileinput fileUpload",
+    "passwordinput": "textinput textInput",
+}
 
 WSGI_APPLICATION = "example_site.wsgi.application"
 
