@@ -176,9 +176,13 @@ class PodcastFeed(Feed):
     def itunes_categories(self, blog: Blog) -> list[str]:
         return blog.itunes_categories.split(",")
 
-    def items(self, blog: Blog) -> QuerySet[Post]:
+    def items(self, podcast: Podcast) -> QuerySet[Episode]:
         queryset = (
-            Episode.objects.live().descendant_of(blog).filter(podcast_audio__isnull=False).order_by("-visible_date")
+            Episode.objects.live()
+            .descendant_of(podcast)
+            .filter(podcast_audio__isnull=False)
+            .select_related("podcast_audio")
+            .order_by("-visible_date")
         )
         return queryset
 
