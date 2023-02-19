@@ -186,6 +186,7 @@
 .cast-date-facet-container {
     display: flex;
     flex-wrap: wrap;
+    height: auto;
 }
 
 .cast-date-facet-item {
