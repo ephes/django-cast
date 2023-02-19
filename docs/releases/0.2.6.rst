@@ -1,5 +1,9 @@
 0.2.6 (2023-02-20)
 ------------------
 
-*  Added badge for supported Python versions
-*  Added some pagination documentation
+Compatibility with django-crispy-forms >= 2
+
+* Added badge for supported Python versions
+* Added some pagination documentation
+* Added bootstrap4 template pack + settings
+* Fixed date facets breaking out of their container
