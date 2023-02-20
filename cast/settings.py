@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "django_filters",
     "crispy_forms",  # Form layouts
+    "crispy_bootstrap4",
     "fluent_comments",  # must be before django_comments
     "threadedcomments",
     "django_comments",
@@ -156,3 +157,7 @@ PASSWORD_HASHERS = [
 
 # Use in memory cache for tests
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# crispy forms
+CRISPY_TEMPLATE_PACK = "bootstrap4"
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
