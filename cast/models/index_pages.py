@@ -17,7 +17,7 @@ from cast import appsettings
 from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
-from .pages import Post
+from .pages import Episode, Post
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,15 @@ class Blog(Page):
 
     @property
     def published_posts(self) -> models.QuerySet[Post]:
-        return self.filterset.qs
+        queryset = self.filterset.qs
+        queryset = (
+            queryset.prefetch_related("audios")
+            .prefetch_related("images")
+            .prefetch_related("videos")
+            .prefetch_related("galleries")
+            .select_related("owner")
+        )
+        return queryset
 
     def paginate_queryset(self, context: ContextDict) -> ContextDict:
         paginator = Paginator(self.published_posts, appsettings.POST_LIST_PAGINATION)
@@ -146,10 +154,11 @@ class Blog(Page):
     def get_context(self, request: HttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         self.request = request
-        context["filterset"] = self.filterset
+        context["filterset"] = kwargs.get("filterset", self.filterset)
         context["parameters"] = self.get_other_get_params()
         context = self.paginate_queryset(context)
         context["posts"] = context["object_list"]  # convenience
+        context["blog"] = self
         return context
 
 
@@ -193,8 +202,31 @@ class Podcast(Blog):
     aliases_homepage: Any  # don't know why this is needed FIXME
 
     @property
+    def unfiltered_published_posts(self) -> models.QuerySet[Episode]:
+        return Episode.objects.live().descendant_of(self).order_by("-visible_date")
+
+    @property
+    def published_posts(self) -> models.QuerySet[Episode]:
+        queryset = self.filterset.qs
+        queryset = (
+            queryset.prefetch_related("audios")
+            .prefetch_related("images")
+            .prefetch_related("videos")
+            .prefetch_related("galleries")
+            .select_related("owner")
+            # .select_related("itunes_artwork")
+        )
+        return queryset
+
+    @property
     def itunes_categories_parsed(self) -> dict[str, list[str]]:
         try:
             return json.loads(self.itunes_categories)
         except json.decoder.JSONDecodeError:
             return {}
+
+    def get_context(self, request: HttpRequest, *args, **kwargs) -> ContextDict:
+        kwargs["filterset"] = self.filterset
+        context = super().get_context(request, *args, **kwargs)
+        context["podcast"] = self
+        return context
