@@ -1,0 +1,6 @@
+0.2.7 (2023-02-27)
+------------------
+
+Exchangeable templates
+
+* Query optimization
