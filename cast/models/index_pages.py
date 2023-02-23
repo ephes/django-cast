@@ -17,7 +17,7 @@ from cast import appsettings
 from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
-from .pages import Episode, Post
+from .pages import Post
 
 logger = logging.getLogger(__name__)
 
@@ -202,31 +202,8 @@ class Podcast(Blog):
     aliases_homepage: Any  # don't know why this is needed FIXME
 
     @property
-    def unfiltered_published_posts(self) -> models.QuerySet[Episode]:
-        return Episode.objects.live().descendant_of(self).order_by("-visible_date")
-
-    @property
-    def published_posts(self) -> models.QuerySet[Episode]:
-        queryset = self.filterset.qs
-        queryset = (
-            queryset.prefetch_related("audios")
-            .prefetch_related("images")
-            .prefetch_related("videos")
-            .prefetch_related("galleries")
-            .select_related("owner")
-            # .select_related("itunes_artwork")
-        )
-        return queryset
-
-    @property
     def itunes_categories_parsed(self) -> dict[str, list[str]]:
         try:
             return json.loads(self.itunes_categories)
         except json.decoder.JSONDecodeError:
             return {}
-
-    def get_context(self, request: HttpRequest, *args, **kwargs) -> ContextDict:
-        kwargs["filterset"] = self.filterset
-        context = super().get_context(request, *args, **kwargs)
-        context["podcast"] = self
-        return context
