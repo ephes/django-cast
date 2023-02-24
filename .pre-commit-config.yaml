@@ -44,7 +44,7 @@ repos:
     rev: 'v1.0.1'  # Use the sha / tag you want to point at
     hooks:
       - id: mypy
-        exclude: "[a-zA-Z]*/(migrations)|(docs)/(.)*"
+        exclude: "[a-zA-Z]*/(migrations)|(docs)|(example)/(.)*"
         args: [--no-strict-optional,
                --ignore-missing-imports]
         additional_dependencies:
