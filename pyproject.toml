@@ -118,7 +118,7 @@ addopts = [
 python_version = "3.11"
 ignore_missing_imports = true
 plugins = ["mypy_django_plugin.main"]
-exclude = "[a-zA-Z]*/(migrations)/(.)*"  # ignore migrations
+exclude = "[a-zA-Z]*/(migrations)|(example)/(.)*"  # ignore migrations
 
 [tool.django-stubs]
 django_settings_module = "cast.settings"
