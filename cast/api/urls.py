@@ -1,6 +1,6 @@
 from typing import Any
 
-from django.urls import path, re_path
+from django.urls import include, path, re_path
 from rest_framework.schemas import get_schema_view
 
 from . import views
@@ -29,4 +29,6 @@ urlpatterns: list[Any] = [
     ),
     # comment training data
     path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment-training-data"),
+    # wagtail api
+    path("wagtail/", include((views.wagtail_api_router.get_urlpatterns(), "api"), namespace="wagtail")),
 ]

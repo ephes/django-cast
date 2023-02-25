@@ -14,6 +14,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from wagtail.api.v2.router import WagtailAPIRouter
+from wagtail.api.v2.views import PagesAPIViewSet
 
 from ..forms import VideoForm
 from ..models import Audio, SpamFilter, Video
@@ -35,6 +37,7 @@ def api_root(request: Request) -> Response:
         ("videos", request.build_absolute_uri(reverse("cast:api:video_list"))),
         ("audios", request.build_absolute_uri(reverse("cast:api:audio_list"))),
         ("comment_training_data", request.build_absolute_uri(reverse("cast:api:comment-training-data"))),
+        ("pages", request.build_absolute_uri(reverse("cast:api:wagtail:pages:listing"))),
     )
     return Response(OrderedDict(root_api_urls))
 
@@ -111,3 +114,8 @@ class CommentTrainingDataView(APIView):
         """
         train = SpamFilter.get_training_data_comments()
         return JsonResponse(train, safe=False)
+
+
+# Wagtail API
+wagtail_api_router = WagtailAPIRouter("cast:api:wagtail")
+wagtail_api_router.register_endpoint("pages", PagesAPIViewSet)

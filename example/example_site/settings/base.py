@@ -61,6 +61,7 @@ THIRD_PARTY_APPS = [
     "fluent_comments",
     "threadedcomments",
     "django_comments",
+    "wagtail.api.v2",
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
     "wagtail.embeds",
