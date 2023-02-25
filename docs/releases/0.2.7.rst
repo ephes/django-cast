@@ -3,4 +3,5 @@
 
 Exchangeable templates
 
-* Query optimization
+* Query optimization - didn't work, this needs some more infrastructure fist
+* Added a `pages` endpoint to the API
