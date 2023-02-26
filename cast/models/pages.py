@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 from slugify import slugify
 from wagtail import blocks
 from wagtail.admin.panels import FieldPanel
+from wagtail.api import APIField
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.fields import StreamField
 from wagtail.images.blocks import ImageChooserBlock
@@ -102,6 +103,13 @@ class Post(Page):
 
     search_fields = Page.search_fields + [
         index.SearchField("body"),
+    ]
+
+    api_fields = [
+        APIField("uuid"),
+        APIField("visible_date"),
+        APIField("comments_enabled"),
+        APIField("body"),
     ]
 
     content_panels = Page.content_panels + [
