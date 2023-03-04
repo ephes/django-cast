@@ -5,6 +5,13 @@
 
 {% block body_class %}template-bloglistpage{% endblock %}
 
+{% block meta %}
+  {{ block.super }}
+  {% if blog.noindex %}
+    <meta name="robots" content="noindex">
+  {% endif %}
+{% endblock %}
+
 {% block content %}
   <div class="cast-post-list-header">
     <div>
@@ -64,7 +71,9 @@
     </div>
   {% endblock filters %}
   <hr class="my-4">
-
+  {% if blog.noindex %}
+    <h1>Noindex? {{ blog.noindex }}</h1>
+  {% endif %}
 
   {% for post in posts %}
     {% include "cast/post_body.html" with render_detail=False page=post %}

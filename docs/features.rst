@@ -47,3 +47,10 @@ is then used to populate following attributes in the feed:
 - `author_name` in atom feed
 
 If the `author`-field is not set `blog.owner.get_full_name()` is used instead.
+
+Blog / NoIndex
+==============
+
+If you set the custom `BooleanField` field named `noindex` on a Blog-Page
+using the Wagtail or Django-Admin interface, the Page and all its subpages
+will be excluded from being indexed by search engines.

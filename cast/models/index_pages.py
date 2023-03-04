@@ -44,6 +44,9 @@ class Blog(Page):
         default=True,
         help_text=_("Whether comments are enabled for this blog." ""),
     )
+    noindex = models.BooleanField(
+        "noindex", default=False, help_text=_("Whether to add a noindex meta tag to this page and all subpages.")
+    )
 
     # wagtail
     description = RichTextField(blank=True)
@@ -52,6 +55,9 @@ class Blog(Page):
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
         FieldPanel("author"),
+    ]
+    promote_panels = Page.promote_panels + [
+        FieldPanel("noindex"),
     ]
 
     subpage_types = ["cast.Post"]

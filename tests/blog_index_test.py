@@ -32,6 +32,28 @@ class TestBlogIndex:
         assert "in_all" in content
         assert "only_in_detail" not in content
 
+    def test_post_in_blog_noindex_flag(self, client, post):
+        # Set the noindex flag for the blog
+        blog = post.blog
+        blog.noindex = True
+        blog.save()
+
+        # Make sure the blog index page contains the noindex meta tag
+        blog_url = post.blog.get_url()
+        r = client.get(blog_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert '<meta name="robots" content="noindex">' in content
+
+        # Make sure the post detail page contains the noindex meta tag
+        post_url = post.get_url()
+        r = client.get(post_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert '<meta name="robots" content="noindex">' in content
+
 
 class TestBlogIndexFilter:
     pytestmark = pytest.mark.django_db

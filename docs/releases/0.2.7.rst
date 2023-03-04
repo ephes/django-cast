@@ -5,3 +5,4 @@ Exchangeable templates
 
 * Query optimization - didn't work, this needs some more infrastructure fist
 * Added a `pages` endpoint to the API
+* Added a `noindex` option to the Blog model to exclude a blog from search engines

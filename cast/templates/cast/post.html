@@ -17,6 +17,12 @@
   {% endif %}
 {% endblock css %}
 
+{% block meta %}
+  {{ block.super }}
+  {% if page.blog.noindex %}
+    <meta name="robots" content="noindex">
+  {% endif %}
+{% endblock %}
 
 {% block body_class %}template-blogpage{% endblock %}
 
