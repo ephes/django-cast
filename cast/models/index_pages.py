@@ -45,7 +45,11 @@ class Blog(Page):
         help_text=_("Whether comments are enabled for this blog." ""),
     )
     noindex = models.BooleanField(
-        "noindex", default=False, help_text=_("Whether to add a noindex meta tag to this page and all subpages.")
+        "noindex",
+        default=False,
+        help_text=_(
+            "Whether to add a noindex meta tag to this page and all subpages excluding them from search engines."
+        ),
     )
 
     # wagtail
