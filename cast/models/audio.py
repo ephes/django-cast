@@ -125,13 +125,18 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
 
     def create_duration(self) -> None:
         for name, field in self.uploaded_audio_files:
-            if not isinstance(field, FileField):
-                continue
-            audio_url = field.url
-            if not audio_url.startswith("http"):
-                audio_url = field.path
-            self.duration = self._get_audio_duration(audio_url)
-            break
+            try:
+                # For mypy this has to be a direct isinstance check
+                # In production it raises a NotImplementedError, very weird,
+                # very ugly, dunno how to fix it
+                if isinstance(field, FileField):
+                    audio_url = field.url
+                    if not audio_url.startswith("http"):
+                        audio_url = field.path
+                    self.duration = self._get_audio_duration(audio_url)
+                    break
+            except NotImplementedError:  # pragma: no cover
+                pass
 
     @property
     def audio(self) -> list[dict[str, str]]:
