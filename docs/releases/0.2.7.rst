@@ -1,8 +1,10 @@
 0.2.7 (2023-02-27)
 ------------------
 
-Exchangeable templates
+Pages API and small fixes.
 
 * Query optimization - didn't work, this needs some more infrastructure fist
 * Added a `pages` endpoint to the API
 * Added a `noindex` option to the Blog model to exclude a blog from search engines
+* Fixed audio web player name `embed.js`
+* Fixed a bug caused by mypy and static protocols raising a NotImplementedError in production :(
