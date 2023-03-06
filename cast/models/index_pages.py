@@ -18,6 +18,7 @@ from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
 from .pages import Post
+from .settings import TemplateBaseDirectory
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,6 @@ class Blog(Page):
 
     # wagtail
     description = RichTextField(blank=True)
-    template = "cast/blog_list_of_posts.html"
     content_panels = Page.content_panels + [
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
@@ -69,6 +69,12 @@ class Blog(Page):
 
     def __str__(self):
         return self.title
+
+    def get_template(self, request, *args, **kwargs):
+        template_base_dir = TemplateBaseDirectory.for_request(request)
+        template = f"cast/{template_base_dir.name}/blog_list_of_posts.html"
+        print("get_template: ", template)
+        return template
 
     @property
     def last_build_date(self) -> timezone.datetime:
@@ -169,6 +175,8 @@ class Blog(Page):
         context = self.paginate_queryset(context)
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
+        template_base_dir = TemplateBaseDirectory.for_request(request)
+        print("template_settings base dir: ", template_base_dir.name)
         return context
 
 

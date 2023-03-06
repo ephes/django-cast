@@ -5,6 +5,7 @@ from .index_pages import Blog, Podcast
 from .itunes import ItunesArtWork
 from .moderation import SpamFilter
 from .pages import Episode, HomePage, Post, sync_media_ids
+from .settings import TemplateBaseDirectory
 from .video import Video, get_video_dimensions
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "Video",
     "get_video_dimensions",
     "Podcast",
+    "TemplateBaseDirectory",
 ]
