@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    {% block meta %}
+      <meta charset="utf-8">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      <meta name="viewport" content="width=device-width" />
+      {% block robots %}
+        <meta name="robots" content="index, follow" />
+      {% endblock robots %}
+      {% block title %}
+        <title>Title of my Site!</title>
+      {% endblock title %}
+      {% block description %}
+        <meta name="description" content="Description of my site" />
+      {% endblock description %}
+    {% endblock %}
+
+    {% block css %}
+      <link href="{% static 'css/plain/cast.css' %}" rel="stylesheet">
+    {% endblock %}
+  </head>
+  <body>
+    {% block header %}
+      <header>The header</header>
+    {% endblock header %}
+    {% block navigation %}
+      <nav>The navigation</nav>
+    {% endblock navigation %}
+    {% block main %}
+      <main>
+        <p>Use this document as a way to quick start any new project.</p>
+      </main>
+    {% endblock main %}
+    {% block footer %}
+      <footer>The footer</footer>
+    {% endblock footer %}
+  </body>
+</html>

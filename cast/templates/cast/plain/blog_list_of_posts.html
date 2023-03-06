@@ -1,0 +1,57 @@
+{% extends "./base.html" %}
+{% load wagtailcore_tags %}
+{% load static %}
+
+{% block robots %}
+  {% if blog.noindex %}
+    <meta name="robots" content="noindex, nofollow">
+  {% else %}
+    <meta name="robots" content="index, follow">
+  {% endif %}
+{% endblock robots %}
+
+{% block title %}
+  <title>{{ page.seo_title }}</title>
+{% endblock %}
+
+{% block description %}
+  <meta name="description" content="{{ page.search_description }}" />
+{% endblock %}
+
+{% block header %}
+  <header>
+    <h1>{{ page.title }}</h1>
+    <section>
+      <p>{{ page.description|richtext }}</p>
+    </section>
+    <section>
+      <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
+        Link to RSS feed
+      </a>
+    </section>
+  </header>
+{% endblock header %}
+
+{% block navigation %}
+  <nav>
+    <form action="" method="get">
+      {{ filterset.form }}
+      <button type="submit">Filter</button>
+    </form>
+
+  </nav>
+{% endblock navigation %}
+
+{% block main %}
+  <main>
+    {% for post in posts %}
+      {% include "./post_body.html" with render_detail=False page=post %}
+    {% endfor %}
+  </main>
+{% endblock main %}
+
+{% block footer %}
+  <footer>
+    {% include "pagination.html" %}
+  </footer>
+{% endblock footer %}
