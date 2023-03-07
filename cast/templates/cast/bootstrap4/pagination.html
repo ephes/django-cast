@@ -1,0 +1,55 @@
+{% if is_paginated %}
+  <nav aria-label="Page navigation">
+    <ul class="pagination">
+      {% if page_obj.has_previous %}
+        <!-- previous page -->
+        <li class="page-item">
+          <a href="?page={{ page_obj.previous_page_number }}{{ parameters }}" class="page-link">
+            Previous
+          </a>
+        </li>
+      {% else %}
+        <!-- we are already on the first page -->
+        <li class="page-item disabled">
+          <span class="page-link">
+            Previous
+          </span>
+        </li>
+      {% endif %}
+      <!-- page numbers -->
+      {% for num in page_range %}
+        {% if num == page_obj.paginator.ELLIPSIS %}
+          <!-- ... -->
+          <li class="page-item disabled">
+            <span class="page-link">{{ num }}</span>
+          </li>
+        {% elif num == page_obj.number %}
+          <!-- currently active page -->
+          <li class="page-item active">
+            <span class="page-link">{{ num }}</span>
+          </li>
+        {% else %}
+          <!-- clickable links to other page numbers -->
+          <li class="page-item">
+            <a class="page-link" href="?page={{ num }}{{ parameters }}">{{ num }}</a>
+          </li>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+        <!-- next page -->
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}{{ parameters }}">
+            Next
+          </a>
+        </li>
+      {% else %}
+        <!-- we are already on the last page -->
+        <li class="page-item disabled">
+          <span class="page-link">
+            Next
+          </span>
+        </li>
+      {% endif %}
+    </ul>
+  </nav>
+{% endif %}

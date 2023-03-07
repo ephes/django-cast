@@ -73,7 +73,6 @@ class Blog(Page):
     def get_template(self, request, *args, **kwargs):
         template_base_dir = TemplateBaseDirectory.for_request(request)
         template = f"cast/{template_base_dir.name}/blog_list_of_posts.html"
-        print("get_template: ", template)
         return template
 
     @property

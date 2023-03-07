@@ -1,4 +1,4 @@
-{% extends "cast/cast_base.html" %}
+{% extends "./cast_base.html" %}
 {% load i18n %}
 {% load static %}
 
@@ -29,7 +29,7 @@
 {% block title %}{{ page.title }}{% endblock title %}
 
 {% block content %}
-  {% include "cast/post_body.html" with render_detail=True %}
+  {% include "./post_body.html" with render_detail=True %}
 
   {% if page.comments_are_enabled %}
     {% render_comment_list for page %}

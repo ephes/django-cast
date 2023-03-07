@@ -25,6 +25,8 @@ from cast import appsettings
 from cast.blocks import AudioChooserBlock, CodeBlock, GalleryBlock, VideoChooserBlock
 from cast.models import get_or_create_gallery
 
+from .settings import TemplateBaseDirectory
+
 if TYPE_CHECKING:
     from .index_pages import Blog, ContextDict, Podcast
 
@@ -116,8 +118,6 @@ class Post(Page):
         FieldPanel("visible_date"),
         FieldPanel("body"),
     ]
-    template = "cast/post.html"
-    body_template = "cast/post_body.html"
     parent_page_types = ["cast.Blog", "cast.Podcast"]
 
     # managers
@@ -145,6 +145,16 @@ class Post(Page):
         attributes like blog.comments_enabled etc..
         """
         return self.get_parent().blog
+
+    def get_template(self, request, *args, **kwargs):
+        template_base_dir = TemplateBaseDirectory.for_request(request)
+        template = f"cast/{template_base_dir.name}/post.html"
+        return template
+
+    def get_body_template(self, request, *args, **kwargs):
+        template_base_dir = TemplateBaseDirectory.for_request(request)
+        template = f"cast/{template_base_dir.name}/post_body.html"
+        return template
 
     def __str__(self) -> str:
         return self.title
@@ -250,7 +260,7 @@ class Post(Page):
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
         """
-        self.template = self.body_template
+        self.template = self.get_body_template(request)
         description = self.serve(request, render_detail=render_detail).rendered_content.replace("\n", "")
         if escape_html:
             description = escape(description)
@@ -290,7 +300,6 @@ class Episode(Post):
         ),
     )
 
-    template = "cast/episode.html"
     parent_page_types = ["cast.Podcast"]
 
     content_panels = Page.content_panels + [
@@ -304,6 +313,11 @@ class Episode(Post):
 
     objects: PageManager = PageManager()
     aliases_homepage: Any  # FIXME: why is this needed?
+
+    def get_template(self, request, *args, **kwargs):
+        template_base_dir = TemplateBaseDirectory.for_request(request)
+        template = f"cast/{template_base_dir.name}/episode.html"
+        return template
 
     def get_context(self, request, *args, **kwargs) -> "ContextDict":
         context = super().get_context(request, *args, **kwargs)

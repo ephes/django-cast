@@ -11,10 +11,7 @@
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
       <section class="block-{{ block.block_type }}">
-        {{ block.block_type }}
-        {% comment %}
-          {% include_block block %}
-        {% endcomment %}
+        {% include_block block %}
       </section>
       {% block detail_link %}{% endblock %}
     {% endif %}
