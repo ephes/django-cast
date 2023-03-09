@@ -1,7 +1,7 @@
 import pytest
 from django.http.request import QueryDict
 
-from cast.models.pages import Episode, HomePage, Post
+from cast.models.pages import Episode, HomePage, PlaceholderRequest, Post
 from cast.models.video import Video
 
 
@@ -168,10 +168,7 @@ class TestPostModel:
             ("foobar.html", "cast/bootstrap4/foobar.html"),
         ],
     )
-    def test_get_template(self, local_template_name, expected_template, mocker):
-        class Request:
-            pass
-
+    def test_get_template_for_post(self, local_template_name, expected_template, mocker):
         class TemplateBaseDirectory:
             name = "bootstrap4"
 
@@ -179,7 +176,7 @@ class TestPostModel:
         post = Post()
         post._local_template_name = local_template_name
 
-        assert post.get_template(Request()) == expected_template
+        assert post.get_template(PlaceholderRequest()) == expected_template
 
 
 class TestEpisodeModel:
@@ -198,10 +195,25 @@ class TestEpisodeModel:
         episode = Episode()
         assert episode.get_enclosure_size("mp3") == 0
 
+    @pytest.mark.parametrize(
+        "local_template_name, expected_template",
+        [
+            (None, "cast/bootstrap4/episode.html"),
+            ("foobar.html", "cast/bootstrap4/foobar.html"),
+        ],
+    )
+    def test_get_template_for_episode(self, local_template_name, expected_template, mocker):
+        class TemplateBaseDirectory:
+            name = "bootstrap4"
+
+        mocker.patch("cast.models.pages.TemplateBaseDirectory.for_request", return_value=TemplateBaseDirectory())
+        episode = Episode()
+        episode._local_template_name = local_template_name
+
+        assert episode.get_template(PlaceholderRequest()) == expected_template
+
 
 def test_placeholder_request():
-    from cast.models.pages import PlaceholderRequest
-
     request = PlaceholderRequest()
     assert "localhost" in request.get_host()
     assert request.get_port() == 80

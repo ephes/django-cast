@@ -148,8 +148,7 @@ class Post(Page):
         """
         return self.get_parent().blog
 
-    def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
-        local_template_name = "post.html"
+    def get_template(self, request: HttpRequest, *args, local_template_name: str = "post.html", **kwargs) -> str:
         if self._local_template_name is not None:
             local_template_name = self._local_template_name
         template_base_dir = TemplateBaseDirectory.for_request(request)
@@ -262,6 +261,7 @@ class Post(Page):
         """
         self._local_template_name = "post_body.html"
         description = self.serve(request, render_detail=render_detail).rendered_content.replace("\n", "")
+        # description = "foobarbaz"
         if escape_html:
             description = escape(description)
         return description
@@ -314,10 +314,11 @@ class Episode(Post):
     objects: PageManager = PageManager()
     aliases_homepage: Any  # FIXME: why is this needed?
 
-    def get_template(self, request, *args, **kwargs):
-        template_base_dir = TemplateBaseDirectory.for_request(request)
-        template = f"cast/{template_base_dir.name}/episode.html"
-        return template
+    def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
+        """
+        Use get_template() from the parent class, but pass a local template name.
+        """
+        return super().get_template(request, *args, local_template_name="episode.html", **kwargs)
 
     def get_context(self, request, *args, **kwargs) -> "ContextDict":
         context = super().get_context(request, *args, **kwargs)
