@@ -161,6 +161,26 @@ class TestPostModel:
         description = post.get_description(escape_html=True)
         assert "&lt" in description
 
+    @pytest.mark.parametrize(
+        "local_template_name, expected_template",
+        [
+            (None, "cast/bootstrap4/post.html"),
+            ("foobar.html", "cast/bootstrap4/foobar.html"),
+        ],
+    )
+    def test_get_template(self, local_template_name, expected_template, mocker):
+        class Request:
+            pass
+
+        class TemplateBaseDirectory:
+            name = "bootstrap4"
+
+        mocker.patch("cast.models.pages.TemplateBaseDirectory.for_request", return_value=TemplateBaseDirectory())
+        post = Post()
+        post._local_template_name = local_template_name
+
+        assert post.get_template(Request()) == expected_template
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db

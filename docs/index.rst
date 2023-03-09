@@ -19,3 +19,4 @@ fill since Django Cast switched to Wagtail.
    howto/index
    release
    releases/index
+   models

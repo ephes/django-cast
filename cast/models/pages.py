@@ -1,9 +1,9 @@
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from django.db import models
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -94,6 +94,8 @@ class Post(Page):
     galleries = models.ManyToManyField("cast.Gallery", blank=True)
     audios = models.ManyToManyField("cast.Audio", blank=True)
 
+    _local_template_name: Optional[str] = None
+
     # wagtail
     body = StreamField(
         [
@@ -146,14 +148,12 @@ class Post(Page):
         """
         return self.get_parent().blog
 
-    def get_template(self, request, *args, **kwargs):
+    def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
+        local_template_name = "post.html"
+        if self._local_template_name is not None:
+            local_template_name = self._local_template_name
         template_base_dir = TemplateBaseDirectory.for_request(request)
-        template = f"cast/{template_base_dir.name}/post.html"
-        return template
-
-    def get_body_template(self, request, *args, **kwargs):
-        template_base_dir = TemplateBaseDirectory.for_request(request)
-        template = f"cast/{template_base_dir.name}/post_body.html"
+        template = f"cast/{template_base_dir.name}/{local_template_name}"
         return template
 
     def __str__(self) -> str:
@@ -260,7 +260,7 @@ class Post(Page):
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
         """
-        self.template = self.get_body_template(request)
+        self._local_template_name = "post_body.html"
         description = self.serve(request, render_detail=render_detail).rendered_content.replace("\n", "")
         if escape_html:
             description = escape(description)
