@@ -266,6 +266,10 @@ class Post(Page):
             description = escape(description)
         return description
 
+    def get_absolute_url(self) -> str:
+        """This is needed for django-fluentcomments."""
+        return self.full_url
+
     def save(self, *args, **kwargs) -> None:
         save_return = super().save(*args, **kwargs)
         self.sync_media_ids()
