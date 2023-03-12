@@ -70,7 +70,7 @@ class Blog(Page):
     def __str__(self):
         return self.title
 
-    def get_template(self, request, *args, **kwargs):
+    def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
         template_base_dir = TemplateBaseDirectory.for_request(request)
         template = f"cast/{template_base_dir.name}/blog_list_of_posts.html"
         return template
@@ -211,7 +211,6 @@ class Podcast(Blog):
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
 
-    template = "cast/blog_list_of_posts.html"
     subpage_types = ["cast.Post", "cast.Episode"]
     is_podcast = True
 
