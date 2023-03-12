@@ -18,7 +18,7 @@ from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
 from .pages import Post
-from .settings import TemplateBaseDirectory
+from .theme import TemplateBaseDirectory, get_template_base_dir_choices
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,17 @@ class Blog(Page):
             "Whether to add a noindex meta tag to this page and all subpages excluding them from search engines."
         ),
     )
+    template_base_dir = models.CharField(
+        choices=get_template_base_dir_choices(),
+        max_length=128,
+        default=None,
+        null=True,
+        blank=True,
+        help_text=_(
+            "The theme to use for this blog implemented as a template base directory. "
+            "If not set, the template base directory will be determined by a site setting."
+        ),
+    )
 
     # wagtail
     description = RichTextField(blank=True)
@@ -59,6 +70,7 @@ class Blog(Page):
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
         FieldPanel("author"),
+        FieldPanel("template_base_dir"),
     ]
     promote_panels = Page.promote_panels + [
         FieldPanel("noindex"),
@@ -70,9 +82,15 @@ class Blog(Page):
     def __str__(self):
         return self.title
 
+    def get_template_base_dir(self, request: HttpRequest) -> str:
+        if self.template_base_dir is not None:
+            return self.template_base_dir
+        else:
+            return TemplateBaseDirectory.for_request(request).name
+
     def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
-        template_base_dir = TemplateBaseDirectory.for_request(request)
-        template = f"cast/{template_base_dir.name}/blog_list_of_posts.html"
+        template_base_dir = self.get_template_base_dir(request)
+        template = f"cast/{template_base_dir}/blog_list_of_posts.html"
         return template
 
     @property

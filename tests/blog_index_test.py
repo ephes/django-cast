@@ -1,6 +1,7 @@
 import pytest
 
 from cast import appsettings
+from cast.models.index_pages import Blog
 
 
 class TestBlogIndex:
@@ -53,6 +54,20 @@ class TestBlogIndex:
 
         content = r.content.decode("utf-8")
         assert '<meta name="robots" content="noindex">' in content
+
+    def test_blog_template_base_dir_overwrites_site_setting(self):
+        blog = Blog(template_base_dir="plain")
+        chosen_base_dir = "foobar"
+        blog.template_base_dir = chosen_base_dir
+        template = blog.get_template(None)
+        assert chosen_base_dir in template
+
+    def test_post_in_blog_inherits_template_base_dir(self, post):
+        blog = post.blog
+        chosen_base_dir = "foobar"
+        blog.template_base_dir = chosen_base_dir
+        template = post.get_template(None)
+        assert chosen_base_dir in template
 
 
 class TestBlogIndexFilter:

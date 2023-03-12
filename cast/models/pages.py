@@ -25,7 +25,7 @@ from cast import appsettings
 from cast.blocks import AudioChooserBlock, CodeBlock, GalleryBlock, VideoChooserBlock
 from cast.models import get_or_create_gallery
 
-from .settings import TemplateBaseDirectory
+from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
     from .index_pages import Blog, ContextDict, Podcast
@@ -151,8 +151,12 @@ class Post(Page):
     def get_template(self, request: HttpRequest, *args, local_template_name: str = "post.html", **kwargs) -> str:
         if self._local_template_name is not None:
             local_template_name = self._local_template_name
-        template_base_dir = TemplateBaseDirectory.for_request(request)
-        template = f"cast/{template_base_dir.name}/{local_template_name}"
+        parent = self.get_parent()
+        if parent is not None:
+            template_base_dir = parent.blog.get_template_base_dir(request)
+        else:
+            template_base_dir = TemplateBaseDirectory.for_request(request).name
+        template = f"cast/{template_base_dir}/{local_template_name}"
         return template
 
     def __str__(self) -> str:

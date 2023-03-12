@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.template import engines
 
-from cast.models.settings import (
+from cast.models.theme import (
     get_required_template_names,
     get_template_base_dir_candidates,
     get_template_base_dir_choices,
@@ -69,5 +69,5 @@ def test_get_template_directories_no_compatible_loaders(mocker):
     class FakeContainer:
         engine = FakeEngine()
 
-    mocker.patch("cast.models.settings.engines.all", return_value=[FakeContainer()])
+    mocker.patch("cast.models.theme.engines.all", return_value=[FakeContainer()])
     assert get_template_directories() == []

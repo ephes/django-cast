@@ -107,4 +107,15 @@ class TemplateBaseDirectory(BaseSiteSetting):
     the wagtail admin.
     """
 
-    name = models.CharField(choices=get_template_base_dir_choices(), max_length=10, default=TemplateName.BOOTSTRAP4)
+    name = models.CharField(
+        choices=get_template_base_dir_choices(),
+        max_length=128,
+        default=TemplateName.BOOTSTRAP4,
+        help_text=_(
+            "The theme to use for this site implemented as a template base directory. "
+            "It's possible to overwrite this setting for each blog."
+            "If you want to use a custom theme, you have to create a new directory "
+            "in your template directory named cast/<your-theme-name>/ and put all "
+            "required templates in there."
+        ),
+    )

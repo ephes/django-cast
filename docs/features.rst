@@ -86,7 +86,7 @@ your custom template in the Wagtail admin interface.
 .. hint::
 
     It's only possible to create own template themes with template
-    loaders that implement the `get_dirs` method (FilesystemLoader,
+    loaders that implemexnt the `get_dirs` method (FilesystemLoader,
     CachedLoader).
 
 
@@ -97,4 +97,13 @@ This setting can be found at `settings > Template base directory`:
 
 .. image:: images/template_base_dir_setting.png
   :width: 600
-  :alt: Set the template base directory for the whole site
+  :alt: Set the theme or "template base directory" for the whole site
+
+How to Change the Theme for a Single Blog
+=========================================
+
+This setting can be found at `pages > ... > Blog`:
+
+.. image:: images/blog_template_base_dir_setting.png
+  :width: 600
+  :alt: Set the theme or "template base directory" for a single blog
