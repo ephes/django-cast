@@ -48,3 +48,27 @@ model is removed. Defaults to ``True``. This is useful if you are
 using an object store like S3 to store your images and want to avoid
 having your production images deleted when you try out stuff in your
 development environment.
+
+*********
+Templates
+*********
+
+Custom Theme Configuration
+==========================
+
+To configure custom themes for the site, use the ``CAST_CUSTOM_THEMES`` setting.
+By default, it is set to an empty list ``[]``. Each theme requires two elements:
+a name and a display. For instance:
+
+.. code-block:: python
+
+    CAST_CUSTOM_THEMES = [
+        # (name, display)
+        ("my_theme", "My Theme"),
+        ("my_other_theme", "My Other Theme"),
+    ]
+
+The display value is the title displayed in the theme selector within the Wagtail
+admin panel. The name corresponds to the theme's base directory inside your templates
+folder. To create a theme named my_theme, make a directory called ``cast/my_theme``
+within your templates folder and place your templates inside.

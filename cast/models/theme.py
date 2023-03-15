@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from django.conf import settings
 from django.db import models
 from django.template import engines
 from django.template.loaders.base import Loader as BaseLoader
@@ -84,16 +85,22 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
     Return a list of choices for the template base directory setting.
     """
     # handle predefined choices
-    choices, predefined = [], set()
+    choices, seen = [], set()
     for template_name in TemplateName:
         choices.append((template_name.value, template_name.label))
-        predefined.add(template_name.value)
+        seen.add(template_name.value)
+
+    # handle custom choices via settings
+    for template_name, display_name in getattr(settings, "CAST_CUSTOM_THEMES", []):
+        if template_name not in seen:
+            choices.append((template_name, display_name))
+            seen.add(template_name)
 
     # search for template base directories
     template_directories = get_template_directories()
     template_base_dir_candidates = get_template_base_dir_candidates(template_directories)
     for candidate in template_base_dir_candidates:
-        if candidate not in predefined:
+        if candidate not in seen:
             choices.append((candidate, candidate))
 
     return choices

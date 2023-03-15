@@ -71,3 +71,16 @@ def test_get_template_directories_no_compatible_loaders(mocker):
 
     mocker.patch("cast.models.theme.engines.all", return_value=[FakeContainer()])
     assert get_template_directories() == []
+
+
+def test_cast_custom_theme_settings_show_up(settings):
+    theme_name, theme_display = "my_theme", "My Theme"
+
+    # make sure the custom theme is added to the choices
+    settings.CAST_CUSTOM_THEMES = [(theme_name, theme_display)]
+    custom_choices = get_template_base_dir_choices()
+    assert (theme_name, theme_display) in custom_choices
+
+    # make sure you cannot add predefined themes twice
+    settings.CAST_CUSTOM_THEMES.append((theme_name, theme_display))
+    assert len(get_template_base_dir_choices()) == len(custom_choices)

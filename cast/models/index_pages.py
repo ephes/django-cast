@@ -1,13 +1,13 @@
 import json
 import logging
 import uuid
+from datetime import datetime
 from typing import Any, Optional, cast
 
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
 from django.http import Http404, HttpRequest
 from django.http.request import QueryDict
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.panels import FieldPanel
 from wagtail.fields import RichTextField
@@ -94,7 +94,7 @@ class Blog(Page):
         return template
 
     @property
-    def last_build_date(self) -> timezone.datetime:
+    def last_build_date(self) -> datetime:
         return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
 
     @property
