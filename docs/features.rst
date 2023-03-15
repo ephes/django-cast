@@ -55,16 +55,18 @@ If you set the custom `BooleanField` field named `noindex` on a Blog-Page
 using the Wagtail or Django-Admin interface, the Page and all its subpages
 will be excluded from being indexed by search engines.
 
-*********
-Templates
-*********
+******************
+Templates / Themes
+******************
 
 It's possible to use different templates for the whole site or different
 blogs. The built-in templates should be selectable right from the Wagtail
 admin interface:
 
-* Plain HTML (plain)
-* Bootstrap 4 (bootstrap4)
+* Plain HTML (plain) - This is just a plain HTML template without any
+  CSS
+* Bootstrap 4 (bootstrap4) - This is a template that uses Bootstrap 4
+  and is currently the default template
 
 If you want to use your own templates, you can do so by overwriting the
 built-in templates or creating a new directory in your project's
