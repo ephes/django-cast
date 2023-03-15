@@ -5,3 +5,4 @@ Themes via settings and HTMX
 
 * Added support for themes via settings
 * Added support for HTMX
+* New documentation section for settings
