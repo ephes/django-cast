@@ -1,0 +1,64 @@
+{% load static i18n %}
+{% load wagtailcore_tags %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>{% block title %}{% endblock title %}</title>
+    {% block meta %}
+      {{ block.super }}
+      <meta charset="utf-8">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="description" content="">
+      <meta name="author" content="">
+    {% endblock %}
+    {% block css %}
+      <link rel="stylesheet" href="{%  static 'css/bootstrap4/bootstrap.min.css' %}">
+      <link href="{% static 'css/project.css' %}" rel="stylesheet">
+    {% endblock %}
+  </head>
+
+  <body>
+    <div class="m-b-1">
+      <nav class="navbar navbar-expand-md navbar-light bg-light">
+        <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <a class="navbar-brand" href="/">Home</a>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav mr-auto">
+            {% for child_page in page.get_site.root_page.get_children.live %}
+              <li class="nav-item">
+                <a class="nav-link" href="{% slugurl child_page.slug %}">{{ child_page.title }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </nav>
+    </div>
+    <div class="container">
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% block content %}
+        <p>Use this document as a way to quick start any new project.</p>
+      {% endblock content %}
+
+    </div>
+
+    {% block modal %}{% endblock modal %}
+
+    {% block javascript %}
+      <script src="{% static 'js/jquery/jquery-3.6.4.min.js' %}"></script>
+      <script src="{% static 'js/bootstrap4/bootstrap.min.js' %}"></script>
+
+      <!-- place project specific Javascript in this file -->
+      <script src="{% static 'js/project.js' %}"></script>
+      {% block template_script %}{% endblock template_script %}
+    {% endblock javascript %}
+  </body>
+</html>
