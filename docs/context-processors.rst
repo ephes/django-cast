@@ -12,8 +12,8 @@ base template for all of them? And how do you switch the base
 template for those pages automatically when you switch the
 base template / theme for your site in wagtail?
 
-The answer is to use a context processor. It will add two variables
-to the context of every template in your site:
+The answer is to use a `context processor <https://docs.djangoproject.com/en/4.1/ref/templates/api/#writing-your-own-context-processors>`_.
+It will add two variables to the context of every template in your site:
 
 - ``cast_base_template``: the base template to use for the current theme
 - ``cast_site_template_base_dir``: the raw template base directory
