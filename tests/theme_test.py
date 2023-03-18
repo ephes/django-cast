@@ -1,8 +1,10 @@
 import shutil
 from pathlib import Path
 
+import pytest
 from django.template import engines
 
+from cast.context_processors import site_template_base_dir
 from cast.models.theme import (
     get_required_template_names,
     get_template_base_dir_candidates,
@@ -14,7 +16,6 @@ from cast.models.theme import (
 def create_new_theme(name, invalid=False):
     default_engine = list(engines.all())[0]
     first_template_dir = Path(list(list(default_engine.engine.template_loaders)[0].get_dirs())[0])
-    print(first_template_dir)
 
     new_base_dir = first_template_dir / "cast" / name
     new_base_dir.mkdir(parents=True, exist_ok=True)
@@ -84,3 +85,11 @@ def test_cast_custom_theme_settings_show_up(settings):
     # make sure you cannot add predefined themes twice
     settings.CAST_CUSTOM_THEMES.append((theme_name, theme_display))
     assert len(get_template_base_dir_choices()) == len(custom_choices)
+
+
+@pytest.mark.django_db
+def test_context_processors_site_template_base_dir(request_factory):
+    request = request_factory.get("/")
+    context = site_template_base_dir(request)
+    assert context["cast_site_template_base_dir"] == "bootstrap4"
+    assert context["cast_base_template"] == "cast/bootstrap4/base.html"

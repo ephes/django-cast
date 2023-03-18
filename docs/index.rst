@@ -20,4 +20,5 @@ fill since Django Cast switched to Wagtail.
    release
    releases/index
    models
+   context-processors
    settings
