@@ -1,8 +1,9 @@
 0.2.9 (2023-03-20)
 ------------------
 
-Themes via settings and HTMX
+Fixes for theme support and documentation.
 
 * Added support for themes via settings
-* Added support for HTMX
 * New documentation section for settings
+* New documentation section for themes
+* New installation instructions
