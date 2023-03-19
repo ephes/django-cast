@@ -1,7 +1,10 @@
 import pytest
 from django.core.paginator import Paginator
+from django.http import QueryDict
 from django.shortcuts import render
 from django.test import RequestFactory
+
+from cast.models import Blog
 
 
 @pytest.fixture
@@ -47,3 +50,14 @@ def test_pagination_template_is_paginated_long(simple_request):
     assert (
         '<span class="page-link">…</span>' == ellipsis_items[0].strip()
     )  # ellipsis in the middle which is not a link
+
+
+@pytest.mark.parametrize(
+    "query_string, expected_other_get_params",
+    [
+        ("", ""),
+        ("foo=bar&bar=foo&page=3", "&foo=bar&bar=foo"),
+    ],
+)
+def test_get_other_get_params(query_string, expected_other_get_params):
+    assert Blog.get_other_get_params(QueryDict(query_string)) == expected_other_get_params

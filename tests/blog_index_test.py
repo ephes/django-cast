@@ -13,7 +13,7 @@ class TestBlogIndex:
         r = client.get(blog_url)
         assert r.status_code == 200
 
-        assert post in r.context["page"].published_posts
+        assert post in r.context["posts"]
 
     def test_unpublished_post_not_in_blog_index(self, client, unpublished_post):
         blog_url = unpublished_post.blog.get_url()
@@ -21,7 +21,7 @@ class TestBlogIndex:
         r = client.get(blog_url)
         assert r.status_code == 200
 
-        assert unpublished_post not in r.context["page"].published_posts
+        assert unpublished_post not in r.context["posts"]
 
     def test_post_overview_content_in_blog_index_but_not_detail(self, client, post):
         blog_url = post.blog.get_url()
@@ -127,7 +127,7 @@ class TestBlogIndexSearch:
         assert r.status_code == 200
 
         # assert initially both posts are in the post list
-        assert len(r.context["page"].published_posts) == 2
+        assert len(r.context["posts"]) == 2
 
     def test_fulltext_search_title(self, client, post, post_with_search):
         blog_url = post.blog.get_url()
@@ -136,7 +136,7 @@ class TestBlogIndexSearch:
         assert r.status_code == 200
 
         # assert search by title only yields post_with search
-        posts = r.context["page"].published_posts
+        posts = r.context["posts"]
         assert len(posts) == 1
         assert posts[0].pk == post_with_search.pk
 
@@ -147,7 +147,7 @@ class TestBlogIndexSearch:
         assert r.status_code == 200
 
         # assert search by title only yields post_with search
-        posts = r.context["page"].published_posts
+        posts = r.context["posts"]
         assert len(posts) == 1
         assert posts[0].pk == post_with_search.pk
 

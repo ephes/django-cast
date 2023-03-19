@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Any
 
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
@@ -108,35 +108,12 @@ class Blog(Page):
     def unfiltered_published_posts(self) -> models.QuerySet[Post]:
         return Post.objects.live().descendant_of(self).order_by("-visible_date")
 
-    @property
-    def request(self) -> Optional[HttpRequest]:
-        return getattr(self, "_request", None)
+    def get_filterset(self, get_params: QueryDict) -> PostFilterset:
+        return PostFilterset(data=get_params, queryset=self.unfiltered_published_posts, fetch_facet_counts=True)
 
-    @request.setter
-    def request(self, value: HttpRequest) -> None:
-        self._request = value
-
-    @property
-    def filterset_data(self) -> QueryDict:
-        if self.request is not None:
-            return self.request.GET.copy()
-        else:
-            filterset_data = getattr(self, "_filterset_data", None)
-            if filterset_data is None:
-                return QueryDict()
-            else:
-                filterset_data_as_querydict = cast(QueryDict, filterset_data)  # make mypy happy
-                return filterset_data_as_querydict
-
-    @property
-    def filterset(self) -> PostFilterset:
-        return PostFilterset(
-            data=self.filterset_data, queryset=self.unfiltered_published_posts, fetch_facet_counts=True
-        )
-
-    @property
-    def published_posts(self) -> models.QuerySet[Post]:
-        queryset = self.filterset.qs
+    @staticmethod
+    def get_published_posts(filtered_posts: models.QuerySet) -> models.QuerySet[Post]:
+        queryset = filtered_posts
         queryset = (
             queryset.prefetch_related("audios")
             .prefetch_related("images")
@@ -146,12 +123,13 @@ class Blog(Page):
         )
         return queryset
 
-    def paginate_queryset(self, context: ContextDict) -> ContextDict:
-        paginator = Paginator(self.published_posts, appsettings.POST_LIST_PAGINATION)
+    def paginate_queryset(
+        self, context: ContextDict, posts_queryset: models.QuerySet, get_params: QueryDict
+    ) -> ContextDict:
+        paginator = Paginator(posts_queryset, appsettings.POST_LIST_PAGINATION)
         page_from_url = "1"
-        if self.request is not None:
-            if "page" in self.request.GET:
-                page_from_url = self.request.GET["page"]
+        if "page" in get_params:
+            page_from_url = get_params["page"]
         try:
             page_number = int(page_from_url)
         except ValueError:
@@ -175,21 +153,22 @@ class Blog(Page):
         context.update(pagination_context)
         return context
 
-    def get_other_get_params(self) -> str:
-        if self.request is None:
-            return ""
-        get_copy = self.request.GET.copy()
-        parameters = get_copy.pop("page", "") and get_copy.urlencode()
+    @staticmethod
+    def get_other_get_params(get_params: QueryDict) -> str:
+        filtered_get_params = {k: v for k, v in get_params.items() if k != "page"}
+        new_get_params = QueryDict("", mutable=True)
+        new_get_params.update(filtered_get_params)
+        parameters = new_get_params.urlencode()
         if len(parameters) > 0:
             parameters = f"&{parameters}"
         return parameters
 
     def get_context(self, request: HttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
-        self.request = request
-        context["filterset"] = kwargs.get("filterset", self.filterset)
-        context["parameters"] = self.get_other_get_params()
-        context = self.paginate_queryset(context)
+        get_params = request.GET.copy()
+        context["filterset"] = filterset = self.get_filterset(get_params)
+        context["parameters"] = self.get_other_get_params(get_params)
+        context = self.paginate_queryset(context, self.get_published_posts(filterset.qs), get_params)
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
         return context

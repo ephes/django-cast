@@ -14,7 +14,6 @@ from django.forms.utils import flatatt
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
 from django.utils.encoding import force_str
-from django.utils.http import urlencode
 from django.utils.safestring import SafeText, mark_safe
 from django.utils.translation import gettext as _
 from wagtail.models import PageQuerySet
@@ -72,10 +71,7 @@ class DateFacetWidget(Widget):
 
         data[name] = option_value
         selected = data == self.data or option_value in selected_choices
-        try:
-            url = data.urlencode()
-        except AttributeError:
-            url = urlencode(data)
+        url = data.urlencode()
         option_string = self.option_string()
         return option_string % {
             "attrs": selected and ' class="selected"' or "",
