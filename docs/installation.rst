@@ -26,6 +26,7 @@ Installation
 
    INSTALLED_APPS = (
        ...
+       "django.contrib.sites",
        "cast.apps.CastConfig",
        "crispy_forms",
        "crispy_bootstrap4",
@@ -78,7 +79,7 @@ Installation
     CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
 
 
-5. Modify your urlconfig to include the urls for django-cast and Wagtail
+5. Modify your url-config to include the urls for django-cast and Wagtail
 
 .. code-block:: python
 
