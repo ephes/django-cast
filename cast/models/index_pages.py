@@ -192,8 +192,6 @@ class Blog(Page):
         context = self.paginate_queryset(context)
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
-        template_base_dir = TemplateBaseDirectory.for_request(request)
-        print("template_settings base dir: ", template_base_dir.name)
         return context
 
 
