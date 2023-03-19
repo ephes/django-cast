@@ -1,3 +1,5 @@
+from django.http import QueryDict
+
 from cast.filters import DateFacetWidget, get_facet_counts
 
 
@@ -24,3 +26,11 @@ def test_get_facet_counts(mocker):
     _ = get_facet_counts(None, [mocker.MagicMock()])
     # only isinstance because the initial filterset_data dict is modified
     assert isinstance(get_selected_facet.call_args[0][0], dict)
+
+
+def test_active_pagination_is_removed_from_date_facet_filter():
+    dfw = DateFacetWidget()
+    dfw.data = QueryDict("page=3")
+    QueryDict
+    option = dfw.render_option("name", set(), "value", "label")
+    assert "page=3" not in option
