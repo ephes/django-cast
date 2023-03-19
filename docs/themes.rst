@@ -23,6 +23,7 @@ your custom template in the Wagtail admin interface.
     This is the minimal list of templates that have to be implemented
     for a template named **minimal**:
 
+    * `cast/minimal/base.html`
     * `cast/minimal/blog_list_of_posts.html`
     * `cast/minimal/post.html`
     * `cast/minimal/post_body.html`
@@ -45,6 +46,11 @@ This setting can be found at `settings > Template base directory`:
 .. image:: images/template_base_dir_setting.png
   :width: 600
   :alt: Set the theme or "template base directory" for the whole site
+
+There's a :doc:`context processor <context-processors>` that adds the
+current template base directory aka theme to the context. For convenience
+it also adds the theme's base template as a variable to the context to
+be able to extend it in non Wagtail templates.
 
 How to Change the Theme for a Single Blog
 =========================================
