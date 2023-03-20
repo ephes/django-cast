@@ -64,8 +64,8 @@ class DateFacetWidget(Widget):
             option_label = _("All")
 
         # remove page from querystring, because otherwise the pagination breaks
-        # filters like date facets
-        data_dict = {k: v for k, v in self.data.items() if k != "page"}
+        # filters like date facets, str to make mypy happy
+        data_dict = {k: str(v) for k, v in self.data.items() if k != "page"}
         data = QueryDict("", mutable=True)
         data.update(data_dict)
 

@@ -123,13 +123,12 @@ class Blog(Page):
         )
         return queryset
 
-    def paginate_queryset(
-        self, context: ContextDict, posts_queryset: models.QuerySet, get_params: QueryDict
-    ) -> ContextDict:
+    @staticmethod
+    def paginate_queryset(context: ContextDict, posts_queryset: models.QuerySet, get_params: QueryDict) -> ContextDict:
         paginator = Paginator(posts_queryset, appsettings.POST_LIST_PAGINATION)
         page_from_url = "1"
         if "page" in get_params:
-            page_from_url = get_params["page"]
+            page_from_url = str(get_params["page"])
         try:
             page_number = int(page_from_url)
         except ValueError:
@@ -155,7 +154,7 @@ class Blog(Page):
 
     @staticmethod
     def get_other_get_params(get_params: QueryDict) -> str:
-        filtered_get_params = {k: v for k, v in get_params.items() if k != "page"}
+        filtered_get_params = {k: str(v) for k, v in get_params.items() if k != "page"}
         new_get_params = QueryDict("", mutable=True)
         new_get_params.update(filtered_get_params)
         parameters = new_get_params.urlencode()
