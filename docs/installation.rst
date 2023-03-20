@@ -14,13 +14,21 @@ Installation
    Django Project.
 
 
-1. Install the package with pip
+Install the package with pip in a virtual environment:
 
 .. code-block:: shell
 
     python -m pip install django-cast
 
-2. Add following third party apps to your INSTALLED_APPS setting
+If you don't already have a Django project, you might want to create
+one with the following ``django-admin`` command:
+
+.. code-block:: shell
+
+    django-admin startproject mysite
+
+
+Add following third party apps to your INSTALLED_APPS setting:
 
 .. code-block:: python
 
@@ -58,17 +66,16 @@ Installation
        "taggit",
     )
 
-3. Add some middleware to your MIDDLEWARE_CLASSES setting like this
+Add some middleware to your MIDDLEWARE_CLASSES setting:
 
 .. code-block:: python
 
    MIDDLEWARE_CLASSES = (
        ...
-       'django_htmx.middleware.HtmxMiddleware',
+       "django_htmx.middleware.HtmxMiddleware",
    )
 
-
-4. Add some required settings to your settings.py
+Add some required configuration settings to your ``settings.py``:
 
 .. code-block:: python
 
@@ -79,7 +86,7 @@ Installation
     CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
 
 
-5. Modify your url-config to include the urls for django-cast and Wagtail
+Modify your url-config to include the urls for django-cast and Wagtail:
 
 .. code-block:: python
 
@@ -89,21 +96,20 @@ Installation
     from wagtail.admin import urls as wagtailadmin_urls
 
     urlpatterns = [
-        path("admin/", admin.site.urls),
+        ...
         path("cast/", include("cast.urls", namespace="cast")),
         path("cms/", include(wagtailadmin_urls)),
         path("", include(wagtail_urls)),
     ]
 
-6. Now run the following commands to create the database
-tables and a superuser
+Now run the following commands to create the database tables and a superuser:
 
 .. code-block:: shell
 
     python manage.py migrate
     python manage.py createsuperuser
 
-7. Run the development server and visit http://localhost:8000
+Run the development server and visit ``http://localhost:8000``:
 
 .. code-block:: shell
 
