@@ -6,4 +6,5 @@ Fixes for theme support and documentation.
 * Added support for themes via settings
 * New documentation section for settings
 * New documentation section for themes
-* New installation instructions
+* Fixed a bug in the filter logic
+* New installation instructions (not yet complete)
