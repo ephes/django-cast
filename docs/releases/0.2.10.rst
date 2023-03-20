@@ -1,0 +1,7 @@
+0.2.10 (2023-03-27)
+------------------
+
+Filter fixes + htmx.
+
+* #88 Fixed date facet removed after changing order
+* #89 Fixed date facet removed after adding date filter
