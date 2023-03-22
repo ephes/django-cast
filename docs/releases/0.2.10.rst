@@ -4,3 +4,4 @@
 Filter fixes + htmx.
 
 * #88 Fixed date facet is removed from form submit
+* Moved app settings init into `appsettings.py`
