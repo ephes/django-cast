@@ -12,7 +12,6 @@ DELETE_WAGTAIL_IMAGES: bool = getattr(settings, "DELETE_WAGTAIL_IMAGES", True)
 
 
 def init_cast_settings():
-    print("init_cast_settings: ", DELETE_WAGTAIL_IMAGES)
     if not DELETE_WAGTAIL_IMAGES:
         # Have a way to deactivate wagtails post_delete_file_cleanup
         # which deletes the file physically when developing against S3
