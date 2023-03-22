@@ -114,3 +114,6 @@ Run the development server and visit ``http://localhost:8000``:
 .. code-block:: shell
 
     python manage.py runserver
+
+To be able to extract posters from videos or get the duration of an audio
+file you need to install `ffmpeg <https://ffmpeg.org/download.html>`_.
