@@ -80,10 +80,6 @@ Add some required configuration settings to your ``settings.py``:
 .. code-block:: python
 
     COMMENTS_APP = "fluent_comments"
-    SITE_ID = 1
-    WAGTAIL_SITE_NAME = "foobar"
-    CRISPY_TEMPLATE_PACK = "bootstrap4"
-    CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
 
 
 Modify your url-config to include the urls for django-cast and Wagtail:
