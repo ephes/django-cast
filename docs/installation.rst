@@ -70,33 +70,42 @@ Add some middleware to your MIDDLEWARE_CLASSES setting:
 
 .. code-block:: python
 
-   MIDDLEWARE_CLASSES = (
+   MIDDLEWARE = (
        ...
        "django_htmx.middleware.HtmxMiddleware",
+       "wagtail.contrib.redirects.middleware.RedirectMiddleware",
    )
 
-Add some required configuration settings to your ``settings.py``:
+Append some required configuration settings to your ``settings.py``:
 
 .. code-block:: python
 
+    ...
     COMMENTS_APP = "fluent_comments"
-
+    MEDIA_ROOT = BASE_DIR / "media"
+    MEDIA_URL = "/media/"
 
 Modify your url-config to include the urls for django-cast and Wagtail:
 
 .. code-block:: python
 
+    from django.conf import settings
     from django.urls import path, include
 
-    from wagtail import urls as wagtail_urls
-    from wagtail.admin import urls as wagtailadmin_urls
+    from cast import cast_and_wagtail_urls
 
     urlpatterns = [
         ...
-        path("cast/", include("cast.urls", namespace="cast")),
-        path("cms/", include(wagtailadmin_urls)),
-        path("", include(wagtail_urls)),
+        path("", include(cast_and_wagtail_urls)),
     ]
+
+    if settings.DEBUG:
+        from django.conf.urls.static import static
+        from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+
+        # Serve static and media files from development server
+        urlpatterns += staticfiles_urlpatterns()
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 Now run the following commands to create the database tables and a superuser:
 

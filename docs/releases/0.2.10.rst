@@ -7,3 +7,4 @@ Filter fixes + htmx.
 * Moved app settings init into `appsettings.py`
 * Provided some default values for settings which don't have
   to be in the settings file
+* Convenience imports for urlpatterns
