@@ -77,7 +77,7 @@ class DateFacetWidget(Widget):
             # the current option is already selected, so add a hidden input field
             # to preserve the selection and add the class "selected" to the link
             option_attrs = ' class="selected"'
-            hidden_input = f'<input type="hidden" name="{name}" value="{option_value}" />'
+            hidden_input = f'<input type="hidden" name="{name}" value="{option_value}">'
         option_string = self.option_string() % {
             "attrs": option_attrs,
             "query_string": url,
