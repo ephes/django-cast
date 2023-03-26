@@ -7,6 +7,7 @@
           <a
             hx-get="?page={{ page_obj.previous_page_number }}{{ parameters }}"
             hx-target="#main_and_footer"
+            hx-swap="innerHTML show:top"
             hx-replace-url="true"
             href="?page={{ page_obj.previous_page_number }}{{ parameters }}"
             class="page-link"
@@ -40,6 +41,7 @@
             <a
               hx-get="?page={{ num }}{{ parameters }}"
               hx-target="#main_and_footer"
+              hx-swap="innerHTML show:top"
               hx-replace-url="true"
               href="?page={{ num }}{{ parameters }}"
               class="page-link"
@@ -53,6 +55,7 @@
           <a
             hx-get="?page={{ page_obj.next_page_number }}{{ parameters }}"
             hx-target="#main_and_footer"
+            hx-swap="innerHTML show:top"
             hx-replace-url="true"
             href="?page={{ page_obj.next_page_number }}{{ parameters }}"
             class="page-link"
