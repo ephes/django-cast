@@ -598,7 +598,7 @@ def simple_request(request_factory):
 
 @pytest.fixture
 def htmx_request(request_factory):
-    request = request_factory.get("/", HTTP_HX_REQUEST="true")
+    request = request_factory.get("/", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="paging-area")
     request.htmx = HtmxDetails(request)
     return request
 

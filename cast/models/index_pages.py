@@ -95,9 +95,12 @@ class Blog(Page):
 
     def get_template(self, request: HtmxHttpRequest, *args, **kwargs) -> str:
         template_base_dir = self.get_template_base_dir(request)
-        template_name = "blog_list_of_posts.html"
+        template_name = "blog_list_of_posts.html"  # full template
         if request.htmx:
-            template_name = "blog_list_of_posts_partial.html"
+            target_to_template_name = {
+                "paging-area": "_list_of_posts_and_paging_controls.html",
+            }
+            template_name = target_to_template_name[request.htmx.target]
         template = f"cast/{template_base_dir}/{template_name}"
         return template
 

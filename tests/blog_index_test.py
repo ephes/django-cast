@@ -65,7 +65,7 @@ class TestBlogIndex:
     def test_blog_use_partial_template_for_htmx_request(self, htmx_request):
         blog = Blog()
         template = blog.get_template(htmx_request)
-        assert "partial" in template
+        assert "_list_of_posts_and_paging_controls.html" in template
 
     def test_post_in_blog_inherits_template_base_dir(self, post):
         blog = post.blog
