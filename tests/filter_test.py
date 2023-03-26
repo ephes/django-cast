@@ -40,4 +40,4 @@ def test_selected_date_facet_is_in_hidden_input():
     dfw = DateFacetWidget()
     dfw.data = QueryDict("date_facets=2018-12")
     option = dfw.render_option("date_facets", {"2018-12"}, "2018-12", "2018-12 (3)")
-    assert '<input type="hidden" name="date_facets" value="2018-12" />' in option
+    assert '<input type="hidden" name="date_facets" value="2018-12">' in option
