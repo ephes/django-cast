@@ -9,6 +9,7 @@ from django.db import models
 from django.http import Http404, HttpRequest
 from django.http.request import QueryDict
 from django.utils.translation import gettext_lazy as _
+from django_htmx.middleware import HtmxDetails
 from wagtail.admin.panels import FieldPanel
 from wagtail.fields import RichTextField
 from wagtail.models import Page, PageManager
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 ContextDict = dict[str, Any]
+
+
+class HtmxHttpRequest(HttpRequest):
+    htmx: HtmxDetails
 
 
 class Blog(Page):
@@ -88,9 +93,12 @@ class Blog(Page):
         else:
             return TemplateBaseDirectory.for_request(request).name
 
-    def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
+    def get_template(self, request: HtmxHttpRequest, *args, **kwargs) -> str:
         template_base_dir = self.get_template_base_dir(request)
-        template = f"cast/{template_base_dir}/blog_list_of_posts.html"
+        template_name = "blog_list_of_posts.html"
+        if request.htmx:
+            template_name = "blog_list_of_posts_partial.html"
+        template = f"cast/{template_base_dir}/{template_name}"
         return template
 
     @property

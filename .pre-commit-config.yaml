@@ -57,6 +57,7 @@ repos:
           - django_extensions
           - django-filter
           - django-fluent-comments
+          - django-htmx
           - django-modelcluster
           - django-model-utils
           - django-stubs[compatible-mypy]

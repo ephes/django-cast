@@ -4,7 +4,13 @@
       {% if page_obj.has_previous %}
         <!-- previous page -->
         <li class="page-item">
-          <a href="?page={{ page_obj.previous_page_number }}{{ parameters }}" class="page-link">
+          <a
+            hx-get="?page={{ page_obj.previous_page_number }}{{ parameters }}"
+            hx-target="#main_and_footer"
+            hx-replace-url="true"
+            href="?page={{ page_obj.previous_page_number }}{{ parameters }}"
+            class="page-link"
+          >
             Previous
           </a>
         </li>
@@ -31,14 +37,26 @@
         {% else %}
           <!-- clickable links to other page numbers -->
           <li class="page-item">
-            <a class="page-link" href="?page={{ num }}{{ parameters }}">{{ num }}</a>
+            <a
+              hx-get="?page={{ num }}{{ parameters }}"
+              hx-target="#main_and_footer"
+              hx-replace-url="true"
+              href="?page={{ num }}{{ parameters }}"
+              class="page-link"
+            >{{ num }}</a>
           </li>
         {% endif %}
       {% endfor %}
       {% if page_obj.has_next %}
         <!-- next page -->
         <li class="page-item">
-          <a class="page-link" href="?page={{ page_obj.next_page_number }}{{ parameters }}">
+          <a
+            hx-get="?page={{ page_obj.next_page_number }}{{ parameters }}"
+            hx-target="#main_and_footer"
+            hx-replace-url="true"
+            href="?page={{ page_obj.next_page_number }}{{ parameters }}"
+            class="page-link"
+          >
             Next
           </a>
         </li>

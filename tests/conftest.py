@@ -596,6 +596,13 @@ def simple_request(request_factory):
     return request
 
 
+@pytest.fixture
+def htmx_request(request_factory):
+    request = request_factory.get("/", HTTP_HX_REQUEST="true")
+    request.htmx = HtmxDetails(request)
+    return request
+
+
 @pytest.fixture()
 def comments_enabled():
     previous = appsettings.CAST_COMMENTS_ENABLED

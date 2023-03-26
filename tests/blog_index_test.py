@@ -62,6 +62,11 @@ class TestBlogIndex:
         template = blog.get_template(simple_request)
         assert chosen_base_dir in template
 
+    def test_blog_use_partial_template_for_htmx_request(self, htmx_request):
+        blog = Blog()
+        template = blog.get_template(htmx_request)
+        assert "partial" in template
+
     def test_post_in_blog_inherits_template_base_dir(self, post):
         blog = post.blog
         chosen_base_dir = "foobar"
