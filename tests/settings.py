@@ -29,9 +29,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admin",
     "django.contrib.messages",
-    "allauth",
-    "allauth.account",
-    "allauth.socialaccount",
     "django_filters",
     "crispy_forms",  # Form layouts
     "crispy_bootstrap4",
@@ -66,6 +63,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "wagtail.contrib.redirects.middleware.RedirectMiddleware",
+    "django_htmx.middleware.HtmxMiddleware",
 ]
 
 # only gets invoked for python manage.py test
