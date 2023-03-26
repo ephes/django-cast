@@ -1,3 +1,5 @@
+from typing import Union
+
 from django.conf import settings
 from django.db.models.signals import post_delete
 from wagtail.images import get_image_model
@@ -10,7 +12,7 @@ MENU_ITEM_PAGINATION: int = getattr(settings, "MENU_ITEM_PAGINATION", 20)
 POST_LIST_PAGINATION: int = getattr(settings, "POST_LIST_PAGINATION", 5)
 DELETE_WAGTAIL_IMAGES: bool = getattr(settings, "DELETE_WAGTAIL_IMAGES", True)
 
-SettingValue = str | bool | int
+SettingValue = Union[str, bool, int]
 
 
 def set_default_if_not_set(setting_name: str, default_value: SettingValue) -> None:
