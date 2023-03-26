@@ -5,8 +5,6 @@ from wagtail.admin import urls as wagtailadmin_urls
 from wagtail.documents import urls as wagtaildocs_urls
 
 urlpatterns = [
-    # allauth
-    path("accounts/", include("allauth.urls")),
     # rest framework docs/schema urls
     re_path(r"^docs/", include_docs_urls(title="cast API service")),
     path("cast/", include("cast.urls", namespace="cast")),

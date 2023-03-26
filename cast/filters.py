@@ -68,20 +68,30 @@ class DateFacetWidget(Widget):
         data_dict = {k: str(v) for k, v in self.data.items() if k != "page"}
         data = QueryDict("", mutable=True)
         data.update(data_dict)
-
         data[name] = option_value
-        selected = data == self.data or option_value in selected_choices
+
+        # build the option string
         url = data.urlencode()
-        option_string = self.option_string()
-        return option_string % {
-            "attrs": selected and ' class="selected"' or "",
+        option_attrs, hidden_input = "", ""
+        if option_value in selected_choices:
+            # the current option is already selected, so add a hidden input field
+            # to preserve the selection and add the class "selected" to the link
+            option_attrs = ' class="selected"'
+            hidden_input = f'<input type="hidden" name="{name}" value="{option_value}" />'
+        option_string = self.option_string() % {
+            "attrs": option_attrs,
             "query_string": url,
             "label": force_str(option_label),
+            "hidden_input": hidden_input,
         }
+        return option_string
 
     @staticmethod
     def option_string() -> str:
-        return '<div class="cast-date-facet-item"><a%(attrs)s href="?%(query_string)s">%(label)s</a></div>'
+        return (
+            '<div class="cast-date-facet-item"><a%(attrs)s href="?%(query_string)s">%(label)s</a>'
+            "%(hidden_input)s</div>"
+        )
 
 
 def parse_date_facets(value: str) -> datetime:

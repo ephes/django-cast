@@ -10,7 +10,7 @@ and [Wagtail](https://wagtail.org).
 
 After switching to Wagtail, the documentation has to be updated. Stay tuned 😄.
 
-**Documentation for [current version 0.2.9](https://django-cast.readthedocs.io/en/develop/)**
+**Documentation for [current version 0.2.10](https://django-cast.readthedocs.io/en/develop/)**
 
 ## Key Features
 - Responsive images via [wagtail-srcset](https://github.com/ephes/wagtail_srcset)

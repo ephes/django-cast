@@ -1,0 +1,10 @@
+<main>
+  {% for post in posts %}
+    {% include "./post_body.html" with render_detail=False page=post %}
+    <hr class="my-4">
+  {% endfor %}
+</main>
+
+<footer>
+  <p>{% include "./pagination.html" %}</p>
+</footer>

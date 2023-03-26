@@ -1,0 +1,12 @@
+0.2.10 (2023-03-26)
+-------------------
+
+Filter fixes + htmx for pagination.
+
+* #88 Fixed date facet is removed from form submit
+* Moved app settings init into `appsettings.py`
+* Provided some default values for settings which don't have
+  to be in the settings file
+* Convenience imports for urlpatterns
+* #85 Added htmx support for pagination in plain and
+  sbootstrap4 themes

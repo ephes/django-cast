@@ -14,13 +14,21 @@ Installation
    Django Project.
 
 
-1. Install the package with pip
+Install the package with pip in a virtual environment:
 
 .. code-block:: shell
 
     python -m pip install django-cast
 
-2. Add following third party apps to your INSTALLED_APPS setting
+If you don't already have a Django project, you might want to create
+one with the following ``django-admin`` command:
+
+.. code-block:: shell
+
+    django-admin startproject mysite
+
+
+Add following third party apps to your INSTALLED_APPS setting:
 
 .. code-block:: python
 
@@ -30,13 +38,9 @@ Installation
        "cast.apps.CastConfig",
        "crispy_forms",
        "crispy_bootstrap4",
-       "allauth",
-       "allauth.account",
-       "allauth.socialaccount",
        "django_filters",
        "django_htmx",
        "rest_framework",
-       "rest_framework.authtoken",
        "fluent_comments",
        "threadedcomments",
        "django_comments",
@@ -58,53 +62,59 @@ Installation
        "taggit",
     )
 
-3. Add some middleware to your MIDDLEWARE_CLASSES setting like this
+Add some middleware to your MIDDLEWARE_CLASSES setting:
 
 .. code-block:: python
 
-   MIDDLEWARE_CLASSES = (
+   MIDDLEWARE = (
        ...
-       'django_htmx.middleware.HtmxMiddleware',
+       "django_htmx.middleware.HtmxMiddleware",
+       "wagtail.contrib.redirects.middleware.RedirectMiddleware",
    )
 
-
-4. Add some required settings to your settings.py
+Append some required configuration settings to your ``settings.py``:
 
 .. code-block:: python
 
+    ...
     COMMENTS_APP = "fluent_comments"
-    SITE_ID = 1
-    WAGTAIL_SITE_NAME = "foobar"
-    CRISPY_TEMPLATE_PACK = "bootstrap4"
-    CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
+    MEDIA_ROOT = BASE_DIR / "media"
+    MEDIA_URL = "/media/"
 
-
-5. Modify your url-config to include the urls for django-cast and Wagtail
+Modify your url-config to include the urls for django-cast and Wagtail:
 
 .. code-block:: python
 
+    from django.conf import settings
     from django.urls import path, include
 
-    from wagtail import urls as wagtail_urls
-    from wagtail.admin import urls as wagtailadmin_urls
+    from cast import cast_and_wagtail_urls
 
     urlpatterns = [
-        path("admin/", admin.site.urls),
-        path("cast/", include("cast.urls", namespace="cast")),
-        path("cms/", include(wagtailadmin_urls)),
-        path("", include(wagtail_urls)),
+        ...
+        path("", include(cast_and_wagtail_urls)),
     ]
 
-6. Now run the following commands to create the database
-tables and a superuser
+    if settings.DEBUG:
+        from django.conf.urls.static import static
+        from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+
+        # Serve static and media files from development server
+        urlpatterns += staticfiles_urlpatterns()
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+Now run the following commands to create the database tables and a superuser:
 
 .. code-block:: shell
 
     python manage.py migrate
     python manage.py createsuperuser
 
-7. Run the development server and visit http://localhost:8000
+Run the development server and visit ``http://localhost:8000``:
 
 .. code-block:: shell
 
     python manage.py runserver
+
+To be able to extract posters from videos or get the duration of an audio
+file you need to install `ffmpeg <https://ffmpeg.org/download.html>`_.

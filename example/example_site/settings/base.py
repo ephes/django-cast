@@ -45,18 +45,13 @@ DJANGO_APPS = [
     "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # 'django.contrib.humanize', # Handy template tags
     "django.contrib.admin",
 ]
 THIRD_PARTY_APPS = [
     "crispy_forms",
     "crispy_bootstrap4",
-    "allauth",
-    "allauth.account",
-    "allauth.socialaccount",
     "django_filters",
     "rest_framework",
-    "rest_framework.authtoken",
     "cast.apps.CastConfig",
     "fluent_comments",
     "threadedcomments",
@@ -96,6 +91,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "wagtail.contrib.redirects.middleware.RedirectMiddleware",
+    "django_htmx.middleware.HtmxMiddleware",
 ]
 
 ROOT_URLCONF = "example_site.urls"
@@ -223,9 +219,6 @@ REST_FRAMEWORK = {
     # AttributeError at /api/docs/ -> 'AutoSchema' object has no attribute 'get_link'
     "DEFAULT_SCHEMA_CLASS": "rest_framework.schemas.coreapi.AutoSchema",
 }
-
-# django imagekit
-IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"
 
 # wagtail-srcset
 # breaks gallery because image renditions are then too small
