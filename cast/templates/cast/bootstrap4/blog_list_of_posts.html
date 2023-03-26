@@ -72,7 +72,7 @@
   {% endblock filters %}
   <hr class="my-4">
 
-  <div id="main_and_footer">
+  <div id="paging-area">
     <main>
       {% for post in posts %}
         {% include "./post_body.html" with render_detail=False page=post %}
