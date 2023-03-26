@@ -55,11 +55,11 @@ class TestBlogIndex:
         content = r.content.decode("utf-8")
         assert '<meta name="robots" content="noindex">' in content
 
-    def test_blog_template_base_dir_overwrites_site_setting(self):
+    def test_blog_template_base_dir_overwrites_site_setting(self, simple_request):
         blog = Blog(template_base_dir="plain")
         chosen_base_dir = "foobar"
         blog.template_base_dir = chosen_base_dir
-        template = blog.get_template(None)
+        template = blog.get_template(simple_request)
         assert chosen_base_dir in template
 
     def test_post_in_blog_inherits_template_base_dir(self, post):

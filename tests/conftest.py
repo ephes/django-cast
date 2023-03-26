@@ -12,6 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test.client import RequestFactory
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
+from django_htmx.middleware import HtmxDetails
 from rest_framework.test import APIClient
 from wagtail.images.models import Image
 from wagtail.models import Site
@@ -586,6 +587,13 @@ def dummy_handler():
 @pytest.fixture()
 def request_factory():
     return RequestFactory()
+
+
+@pytest.fixture
+def simple_request(request_factory):
+    request = request_factory.get("/")
+    request.htmx = HtmxDetails(request)
+    return request
 
 
 @pytest.fixture()

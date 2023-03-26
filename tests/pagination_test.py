@@ -2,19 +2,8 @@ import pytest
 from django.core.paginator import Paginator
 from django.http import QueryDict
 from django.shortcuts import render
-from django.test import RequestFactory
 
 from cast.models import Blog
-
-
-@pytest.fixture
-def request_factory():
-    return RequestFactory()
-
-
-@pytest.fixture
-def simple_request(request_factory):
-    return request_factory.get("/")
 
 
 def test_pagination_template_is_not_paginated(simple_request):
