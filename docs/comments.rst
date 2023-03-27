@@ -1,6 +1,22 @@
-*******************
+********
+Comments
+********
+
+You can enable / disable comments on app, blog and post-level. For app-level,
+there's a global switch you can use in the :ref:`settings <cast_comments_enabled>`.
+Blog and post models have a comments_enabled database field. They are set
+to ``True`` by default.
+
+Caveats
+=======
+
+The ajax-calls django-fluent-comments_ does depend on the availability of a
+full jquery version.
+
+.. _`django-fluent-comments`: https://github.com/django-fluent/django-fluent-comments
+
 Comment Spam Filter
-*******************
+===================
 
 There's a simple
 `Naive Bayes-based <https://en.wikipedia.org/wiki/Naive_Bayes_classifier>`_

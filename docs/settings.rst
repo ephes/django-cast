@@ -9,6 +9,8 @@ Documentation of all the configuration variables you can add to your
 Comments
 ********
 
+.. _cast_comments_enabled:
+
 CAST_COMMENTS_ENABLED
 =====================
 
