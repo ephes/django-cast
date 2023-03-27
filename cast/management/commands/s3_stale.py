@@ -18,11 +18,14 @@ class Command(BaseCommand):
             help="Delete stale files instead of only showing them",
         )
 
-    def get_paths(self, storage):
+    @staticmethod
+    def get_paths(storage):
         paths = {}
-        for path in storage_walk_paths(storage):
+        for num, path in enumerate(storage_walk_paths(storage)):
             size = storage.size(path)
             paths[path] = size
+            if num % 100 == 0:
+                print(".", end="", flush=True)
             # print(path, size / 2 ** 20)
         return paths
 
