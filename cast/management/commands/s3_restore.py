@@ -1,11 +1,11 @@
 from django.core.files.storage import default_storage, get_storage_class
 from django.core.management.base import BaseCommand
 
-from blogs.utils import storage_walk_paths
+from cast.utils import storage_walk_paths
 
 
 class Command(BaseCommand):
-    help = "restoremedia files from local media root to s3"
+    help = "restore media files from local media root to s3"
 
     def handle(self, *args, **options):
         s3 = get_storage_class("storages.backends.s3boto3.S3Boto3Storage")()

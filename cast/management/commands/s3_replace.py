@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "replace paths on s3 with local versions - useful for" " compressed videos for example"
+    help = "replace paths on s3 with local versions - useful for compressed videos for example"
 
     def add_arguments(self, parser):
         parser.add_argument("paths", nargs="+", type=str)

@@ -7,9 +7,7 @@ from ...utils import storage_walk_paths
 
 
 class Command(BaseCommand):
-    help = (
-        "show media files which are in the filesystem (s3, locale), " "but not in database and optionally delete them"
-    )
+    help = "show media files which are in the filesystem (s3, locale), but not in database and optionally delete them"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -28,11 +26,17 @@ class Command(BaseCommand):
             # print(path, size / 2 ** 20)
         return paths
 
-    def get_models_paths(self):
+    @staticmethod
+    def get_image_paths() -> set[str]:
         paths = set()
         for image in Image.objects.all():
-            for path in image.get_all_paths():
-                paths.add(path)
+            paths.add(image.file.name)
+            for rendition in image.renditions.all():
+                paths.add(rendition.file.name)
+        return paths
+
+    def get_models_paths(self):
+        paths = self.get_image_paths()
         for video in Video.objects.all():
             for path in video.get_all_paths():
                 paths.add(path)

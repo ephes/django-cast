@@ -56,3 +56,5 @@ using the Wagtail or Django-Admin interface, the Page and all its subpages
 will be excluded from being indexed by search engines.
 
 .. include:: themes.rst
+
+.. include:: management-commands.rst

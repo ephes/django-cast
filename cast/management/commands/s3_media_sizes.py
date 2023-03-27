@@ -7,7 +7,8 @@ from cast.utils import storage_walk_paths
 class Command(BaseCommand):
     help = "shows size of media on s3"
 
-    def show_usage(self, paths):
+    @staticmethod
+    def show_usage(paths):
         video_endings = {"mov", "mp4"}
         image_endings = {"jpg", "jpeg", "png"}
         image, video, misc = 0, 0, 0

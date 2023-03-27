@@ -2,4 +2,5 @@
 -------------------
 
 Htmx for filters
-* ...
+
+* #74 Added some documentation for django-admin commands and fixed ``s3_stale``
