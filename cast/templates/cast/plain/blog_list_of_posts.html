@@ -36,11 +36,9 @@
 
 {% block navigation %}
   <nav>
-    <form method="get">
-      {{ filterset.form }}
-      <button type="submit">Filter</button>
-    </form>
-
+    <hr>
+    {% include "./_filter_form.html" with form=filterset.form %}
+    <hr>
   </nav>
 {% endblock navigation %}
 
