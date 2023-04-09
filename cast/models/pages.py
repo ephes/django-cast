@@ -282,7 +282,14 @@ class Post(Page):
 
 class Episode(Post):
     podcast_audio = models.ForeignKey(
-        "cast.Audio", null=True, blank=True, on_delete=models.SET_NULL, related_name="episodes"
+        "cast.Audio",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="episodes",
+        help_text=_(
+            "The audio file for this episode -if this is not set," "the episode will not be included in the feed."
+        ),
     )
     keywords = models.CharField(
         max_length=255,
@@ -312,11 +319,11 @@ class Episode(Post):
 
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
+        FieldPanel("podcast_audio"),
         FieldPanel("body"),
         FieldPanel("keywords"),
         FieldPanel("explicit"),
         FieldPanel("block"),
-        FieldPanel("podcast_audio"),
     ]
 
     objects: PageManager = PageManager()
