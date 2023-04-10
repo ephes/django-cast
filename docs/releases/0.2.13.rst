@@ -1,0 +1,6 @@
+0.2.13 (2023-04-17)
+-------------------
+
+Fixing tests for Django 4.0
+
+* #91 fixed tests for Django 4.0
