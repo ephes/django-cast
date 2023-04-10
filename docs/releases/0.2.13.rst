@@ -3,4 +3,5 @@
 
 Fixing tests for Django 4.0
 
+* Fixed a mypy error and added one test for htmx.target is None
 * #91 fixed tests for Django 4.0

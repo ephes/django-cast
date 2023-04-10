@@ -62,6 +62,11 @@ class TestBlogIndex:
         template = blog.get_template(simple_request)
         assert chosen_base_dir in template
 
+    def test_blog_use_partial_template_for_htmx_request_without_target(self, htmx_request_without_target):
+        blog = Blog()
+        with pytest.raises(ValueError, match="HTMX target is None"):
+            blog.get_template(htmx_request_without_target)
+
     def test_blog_use_partial_template_for_htmx_request(self, htmx_request):
         blog = Blog()
         template = blog.get_template(htmx_request)

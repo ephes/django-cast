@@ -100,7 +100,10 @@ class Blog(Page):
             target_to_template_name = {
                 "paging-area": "_list_of_posts_and_paging_controls.html",
             }
-            template_name = target_to_template_name[request.htmx.target]
+            if request.htmx.target is not None:
+                template_name = target_to_template_name[request.htmx.target]
+            else:
+                raise ValueError("HTMX target is None")
         template = f"cast/{template_base_dir}/{template_name}"
         return template
 

@@ -603,6 +603,13 @@ def htmx_request(request_factory):
     return request
 
 
+@pytest.fixture
+def htmx_request_without_target(request_factory):
+    request = request_factory.get("/", HTTP_HX_REQUEST="true", HTTP_HX_TARGET=None)
+    request.htmx = HtmxDetails(request)
+    return request
+
+
 @pytest.fixture()
 def comments_enabled():
     previous = appsettings.CAST_COMMENTS_ENABLED
