@@ -104,9 +104,9 @@ class TestPodcastAudio:
         r = api_client.get(podlove_detail_url, format="json")
         assert "." not in r.json()["duration"]
 
-    def test_podlove_detail_endpoint_includes_link_to_episode(self, api_client, podcast_episode):
+    def test_podlove_detail_endpoint_includes_link_to_episode(self, api_client, episode):
         """Test whether the podlove detail endpoint includes a link to the episode."""
-        audio = podcast_episode.podcast_audio
+        audio = episode.podcast_audio
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
 
         r = api_client.get(podlove_detail_url, format="json")
@@ -116,14 +116,14 @@ class TestPodcastAudio:
         assert "link" in r.json()
 
         # explicitly set episode_id FIXME: only works if there are multiple episodes for audio
-        podlove_detail_url_with_episode_id = f"{podlove_detail_url}?episode_id={podcast_episode.pk}"
+        podlove_detail_url_with_episode_id = f"{podlove_detail_url}?episode_id={episode.pk}"
 
         r = api_client.get(podlove_detail_url_with_episode_id, format="json")
         assert r.status_code == 200
 
         podlove_data = r.json()
         assert "link" in podlove_data
-        assert podlove_data["link"] == podcast_episode.full_url
+        assert podlove_data["link"] == episode.full_url
 
     def test_podlove_detail_endpoint_chaptermarks(self, api_client, audio, chaptermarks):
         """Test whether chaptermarks get delivered via podlove endpoint."""

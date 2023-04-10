@@ -69,10 +69,10 @@ class TestGeneratedFeeds:
         assert "xml" in content
         assert post.title in content
 
-    def test_get_podcast_m4a_feed_rss(self, client, podcast_episode, use_dummy_cache_backend):
+    def test_get_podcast_m4a_feed_rss(self, client, episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",
-            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+            kwargs={"slug": episode.blog.slug, "audio_format": "m4a"},
         )
 
         r = client.get(feed_url)
@@ -80,12 +80,12 @@ class TestGeneratedFeeds:
 
         content = r.content.decode("utf-8")
         assert "rss" in content
-        assert podcast_episode.title in content
+        assert episode.title in content
 
-    def test_get_podcast_m4a_feed_atom(self, client, podcast_episode):
+    def test_get_podcast_m4a_feed_atom(self, client, episode):
         feed_url = reverse(
             "cast:podcast_feed_atom",
-            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+            kwargs={"slug": episode.blog.slug, "audio_format": "m4a"},
         )
 
         r = client.get(feed_url)
@@ -93,22 +93,22 @@ class TestGeneratedFeeds:
 
         content = r.content.decode("utf-8")
         assert "feed" in content
-        assert podcast_episode.title in content
+        assert episode.title in content
 
-    def test_podcast_feed_contains_only_podcasts(self, client, post, podcast_episode, use_dummy_cache_backend):
+    def test_podcast_feed_contains_only_podcasts(self, client, post, episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",
-            kwargs={"slug": podcast_episode.blog.slug, "audio_format": "m4a"},
+            kwargs={"slug": episode.blog.slug, "audio_format": "m4a"},
         )
         r = client.get(feed_url)
         assert r.status_code == 200
 
         d = feedparser.parse(r.content)
         assert len(d.entries) == 1
-        print(podcast_episode)
-        print(podcast_episode.blog)
-        print(podcast_episode.podcast)
-        assert Post.objects.live().descendant_of(podcast_episode.blog).count() == 1
+        print(episode)
+        print(episode.blog)
+        print(episode.podcast)
+        assert Post.objects.live().descendant_of(episode.blog).count() == 1
 
     def test_podcast_feed_contains_visible_date_as_pubdate(
         self, client, podcast_episode_with_different_visible_date, use_dummy_cache_backend
@@ -127,10 +127,10 @@ class TestGeneratedFeeds:
         date_from_feed = pytz.utc.localize(date_from_feed)
         assert date_from_feed == podcast_episode.visible_date
 
-    def test_podcast_feed_contains_detail_information(self, client, podcast_episode):
+    def test_podcast_feed_contains_detail_information(self, client, episode):
         feed_url = reverse(
             "cast:podcast_feed_rss",
-            kwargs={"slug": podcast_episode.podcast.slug, "audio_format": "m4a"},
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
         )
 
         r = client.get(feed_url)

@@ -3,8 +3,8 @@ from django.urls import reverse
 
 
 @pytest.mark.django_db
-def test_twitter_player(client, podcast_episode):
-    episode = podcast_episode
+def test_twitter_player(client, episode):
+    episode = episode
     url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": episode.blog.slug})
     r = client.get(url)
     assert r.status_code == 200

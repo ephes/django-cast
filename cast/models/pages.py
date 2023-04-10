@@ -2,6 +2,7 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Optional
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -363,6 +364,12 @@ class Episode(Post):
         if self.podcast_audio is None:
             return 0
         return self.podcast_audio.get_file_size(audio_format)
+
+    def clean(self):
+        super().clean()
+        if self.live:
+            if self.podcast_audio is None:
+                raise ValidationError(_("An episode must have an audio file to be published."))
 
 
 class HomePage(Page):

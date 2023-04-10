@@ -359,17 +359,6 @@ def post_in_podcast(podcast, body):
 
 
 @pytest.fixture()
-def episode(podcast, body):
-    return EpisodeFactory(
-        owner=podcast.owner,
-        parent=podcast,
-        title="test entry",
-        slug="test-entry",
-        body=body,
-    )
-
-
-@pytest.fixture()
 def post_with_gallery(blog, body_with_gallery):
     return PostFactory(
         owner=blog.owner,
@@ -427,6 +416,14 @@ def unpublished_post(blog):
 
 
 @pytest.fixture()
+def unpublished_episode_without_audio(episode):
+    episode.podcast_audio = None
+    episode.unpublish()
+    episode.refresh_from_db()
+    return episode
+
+
+@pytest.fixture()
 def post_with_date(blog):
     visible_date = pytz.timezone("Europe/Berlin").localize(datetime(2018, 1, 1, 8))
     return PostFactory(
@@ -469,7 +466,7 @@ def post_with_search(blog, python_body):
 
 
 @pytest.fixture()
-def podcast_episode(podcast, audio, body):
+def episode(podcast, audio, body):
     return EpisodeFactory(
         owner=podcast.owner,
         parent=podcast,

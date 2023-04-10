@@ -92,11 +92,11 @@ class TestAudioModel:
     def test_audio_podlove_url(self, audio):
         assert audio.podlove_url == "/cast/api/audios/podlove/1"
 
-    def test_get_episode_url_from_audio(self, podcast_episode):
-        audio = podcast_episode.podcast_audio
+    def test_get_episode_url_from_audio(self, episode):
+        audio = episode.podcast_audio
 
         # happy path - audio has episode and episode_id is set
-        audio.set_episode_id(podcast_episode.pk)
+        audio.set_episode_id(episode.pk)
         assert "http" in audio.episode_url
 
         # happy path - audio is only used by one episode
@@ -104,19 +104,20 @@ class TestAudioModel:
         assert "http" in audio.episode_url
 
         # sad path - audio is not used by any episode
-        podcast_episode.podcast_audio = None
-        podcast_episode.save()
+        episode.unpublish()
+        episode.podcast_audio = None
+        episode.save()
         assert audio.episode_url is None
 
-    def test_get_episode_url_from_audio_with_multiple_episodes(self, podcast_episode, podcast_episode_with_same_audio):
-        audio = podcast_episode.podcast_audio
+    def test_get_episode_url_from_audio_with_multiple_episodes(self, episode, podcast_episode_with_same_audio):
+        audio = episode.podcast_audio
 
         # sad path - audio is used by multiple episodes
         assert audio.episode_url is None
 
         # happy path - audio is used by multiple episodes but episode_id is set
-        audio.set_episode_id(podcast_episode.pk)
-        assert audio.episode_url == podcast_episode.full_url
+        audio.set_episode_id(episode.pk)
+        assert audio.episode_url == episode.full_url
 
         audio.set_episode_id(podcast_episode_with_same_audio.pk)
         assert audio.episode_url == podcast_episode_with_same_audio.full_url

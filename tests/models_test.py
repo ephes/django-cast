@@ -1,4 +1,5 @@
 import pytest
+from django.core.exceptions import ValidationError
 from django.http.request import QueryDict
 
 from cast.models.pages import Episode, HomePage, PlaceholderRequest, Post
@@ -82,7 +83,8 @@ class TestPostModel:
     def test_post_has_audio(self, post):
         assert post.has_audio is False
 
-    def test_episode_has_audio(self, episode):
+    def test_episode_has_audio(self, unpublished_episode_without_audio):
+        episode = unpublished_episode_without_audio
         assert episode.has_audio is False
 
     def test_episode_has_audio_true(self, episode, audio):
@@ -186,6 +188,13 @@ class TestEpisodeModel:
         episode._local_template_name = local_template_name
 
         assert episode.get_template(PlaceholderRequest()) == expected_template
+
+    def test_publish_without_audio_raises_validation_error(self, unpublished_episode_without_audio):
+        episode = unpublished_episode_without_audio
+        episode.podcast_audio = None
+        revision = episode.save_revision()
+        with pytest.raises(ValidationError, match="must have an audio file"):
+            episode.publish(revision)
 
 
 def test_placeholder_request():

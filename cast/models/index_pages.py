@@ -188,6 +188,8 @@ class Blog(Page):
 
 
 class Podcast(Blog):
+    """A podcast is a blog with some extra fields for podcasting."""
+
     # atm it's only used for podcast image
     itunes_artwork = models.ForeignKey(ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL)
     itunes_categories = models.CharField(
