@@ -46,12 +46,14 @@ class TestFeedCreation:
 
 
 @pytest.fixture
-def use_dummy_cache_backend(settings):
+def use_dummy_cache_backend(settings, mocker):
     settings.CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.dummy.DummyCache",
         }
     }
+    # workaround for settings fixture is not working in Django 4.0 and pytest-django
+    mocker.patch("django.core.cache.backends.locmem.LocMemCache.get", return_value=None)
 
 
 class TestGeneratedFeeds:
