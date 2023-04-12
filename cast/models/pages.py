@@ -2,8 +2,8 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Optional
 
+from django import forms
 from django.db import models
-from django.forms import ValidationError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -293,18 +293,12 @@ class CustomEpisodeForm(WagtailAdminPageForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # check if the publish button was clicked
-        self.is_about_to_be_published = False
-        print("args: ", args)
-        if len(args) > 0:
-            post = args[0]
-            self.is_about_to_be_published = "action-publish" in post
+        self.fields["action-publish"] = forms.CharField(required=False, widget=forms.HiddenInput())
 
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
-        if self.is_about_to_be_published and cleaned_data.get("podcast_audio") is None:
-            raise ValidationError({"podcast_audio": _("An episode must have an audio file to be published.")})
+        if cleaned_data.get("action-publish") and cleaned_data.get("podcast_audio") is None:
+            raise forms.ValidationError({"podcast_audio": _("An episode must have an audio file to be published.")})
         return cleaned_data
 
 

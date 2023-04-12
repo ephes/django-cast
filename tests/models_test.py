@@ -200,7 +200,7 @@ class TestEpisodeModel:
 def test_custom_episode_form():
     # arrange the custom episode form
     CustomEpisodeForm._meta.model = Episode
-    CustomEpisodeForm._meta.fields = ("podcast_audio",)
+    CustomEpisodeForm._meta.fields = ("podcast_audio", "about_to_be_published")
     CustomEpisodeForm.formsets = {}
 
     # test the form with no data
