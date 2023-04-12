@@ -1,8 +1,14 @@
 import pytest
-from django.core.exceptions import ValidationError
+from django import forms
 from django.http.request import QueryDict
 
-from cast.models.pages import Episode, HomePage, PlaceholderRequest, Post
+from cast.models.pages import (
+    CustomEpisodeForm,
+    Episode,
+    HomePage,
+    PlaceholderRequest,
+    Post,
+)
 from cast.models.video import Video
 
 
@@ -189,12 +195,26 @@ class TestEpisodeModel:
 
         assert episode.get_template(PlaceholderRequest()) == expected_template
 
-    def test_publish_without_audio_raises_validation_error(self, unpublished_episode_without_audio):
-        episode = unpublished_episode_without_audio
-        episode.podcast_audio = None
-        revision = episode.save_revision()
-        with pytest.raises(ValidationError, match="must have an audio file"):
-            episode.publish(revision)
+
+@pytest.mark.django_db
+def test_custom_episode_form():
+    # arrange the custom episode form
+    CustomEpisodeForm._meta.model = Episode
+    CustomEpisodeForm._meta.fields = ("podcast_audio",)
+    CustomEpisodeForm.formsets = {}
+
+    # test the form with no data
+    form = CustomEpisodeForm()
+    assert not form.is_valid()
+
+    # test the form with the "Save draft" button clicked (no audio file is ok)
+    form = CustomEpisodeForm({"podcast_audio": None})
+    assert form.is_valid()
+
+    # test the form with the "Publish" button clicked (audio file is required)
+    form = CustomEpisodeForm({"action-publish": "action-publish", "podcast_audio": None})
+    form.fields["podcast_audio"] = forms.IntegerField(required=False)
+    assert not form.is_valid()
 
 
 def test_placeholder_request():

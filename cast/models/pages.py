@@ -2,8 +2,8 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Optional
 
-from django.core.exceptions import ValidationError
 from django.db import models
+from django.forms import ValidationError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -13,6 +13,7 @@ from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
 from slugify import slugify
 from wagtail import blocks
+from wagtail.admin.forms import WagtailAdminPageForm
 from wagtail.admin.panels import FieldPanel
 from wagtail.api import APIField
 from wagtail.embeds.blocks import EmbedBlock
@@ -281,7 +282,35 @@ class Post(Page):
         return save_return
 
 
+class CustomEpisodeForm(WagtailAdminPageForm):
+    """
+    Custom form for Episode to validate the podcast_audio field.
+
+    The reason for this is that the podcast_audio field is not required
+    for draft episodes, but it is required for published episodes. So
+    we have to check which button was clicked in the admin form.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # check if the publish button was clicked
+        self.is_about_to_be_published = False
+        print("args: ", args)
+        if len(args) > 0:
+            post = args[0]
+            self.is_about_to_be_published = "action-publish" in post
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean()
+        if self.is_about_to_be_published and cleaned_data.get("podcast_audio") is None:
+            raise ValidationError({"podcast_audio": _("An episode must have an audio file to be published.")})
+        return cleaned_data
+
+
 class Episode(Post):
+    """A podcast episode is just a Post with some additional fields."""
+
     podcast_audio = models.ForeignKey(
         "cast.Audio",
         null=True,
@@ -289,7 +318,7 @@ class Episode(Post):
         on_delete=models.SET_NULL,
         related_name="episodes",
         help_text=_(
-            "The audio file for this episode -if this is not set," "the episode will not be included in the feed."
+            "The audio file for this episode -if this is not set, the episode will not be included in the feed."
         ),
     )
     keywords = models.CharField(
@@ -329,6 +358,7 @@ class Episode(Post):
 
     objects: PageManager = PageManager()
     aliases_homepage: Any  # FIXME: why is this needed?
+    base_form_class = CustomEpisodeForm
 
     def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
         """
@@ -364,12 +394,6 @@ class Episode(Post):
         if self.podcast_audio is None:
             return 0
         return self.podcast_audio.get_file_size(audio_format)
-
-    def clean(self):
-        super().clean()
-        if self.live:
-            if self.podcast_audio is None:
-                raise ValidationError(_("An episode must have an audio file to be published."))
 
 
 class HomePage(Page):
