@@ -8,3 +8,4 @@ Fixing tests for Django 4.0
 * Added support badge for Django 4.0 and 4.1 in README
 * Updated pre-commit hooks
 * #90 added a validation for `episode.podcast_audio` to be set when an episode is published
+* #83 make it possible to set custom templates for http error responses
