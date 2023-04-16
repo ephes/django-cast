@@ -162,3 +162,6 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"
 # crispy forms
 CRISPY_TEMPLATE_PACK = "bootstrap4"
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
+
+# view handling csrf failures
+CSRF_FAILURE_VIEW = "cast.views.defaults.csrf_failure"

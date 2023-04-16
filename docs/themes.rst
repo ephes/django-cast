@@ -52,6 +52,45 @@ current template base directory aka theme to the context. For convenience
 it also adds the theme's base template as a variable to the context to
 be able to extend it in non Wagtail templates.
 
+Error Views
+-----------
+
+If you want to use your own error views, you can do so by creating templates
+for each error code in your theme's directory.
+
+.. hint::
+
+    This is the list of templates that you can overwrite
+
+    * `cast/your_theme/404.html`
+    * `cast/your_theme/500.html`
+    * `cast/your_theme/400.html`
+    * `cast/your_theme/403.html`
+    * `cast/your_theme/403_csrf.html`
+
+
+Since now the error views need to know which theme to use, you have to
+overwrite the default error views in your project's root URL-conf:
+
+.. code-block:: python
+
+    ...
+    from cast.views import defaults as default_views_cast
+
+    handler404 = default_views_cast.page_not_found
+    handler500 = default_views_cast.server_error
+    handler400 = default_views_cast.bad_request
+    handler403 = default_views_cast.permission_denied
+
+Setting the view for the 403_csrf error is a special case. You have to
+specify the view in your project's settings:
+
+.. code-block:: python
+
+    ...
+    # view handling csrf failures
+    CSRF_FAILURE_VIEW = "cast.views.defaults.csrf_failure"
+
 How to Change the Theme for a Single Blog
 =========================================
 

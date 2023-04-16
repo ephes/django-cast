@@ -165,3 +165,6 @@ WAGTAILIMAGES_MAX_UPLOAD_SIZE = 30 * 1024 * 1024
 # crispy forms
 CRISPY_TEMPLATE_PACK = "bootstrap4"
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
+
+# view handling csrf failures
+CSRF_FAILURE_VIEW = "cast.views.defaults.csrf_failure"
