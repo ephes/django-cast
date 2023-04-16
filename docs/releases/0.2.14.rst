@@ -1,0 +1,6 @@
+0.2.14 (2023-04-24)
+-------------------
+
+not clear yet
+
+* removed `nb_black` dev dependency

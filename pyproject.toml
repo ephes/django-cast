@@ -78,7 +78,6 @@ dev = [
     "isort",
     "jupyter",
     "mypy",
-    "nb-black",
     "rich",
     "tox",
     "typer",
