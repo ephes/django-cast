@@ -5,8 +5,8 @@ import uuid
 import django.db.models.deletion
 import django.utils.timezone
 import model_utils.fields
-import wagtail.core.blocks
-import wagtail.core.fields
+import wagtail.blocks
+import wagtail.fields
 import wagtail.images.blocks
 from django.conf import settings
 from django.db import migrations, models
@@ -120,7 +120,7 @@ class Migration(migrations.Migration):
                         verbose_name="explicit",
                     ),
                 ),
-                ("intro", wagtail.core.fields.RichTextField(blank=True)),
+                ("intro", wagtail.fields.RichTextField(blank=True)),
             ],
             options={
                 "abstract": False,
@@ -164,10 +164,10 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "body",
-                    wagtail.core.fields.StreamField(
+                    wagtail.fields.StreamField(
                         [
-                            ("heading", wagtail.core.blocks.CharBlock(classname="full title")),
-                            ("paragraph", wagtail.core.blocks.RichTextBlock()),
+                            ("heading", wagtail.blocks.CharBlock(classname="full title")),
+                            ("paragraph", wagtail.blocks.RichTextBlock()),
                             ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image/image.html")),
                             ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                         ]
@@ -371,10 +371,10 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "body",
-                    wagtail.core.fields.StreamField(
+                    wagtail.fields.StreamField(
                         [
-                            ("heading", wagtail.core.blocks.CharBlock(classname="full title")),
-                            ("paragraph", wagtail.core.blocks.RichTextBlock()),
+                            ("heading", wagtail.blocks.CharBlock(classname="full title")),
+                            ("paragraph", wagtail.blocks.RichTextBlock()),
                             ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image/image.html")),
                             ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                         ]

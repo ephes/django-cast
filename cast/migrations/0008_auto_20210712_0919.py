@@ -2,9 +2,9 @@
 
 import django.db.models.deletion
 import taggit.managers
-import wagtail.core.blocks
-import wagtail.core.fields
-import wagtail.core.models
+import wagtail.blocks
+import wagtail.fields
+import wagtail.models
 import wagtail.embeds.blocks
 import wagtail.images.blocks
 from django.db import migrations, models
@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
             model_name="video",
             name="collection",
             field=models.ForeignKey(
-                default=wagtail.core.models.get_root_collection_id,
+                default=wagtail.models.get_root_collection_id,
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="+",
                 to="wagtailcore.collection",
@@ -47,10 +47,10 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="post",
             name="body",
-            field=wagtail.core.fields.StreamField(
+            field=wagtail.fields.StreamField(
                 [
-                    ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
-                    ("paragraph", wagtail.core.blocks.RichTextBlock()),
+                    ("heading", wagtail.blocks.CharBlock(form_classname="full title")),
+                    ("paragraph", wagtail.blocks.RichTextBlock()),
                     ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image.html")),
                     ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                     ("embed", wagtail.embeds.blocks.EmbedBlock()),

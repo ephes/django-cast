@@ -2,7 +2,7 @@
 
 import django.db.models.deletion
 import taggit.managers
-import wagtail.core.models.collections
+import wagtail.models.collections
 from django.db import migrations, models
 
 
@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
             model_name="audio",
             name="collection",
             field=models.ForeignKey(
-                default=wagtail.core.models.collections.get_root_collection_id,
+                default=wagtail.models.collections.get_root_collection_id,
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="+",
                 to="wagtailcore.collection",

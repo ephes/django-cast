@@ -2,8 +2,8 @@
 
 import cast.blocks
 from django.db import migrations
-import wagtail.core.blocks
-import wagtail.core.fields
+import wagtail.blocks
+import wagtail.fields
 import wagtail.embeds.blocks
 import wagtail.images.blocks
 
@@ -18,14 +18,14 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="post",
             name="body",
-            field=wagtail.core.fields.StreamField(
+            field=wagtail.fields.StreamField(
                 [
                     (
                         "overview",
-                        wagtail.core.blocks.StreamBlock(
+                        wagtail.blocks.StreamBlock(
                             [
-                                ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
-                                ("paragraph", wagtail.core.blocks.RichTextBlock()),
+                                ("heading", wagtail.blocks.CharBlock(form_classname="full title")),
+                                ("paragraph", wagtail.blocks.RichTextBlock()),
                                 ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image/image.html")),
                                 ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                                 ("embed", wagtail.embeds.blocks.EmbedBlock()),
@@ -42,10 +42,10 @@ class Migration(migrations.Migration):
                     ),
                     (
                         "detail",
-                        wagtail.core.blocks.StreamBlock(
+                        wagtail.blocks.StreamBlock(
                             [
-                                ("heading", wagtail.core.blocks.CharBlock(form_classname="full title")),
-                                ("paragraph", wagtail.core.blocks.RichTextBlock()),
+                                ("heading", wagtail.blocks.CharBlock(form_classname="full title")),
+                                ("paragraph", wagtail.blocks.RichTextBlock()),
                                 ("image", wagtail.images.blocks.ImageChooserBlock(template="cast/image/image.html")),
                                 ("gallery", cast.blocks.GalleryBlock(wagtail.images.blocks.ImageChooserBlock())),
                                 ("embed", wagtail.embeds.blocks.EmbedBlock()),
