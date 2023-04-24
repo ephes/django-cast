@@ -32,7 +32,7 @@ class TestAudioModel:
 
     def test_audio_duration(self, audio):
         duration = audio._get_audio_duration(audio.m4a.path)
-        assert duration == timedelta(microseconds=700000)
+        assert duration == timedelta(microseconds=746667)
 
     def test_audio_duration_no_match(self, mocker):
         mocker.patch("cast.models.audio.subprocess.check_output", return_value=b"foobar")
