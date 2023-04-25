@@ -13,7 +13,18 @@ from wagtail.telepath import register
 from .models import Audio, Video
 
 
-class AdminVideoChooser(BaseChooser):
+class AdminChooser(BaseChooser):
+    chooser_namespace = "castvideo"
+
+    @property
+    def chooser_modal_url_name(self) -> str:
+        return f"{self.chooser_namespace}:chooser"
+
+    def get_chooser_modal_url(self) -> str:
+        return reverse(self.chooser_modal_url_name)
+
+
+class AdminVideoChooser(AdminChooser):
     choose_one_text = _("Choose a video item")
     choose_another_text = _("Choose another video item")
     link_to_chosen_text = _("Edit this video item")
@@ -49,13 +60,6 @@ class AdminVideoChooser(BaseChooser):
     def render_js_init(self, id_: int, name: str, value: Optional[dict]) -> str:
         return f"createVideoChooser({json.dumps(id_)});"
 
-    @property
-    def chooser_modal_url_name(self):
-        return "castvideo:chooser"
-
-    def get_chooser_modal_url(self):
-        return reverse("castvideo:chooser")
-
     class Media:
         js = [
             "js/cast/wagtail/video-chooser-modal.js",
@@ -84,10 +88,11 @@ class VideoChooserAdapter(BaseChooserAdapter):
 register(VideoChooserAdapter(), AdminVideoChooser)
 
 
-class AdminAudioChooser(BaseChooser):
+class AdminAudioChooser(AdminChooser):
     choose_one_text = _("Choose a audio item")
     choose_another_text = _("Choose another audio item")
     link_to_chosen_text = _("Edit this audio item")
+    chooser_namespace = "castaudio"
 
     def get_value_data(self, value: Optional[Union["Video", int]]) -> Optional[dict]:
         if value is None:
@@ -100,13 +105,6 @@ class AdminAudioChooser(BaseChooser):
             "title": value.title,
             "edit_link": reverse("castaudio:edit", args=[value.id]),
         }
-
-    @property
-    def chooser_modal_url_name(self):
-        return "castaudio:chooser"
-
-    def get_chooser_modal_url(self):
-        return reverse("castaudio:chooser")
 
     def render_html(self, name: str, value: Optional[dict], attrs: dict) -> str:
         value = value if value is not None else {}
