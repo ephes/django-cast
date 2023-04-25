@@ -7,14 +7,13 @@ from django.urls import reverse
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.staticfiles import versioned_static
-from wagtail.admin.widgets import AdminChooser
+from wagtail.admin.widgets import BaseChooser, BaseChooserAdapter
 from wagtail.telepath import register
-from wagtail.widget_adapters import WidgetAdapter
 
 from .models import Audio, Video
 
 
-class AdminVideoChooser(AdminChooser):
+class AdminVideoChooser(BaseChooser):
     choose_one_text = _("Choose a video item")
     choose_another_text = _("Choose another video item")
     link_to_chosen_text = _("Edit this video item")
@@ -50,6 +49,13 @@ class AdminVideoChooser(AdminChooser):
     def render_js_init(self, id_: int, name: str, value: Optional[dict]) -> str:
         return f"createVideoChooser({json.dumps(id_)});"
 
+    @property
+    def chooser_modal_url_name(self):
+        return "castvideo:chooser"
+
+    def get_chooser_modal_url(self):
+        return reverse("castvideo:chooser")
+
     class Media:
         js = [
             "js/cast/wagtail/video-chooser-modal.js",
@@ -57,7 +63,7 @@ class AdminVideoChooser(AdminChooser):
         ]
 
 
-class VideoChooserAdapter(WidgetAdapter):
+class VideoChooserAdapter(BaseChooserAdapter):
     js_constructor = "cast.wagtail.VideoChooser"
 
     def js_args(self, widget: AdminVideoChooser) -> list:
@@ -78,7 +84,7 @@ class VideoChooserAdapter(WidgetAdapter):
 register(VideoChooserAdapter(), AdminVideoChooser)
 
 
-class AdminAudioChooser(AdminChooser):
+class AdminAudioChooser(BaseChooser):
     choose_one_text = _("Choose a audio item")
     choose_another_text = _("Choose another audio item")
     link_to_chosen_text = _("Edit this audio item")
@@ -94,6 +100,13 @@ class AdminAudioChooser(AdminChooser):
             "title": value.title,
             "edit_link": reverse("castaudio:edit", args=[value.id]),
         }
+
+    @property
+    def chooser_modal_url_name(self):
+        return "castaudio:chooser"
+
+    def get_chooser_modal_url(self):
+        return reverse("castaudio:chooser")
 
     def render_html(self, name: str, value: Optional[dict], attrs: dict) -> str:
         value = value if value is not None else {}
@@ -121,7 +134,7 @@ class AdminAudioChooser(AdminChooser):
         ]
 
 
-class AudioChooserAdapter(WidgetAdapter):
+class AudioChooserAdapter(BaseChooserAdapter):
     js_constructor = "cast.wagtail.AudioChooser"
 
     def js_args(self, widget: AdminAudioChooser) -> list:
