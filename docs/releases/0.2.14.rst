@@ -1,6 +1,7 @@
-0.2.14 (2023-04-24)
+0.2.14 (2023-05-01)
 -------------------
 
-not clear yet
+New vue-theme.
 
 * removed `nb_black` dev dependency
+* removed `max-height` from `.cast-image` for bootstrap4-theme because of contortion
