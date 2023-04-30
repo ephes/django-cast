@@ -1,7 +1,8 @@
 0.2.14 (2023-05-01)
 -------------------
 
-New vue-theme.
+Wagtail 5 compatibility.
 
 * removed `nb_black` dev dependency
+* Support for Wagtail 5
 * removed `max-height` from `.cast-image` for bootstrap4-theme because of contortion
