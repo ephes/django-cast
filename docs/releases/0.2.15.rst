@@ -6,3 +6,4 @@ Not sure yet.
 * Expose data via template context to theme (for vue theme)
     * pagination page size
     * wagtail api page url via `reverse("cast:api:wagtail:pages:listing")`
+* Add overview_html and detail_html to the Post model to get the rendered html in the vue theme

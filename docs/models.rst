@@ -24,6 +24,17 @@ can be used to override the template name. This is used for example in
 the `get_description` method to render the description of the post using
 the `post_body.html` template for the feed and the twitter card.
 
+API-Fields
+==========
+
+There are some additional fields that can be fetched from the wagtail pages API:
+* uuid - a unique identifier for the post
+* visible_date - the date the post is visible, usually used for sorting
+* comments_enabled - whether comments are enabled for this post
+* body - the body stream field of the post
+* html_overview - the rendered html of the overview section of the body (used in SPA themes)
+* html_detail - the rendered html of the overview and detail section of the body (used in SPA themes)
+
 *******
 Episode
 *******

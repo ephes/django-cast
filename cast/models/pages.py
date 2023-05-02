@@ -116,6 +116,8 @@ class Post(Page):
         APIField("visible_date"),
         APIField("comments_enabled"),
         APIField("body"),
+        APIField("html_overview"),
+        APIField("html_detail"),
     ]
 
     content_panels = Page.content_panels + [
@@ -267,10 +269,27 @@ class Post(Page):
         """
         self._local_template_name = "post_body.html"
         description = self.serve(request, render_detail=render_detail).rendered_content.replace("\n", "")
-        # description = "foobarbaz"
         if escape_html:
             description = escape(description)
         return description
+
+    @property
+    def html_overview(self) -> SafeText:
+        """
+        A convenience method to be able to get the rendered html of the overview
+        html of the post for the wagtail api. It then is used in the Vue.js theme
+        for example.
+        """
+        return self.get_description(render_detail=False, escape_html=False)
+
+    @property
+    def html_detail(self) -> SafeText:
+        """
+        Just a convenience method to be able to get the rendered html of the
+        post overview and detail for the wagtail api. It then is used in the
+        Vue.js theme for example.
+        """
+        return self.get_description(render_detail=True, escape_html=False)
 
     def get_absolute_url(self) -> str:
         """This is needed for django-fluentcomments."""

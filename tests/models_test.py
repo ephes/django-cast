@@ -144,6 +144,22 @@ class TestPostModel:
         description = post.get_description(escape_html=True)
         assert "&lt" in description
 
+    def test_overview_html(self, mocker):
+        expected_html = "<h1>foo</h1>"
+        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        overview = Post().html_overview
+        assert overview == expected_html
+        assert mock.call_args[1]["render_detail"] is False
+        assert mock.call_args[1]["escape_html"] is False
+
+    def test_detail_html(self, mocker):
+        expected_html = "<h1>foo</h1><p>bar</p>"
+        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        detail = Post().html_detail
+        assert detail == expected_html
+        assert mock.call_args[1]["render_detail"] is True
+        assert mock.call_args[1]["escape_html"] is False
+
     @pytest.mark.parametrize(
         "local_template_name, expected_template",
         [
