@@ -8,6 +8,7 @@ from django.core.paginator import InvalidPage, Paginator
 from django.db import models
 from django.http import Http404, HttpRequest
 from django.http.request import QueryDict
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django_htmx.middleware import HtmxDetails
 from wagtail.admin.panels import FieldPanel
@@ -183,6 +184,9 @@ class Blog(Page):
         context["parameters"] = self.get_other_get_params(get_params)
         context = self.paginate_queryset(context, self.get_published_posts(filterset.qs), get_params)
         context["posts"] = context["object_list"]  # convenience
+        # data used in themes
+        context["wagtail_api_pages_url"] = reverse("cast:api:wagtail:pages:listing")
+        context["pagination_page_size"] = appsettings.POST_LIST_PAGINATION
         context["blog"] = self
         return context
 
