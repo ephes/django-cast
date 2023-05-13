@@ -53,17 +53,17 @@
         <p>Use this document as a way to quick start any new project.</p>
       {% endblock content %}
     </div>
-
     {% block modal %}{% endblock modal %}
+    <div class="additional_javascript">
+      {% block javascript %}
+        <script src="{% static 'js/jquery/jquery-3.6.4.min.js' %}"></script>
+        <script src="{% static 'js/bootstrap4/bootstrap.min.js' %}"></script>
+        <script src="{% static 'js/htmx.min.js' %}"></script>
 
-    {% block javascript %}
-      <script src="{% static 'js/jquery/jquery-3.6.4.min.js' %}"></script>
-      <script src="{% static 'js/bootstrap4/bootstrap.min.js' %}"></script>
-      <script src="{% static 'js/htmx.min.js' %}"></script>
-
-      <!-- place project specific Javascript in this file -->
-      <script src="{% static 'js/project.js' %}"></script>
-      {% block template_script %}{% endblock template_script %}
-    {% endblock javascript %}
+        <!-- place project specific Javascript in this file -->
+        <script src="{% static 'js/project.js' %}"></script>
+        {% block template_script %}{% endblock template_script %}
+      {% endblock javascript %}
+    </div>
   </body>
 </html>

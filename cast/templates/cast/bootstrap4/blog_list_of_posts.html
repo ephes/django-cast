@@ -78,12 +78,12 @@
         {% include "./post_body.html" with render_detail=False page=post %}
         <hr class="my-4">
       {% endfor %}
-      <main>
+    </main>
 
-        <footer>
-          <p>{% include "./pagination.html" %}</p>
-        </footer>
-        <div>
+    <footer>
+      <p>{% include "./pagination.html" %}</p>
+    </footer>
+  </div>
 {% endblock content %}
 
 {% block javascript %}
@@ -97,5 +97,4 @@
       {% endfor %}
     {% endfor %}
   {% endif %}
-
 {% endblock javascript %}
