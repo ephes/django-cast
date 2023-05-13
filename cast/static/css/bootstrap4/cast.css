@@ -109,7 +109,10 @@
 .highlight .il { color: #666666 } /* Literal.Number.Integer.Long */
 
 .cast-image {
-    max-width: 100%;
+    width: 100%;
+    height: auto;
+    max-height: 740px;
+    object-fit: contain;
 }
 
 .cast-gallery-container {
