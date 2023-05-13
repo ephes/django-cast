@@ -188,6 +188,8 @@ class Blog(Page):
         context["wagtail_api_pages_url"] = reverse("cast:api:wagtail:pages:listing")
         context["pagination_page_size"] = appsettings.POST_LIST_PAGINATION
         context["blog"] = self
+        print("show audio player: ", any([post.has_audio for post in context["posts"]]), "for blog: ", self.title)
+        context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
         return context
 
 
