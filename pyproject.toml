@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name = "django-cast"
 authors = [
-    {name = "Jochen Wersdörfer", email = "jochen-wagtailsrcset@wersdoerfer.de"},
+    {name = "Jochen Wersdörfer", email = "jochen-cast@wersdoerfer.de"},
     {name = "Dominik Geldmacher", email = "oryon@cyberise.de"},
 ]
 dynamic = ["version", "description"]
