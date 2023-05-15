@@ -224,6 +224,7 @@ class Post(Page):
     def get_context(self, *args, **kwargs) -> "ContextDict":
         context = super().get_context(*args, **kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
+        context["blog"] = self.blog  # needed for SPA themes
         return context
 
     @property
