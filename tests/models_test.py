@@ -2,6 +2,7 @@ import pytest
 from django import forms
 from django.http.request import QueryDict
 
+from cast import appsettings
 from cast.models.pages import (
     CustomEpisodeForm,
     Episode,
@@ -78,6 +79,12 @@ class TestBlogModel:
     def test_paginate_queryset_request_is_none(self, blog):
         context = blog.paginate_queryset({}, blog.get_filterset(QueryDict()).qs, QueryDict())
         assert context["page_obj"].number == 1
+
+    def test_wagtail_api_pages_url(self, blog):
+        assert blog.wagtail_api_pages_url == "/cast/api/wagtail/pages/"
+
+    def test_pagination_page_size(self, blog):
+        assert blog.pagination_page_size == appsettings.POST_LIST_PAGINATION
 
 
 class TestPostModel:
