@@ -16,6 +16,7 @@ from django.utils.datastructures import MultiValueDict
 from django.utils.encoding import force_str
 from django.utils.safestring import SafeText, mark_safe
 from django.utils.translation import gettext as _
+from django_filters.fields import ChoiceField as FilterChoiceField
 from wagtail.models import PageQuerySet
 
 
@@ -159,7 +160,23 @@ class FacetChoicesMixin:
         return super_filter.field
 
 
+class AllChoicesField(FilterChoiceField):
+    def valid_value(self, value: str) -> bool:
+        """
+        Allow all values instead of explicit choices but still validate
+        against parse_date_facets to make sure the facet is parseable
+        into a date.
+        """
+        try:
+            parse_date_facets(value)
+            return True
+        except ValueError:
+            return False
+
+
 class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
+    field_class = AllChoicesField
+
     def filter(self, qs: models.QuerySet, value: str) -> models.QuerySet:
         if len(value) == 0:
             # don't filter if value is empty
@@ -167,7 +184,8 @@ class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
         year_month = parse_date_facets(value)
         year = year_month.year
         month = year_month.month
-        return qs.filter(visible_date__year=year, visible_date__month=month)
+        filtered = qs.filter(visible_date__year=year, visible_date__month=month)
+        return filtered
 
 
 class PostFilterset(django_filters.FilterSet):
@@ -178,9 +196,8 @@ class PostFilterset(django_filters.FilterSet):
         widget=django_filters.widgets.DateRangeWidget(attrs={"type": "date", "placeholder": "YYYY/MM/DD"}),
     )
     date_facets = DateFacetFilter(
-        field_name="title",
+        field_name="date_facets",
         label="Date Facets",
-        choices=[],
         widget=DateFacetWidget(attrs={"class": "cast-date-facet-container"}),
     )
     o = django_filters.OrderingFilter(

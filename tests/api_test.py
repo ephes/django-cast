@@ -2,8 +2,9 @@ from datetime import timedelta
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
-from cast.api.views import AudioPodloveDetailView
+from cast.api.views import AudioPodloveDetailView, FilteredPagesAPIViewSet
 
 from .factories import UserFactory
 
@@ -169,3 +170,24 @@ class TestCommentTrainingData:
         r = api_client.get(self.url, format="json")
         assert r.status_code == 200
         assert r.json() == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "date, post_filter, len_result",
+    [
+        (timezone.datetime(2022, 8, 22), "true", 0),  # wrong date facet -> not found
+        (timezone.now(), "true", 1),  # correct date facet -> found
+        (timezone.datetime(2022, 8, 22), "false", 1),  # wrong date facet and no post filter -> found
+    ],
+)
+def test_wagtail_pages_api_with_post_filter(date, post_filter, len_result, rf, blog, post):
+    viewset = FilteredPagesAPIViewSet()
+    path = blog.wagtail_api_pages_url
+    date_facet = f"{date.year}-{date.month}"
+    request = rf.get(
+        f"{path}?child_of={blog.pk}&type=cast.Post&date_facets={date_facet}&use_post_filter={post_filter}"
+    )
+    viewset.request = request
+    queryset = viewset.get_queryset()
+    assert len(queryset) == len_result

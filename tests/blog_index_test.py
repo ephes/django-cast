@@ -116,6 +116,13 @@ class TestBlogIndexFilter:
         assert date_to_find in content
         assert different_date_to_find not in content  # attention
 
+    def test_selecting_non_existing_date_facet_filters_all_posts(self, client, post_with_date):
+        blog_url = post_with_date.blog.get_url()
+        blog_url = f"{blog_url}?date_facets=1999-01"
+        r = client.get(blog_url)
+        assert r.status_code == 200
+        assert len(r.context["posts"]) == 0
+
     def test_date_facet_garbage(self, client, post_with_date):
         blog_url = post_with_date.blog.get_url()
         blog_url = f"{blog_url}?date_facets=garbage"

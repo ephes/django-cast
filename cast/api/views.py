@@ -18,6 +18,7 @@ from wagtail.api.v2.router import WagtailAPIRouter
 from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.images.api.v2.views import ImagesAPIViewSet
 
+from ..filters import PostFilterset
 from ..forms import VideoForm
 from ..models import Audio, SpamFilter, Video
 from .serializers import AudioPodloveSerializer, AudioSerializer, VideoSerializer
@@ -118,7 +119,22 @@ class CommentTrainingDataView(APIView):
         return JsonResponse(train, safe=False)
 
 
+class FilteredPagesAPIViewSet(PagesAPIViewSet):
+    def get_filtered_queryset(self) -> QuerySet:
+        # allow additional query parameters from PostFilterset + use_post_filter flag
+        additional_query_params = PostFilterset.Meta.fields + ["use_post_filter"]
+        self.known_query_parameters: set = self.known_query_parameters.union(additional_query_params)
+        queryset = super().get_queryset()
+        filterset = PostFilterset(data=self.request.GET.copy(), queryset=queryset, fetch_facet_counts=True)
+        return filterset.qs
+
+    def get_queryset(self):
+        if self.request.GET.dict().get("use_post_filter", "false") == "true":
+            return self.get_filtered_queryset()
+        return super().get_queryset()
+
+
 # Wagtail API
 wagtail_api_router = WagtailAPIRouter("cast:api:wagtail")
-wagtail_api_router.register_endpoint("pages", PagesAPIViewSet)
+wagtail_api_router.register_endpoint("pages", FilteredPagesAPIViewSet)
 wagtail_api_router.register_endpoint("images", ImagesAPIViewSet)
