@@ -152,14 +152,17 @@ class Post(Page):
         """
         return self.get_parent().blog
 
+    def get_template_base_dir(self, request: HttpRequest) -> str:
+        parent = self.get_parent()
+        if parent is not None:
+            return parent.blog.get_template_base_dir(request)
+        else:
+            return TemplateBaseDirectory.for_request(request).name
+
     def get_template(self, request: HttpRequest, *args, local_template_name: str = "post.html", **kwargs) -> str:
         if self._local_template_name is not None:
             local_template_name = self._local_template_name
-        parent = self.get_parent()
-        if parent is not None:
-            template_base_dir = parent.blog.get_template_base_dir(request)
-        else:
-            template_base_dir = TemplateBaseDirectory.for_request(request).name
+        template_base_dir = self.get_template_base_dir(request)
         template = f"cast/{template_base_dir}/{local_template_name}"
         return template
 
@@ -221,9 +224,11 @@ class Post(Page):
     def comments_are_enabled(self) -> bool:
         return appsettings.CAST_COMMENTS_ENABLED and self.blog.comments_enabled and self.comments_enabled
 
-    def get_context(self, *args, **kwargs) -> "ContextDict":
-        context = super().get_context(*args, **kwargs)
+    def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
+        context = super().get_context(request, **kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
+        # needed for blocks with themed templates
+        context["template_base_dir"] = self.get_template_base_dir(request)
         context["blog"] = self.blog  # needed for SPA themes
         return context
 

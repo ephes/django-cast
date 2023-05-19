@@ -3,6 +3,7 @@ from itertools import chain, islice, tee
 from typing import TYPE_CHECKING, Optional, Union
 
 from django.db.models import QuerySet
+from django.template.loader import TemplateDoesNotExist, get_template
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
 from pygments import highlight
@@ -33,14 +34,28 @@ def previous_and_next(all_items: Iterable) -> Iterable:
 
 
 class GalleryBlock(ListBlock):
-    class Meta:
-        template: str = "cast/gallery.html"
+    default_template_name = "cast/gallery.html"
 
     @staticmethod
     def add_prev_next(gallery: QuerySet[Gallery]) -> None:
         for previous_image, current_image, next_image in previous_and_next(gallery):
             current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
             current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
+
+    def get_template(self, context: Optional[dict] = None) -> str:
+        if context is None:
+            return self.default_template_name
+
+        template_base_dir = context.get("template_base_dir")
+        if template_base_dir is None:
+            return self.default_template_name
+
+        template_from_theme = f"cast/{template_base_dir}/gallery.html"
+        try:
+            get_template(template_from_theme)
+            return template_from_theme
+        except TemplateDoesNotExist:
+            return self.default_template_name
 
     def get_context(self, gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> dict:
         self.add_prev_next(gallery)
