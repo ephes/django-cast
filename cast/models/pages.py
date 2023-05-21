@@ -85,10 +85,14 @@ class PlaceholderRequest:
 
 class Post(Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
-    visible_date = models.DateTimeField(default=timezone.now)
+    visible_date = models.DateTimeField(
+        default=timezone.now,
+        help_text=_("The visible date of the post which is used for sorting."),
+        db_index=True,
+    )
     comments_enabled = models.BooleanField(
         default=True,
-        help_text=_("Whether comments are enabled for this post." ""),
+        help_text=_("Whether comments are enabled for this post."),
     )
 
     images = models.ManyToManyField(Image, blank=True)
