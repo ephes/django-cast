@@ -272,13 +272,17 @@ class Post(Page):
             for media_id in ids:
                 media_attr_lookup[media_type].remove(media_id)
 
-    def get_description(self, request=PlaceholderRequest(), render_detail=False, escape_html=True) -> SafeText:
+    def get_description(
+        self, request=PlaceholderRequest(), render_detail=False, escape_html=True, remove_newlines=True
+    ) -> SafeText:
         """
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
         """
         self._local_template_name = "post_body.html"
-        description = self.serve(request, render_detail=render_detail).rendered_content.replace("\n", "")
+        description = self.serve(request, render_detail=render_detail).rendered_content
+        if remove_newlines:
+            description = description.replace("\n", "")
         if escape_html:
             description = escape(description)
         return description
@@ -290,7 +294,7 @@ class Post(Page):
         html of the post for the wagtail api. It then is used in the Vue.js theme
         for example.
         """
-        return self.get_description(render_detail=False, escape_html=False)
+        return self.get_description(render_detail=False, escape_html=False, remove_newlines=False)
 
     @property
     def html_detail(self) -> SafeText:
@@ -299,7 +303,7 @@ class Post(Page):
         post overview and detail for the wagtail api. It then is used in the
         Vue.js theme for example.
         """
-        return self.get_description(render_detail=True, escape_html=False)
+        return self.get_description(render_detail=True, escape_html=False, remove_newlines=False)
 
     def get_absolute_url(self) -> str:
         """This is needed for django-fluentcomments."""

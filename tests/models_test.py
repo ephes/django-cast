@@ -151,6 +151,15 @@ class TestPostModel:
         description = post.get_description(escape_html=True)
         assert "&lt" in description
 
+    def test_get_description_newlines(self, mocker):
+        class Rendered:
+            rendered_content = "<h1>foo</h1>\n"
+
+        mocker.patch("cast.models.Post.serve", return_value=Rendered())
+        post = Post()
+        description = post.get_description(remove_newlines=False)
+        assert "\n" in description
+
     def test_overview_html(self, mocker):
         expected_html = "<h1>foo</h1>"
         mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
@@ -158,6 +167,7 @@ class TestPostModel:
         assert overview == expected_html
         assert mock.call_args[1]["render_detail"] is False
         assert mock.call_args[1]["escape_html"] is False
+        assert mock.call_args[1]["remove_newlines"] is False
 
     def test_detail_html(self, mocker):
         expected_html = "<h1>foo</h1><p>bar</p>"
@@ -166,6 +176,7 @@ class TestPostModel:
         assert detail == expected_html
         assert mock.call_args[1]["render_detail"] is True
         assert mock.call_args[1]["escape_html"] is False
+        assert mock.call_args[1]["remove_newlines"] is False
 
     @pytest.mark.parametrize(
         "local_template_name, expected_template",
