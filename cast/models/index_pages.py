@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django_htmx.middleware import HtmxDetails
 from wagtail.admin.panels import FieldPanel
+from wagtail.api import APIField
 from wagtail.fields import RichTextField
 from wagtail.models import Page, PageManager
 
@@ -80,6 +81,9 @@ class Blog(Page):
     ]
     promote_panels = Page.promote_panels + [
         FieldPanel("noindex"),
+    ]
+    api_fields = [
+        APIField("description"),
     ]
 
     subpage_types = ["cast.Post"]
