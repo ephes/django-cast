@@ -122,10 +122,17 @@ class CommentTrainingDataView(APIView):
 class FilteredPagesAPIViewSet(PagesAPIViewSet):
     def get_filtered_queryset(self) -> QuerySet:
         # allow additional query parameters from PostFilterset + use_post_filter flag
-        additional_query_params = PostFilterset.Meta.fields + ["use_post_filter"]
+        additional_query_params = PostFilterset.Meta.fields + ["use_post_filter"] + ["date_before", "date_after"]
         self.known_query_parameters: set = self.known_query_parameters.union(additional_query_params)
+        # remove search parameter from query params because it won't work with PagesAPIViewSet
+        # in combination with PostFilterset. But doing full text search on PostFilterset will work.
+        original_get_params = self.request.GET.copy()
+        get_params = self.request.GET.copy()
+        if "search" in get_params:
+            del get_params["search"]
+        self.request.GET = get_params
         queryset = super().get_queryset()
-        filterset = PostFilterset(data=self.request.GET.copy(), queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(data=original_get_params, queryset=queryset, fetch_facet_counts=True)
         return filterset.qs
 
     def get_queryset(self):
