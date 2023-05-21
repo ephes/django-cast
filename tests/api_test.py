@@ -191,3 +191,14 @@ def test_wagtail_pages_api_with_post_filter(date, post_filter, len_result, rf, b
     viewset.request = request
     queryset = viewset.get_queryset()
     assert len(queryset) == len_result
+
+
+@pytest.mark.django_db
+def test_wagtail_pages_api_with_post_filter_and_fulltext_search(rf, blog, post):
+    viewset = FilteredPagesAPIViewSet()
+    path = blog.wagtail_api_pages_url
+    search_param = "search=foo"
+    request = rf.get(f"{path}?child_of={blog.pk}&type=cast.Post&{search_param}&use_post_filter=true")
+    viewset.request = request
+    queryset = viewset.get_queryset()
+    assert len(queryset) == 0
