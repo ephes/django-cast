@@ -189,7 +189,7 @@ class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
 
 
 class PostFilterset(django_filters.FilterSet):
-    search = django_filters.CharFilter(field_name="title", method="fulltext_search", label="Search")
+    search = django_filters.CharFilter(field_name="search", method="fulltext_search", label="Search")
     date = django_filters.DateFromToRangeFilter(
         field_name="visible_date",
         label="Date",
