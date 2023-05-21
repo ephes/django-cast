@@ -186,6 +186,10 @@ class Blog(Page):
         return reverse("cast:api:wagtail:pages:listing")
 
     @property
+    def facet_counts_api_url(self) -> str:
+        return reverse("cast:api:facet-counts-detail", kwargs={"pk": self.pk})
+
+    @property
     def pagination_page_size(self) -> int:
         return appsettings.POST_LIST_PAGINATION
 

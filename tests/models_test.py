@@ -1,6 +1,7 @@
 import pytest
 from django import forms
 from django.http.request import QueryDict
+from django.urls import reverse
 
 from cast import appsettings
 from cast.models.pages import (
@@ -85,6 +86,9 @@ class TestBlogModel:
 
     def test_pagination_page_size(self, blog):
         assert blog.pagination_page_size == appsettings.POST_LIST_PAGINATION
+
+    def test_facet_counts_api_url(self, blog):
+        assert blog.facet_counts_api_url == reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
 
 
 class TestPostModel:
