@@ -202,3 +202,42 @@ def test_wagtail_pages_api_with_post_filter_and_fulltext_search(rf, blog, post):
     viewset.request = request
     queryset = viewset.get_queryset()
     assert len(queryset) == 0
+
+
+@pytest.mark.django_db
+def test_facet_counts_list(api_client, blog):
+    """
+    Test whether the facet counts list endpoint returns a list of all blogs
+    and the blog is included in the result.
+    """
+    url = reverse("cast:api:facet-counts-list")
+    r = api_client.get(url, format="json")
+    assert r.status_code == 200
+
+    [result] = r.json()["results"]
+    assert "id" in result
+    assert "url" in result
+    assert result["id"] == blog.pk
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail(api_client, blog, post):
+    """
+    Test whether the facet counts detail endpoint returns the
+    facet counts for a specific blog.
+    """
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(url, format="json")
+    assert r.status_code == 200
+
+    result = r.json()
+    facet_counts = result["facet_counts"]
+    assert facet_counts[post.visible_date.strftime("%Y-%m")] == 1
+
+    # make sure adding a search param filters the results
+    r = api_client.get(f"{url}?search=foobar", format="json")
+    assert r.status_code == 200
+
+    result = r.json()
+    facet_counts = result["facet_counts"]
+    assert len(facet_counts) == 0

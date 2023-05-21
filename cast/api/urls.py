@@ -27,6 +27,9 @@ urlpatterns: list[Any] = [
         views.AudioPodloveDetailView.as_view(),
         name="audio_podlove_detail",
     ),
+    # facet counts
+    path("facet_counts/", views.FacetCountListView.as_view(), name="facet-counts-list"),
+    re_path(r"facet_counts/(?P<pk>\d+)/?$", views.FacetCountsDetailView.as_view(), name="facet-counts-detail"),
     # comment training data
     path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment-training-data"),
     # wagtail api

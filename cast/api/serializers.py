@@ -2,7 +2,7 @@ import logging
 
 from rest_framework import serializers
 
-from ..models import Audio, Video
+from ..models import Audio, Blog, Video
 
 logger = logging.getLogger(__name__)
 
@@ -35,3 +35,28 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Audio
         fields = ("title", "subtitle", "audio", "duration", "chapters", "link")
+
+
+class SimpleBlogSerializer(serializers.HyperlinkedModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name="cast:api:facet-counts-detail")
+
+    class Meta:
+        model = Blog
+        fields = ("id", "url")
+
+
+class FacetCountSerializer(SimpleBlogSerializer):
+    facet_counts = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Blog
+        fields = ("id", "url", "facet_counts")
+
+    def get_facet_counts(self, instance: Blog) -> dict[str, int]:
+        get_params = self.context["request"].GET.copy()
+        filterset = instance.get_filterset(get_params)
+        facet_counts = filterset.facet_counts["year_month"]
+        result = {}
+        for date, count in facet_counts.items():
+            result[date.strftime("%Y-%m")] = count
+        return result

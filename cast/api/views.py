@@ -20,8 +20,14 @@ from wagtail.images.api.v2.views import ImagesAPIViewSet
 
 from ..filters import PostFilterset
 from ..forms import VideoForm
-from ..models import Audio, SpamFilter, Video
-from .serializers import AudioPodloveSerializer, AudioSerializer, VideoSerializer
+from ..models import Audio, Blog, SpamFilter, Video
+from .serializers import (
+    AudioPodloveSerializer,
+    AudioSerializer,
+    FacetCountSerializer,
+    SimpleBlogSerializer,
+    VideoSerializer,
+)
 from .viewmixins import AddRequestUserMixin, FileUploadResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -41,6 +47,7 @@ def api_root(request: Request) -> Response:
         ("comment_training_data", request.build_absolute_uri(reverse("cast:api:comment-training-data"))),
         ("pages", request.build_absolute_uri(reverse("cast:api:wagtail:pages:listing"))),
         ("images", request.build_absolute_uri(reverse("cast:api:wagtail:images:listing"))),
+        ("facet_counts", request.build_absolute_uri(reverse("cast:api:facet-counts-list"))),
     )
     return Response(OrderedDict(root_api_urls))
 
@@ -105,6 +112,17 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
                 pass
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+class FacetCountListView(generics.ListCreateAPIView):
+    serializer_class = SimpleBlogSerializer
+    queryset = Blog.objects.all().live().order_by("-first_published_at")
+    pagination_class = StandardResultsSetPagination
+
+
+class FacetCountsDetailView(generics.RetrieveAPIView):
+    queryset = Blog.objects.all()
+    serializer_class = FacetCountSerializer
 
 
 class CommentTrainingDataView(APIView):
