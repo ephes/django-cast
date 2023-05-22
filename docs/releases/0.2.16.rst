@@ -1,0 +1,6 @@
+0.2.16 (2023-05-29)
+-------------------
+
+Maybe comments for SPA?
+
+* Make comments field available on type=cast.Post
