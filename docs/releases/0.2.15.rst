@@ -1,9 +1,16 @@
-0.2.15 (2023-05-08)
+0.2.15 (2023-05-22)
 -------------------
 
-Not sure yet.
+Support for SPA themes and some htmx fixes
 
 * Expose data via template context to theme (for vue theme)
     * pagination page size
     * wagtail api page url via `reverse("cast:api:wagtail:pages:listing")`
+    * facet count api base url
 * Add overview_html and detail_html to the Post model to get the rendered html in the vue theme
+* The template for image galleries can now be overwritten by themes
+* Fixed audio player on htmx pagination
+* Fixed galleries on htmx pagination
+* Don't remove newlines in *_html because it breaks preformatted code blocks
+* Combine wagtail api pages endpoint with django-filter to allow filtering by date facets and fulltext search
+* Add facet count api endpoints
