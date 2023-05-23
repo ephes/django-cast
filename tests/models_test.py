@@ -199,6 +199,33 @@ class TestPostModel:
 
         assert post.get_template(PlaceholderRequest()) == expected_template
 
+    @pytest.mark.parametrize(
+        "is_public, is_removed, contained_in_list",
+        [
+            (True, False, True),  # public, not removed, in list
+            (True, True, False),  # public, removed, not in list
+            (False, True, False),  # not public, removed, not in list
+            (False, False, False),  # not public, not removed, not in list
+        ],
+    )
+    def test_get_comments(self, is_public, is_removed, contained_in_list, post, comment):
+        comment.is_public = is_public
+        comment.is_removed = is_removed
+        comment.save()
+        if contained_in_list:
+            assert list(post.get_comments()) == [comment]
+        else:
+            assert list(post.get_comments()) == []
+
+    def test_get_comments_is_public_and_is_removed_not_in_fields(self, mocker, post, comment):
+        from django_comments import get_model as get_comment_model
+
+        comment_model = get_comment_model()
+        exclude = {"is_public", "is_removed"}
+        fields_without_excluded = [field for field in comment_model._meta.fields if field.name not in exclude]
+        mocker.patch("cast.models.pages.comment_model._meta.fields", fields_without_excluded)
+        assert list(post.get_comments()) == [comment]
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db

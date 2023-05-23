@@ -3,14 +3,20 @@ import uuid
 from typing import TYPE_CHECKING, Any, Optional
 
 from django import forms
+from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.encoding import smart_str
 from django.utils.html import escape
 from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
+from django_comments import get_model as get_comment_model
+from django_comments.models import Comment
 from slugify import slugify
 from wagtail import blocks
 from wagtail.admin.forms import WagtailAdminPageForm
@@ -33,6 +39,9 @@ if TYPE_CHECKING:
     from .index_pages import Blog, ContextDict, Podcast
 
 logger = logging.getLogger(__name__)
+
+
+comment_model = get_comment_model()
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -271,6 +280,28 @@ class Post(Page):
         for media_type, ids in to_remove.items():
             for media_id in ids:
                 media_attr_lookup[media_type].remove(media_id)
+
+    def get_comments(self) -> QuerySet[Comment]:
+        ctype = ContentType.objects.get_for_model(self)
+        site_id = getattr(settings, "SITE_ID", None)
+        print("comment_model: ", comment_model)
+        qs = comment_model.objects.filter(
+            content_type=ctype,
+            object_pk=smart_str(self.pk),
+            site__pk=site_id,
+        )
+
+        # The is_public and is_removed fields are implementation details of the
+        # built-in comment model's spam filtering system, so they might not
+        # be present on a custom comment model subclass. If they exist, we
+        # should filter on them.
+        field_names = [f.name for f in comment_model._meta.fields]
+        if "is_public" in field_names:
+            qs = qs.filter(is_public=True)
+        if getattr(settings, "COMMENTS_HIDE_REMOVED", True) and "is_removed" in field_names:
+            qs = qs.filter(is_removed=False)
+
+        return qs
 
     def get_description(
         self, request=PlaceholderRequest(), render_detail=False, escape_html=True, remove_newlines=True
