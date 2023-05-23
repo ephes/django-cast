@@ -35,8 +35,7 @@ class TestPostComments:
         r = client.get(detail_url)
         assert r.status_code == 200
 
-        content = r.content.decode("utf-8")
-        assert str(comment.comment) in content
+        assert comment in r.context["comment_list"]
 
     def test_add_new_comment(self, client, post, comments_enabled):
         ajax_url = reverse("comments-post-comment-ajax")
