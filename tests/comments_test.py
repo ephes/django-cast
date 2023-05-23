@@ -4,6 +4,7 @@ import pytest
 from django.urls import reverse
 from django_comments import get_model as get_comments_model
 from django_comments import signals
+from django_comments.forms import CommentForm
 
 from cast.moderation import Moderator
 
@@ -18,7 +19,7 @@ class TestPostComments:
 
         content = r.content.decode("utf-8")
         assert post.title in content
-        assert 'class="comments' not in content
+        assert "form" not in r.context
 
     def test_comment_form_included(self, client, post, comments_enabled):
         detail_url = post.get_url()
@@ -27,7 +28,7 @@ class TestPostComments:
 
         content = r.content.decode("utf-8")
         assert post.title in content
-        assert 'class="comments' in content
+        assert isinstance(r.context["form"], CommentForm)
 
     def test_comment_in_comment_list(self, client, post, comment, comments_enabled):
         detail_url = post.get_url()
