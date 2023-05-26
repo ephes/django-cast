@@ -284,7 +284,6 @@ class Post(Page):
     def comments(self) -> list[dict[str, Union[int, None, str]]]:
         ctype = ContentType.objects.get_for_model(self)
         site_id = getattr(settings, "SITE_ID", None)
-        print("comment_model: ", comment_model)
         qs = comment_model.objects.filter(
             content_type=ctype,
             object_pk=smart_str(self.pk),

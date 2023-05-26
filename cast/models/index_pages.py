@@ -190,6 +190,11 @@ class Blog(Page):
         return reverse("cast:api:facet-counts-detail", kwargs={"pk": self.pk})
 
     @property
+    def comment_post_url(self) -> str:
+        ajax_post_url = reverse("comments-post-comment-ajax")
+        return ajax_post_url
+
+    @property
     def pagination_page_size(self) -> int:
         return appsettings.POST_LIST_PAGINATION
 

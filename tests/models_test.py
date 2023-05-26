@@ -90,6 +90,9 @@ class TestBlogModel:
     def test_facet_counts_api_url(self, blog):
         assert blog.facet_counts_api_url == reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
 
+    def test_comment_post_url(self, blog):
+        assert blog.comment_post_url == reverse("comments-post-comment-ajax")
+
 
 class TestPostModel:
     pytestmark = pytest.mark.django_db
