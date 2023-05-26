@@ -213,9 +213,10 @@ class TestPostModel:
         comment.is_removed = is_removed
         comment.save()
         if contained_in_list:
-            assert list(post.get_comments()) == [comment]
+            [json_comment] = post.comments
+            assert json_comment["comment"] == comment.comment
         else:
-            assert list(post.get_comments()) == []
+            assert list(post.comments) == []
 
     def test_get_comments_is_public_and_is_removed_not_in_fields(self, mocker, post, comment):
         from django_comments import get_model as get_comment_model
@@ -224,7 +225,8 @@ class TestPostModel:
         exclude = {"is_public", "is_removed"}
         fields_without_excluded = [field for field in comment_model._meta.fields if field.name not in exclude]
         mocker.patch("cast.models.pages.comment_model._meta.fields", fields_without_excluded)
-        assert list(post.get_comments()) == [comment]
+        [json_comment] = post.comments
+        assert json_comment["comment"] == comment.comment
 
 
 class TestEpisodeModel:

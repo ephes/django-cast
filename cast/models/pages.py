@@ -1,12 +1,11 @@
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from django import forms
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -16,7 +15,6 @@ from django.utils.html import escape
 from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
 from django_comments import get_model as get_comment_model
-from django_comments.models import Comment
 from slugify import slugify
 from wagtail import blocks
 from wagtail.admin.forms import WagtailAdminPageForm
@@ -131,6 +129,7 @@ class Post(Page):
         APIField("body"),
         APIField("html_overview"),
         APIField("html_detail"),
+        APIField("comments"),
     ]
 
     content_panels = Page.content_panels + [
@@ -281,7 +280,8 @@ class Post(Page):
             for media_id in ids:
                 media_attr_lookup[media_type].remove(media_id)
 
-    def get_comments(self) -> QuerySet[Comment]:
+    @property
+    def comments(self) -> list[dict[str, Union[int, None, str]]]:
         ctype = ContentType.objects.get_for_model(self)
         site_id = getattr(settings, "SITE_ID", None)
         print("comment_model: ", comment_model)
@@ -301,7 +301,18 @@ class Post(Page):
         if getattr(settings, "COMMENTS_HIDE_REMOVED", True) and "is_removed" in field_names:
             qs = qs.filter(is_removed=False)
 
-        return qs
+        result = []
+        for comment in qs:
+            result.append(
+                {
+                    "id": comment.id,
+                    "parent": comment.parent_id,
+                    "user": comment.user_name,
+                    "date": comment.submit_date,
+                    "comment": comment.comment,
+                }
+            )
+        return result
 
     def get_description(
         self, request=PlaceholderRequest(), render_detail=False, escape_html=True, remove_newlines=True

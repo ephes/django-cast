@@ -128,7 +128,6 @@ class TestPodcastAudio:
 
     def test_podlove_detail_endpoint_chaptermarks(self, api_client, audio, chaptermarks):
         """Test whether chaptermarks get delivered via podlove endpoint."""
-        print("chaptermarks: ", chaptermarks)
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         chapters = r.json()["chapters"]
@@ -241,3 +240,13 @@ def test_facet_counts_detail(api_client, blog, post):
     result = r.json()
     facet_counts = result["facet_counts"]
     assert len(facet_counts) == 0
+
+
+@pytest.mark.django_db
+def test_get_comments_via_post_detail(api_client, post, comment):
+    url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
+    r = api_client.get(url, format="json")
+    assert r.status_code == 200
+
+    comments = r.json()["comments"]
+    assert comments[0]["comment"] == comment.comment
