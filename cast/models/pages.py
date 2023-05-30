@@ -130,6 +130,7 @@ class Post(Page):
         APIField("html_overview"),
         APIField("html_detail"),
         APIField("comments"),
+        APIField("comments_security_data"),
     ]
 
     content_panels = Page.content_panels + [
@@ -235,6 +236,13 @@ class Post(Page):
     @property
     def comments_are_enabled(self) -> bool:
         return appsettings.CAST_COMMENTS_ENABLED and self.blog.comments_enabled and self.comments_enabled
+
+    @property
+    def comments_security_data(self) -> dict[str, Union[str, int]]:
+        from django_comments.forms import CommentSecurityForm
+
+        form = CommentSecurityForm(self)
+        return form.generate_security_data()
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
