@@ -125,7 +125,7 @@ class Post(Page):
     api_fields = [
         APIField("uuid"),
         APIField("visible_date"),
-        APIField("comments_enabled"),
+        APIField("comments_are_enabled"),
         APIField("body"),
         APIField("html_overview"),
         APIField("html_detail"),
