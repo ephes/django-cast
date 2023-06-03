@@ -231,6 +231,10 @@ class TestPostModel:
         [json_comment] = post.comments
         assert json_comment["comment"] == comment.comment
 
+    def test_page_type(self):
+        post = Post()
+        assert post.page_type == "cast.Post"
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db
@@ -264,6 +268,10 @@ class TestEpisodeModel:
         episode._local_template_name = local_template_name
 
         assert episode.get_template(PlaceholderRequest()) == expected_template
+
+    def test_page_type(self):
+        episode = Episode()
+        assert episode.page_type == "cast.Episode"
 
 
 @pytest.mark.django_db
