@@ -244,6 +244,13 @@ class Post(Page):
         form = CommentSecurityForm(self)
         return form.generate_security_data()
 
+    @property
+    def page_type(self) -> str:
+        """
+        cannot use wagtail.api.v2.serializers.TypeField.to_representation easily
+        """
+        return type(self)._meta.app_label + "." + type(self).__name__  # FIXME butt ugly
+
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
