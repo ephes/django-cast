@@ -131,6 +131,7 @@ class Post(Page):
         APIField("html_detail"),
         APIField("comments"),
         APIField("comments_security_data"),
+        APIField("podlove_players"),
     ]
 
     content_panels = Page.content_panels + [
@@ -326,6 +327,17 @@ class Post(Page):
                     "comment": comment.comment,
                 }
             )
+        return result
+
+    @property
+    def podlove_players(self) -> list[tuple[str, str]]:
+        """
+        Get the podlove player data for posts containing audio elements.
+        """
+        result = []
+        for pk, audio in self.media_lookup["audio"].items():
+            element_id = f"#audio_{pk}"
+            result.append((element_id, audio.podlove_url))
         return result
 
     def get_description(

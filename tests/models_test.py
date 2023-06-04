@@ -235,6 +235,13 @@ class TestPostModel:
         post = Post()
         assert post.page_type == "cast.Post"
 
+    def test_podlove_players(self, post_with_audio):
+        post = post_with_audio
+        [audio] = post.audios.all()
+        assert post.podlove_players == [
+            (f"#audio_{audio.pk}", audio.podlove_url),
+        ]
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db
