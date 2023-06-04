@@ -1,6 +1,7 @@
-0.2.16 (2023-05-29)
+0.2.16 (2023-06-04)
 -------------------
 
-Maybe comments for SPA?
+Finished support for SPA themes (comments and podlove player).
 
-* Make comments field available on type=cast.Post
+* Made comments data available via wagtail api #95
+* Made some data available just via page attribute, because it's only added via template and script tag #95
