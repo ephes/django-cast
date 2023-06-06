@@ -1,4 +1,5 @@
 <main>
+  {% include "./pagination.html" %}
   {% for post in posts %}
     {% include "./post_body.html" with render_detail=False page=post %}
   {% endfor %}
