@@ -37,7 +37,7 @@ def test_pagination_template_is_paginated_long(simple_request):
     ellipsis_items = [line for line in html.splitlines() if "…" in line]
     assert len(ellipsis_items) == 2
     assert (
-        '<span class="page-link">…</span>' == ellipsis_items[0].strip()
+        '<span class="cast-page-link-disabled">…</span>' == ellipsis_items[0].strip()
     )  # ellipsis in the middle which is not a link
 
 

@@ -1,24 +1,24 @@
 {% if is_paginated %}
-  <nav aria-label="Page navigation">
-    <ul class="pagination">
+  <nav aria-label="Page navigation" class="cast-page-navigation">
+    <ul class="cast-pagination">
       {% if page_obj.has_previous %}
         <!-- previous page -->
-        <li class="page-item">
+        <li class="cast-page-item">
           <a
             hx-get="?page={{ page_obj.previous_page_number }}{{ parameters }}"
             hx-target="#paging-area"
             hx-swap="innerHTML show:top"
             hx-replace-url="true"
             href="?page={{ page_obj.previous_page_number }}{{ parameters }}"
-            class="page-link"
+            class="cast-page-link"
           >
             Previous
           </a>
         </li>
       {% else %}
         <!-- we are already on the first page -->
-        <li class="page-item disabled">
-          <span class="page-link">
+        <li class="cast-page-item disabled">
+          <span class="cast-page-link-disabled">
             Previous
           </span>
         </li>
@@ -27,46 +27,46 @@
       {% for num in page_range %}
         {% if num == page_obj.paginator.ELLIPSIS %}
           <!-- ... -->
-          <li class="page-item disabled">
-            <span class="page-link">{{ num }}</span>
+          <li class="cast-page-item disabled">
+            <span class="cast-page-link-disabled">{{ num }}</span>
           </li>
         {% elif num == page_obj.number %}
           <!-- currently active page -->
-          <li class="page-item active">
-            <span class="page-link">{{ num }}</span>
+          <li class="cast-page-item active">
+            <span class="cast-page-link-active">{{ num }}</span>
           </li>
         {% else %}
           <!-- clickable links to other page numbers -->
-          <li class="page-item">
+          <li class="cast-page-item">
             <a
               hx-get="?page={{ num }}{{ parameters }}"
               hx-target="#paging-area"
               hx-swap="innerHTML show:top"
               hx-replace-url="true"
               href="?page={{ num }}{{ parameters }}"
-              class="page-link"
+              class="cast-page-link"
             >{{ num }}</a>
           </li>
         {% endif %}
       {% endfor %}
       {% if page_obj.has_next %}
         <!-- next page -->
-        <li class="page-item">
+        <li class="cast-page-item">
           <a
             hx-get="?page={{ page_obj.next_page_number }}{{ parameters }}"
             hx-target="#paging-area"
             hx-swap="innerHTML show:top"
             hx-replace-url="true"
             href="?page={{ page_obj.next_page_number }}{{ parameters }}"
-            class="page-link"
+            class="cast-page-link"
           >
             Next
           </a>
         </li>
       {% else %}
         <!-- we are already on the last page -->
-        <li class="page-item disabled">
-          <span class="page-link">
+        <li class="cast-page-item disabled">
+          <span class="cast-page-link">
             Next
           </span>
         </li>

@@ -10,3 +10,31 @@
     margin-right: 10px;
     margin-left: 10px;
 }
+
+.cast-page-navigation {
+  text-align: center;
+}
+
+.cast-pagination {
+  display: flex;
+  justify-content: center;
+  list-style-type: none;
+  padding: 0;
+}
+
+.cast-page-item {
+  margin-right: 10px;
+}
+
+.cast-page-link {
+  color: #007bff;
+}
+
+.cast-page-link-disabled {
+  color: #6c757d;
+}
+
+.cast-page-link-active {
+  background-color: #007bff;
+  color: #fff;
+}
