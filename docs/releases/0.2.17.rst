@@ -4,3 +4,5 @@
 Improved plain theme.
 
 * Better pagination styling for plain theme.
+* Update pre-commit hooks
+* Include wagtail 5.1 in test matrix (tox.ini)
