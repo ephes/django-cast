@@ -89,7 +89,7 @@ register(VideoChooserAdapter(), AdminVideoChooser)
 
 
 class AdminAudioChooser(AdminChooser):
-    choose_one_text = _("Choose a audio item")
+    choose_one_text = _("Choose an audio item")
     choose_another_text = _("Choose another audio item")
     link_to_chosen_text = _("Edit this audio item")
     chooser_namespace = "castaudio"
