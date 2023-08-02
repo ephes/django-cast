@@ -70,11 +70,11 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     search_fields = CollectionMember.search_fields + [
-        index.SearchField("title", partial_match=True, boost=10),
+        index.SearchField("title", boost=10),
         index.RelatedFields(
             "tags",
             [
-                index.SearchField("name", partial_match=True, boost=10),
+                index.SearchField("name", boost=10),
             ],
         ),
         index.FilterField("user"),
