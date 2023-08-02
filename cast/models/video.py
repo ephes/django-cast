@@ -137,11 +137,6 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         paths.add(self.original.name)
         if self.poster:
             paths.add(self.poster.name)
-            # try:
-            #     if self.poster_thumbnail:
-            #         paths.add(self.poster_thumbnail.name)
-            # except (FileNotFoundError, OSError):
-            #     pass
         return paths
 
     def get_mime_type(self) -> str:
