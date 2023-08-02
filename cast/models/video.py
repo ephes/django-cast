@@ -62,13 +62,6 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     poster = models.ImageField(upload_to="cast_videos/poster/", null=True, blank=True)
     poster_seconds = models.FloatField(default=1)
 
-    # poster_thumbnail = ImageSpecField(
-    #     source="poster",
-    #     processors=[Thumbnail(300, 300, crop=False)],
-    #     format="JPEG",
-    #     options={"quality": 60},
-    # )
-
     post_context_key = "video"
     calc_poster = True
 
