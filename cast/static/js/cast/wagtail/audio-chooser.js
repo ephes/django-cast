@@ -48,7 +48,7 @@ function createAudioChooser(id) {
         }
     };
 
-    $('.action-choose', chooserElement).on('click', function() {
+    $('.action-choose, [data-chooser-action-choose]', chooserElement).on('click', function() {
         chooser.openChooserModal();
     });
 
