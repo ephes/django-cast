@@ -1,7 +1,5 @@
 from typing import Any
 
-from django.core.paginator import Page, Paginator
-from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -16,19 +14,7 @@ from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm, get_video_form
 from ..models import Video
 from . import AuthenticatedHttpRequest
-
-DEFAULT_PAGE_KEY = "p"
-
-
-pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
-
-
-def paginate(
-    request: HttpRequest, items: QuerySet[Video], page_key: str = DEFAULT_PAGE_KEY, per_page: int = 20
-) -> tuple[Paginator, Page]:
-    paginator = Paginator(items, per_page)
-    page = paginator.get_page(request.GET.get(page_key, 0))
-    return paginator, page
+from .wagtail_pagination import paginate, pagination_template
 
 
 @vary_on_headers("X-Requested-With")

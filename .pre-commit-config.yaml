@@ -9,7 +9,7 @@ repos:
       - id: check-yaml
       - id: check-toml
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.6.0
+    rev: v3.10.1
     hooks:
       - id: pyupgrade
         args: [--py39-plus]
@@ -19,7 +19,7 @@ repos:
       - id: django-upgrade
         args: [--target-version, "4.1"]
   - repo: https://github.com/psf/black
-    rev: 23.3.0
+    rev: 23.7.0
     hooks:
       - id: black
         language_version: python3.11
@@ -31,7 +31,7 @@ repos:
         language_version: python3
   - repo: https://github.com/PyCQA/flake8
     # flake8 config is in setup.cfg
-    rev: 6.0.0
+    rev: 6.1.0
     hooks:
       - id: flake8
         language_version: python3
@@ -41,7 +41,7 @@ repos:
       - id: djhtml
         args: [-t, "2"]
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.3.0'  # Use the sha / tag you want to point at
+    rev: 'v1.4.1'  # Use the sha / tag you want to point at
     hooks:
       - id: mypy
         exclude: "[a-zA-Z]*/(migrations)|(docs)|(example)/(.)*"

@@ -62,13 +62,6 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     poster = models.ImageField(upload_to="cast_videos/poster/", null=True, blank=True)
     poster_seconds = models.FloatField(default=1)
 
-    # poster_thumbnail = ImageSpecField(
-    #     source="poster",
-    #     processors=[Thumbnail(300, 300, crop=False)],
-    #     format="JPEG",
-    #     options={"quality": 60},
-    # )
-
     post_context_key = "video"
     calc_poster = True
 
@@ -77,11 +70,11 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     search_fields = CollectionMember.search_fields + [
-        index.SearchField("title", partial_match=True, boost=10),
+        index.SearchField("title", boost=10),
         index.RelatedFields(
             "tags",
             [
-                index.SearchField("name", partial_match=True, boost=10),
+                index.SearchField("name", boost=10),
             ],
         ),
         index.FilterField("user"),
@@ -144,11 +137,6 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         paths.add(self.original.name)
         if self.poster:
             paths.add(self.poster.name)
-            # try:
-            #     if self.poster_thumbnail:
-            #         paths.add(self.poster_thumbnail.name)
-            # except (FileNotFoundError, OSError):
-            #     pass
         return paths
 
     def get_mime_type(self) -> str:

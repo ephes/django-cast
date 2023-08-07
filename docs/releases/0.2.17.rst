@@ -1,6 +1,12 @@
-0.2.17 (2023-06-12)
+0.2.17 (2023-08-07)
 -------------------
 
 Improved plain theme.
 
 * Better pagination styling for plain theme.
+* Update pre-commit hooks
+* Include wagtail 5.1 in test matrix (tox.ini)
+* Fixed the "land on last page by default" wagtail admin pagination bug #98
+* Fixed the broken chooser buttons for audio and video (wagtail 5.1, action-chooser class was removed from button) #98
+* Fixed duplicate chooser button for audio and video #98
+* Added some documentation for audio content

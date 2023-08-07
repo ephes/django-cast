@@ -7,5 +7,7 @@ Features
 .. include:: social-media.rst
 .. include:: comments.rst
 .. include:: blog.rst
+.. include:: video.rst
+.. include:: audio.rst
 .. include:: themes.rst
 .. include:: management-commands.rst

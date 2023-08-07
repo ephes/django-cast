@@ -4,6 +4,7 @@ from django.http import QueryDict
 from django.shortcuts import render
 
 from cast.models import Blog
+from cast.views.wagtail_pagination import paginate
 
 
 def test_pagination_template_is_not_paginated(simple_request):
@@ -50,3 +51,16 @@ def test_pagination_template_is_paginated_long(simple_request):
 )
 def test_get_other_get_params(query_string, expected_other_get_params):
     assert Blog.get_other_get_params(QueryDict(query_string)) == expected_other_get_params
+
+
+def test_wagtail_admin_pagination_starts_with_first_page(simple_request):
+    """
+    Test that the pagination starts with the first page. There was a bug
+    when the page was fetched like this:
+        page = paginator.get_page(request.GET.get(page_key, 0))
+
+    This would return the last page if there was more than one page. Make
+    sure this does not happen again.
+    """
+    paginator, page = paginate(simple_request, range(100))  # noqa
+    assert page.number == 1
