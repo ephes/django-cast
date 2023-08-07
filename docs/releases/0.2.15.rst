@@ -11,6 +11,6 @@ Support for SPA themes and some htmx fixes
 * The template for image galleries can now be overwritten by themes
 * Fixed audio player on htmx pagination
 * Fixed galleries on htmx pagination
-* Don't remove newlines in *_html because it breaks preformatted code blocks
+* Don't remove newlines in ``*_html`` because it breaks preformatted code blocks
 * Combine wagtail api pages endpoint with django-filter to allow filtering by date facets and fulltext search
 * Add facet count api endpoints
