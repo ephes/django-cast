@@ -73,4 +73,33 @@ a name and a display. For instance:
 The display value is the title displayed in the theme selector within the Wagtail
 admin panel. The name corresponds to the theme's base directory inside your templates
 folder. To create a theme named my_theme, make a directory called ``cast/my_theme``
-within your templates folder and place your templates inside.
+within your templates folder and place your templates inside. asdf
+
+********
+Storages
+********
+
+Configure Backup Storage
+========================
+
+If you store your media files on S3, you can configure a local backup storage
+like this:
+
+.. code-block:: python
+
+    STORAGES = {
+      "default": {"BACKEND": "config.settings.local.CustomS3Boto3Storage"},
+      "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+      "production": {"BACKEND": "config.settings.local.CustomS3Boto3Storage"},
+      "backup": {
+          "BACKEND": "django.core.files.storage.FileSystemStorage",
+          "OPTIONS": {
+              "location": ROOT_DIR.path("backups").path("media"),
+          },
+      },
+    }
+
+
+.. important::
+
+    This will only work if you are using Django >= 4.2.

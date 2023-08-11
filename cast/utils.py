@@ -1,10 +1,10 @@
 import os
 from collections.abc import Iterable
 
-from django.core.files.storage import FileSystemStorage
+from django.core.files.storage import Storage
 
 
-def storage_walk_paths(storage: FileSystemStorage, cur_dir: str = "") -> Iterable[str]:
+def storage_walk_paths(storage: Storage, cur_dir: str = "") -> Iterable[str]:
     dirs, files = storage.listdir(cur_dir)
     for directory in dirs:
         new_dir = os.path.join(cur_dir, directory)

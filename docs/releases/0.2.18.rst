@@ -1,0 +1,4 @@
+0.2.18 (2023-08-14)
+-------------------
+
+Improved media backup and restore #99.
