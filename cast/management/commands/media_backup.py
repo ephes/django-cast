@@ -26,7 +26,9 @@ class Command(BaseCommand):
             print("production or backup storage not configured")
             return
         for num, path in enumerate(storage_walk_paths(production_storage)):
+            print("path: ", path)
             if not backup_storage.exists(path):
+                print("not in backup storage")
                 with production_storage.open(path, "rb") as in_f:
                     backup_storage.save(path, in_f)
             if num % 100 == 0:
