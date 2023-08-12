@@ -19,7 +19,7 @@ class Command(BaseCommand):
         if not DJANGO_VERSION_VALID:
             # make sure we run at least Django 4.2
             print("Django version >= 4.2 is required")
-            exit(1)
+            return
         try:
             production_storage, backup_storage = storages["production"], storages["backup"]
         except InvalidStorageError:
