@@ -45,7 +45,7 @@ class StubStorage:
 
         return StubFile(name)
 
-    def listdir(self, path):
+    def listdir(self, _path):
         return [], self._files
 
 
