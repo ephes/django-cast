@@ -5,13 +5,13 @@ from .storage_backend import get_production_and_backup_storage, sync_media_files
 
 class Command(BaseCommand):
     help = (
-        "backup media files from production to backup storage "
+        "restore media files from backup storage backend to production storage backend "
         "(requires Django >= 4.2 and production and backup storage configured)"
     )
 
     @staticmethod
-    def backup_media_files(production_storage, backup_storage):
-        sync_media_files(production_storage, backup_storage)
+    def restore_media_files(production_storage, backup_storage):
+        sync_media_files(backup_storage, production_storage)
 
     def handle(self, *args, **options):
-        self.backup_media_files(*get_production_and_backup_storage())
+        self.restore_media_files(*get_production_and_backup_storage())
