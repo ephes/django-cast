@@ -1,0 +1,7 @@
+0.2.19 (2023-08-21)
+-------------------
+
+Tags for Posts.
+
+- Updated some documentation in top level README.md
+- Added tags to posts #100
