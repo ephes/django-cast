@@ -1,13 +1,16 @@
-from django.core.files.storage import default_storage, get_storage_class
 from django.core.management.base import BaseCommand
 from wagtail.images.models import Image
 
 from ...models import File, Video
 from ...utils import storage_walk_paths
+from .storage_backend import get_production_and_backup_storage
 
 
 class Command(BaseCommand):
-    help = "show media files which are in the filesystem (s3, locale), but not in database and optionally delete them"
+    help = (
+        "show media files which are in the production storage backend, but not in database and optionally delete them "
+        "(requires Django >= 4.2 and production and backup storage configured)"
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -49,29 +52,18 @@ class Command(BaseCommand):
         return paths
 
     def handle(self, *args, **options):
+        production_storage, _ = get_production_and_backup_storage()
         paths_from_models = self.get_models_paths()
 
-        print("stale s3")
-        s3 = get_storage_class("storages.backends.s3boto3.S3Boto3Storage")()
-        s3_paths = self.get_paths(s3)
-        stale_s3 = {}
-        for path, size in s3_paths.items():
+        print("stale production")
+        production_paths = self.get_paths(production_storage)
+        stale_production = {}
+        for path, size in production_paths.items():
             if path not in paths_from_models:
                 print(path)
-                stale_s3[path] = size
-        print(f"stale s3 size: {sum(stale_s3.values()) / 2 ** 20} Mb")
-
-        print("stale locale")
-        locale_paths = self.get_paths(default_storage)
-        stale_locale = {}
-        for path, size in locale_paths.items():
-            if path not in paths_from_models:
-                print(path)
-                stale_locale[path] = size
-        print(f"stale locale size: {sum(stale_locale.values()) / 2 ** 20} Mb")
+                stale_production[path] = size
+        print(f"stale production size: {sum(stale_production.values()) / 2 ** 20} Mb")
 
         if options["delete"]:
-            # for path in stale_s3.keys():
-            #     s3.delete(path)
-            for path in stale_locale.keys():
-                default_storage.delete(path)
+            for path in stale_production.keys():
+                production_storage.delete(path)
