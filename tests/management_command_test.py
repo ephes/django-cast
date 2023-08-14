@@ -21,15 +21,14 @@ def test_media_backup_with_wrong_django_version(mocker):
 
 
 class StubStorage:
-    _files: list[str] = []
-    _exists: list[str] = []
+    def __init__(self):
+        self._files = []
 
     def exists(self, path):
-        return path in self._exists
+        return path in self._files
 
     def save(self, name, _content):
-        print("save called: ", name, _content)
-        self._exists.append(name)
+        self._files.append(name)
 
     @staticmethod
     def open(name, _mode):
