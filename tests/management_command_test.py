@@ -50,7 +50,7 @@ def stub_storages(settings):
     return storages
 
 
-def test_media_backup_new_file(capsys, stub_storages):
+def test_media_backup_new_file_in_production(stub_storages):
     production, backup = stub_storages["production"], stub_storages["backup"]
 
     # given there's a new file added to production
