@@ -16,7 +16,7 @@ class Command(BaseCommand):
             if not backup_storage.exists(path):
                 with production_storage.open(path, "rb") as in_f:
                     backup_storage.save(path, in_f)
-            if num % 100 == 0:
+            if num % 100 == 0:  # pragma: no cover
                 print(".", end="", flush=True)
 
     def handle(self, *args, **options):
