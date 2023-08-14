@@ -4,7 +4,7 @@ try:
     from django.core.files.storage import storages  # noqa F401
 
     DJANGO_VERSION_VALID = True
-except ImportError:
+except ImportError:  # pragma: no cover
     DJANGO_VERSION_VALID = False
 
 from django.core.management.base import CommandError
