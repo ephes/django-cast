@@ -4,8 +4,7 @@ from io import BytesIO
 
 import pytest
 from django.core.files.storage import storages
-from django.core.management import call_command
-from django.core.management.base import CommandError
+from django.core.management import CommandError, call_command
 
 from cast.management.commands.media_backup import Command as MediaBackupCommand
 
