@@ -2,11 +2,29 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
 
+import django
 import pytest
-from django.core.files.storage import storages
+
+try:
+    from django.core.files.storage import storages
+except ImportError:
+    pass
 from django.core.management import CommandError, call_command
 
-from cast.management.commands.media_backup import Command as MediaBackupCommand
+try:
+    from cast.management.commands.media_backup import Command as MediaBackupCommand
+except ImportError:
+    pass
+
+
+def get_comparable_django_version():
+    return int("".join(django.get_version().split(".")[:2]))
+
+
+pytestmark = pytest.mark.skipif(
+    get_comparable_django_version() < 42,
+    reason="Django version >= 4.2 is required",
+)
 
 
 def test_media_backup_without_storages(settings):
