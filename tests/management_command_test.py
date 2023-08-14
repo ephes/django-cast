@@ -1,6 +1,5 @@
 from collections.abc import Generator
 from contextlib import contextmanager
-from io import BytesIO
 
 import pytest
 from django.core.files.storage import storages
@@ -25,11 +24,19 @@ def test_media_backup_with_wrong_django_version(mocker):
 class StubStorage:
     def __init__(self) -> None:
         self._files: dict[str, str] = {}
+        self._added: set[str] = set()
 
     def exists(self, path: str) -> bool:
         return path in self._files
 
+    def was_added_by_backup(self, name: str) -> bool:
+        return name in self._added
+
     def save(self, name: str, content: str) -> None:
+        self.save_without_adding(name, content)
+        self._added.add(name)
+
+    def save_without_adding(self, name: str, content: str) -> None:
         self._files[name] = content
 
     def listdir(self, _path: str) -> tuple[list, dict[str, str]]:
@@ -54,10 +61,10 @@ def test_media_backup_new_file_in_production(stub_storages):
     production, backup = stub_storages["production"], stub_storages["backup"]
 
     # given there's a new file added to production
-    production.save("foobar.jpg", BytesIO(b"foobar"))
+    production.save_without_adding("foobar.jpg", "foobar")  # type: ignore
 
     # when we run the backup command
     call_command("media_backup")
 
-    # then the file should be added to the backup
-    assert backup.exists("foobar.jpg")
+    # then the file should have been added by the backup command
+    assert backup.was_added_by_backup("foobar.jpg")  # type: ignore
