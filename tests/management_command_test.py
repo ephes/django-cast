@@ -3,21 +3,21 @@ from io import BytesIO
 import pytest
 from django.core.files.storage import storages
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 
-def test_media_backup_without_storages(capsys, settings):
+def test_media_backup_without_storages(settings):
     settings.STORAGES = {}
-    call_command("media_backup")
-    captured = capsys.readouterr()
-    assert captured.out == "production or backup storage not configured\n"
+    with pytest.raises(CommandError) as err:
+        call_command("media_backup")
+    assert str(err.value) == "production or backup storage not configured"
 
 
-def test_media_backup_without_django_version(capsys, settings, mocker):
-    settings.STORAGES = {}
-    mocker.patch("cast.management.commands.media_backup.DJANGO_VERSION_VALID", False)
-    call_command("media_backup")
-    captured = capsys.readouterr()
-    assert captured.out == "Django version >= 4.2 is required\n"
+def test_media_backup_with_wrong_django_version(mocker):
+    mocker.patch("cast.management.commands.storage_backend.DJANGO_VERSION_VALID", False)
+    with pytest.raises(CommandError) as err:
+        call_command("media_backup")
+    assert str(err.value) == "Django version >= 4.2 is required"
 
 
 class StubStorage:
