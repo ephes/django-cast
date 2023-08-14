@@ -1,11 +1,15 @@
-from django.core.files.storage import get_storage_class
 from django.core.management.base import BaseCommand
 
 from cast.utils import storage_walk_paths
 
+from .storage_backend import get_production_and_backup_storage
+
 
 class Command(BaseCommand):
-    help = "shows size of media on s3"
+    help = (
+        "show size of media files on production storage backend"
+        "(requires Django >= 4.2 and production and backup storage configured)"
+    )
 
     @staticmethod
     def show_usage(paths):
@@ -26,11 +30,16 @@ class Command(BaseCommand):
         print(f"misc  usage: {misc / unit}")
         print(f"total usage: {sum(paths.values()) / unit}")
 
-    def handle(self, *args, **options):
-        s3 = get_storage_class("storages.backends.s3boto3.S3Boto3Storage")()
+    @staticmethod
+    def get_paths_with_sizes_for(storage_backend):
         paths = {}
-        for path in storage_walk_paths(s3):
-            size = s3.size(path)
+        for path in storage_walk_paths(storage_backend):
+            size = storage_backend.size(path)
             paths[path] = size
             print(path, size / 2**20)
+        return paths
+
+    def handle(self, *args, **options):
+        production, _ = get_production_and_backup_storage()
+        paths = self.get_paths_with_sizes_for(production)
         self.show_usage(paths)
