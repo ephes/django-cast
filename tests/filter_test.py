@@ -31,7 +31,6 @@ def test_get_facet_counts(mocker):
 def test_active_pagination_is_removed_from_date_facet_filter():
     dfw = DateFacetWidget()
     dfw.data = QueryDict("page=3")
-    QueryDict
     option = dfw.render_option("name", set(), "value", "label")
     assert "page=3" not in option
 
