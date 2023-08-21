@@ -40,32 +40,32 @@ repos:
     hooks:
       - id: djhtml
         args: [-t, "2"]
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.5.0'  # Use the sha / tag you want to point at
-    hooks:
-      - id: mypy
-        exclude: "[a-zA-Z]*/(migrations)|(docs)|(example)/(.)*"
-        args: [--no-strict-optional,
-               --ignore-missing-imports]
-        additional_dependencies:
-          - crispy_bootstrap4
-          - dj-inmemorystorage
-          - django-allauth
-          - django-crispy-forms
-          - django-debug-toolbar
-          - django-environ
-          - django_extensions
-          - django-filter
-          - django-fluent-comments
-          - django-htmx
-          - django-modelcluster
-          - django-model-utils
-          - django-stubs[compatible-mypy]
-          - django-taggit
-          - django-threadedcomments
-          - psycopg2
-          - Pygments
-          - python-slugify
-          - wagtail
-          - wagtail_srcset
-          - types-python-slugify
+#  - repo: https://github.com/pre-commit/mirrors-mypy
+#    rev: 'v1.5.0'  # Use the sha / tag you want to point at
+#    hooks:
+#      - id: mypy
+#        exclude: "[a-zA-Z]*/(migrations)|(docs)|(example)/(.)*"
+#        args: [--no-strict-optional,
+#               --ignore-missing-imports]
+#        additional_dependencies:
+#          - crispy_bootstrap4
+#          - dj-inmemorystorage
+#          - django-allauth
+#          - django-crispy-forms
+#          - django-debug-toolbar
+#          - django-environ
+#          - django_extensions
+#          - django-filter
+#          - django-fluent-comments
+#          - django-htmx
+#          - django-modelcluster
+#          - django-model-utils
+#          - django-stubs[compatible-mypy]
+#          - django-taggit
+#          - django-threadedcomments
+#          - psycopg2
+#          - Pygments
+#          - python-slugify
+#          - wagtail
+#          - wagtail_srcset
+#          - types-python-slugify

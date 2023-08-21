@@ -5,6 +5,7 @@ from .index_pages import Blog, Podcast
 from .itunes import ItunesArtWork
 from .moderation import SpamFilter
 from .pages import Episode, HomePage, Post, sync_media_ids
+from .snippets import PostCategory
 from .theme import TemplateBaseDirectory
 from .video import Video, get_video_dimensions
 
@@ -19,6 +20,7 @@ __all__ = [
     "HomePage",
     "ItunesArtWork",
     "Post",
+    "PostCategory",
     "Episode",
     "sync_media_ids",
     "SpamFilter",

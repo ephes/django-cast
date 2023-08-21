@@ -15,10 +15,13 @@ from django.utils.html import escape
 from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
 from django_comments import get_model as get_comment_model
+from modelcluster.contrib.taggit import ClusterTaggableManager
+from modelcluster.fields import ParentalKey, ParentalManyToManyField
 from slugify import slugify
+from taggit.models import TaggedItemBase
 from wagtail import blocks
 from wagtail.admin.forms import WagtailAdminPageForm
-from wagtail.admin.panels import FieldPanel
+from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.api import APIField
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.fields import StreamField
@@ -90,6 +93,10 @@ class PlaceholderRequest:
         return self.port
 
 
+class PostTag(TaggedItemBase):
+    content_object = ParentalKey("Post", related_name="tagged_items", on_delete=models.CASCADE)
+
+
 class Post(Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     visible_date = models.DateTimeField(
@@ -106,6 +113,11 @@ class Post(Page):
     videos = models.ManyToManyField("cast.Video", blank=True)
     galleries = models.ManyToManyField("cast.Gallery", blank=True)
     audios = models.ManyToManyField("cast.Audio", blank=True)
+    categories = ParentalManyToManyField("cast.PostCategory", blank=True)
+
+    # managers
+    objects: PageManager = PageManager()
+    tags = ClusterTaggableManager(through=PostTag, blank=True, verbose_name=_("tags"))
 
     _local_template_name: Optional[str] = None
 
@@ -136,12 +148,15 @@ class Post(Page):
 
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
+        MultiFieldPanel(
+            [FieldPanel("categories", widget=forms.CheckboxSelectMultiple)],
+            heading="Categories",
+            classname="collapsed",
+        ),
+        FieldPanel("tags"),
         FieldPanel("body"),
     ]
     parent_page_types = ["cast.Blog", "cast.Podcast"]
-
-    # managers
-    objects: PageManager = PageManager()
 
     @property
     def media_model_lookup(self) -> dict[str, type[models.Model]]:

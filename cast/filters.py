@@ -1,9 +1,11 @@
 import string
 from collections.abc import Iterable, Mapping
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Any, Optional, Union, cast
 
 import django_filters
+from django.core import validators
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.db.models.fields import BLANK_CHOICE_DASH
@@ -19,8 +21,12 @@ from django.utils.translation import gettext as _
 from django_filters.fields import ChoiceField as FilterChoiceField
 from wagtail.models import PageQuerySet
 
+from cast import appsettings
+from cast.models.pages import PostTag
+from cast.models.snippets import PostCategory
 
-class DateFacetWidget(Widget):
+
+class CountFacetWidget(Widget):
     data: QueryDict
 
     def __init__(self, attrs: Optional[dict[str, str]] = None):
@@ -105,44 +111,70 @@ def parse_date_facets(value: str) -> datetime:
     return year_month
 
 
-def get_selected_facet(get_params: dict) -> Optional[datetime]:
-    date_facet = get_params.get("date_facets")
-    if date_facet is None or len(date_facet) == 0:
-        return None
-    return parse_date_facets(date_facet)
-
-
-def get_facet_counts(
-    filterset_data_orig: Optional[QueryDict], queryset: Optional[models.QuerySet]
-) -> dict[str, dict[datetime, int]]:
-    if filterset_data_orig is None:
-        filterset_data = {}
-    else:
-        filterset_data = {k: v for k, v in filterset_data_orig.items()}  # copy filterset_data to avoid overwriting
-
-    # get selected facet if set and build the facet counting queryset
-    facet_counts = {}
-    selected_facet = get_selected_facet(filterset_data)
-    if selected_facet is not None:
-        facet_counts = {"year_month": {selected_facet: 1}}
-    filterset_data["facet_counts"] = facet_counts  # type: ignore
-    filterset_data_as_query_dict = cast(QueryDict, filterset_data)  # make mypy happy
-    post_filter = PostFilterset(queryset=queryset, data=filterset_data_as_query_dict, facet_counts=facet_counts)
+def fetch_date_facet_counts(post_queryset: models.QuerySet) -> dict[datetime, int]:
+    # get the date facet counts
     facet_queryset = (
-        post_filter.qs.order_by()
+        post_queryset.order_by()
         .annotate(month=TruncMonth("visible_date"))
         .values("month")
-        .annotate(n=models.Count("pk"))
+        .annotate(num_posts=models.Count("pk"))
     )
 
     # build up the date facet counts for final filter pass
     year_month_counts = {}
     for row in facet_queryset:
-        year_month_counts[row["month"]] = row["n"]
-    return {"year_month": year_month_counts}
+        year_month_counts[row["month"]] = row["num_posts"]
+    return year_month_counts
 
 
-class FacetChoicesMixin:
+SlugFacetCounts = dict[str, tuple[str, int]]
+
+
+def fetch_category_facet_counts(post_queryset: models.QuerySet) -> SlugFacetCounts:
+    category_count_queryset = PostCategory.objects.annotate(
+        num_posts=models.Count("post", filter=models.Q(post__in=post_queryset))
+    )
+    category_counts = {}
+    for category in category_count_queryset:
+        category_counts[category.slug] = (category.name, category.num_posts)  # type: ignore
+    return category_counts
+
+
+def fetch_tag_facet_counts(post_queryset: models.QuerySet) -> SlugFacetCounts:
+    tag_count_queryset = PostTag.objects.annotate(
+        num_posts=models.Count("content_object", filter=models.Q(content_object__in=post_queryset))
+    )
+    tag_counts = {}
+    for tag in tag_count_queryset:
+        tag_counts[tag.tag.slug] = (tag.tag.name, tag.num_posts)  # type: ignore
+    return tag_counts
+
+
+def get_facet_counts(
+    filterset_data_orig: Union[QueryDict, dict],
+    queryset: Optional[models.QuerySet],
+    fields: tuple[str, ...] = tuple(appsettings.CAST_FILTERSET_FACETS),
+) -> dict[str, dict[datetime, int]]:
+    filterset_data = {k: v for k, v in filterset_data_orig.items()}  # copy filterset_data to avoid overwriting
+    filterset_data["facet_counts"] = {}  # type: ignore
+    filterset_data_as_query_dict = cast(QueryDict, filterset_data)  # make mypy happy
+    post_filter = PostFilterset(queryset=queryset, data=filterset_data_as_query_dict)
+
+    # fetch the facet counts for the fields with counts
+    facet_counts: dict[str, dict] = {}
+    post_queryset = post_filter.qs
+
+    if "date_facets" in fields:
+        facet_counts["year_month"] = fetch_date_facet_counts(post_queryset)
+    if "category_facets" in fields:
+        facet_counts["categories"] = fetch_category_facet_counts(post_queryset)
+    if "tag_facets" in fields:
+        facet_counts["tags"] = fetch_tag_facet_counts(post_queryset)
+
+    return facet_counts
+
+
+class DateFacetChoicesMixin:
     """Just a way to pass the facet counts to the field which displays the choice."""
 
     parent: "PostFilterset"
@@ -160,7 +192,7 @@ class FacetChoicesMixin:
         return super_filter.field
 
 
-class AllChoicesField(FilterChoiceField):
+class AllDateChoicesField(FilterChoiceField):
     def valid_value(self, value: str) -> bool:
         """
         Allow all values instead of explicit choices but still validate
@@ -174,8 +206,8 @@ class AllChoicesField(FilterChoiceField):
             return False
 
 
-class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
-    field_class = AllChoicesField
+class DateFacetFilter(DateFacetChoicesMixin, django_filters.filters.ChoiceFilter):
+    field_class = AllDateChoicesField
 
     def filter(self, qs: models.QuerySet, value: str) -> models.QuerySet:
         if len(value) == 0:
@@ -188,17 +220,98 @@ class DateFacetFilter(FacetChoicesMixin, django_filters.filters.ChoiceFilter):
         return filtered
 
 
+class SlugChoicesField(FilterChoiceField):
+    def valid_value(self, value: str) -> bool:
+        """
+        Used to determine if the value provided by the user can be used
+        to filter the queryset. Return early if value is not a string,
+        use the slug validator to check if the value is a valid slug.
+        """
+        if not isinstance(value, str):
+            return False
+        try:
+            validators.validate_slug(value)
+            return True
+        except ValidationError:
+            return False
+
+
+class CountChoicesMixin:
+    """Just a way to pass the facet counts to the field which displays the choice."""
+
+    parent: "PostFilterset"
+    extra: dict[str, Any]
+    _facet_count_key = "categories"
+
+    @property
+    def field(self) -> Field:
+        facet_count_choices = []
+        # use cast to make mypy happy
+        facet_counts: SlugFacetCounts = cast(SlugFacetCounts, self.parent.facet_counts.get(self._facet_count_key, {}))
+        for slug, (name, count) in sorted(facet_counts.items()):
+            if count == 0:
+                continue
+            label = f"{name} ({count})"
+            facet_count_choices.append((slug, label))
+        self.extra["choices"] = facet_count_choices
+        super_filter = cast(django_filters.filters.ChoiceFilter, super())  # make mypy happy
+        return super_filter.field
+
+
+class CategoryFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
+    field_class = SlugChoicesField
+
+    def filter(self, qs: models.QuerySet, value: str):
+        # Check if value is provided (not None and not an empty list)
+        if value:
+            return qs.filter(categories__slug__in=[value])
+        return qs
+
+
+class TagChoicesMixin(CountChoicesMixin):
+    _facet_count_key = "tags"
+
+
+class TagFacetFilter(TagChoicesMixin, django_filters.filters.ChoiceFilter):
+    field_class = SlugChoicesField
+
+    def filter(self, qs: models.QuerySet, value: str):
+        # Check if value is provided (not None and not an empty list)
+        if value:
+            return qs.filter(tags__name__in=[value])
+        return qs
+
+
 class PostFilterset(django_filters.FilterSet):
     search = django_filters.CharFilter(field_name="search", method="fulltext_search", label="Search")
     date = django_filters.DateFromToRangeFilter(
         field_name="visible_date",
         label="Date",
-        widget=django_filters.widgets.DateRangeWidget(attrs={"type": "date", "placeholder": "YYYY/MM/DD"}),
+        widget=django_filters.widgets.DateRangeWidget(
+            attrs={"type": "date", "placeholder": "YYYY/MM/DD"}
+        ),  # type: ignore
+    )
+    # FIXME Maybe use ModelMultipleChoiceFilter for categories? Couldn't get it to work for now, though.
+    #   - one problem was that after setting choices via the choices parameter, Django randomly
+    #     complained about models not being available before app start etc.
+    category_facets = CategoryFacetFilter(
+        field_name="category_facets",
+        label="Categories",
+        # choices do not need to be set, since they are transported from facet counts
+        # into the extra dict of the field via CountChoicesMixin
+        widget=CountFacetWidget(attrs={"class": "cast-date-facet-container"}),
+    )
+    tag_facets = TagFacetFilter(
+        field_name="tag_facets",
+        label="Tags",
+        # choices do not need to be set, since they are transported from facet counts
+        # into the extra dict of the field via CountChoicesMixin
+        widget=CountFacetWidget(attrs={"class": "cast-date-facet-container"}),
     )
     date_facets = DateFacetFilter(
         field_name="date_facets",
         label="Date Facets",
-        widget=DateFacetWidget(attrs={"class": "cast-date-facet-container"}),
+        widget=CountFacetWidget(attrs={"class": "cast-date-facet-container"}),
     )
     o = django_filters.OrderingFilter(
         fields=(("visible_date", "visible_date"),),
@@ -206,26 +319,30 @@ class PostFilterset(django_filters.FilterSet):
     )
 
     class Meta:
-        fields = ["search", "date", "date_facets"]
+        fields = appsettings.CAST_FILTERSET_FACETS
 
     def __init__(
         self,
         data: Optional[QueryDict] = None,
         queryset: Optional[models.QuerySet] = None,
         *,
-        facet_counts: Optional[dict] = None,
         fetch_facet_counts: bool = False,
     ):
         super().__init__(data=data, queryset=queryset)
-        self.facet_counts = facet_counts if facet_counts is not None else {}
+        if data is None:
+            data = QueryDict("")
+        # Remove filters which are not configured in the settings
+        configured_filters = set(appsettings.CAST_FILTERSET_FACETS)
+        for filter_name in self.filters.copy().keys():
+            if filter_name not in configured_filters:
+                del self.filters[filter_name]
+        # fetch the facet counts
+        self.facet_counts = {}
         if fetch_facet_counts:
             # avoid running into infinite recursion problems, because
             # get_facet_counts will instantiate PostFilterset again
             # -> and again -> and again ...
-            try:
-                self.facet_counts = get_facet_counts(data, queryset)
-            except ValueError:
-                self.facet_counts = {}
+            self.facet_counts = get_facet_counts(data, queryset, fields=tuple(self._meta.fields))
 
     @staticmethod
     def fulltext_search(queryset: PageQuerySet, _name: str, value: str) -> models.QuerySet:

@@ -11,6 +11,9 @@ CHOOSER_PAGINATION: int = getattr(settings, "CHOOSER_PAGINATION", 10)
 MENU_ITEM_PAGINATION: int = getattr(settings, "MENU_ITEM_PAGINATION", 20)
 POST_LIST_PAGINATION: int = getattr(settings, "POST_LIST_PAGINATION", 5)
 DELETE_WAGTAIL_IMAGES: bool = getattr(settings, "DELETE_WAGTAIL_IMAGES", True)
+CAST_FILTERSET_FACETS: list[str] = getattr(
+    settings, "CAST_FILTERSET_FACETS", ["search", "date", "date_facets", "category_facets", "tag_facets"]
+)
 
 SettingValue = Union[str, bool, int]
 
