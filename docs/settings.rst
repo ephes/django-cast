@@ -103,3 +103,27 @@ like this:
 .. important::
 
     This will only work if you are using Django >= 4.2.
+
+
+******************
+Faceted Navigation
+******************
+
+You can configure the facets that are available in the search UI by
+setting the ``CAST_FILTERSET_FACETS`` variable in your settings file.
+The default value is:
+
+.. code-block:: python
+
+    CAST_FILTERSET_FACETS = [
+        "search", "date", "date_facets", "category_facets", "tag_facets"
+    ]
+
+But if you want to remove the ``tag_facets`` facet, because you don't
+use tags, you can do it like this:
+
+.. code-block:: python
+
+    CAST_FILTERSET_FACETS = [
+        "search", "date", "date_facets", "category_facets"
+    ]

@@ -1,0 +1,12 @@
+0.2.19 (2023-08-21)
+-------------------
+
+Added tags and categories for posts. I planned for long adding a feature
+like this, but avoided implementing it because I didn't understand what I
+did in `filters.py`. It's a beta feature and I probably will keep only
+categories or tags, but not both.
+
+- Updated some documentation in top level README.md
+- Added tags / categories to posts #100 😅
+- Temporarily deactivated the mypy pre-commit hook because mypy 1.5.0 is not compatible with django-stubs
+- Had to drop support for Wagtail 3 because of conflicting migrations (taggit)

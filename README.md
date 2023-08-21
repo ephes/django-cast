@@ -2,7 +2,7 @@
 
 [![name](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-brightgreen)](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-brightgreen)
 [![name](https://img.shields.io/badge/django-4.0%7C4.1%7C4.2-brightgreen)](https://img.shields.io/badge/django-4.0%7C4.1%7C4.2-brightgreen)
-[![name](https://img.shields.io/badge/wagtail-3%7C4%7C5-brightgreen)](https://img.shields.io/badge/wagtail-3%7C4%7C5-brightgreen)
+[![name](https://img.shields.io/badge/wagtail-3%7C4%7C5-brightgreen)](https://img.shields.io/badge/wagtail-4%7C5-brightgreen)
 [![name](https://badge.fury.io/py/django-cast.svg)](https://badge.fury.io/py/django-cast)
 [![name](https://codecov.io/gh/ephes/django-cast/branch/develop/graph/badge.svg)](https://codecov.io/gh/ephes/django-cast)
 [![name](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ephes/django-cast)
@@ -12,7 +12,7 @@ and [Wagtail](https://wagtail.org).
 
 After switching to Wagtail, the documentation has to be updated. Stay tuned 😄.
 
-**Documentation for [current version 0.2.18](https://django-cast.readthedocs.io/en/develop/)**
+**Documentation for [current version 0.2.19](https://django-cast.readthedocs.io/en/develop/)**
 
 ## Key Features
 - Responsive images via [wagtail-srcset](https://github.com/ephes/wagtail_srcset)
@@ -26,6 +26,7 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 - Code blocks for the Wagtail page editor
 - Use [Twitter Player Card](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/player-card)
   for links to podcast episode detail pages
+- Tags and categories for posts which are then included in the faceted navigation UI (beta feature)
 
 
 ## Deployment
@@ -39,7 +40,6 @@ Although switching to Wagtail was a big step, there is still a lot to do. Things
 - Improve the documentation
 - Update the [Podlove Web Player](https://podlove.org/podlove-web-player/) version
 - Design improvements for the default theme (it's still bootstrap 4 atm)
-- Add tags for posts (TIL, etc.) and navigation
 - Collaborators for podcast episodes
 - Transcripts for podcast episodes
 

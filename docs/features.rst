@@ -7,6 +7,7 @@ Features
 .. include:: social-media.rst
 .. include:: comments.rst
 .. include:: blog.rst
+.. include:: tags.rst
 .. include:: video.rst
 .. include:: audio.rst
 .. include:: themes.rst
