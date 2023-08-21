@@ -26,6 +26,7 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 - Code blocks for the Wagtail page editor
 - Use [Twitter Player Card](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/player-card)
   for links to podcast episode detail pages
+- Tags and categories for posts which are then included in the faceted navigation UI (beta feature)
 
 
 ## Deployment
