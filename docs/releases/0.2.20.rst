@@ -1,0 +1,6 @@
+0.2.19 (2023-08-28)
+-------------------
+
+Smaller fixes and improvements.
+
+- Fixed the .readthedocs.yml #102
