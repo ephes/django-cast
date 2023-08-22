@@ -4,13 +4,11 @@ import pytest
 from django.http import QueryDict
 from django.utils.timezone import make_aware
 
-from cast import appsettings
 from cast.filters import (
     CategoryFacetFilter,
     CountFacetWidget,
     PostFilterset,
     SlugChoicesField,
-    get_facet_counts,
 )
 from cast.models import Post, PostCategory
 from tests.factories import PostFactory
@@ -61,39 +59,12 @@ def test_validate_category_facet_choice(value, is_valid):
     assert field.valid_value(value) == is_valid
 
 
-def test_category_choices_mixin_side_effects():
-    class Parent:
-        def __init__(self, facet_counts):
-            self.facet_counts = facet_counts
-
+def test_category_choices_mixin_filters_facets_with_count_0():
     ccm = CategoryFacetFilter()  # use Filter instead of Mixin to make super and self.extra work
-    ccm.parent = Parent({"categories": {"count1": ("count one", 1), "count0": ("count 0", 0)}})
+    ccm.facet_counts = {"count1": ("count one", 1), "count0": ("count 0", 0)}
     _ = ccm.field
     category_slugs = {slug for slug, label in ccm.extra["choices"]}
     assert category_slugs == {"count1"}
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    "field_name, facet_count_key",
-    [
-        ("date_facets", "year_month"),
-        ("category_facets", "categories"),
-        ("tag_facets", "tags"),
-    ],
-)
-def test_only_filter_specified_fields(field_name, facet_count_key):
-    # given an empty queryset and a facet that is usually in the facet counts
-    queryset = Post.objects.none()
-    assert facet_count_key in get_facet_counts({}, queryset)
-
-    # when the field is removed from the list of fields
-    fields = set(appsettings.CAST_FILTERSET_FACETS)
-    fields.remove(field_name)
-    facet_counts = get_facet_counts({}, queryset, fields=tuple(fields))
-
-    # then the facet is not in the facet counts
-    assert facet_count_key not in facet_counts
 
 
 @pytest.mark.django_db
@@ -112,7 +83,7 @@ class TestPostFilterset:
         # when the facet counts are fetched
         filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
         # then there are no date facets
-        assert filterset.facet_counts["year_month"] == {}
+        assert filterset.filters["date_facets"].facet_counts == {}
 
     def test_post_is_counted_in_date_facets(self, post):
         # given a queryset with a post
@@ -120,7 +91,7 @@ class TestPostFilterset:
         # when the facet counts are fetched
         filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
         # then the post is counted in the date facets
-        date_facets = filterset.facet_counts["year_month"]
+        date_facets = filterset.filters["date_facets"].facet_counts
         date_month_post = make_aware(datetime(post.visible_date.year, post.visible_date.month, 1))
         assert date_facets[date_month_post] == 1
 
@@ -133,7 +104,7 @@ class TestPostFilterset:
         # then the post is in the queryset
         assert post in filterset.qs
         # and the post is counted in the date facets
-        date_facets = filterset.facet_counts["year_month"]
+        date_facets = filterset.filters["date_facets"].facet_counts
         date_month_post = make_aware(datetime(post.visible_date.year, post.visible_date.month, 1))
         assert date_facets[date_month_post] == 1
 
@@ -146,7 +117,7 @@ class TestPostFilterset:
         # then the post is not in the queryset
         assert post not in filterset.qs
         # and the post is not counted in the date facets
-        date_facets = filterset.facet_counts["year_month"]
+        date_facets = filterset.filters["date_facets"].facet_counts
         assert date_facets == {}
 
     def test_post_is_counted_in_category_facets(self, post):
@@ -158,7 +129,7 @@ class TestPostFilterset:
         # when the facet counts are fetched
         filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
         # then the post is counted in the category facets
-        category_facets = filterset.facet_counts["categories"]
+        category_facets = filterset.filters["category_facets"].facet_counts
         assert category_facets[category.slug] == ("Today I Learned", 1)
 
     def test_posts_are_filtered_by_category_facet(self, post, body):

@@ -55,7 +55,7 @@ class FacetCountSerializer(SimpleBlogSerializer):
     def get_facet_counts(self, instance: Blog) -> dict[str, int]:
         get_params = self.context["request"].GET.copy()
         filterset = instance.get_filterset(get_params)
-        facet_counts = filterset.facet_counts["year_month"]
+        facet_counts = filterset.filters["date_facets"].facet_counts
         result = {}
         for date, count in facet_counts.items():
             result[date.strftime("%Y-%m")] = count
