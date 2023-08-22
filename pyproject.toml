@@ -106,7 +106,7 @@ minversion = "6.0"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore::django.utils.deprecation.RemovedInDjango50Warning",
-    # "ignore::django.utils.deprecation.RemovedInDjango51Warning",
+    "ignore::django.utils.deprecation.RemovedInDjango51Warning",
     "ignore::wagtail.utils.deprecation.RemovedInWagtail60Warning",
     "ignore::DeprecationWarning",
 ]
