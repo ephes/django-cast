@@ -287,7 +287,7 @@ class PostFilterset(django_filters.FilterSet):
     date = django_filters.DateFromToRangeFilter(
         field_name="visible_date",
         label="Date",
-        widget=django_filters.widgets.DateRangeWidget(
+        widget=django_filters.widgets.DateRangeWidget(  # type: ignore
             attrs={"type": "date", "placeholder": "YYYY/MM/DD"}
         ),  # type: ignore
     )
