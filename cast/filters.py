@@ -194,6 +194,7 @@ class CountChoicesMixin:
     extra: dict[str, Any]
     facet_count_key: str = ""  # you need to override this!
     facet_counts: dict[str, tuple[str, int]] = {}
+    has_facets_with_posts: bool = False
 
     @property
     def field(self) -> Field:
@@ -203,9 +204,16 @@ class CountChoicesMixin:
                 continue
             label = f"{name} ({count})"
             facet_count_choices.append((slug, label))
+        if len(facet_count_choices) > 0:
+            self.has_facets_with_posts = True
         self.extra["choices"] = facet_count_choices
         super_filter = cast(django_filters.filters.ChoiceFilter, super())  # make mypy happy
         return super_filter.field
+
+    @property
+    def hide_form_field(self) -> bool:
+        """True if there are no facets containing posts."""
+        return not self.has_facets_with_posts
 
 
 class CategoryFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
@@ -245,6 +253,7 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
         tag_counts = {}
         for tag in tag_count_queryset:
             tag_counts[tag.tag.slug] = (tag.tag.name, tag.num_posts)  # type: ignore
+        print("set tag counts: ", tag_counts)
         self.facet_counts = tag_counts
 
 
@@ -309,6 +318,7 @@ class PostFilterset(django_filters.FilterSet):
             # self.get_facet_counts will instantiate PostFilterset again
             #  -> and again -> and again ...
             self.set_facet_counts(data, queryset)
+            self.remove_form_fields_that_should_be_hidden()
 
     def set_facet_counts(self, data: QueryDict, queryset: models.QuerySet) -> None:
         # copy data to avoid overwriting
@@ -317,6 +327,15 @@ class PostFilterset(django_filters.FilterSet):
         for post_filter in self.filters.values():
             if hasattr(post_filter, "set_facet_counts"):
                 post_filter.set_facet_counts(facet_queryset)
+
+    def remove_form_fields_that_should_be_hidden(self) -> None:
+        """
+        Remove form fields which should be hidden. For example facets fields with no
+        facet with count > 0.
+        """
+        for name, post_filter in self.filters.items():
+            if getattr(post_filter, "hide_form_field", False):
+                del self.form.fields[name]
 
     @staticmethod
     def fulltext_search(queryset: PageQuerySet, _name: str, value: str) -> models.QuerySet:

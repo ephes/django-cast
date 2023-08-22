@@ -190,3 +190,12 @@ class TestPostFilterset:
         # then the untagged post is not in the queryset
         assert another_post not in filterset.qs
         assert filterset.qs.count() == 1
+
+    def test_fields_without_facets_having_some_posts_get_removed(self, post):
+        # given a queryset without a post having a category or tag
+        queryset = post.blog.unfiltered_published_posts
+        # when the facet counts are fetched
+        filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
+        # then the category and tag facet are not in the filterset form
+        assert "category_facets" not in filterset.form.fields
+        assert "tag_facets" not in filterset.form.fields
