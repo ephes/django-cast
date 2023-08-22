@@ -1,7 +1,8 @@
-0.2.19 (2023-08-28)
+0.2.20 (2023-08-28)
 -------------------
 
 Smaller fixes and improvements.
 
 - Fixed the .readthedocs.yml #102
 - Moved facet filter related logic into the facet filter classes, this is a lot cleaner #100
+- Remove empty facet filter fields from filterset form #100
