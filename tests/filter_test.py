@@ -98,6 +98,14 @@ def test_only_filter_specified_fields(field_name, facet_count_key):
 
 @pytest.mark.django_db
 class TestPostFilterset:
+    def test_data_is_none(self):
+        filterset = PostFilterset(None)
+        assert filterset.data == QueryDict("")
+
+    def test_queryset_is_none(self):
+        filterset = PostFilterset(None, queryset=None)
+        assert filterset.qs.count() == 0
+
     def test_no_posts_no_date_facets(self):
         # given a filterset with no posts
         queryset = Post.objects.none()

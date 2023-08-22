@@ -19,7 +19,7 @@ from django.utils.encoding import force_str
 from django.utils.safestring import SafeText, mark_safe
 from django.utils.translation import gettext as _
 from django_filters.fields import ChoiceField as FilterChoiceField
-from wagtail.models import PageQuerySet
+from wagtail.models import Page, PageQuerySet
 
 from cast import appsettings
 from cast.models.pages import PostTag
@@ -328,9 +328,11 @@ class PostFilterset(django_filters.FilterSet):
         *,
         fetch_facet_counts: bool = False,
     ):
-        super().__init__(data=data, queryset=queryset)
         if data is None:
             data = QueryDict("")
+        if queryset is None:
+            queryset = Page.objects.none()
+        super().__init__(data=data, queryset=queryset)
         # Remove filters which are not configured in the settings
         configured_filters = set(appsettings.CAST_FILTERSET_FACETS)
         for filter_name in self.filters.copy().keys():
