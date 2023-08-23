@@ -371,7 +371,6 @@ class PostFilterset(django_filters.FilterSet):
                 del self.filters[filter_name]
         self.set_facet_counts(self.qs)
         self.remove_form_fields_that_should_be_hidden()
-        # delattr(self, "_form")
 
     def set_facet_counts(self, queryset: models.QuerySet) -> None:
         facet_queryset = queryset
