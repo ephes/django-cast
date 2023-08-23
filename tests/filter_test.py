@@ -4,12 +4,7 @@ import pytest
 from django.http import QueryDict
 from django.utils.timezone import make_aware
 
-from cast.filters import (
-    CategoryFacetFilter,
-    CountFacetWidget,
-    PostFilterset,
-    SlugChoicesField,
-)
+from cast.filters import CountFacetWidget, PostFilterset, SlugChoicesField
 from cast.models import Post, PostCategory
 from tests.factories import PostFactory
 
@@ -59,18 +54,10 @@ def test_validate_category_facet_choice(value, is_valid):
     assert field.valid_value(value) == is_valid
 
 
-def test_category_choices_mixin_filters_facets_with_count_0():
-    ccm = CategoryFacetFilter()  # use Filter instead of Mixin to make super and self.extra work
-    ccm.facet_counts = {"count1": ("count one", 1), "count0": ("count 0", 0)}
-    _ = ccm.field
-    category_slugs = {slug for slug, label in ccm.extra["choices"]}
-    assert category_slugs == {"count1"}
-
-
 @pytest.mark.django_db
 class TestPostFilterset:
     def test_data_is_none(self):
-        filterset = PostFilterset(None)
+        filterset = PostFilterset(data=None)
         assert filterset.data == QueryDict("")
 
     def test_queryset_is_none(self):
@@ -199,3 +186,37 @@ class TestPostFilterset:
         # then the category and tag facet are not in the filterset form
         assert "category_facets" not in filterset.form.fields
         assert "tag_facets" not in filterset.form.fields
+
+    def test_tag_used_for_two_posts_should_be_counted_twice(self, post, body):
+        """
+        This didn't happen because `PostTag.annotate` created the wrong group
+        by clause (post_tag_id instead of tag_id).
+        """
+        # given two posts with the same tag
+        post.tags.add("tag")
+        post.save()
+        blog = post.blog
+        another_post = PostFactory(owner=blog.owner, parent=blog, title="another post", slug="another-post", body=body)
+        another_post.tags.add("tag")
+        another_post.save()
+        # when the facet counts are fetched
+        queryset = post.blog.unfiltered_published_posts
+        filterset = PostFilterset(QueryDict(), queryset=queryset)
+        # then the tag is counted twice
+        tag_facets = filterset.filters["tag_facets"].facet_counts
+        assert tag_facets["tag"] == ("tag", 2)
+
+    def test_bound_field_choices_should_be_set_from_facet_counts(self, post):
+        """
+        If this test fails, we are in big trouble since there's a lot of magic
+        necessary to make the facet counts appear in the choices.
+        """
+        # given a queryset with a tagged post
+        post.tags.add("tag")
+        post.save()
+        queryset = post.blog.unfiltered_published_posts
+        # when we create a filterset
+        filterset = PostFilterset(QueryDict(), queryset=queryset)
+        # then the tag appears in the choices of the bound field
+        slugs = {slug for slug, display in filterset.form["tag_facets"].field.choices}
+        assert "tag" in slugs
