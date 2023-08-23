@@ -10,7 +10,7 @@ from django.core.files.uploadedfile import UploadedFile
 from django.db import models
 from django.db.models.fields import BLANK_CHOICE_DASH
 from django.db.models.functions import TruncMonth
-from django.forms import Field, Widget
+from django.forms import Widget
 from django.forms.renderers import BaseRenderer
 from django.forms.utils import flatatt
 from django.http import QueryDict
@@ -111,22 +111,38 @@ def parse_date_facets(value: str) -> datetime:
     return year_month
 
 
+DateFacetCounts = dict[datetime, int]
+Choices = list[tuple[str, str]]
+
+
 class DateFacetChoicesMixin:
     """Just a way to pass the facet counts to the field which displays the choice."""
 
-    facet_counts: dict[datetime, int] = {}
+    facet_counts: DateFacetCounts = {}
+    extra: dict[str, Any] = {}
 
-    @property
-    def field(self) -> Field:
+    @staticmethod
+    def transform_facet_counts_to_choices(facet_counts: DateFacetCounts) -> Choices:
+        """
+        Transform the facet counts into a list of choices for the field.
+        """
         facet_count_choices = []
-        for year_month, count in sorted(self.facet_counts.items()):
+        for year_month, count in sorted(facet_counts.items()):
             date_str = year_month.strftime("%Y-%m")
             label = f"{date_str} ({count})"
             facet_count_choices.append((date_str, label))
-        super_filter = cast(django_filters.filters.ChoiceFilter, super())  # make mypy happy
-        field = super_filter.field
-        field.choices = facet_count_choices
-        return field
+        return facet_count_choices
+
+    def set_field_choices(self, choices: Choices) -> None:
+        """
+        Set the choices on the field. Also remove the cached _field
+        attribute so that the field is recreated with the new choices
+        next time it is accessed.
+
+        See django_filters/filters.py:Filter::field for more info.
+        """
+        self.extra["choices"] = choices
+        delattr(self, "_field")
 
 
 class AllDateChoicesField(FilterChoiceField):
@@ -157,18 +173,21 @@ class DateFacetFilter(DateFacetChoicesMixin, django_filters.filters.ChoiceFilter
         return filtered
 
     def set_facet_counts(self, queryset: models.QuerySet) -> None:
-        facet_queryset = (
-            queryset.order_by()
-            .annotate(month=TruncMonth("visible_date"))
-            .values("month")
-            .annotate(num_posts=models.Count("pk"))
-        )
-
-        # build up the date facet counts for final filter pass
-        year_month_counts = {}
-        for row in facet_queryset:
-            year_month_counts[row["month"]] = row["num_posts"]
-        self.facet_counts = year_month_counts
+        """
+        Fetch facet counts for filtered queryset and set the field
+        choices to the facet counts.
+        """
+        self.facet_counts = {
+            month: num_posts
+            for month, num_posts in (
+                queryset.order_by()
+                .annotate(month=TruncMonth("visible_date"))
+                .values("month")
+                .annotate(num_posts=models.Count("pk"))
+            ).values_list("month", "num_posts")
+        }
+        choices = self.transform_facet_counts_to_choices(self.facet_counts)
+        self.set_field_choices(choices)
 
 
 class SlugChoicesField(FilterChoiceField):
@@ -187,24 +206,54 @@ class SlugChoicesField(FilterChoiceField):
             return False
 
 
+FacetCounts = dict[str, tuple[str, int]]
+
+
 class CountChoicesMixin:
     """Just a way to pass the facet counts to the field which displays the choice."""
 
-    facet_counts: dict[str, tuple[str, int]] = {}
+    facet_counts: FacetCounts = {}
     has_facets_with_posts: bool = False
+    extra: dict[str, Any] = {}
 
-    @property
-    def field(self) -> FilterChoiceField:
+    @staticmethod
+    def fetch_facet_counts(post_queryset: models.QuerySet, count_queryset: models.QuerySet) -> FacetCounts:
+        """
+        Fetch the facet counts for all facets with post count > 0.
+        """
+        return {
+            slug: (name, num_posts)
+            for slug, name, num_posts in count_queryset.annotate(
+                num_posts=models.Count("post", filter=models.Q(post__in=post_queryset))
+            )
+            .filter(num_posts__gt=0)
+            .values_list("slug", "name", "num_posts")
+        }
+
+    @staticmethod
+    def transform_facet_counts_to_choices(facet_counts: FacetCounts) -> Choices:
+        """
+        Transform the facet counts into a list of choices for the field.
+        """
         facet_count_choices = []
-        for slug, (name, count) in sorted(self.facet_counts.items()):
+        for slug, (name, count) in sorted(facet_counts.items()):
             label = f"{name} ({count})"
             facet_count_choices.append((slug, label))
-        if len(facet_count_choices) > 0:
-            self.has_facets_with_posts = True
-        super_filter = cast(django_filters.filters.ChoiceFilter, super())  # make mypy happy
-        field = super_filter.field
-        field.choices = facet_count_choices
-        return field
+        return facet_count_choices
+
+    def set_field_choices(self, choices: Choices) -> None:
+        """
+        Set the choices on the field. Also remove the cached _field
+        attribute so that the field is recreated with the new choices
+        next time it is accessed.
+
+        Also set the has_facets_with_posts attribute to True if there
+        are any facets with posts. This is used to determine if the
+        form field should be hidden.
+        """
+        self.extra["choices"] = choices
+        delattr(self, "_field")
+        self.has_facets_with_posts = len(choices) > 0
 
     @property
     def hide_form_field(self) -> bool:
@@ -222,14 +271,13 @@ class CategoryFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter
         return qs
 
     def set_facet_counts(self, queryset: models.QuerySet) -> None:
-        self.facet_counts = {
-            slug: (name, num_posts)
-            for slug, name, num_posts in PostCategory.objects.annotate(
-                num_posts=models.Count("post", filter=models.Q(post__in=queryset))
-            )
-            .filter(num_posts__gt=0)
-            .values_list("slug", "name", "num_posts")
-        }  # type: ignore
+        """
+        Fetch the facet counts for all facets with post count > 0
+        and set the choices on the field.
+        """
+        self.facet_counts = self.fetch_facet_counts(queryset, PostCategory.objects.all())
+        choices = self.transform_facet_counts_to_choices(self.facet_counts)
+        self.set_field_choices(choices)
 
 
 class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
@@ -243,17 +291,16 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
         return qs
 
     def set_facet_counts(self, queryset: models.QuerySet) -> None:
-        """Count only facets with num_posts > 0."""
-        # Cannot use PostTag.objects.annotate here because the group by clause
-        # would be wrong (GROUP BY "cast_posttag"."id" instead of "tag"."id")
-        self.facet_counts = {
-            slug: (name, num_posts)
-            for slug, name, num_posts in Tag.objects.annotate(
-                num_posts=models.Count("post", filter=models.Q(post__in=queryset))
-            )
-            .filter(num_posts__gt=0)
-            .values_list("slug", "name", "num_posts")
-        }
+        """
+        Fetch the facet counts for all facets with post count > 0
+        and set the choices on the field.
+
+        Cannot use PostTag.objects.annotate here because the group by clause
+        would be wrong (GROUP BY "cast_posttag"."id" instead of "tag"."id")
+        """
+        self.facet_counts = self.fetch_facet_counts(queryset, Tag.objects.all())
+        choices = self.transform_facet_counts_to_choices(self.facet_counts)
+        self.set_field_choices(choices)
 
 
 class PostFilterset(django_filters.FilterSet):
@@ -314,11 +361,11 @@ class PostFilterset(django_filters.FilterSet):
         for filter_name in self.filters.copy().keys():
             if filter_name not in configured_filters:
                 del self.filters[filter_name]
-        self.set_facet_counts(data, self.qs)
+        self.set_facet_counts(self.qs)
         self.remove_form_fields_that_should_be_hidden()
         # delattr(self, "_form")
 
-    def set_facet_counts(self, data: QueryDict, queryset: models.QuerySet) -> None:
+    def set_facet_counts(self, queryset: models.QuerySet) -> None:
         # copy data to avoid overwriting
         facet_queryset = queryset
         for filter_name, post_filter in self.filters.items():
