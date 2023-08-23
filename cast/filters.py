@@ -304,6 +304,16 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
 
 
 class PostFilterset(django_filters.FilterSet):
+    """
+    A filterset for posts. It is used to filter the posts faceted navigation
+    style. The filterset facets are configured via the CAST_FILTERSET_FACETS setting.
+
+    The main reason why this code is confusing is that the facets are used
+    as the choices for the filterset fields. But the facets are only available
+    if the queryset is filtered. So the choices of the fields need to be set
+    after the queryset is filtered.
+    """
+
     search = django_filters.CharFilter(field_name="search", method="fulltext_search", label="Search")
     date = django_filters.DateFromToRangeFilter(
         field_name="visible_date",
