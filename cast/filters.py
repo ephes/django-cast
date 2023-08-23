@@ -374,7 +374,6 @@ class PostFilterset(django_filters.FilterSet):
         # delattr(self, "_form")
 
     def set_facet_counts(self, queryset: models.QuerySet) -> None:
-        # copy data to avoid overwriting
         facet_queryset = queryset
         for filter_name, post_filter in self.filters.items():
             if hasattr(post_filter, "set_facet_counts"):
