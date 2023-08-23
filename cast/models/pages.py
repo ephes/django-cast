@@ -460,6 +460,12 @@ class Episode(Post):
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
         FieldPanel("podcast_audio"),
+        MultiFieldPanel(
+            [FieldPanel("categories", widget=forms.CheckboxSelectMultiple)],
+            heading="Categories",
+            classname="collapsed",
+        ),
+        FieldPanel("tags"),
         FieldPanel("body"),
         FieldPanel("keywords"),
         FieldPanel("explicit"),
