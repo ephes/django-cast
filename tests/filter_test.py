@@ -54,6 +54,30 @@ def test_validate_category_facet_choice(value, is_valid):
     assert field.valid_value(value) == is_valid
 
 
+@pytest.fixture
+def post_with_tag(post):
+    post.tags.add("tag")
+    post.save()
+    return post
+
+
+@pytest.fixture
+def post_with_category(post):
+    category = PostCategory.objects.create(name="Today I Learned", slug="til")
+    post.categories.add(category)
+    post.save()  # yes, this is required
+    post.category = category
+    return post
+
+
+@pytest.fixture()
+def another_post(post, body):
+    blog = post.blog
+    another_post = PostFactory(owner=blog.owner, parent=blog, title="another post", slug="another-post", body=body)
+    another_post.save()
+    return another_post
+
+
 @pytest.mark.django_db
 class TestPostFilterset:
     def test_data_is_none(self):
@@ -107,26 +131,20 @@ class TestPostFilterset:
         date_facets = filterset.filters["date_facets"].facet_counts
         assert date_facets == {}
 
-    def test_post_is_counted_in_category_facets(self, post):
+    def test_post_is_counted_in_category_facets(self, post_with_category):
         # given a queryset with a post in a category
-        category = PostCategory.objects.create(name="Today I Learned", slug="til")
-        post.categories.add(category)
-        post.save()  # yes, this is required
+        post = post_with_category
         queryset = post.blog.unfiltered_published_posts
         # when the facet counts are fetched
         filterset = PostFilterset(QueryDict(), queryset=queryset)
         # then the post is counted in the category facets
         category_facets = filterset.filters["category_facets"].facet_counts
-        assert category_facets[category.slug] == ("Today I Learned", 1)
+        assert category_facets[post.category.slug] == ("Today I Learned", 1)
 
-    def test_posts_are_filtered_by_category_facet(self, post, body):
+    def test_posts_are_filtered_by_category_facet(self, post_with_category, another_post):
         # given a queryset with a post in a category and another post without a category
-        category = PostCategory.objects.create(name="Today I Learned", slug="til")
-        post.categories.add(category)
-        post.save()
+        post = post_with_category
         blog = post.blog
-        another_post = PostFactory(owner=blog.owner, parent=blog, title="another post", slug="another-post", body=body)
-        another_post.save()
         # when the posts are filtered by the category
         queryset = blog.unfiltered_published_posts
         querydict = QueryDict("category_facets=til")
@@ -135,7 +153,7 @@ class TestPostFilterset:
         assert another_post not in filterset.qs
         assert filterset.qs.count() == 1
 
-    def test_posts_are_filtered_and_wise_by_multiple_categories(self, post, body):
+    def test_posts_are_filtered_and_wise_by_multiple_categories(self, post, another_post):
         # given a queryset containing two posts being in one category and one of the posts is
         # in an additional category
 
@@ -148,7 +166,6 @@ class TestPostFilterset:
 
         # second post
         blog = post.blog
-        another_post = PostFactory(owner=blog.owner, parent=blog, title="another post", slug="another-post", body=body)
         another_post.categories.add(category)
         another_post.save()
         queryset = blog.unfiltered_published_posts
@@ -163,15 +180,12 @@ class TestPostFilterset:
         assert another_post not in filterset.qs
         assert filterset.qs.count() == 1
 
-    def test_posts_are_filtered_by_tag_facet(self, post, body):
+    def test_posts_are_filtered_by_tag_facet(self, post, another_post):
         # given a queryset with a tagged post and another post without this tag
         post.tags.add("tag")
         post.save()
-        blog = post.blog
-        another_post = PostFactory(owner=blog.owner, parent=blog, title="another post", slug="another-post", body=body)
-        another_post.save()
         # when the posts are filtered by the tag
-        queryset = blog.unfiltered_published_posts
+        queryset = post.blog.unfiltered_published_posts
         querydict = QueryDict("tag_facets=tag")
         filterset = PostFilterset(querydict, queryset=queryset)
         # then the untagged post is not in the queryset
@@ -187,7 +201,7 @@ class TestPostFilterset:
         assert "category_facets" not in filterset.form.fields
         assert "tag_facets" not in filterset.form.fields
 
-    def test_tag_used_for_two_posts_should_be_counted_twice(self, post, body):
+    def test_tag_used_for_two_posts_should_be_counted_twice(self, post, another_post):
         """
         This didn't happen because `PostTag.annotate` created the wrong group
         by clause (post_tag_id instead of tag_id).
@@ -195,8 +209,6 @@ class TestPostFilterset:
         # given two posts with the same tag
         post.tags.add("tag")
         post.save()
-        blog = post.blog
-        another_post = PostFactory(owner=blog.owner, parent=blog, title="another post", slug="another-post", body=body)
         another_post.tags.add("tag")
         another_post.save()
         # when the facet counts are fetched
