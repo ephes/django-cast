@@ -346,8 +346,6 @@ class PostFilterset(django_filters.FilterSet):
         self,
         data: Optional[QueryDict] = None,
         queryset: Optional[models.QuerySet] = None,
-        *,
-        fetch_facet_counts: bool = False,
     ):
         if data is None:
             data = QueryDict("")

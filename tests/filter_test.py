@@ -68,7 +68,7 @@ class TestPostFilterset:
         # given a filterset with no posts
         queryset = Post.objects.none()
         # when the facet counts are fetched
-        filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(QueryDict(), queryset=queryset)
         # then there are no date facets
         assert filterset.filters["date_facets"].facet_counts == {}
 
@@ -76,7 +76,7 @@ class TestPostFilterset:
         # given a queryset with a post
         queryset = post.blog.unfiltered_published_posts
         # when the facet counts are fetched
-        filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(QueryDict(), queryset=queryset)
         # then the post is counted in the date facets
         date_facets = filterset.filters["date_facets"].facet_counts
         date_month_post = make_aware(datetime(post.visible_date.year, post.visible_date.month, 1))
@@ -87,7 +87,7 @@ class TestPostFilterset:
         queryset = post.blog.unfiltered_published_posts
         # when the queryset is filtered by the posts title
         querydict = QueryDict(f"search={post.title}")
-        filterset = PostFilterset(querydict, queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(querydict, queryset=queryset)
         # then the post is in the queryset
         assert post in filterset.qs
         # and the post is counted in the date facets
@@ -100,7 +100,7 @@ class TestPostFilterset:
         queryset = post.blog.unfiltered_published_posts
         # when the queryset is filtered by a query that does not match the post
         querydict = QueryDict("search=not_in_title")
-        filterset = PostFilterset(querydict, queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(querydict, queryset=queryset)
         # then the post is not in the queryset
         assert post not in filterset.qs
         # and the post is not counted in the date facets
@@ -114,7 +114,7 @@ class TestPostFilterset:
         post.save()  # yes, this is required
         queryset = post.blog.unfiltered_published_posts
         # when the facet counts are fetched
-        filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(QueryDict(), queryset=queryset)
         # then the post is counted in the category facets
         category_facets = filterset.filters["category_facets"].facet_counts
         assert category_facets[category.slug] == ("Today I Learned", 1)
@@ -173,7 +173,7 @@ class TestPostFilterset:
         # when the posts are filtered by the tag
         queryset = blog.unfiltered_published_posts
         querydict = QueryDict("tag_facets=tag")
-        filterset = PostFilterset(querydict, queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(querydict, queryset=queryset)
         # then the untagged post is not in the queryset
         assert another_post not in filterset.qs
         assert filterset.qs.count() == 1
@@ -182,7 +182,7 @@ class TestPostFilterset:
         # given a queryset without a post having a category or tag
         queryset = post.blog.unfiltered_published_posts
         # when the facet counts are fetched
-        filterset = PostFilterset(QueryDict(), queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(QueryDict(), queryset=queryset)
         # then the category and tag facet are not in the filterset form
         assert "category_facets" not in filterset.form.fields
         assert "tag_facets" not in filterset.form.fields

@@ -128,7 +128,7 @@ class Blog(Page):
         return Post.objects.live().descendant_of(self).order_by("-visible_date")
 
     def get_filterset(self, get_params: QueryDict) -> PostFilterset:
-        return PostFilterset(data=get_params, queryset=self.unfiltered_published_posts, fetch_facet_counts=True)
+        return PostFilterset(data=get_params, queryset=self.unfiltered_published_posts)
 
     @staticmethod
     def get_published_posts(filtered_posts: models.QuerySet) -> models.QuerySet[Post]:

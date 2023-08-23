@@ -150,7 +150,7 @@ class FilteredPagesAPIViewSet(PagesAPIViewSet):
             del get_params["search"]
         self.request.GET = get_params
         queryset = super().get_queryset()
-        filterset = PostFilterset(data=original_get_params, queryset=queryset, fetch_facet_counts=True)
+        filterset = PostFilterset(data=original_get_params, queryset=queryset)
         return filterset.qs
 
     def get_queryset(self):
