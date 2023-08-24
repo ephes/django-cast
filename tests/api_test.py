@@ -231,15 +231,17 @@ def test_facet_counts_detail(api_client, blog, post):
 
     result = r.json()
     facet_counts = result["facet_counts"]
-    assert facet_counts[post.visible_date.strftime("%Y-%m")] == 1
+    assert facet_counts["date_facets"][0]["slug"] == post.visible_date.strftime("%Y-%m")
+    assert facet_counts["date_facets"][0]["name"] == post.visible_date.strftime("%Y-%m")
+    assert facet_counts["date_facets"][0]["count"] == 1
 
     # make sure adding a search param filters the results
     r = api_client.get(f"{url}?search=foobar", format="json")
     assert r.status_code == 200
 
     result = r.json()
-    facet_counts = result["facet_counts"]
-    assert len(facet_counts) == 0
+    date_facets = result["facet_counts"]["date_facets"]
+    assert len(date_facets) == 0
 
 
 @pytest.mark.django_db

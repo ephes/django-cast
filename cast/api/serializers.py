@@ -1,4 +1,5 @@
 import logging
+from typing import Literal
 
 from rest_framework import serializers
 
@@ -45,6 +46,12 @@ class SimpleBlogSerializer(serializers.HyperlinkedModelSerializer):
         fields = ("id", "url")
 
 
+FacetName = Literal["date_facets", "category_facets", "tag_facets"]
+FacetValueName = Literal["slug", "name", "count"]
+FacetList = list[dict[FacetValueName, str | int]]
+FacetCounts = dict[FacetName, FacetList]
+
+
 class FacetCountSerializer(SimpleBlogSerializer):
     facet_counts = serializers.SerializerMethodField()
 
@@ -52,11 +59,40 @@ class FacetCountSerializer(SimpleBlogSerializer):
         model = Blog
         fields = ("id", "url", "facet_counts")
 
-    def get_facet_counts(self, instance: Blog) -> dict[str, int]:
+    def get_facet_counts(self, instance: Blog) -> FacetCounts:
+        """
+        Facet counts have the following format:
+        {
+            "facet_name": [
+                {
+                    "slug": slug,
+                    "name": name,
+                    "count": count,
+                },
+            ],
+        }
+        """
         get_params = self.context["request"].GET.copy()
         filterset = instance.get_filterset(get_params)
-        facet_counts = filterset.filters["date_facets"].facet_counts
-        result = {}
-        for date, count in facet_counts.items():
-            result[date.strftime("%Y-%m")] = count
-        return result
+
+        # transform date facets
+        date_facets: FacetList = []
+        for date, count in filterset.filters["date_facets"].facet_counts.items():
+            year_month: str = date.strftime("%Y-%m")
+            date_facets.append({"slug": year_month, "name": year_month, "count": count})
+
+        # transform category facets
+        category_facets: FacetList = []
+        for slug, (name, count) in filterset.filters["category_facets"].facet_counts.items():
+            category_facets.append({"slug": slug, "name": name, "count": count})
+
+        # transform tag facets
+        tag_facets: FacetList = []
+        for slug, (name, count) in filterset.filters["tag_facets"].facet_counts.items():
+            tag_facets.append({"slug": slug, "name": name, "count": count})
+
+        return {
+            "date_facets": date_facets,
+            "category_facets": category_facets,
+            "tag_facets": tag_facets,
+        }
