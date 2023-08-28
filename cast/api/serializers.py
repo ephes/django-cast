@@ -1,5 +1,5 @@
 import logging
-from typing import Literal
+from typing import Literal, Union
 
 from rest_framework import serializers
 
@@ -48,7 +48,7 @@ class SimpleBlogSerializer(serializers.HyperlinkedModelSerializer):
 
 FacetName = Literal["date_facets", "category_facets", "tag_facets"]
 FacetValueName = Literal["slug", "name", "count"]
-FacetList = list[dict[FacetValueName, str | int]]
+FacetList = list[dict[FacetValueName, Union[str, int]]]
 FacetCounts = dict[FacetName, FacetList]
 
 
