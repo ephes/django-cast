@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from cast.api.views import AudioPodloveDetailView, FilteredPagesAPIViewSet
+from cast.models import PostCategory
 
 from .factories import UserFactory
 
@@ -225,15 +226,30 @@ def test_facet_counts_detail(api_client, blog, post):
     Test whether the facet counts detail endpoint returns the
     facet counts for a specific blog.
     """
+    # Given a post with a category and a tag
+    category = PostCategory.objects.create(name="category", slug="category")
+    post.categories.add(category)
+    post.tags.add("tag")
+    post.save()
+
+    # When we request the facet counts for the blog
     url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
     r = api_client.get(url, format="json")
     assert r.status_code == 200
 
     result = r.json()
     facet_counts = result["facet_counts"]
+
+    # Then we expect the correct facet counts to be returned
     assert facet_counts["date_facets"][0]["slug"] == post.visible_date.strftime("%Y-%m")
     assert facet_counts["date_facets"][0]["name"] == post.visible_date.strftime("%Y-%m")
     assert facet_counts["date_facets"][0]["count"] == 1
+
+    assert facet_counts["category_facets"][0]["slug"] == category.slug
+    assert facet_counts["category_facets"][0]["count"] == 1
+
+    assert facet_counts["tag_facets"][0]["slug"] == "tag"
+    assert facet_counts["tag_facets"][0]["count"] == 1
 
     # make sure adding a search param filters the results
     r = api_client.get(f"{url}?search=foobar", format="json")
