@@ -1,0 +1,6 @@
+0.2.21 (2023-09-04)
+-------------------
+
+Smaller fixes and improvements.
+
+- Added a snippet viewset to be able to do CRUD on tags via wagtail admin #100
