@@ -148,11 +148,7 @@ class Post(Page):
 
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
-        MultiFieldPanel(
-            [FieldPanel("categories", widget=forms.CheckboxSelectMultiple)],
-            heading="Categories",
-            classname="collapsed",
-        ),
+        FieldPanel("categories", widget=forms.CheckboxSelectMultiple),
         FieldPanel("tags"),
         FieldPanel("body"),
     ]
