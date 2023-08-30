@@ -590,6 +590,7 @@ def request_factory():
 def simple_request(request_factory):
     request = request_factory.get("/")
     request.htmx = HtmxDetails(request)
+    request.session = {}
     return request
 
 

@@ -4,3 +4,4 @@
 Smaller fixes and improvements.
 
 - Added a snippet viewset to be able to do CRUD on tags via wagtail admin #100
+- Let users select a theme for the site and store the choice in the session #105

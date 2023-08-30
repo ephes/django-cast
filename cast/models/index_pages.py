@@ -93,6 +93,8 @@ class Blog(Page):
         return self.title
 
     def get_template_base_dir(self, request: HttpRequest) -> str:
+        if hasattr(request, "session") and (template_base_dir := request.session.get("template_base_dir")) is not None:
+            return template_base_dir
         if self.template_base_dir is not None:
             return self.template_base_dir
         else:
