@@ -31,7 +31,7 @@ your custom template in the Wagtail admin interface.
 
 .. hint::
 
-    It's only possible to create own template themes without with template
+    It's only possible to create own template themes with template
     loaders that implement the `get_dirs` method (FilesystemLoader,
     CachedLoader). If you want to use a template loader that doesn't
     implement the `get_dirs` method, you have to add it to
