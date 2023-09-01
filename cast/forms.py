@@ -11,7 +11,7 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.models import Collection
 
-from .models import Audio, ChapterMark, Video
+from .models import Audio, ChapterMark, Video, get_template_base_dir_choices
 
 
 class VideoForm(forms.ModelForm):
@@ -183,3 +183,17 @@ class NonEmptySearchForm(SearchForm):
         if not query:
             raise forms.ValidationError(_("Please enter a search term"))
         return query
+
+
+class SelectThemeForm(forms.Form):
+    template_base_dir = forms.ChoiceField(
+        choices=[],
+        label=_("Theme"),
+        help_text=_("Select a theme for this site."),
+        required=True,
+    )
+    next = forms.CharField(widget=forms.HiddenInput, required=False)
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["template_base_dir"].choices = get_template_base_dir_choices()

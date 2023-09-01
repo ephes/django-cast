@@ -1,0 +1,5 @@
+<form action='{% url "cast:select-theme" %}' method="post">
+  {% csrf_token %}
+  {{ theme_form.as_p }}
+  <input role="button" type="submit" />
+</form>

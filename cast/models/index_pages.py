@@ -4,13 +4,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+import django.forms.forms
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
 from django.http import Http404, HttpRequest
 from django.http.request import QueryDict
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from django_htmx.middleware import HtmxDetails
 from wagtail.admin.panels import FieldPanel
 from wagtail.api import APIField
 from wagtail.fields import RichTextField
@@ -20,17 +20,14 @@ from cast import appsettings
 from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
+from ..views import HtmxHttpRequest
 from .pages import Post
-from .theme import TemplateBaseDirectory, get_template_base_dir_choices
+from .theme import get_template_base_dir, get_template_base_dir_choices
 
 logger = logging.getLogger(__name__)
 
 
 ContextDict = dict[str, Any]
-
-
-class HtmxHttpRequest(HttpRequest):
-    htmx: HtmxDetails
 
 
 class Blog(Page):
@@ -92,13 +89,8 @@ class Blog(Page):
     def __str__(self):
         return self.title
 
-    def get_template_base_dir(self, request: HttpRequest) -> str:
-        if hasattr(request, "session") and (template_base_dir := request.session.get("template_base_dir")) is not None:
-            return template_base_dir
-        if self.template_base_dir is not None:
-            return self.template_base_dir
-        else:
-            return TemplateBaseDirectory.for_request(request).name
+    def get_template_base_dir(self, request: HtmxHttpRequest) -> str:
+        return get_template_base_dir(request, self.template_base_dir)
 
     def get_template(self, request: HtmxHttpRequest, *args, **kwargs) -> str:
         template_base_dir = self.get_template_base_dir(request)
@@ -200,6 +192,16 @@ class Blog(Page):
     def pagination_page_size(self) -> int:
         return appsettings.POST_LIST_PAGINATION
 
+    def get_theme_form(self, request: HttpRequest) -> django.forms.forms.Form:
+        from ..forms import SelectThemeForm
+
+        return SelectThemeForm(
+            initial={
+                "template_base_dir": self.get_template_base_dir(request),
+                "next": request.path,
+            }
+        )
+
     def get_context(self, request: HttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         get_params = request.GET.copy()
@@ -209,6 +211,7 @@ class Blog(Page):
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
         context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
+        context["theme_form"] = self.get_theme_form(request)
         return context
 
 

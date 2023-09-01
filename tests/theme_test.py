@@ -1,8 +1,10 @@
+import json
 import shutil
 from pathlib import Path
 
 import pytest
 from django.template import engines
+from django.urls import reverse
 
 from cast.context_processors import site_template_base_dir
 from cast.models.theme import (
@@ -93,3 +95,73 @@ def test_context_processors_site_template_base_dir(request_factory):
     context = site_template_base_dir(request)
     assert context["cast_site_template_base_dir"] == "bootstrap4"
     assert context["cast_base_template"] == "cast/bootstrap4/base.html"
+
+
+@pytest.mark.django_db
+def test_get_select_theme_view(client):
+    url = reverse("cast:select-theme")
+    response = client.get(url)
+    assert response.status_code == 200
+    select_template_name = response.templates[0].name
+    assert select_template_name == "cast/bootstrap4/select_theme.html"
+
+
+@pytest.mark.django_db
+def test_post_select_theme_view_invalid(client):
+    # Given an invalid theme and a next url
+    url = reverse("cast:select-theme")
+    theme, next_url = "invalid", "/next-url/"
+    # When we post to the select theme view
+    response = client.post(
+        url,
+        {
+            "template_base_dir": theme,
+            "next": next_url,
+        },
+    )
+    # Then we are not redirected to the next url and the theme is not stored in the session
+    # and the form was invalid and has an error for the invalid field
+    assert response.status_code == 200
+    assert "template_base_dir" not in client.session
+    assert "template_base_dir" in response.context["form"].errors
+
+
+@pytest.mark.django_db
+def test_post_select_theme_view_happy(client):
+    # Given plain as theme and a next url
+    url = reverse("cast:select-theme")
+    theme, next_url = "plain", "/next-url/"
+    # When we post to the select theme view
+    response = client.post(
+        url,
+        {
+            "template_base_dir": theme,
+            "next": next_url,
+        },
+    )
+    # Then we are redirected to the next url and the theme is stored in the session
+    assert response.status_code == 302
+    assert next_url == response.url
+    assert client.session["template_base_dir"] == "plain"
+
+
+@pytest.mark.django_db
+def test_post_select_theme_view_happy_htmx(client):
+    # Given plain as theme and a next url
+    url = reverse("cast:select-theme")
+    theme, next_url = "plain", "/next-url/"
+    # When we post to the select theme view
+    headers = {"HTTP_HX-Request": "true"}
+    response = client.post(
+        url,
+        {
+            "template_base_dir": theme,
+            "next": next_url,
+        },
+        **headers,
+    )
+    # Then we are redirected to the next url and the theme is stored in the session
+    assert response.status_code == 200
+    actual_next_url = json.loads(response.headers["HX-Location"])["path"]
+    assert actual_next_url == next_url
+    assert client.session["template_base_dir"] == "plain"

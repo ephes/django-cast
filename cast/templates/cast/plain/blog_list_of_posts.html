@@ -37,6 +37,8 @@
 {% block navigation %}
   <nav>
     <hr>
+    {% include "./select_theme.html" %}
+    <hr>
     {% include "./_filter_form.html" with form=filterset.form %}
     <hr>
   </nav>

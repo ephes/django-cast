@@ -5,6 +5,7 @@ from django.views.decorators.cache import cache_page
 
 from . import feeds
 from .views import meta
+from .views.theme import select_theme
 
 app_name = "cast"
 urlpatterns: list[Any] = [
@@ -28,4 +29,6 @@ urlpatterns: list[Any] = [
     ),
     # Meta views like twitter player cards etc
     path("<slug:blog_slug>/<slug:episode_slug>/twitter-player/", view=meta.twitter_player, name="twitter-player"),
+    # Store selected theme in session
+    path("select-theme/", view=select_theme, name="select-theme"),
 ]

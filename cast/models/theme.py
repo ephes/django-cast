@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Union
 
 from django.conf import settings
 from django.db import models
@@ -6,6 +7,8 @@ from django.template import engines
 from django.template.loaders.base import Loader as BaseLoader
 from django.utils.translation import gettext_lazy as _
 from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
+
+from ..views import HtmxHttpRequest
 
 
 def get_required_template_names() -> list[str]:
@@ -104,6 +107,15 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
             choices.append((candidate, candidate))
 
     return choices
+
+
+def get_template_base_dir(request: HtmxHttpRequest, pre_selected: Union[str, None]) -> str:
+    if hasattr(request, "session") and (template_base_dir := request.session.get("template_base_dir")) is not None:
+        return template_base_dir
+    if pre_selected is not None:
+        return pre_selected
+    else:
+        return TemplateBaseDirectory.for_request(request).name
 
 
 @register_setting
