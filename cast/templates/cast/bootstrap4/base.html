@@ -19,7 +19,7 @@
     {% block additionalheaders %}{% endblock additionalheaders %}
   </head>
 
-  <body>
+  <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     {% block bodystart %}{% endblock bodystart %}
     {% block navigation %}
       <div class="m-b-1">
