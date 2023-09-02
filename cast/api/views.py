@@ -1,6 +1,6 @@
 import logging
 from collections import OrderedDict
-from typing import Any
+from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
@@ -20,7 +20,15 @@ from wagtail.images.api.v2.views import ImagesAPIViewSet
 
 from ..filters import PostFilterset
 from ..forms import VideoForm
-from ..models import Audio, Blog, SpamFilter, Video
+from ..models import (
+    Audio,
+    Blog,
+    SpamFilter,
+    Video,
+    get_template_base_dir,
+    get_template_base_dir_choices,
+)
+from ..views import HtmxHttpRequest
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -45,6 +53,7 @@ def api_root(request: Request) -> Response:
         ("videos", request.build_absolute_uri(reverse("cast:api:video_list"))),
         ("audios", request.build_absolute_uri(reverse("cast:api:audio_list"))),
         ("comment_training_data", request.build_absolute_uri(reverse("cast:api:comment-training-data"))),
+        ("themes", request.build_absolute_uri(reverse("cast:api:theme-list"))),
         ("pages", request.build_absolute_uri(reverse("cast:api:wagtail:pages:listing"))),
         ("images", request.build_absolute_uri(reverse("cast:api:wagtail:images:listing"))),
         ("facet_counts", request.build_absolute_uri(reverse("cast:api:facet-counts-list"))),
@@ -135,6 +144,26 @@ class CommentTrainingDataView(APIView):
         """
         train = SpamFilter.get_training_data_comments()
         return JsonResponse(train, safe=False)
+
+
+class ThemeListView(generics.ListAPIView):
+    """
+    Return a list of available themes. Mark the currently selected theme.
+    This is used by the theme switcher for the vue frontend for example.
+    """
+
+    def get_queryset(self) -> None:
+        return None
+
+    def list(self, request: Request, *args, **kwargs) -> Response:
+        choices = get_template_base_dir_choices()
+        request = cast(HtmxHttpRequest, request)
+        template_base_dir = get_template_base_dir(request, None)
+        results = []
+        for slug, name in choices:
+            selected = slug == template_base_dir
+            results.append({"slug": slug, "name": name, "selected": selected})
+        return Response(results)
 
 
 class FilteredPagesAPIViewSet(PagesAPIViewSet):

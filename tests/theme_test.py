@@ -123,7 +123,7 @@ def test_post_select_theme_view_invalid(client):
     # and the form was invalid and has an error for the invalid field
     assert response.status_code == 200
     assert "template_base_dir" not in client.session
-    assert "template_base_dir" in response.context["form"].errors
+    assert "template_base_dir" in response.context["theme_form"].errors
 
 
 @pytest.mark.django_db

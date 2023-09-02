@@ -32,6 +32,8 @@ urlpatterns: list[Any] = [
     re_path(r"facet_counts/(?P<pk>\d+)/?$", views.FacetCountsDetailView.as_view(), name="facet-counts-detail"),
     # comment training data
     path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment-training-data"),
+    # themes
+    path("themes/", views.ThemeListView.as_view(), name="theme-list"),
     # wagtail api
     path("wagtail/", include((views.wagtail_api_router.get_urlpatterns(), "api"), namespace="wagtail")),
 ]

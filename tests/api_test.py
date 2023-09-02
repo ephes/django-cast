@@ -4,7 +4,11 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from cast.api.views import AudioPodloveDetailView, FilteredPagesAPIViewSet
+from cast.api.views import (
+    AudioPodloveDetailView,
+    FilteredPagesAPIViewSet,
+    ThemeListView,
+)
 from cast.models import PostCategory
 
 from .factories import UserFactory
@@ -268,3 +272,21 @@ def test_get_comments_via_post_detail(api_client, post, comment):
 
     comments = r.json()["comments"]
     assert comments[0]["comment"] == comment.comment
+
+
+def test_theme_list_queryset_is_none():
+    view = ThemeListView()
+    assert view.get_queryset() is None
+
+
+@pytest.mark.django_db
+def test_list_themes(api_client):
+    # Given an api url to fetch the list of themes
+    url = reverse("cast:api:theme-list")
+    # When we request the list of themes
+    r = api_client.get(url, format="json")
+    assert r.status_code == 200
+
+    # Then we expect a list of themes to be returned and include the `plain` theme
+    result = r.json()
+    assert "plain" in {theme["slug"] for theme in result}
