@@ -37,7 +37,7 @@ def select_theme(request: HtmxHttpRequest) -> Union[HttpResponse, HttpResponseLo
     context = {
         "theme_form": form,
         "template_base_dir": template_base_dir,
-        "template_base_dir_choices": form.fields["template_base_dir"].choices,
+        "template_base_dir_choices": form.fields["template_base_dir"].choices,  # type: ignore
         "next_url": next_url,
     }
     return render(request, f"cast/{template_base_dir}/select_theme.html", context=context)

@@ -7,7 +7,7 @@ from typing import Any
 import django.forms.forms
 from django.core.paginator import InvalidPage, Paginator
 from django.db import models
-from django.http import Http404, HttpRequest
+from django.http import Http404
 from django.http.request import QueryDict
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -192,7 +192,7 @@ class Blog(Page):
     def pagination_page_size(self) -> int:
         return appsettings.POST_LIST_PAGINATION
 
-    def get_theme_form(self, request: HttpRequest) -> django.forms.forms.Form:
+    def get_theme_form(self, request: HtmxHttpRequest) -> django.forms.forms.Form:
         from ..forms import SelectThemeForm
 
         return SelectThemeForm(
@@ -202,7 +202,7 @@ class Blog(Page):
             }
         )
 
-    def get_context(self, request: HttpRequest, *args, **kwargs) -> ContextDict:
+    def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         get_params = request.GET.copy()
         context["filterset"] = filterset = self.get_filterset(get_params)

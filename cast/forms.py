@@ -196,4 +196,4 @@ class SelectThemeForm(forms.Form):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.fields["template_base_dir"].choices = get_template_base_dir_choices()
+        self.fields["template_base_dir"].choices = get_template_base_dir_choices()  # type: ignore
