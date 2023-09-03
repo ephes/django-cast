@@ -1,4 +1,3 @@
-import json
 import shutil
 from pathlib import Path
 
@@ -142,26 +141,4 @@ def test_post_select_theme_view_happy(client):
     # Then we are redirected to the next url and the theme is stored in the session
     assert response.status_code == 302
     assert next_url == response.url
-    assert client.session["template_base_dir"] == "plain"
-
-
-@pytest.mark.django_db
-def test_post_select_theme_view_happy_htmx(client):
-    # Given plain as theme and a next url
-    url = reverse("cast:select-theme")
-    theme, next_url = "plain", "/next-url/"
-    # When we post to the select theme view
-    headers = {"HTTP_HX-Request": "true"}
-    response = client.post(
-        url,
-        {
-            "template_base_dir": theme,
-            "next": next_url,
-        },
-        **headers,
-    )
-    # Then we are redirected to the next url and the theme is stored in the session
-    assert response.status_code == 200
-    actual_next_url = json.loads(response.headers["HX-Location"])["path"]
-    assert actual_next_url == next_url
     assert client.session["template_base_dir"] == "plain"

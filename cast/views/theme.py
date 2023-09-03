@@ -1,8 +1,5 @@
-from typing import Union
-
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
-from django_htmx.http import HttpResponseLocation
 
 from ..forms import SelectThemeForm
 from ..models import HtmxHttpRequest, get_template_base_dir
@@ -13,7 +10,7 @@ def set_template_base_dir(request: HtmxHttpRequest, template_base_dir: str) -> N
     request.session["template_base_dir"] = template_base_dir
 
 
-def select_theme(request: HtmxHttpRequest) -> Union[HttpResponse, HttpResponseLocation]:
+def select_theme(request: HtmxHttpRequest) -> HttpResponse:
     """
     Store the selected theme in the session. This is used to
     determine the template base directory for rendering the
@@ -28,10 +25,7 @@ def select_theme(request: HtmxHttpRequest) -> Union[HttpResponse, HttpResponseLo
         if form.is_valid():
             set_template_base_dir(request, form.cleaned_data["template_base_dir"])
             success_url = form.cleaned_data["next"]
-            if request.htmx:
-                return HttpResponseLocation(success_url)
-            else:
-                return HttpResponseRedirect(success_url)
+            return HttpResponseRedirect(success_url)
     else:
         form = SelectThemeForm(
             initial={
