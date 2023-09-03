@@ -34,6 +34,7 @@ urlpatterns: list[Any] = [
     path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment-training-data"),
     # themes
     path("themes/", views.ThemeListView.as_view(), name="theme-list"),
+    path("update_theme/", views.UpdateThemeView.as_view(), name="theme-update"),
     # wagtail api
     path("wagtail/", include((views.wagtail_api_router.get_urlpatterns(), "api"), namespace="wagtail")),
 ]

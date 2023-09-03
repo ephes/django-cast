@@ -7,7 +7,7 @@ from django.db.models import QuerySet
 from django.http import JsonResponse
 from django.urls import reverse
 from django.views.generic import CreateView
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -19,7 +19,7 @@ from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.images.api.v2.views import ImagesAPIViewSet
 
 from ..filters import PostFilterset
-from ..forms import VideoForm
+from ..forms import SelectThemeForm, VideoForm
 from ..models import (
     Audio,
     Blog,
@@ -29,6 +29,7 @@ from ..models import (
     get_template_base_dir_choices,
 )
 from ..views import HtmxHttpRequest
+from ..views.theme import set_template_base_dir
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -164,6 +165,23 @@ class ThemeListView(generics.ListAPIView):
             selected = slug == template_base_dir
             results.append({"slug": slug, "name": name, "selected": selected})
         return Response(results)
+
+
+class UpdateThemeView(APIView):
+    """
+    Update the selected theme.
+    """
+
+    def post(self, request: Request, *args, **kwargs) -> Response:
+        new_theme_slug = request.data.get("theme_slug", None)
+        form = SelectThemeForm({"template_base_dir": new_theme_slug})
+        if not form.is_valid():
+            return Response({"error": "Theme slug is invalid"}, status=status.HTTP_400_BAD_REQUEST)
+
+        request = cast(HtmxHttpRequest, request)
+        set_template_base_dir(request, form.cleaned_data["template_base_dir"])
+
+        return Response({"message": "Theme updated successfully"}, status=status.HTTP_200_OK)
 
 
 class FilteredPagesAPIViewSet(PagesAPIViewSet):

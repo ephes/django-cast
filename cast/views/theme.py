@@ -8,6 +8,11 @@ from ..forms import SelectThemeForm
 from ..models import HtmxHttpRequest, get_template_base_dir
 
 
+def set_template_base_dir(request: HtmxHttpRequest, template_base_dir: str) -> None:
+    """Store the template base dir in the session."""
+    request.session["template_base_dir"] = template_base_dir
+
+
 def select_theme(request: HtmxHttpRequest) -> Union[HttpResponse, HttpResponseLocation]:
     """
     Store the selected theme in the session. This is used to
@@ -21,7 +26,7 @@ def select_theme(request: HtmxHttpRequest) -> Union[HttpResponse, HttpResponseLo
     if request.method == "POST":
         form = SelectThemeForm(request.POST)
         if form.is_valid():
-            request.session["template_base_dir"] = form.cleaned_data["template_base_dir"]
+            set_template_base_dir(request, form.cleaned_data["template_base_dir"])
             success_url = form.cleaned_data["next"]
             if request.htmx:
                 return HttpResponseLocation(success_url)

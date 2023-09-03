@@ -290,3 +290,33 @@ def test_list_themes(api_client):
     # Then we expect a list of themes to be returned and include the `plain` theme
     result = r.json()
     assert "plain" in {theme["slug"] for theme in result}
+
+
+@pytest.mark.django_db
+def test_update_theme(api_client):
+    # Given an api url to update the theme
+    url = reverse("cast:api:theme-update")
+    # When we post to the update theme endpoint
+    r = api_client.post(url, {"theme_slug": "plain"}, format="json")
+    assert r.status_code == 200
+
+    # Then we expect a success message to be returned
+    result = r.json()
+    assert result["message"] == "Theme updated successfully"
+    assert api_client.session.get("template_base_dir") == "plain"
+
+
+@pytest.mark.django_db
+def test_update_theme_invalid(api_client):
+    # Given an api url to update the theme
+    url = reverse("cast:api:theme-update")
+    # When we post an invalid theme to the update theme endpoint
+    r = api_client.post(url, {"theme_slug": "invalid"}, format="json")
+    assert r.status_code == 400
+
+    # Then we expect an error message to be returned and
+    # the theme is not stored in the session
+    result = r.json()
+    print(result)
+    assert result["error"] == "Theme slug is invalid"
+    assert api_client.session.get("template_base_dir") is None
