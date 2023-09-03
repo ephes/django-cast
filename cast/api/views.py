@@ -160,11 +160,12 @@ class ThemeListView(generics.ListAPIView):
         choices = get_template_base_dir_choices()
         request = cast(HtmxHttpRequest, request)
         template_base_dir = get_template_base_dir(request, None)
-        results = []
+        themes = []
         for slug, name in choices:
             selected = slug == template_base_dir
-            results.append({"slug": slug, "name": name, "selected": selected})
-        return Response(results)
+            themes.append({"slug": slug, "name": name, "selected": selected})
+        result = {"items": themes}
+        return Response(result)
 
 
 class UpdateThemeView(APIView):

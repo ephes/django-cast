@@ -289,7 +289,7 @@ def test_list_themes(api_client):
 
     # Then we expect a list of themes to be returned and include the `plain` theme
     result = r.json()
-    assert "plain" in {theme["slug"] for theme in result}
+    assert "plain" in {theme["slug"] for theme in result["items"]}
 
 
 @pytest.mark.django_db

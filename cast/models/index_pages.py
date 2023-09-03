@@ -184,6 +184,14 @@ class Blog(Page):
         return reverse("cast:api:facet-counts-detail", kwargs={"pk": self.pk})
 
     @property
+    def theme_list_api_url(self) -> str:
+        return reverse("cast:api:theme-list")
+
+    @property
+    def theme_update_api_url(self) -> str:
+        return reverse("cast:api:theme-update")
+
+    @property
     def comment_post_url(self) -> str:
         ajax_post_url = reverse("comments-post-comment-ajax")
         return ajax_post_url
