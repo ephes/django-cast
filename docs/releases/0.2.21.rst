@@ -6,4 +6,4 @@ the selection result in the session.
 
 - Added a snippet viewset to be able to do CRUD on tags via wagtail admin #100
 - Let users select a theme for the site and store the choice in the session #105
-- Added a new api endpoint to get the list of available themes #105
+- Added a new api endpoint to get the list of available themes and update the selected theme #105
