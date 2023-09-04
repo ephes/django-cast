@@ -94,6 +94,7 @@ class TagsSnippetViewSet(SnippetViewSet):
     menu_order = 200  # will put in 3rd place (000 being 1st, 100 2nd)
     list_display = ["name", "slug"]
     search_fields = ("name",)
+    _meta = Tag._meta  # needed for wagtail4 compatibility :/ FIXME
 
 
 register_snippet(TagsSnippetViewSet)
