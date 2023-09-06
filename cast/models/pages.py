@@ -77,14 +77,23 @@ def sync_media_ids(from_database: TypeToIdSet, from_body: TypeToIdSet) -> tuple[
     return to_add, to_remove
 
 
-class PlaceholderRequest:
-    """Just a fake request to please the serve method"""
+class ProxyRequest:
+    """
+    Just a fake request to please the serve method if the optional
+    request attribute is not set.
+
+    When it's set it will be used to render the page. This is used
+    for example to pass the request from an rest api view to the
+    page's serve method, because the actual theme is stored in the
+    session and the request is needed to get the session.
+    """
 
     is_preview = False
     headers: dict[str, str] = {}
     META: dict = {}
     port: int = 80
     host: str = f"https://localhost:{port}"
+    request: Optional[HttpRequest] = None
 
     def get_host(self) -> str:
         return self.host
@@ -352,12 +361,18 @@ class Post(Page):
         return result
 
     def get_description(
-        self, request=PlaceholderRequest(), render_detail=False, escape_html=True, remove_newlines=True
+        self,
+        request: Union[HttpRequest, ProxyRequest] = ProxyRequest(),
+        render_detail: bool = False,
+        escape_html: bool = True,
+        remove_newlines: bool = True,
     ) -> SafeText:
         """
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
         """
+        if hasattr(request, "request") and request.request is not None:
+            request = request.request
         self._local_template_name = "post_body.html"
         description = self.serve(request, render_detail=render_detail).rendered_content
         if remove_newlines:

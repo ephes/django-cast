@@ -4,7 +4,7 @@ from .gallery import Gallery, get_or_create_gallery
 from .index_pages import Blog, HtmxHttpRequest, Podcast
 from .itunes import ItunesArtWork
 from .moderation import SpamFilter
-from .pages import Episode, HomePage, Post, sync_media_ids
+from .pages import Episode, HomePage, Post, ProxyRequest, sync_media_ids
 from .snippets import PostCategory
 from .theme import (
     TemplateBaseDirectory,
@@ -28,6 +28,7 @@ __all__ = [
     "ItunesArtWork",
     "Post",
     "PostCategory",
+    "ProxyRequest",
     "Episode",
     "sync_media_ids",
     "SpamFilter",

@@ -4,13 +4,7 @@ from django.http.request import QueryDict
 from django.urls import reverse
 
 from cast import appsettings
-from cast.models.pages import (
-    CustomEpisodeForm,
-    Episode,
-    HomePage,
-    PlaceholderRequest,
-    Post,
-)
+from cast.models.pages import CustomEpisodeForm, Episode, HomePage, Post, ProxyRequest
 from cast.models.video import Video
 
 
@@ -206,7 +200,7 @@ class TestPostModel:
         post = Post()
         post._local_template_name = local_template_name
 
-        assert post.get_template(PlaceholderRequest()) == expected_template
+        assert post.get_template(ProxyRequest()) == expected_template
 
     @pytest.mark.parametrize(
         "is_public, is_removed, contained_in_list",
@@ -280,7 +274,7 @@ class TestEpisodeModel:
         episode = Episode()
         episode._local_template_name = local_template_name
 
-        assert episode.get_template(PlaceholderRequest()) == expected_template
+        assert episode.get_template(ProxyRequest()) == expected_template
 
     def test_page_type(self):
         episode = Episode()
@@ -309,7 +303,7 @@ def test_custom_episode_form():
 
 
 def test_placeholder_request():
-    request = PlaceholderRequest()
+    request = ProxyRequest()
     assert "localhost" in request.get_host()
     assert request.get_port() == 80
 
