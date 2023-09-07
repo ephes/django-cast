@@ -8,4 +8,4 @@ past from the json api to the wagtail page. This caused the vue theme
 to be completely broken. This is fixed now.
 
 - Bugfix theme selection #105
--
+- Fixed mypy issues by django-stubs update + one small fix #101
