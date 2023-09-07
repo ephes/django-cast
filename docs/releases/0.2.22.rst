@@ -1,0 +1,11 @@
+0.2.22 (2023-09-11)
+-------------------
+
+Fixed a bad bug in theme selection: If you selected a theme which was
+stored in the session, for html fragments rendered via the json api the
+pre selected theme was used instead, because the real request was not
+past from the json api to the wagtail page. This caused the vue theme
+to be completely broken. This is fixed now.
+
+- Bugfix theme selection #105
+-
