@@ -1,10 +1,12 @@
 import logging
 from collections import OrderedDict
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.urls import reverse
 from django.views.generic import CreateView
 from rest_framework import generics, status
@@ -203,10 +205,34 @@ class FilteredPagesAPIViewSet(PagesAPIViewSet):
         return filterset.qs
 
     def get_queryset(self):
-        ProxyRequest.request = self.request
         if self.request.GET.dict().get("use_post_filter", "false") == "true":
             return self.get_filtered_queryset()
         return super().get_queryset()
+
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Override dispatch to set request on ProxyRequest to be able to use
+        the real request in page models. This is needed for example to select
+        the correct template base directory (theme) from `request.session` which
+        would otherwise not be available.
+
+        Putting this into get_queryset() would not work because `ProxyRequest.request`
+        would be None again before it gets used in the `page.get_description` method.
+        """
+
+        @contextmanager
+        def tunneled_request(_request: HttpRequest) -> Iterator:
+            """
+            Set request on ProxyRequest for use in page models temporarily.
+            """
+            ProxyRequest.request = _request
+            try:
+                yield
+            finally:
+                ProxyRequest.request = None
+
+        with tunneled_request(request):
+            return super().dispatch(request, *args, **kwargs)
 
 
 # Wagtail API

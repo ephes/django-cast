@@ -320,3 +320,25 @@ def test_update_theme_invalid(api_client):
     print(result)
     assert result["error"] == "Theme slug is invalid"
     assert api_client.session.get("template_base_dir") is None
+
+
+@pytest.mark.django_db
+def test_render_html_with_theme_from_session(api_client, post):
+    # Given we have custom theme set in the session
+    r = api_client.post(
+        # FIXME there's some way to update the session more elegantly
+        # use this instead of the post request
+        reverse("cast:api:theme-update"),
+        {"theme_slug": "plain"},
+        format="json",
+    )
+    assert r.status_code == 200
+
+    # When we request the blog post via api
+    url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
+    r = api_client.get(url, format="json")
+    assert r.status_code == 200
+
+    # Then we expect the blog post to be rendered with the theme from the session
+    assert r.context.get("template_base_dir") == "plain"
+    assert all([t.name.startswith("cast/plain/") for t in r.templates])
