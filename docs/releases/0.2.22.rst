@@ -9,3 +9,4 @@ to be completely broken. This is fixed now.
 
 - Bugfix theme selection #105
 - Fixed mypy issues by django-stubs update + one small fix #101
+- Improved documentation for theme selection #105

@@ -2,14 +2,21 @@
 Templates / Themes
 ******************
 
-It's possible to use different templates for the whole site or different
-blogs. The built-in templates should be selectable right from the Wagtail
-admin interface:
+You can choose different templates for the entire website or for specific
+blogs / podcasts. All users can select these templates from the Wagtail
+admin interface. Individual users can make their own template selections,
+which are stored in their session.
 
 * Plain HTML (plain) - This is just a plain HTML template without any
   CSS
 * Bootstrap 4 (bootstrap4) - This is a template that uses Bootstrap 4
   and is currently the default template
+* `Bootstrap 5 (bootstrap5) <https://https://github.com/ephes/cast-bootstrap5>`_
+  - This is a template that uses Bootstrap 5 and is the theme that I usually
+  use for my own projects
+* `Vue.js <https://https://github.com/ephes/cast-vue>`_ - This is a template
+  that uses Vue.js and demonstrates how to combine an SPA frontend with
+  django-cast
 
 If you want to use your own templates, you can do so by overwriting the
 built-in templates or creating a new directory in your project's
@@ -28,6 +35,7 @@ your custom template in the Wagtail admin interface.
     * `cast/minimal/post.html`
     * `cast/minimal/post_body.html`
     * `cast/minimal/episode.html`
+    * `cast/minimal/select_template.html`
 
 .. hint::
 
@@ -99,3 +107,26 @@ This setting can be found at `pages > ... > Blog`:
 .. image:: images/blog_template_base_dir_setting.png
   :width: 600
   :alt: Set the theme or "template base directory" for a single blog
+
+How to Change the Theme for an Individual User
+==============================================
+
+The theme selection for an individual user is stored in `request.session`
+and does overwrite blog and site level theme settings.
+
+JSON-Api
+--------
+
+You can get a list of selectable themes via the `cast:api:theme-list`
+endpoint. This endpoint will also show the currently selected theme.
+If you want to update the selected theme, you can do so via
+`cast:api:theme-update`.
+
+Hypermedia
+----------
+
+The hypermedia endpoints for getting / setting the theme are:
+
+* `cast:theme-list` - List of all themes (the currently selected theme
+  is marked)
+* `cast:theme-update` - Update the theme for the current user

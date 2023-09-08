@@ -27,7 +27,8 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 - Use [Twitter Player Card](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/player-card)
   for links to podcast episode detail pages
 - Tags and categories for posts which are then included in the faceted navigation UI (beta feature)
-
+- [Frontend themes](https://django-cast.readthedocs.io/en/develop/features.html#templates-themes) to
+  customize the look and feel of your site
 
 ## Deployment
 
