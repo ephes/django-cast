@@ -4,7 +4,7 @@ from django.http.request import QueryDict
 from django.urls import reverse
 
 from cast import appsettings
-from cast.models.pages import CustomEpisodeForm, Episode, HomePage, Post, ProxyRequest
+from cast.models.pages import CustomEpisodeForm, Episode, HomePage, HtmlField, Post
 from cast.models.video import Video
 
 
@@ -149,28 +149,30 @@ class TestPostModel:
         post = Post()
         assert post._media_ids_from_body([block]) == {}
 
-    def test_get_description_escape(self, mocker):
+    def test_get_description_escape(self, mocker, simple_request):
         class Rendered:
             rendered_content = "<h1>foo</h1>"
 
         mocker.patch("cast.models.Post.serve", return_value=Rendered())
         post = Post()
-        description = post.get_description(escape_html=True)
+        description = post.get_description(request=simple_request, escape_html=True)
         assert "&lt" in description
 
-    def test_get_description_newlines(self, mocker):
+    def test_get_description_newlines(self, mocker, simple_request):
         class Rendered:
             rendered_content = "<h1>foo</h1>\n"
 
         mocker.patch("cast.models.Post.serve", return_value=Rendered())
         post = Post()
-        description = post.get_description(remove_newlines=False)
+        description = post.get_description(request=simple_request, remove_newlines=False)
         assert "\n" in description
 
     def test_overview_html(self, mocker):
         expected_html = "<h1>foo</h1>"
         mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
-        overview = Post().html_overview
+        html_field = HtmlField(source="*", render_detail=False)
+        html_field._context = {"request": "foobar"}
+        overview = html_field.to_representation(Post())
         assert overview == expected_html
         assert mock.call_args[1]["render_detail"] is False
         assert mock.call_args[1]["escape_html"] is False
@@ -179,7 +181,9 @@ class TestPostModel:
     def test_detail_html(self, mocker):
         expected_html = "<h1>foo</h1><p>bar</p>"
         mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
-        detail = Post().html_detail
+        html_field = HtmlField(source="*", render_detail=True)
+        html_field._context = {"request": "foobar"}
+        detail = html_field.to_representation(Post())
         assert detail == expected_html
         assert mock.call_args[1]["render_detail"] is True
         assert mock.call_args[1]["escape_html"] is False
@@ -192,7 +196,7 @@ class TestPostModel:
             ("foobar.html", "cast/bootstrap4/foobar.html"),
         ],
     )
-    def test_get_template_for_post(self, local_template_name, expected_template, mocker):
+    def test_get_template_for_post(self, local_template_name, expected_template, mocker, simple_request):
         class TemplateBaseDirectory:
             name = "bootstrap4"
 
@@ -200,7 +204,7 @@ class TestPostModel:
         post = Post()
         post._local_template_name = local_template_name
 
-        assert post.get_template(ProxyRequest()) == expected_template
+        assert post.get_template(simple_request) == expected_template
 
     @pytest.mark.parametrize(
         "is_public, is_removed, contained_in_list",
@@ -266,7 +270,7 @@ class TestEpisodeModel:
             ("foobar.html", "cast/bootstrap4/foobar.html"),
         ],
     )
-    def test_get_template_for_episode(self, local_template_name, expected_template, mocker):
+    def test_get_template_for_episode(self, local_template_name, expected_template, mocker, simple_request):
         class TemplateBaseDirectory:
             name = "bootstrap4"
 
@@ -274,7 +278,7 @@ class TestEpisodeModel:
         episode = Episode()
         episode._local_template_name = local_template_name
 
-        assert episode.get_template(ProxyRequest()) == expected_template
+        assert episode.get_template(simple_request) == expected_template
 
     def test_page_type(self):
         episode = Episode()
@@ -300,12 +304,6 @@ def test_custom_episode_form():
     form = CustomEpisodeForm({"action-publish": "action-publish", "podcast_audio": None})
     form.fields["podcast_audio"] = forms.IntegerField(required=False)
     assert not form.is_valid()
-
-
-def test_placeholder_request():
-    request = ProxyRequest()
-    assert "localhost" in request.get_host()
-    assert request.get_port() == 80
 
 
 @pytest.mark.django_db

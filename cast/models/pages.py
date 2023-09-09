@@ -17,6 +17,7 @@ from django.utils.translation import gettext_lazy as _
 from django_comments import get_model as get_comment_model
 from modelcluster.contrib.taggit import ClusterTaggableManager
 from modelcluster.fields import ParentalKey, ParentalManyToManyField
+from rest_framework.fields import Field
 from slugify import slugify
 from taggit.models import TaggedItemBase
 from wagtail import blocks
@@ -77,33 +78,30 @@ def sync_media_ids(from_database: TypeToIdSet, from_body: TypeToIdSet) -> tuple[
     return to_add, to_remove
 
 
-class ProxyRequest:
-    """
-    Just a fake request to please the serve method if the optional
-    request attribute is not set.
-
-    When it's set it will be used to render the page. This is used
-    for example to pass the request from an rest api view to the
-    page's serve method, because the actual theme is stored in the
-    session and the request is needed to get the session.
-    """
-
-    is_preview = False
-    headers: dict[str, str] = {}
-    META: dict = {}
-    port: int = 80
-    host: str = f"https://localhost:{port}"
-    request: Optional[HttpRequest] = None
-
-    def get_host(self) -> str:
-        return self.host
-
-    def get_port(self) -> int:
-        return self.port
-
-
 class PostTag(TaggedItemBase):
     content_object = ParentalKey("Post", related_name="tagged_items", on_delete=models.CASCADE)
+
+
+class HtmlField(Field):
+    """
+    A serializer field to render the html of a post. It's used in the wagtail api
+    to get the rendered html of the overview and detail of a post. An SPA theme
+    like `cast_vue` can then use this html instead of having to render the blocks
+    itself.
+    """
+
+    def __init__(self, *, render_detail: bool = False, **kwargs) -> None:
+        self.render_detail = render_detail
+        super().__init__(**kwargs)
+
+    def to_representation(self, post: "Post") -> SafeText:
+        """
+        Pass the request from context to the post's serve method to be able to
+        render the post with the correct theme.
+        """
+        return post.get_description(
+            request=self.context["request"], render_detail=self.render_detail, escape_html=False, remove_newlines=False
+        )
 
 
 class Post(Page):
@@ -148,8 +146,8 @@ class Post(Page):
         APIField("visible_date"),
         APIField("comments_are_enabled"),
         APIField("body"),
-        APIField("html_overview"),
-        APIField("html_detail"),
+        APIField("html_overview", serializer=HtmlField(source="*", render_detail=False)),
+        APIField("html_detail", serializer=HtmlField(source="*", render_detail=True)),
         APIField("comments"),
         APIField("comments_security_data"),
         APIField("podlove_players"),
@@ -362,7 +360,8 @@ class Post(Page):
 
     def get_description(
         self,
-        request: Union[HttpRequest, ProxyRequest] = ProxyRequest(),
+        *,
+        request: HttpRequest,
         render_detail: bool = False,
         escape_html: bool = True,
         remove_newlines: bool = True,
@@ -371,8 +370,6 @@ class Post(Page):
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
         """
-        if hasattr(request, "request") and request.request is not None:
-            request = request.request
         self._local_template_name = "post_body.html"
         description = self.serve(request, render_detail=render_detail).rendered_content
         if remove_newlines:
@@ -380,24 +377,6 @@ class Post(Page):
         if escape_html:
             description = escape(description)
         return description
-
-    @property
-    def html_overview(self) -> SafeText:
-        """
-        A convenience method to be able to get the rendered html of the overview
-        html of the post for the wagtail api. It then is used in the Vue.js theme
-        for example.
-        """
-        return self.get_description(render_detail=False, escape_html=False, remove_newlines=False)
-
-    @property
-    def html_detail(self) -> SafeText:
-        """
-        Just a convenience method to be able to get the rendered html of the
-        post overview and detail for the wagtail api. It then is used in the
-        Vue.js theme for example.
-        """
-        return self.get_description(render_detail=True, escape_html=False, remove_newlines=False)
 
     def get_absolute_url(self) -> str:
         """This is needed for django-fluentcomments."""
