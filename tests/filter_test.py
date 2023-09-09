@@ -184,9 +184,13 @@ class TestPostFilterset:
         # given a queryset with a tagged post and another post without this tag
         post.tags.add("tag")
         post.save()
+        # use a tag where name and slug are different to test that the slug is used
+        [tag] = post.tags.all()
+        tag.slug = "foobar"
+        tag.save()
         # when the posts are filtered by the tag
         queryset = post.blog.unfiltered_published_posts
-        querydict = QueryDict("tag_facets=tag")
+        querydict = QueryDict(f"tag_facets={tag.slug}")
         filterset = PostFilterset(querydict, queryset=queryset)
         # then the untagged post is not in the queryset
         assert another_post not in filterset.qs
