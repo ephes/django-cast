@@ -1,12 +1,13 @@
 0.2.22 (2023-09-11)
 -------------------
 
-Fixed a bad bug in theme selection: If you selected a theme which was
-stored in the session, for html fragments rendered via the json api the
-pre selected theme was used instead, because the real request was not
-past from the json api to the wagtail page. This caused the vue theme
-to be completely broken. This is fixed now.
+Resolved a significant bug in theme selection. If you picked a theme
+stored in your session, the system would mistakenly apply a pre-selected
+theme for HTML fragments rendered through the JSON API. This was due
+to the real theme choice not being correctly passed from the JSON API
+to the Wagtail page, resulting in a completely dysfunctional Vue theme.
 
 - Bugfix theme selection #105
 - Fixed mypy issues by django-stubs update + one small fix #101
 - Improved documentation for theme selection #105
+- Got rid of ProxyRequest in favor of a simple HtmlField #105
