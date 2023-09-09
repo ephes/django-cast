@@ -287,7 +287,7 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
     def filter(self, qs: models.QuerySet, value: str):
         # Check if value is provided (not None and not an empty list)
         if value:
-            return qs.filter(tags__name__in=[value])
+            return qs.filter(tags__slug__in=[value])
         return qs
 
     def set_facet_counts(self, queryset: models.QuerySet) -> None:

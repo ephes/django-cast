@@ -11,3 +11,4 @@ to the Wagtail page, resulting in a completely dysfunctional Vue theme.
 - Fixed mypy issues by django-stubs update + one small fix #101
 - Improved documentation for theme selection #105
 - Got rid of ProxyRequest in favor of a simple HtmlField #105
+- Fixed searching for name instead of slug when filtering tags #100
