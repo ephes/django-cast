@@ -93,6 +93,9 @@ class TestBlogModel:
     def test_comment_post_url(self, blog):
         assert blog.comment_post_url == reverse("comments-post-comment-ajax")
 
+    def test_has_selectable_themes(self, blog, simple_request):
+        assert blog.get_context(simple_request)["has_selectable_themes"]
+
 
 class TestPostModel:
     pytestmark = pytest.mark.django_db
