@@ -6,7 +6,6 @@ from cast.models import TemplateBaseDirectory
 def get_template_base_directory(request):
     """Get the template base directory for the current request, ignoring all exceptions"""
     try:
-        print("asdf")
         return TemplateBaseDirectory.for_request(request).name
     except Exception:
         # If we can't get the template base directory from the database,
