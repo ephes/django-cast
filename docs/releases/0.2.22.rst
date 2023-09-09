@@ -12,3 +12,4 @@ to the Wagtail page, resulting in a completely dysfunctional Vue theme.
 - Improved documentation for theme selection #105
 - Got rid of ProxyRequest in favor of a simple HtmlField #105
 - Fixed searching for name instead of slug when filtering tags #100
+- Added a `has_selectable_themes` flag to the context of blog pages to make it easy to decide whether a theme selector can be showed #105
