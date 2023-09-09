@@ -218,6 +218,7 @@ class Blog(Page):
         context = self.paginate_queryset(context, self.get_published_posts(filterset.qs), get_params)
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
+        context["has_selectable_themes"] = True
         context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
         context["theme_form"] = self.get_theme_form(request)
         return context
