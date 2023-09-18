@@ -1,4 +1,4 @@
-0.2.22 (2023-09-11)
+0.2.22 (2023-09-18)
 -------------------
 
 Resolved a significant bug in theme selection. If you picked a theme
