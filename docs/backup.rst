@@ -17,6 +17,18 @@ reading from the cast REST-api and recreate the contents by just writing to
 another cast REST-api. This would make it possible to backup and restore really
 easy. But for now you have to do something database specific.
 
+Howto Restore a Database
+========================
+
+.. code-block:: shell
+
+    python commands.py production-db-to-local
+    cd backups
+    mv 2023-09-18-22:17:27_homepage.sql.gz db.staging.psql.gz
+    cd ..
+    cd deploy
+    ansible-playbook restore_database.yml --limit staging
+
 ********************
 Media Backup/Restore
 ********************

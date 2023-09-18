@@ -2,3 +2,5 @@
 -------------------
 
 Just a placeholder for now.
+
+- A little bit more documentation for database restore #56
