@@ -17,7 +17,7 @@ It will add two variables to the context of every template in your site:
 
 - ``cast_base_template``: the base template to use for the current theme
 - ``cast_site_template_base_dir``: the raw template base directory
-  for the current theme holding ``bootstrap4`` or ``plain`` for exapmle
+  for the current theme holding ``bootstrap4`` or ``plain`` for example
 
 The ``cast_base_template`` variable is the one you could use in
 your local template to extend the base template:
