@@ -1,6 +1,6 @@
 # Django Cast
 
-[![name](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-brightgreen)](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-brightgreen)
+[![name](https://img.shields.io/badge/python-3.10%7C3.11%7C3.12-brightgreen)](https://img.shields.io/badge/python-3.9%7C3.10%7C3.11-brightgreen)
 [![name](https://img.shields.io/badge/django-4.0%7C4.1%7C4.2-brightgreen)](https://img.shields.io/badge/django-4.0%7C4.1%7C4.2-brightgreen)
 [![name](https://img.shields.io/badge/wagtail-4%7C5-brightgreen)](https://img.shields.io/badge/wagtail-4%7C5-brightgreen)
 [![name](https://badge.fury.io/py/django-cast.svg)](https://badge.fury.io/py/django-cast)
