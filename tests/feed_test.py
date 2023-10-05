@@ -159,7 +159,7 @@ def test_itunes_elements_add_item_elements_post_block(mocker):
     handler = mocker.MagicMock()
     atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
     atom_itunes_feed_generator.add_item_elements(handler, {"post": post})
-    assert handler.called_once_with("itunes:block", "yes")
+    handler.addQuickElement.assert_called_with("itunes:block", "yes")
 
 
 def test_podcast_feed_categories_and_keywords():
