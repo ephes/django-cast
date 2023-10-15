@@ -195,3 +195,10 @@
     margin-right: 10px;
     margin-left: 10px;
 }
+
+.invalid-feedback {
+    /* Workaround for django-fluentcomments error messages not showing up
+    See https://github.com/ephes/django-cast/issues/107
+    */
+    display: block;
+}
