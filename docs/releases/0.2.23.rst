@@ -1,6 +1,8 @@
-0.2.23 (2023-09-25)
+0.2.23 (2023-10-21)
 -------------------
 
-Just a placeholder for now.
+Added Python 3.12 support, dropped Python 3.9 support.
 
+- Workaround for missing comment form error messages #107 (thanks @petermeissner)
+- Python Version support (+3.12 -3.9) #106
 - A little bit more documentation for database restore #56
