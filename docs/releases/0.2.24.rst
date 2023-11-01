@@ -1,0 +1,6 @@
+0.2.24 (2023-11-06)
+-------------------
+
+Template stuff
+
+- Fixed an issue in the bootstrap4 template ephes/python-podcast#24
