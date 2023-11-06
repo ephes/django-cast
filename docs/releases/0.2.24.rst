@@ -1,6 +1,9 @@
 0.2.24 (2023-11-06)
 -------------------
 
-Template stuff
+Some template fixes and a re-added ordering parameter.
 
-- Fixed an issue in the bootstrap4 template ephes/python-podcast#24
+- Make title link to detail and strip dash from date link in bootstrap4
+  template
+- Re-added the `o` ordering parameter to make it possible to order by
+  visible date
