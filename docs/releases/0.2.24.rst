@@ -7,3 +7,4 @@ Some template fixes and a re-added ordering parameter.
   template
 - Re-added the `o` ordering parameter to make it possible to order by
   visible date
+- Upgraded Python Version for GitHub Actions to 3.12
