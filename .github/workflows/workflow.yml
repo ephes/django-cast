@@ -8,13 +8,14 @@ jobs:
         os: [ubuntu-latest]
     env:
       OS: ${{ matrix.os }}
-      PYTHON: '3.11'
+      PYTHON: '3.12'
     steps:
     - uses: actions/checkout@master
     - name: Setup Python
-      uses: actions/setup-python@master
+      uses: actions/setup-python@v4
       with:
-        python-version: 3.11
+        python-version: 3.12
+        cache: pip
     - name: Install ffmpeg
       uses: FedericoCarboni/setup-ffmpeg@v2
       id: setup-ffmpeg
