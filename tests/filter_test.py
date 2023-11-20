@@ -236,3 +236,11 @@ class TestPostFilterset:
         # then the tag appears in the choices of the bound field
         slugs = {slug for slug, display in filterset.form["tag_facets"].field.choices}
         assert "tag" in slugs
+
+    def test_remove_filters_not_in_configured_filters(self, mocker):
+        # given the configured_filters are an empty set
+        mocker.patch("cast.filters.appsettings.CAST_FILTERSET_FACETS", return_value=[])
+        # when the filterset is created
+        filterset = PostFilterset(QueryDict("foo=bar"))
+        # then all filters are removed
+        assert filterset.filters == {}

@@ -1,4 +1,4 @@
-0.2.24 (2023-11-06)
+0.2.24 (2023-11-21)
 -------------------
 
 Some template fixes and a re-added ordering parameter.
@@ -8,3 +8,4 @@ Some template fixes and a re-added ordering parameter.
 - Re-added the `o` ordering parameter to make it possible to order by
   visible date
 - Upgraded Python Version for GitHub Actions to 3.12
+- #108 Fixed test coverage for `cast/filters.py`
