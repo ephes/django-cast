@@ -10,6 +10,7 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
 from wagtail.blocks import CharBlock, ChooserBlock, ListBlock, StructBlock, TextBlock
+from wagtail.images.models import AbstractRendition, Image
 
 from .models import Gallery
 
@@ -31,6 +32,51 @@ def previous_and_next(all_items: Iterable) -> Iterable:
     previous_items = chain([None], previous_items)
     next_items = chain(islice(next_items, 1, None), [None])
     return zip(previous_items, items, next_items)
+
+
+def calculate_thumbnail_width(original_width, original_height, rect_width, rect_height):
+    # Calculate aspect ratios
+    original_aspect_ratio = original_width / original_height
+    rect_aspect_ratio = rect_width / rect_height
+
+    # Determine if the image needs to be scaled based on width or height
+    if original_aspect_ratio > rect_aspect_ratio:
+        # Scale based on width
+        thumbnail_width = rect_width
+    else:
+        # Scale based on height (maintain aspect ratio)
+        thumbnail_width = rect_height * original_aspect_ratio
+
+    return thumbnail_width
+
+
+class Thumbnail:
+    def __init__(self, image: Image, slot_width: int, slot_height: int, max_scale_factor: int = 3):
+        thumbnail_width = round(calculate_thumbnail_width(image.width, image.height, slot_width, slot_height))
+        self.renditions = self.build_renditions(image, thumbnail_width, max_scale_factor=max_scale_factor)
+
+    @staticmethod
+    def build_renditions(image: Image, width: int, max_scale_factor: int = 3) -> list[AbstractRendition]:
+        renditions = []
+        for scale_factor in range(1, max_scale_factor + 1):
+            scaled_width = width * scale_factor
+            if scaled_width > image.width * 0.8:
+                # already big enough
+                continue
+            renditions.append(image.get_rendition(f"width-{scaled_width}"))
+        return renditions
+
+    @property
+    def src(self) -> str:
+        return self.renditions[0].url
+
+    @property
+    def srcset(self) -> str:
+        return ", ".join(f"{rendition.url} {rendition.width}w" for rendition in self.renditions)
+
+    @property
+    def sizes(self) -> str:
+        return f"{self.renditions[0].width}px"
 
 
 class GalleryBlock(ListBlock):
@@ -57,8 +103,15 @@ class GalleryBlock(ListBlock):
         except TemplateDoesNotExist:
             return self.default_template_name
 
+    @staticmethod
+    def add_image_thumbnails(gallery: QuerySet[Gallery]) -> None:
+        for image in gallery:
+            image.thumbnail = Thumbnail(image, 120, 80)
+            image.modal = Thumbnail(image, 1110, 740)
+
     def get_context(self, gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> dict:
         self.add_prev_next(gallery)
+        self.add_image_thumbnails(gallery)
         return super().get_context(gallery, parent_context=parent_context)
 
 

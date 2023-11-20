@@ -1,7 +1,7 @@
 import pytest
 from wagtail.images.blocks import ImageChooserBlock
 
-from cast.blocks import CodeBlock, GalleryBlock
+from cast.blocks import CodeBlock, GalleryBlock, Thumbnail, calculate_thumbnail_width
 
 
 @pytest.mark.parametrize(
@@ -50,3 +50,35 @@ def test_gallery_block_template_from_theme(mocker):
     block = GalleryBlock(ImageChooserBlock())
     template_name = block.get_template(context={"template_base_dir": "vue"})
     assert template_name == "cast/vue/gallery.html"
+
+
+@pytest.mark.parametrize(
+    "original_width, original_height, slot_width, slot_height, expected_width",
+    [
+        (6000, 4000, 120, 80, 120),  # 3:2 landscape
+        (8000, 4000, 120, 80, 120),  # 2:1 landscape
+        (4000, 6000, 120, 80, 53),  # 2:3 portrait
+        (4000, 4000, 120, 80, 80),  # 1:1 square
+    ],
+)
+def test_calculate_thumbnail_width(original_width, original_height, slot_width, slot_height, expected_width):
+    assert round(calculate_thumbnail_width(original_width, original_height, slot_width, slot_height)) == expected_width
+
+
+class StubImage:
+    url = "image_url"
+
+    def __init__(self, width: int, height: int):
+        self.width = width
+        self.height = height
+
+    def get_rendition(self, width: str) -> "StubImage":
+        return self
+
+
+def test_thumbnail_attributes():
+    image = StubImage(6000, 4000)
+    thumbnail = Thumbnail(image, 120, 80, max_scale_factor=1)
+    assert thumbnail.src == image.url
+    assert thumbnail.srcset == f"{image.url} {image.width}w"
+    assert thumbnail.sizes == f"{image.width}px"

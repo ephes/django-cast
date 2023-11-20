@@ -9,3 +9,4 @@ Some template fixes and a re-added ordering parameter.
   visible date
 - Upgraded Python Version for GitHub Actions to 3.12
 - #108 Fixed test coverage for `cast/filters.py`
+- #109 Responsive images revisited
