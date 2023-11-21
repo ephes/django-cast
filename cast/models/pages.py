@@ -32,7 +32,13 @@ from wagtail.models import Page, PageManager
 from wagtail.search import index
 
 from cast import appsettings
-from cast.blocks import AudioChooserBlock, CodeBlock, GalleryBlock, VideoChooserBlock
+from cast.blocks import (
+    AudioChooserBlock,
+    CastImageChooserBlock,
+    CodeBlock,
+    GalleryBlock,
+    VideoChooserBlock,
+)
 from cast.models import get_or_create_gallery
 
 from .theme import TemplateBaseDirectory
@@ -50,7 +56,7 @@ class ContentBlock(blocks.StreamBlock):
     heading: blocks.CharBlock = blocks.CharBlock(classname="full title")
     paragraph: blocks.RichTextBlock = blocks.RichTextBlock()
     code: CodeBlock = CodeBlock(icon="code")
-    image: ImageChooserBlock = ImageChooserBlock(template="cast/image/image.html")
+    image: CastImageChooserBlock = CastImageChooserBlock(template="cast/image/image.html")
     gallery: GalleryBlock = GalleryBlock(ImageChooserBlock())
     embed: EmbedBlock = EmbedBlock()
     video: VideoChooserBlock = VideoChooserBlock(template="cast/video/video.html", icon="media")
@@ -507,7 +513,7 @@ class HomePage(Page):
         [
             ("heading", blocks.CharBlock(classname="full title")),
             ("paragraph", blocks.RichTextBlock()),
-            ("image", ImageChooserBlock(template="cast/image/image.html")),
+            ("image", CastImageChooserBlock(template="cast/image/image.html")),
             ("gallery", GalleryBlock(ImageChooserBlock())),
         ],
         use_json_field=True,

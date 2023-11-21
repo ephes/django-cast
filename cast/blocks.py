@@ -10,7 +10,8 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
 from wagtail.blocks import CharBlock, ChooserBlock, ListBlock, StructBlock, TextBlock
-from wagtail.images.models import AbstractRendition, Image
+from wagtail.images.blocks import ImageChooserBlock
+from wagtail.images.models import AbstractImage, AbstractRendition, Image
 
 from .models import Gallery
 
@@ -52,11 +53,12 @@ def calculate_thumbnail_width(original_width, original_height, rect_width, rect_
 
 class Thumbnail:
     def __init__(self, image: Image, slot_width: int, slot_height: int, max_scale_factor: int = 3):
+        self.image = image
         thumbnail_width = round(calculate_thumbnail_width(image.width, image.height, slot_width, slot_height))
         self.renditions = self.build_renditions(image, thumbnail_width, max_scale_factor=max_scale_factor)
 
     @staticmethod
-    def build_renditions(image: Image, width: int, max_scale_factor: int = 3) -> list[AbstractRendition]:
+    def build_renditions(image: AbstractImage, width: int, max_scale_factor: int = 3) -> list[AbstractRendition]:
         renditions = []
         for scale_factor in range(1, max_scale_factor + 1):
             scaled_width = width * scale_factor
@@ -68,6 +70,8 @@ class Thumbnail:
 
     @property
     def src(self) -> str:
+        if len(self.renditions) == 0:
+            return getattr(self.image, "url", "")
         return self.renditions[0].url
 
     @property
@@ -76,7 +80,20 @@ class Thumbnail:
 
     @property
     def sizes(self) -> str:
+        if len(self.renditions) == 0:
+            return "100vw"
         return f"{self.renditions[0].width}px"
+
+
+class CastImageChooserBlock(ImageChooserBlock):
+    """
+    Just add a thumbnail to the image because we then can use the thumbnail
+    to get the srcset and sizes attributes in the template.
+    """
+
+    def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
+        image.thumbnail = Thumbnail(image, 1110, 740)
+        return super().get_context(image, parent_context=parent_context)
 
 
 class GalleryBlock(ListBlock):

@@ -1,5 +1,10 @@
-{% load wagtail_srcset_tags %}
-
 <a href="{{ value.file.url }}">
-  {% srcset_image value width-600 class="cast-image" sizes="100vw" height="" loading="lazy" %}
+  <img
+    class="cast-image"
+    alt="{{ value.default_alt_text }}"
+    src="{{ value.thumbnail.src }}"
+    srcset="{{ value.thumbnail.srcset }}"
+    sizes="{{ value.thumbnail.sizes }}"
+    loading="lazy"
+  >
 </a>
