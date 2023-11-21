@@ -21,7 +21,10 @@ function setButtons (curImage, modalFooter) {
 
 function setModalImage (el) {
   curImage = el
-  modalImage.attr('src', curImage.data('modal-src')).attr('srcset', curImage.data('modal-srcset')).attr('sizes', curImage.data('modal-sizes'))
+  modalImage.attr('src', curImage.data('modal-src'))
+  modalImage.attr('srcset', curImage.data('modal-srcset'))
+  modalImage.attr('sizes', curImage.data('modal-sizes'))
+  modalImage.attr('alt', curImage.attr('alt'))
   modalImage.parent().attr('href', curImage.parent().data("full"))
   setButtons(curImage, modalFooter)
 }
