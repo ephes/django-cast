@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -52,38 +52,70 @@ def calculate_thumbnail_width(original_width, original_height, rect_width, rect_
     return thumbnail_width
 
 
+ImageFormat = Literal["jpeg", "avif", "webp"]
+
+
+ImageFormats = list[ImageFormat]
+
+
 class Thumbnail:
-    def __init__(self, image: Image, slot_width: int, slot_height: int, max_scale_factor: int = 3):
+    def __init__(
+        self,
+        image: Image,
+        slot_width: int,
+        slot_height: int,
+        max_scale_factor: int = 3,
+        formats: ImageFormats = ["jpeg", "avif"],
+    ) -> None:
         self.image = image
+        self.formats: ImageFormats = formats
         thumbnail_width = round(calculate_thumbnail_width(image.width, image.height, slot_width, slot_height))
-        self.renditions = self.build_renditions(image, thumbnail_width, max_scale_factor=max_scale_factor)
+        self.renditions = {}
+        for image_format in self.formats:
+            self.renditions[image_format] = self.build_renditions(
+                image, thumbnail_width, max_scale_factor=max_scale_factor, format=image_format
+            )
 
     @staticmethod
-    def build_renditions(image: AbstractImage, width: int, max_scale_factor: int = 3) -> list[AbstractRendition]:
+    def build_renditions(
+        image: AbstractImage, width: int, max_scale_factor: int = 3, format: str = "jpeg"
+    ) -> list[AbstractRendition]:
         renditions = []
         for scale_factor in range(1, max_scale_factor + 1):
             scaled_width = width * scale_factor
             if scaled_width > image.width * 0.8:
                 # already big enough
                 continue
-            renditions.append(image.get_rendition(f"width-{scaled_width}"))
+            renditions.append(image.get_rendition(f"width-{scaled_width}|format-{format}"))
         return renditions
 
     @property
-    def src(self) -> str:
-        if len(self.renditions) == 0:
-            return getattr(self.image, "url", "")
-        return self.renditions[0].url
+    def src(self) -> dict[ImageFormat, str]:
+        format_to_src = {}
+        for image_format in self.formats:
+            if len(self.renditions.get(image_format, [])) == 0:
+                format_to_src[image_format] = getattr(self.image, "url", "")
+            else:
+                format_to_src[image_format] = self.renditions[image_format][0].url
+        return format_to_src
 
     @property
-    def srcset(self) -> str:
-        return ", ".join(f"{rendition.url} {rendition.width}w" for rendition in self.renditions)
+    def srcset(self) -> dict[ImageFormat, str]:
+        format_to_srcset = {}
+        for image_format in self.formats:
+            if len(self.renditions.get(image_format, [])) == 0:
+                continue
+            format_to_srcset[image_format] = ", ".join(
+                f"{rendition.url} {rendition.width}w" for rendition in self.renditions[image_format]
+            )
+        return format_to_srcset
 
     @property
     def sizes(self) -> str:
-        if len(self.renditions) == 0:
+        jpg_renditions = self.renditions["jpeg"]
+        if len(jpg_renditions) == 0:
             return "100vw"
-        return f"{self.renditions[0].width}px"
+        return f"{jpg_renditions[0].width}px"
 
 
 class CastImageChooserBlock(ImageChooserBlock):

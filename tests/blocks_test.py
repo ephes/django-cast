@@ -79,6 +79,6 @@ class StubImage:
 def test_thumbnail_attributes():
     image = StubImage(6000, 4000)
     thumbnail = Thumbnail(image, 120, 80, max_scale_factor=1)
-    assert thumbnail.src == image.url
-    assert thumbnail.srcset == f"{image.url} {image.width}w"
+    assert thumbnail.src["jpeg"] == image.url
+    assert thumbnail.srcset["jpeg"] == f"{image.url} {image.width}w"
     assert thumbnail.sizes == f"{image.width}px"
