@@ -7,7 +7,7 @@ from wagtail.images.models import Image
 
 
 class Gallery(TimeStampedModel):
-    images = models.ManyToManyField(Image)
+    images: models.ManyToManyField = models.ManyToManyField(Image)  # FIXME mypy are you ok?
     post_context_key = "gallery"
 
     @property

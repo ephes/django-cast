@@ -122,10 +122,10 @@ class Post(Page):
         help_text=_("Whether comments are enabled for this post."),
     )
 
-    images = models.ManyToManyField(Image, blank=True)
-    videos = models.ManyToManyField("cast.Video", blank=True)
-    galleries = models.ManyToManyField("cast.Gallery", blank=True)
-    audios = models.ManyToManyField("cast.Audio", blank=True)
+    images: models.ManyToManyField = models.ManyToManyField(Image, blank=True)  # FIXME mypy are you ok?
+    videos: models.ManyToManyField = models.ManyToManyField("cast.Video", blank=True)
+    galleries: models.ManyToManyField = models.ManyToManyField("cast.Gallery", blank=True)
+    audios: models.ManyToManyField = models.ManyToManyField("cast.Audio", blank=True)
     categories = ParentalManyToManyField("cast.PostCategory", blank=True)
 
     # managers
