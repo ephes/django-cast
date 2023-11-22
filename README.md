@@ -15,7 +15,7 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 **Documentation for [current version 0.2.23](https://django-cast.readthedocs.io/en/develop/)**
 
 ## Key Features
-- Responsive images via [wagtail-srcset](https://github.com/ephes/wagtail_srcset)
+- [Responsive images](https://django-cast.readthedocs.io/en/develop/features.html#responsive-images)
 - Wagtail as CMS makes it possible for non-technical people to manage the content
   (blog posts, podcast episodes, ...)
 - Podcast support: this package powers [python-podcast.de](https://python-podcast.de/show)

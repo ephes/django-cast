@@ -51,6 +51,21 @@ using an object store like S3 to store your images and want to avoid
 having your production images deleted when you try out stuff in your
 development environment.
 
+.. _image_slot_dimensions:
+
+CAST_IMAGE_SLOT_DIMENSIONS
+==========================
+
+The dimensions of the image slots in blog posts and the modal shown
+when clicking on thumbnail gallery images. Defaults to
+``(1110, 740)``.
+
+CAST_THUMBNAIL_SLOT_DIMENSIONS
+===============================
+
+The dimension of image slots for thumbnails in blog posts. Defaults
+to ``(120, 80)``.
+
 *********
 Templates
 *********

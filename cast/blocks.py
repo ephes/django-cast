@@ -13,6 +13,7 @@ from wagtail.blocks import CharBlock, ChooserBlock, ListBlock, StructBlock, Text
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image
 
+from . import appsettings as settings
 from .models import Gallery
 
 if TYPE_CHECKING:
@@ -92,7 +93,8 @@ class CastImageChooserBlock(ImageChooserBlock):
     """
 
     def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
-        image.thumbnail = Thumbnail(image, 1110, 740)
+        slot_width, slog_height = settings.CAST_IMAGE_SLOT_DIMENSIONS
+        image.thumbnail = Thumbnail(image, slot_width, slog_height)
         return super().get_context(image, parent_context=parent_context)
 
 
@@ -122,9 +124,11 @@ class GalleryBlock(ListBlock):
 
     @staticmethod
     def add_image_thumbnails(gallery: QuerySet[Gallery]) -> None:
+        thumbnail_slot_width, thumbnail_slot_height = settings.CAST_THUMBNAIL_SLOT_DIMENSIONS
+        image_slot_width, image_slot_height = settings.CAST_IMAGE_SLOT_DIMENSIONS
         for image in gallery:
-            image.thumbnail = Thumbnail(image, 120, 80)
-            image.modal = Thumbnail(image, 1110, 740)
+            image.thumbnail = Thumbnail(image, thumbnail_slot_width, thumbnail_slot_height)
+            image.modal = Thumbnail(image, image_slot_width, image_slot_height)
 
     def get_context(self, gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> dict:
         self.add_prev_next(gallery)

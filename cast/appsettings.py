@@ -14,6 +14,8 @@ DELETE_WAGTAIL_IMAGES: bool = getattr(settings, "DELETE_WAGTAIL_IMAGES", True)
 CAST_FILTERSET_FACETS: list[str] = getattr(
     settings, "CAST_FILTERSET_FACETS", ["search", "date", "date_facets", "category_facets", "tag_facets", "o"]
 )
+CAST_IMAGE_SLOT_DIMENSIONS: tuple[int, int] = getattr(settings, "CAST_IMAGE_SLOT_DIMENSIONS", (1110, 740))
+CAST_THUMBNAIL_SLOT_DIMENSIONS: tuple[int, int] = getattr(settings, "CAST_THUMBNAIL_SLOT_DIMENSIONS", (120, 80))
 
 SettingValue = Union[str, bool, int]
 

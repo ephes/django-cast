@@ -2,6 +2,7 @@
 Features
 ########
 
+.. include:: responsive-images.rst
 .. include:: frontend.rst
 .. include:: django-admin.rst
 .. include:: social-media.rst
