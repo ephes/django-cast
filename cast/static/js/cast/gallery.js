@@ -2,6 +2,7 @@
 
 var curImage = null
 var modalImage = $('.modal-image')
+var modalSource = $('.modal-source')
 var modalFooter = $('.modal-footer')
 
 function setButtons (curImage, modalFooter) {
@@ -19,13 +20,22 @@ function setButtons (curImage, modalFooter) {
   modalFooter.html(buttons)
 }
 
-function setModalImage (el) {
+function setModalImage(el) {
   curImage = el
+  const thumbnailPicture = curImage.parent()
+  const thumbnailSource = thumbnailPicture.find('source')
   modalImage.attr('src', curImage.data('modal-src'))
   modalImage.attr('srcset', curImage.data('modal-srcset'))
   modalImage.attr('sizes', curImage.data('modal-sizes'))
   modalImage.attr('alt', curImage.attr('alt'))
-  modalImage.parent().attr('href', curImage.parent().data("full"))
+  // set link for modal image
+  modalImage.parent().parent().attr('href', thumbnailPicture.parent().data("full"))
+  // set attributes for modal source
+  console.log('modal source src: ', thumbnailSource.data('modal-src'))
+  modalSource.attr('src', thumbnailSource.data('modal-src'))
+  modalSource.attr('srcset', thumbnailSource.data('modal-srcset'))
+  modalSource.attr('sizes', thumbnailSource.data('modal-sizes'))
+  // set prev and next buttons
   setButtons(curImage, modalFooter)
 }
 
