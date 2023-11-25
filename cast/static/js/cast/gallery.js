@@ -33,7 +33,6 @@ function setModalImage(el) {
   // set link for modal image
   modalImage.parent().parent().attr('href', thumbnailPicture.parent().data("full"))
   // set attributes for modal source
-  modalSource.attr('src', thumbnailSource.data('modal-src'))
   modalSource.attr('srcset', thumbnailSource.data('modal-srcset'))
   modalSource.attr('sizes', thumbnailSource.data('modal-sizes'))
   // set prev and next buttons
