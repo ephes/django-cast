@@ -1,4 +1,4 @@
-0.2.24 (2023-11-21)
+0.2.24 (2023-11-25)
 -------------------
 
 Some template fixes and a re-added ordering parameter.
