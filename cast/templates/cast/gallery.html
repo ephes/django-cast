@@ -1,7 +1,6 @@
 <div class="cast-gallery-container">
   {% for image in value %}
     <a
-      src="#"
       class="cast-gallery-modal"
       data-toggle="modal"
       data-target="#galleryModal-{{ block.id }}"
@@ -48,10 +47,14 @@
           </button>
         </div>
         <div class="modal-body cast-gallery-body">
-          <a><img class="modal-image cast-image" src="" srcset="" sizes="100vw"></img></a>
+          <picture class="modal-picture">
+            <source class="modal-source" srcset="" sizes="" type="image/avif">
+            <img class="modal-image cast-image" alt="modal image placeholder" src="" srcset="" sizes="100vw">
+          </picture>
         </div>
         <div class="modal-footer cast-gallery-footer">
         </div>
       </div>
     </div>
   </div>
+</div>
