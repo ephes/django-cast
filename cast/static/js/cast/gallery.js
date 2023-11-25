@@ -27,6 +27,8 @@ function setModalImage(el) {
   modalImage.attr('src', curImage.data('modal-src'))
   modalImage.attr('srcset', curImage.data('modal-srcset'))
   modalImage.attr('sizes', curImage.data('modal-sizes'))
+  modalImage.attr('width', curImage.data('modal-width'))
+  modalImage.attr('height', curImage.data('modal-height'))
   modalImage.attr('alt', curImage.attr('alt'))
   // set link for modal image
   modalImage.parent().parent().attr('href', thumbnailPicture.parent().data("full"))

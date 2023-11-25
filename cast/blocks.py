@@ -117,6 +117,20 @@ class Thumbnail:
             return "100vw"
         return f"{jpg_renditions[0].width}px"
 
+    @property
+    def width(self) -> int:
+        jpg_renditions = self.renditions["jpeg"]
+        if len(jpg_renditions) == 0:
+            return 0
+        return jpg_renditions[0].width
+
+    @property
+    def height(self) -> int:
+        jpg_renditions = self.renditions["jpeg"]
+        if len(jpg_renditions) == 0:
+            return 0
+        return jpg_renditions[0].height
+
 
 class CastImageChooserBlock(ImageChooserBlock):
     """
