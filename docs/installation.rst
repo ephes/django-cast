@@ -57,7 +57,6 @@ Add following third party apps to your INSTALLED_APPS setting:
        "wagtail.search",
        "wagtail.admin",
        "wagtail",
-       "wagtail_srcset",
        "modelcluster",
        "taggit",
     )

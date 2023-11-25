@@ -49,7 +49,6 @@ INSTALLED_APPS = [
     "wagtail.search",
     "wagtail.admin",
     "wagtail",
-    "wagtail_srcset",
     "cast.apps.CastConfig",
 ]
 
