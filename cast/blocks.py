@@ -139,8 +139,8 @@ class CastImageChooserBlock(ImageChooserBlock):
     """
 
     def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
-        slot_width, slog_height = settings.CAST_IMAGE_SLOT_DIMENSIONS
-        image.thumbnail = Thumbnail(image, slot_width, slog_height)
+        slot_width, slot_height = settings.CAST_IMAGE_SLOT_DIMENSIONS
+        image.thumbnail = Thumbnail(image, slot_width, slot_height)
         return super().get_context(image, parent_context=parent_context)
 
 
