@@ -10,4 +10,8 @@ Some template fixes and a re-added ordering parameter.
 - Upgraded Python Version for GitHub Actions to 3.12
 - #108 Fixed test coverage for `cast/filters.py`
 - #109 Responsive images revisited
+  - picture element and avif format for images
+  - images now have an `alt` attribute
+  - using `srcset` in combination with `sizes` attributes for smaller images
+  - removed `wagtail_srcset` dependency
 - #110 Fixed mypy errors by putting a workaround in place
