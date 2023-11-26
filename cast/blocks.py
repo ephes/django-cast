@@ -103,18 +103,13 @@ class Thumbnail:
     def src(self) -> dict[ImageFormat, str]:
         format_to_src = {}
         for image_format in self.formats:
-            if len(self.renditions.get(image_format, [])) == 0:
-                format_to_src[image_format] = getattr(self.image, "url", "")
-            else:
-                format_to_src[image_format] = self.renditions[image_format][0].url
+            format_to_src[image_format] = self.renditions[image_format][0].url
         return format_to_src
 
     @property
     def srcset(self) -> dict[ImageFormat, str]:
         format_to_srcset = {}
         for image_format in self.formats:
-            if len(self.renditions.get(image_format, [])) == 0:
-                continue
             format_to_srcset[image_format] = ", ".join(
                 f"{rendition.url} {rendition.width}w" for rendition in self.renditions[image_format]
             )
