@@ -1,5 +1,7 @@
 0.2.25 (2023-11-27)
 -------------------
 
-- Image fixes
+Fixed a bug for small image sources.
+
+- #112 If no renditions are generated, use the original image as the default rendition
 - Regenerate renditions
