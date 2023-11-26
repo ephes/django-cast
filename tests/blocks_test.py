@@ -71,8 +71,10 @@ class StubImage:
     def __init__(self, width: int, height: int):
         self.width = width
         self.height = height
+        self.file = self
 
-    def get_rendition(self, width: str) -> "StubImage":
+    def get_rendition(self, filter_str: str) -> "StubImage":
+        self.rendition_filter = filter_str
         return self
 
 
@@ -82,3 +84,14 @@ def test_thumbnail_attributes():
     assert thumbnail.src["jpeg"] == image.url
     assert thumbnail.srcset["jpeg"] == f"{image.url} {image.width}w"
     assert thumbnail.sizes == f"{image.width}px"
+
+
+def test_thumbnail_attributes_small_source():
+    # given a small source image
+    image = StubImage(800, 835)
+    # when the thumbnail is created
+    thumbnail = Thumbnail(image, 1110, 740)
+    # then the list of renditions contains just one rendition
+    assert len(thumbnail.renditions["jpeg"]) == 1
+    # and the thumbnail is the same size as the source image
+    assert thumbnail.first_rendition.width == image.width

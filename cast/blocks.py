@@ -87,6 +87,16 @@ class Thumbnail:
                 # already big enough
                 continue
             renditions.append(image.get_rendition(f"width-{scaled_width}|format-{format}"))
+        if len(renditions) == 0:
+            # no renditions found, so add at least the original image
+            if format == "jpeg":
+                # just append the original image to avoid compressing it twice but add url attribute to make it
+                # compatible with renditions
+                image.url = image.file.url
+                renditions.append(image)
+            else:
+                # convert if format is not jpeg
+                renditions.append(image.get_rendition(f"width-{image.width}|format-{format}"))
         return renditions
 
     @property
@@ -111,25 +121,20 @@ class Thumbnail:
         return format_to_srcset
 
     @property
+    def first_rendition(self) -> AbstractRendition:
+        return self.renditions["jpeg"][0]
+
+    @property
     def sizes(self) -> str:
-        jpg_renditions = self.renditions["jpeg"]
-        if len(jpg_renditions) == 0:
-            return "100vw"
-        return f"{jpg_renditions[0].width}px"
+        return f"{self.first_rendition.width}px"
 
     @property
     def width(self) -> int:
-        jpg_renditions = self.renditions["jpeg"]
-        if len(jpg_renditions) == 0:
-            return 0
-        return jpg_renditions[0].width
+        return self.first_rendition.width
 
     @property
     def height(self) -> int:
-        jpg_renditions = self.renditions["jpeg"]
-        if len(jpg_renditions) == 0:
-            return 0
-        return jpg_renditions[0].height
+        return self.first_rendition.height
 
 
 class CastImageChooserBlock(ImageChooserBlock):
