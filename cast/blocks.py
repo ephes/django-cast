@@ -55,7 +55,7 @@ def calculate_thumbnail_width(original_width, original_height, rect_width, rect_
 ImageFormat = Literal["jpeg", "avif", "webp"]
 
 
-ImageFormats = list[ImageFormat]
+ImageFormats = Iterable[ImageFormat]
 
 
 class Thumbnail:
@@ -65,7 +65,7 @@ class Thumbnail:
         slot_width: int,
         slot_height: int,
         max_scale_factor: int = 3,
-        formats: ImageFormats = ["jpeg", "avif"],
+        formats: ImageFormats = ("jpeg", "avif"),
     ) -> None:
         self.image = image
         self.formats: ImageFormats = formats
