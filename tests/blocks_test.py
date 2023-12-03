@@ -1,7 +1,11 @@
+from typing import cast
+
 import pytest
 from wagtail.images.blocks import ImageChooserBlock
+from wagtail.images.models import AbstractImage
 
-from cast.blocks import CodeBlock, GalleryBlock, Thumbnail, calculate_thumbnail_width
+from cast.blocks import CodeBlock, GalleryBlock, get_srcset_images_for_slots
+from cast.renditions import Height, Rectangle, Width
 
 
 @pytest.mark.parametrize(
@@ -10,7 +14,7 @@ from cast.blocks import CodeBlock, GalleryBlock, Thumbnail, calculate_thumbnail_
         (None, ""),  # make sure None is rendered as empty string
         (  # make sure source is rendered even if language is not found
             {"language": "nonexistent", "source": "blub"},
-            ('<div class="highlight"><pre><span></span>blub\n' "</pre></div>\n"),
+            '<div class="highlight"><pre><span></span>blub\n' "</pre></div>\n",
         ),
         (  # happy path
             {
@@ -52,46 +56,71 @@ def test_gallery_block_template_from_theme(mocker):
     assert template_name == "cast/vue/gallery.html"
 
 
-@pytest.mark.parametrize(
-    "original_width, original_height, slot_width, slot_height, expected_width",
-    [
-        (6000, 4000, 120, 80, 120),  # 3:2 landscape
-        (8000, 4000, 120, 80, 120),  # 2:1 landscape
-        (4000, 6000, 120, 80, 53),  # 2:3 portrait
-        (4000, 4000, 120, 80, 80),  # 1:1 square
-    ],
-)
-def test_calculate_thumbnail_width(original_width, original_height, slot_width, slot_height, expected_width):
-    assert round(calculate_thumbnail_width(original_width, original_height, slot_width, slot_height)) == expected_width
+class StubWagtailImage:
+    class File:
+        name = "test.jpg"
+        url = "https://example.com/test.jpg"
+
+    width = Width(6000)
+    height = Height(4000)
+    file = File()
+
+    @staticmethod
+    def get_renditions(*filter_strings):
+        class StubImage:
+            url = "https://example.com/test.jpg"
+            width = Width(120)
+
+        return {fs: StubImage() for fs in filter_strings}
 
 
-class StubImage:
-    url = "image_url"
-
-    def __init__(self, width: int, height: int):
-        self.width = width
-        self.height = height
-        self.file = self
-
-    def get_rendition(self, filter_str: str) -> "StubImage":
-        self.rendition_filter = filter_str
-        return self
-
-
-def test_thumbnail_attributes():
-    image = StubImage(6000, 4000)
-    thumbnail = Thumbnail(image, 120, 80, max_scale_factor=1)
-    assert thumbnail.src["jpeg"] == image.url
-    assert thumbnail.srcset["jpeg"] == f"{image.url} {image.width}w"
-    assert thumbnail.sizes == f"{image.width}px"
+def test_get_srcset_images_for_slots_get_renditions_is_called_when_filters_not_empty():
+    # Given an image that should generate multiple renditions for a slot
+    slot = Rectangle(Width(120), Height(80))
+    images_for_slots = get_srcset_images_for_slots(
+        cast(AbstractImage, StubWagtailImage()),
+        [slot],
+        ["jpeg", "avif"],
+    )
+    # When we get the srcset images for the slot
+    image_for_slot = images_for_slots[slot]
+    split_srcset = image_for_slot.srcset["jpeg"].replace(",", "").split(" ")  # type: ignore
+    srcset_widths = sorted([int(t.rstrip("w")) for t in split_srcset if t.endswith("w")])
+    # Then the srcset widths should be 120 * 1, 120 * 2, 120 * 3
+    assert srcset_widths == [120, 240, 360]
 
 
-def test_thumbnail_attributes_small_source():
-    # given a small source image
-    image = StubImage(800, 835)
-    # when the thumbnail is created
-    thumbnail = Thumbnail(image, 1110, 740)
-    # then the list of renditions contains just one rendition
-    assert len(thumbnail.renditions["jpeg"]) == 1
-    # and the thumbnail is the same size as the source image
-    assert thumbnail.first_rendition.width == image.width
+class Stub1PxImage:
+    class File:
+        name = "test.jpg"
+        url = "https://example.com/test.jpg"
+
+    width = Width(1)
+    height = Height(1)
+    file = File()
+
+    @staticmethod
+    def get_rendition(_filter_string):
+        class Avif:
+            url = "https://example.com/test.avif"
+            width = Width(1)
+
+        return Avif()
+
+
+def test_get_srcset_images_for_slots_use_original_if_image_too_small():
+    # Given an image that is too small for the slot
+    slot = Rectangle(Width(120), Height(80))
+    images_for_slots = get_srcset_images_for_slots(
+        cast(AbstractImage, Stub1PxImage()),
+        [slot],
+        ["jpeg", "avif"],
+    )
+    # When we get the srcset images for the slot
+    image_for_slot = images_for_slots[slot]
+    # Then the image for the slot should be the original image
+    assert image_for_slot.src["jpeg"] == "https://example.com/test.jpg"
+    assert image_for_slot.srcset["jpeg"] == "https://example.com/test.jpg 1w"
+    # And it should have been converted to avif
+    assert image_for_slot.src["avif"] == "https://example.com/test.avif"
+    assert image_for_slot.srcset["avif"] == "https://example.com/test.avif 1w"

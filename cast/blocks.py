@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Literal, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -11,10 +11,18 @@ from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
 from wagtail.blocks import CharBlock, ChooserBlock, ListBlock, StructBlock, TextBlock
 from wagtail.images.blocks import ImageChooserBlock
-from wagtail.images.models import AbstractImage, AbstractRendition, Image
+from wagtail.images.models import AbstractImage
 
 from . import appsettings as settings
 from .models import Gallery
+from .renditions import (
+    Height,
+    ImageFormats,
+    ImageForSlot,
+    Rectangle,
+    RenditionFilters,
+    Width,
+)
 
 if TYPE_CHECKING:
     from .models import Audio, Video
@@ -36,100 +44,44 @@ def previous_and_next(all_items: Iterable) -> Iterable:
     return zip(previous_items, items, next_items)
 
 
-def calculate_thumbnail_width(original_width, original_height, rect_width, rect_height):
-    # Calculate aspect ratios
-    original_aspect_ratio = original_width / original_height
-    rect_aspect_ratio = rect_width / rect_height
-
-    # Determine if the image needs to be scaled based on width or height
-    if original_aspect_ratio > rect_aspect_ratio:
-        # Scale based on width
-        thumbnail_width = rect_width
-    else:
-        # Scale based on height (maintain aspect ratio)
-        thumbnail_width = rect_height * original_aspect_ratio
-
-    return thumbnail_width
-
-
-ImageFormat = Literal["jpeg", "avif", "webp"]
-
-
-ImageFormats = Iterable[ImageFormat]
-
-
-class Thumbnail:
-    def __init__(
-        self,
-        image: Image,
-        slot_width: int,
-        slot_height: int,
-        max_scale_factor: int = 3,
-        formats: ImageFormats = ("jpeg", "avif"),
-    ) -> None:
-        self.image = image
-        self.formats: ImageFormats = formats
-        thumbnail_width = round(calculate_thumbnail_width(image.width, image.height, slot_width, slot_height))
-        self.renditions = {}
-        for image_format in self.formats:
-            self.renditions[image_format] = self.build_renditions(
-                image, thumbnail_width, max_scale_factor=max_scale_factor, format=image_format
-            )
-
-    @staticmethod
-    def build_renditions(
-        image: AbstractImage, width: int, max_scale_factor: int = 3, format: str = "jpeg"
-    ) -> list[AbstractRendition]:
-        renditions = []
-        for scale_factor in range(1, max_scale_factor + 1):
-            scaled_width = width * scale_factor
-            if scaled_width > image.width * 0.8:
-                # already big enough
-                continue
-            renditions.append(image.get_rendition(f"width-{scaled_width}|format-{format}"))
-        if len(renditions) == 0:
-            # no renditions found, so add at least the original image
-            if format == "jpeg":
-                # just append the original image to avoid compressing it twice but add url attribute to make it
-                # compatible with renditions
-                image.url = image.file.url
-                renditions.append(image)
-            else:
-                # convert if format is not jpeg
-                renditions.append(image.get_rendition(f"width-{image.width}|format-{format}"))
-        return renditions
-
-    @property
-    def src(self) -> dict[ImageFormat, str]:
-        format_to_src = {}
-        for image_format in self.formats:
-            format_to_src[image_format] = self.renditions[image_format][0].url
-        return format_to_src
-
-    @property
-    def srcset(self) -> dict[ImageFormat, str]:
-        format_to_srcset = {}
-        for image_format in self.formats:
-            format_to_srcset[image_format] = ", ".join(
-                f"{rendition.url} {rendition.width}w" for rendition in self.renditions[image_format]
-            )
-        return format_to_srcset
-
-    @property
-    def first_rendition(self) -> AbstractRendition:
-        return self.renditions["jpeg"][0]
-
-    @property
-    def sizes(self) -> str:
-        return f"{self.first_rendition.width}px"
-
-    @property
-    def width(self) -> int:
-        return self.first_rendition.width
-
-    @property
-    def height(self) -> int:
-        return self.first_rendition.height
+def get_srcset_images_for_slots(
+    image: AbstractImage, slots: list[Rectangle], image_formats: ImageFormats
+) -> dict[Rectangle, ImageForSlot]:
+    """
+    Get the srcset images for the given slots and image formats. This will fetch
+    renditions from wagtail and return a list of ImageInSlot objects.
+    """
+    images_for_slots = {}
+    rendition_filters = RenditionFilters.from_wagtail_image(image=image, slots=slots, image_formats=image_formats)
+    rendition_filter_strings = rendition_filters.filter_strings
+    if len(rendition_filter_strings) > 0:
+        renditions = image.get_renditions(*rendition_filter_strings)
+        rendition_filters.set_filter_to_url_via_wagtail_renditions(renditions)
+    for slot in slots:
+        try:
+            images_for_slots[slot] = rendition_filters.get_image_for_slot(slot)
+        except ValueError:
+            print("yes, value error!")
+            # no fitting image found for slot -> use original image
+            src = {}
+            for image_format in image_formats:
+                if image_format == rendition_filters.original_format:
+                    src[image_format] = image.file.url
+                else:
+                    # convert to image_format
+                    rendition = image.get_rendition(f"format-{image_format}")
+                    src[image_format] = rendition.url
+            srcset = {}
+            for image_format in image_formats:
+                if image_format == rendition_filters.original_format:
+                    srcset[image_format] = f"{image.file.url} {image.width}w"
+                else:
+                    # convert to image_format
+                    rendition = image.get_rendition(f"format-{image_format}")
+                    srcset[image_format] = f"{rendition.url} {rendition.width}w"
+            width = rendition_filters.slot_to_fitting_width[slot]
+            images_for_slots[slot] = ImageForSlot(Rectangle(width, slot.height), src, srcset)
+    return images_for_slots
 
 
 class CastImageChooserBlock(ImageChooserBlock):
@@ -139,8 +91,9 @@ class CastImageChooserBlock(ImageChooserBlock):
     """
 
     def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
-        slot_width, slot_height = settings.CAST_IMAGE_SLOT_DIMENSIONS
-        image.thumbnail = Thumbnail(image, slot_width, slot_height)
+        [slot] = [Rectangle(Width(w), Height(h)) for w, h in settings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS]
+        slot_to_image = get_srcset_images_for_slots(image, [slot], ["jpeg", "avif"])
+        image.regular = slot_to_image[slot]
         return super().get_context(image, parent_context=parent_context)
 
 
@@ -170,11 +123,14 @@ class GalleryBlock(ListBlock):
 
     @staticmethod
     def add_image_thumbnails(gallery: QuerySet[Gallery]) -> None:
-        thumbnail_slot_width, thumbnail_slot_height = settings.CAST_THUMBNAIL_SLOT_DIMENSIONS
-        image_slot_width, image_slot_height = settings.CAST_IMAGE_SLOT_DIMENSIONS
+        modal_slot, thumbnail_slot = slots = [
+            Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
+        ]
+        image_formats: ImageFormats = ["jpeg", "avif"]
         for image in gallery:
-            image.thumbnail = Thumbnail(image, thumbnail_slot_width, thumbnail_slot_height)
-            image.modal = Thumbnail(image, image_slot_width, image_slot_height)
+            images_for_slots = get_srcset_images_for_slots(image, slots, image_formats)
+            image.modal = images_for_slots[modal_slot]
+            image.thumbnail = images_for_slots[thumbnail_slot]
 
     def get_context(self, gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> dict:
         self.add_prev_next(gallery)
