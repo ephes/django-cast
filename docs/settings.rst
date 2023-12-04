@@ -51,6 +51,11 @@ using an object store like S3 to store your images and want to avoid
 having your production images deleted when you try out stuff in your
 development environment.
 
+CAST_IMAGE_FORMATS
+==================
+For which image formats to generate thumbnails / srcset / source renditions. Defaults to
+``["jpeg", "avif"]``.
+
 .. _image_slot_dimensions:
 
 CAST_IMAGE_SLOT_DIMENSIONS

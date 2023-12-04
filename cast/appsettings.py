@@ -14,6 +14,7 @@ DELETE_WAGTAIL_IMAGES: bool = getattr(settings, "DELETE_WAGTAIL_IMAGES", True)
 CAST_FILTERSET_FACETS: list[str] = getattr(
     settings, "CAST_FILTERSET_FACETS", ["search", "date", "date_facets", "category_facets", "tag_facets", "o"]
 )
+CAST_IMAGE_FORMATS: list[str] = getattr(settings, "CAST_IMAGE_FORMATS", ["jpeg", "avif"])
 CAST_REGULAR_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]] = getattr(
     settings, "CAST_REGULAR_IMAGE_SLOT_DIMENSIONS", [(1110, 740)]
 )

@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -92,7 +92,8 @@ class CastImageChooserBlock(ImageChooserBlock):
 
     def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
         [slot] = [Rectangle(Width(w), Height(h)) for w, h in settings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS]
-        slot_to_image = get_srcset_images_for_slots(image, [slot], ["jpeg", "avif"])
+        image_formats: ImageFormats = cast(ImageFormats, settings.CAST_IMAGE_FORMATS)
+        slot_to_image = get_srcset_images_for_slots(image, [slot], image_formats)
         image.regular = slot_to_image[slot]
         return super().get_context(image, parent_context=parent_context)
 
@@ -126,7 +127,7 @@ class GalleryBlock(ListBlock):
         modal_slot, thumbnail_slot = slots = [
             Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
         ]
-        image_formats: ImageFormats = ["jpeg", "avif"]
+        image_formats: ImageFormats = cast(ImageFormats, settings.CAST_IMAGE_FORMATS)
         for image in gallery:
             images_for_slots = get_srcset_images_for_slots(image, slots, image_formats)
             image.modal = images_for_slots[modal_slot]
