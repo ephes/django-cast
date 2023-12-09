@@ -100,7 +100,9 @@ class CastImageChooserBlock(ImageChooserBlock):
     def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
         if parent_context is None:
             parent_context = {}
-        fetched_renditions = {r.filter_spec: r for r in parent_context.get("renditions_for_posts", {})}
+        fetched_renditions = {
+            r.filter_spec: r for r in parent_context.get("renditions_for_posts", {}) if r.image_id == image.pk
+        }
         images_for_slots = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
         [image.regular] = images_for_slots.values()
         return super().get_context(image, parent_context=parent_context)
@@ -134,11 +136,13 @@ class GalleryBlock(ListBlock):
     def add_image_thumbnails(gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> None:
         if parent_context is None:
             parent_context = {}
-        fetched_renditions = {r.filter_spec: r for r in parent_context.get("renditions_for_posts", {})}
         modal_slot, thumbnail_slot = (
             Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
         )
         for image in gallery:
+            fetched_renditions = {
+                r.filter_spec: r for r in parent_context.get("renditions_for_posts", {}) if r.image_id == image.pk
+            }
             images_for_slots = get_srcset_images_for_slots(image, "gallery", fetched_renditions=fetched_renditions)
             image.modal = images_for_slots[modal_slot]
             image.thumbnail = images_for_slots[thumbnail_slot]
