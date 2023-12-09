@@ -61,7 +61,6 @@ def get_srcset_images_for_slots(
         try:
             images_for_slots[slot] = rendition_filters.get_image_for_slot(slot)
         except ValueError:
-            print("yes, value error!")
             # no fitting image found for slot -> use original image
             src = {}
             for image_format in image_formats:

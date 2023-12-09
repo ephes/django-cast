@@ -1,5 +1,6 @@
 import logging
 import uuid
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 from django import forms
@@ -27,7 +28,7 @@ from wagtail.api import APIField
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.fields import StreamField
 from wagtail.images.blocks import ImageChooserBlock
-from wagtail.images.models import Image
+from wagtail.images.models import Image, Rendition
 from wagtail.models import Page, PageManager
 from wagtail.search import index
 
@@ -41,6 +42,7 @@ from cast.blocks import (
 )
 from cast.models import get_or_create_gallery
 
+from ..renditions import RenditionFilters
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
@@ -110,6 +112,9 @@ class HtmlField(Field):
         )
 
 
+ImagesWithType = Iterator[tuple[str, Image]]
+
+
 class Post(Page):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)
     visible_date = models.DateTimeField(
@@ -129,7 +134,6 @@ class Post(Page):
     categories = ParentalManyToManyField("cast.PostCategory", blank=True)
 
     # managers
-    objects: PageManager = PageManager()
     tags = ClusterTaggableManager(through=PostTag, blank=True, verbose_name=_("tags"))
 
     _local_template_name: Optional[str] = None
@@ -186,7 +190,7 @@ class Post(Page):
         The get_parent() method returns wagtail parent page, which is not
         necessarily a Blog model, but maybe the root page. If it's a Blog
         it has a .blog attribute containing the model which has all the
-        attributes like blog.comments_enabled etc..
+        attributes like blog.comments_enabled etc.
         """
         return self.get_parent().blog
 
@@ -319,6 +323,67 @@ class Post(Page):
         for media_type, ids in to_remove.items():
             for media_id in ids:
                 media_attr_lookup[media_type].remove(media_id)
+
+    # helper methods for image rendition syncing
+    @staticmethod
+    def get_all_images_from_queryset(post_queryset: models.QuerySet["Post"]) -> ImagesWithType:
+        for post in post_queryset:
+            yield from post.get_all_images()
+
+    @staticmethod
+    def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[int, str]]:
+        for image_type, image in images_with_type:
+            rfs = RenditionFilters.from_wagtail_image_with_type(image, image_type)
+            for filter_string in rfs.filter_strings:
+                yield image.pk, filter_string
+
+    def get_all_images(self) -> ImagesWithType:
+        """
+        Use it like this:
+        posts_queryset = Post.objects.prefetch_related("images", "galleries__images")[:10]
+        for post in posts_queryset:
+            for image_type, image in post.get_all_images():
+                print(image_type, image)
+        """
+        for image in self.images.all():
+            yield "image", image
+        for gallery in self.galleries.all():
+            for image in gallery.images.all():
+                yield "gallery", image
+
+    @staticmethod
+    def get_obsolete_and_missing_rendition_strings(
+        images_with_type: ImagesWithType,
+    ) -> tuple[set[int], dict[int, set[str]]]:
+        """
+        Get all obsolete and missing rendition strings from a queryset of posts.
+        """
+        required_renditions = set(Post.get_all_filterstrings(images_with_type))
+        all_image_ids = {image_id for image_id, filter_string in required_renditions}
+        renditions_queryset = Rendition.objects.filter(image__in=all_image_ids)
+        existing_rendition_to_id = {
+            (image_id, filter_spec): pk
+            for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec")
+        }
+        existing_renditions = set(existing_rendition_to_id.keys())
+        obsolete_renditions_unfiltered = existing_renditions - required_renditions
+
+        # remove wagtail generated renditions from obsolete_renditions
+        obsolete_renditions = set()
+        wagtail_filter_specs = {"max-165x165", "max-800x600"}
+        for image_id, filter_spec in obsolete_renditions_unfiltered:
+            if filter_spec not in wagtail_filter_specs:
+                obsolete_renditions.add((image_id, filter_spec))
+        obsolete_rendition_pks = {
+            existing_rendition_to_id[(image_id, filter_spec)] for image_id, filter_spec in obsolete_renditions
+        }
+
+        # build missing renditions aggregated by image id
+        missing_renditions = required_renditions - existing_renditions
+        missing_renditions_by_image_id: dict[int, set[str]] = {}  # why mypy?
+        for image_id, filter_spec in missing_renditions:
+            missing_renditions_by_image_id.setdefault(image_id, set()).add(filter_spec)
+        return obsolete_rendition_pks, missing_renditions_by_image_id
 
     @property
     def comments(self) -> list[dict[str, Union[int, None, str]]]:
@@ -478,8 +543,8 @@ class Episode(Post):
         """
         return super().get_template(request, *args, local_template_name="episode.html", **kwargs)
 
-    def get_context(self, request, *args, **kwargs) -> "ContextDict":
-        context = super().get_context(request, *args, **kwargs)
+    def get_context(self, request, **kwargs) -> "ContextDict":
+        context = super().get_context(request, **kwargs)
         context["episode"] = self
         if hasattr(request, "build_absolute_uri"):
             player_url = reverse(
@@ -495,7 +560,7 @@ class Episode(Post):
         The get_parent() method returns wagtail parent page, which is not
         necessarily a Blog model, but maybe the root page. If it's a Blog
         it has a .blog attribute containing the model which has all the
-        attributes like blog.comments_enabled etc..
+        attributes like blog.comments_enabled etc.
         """
         return self.get_parent().specific
 

@@ -5,6 +5,8 @@ from typing import Literal, NewType, cast, get_args
 
 from wagtail.images.models import AbstractImage, AbstractRendition
 
+from . import appsettings
+
 Width = NewType("Width", int)
 Height = NewType("Height", int)
 
@@ -53,6 +55,11 @@ def calculate_fitting_width(image: Rectangle, slot: Rectangle) -> Width:
 ImageFormat = Literal["jpeg", "avif", "webp", "png", "svg"]
 SUPPORTED_IMAGE_FORMATS = set(get_args(ImageFormat))
 ImageFormats = Iterable[ImageFormat]
+IMAGE_TYPE_TO_SLOTS = {
+    "image": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS],
+    "gallery": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS],
+}
+DEFAULT_IMAGE_FORMATS = cast(ImageFormats, appsettings.CAST_IMAGE_FORMATS)
 
 
 @dataclass
@@ -159,6 +166,12 @@ class RenditionFilters:
         original_format = get_image_format_by_name(image.file.name)
         image = Rectangle(Width(image.width), Height(image.height))
         return cls(image=image, original_format=original_format, slots=slots, image_formats=image_formats)
+
+    @classmethod
+    def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: str):
+        return cls.from_wagtail_image(
+            image, slots=IMAGE_TYPE_TO_SLOTS[image_type], image_formats=DEFAULT_IMAGE_FORMATS
+        )
 
     def set_filter_to_url_via_wagtail_renditions(self, renditions: dict[str, AbstractRendition]) -> None:
         self.filter_to_url = {fs: renditions[fs].url for fs in self.filter_strings}

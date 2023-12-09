@@ -117,7 +117,7 @@ def test_rendition_filters_build_filters():
     assert widths == [53, 106, 159, 493, 986, 1479]
 
 
-def test_rendition_filters_by_format_and_width():
+def test_rendition_filters_get_filter_by_slot_format_and_fitting_width():
     # Given an empty list of rendition filters
     image_1px = rect(w1, h1)
     [slot] = slots = [Rectangle(w120, h80)]

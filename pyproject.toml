@@ -54,6 +54,7 @@ dependencies = [
     "Pygments",
     "python-akismet",
     "python-slugify",
+    "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
     "wagtail",
 ]
@@ -80,7 +81,6 @@ dev = [
     "isort",
     "jupyter",
     "mypy",
-    "rich",
     "tox",
     "typer",
     "types-python-slugify",
