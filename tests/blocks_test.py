@@ -77,11 +77,7 @@ class StubWagtailImage:
 def test_get_srcset_images_for_slots_get_renditions_is_called_when_filters_not_empty():
     # Given an image that should generate multiple renditions for a slot
     slot = Rectangle(Width(120), Height(80))
-    images_for_slots = get_srcset_images_for_slots(
-        cast(AbstractImage, StubWagtailImage()),
-        [slot],
-        ["jpeg", "avif"],
-    )
+    images_for_slots = get_srcset_images_for_slots(cast(AbstractImage, StubWagtailImage()), "gallery")
     # When we get the srcset images for the slot
     image_for_slot = images_for_slots[slot]
     split_srcset = image_for_slot.srcset["jpeg"].replace(",", "").split(" ")  # type: ignore
@@ -111,11 +107,7 @@ class Stub1PxImage:
 def test_get_srcset_images_for_slots_use_original_if_image_too_small():
     # Given an image that is too small for the slot
     slot = Rectangle(Width(120), Height(80))
-    images_for_slots = get_srcset_images_for_slots(
-        cast(AbstractImage, Stub1PxImage()),
-        [slot],
-        ["jpeg", "avif"],
-    )
+    images_for_slots = get_srcset_images_for_slots(cast(AbstractImage, Stub1PxImage()), "gallery")
     # When we get the srcset images for the slot
     image_for_slot = images_for_slots[slot]
     # Then the image for the slot should be the original image

@@ -42,7 +42,7 @@ from cast.blocks import (
 )
 from cast.models import get_or_create_gallery
 
-from ..renditions import RenditionFilters
+from ..renditions import ImageType, RenditionFilters
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
@@ -112,7 +112,7 @@ class HtmlField(Field):
         )
 
 
-ImagesWithType = Iterator[tuple[str, Image]]
+ImagesWithType = Iterator[tuple[ImageType, Image]]
 
 
 class Post(Page):
@@ -331,6 +331,11 @@ class Post(Page):
             yield from post.get_all_images()
 
     @staticmethod
+    def get_all_renditions_from_queryset(post_queryset: models.QuerySet["Post"]) -> Iterator[Rendition]:
+        for image_type, image in Post.get_all_images_from_queryset(post_queryset):
+            yield from image.renditions.all()
+
+    @staticmethod
     def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[int, str]]:
         for image_type, image in images_with_type:
             rfs = RenditionFilters.from_wagtail_image_with_type(image, image_type)
@@ -346,7 +351,7 @@ class Post(Page):
                 print(image_type, image)
         """
         for image in self.images.all():
-            yield "image", image
+            yield "regular", image
         for gallery in self.galleries.all():
             for image in gallery.images.all():
                 yield "gallery", image

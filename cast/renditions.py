@@ -52,11 +52,12 @@ def calculate_fitting_width(image: Rectangle, slot: Rectangle) -> Width:
     return fitting_width
 
 
+ImageType = Literal["regular", "gallery"]
 ImageFormat = Literal["jpeg", "avif", "webp", "png", "svg"]
 SUPPORTED_IMAGE_FORMATS = set(get_args(ImageFormat))
 ImageFormats = Iterable[ImageFormat]
-IMAGE_TYPE_TO_SLOTS = {
-    "image": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS],
+IMAGE_TYPE_TO_SLOTS: dict[ImageType, list[Rectangle]] = {
+    "regular": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS],
     "gallery": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS],
 }
 DEFAULT_IMAGE_FORMATS = cast(ImageFormats, appsettings.CAST_IMAGE_FORMATS)
@@ -168,7 +169,7 @@ class RenditionFilters:
         return cls(image=image, original_format=original_format, slots=slots, image_formats=image_formats)
 
     @classmethod
-    def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: str):
+    def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: ImageType):
         return cls.from_wagtail_image(
             image, slots=IMAGE_TYPE_TO_SLOTS[image_type], image_formats=DEFAULT_IMAGE_FORMATS
         )

@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union
 
 from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -17,8 +17,8 @@ from . import appsettings as settings
 from .models import Gallery
 from .renditions import (
     Height,
-    ImageFormats,
     ImageForSlot,
+    ImageType,
     Rectangle,
     RenditionFilters,
     Width,
@@ -44,15 +44,14 @@ def previous_and_next(all_items: Iterable) -> Iterable:
     return zip(previous_items, items, next_items)
 
 
-def get_srcset_images_for_slots(
-    image: AbstractImage, slots: list[Rectangle], image_formats: ImageFormats
-) -> dict[Rectangle, ImageForSlot]:
+def get_srcset_images_for_slots(image: AbstractImage, image_type: ImageType) -> dict[Rectangle, ImageForSlot]:
     """
     Get the srcset images for the given slots and image formats. This will fetch
     renditions from wagtail and return a list of ImageInSlot objects.
     """
     images_for_slots = {}
-    rendition_filters = RenditionFilters.from_wagtail_image(image=image, slots=slots, image_formats=image_formats)
+    rendition_filters = RenditionFilters.from_wagtail_image_with_type(image=image, image_type=image_type)
+    slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
     rendition_filter_strings = rendition_filters.filter_strings
     if len(rendition_filter_strings) > 0:
         renditions = image.get_renditions(*rendition_filter_strings)
@@ -90,10 +89,8 @@ class CastImageChooserBlock(ImageChooserBlock):
     """
 
     def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
-        [slot] = [Rectangle(Width(w), Height(h)) for w, h in settings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS]
-        image_formats: ImageFormats = cast(ImageFormats, settings.CAST_IMAGE_FORMATS)
-        slot_to_image = get_srcset_images_for_slots(image, [slot], image_formats)
-        image.regular = slot_to_image[slot]
+        images_for_slots = get_srcset_images_for_slots(image, "regular")
+        [image.regular] = images_for_slots.values()
         return super().get_context(image, parent_context=parent_context)
 
 
@@ -123,12 +120,11 @@ class GalleryBlock(ListBlock):
 
     @staticmethod
     def add_image_thumbnails(gallery: QuerySet[Gallery]) -> None:
-        modal_slot, thumbnail_slot = slots = [
+        modal_slot, thumbnail_slot = (
             Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
-        ]
-        image_formats: ImageFormats = cast(ImageFormats, settings.CAST_IMAGE_FORMATS)
+        )
         for image in gallery:
-            images_for_slots = get_srcset_images_for_slots(image, slots, image_formats)
+            images_for_slots = get_srcset_images_for_slots(image, "gallery")
             image.modal = images_for_slots[modal_slot]
             image.thumbnail = images_for_slots[thumbnail_slot]
 

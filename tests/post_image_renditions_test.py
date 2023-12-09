@@ -38,7 +38,7 @@ class StubWagtailImage:
 
 def test_post_get_all_required_filter_strings():
     # Given an iterator ofr images with types
-    images = [("image", StubWagtailImage())]
+    images = [("regular", StubWagtailImage())]
     # When we get all required filter strings for the image
     required_filter_strings = {fs for ipk, fs in Post.get_all_filterstrings(images)}  # type: ignore
     # Then the required filter strings should be in the list
@@ -58,7 +58,7 @@ class RenditionQuerysetStub:
 @pytest.mark.django_db
 def test_post_get_obsolete_and_missing_rendition_strings(mocker):
     # Given an iterator of images with types
-    images = [("image", StubWagtailImage())]
+    images = [("regular", StubWagtailImage())]
     # And a stub for the Rendition queryset
     rendition_queryset = RenditionQuerysetStub()
     mocker.patch("cast.models.pages.Rendition.objects.filter", return_value=rendition_queryset)
