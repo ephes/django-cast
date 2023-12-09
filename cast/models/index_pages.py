@@ -158,12 +158,13 @@ class Blog(Page):
             raise Http404(
                 _("Invalid page (%(page_number)s): %(message)s") % {"page_number": page_number, "message": str(e)}
             )
+        object_list = list(page.object_list)
         pagination_context = {
             "paginator": paginator,
             "page_obj": page,
             "is_paginated": page.has_other_pages(),
-            "object_list": page.object_list,
-            "renditions_for_posts": list(Post.get_all_renditions_from_queryset(page.object_list)),
+            "object_list": object_list,
+            "renditions_for_posts": list(Post.get_all_renditions_from_queryset(object_list)),
             "page_range": page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1),  # type: ignore
         }
         context.update(pagination_context)

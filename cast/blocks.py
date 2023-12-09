@@ -57,7 +57,6 @@ def get_srcset_images_for_slots(
     rendition_filters = RenditionFilters.from_wagtail_image_with_type(image=image, image_type=image_type)
     slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
     rendition_filter_strings = rendition_filters.filter_strings
-    print("rendition_filter_strings: ", rendition_filter_strings)
     if len(rendition_filter_strings) > 0:
         renditions = {}
         if fetched_renditions is not None:
@@ -99,6 +98,8 @@ class CastImageChooserBlock(ImageChooserBlock):
     """
 
     def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
+        if parent_context is None:
+            parent_context = {}
         fetched_renditions = {r.filter_spec: r for r in parent_context.get("renditions_for_posts", {})}
         images_for_slots = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
         [image.regular] = images_for_slots.values()
@@ -131,6 +132,8 @@ class GalleryBlock(ListBlock):
 
     @staticmethod
     def add_image_thumbnails(gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> None:
+        if parent_context is None:
+            parent_context = {}
         fetched_renditions = {r.filter_spec: r for r in parent_context.get("renditions_for_posts", {})}
         modal_slot, thumbnail_slot = (
             Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS

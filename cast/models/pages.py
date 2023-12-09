@@ -1,6 +1,6 @@
 import logging
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 from django import forms
@@ -326,13 +326,13 @@ class Post(Page):
 
     # helper methods for image rendition syncing
     @staticmethod
-    def get_all_images_from_queryset(post_queryset: models.QuerySet["Post"]) -> ImagesWithType:
-        for post in post_queryset:
+    def get_all_images_from_queryset(posts: Iterable["Post"]) -> ImagesWithType:
+        for post in posts:
             yield from post.get_all_images()
 
     @staticmethod
-    def get_all_renditions_from_queryset(post_queryset: models.QuerySet["Post"]) -> Iterator[Rendition]:
-        for image_type, image in Post.get_all_images_from_queryset(post_queryset):
+    def get_all_renditions_from_queryset(posts: Iterable["Post"]) -> Iterator[Rendition]:
+        for image_type, image in Post.get_all_images_from_queryset(posts):
             yield from image.renditions.all()
 
     @staticmethod
