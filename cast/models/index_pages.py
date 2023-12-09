@@ -127,12 +127,15 @@ class Blog(Page):
     @staticmethod
     def get_published_posts(filtered_posts: models.QuerySet) -> models.QuerySet[Post]:
         queryset = filtered_posts
-        queryset = (
-            queryset.prefetch_related("audios")
-            .prefetch_related("images")
-            .prefetch_related("videos")
-            .prefetch_related("galleries")
-            .select_related("owner")
+        queryset = queryset.select_related("owner")
+        queryset = queryset.prefetch_related(
+            "audios",
+            "images",
+            "videos",
+            "galleries",
+            "galleries__images",
+            "images__renditions",
+            "galleries__images__renditions",
         )
         return queryset
 
@@ -160,6 +163,7 @@ class Blog(Page):
             "page_obj": page,
             "is_paginated": page.has_other_pages(),
             "object_list": page.object_list,
+            "renditions_for_posts": list(Post.get_all_renditions_from_queryset(page.object_list)),
             "page_range": page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1),  # type: ignore
         }
         context.update(pagination_context)

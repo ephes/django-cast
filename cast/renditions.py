@@ -207,11 +207,11 @@ class RenditionFilters:
         """
         Return a flat list of all filters.
         """
-        all = []
+        all_filters = []
         for slot_filters in filters.values():
             for format_filters in slot_filters.values():
-                all.extend(format_filters)
-        return all
+                all_filters.extend(format_filters)
+        return all_filters
 
     @property
     def all_filters(self) -> list[RenditionFilter]:

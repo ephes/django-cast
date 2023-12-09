@@ -26,6 +26,13 @@ def test_post_image_from_gallery_in_get_all_images_from_queryset(post_with_galle
     assert gallery_image in all_images
 
 
+@pytest.mark.django_db
+def test_post_get_all_renditions_from_queryset(post_with_image):
+    post_queryset = Post.objects.filter(pk=post_with_image.pk).prefetch_related("galleries__images")
+    all_renditions = list(Post.get_all_renditions_from_queryset(post_queryset))
+    assert all_renditions == []
+
+
 class StubWagtailImage:
     class File:
         name = "test.jpg"

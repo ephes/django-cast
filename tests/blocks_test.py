@@ -2,10 +2,10 @@ from typing import cast
 
 import pytest
 from wagtail.images.blocks import ImageChooserBlock
-from wagtail.images.models import AbstractImage
+from wagtail.images.models import AbstractImage, AbstractRendition
 
 from cast.blocks import CodeBlock, GalleryBlock, get_srcset_images_for_slots
-from cast.renditions import Height, Rectangle, Width
+from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Rectangle, Width
 
 
 @pytest.mark.parametrize(
@@ -106,7 +106,7 @@ class Stub1PxImage:
 
 def test_get_srcset_images_for_slots_use_original_if_image_too_small():
     # Given an image that is too small for the slot
-    slot = Rectangle(Width(120), Height(80))
+    slot = IMAGE_TYPE_TO_SLOTS["gallery"][0]
     images_for_slots = get_srcset_images_for_slots(cast(AbstractImage, Stub1PxImage()), "gallery")
     # When we get the srcset images for the slot
     image_for_slot = images_for_slots[slot]
@@ -116,3 +116,47 @@ def test_get_srcset_images_for_slots_use_original_if_image_too_small():
     # And it should have been converted to avif
     assert image_for_slot.src["avif"] == "https://example.com/test.avif"
     assert image_for_slot.srcset["avif"] == "https://example.com/test.avif 1w"
+
+
+class StubBigImage:
+    class File:
+        name = "test.jpg"
+        url = "https://example.com/test.jpg"
+
+    url = "https://example.com/test.jpg"
+    width = Width(6000)
+    height = Height(4000)
+    file = File()
+
+    @staticmethod
+    def get_renditions(*filter_strings):
+        class StubImage:
+            url = "https://example.com/test.jpg"
+            width = Width(120)
+
+        return {fs: StubImage() for fs in filter_strings}
+
+
+def test_get_srcset_images_for_slots_fetched_renditions_not_none():
+    [slot] = IMAGE_TYPE_TO_SLOTS["regular"]
+    rendition = cast(AbstractRendition, StubBigImage())
+    image = cast(AbstractImage, StubBigImage())
+    images_for_slot = get_srcset_images_for_slots(image, "regular", fetched_renditions={"width-1110": rendition})
+    assert images_for_slot[slot].src["jpeg"] == "https://example.com/test.jpg"
+
+
+def test_get_srcset_images_for_slots_fetched_renditions_contain_all_filter_strings():
+    [slot] = IMAGE_TYPE_TO_SLOTS["regular"]
+    rendition = cast(AbstractRendition, StubBigImage())
+    image = cast(AbstractImage, StubBigImage())
+    all_filter_strings = [
+        "width-1110",
+        "width-2220",
+        "width-3330",
+        "width-1110|format-avif",
+        "width-2220|format-avif",
+        "width-3330|format-avif",
+    ]
+    fetched_renditions = {fs: rendition for fs in all_filter_strings}
+    images_for_slot = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
+    assert images_for_slot[slot].src["jpeg"] == "https://example.com/test.jpg"
