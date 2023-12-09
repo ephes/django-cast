@@ -1,28 +1,52 @@
+from argparse import RawTextHelpFormatter
+
 from django.core.management.base import BaseCommand
 from rich.progress import track
-from wagtail.images.models import Image
+from wagtail.images.models import Image, Rendition
 
-from ...models import Post
+from ...models import Blog, Post
 
 
 class Command(BaseCommand):
-    """
-    What does it mean to sync the renditions for all posts?
-
+    help = """
+What does it mean to sync the renditions for all posts?
     - create missing renditions
     - delete obsolete renditions
+
+Optional arguments:
+    --post-slug: sync renditions for a specific post
+    --blog-slug: sync renditions for posts in a specific blog
+
+By default all posts are synced.
     """
 
-    help = "sync the renditions for all posts"
+    def create_parser(self, *args, **kwargs):
+        parser = super().create_parser(*args, **kwargs)
+        parser.formatter_class = RawTextHelpFormatter
+        return parser
+
+    def add_arguments(self, parser):
+        # Optional argument for a post slug
+        parser.add_argument("--post-slug", type=str, help="Sync renditions for a specific post")
+        # Optional argument for a blog slug
+        parser.add_argument("--blog-slug", type=str, help="Sync renditions for posts in a specific blog")
 
     def handle(self, *args, **options):
-        posts_queryset = Post.objects.all().prefetch_related("images", "galleries__images")
-        # posts_queryset = Post.objects.filter(
-        #     slug="november-2023-11-20").prefetch_related("images", "galleries__images")
+        post_slug = options.get("post_slug")
+        blog_slug = options.get("blog_slug")
+
+        if post_slug is not None:
+            posts_queryset = Post.objects.filter(slug=post_slug)
+        elif blog_slug is not None:
+            blog = Blog.objects.get(slug=blog_slug)
+            posts_queryset = Post.objects.descendant_of(blog)
+        else:
+            posts_queryset = Post.objects.all()
+
+        posts_queryset = posts_queryset.prefetch_related("images", "galleries__images")
         all_images = Post.get_all_images_from_queryset(posts_queryset)
-        print(all_images)
         obsolete_renditions, missing_renditions = Post.get_obsolete_and_missing_rendition_strings(all_images)
-        # Rendition.objects.filter(id__in=obsolete_renditions).delete()
+        Rendition.objects.filter(id__in=obsolete_renditions).delete()
         missing_renditions = list(missing_renditions.items())
         print("len missing renditions: ", len(missing_renditions))
         for image_id, filter_specs in track(missing_renditions, description="create missing renditions"):

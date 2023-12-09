@@ -1,7 +1,7 @@
-0.2.25 (2023-11-27)
+0.2.25 (2023-12-10)
 -------------------
 
 Fixed a bug for small image sources.
 
 - #112 If no renditions are generated, use the original image as the default rendition
-- Regenerate renditions
+- #113 Management command to sync renditions

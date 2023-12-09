@@ -16,3 +16,5 @@ are dealing with the management of media files.
 * ``media_restore``: Restore media files from backup storage backend to production storage backend (requires Django >= 4.2).
 * ``media_stale``: Print the paths of all media files stored in the production storage backend that are not
   referenced in the database (requires Django >= 4.2).
+* ``sync_renditions``: Create missing renditions for images and remove obsolete ones. Useful if you have changed
+  the rendition sizes in your settings or added new image formats.
