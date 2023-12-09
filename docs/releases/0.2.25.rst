@@ -5,3 +5,4 @@ Fixed a bug for small image sources.
 
 - #112 If no renditions are generated, use the original image as the default rendition
 - #113 Management command to sync renditions
+- Changed tox.ini to include Django 5.0 and removed Django 4.0
