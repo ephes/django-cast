@@ -19,9 +19,9 @@ keywords = [
 classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: Django :: 4.0",
     "Framework :: Django :: 4.1",
     "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: BSD License",
     "Topic :: Internet",
@@ -117,7 +117,7 @@ addopts = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true
 plugins = ["mypy_django_plugin.main"]
 exclude = "[a-zA-Z]*/(migrations)|(example)/(.)*"  # ignore migrations
