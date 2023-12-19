@@ -133,9 +133,7 @@ class GalleryBlock(ListBlock):
             return self.default_template_name
 
     @staticmethod
-    def add_image_thumbnails(gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> None:
-        if parent_context is None:
-            parent_context = {}
+    def add_image_thumbnails(gallery: QuerySet[Gallery], parent_context: dict) -> None:
         modal_slot, thumbnail_slot = (
             Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
         )
@@ -148,6 +146,8 @@ class GalleryBlock(ListBlock):
             image.thumbnail = images_for_slots[thumbnail_slot]
 
     def get_context(self, gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> dict:
+        if parent_context is None:
+            parent_context = {}
         self.add_prev_next(gallery)
         self.add_image_thumbnails(gallery, parent_context=parent_context)
         return super().get_context(gallery, parent_context=parent_context)

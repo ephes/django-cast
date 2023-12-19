@@ -4,7 +4,13 @@ import pytest
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition
 
-from cast.blocks import CodeBlock, GalleryBlock, get_srcset_images_for_slots
+from cast.blocks import (
+    CastImageChooserBlock,
+    CodeBlock,
+    GalleryBlock,
+    get_srcset_images_for_slots,
+)
+from cast.models import Gallery
 from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Rectangle, Width
 
 
@@ -160,3 +166,17 @@ def test_get_srcset_images_for_slots_fetched_renditions_contain_all_filter_strin
     fetched_renditions = {fs: rendition for fs in all_filter_strings}
     images_for_slot = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
     assert images_for_slot[slot].src["jpeg"] == "https://example.com/test.jpg"
+
+
+def test_image_chooser_block_get_context_parent_context_none():
+    """Just make sure parent context is set to {} if it is None."""
+    cicb = CastImageChooserBlock()
+    context = cicb.get_context(StubWagtailImage(), parent_context=None)
+    assert "value" in context
+
+
+def test_gallery_block_get_context_parent_context_none():
+    """Just make sure parent context is set to {} if it is None."""
+    cb = GalleryBlock(ImageChooserBlock())
+    context = cb.get_context(Gallery.objects.none(), parent_context=None)
+    assert "value" in context
