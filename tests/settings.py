@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.messages",
     "django_filters",
+    "django_vite",
     "crispy_forms",  # Form layouts
     "crispy_bootstrap4",
     "fluent_comments",  # must be before django_comments
@@ -167,3 +168,10 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
 
 # view handling csrf failures
 CSRF_FAILURE_VIEW = "cast.views.defaults.csrf_failure"
+
+# django_vite
+DJANGO_VITE = {
+    "cast": {
+        "dev_mode": True,
+    }
+}

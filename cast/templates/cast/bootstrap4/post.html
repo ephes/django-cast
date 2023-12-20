@@ -5,6 +5,8 @@
 {% load wagtailcore_tags %}
 {% load wagtailimages_tags %}
 
+{% load django_vite %}
+
 {% if page.comments_enabled %}
   {% load comments %}
 {% endif %}
@@ -43,6 +45,8 @@
 {% block javascript %}
   <!-- block.super needs to be below full jquery because otherwise jquery-slim would overwrite calls necessary for comments -->
   {{ block.super }}
+  {% vite_hmr_client app="cast" %}
+  {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
 
   <!-- recent jquery (not slim) is needed for fluent-comments -->
   <script
@@ -54,10 +58,9 @@
 
   <!-- block.super needs to be below full jquery because otherwise jquery-slim would overwrite calls necessary for comments -->
   {{ block.super }}
-  <script src="{% static 'js/cast/gallery.js' %}"></script>
   <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
   {% if page.has_audio %}
-    <script src={% static 'js/cast/web-player/embed.4.js' %}></script>
+    <script src="{% static 'js/cast/web-player/embed.4.js' %}"></script>
     {% for pk, audio in page.media_lookup.audio.items %}
       <script>podlovePlayer("#audio_{{ audio.pk }}", "{{ audio.podlove_url }}");</script>
     {% endfor %}

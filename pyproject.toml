@@ -50,6 +50,7 @@ dependencies = [
     "django-model-utils",
     "django-tag-parser",
     "django-threadedcomments",
+    "django-vite",
     "markdown",
     "Pygments",
     "python-akismet",

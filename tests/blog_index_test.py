@@ -85,6 +85,18 @@ class TestBlogIndex:
         template = post.get_template(None)
         assert chosen_base_dir in template
 
+    def test_template_base_dir_in_context(self, simple_request):
+        # from blog model
+        blog = Blog(template_base_dir="plain")
+        context = blog.get_context(simple_request)
+        assert context["template_base_dir"] == "plain"
+
+        # from session
+        chosen_base_dir = "from_session"
+        simple_request.session["template_base_dir"] = "from_session"
+        context = blog.get_context(simple_request)
+        assert context["template_base_dir"] == chosen_base_dir
+
 
 class TestBlogIndexFilter:
     pytestmark = pytest.mark.django_db

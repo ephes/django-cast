@@ -2,6 +2,7 @@
 {% load wagtailcore_tags %}
 {% load crispy_forms_tags %}
 {% load static %}
+{% load django_vite %}
 
 {% block body_class %}template-bloglistpage{% endblock %}
 
@@ -88,7 +89,9 @@
 
 {% block javascript %}
   {{ block.super }}
-  <script src="{% static 'js/cast/gallery.js' %}"></script>
+  {% vite_hmr_client app="cast" %}
+  {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
+
   {% if use_audio_player %}
     <script src={% static 'js/cast/web-player/embed.4.js' %}></script>
     {% for post in posts %}

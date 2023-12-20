@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "vite": "^5.0.10"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest -r js/src/tests/",
+    "coverage": "vitest run --coverage",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@vue/test-utils": "^2.4.3",
+    "jsdom": "^23.0.1",
+    "vitest": "^1.0.4"
+  }
+}

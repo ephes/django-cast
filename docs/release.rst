@@ -11,6 +11,21 @@ Change the version number in following files:
 - docs/conf.py
 - README.md
 
+Javascript
+----------
+
+Build the Javascript (image-gallery component):
+
+.. code-block:: shell
+
+   $ cd javascript
+   $ npx vite build
+   $ cd dist/
+   $ mv .vite/manifest.json manifest.json
+   $ rm -r .vite
+   $ rm ../../cast/static/js/vite/*
+   $ cp * ../../cast/static/js/vite/
+
 Create the Release on GitHub
 ----------------------------
 

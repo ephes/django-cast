@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admin",
     "django.contrib.messages",
+    "django_vite",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
@@ -165,3 +166,10 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap4"
 
 # view handling csrf failures
 CSRF_FAILURE_VIEW = "cast.views.defaults.csrf_failure"
+
+# django_vite
+DJANGO_VITE = {
+    "cast": {
+        "dev_mode": True,
+    }
+}

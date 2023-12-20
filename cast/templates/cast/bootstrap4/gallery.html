@@ -1,0 +1,63 @@
+<h1>Image gallery BS4</h1>
+<image-gallery-bs4>
+  <div class="cast-gallery-container">
+    {% for image in value %}
+      <a
+        class="cast-gallery-modal"
+        data-toggle="modal"
+        data-target="#galleryModal-{{ block.id }}"
+        data-full="{{ image.file.url }}"
+      >
+        <picture>
+          <source
+            srcset="{{ image.thumbnail.srcset.avif }}"
+            type="image/avif"
+            sizes="{{ image.thumbnail.sizes }}"
+            data-modal-src="{{ image.modal.src.avif }}"
+            data-modal-srcset="{{ image.modal.srcset.avif }}"
+            data-modal-sizes="{{ image.modal.sizes }}"
+          >
+          <img
+            id="img-{{image.pk}}"
+            class="cast-gallery-thumbnail"
+            alt="{{ image.default_alt_text }}"
+            src="{{ image.thumbnail.src.jpeg }}"
+            srcset="{{ image.thumbnail.srcset.jpeg }}"
+            sizes="{{ image.thumbnail.sizes }}"
+            width="{{ image.thumbnail.width }}"
+            height="{{ image.thumbnail.height }}"
+            data-modal-src="{{ image.modal.src.jpeg }}"
+            data-modal-srcset="{{ image.modal.srcset.jpeg }}"
+            data-modal-sizes="{{ image.modal.sizes }}"
+            data-modal-width="{{ image.modal.width }}"
+            data-modal-height="{{ image.modal.height }}"
+            data-prev="{{ image.prev }}"
+            data-next="{{ image.next }}"
+            loading="lazy"
+          />
+        </picture>
+      </a>
+    {% endfor %}
+    <!-- Modal -->
+    <div class="modal fade" id="galleryModal-{{ block.id }}" tabindex="-1" role="dialog"
+         aria-labelledby="galleryModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg cast-gallery-lg" role="document">
+        <div class="modal-content cast-gallery-content">
+          <div class="modal-header cast-gallery-header">
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body cast-gallery-body">
+            <picture class="modal-picture">
+              <source class="modal-source" srcset="" sizes="" type="image/avif">
+              <img class="modal-image cast-image" alt="modal image placeholder" src="" srcset="" sizes="100vw">
+            </picture>
+          </div>
+          <div class="modal-footer cast-gallery-footer">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</image-gallery-bs4>

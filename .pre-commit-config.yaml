@@ -63,6 +63,7 @@ repos:
           - django-stubs[compatible-mypy]
           - django-taggit
           - django-threadedcomments
+          - django-vite
           - psycopg2
           - Pygments
           - python-slugify

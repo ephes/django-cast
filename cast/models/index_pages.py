@@ -119,6 +119,9 @@ class Blog(Page):
 
     @property
     def unfiltered_published_posts(self) -> models.QuerySet[Post]:
+        if self.pk is None:
+            # this blog is not saved to database yet, therefore it has no posts
+            return Post.objects.none()
         return Post.objects.live().descendant_of(self).order_by("-visible_date")
 
     def get_filterset(self, get_params: QueryDict) -> PostFilterset:
@@ -224,6 +227,7 @@ class Blog(Page):
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
         context["has_selectable_themes"] = True
+        context["template_base_dir"] = self.get_template_base_dir(request)
         context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
         context["theme_form"] = self.get_theme_form(request)
         return context

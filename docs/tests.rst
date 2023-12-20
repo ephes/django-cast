@@ -2,6 +2,9 @@
 Running the Tests
 *****************
 
+Python
+======
+
 The tests are run by executing the following command:
 
 .. code-block:: bash
@@ -19,3 +22,11 @@ execute the following commands below to re-create the test database:
    $ python manage.py migrate  # re-create the test database
 
 After that, you should be able to run the tests again.
+
+Javascript
+==========
+
+.. code-block:: bash
+
+   $ cd javascript
+   $ npx vittest run
