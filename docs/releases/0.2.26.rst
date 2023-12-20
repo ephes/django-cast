@@ -5,3 +5,4 @@ Use a web component for the image gallery. Have a proper build pipeline
 for the web components Javascript and some tests.
 
 - #114 Use web component for image gallery
+- Some cleanup regarding javascript paths etc. - using a global cast prefix for example

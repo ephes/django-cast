@@ -26,7 +26,7 @@
       <div>
         <div class="cast-feeds-container">
           <div class="cast-feed-item">
-            <img class="cast-feed-icon" src="{% static 'img/cast/Feed-icon.svg' %}" height=64 width=64></img>
+            <img class="cast-feed-icon" src="{% static 'cast/img/Feed-icon.svg' %}" height=64 width=64>
             <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
               Plain RSS
             </a>
@@ -93,7 +93,7 @@
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
 
   {% if use_audio_player %}
-    <script src={% static 'js/cast/web-player/embed.4.js' %}></script>
+    <script src={% static 'cast/js/web-player/embed.4.js' %}></script>
     {% for post in posts %}
       {% for pk, audio in post.media_lookup.audio.items %}
         <script>podlovePlayer("#audio_{{ audio.pk }}", "{{ audio.podlove_url }}");</script>

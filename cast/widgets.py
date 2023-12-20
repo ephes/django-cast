@@ -87,8 +87,8 @@ class AdminVideoChooser(CastChooser):
 
     class Media:
         js = [
-            "js/cast/wagtail/video-chooser-modal.js",
-            "js/cast/wagtail/video-chooser.js",
+            "cast/js/wagtail/video-chooser-modal.js",
+            "cast/js/wagtail/video-chooser.js",
         ]
 
 
@@ -105,7 +105,7 @@ class VideoChooserAdapter(BaseChooserAdapter):
     def media(self) -> forms.Media:
         return forms.Media(
             js=[
-                versioned_static("js/cast/wagtail/video-chooser-telepath.js"),
+                versioned_static("cast/js/wagtail/video-chooser-telepath.js"),
             ]
         )
 
@@ -137,8 +137,8 @@ class AdminAudioChooser(CastChooser):
 
     class Media:
         js = [
-            "js/cast/wagtail/audio-chooser-modal.js",
-            "js/cast/wagtail/audio-chooser.js",
+            "cast/js/wagtail/audio-chooser-modal.js",
+            "cast/js/wagtail/audio-chooser.js",
         ]
 
 
@@ -155,7 +155,7 @@ class AudioChooserAdapter(BaseChooserAdapter):
     def media(self) -> forms.Media:
         return forms.Media(
             js=[
-                versioned_static("js/cast/wagtail/audio-chooser-telepath.js"),
+                versioned_static("cast/js/wagtail/audio-chooser-telepath.js"),
             ]
         )
 
