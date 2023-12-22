@@ -43,13 +43,12 @@
 {% endblock %}
 
 {% block javascript %}
-  <!-- block.super needs to be below full jquery because otherwise jquery-slim would overwrite calls necessary for comments -->
   {{ block.super }}
   {% vite_hmr_client app="cast" %}
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
 
-  <!-- block.super needs to be below full jquery because otherwise jquery-slim would overwrite calls necessary for comments -->
-  {{ block.super }}
+  <!-- full query is needed for comments -->
+  <script src="{% static 'cast/js/jquery/jquery-3.7.1.min.js' %}"></script>
   <script type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
   {% if page.has_audio %}
     <script src="{% static 'cast/js/web-player/embed.4.js' %}"></script>
