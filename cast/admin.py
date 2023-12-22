@@ -120,7 +120,7 @@ class VideoModelAdmin(AdminUserMixin, ModelAdmin):
 @admin.register(Gallery)
 class GalleryModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("pk",)
-    fields = ("user", "images")
+    fields = ("layout", "images")
 
 
 @admin.action(description="Retrain model from scratch using marked comments")
