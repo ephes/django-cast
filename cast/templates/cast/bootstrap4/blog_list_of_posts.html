@@ -90,10 +90,6 @@
 {% block javascript %}
   <!-- block.super does not work? -->
   {{ block.super }}
-  <!-- bootstrap4 needs jquery -->
-  <script defer src="{% static 'cast/js/jquery/jquery-3.7.1.min.js' %}"></script>
-  <script defer src="{% static 'cast/js/bootstrap4/bootstrap.min.js' %}"></script>
-  <script defer src="{% static 'cast/js/htmx.min.js' %}"></script>
 
   {% vite_hmr_client app="cast" %}
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
