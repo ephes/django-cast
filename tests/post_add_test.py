@@ -96,10 +96,11 @@ class TestPostAdd:
 
         post_data_wagtail["body-0-value-0-type"] = "gallery"
         post_data_wagtail["body-0-value-0-value-0-id"] = ""
-        post_data_wagtail["body-0-value-0-value-count"] = gallery.images.count()
-        post_data_wagtail["body-0-value-0-value-0-value"] = gallery.images.first().pk
-        post_data_wagtail["body-0-value-0-value-0-deleted"] = ""
-        post_data_wagtail["body-0-value-0-value-0-order"] = "0"
+        post_data_wagtail["body-0-value-0-value-layout"] = "default"
+        post_data_wagtail["body-0-value-0-value-gallery-count"] = gallery.images.count()
+        post_data_wagtail["body-0-value-0-value-gallery-0-value"] = gallery.images.first().pk
+        post_data_wagtail["body-0-value-0-value-gallery-0-deleted"] = ""
+        post_data_wagtail["body-0-value-0-value-gallery-0-order"] = "0"
 
         r = client.post(add_url, post_data_wagtail)
 

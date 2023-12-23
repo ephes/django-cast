@@ -52,7 +52,7 @@ def test_code_block_value(value, expected):
 )
 def test_gallery_block_template_default(context):
     block = GalleryBlock(ImageChooserBlock())
-    assert block.get_template(context=context) == GalleryBlock.default_template_name
+    assert block.get_template(images=None, context=context) == block.meta.template
 
 
 def test_gallery_block_template_from_theme(mocker):

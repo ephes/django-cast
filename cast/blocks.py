@@ -6,15 +6,15 @@ from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
+from django.utils.translation import gettext_lazy as _
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
-from wagtail.blocks import CharBlock, ChooserBlock, ListBlock, StructBlock, TextBlock
-from wagtail.images.blocks import ImageChooserBlock
+from wagtail.blocks import CharBlock, ChoiceBlock, ListBlock, StructBlock, TextBlock
+from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition
 
 from . import appsettings as settings
-from .models import Gallery
 from .renditions import (
     Height,
     ImageForSlot,
@@ -108,49 +108,99 @@ class CastImageChooserBlock(ImageChooserBlock):
         return super().get_context(image, parent_context=parent_context)
 
 
+def add_prev_next(images: QuerySet[AbstractImage]) -> None:
+    """
+    For each image in the queryset, add the previous and next image.
+    """
+    for previous_image, current_image, next_image in previous_and_next(images):
+        current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
+        current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
+
+
+def add_image_thumbnails(images: QuerySet[AbstractImage], context: dict) -> None:
+    """
+    For each image in the queryset, add the thumbnail and modal image data to the image.
+    """
+    modal_slot, thumbnail_slot = (
+        Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
+    )
+    for image in images:
+        fetched_renditions = {
+            r.filter_spec: r for r in context.get("renditions_for_posts", {}) if r.image_id == image.pk
+        }
+        images_for_slots = get_srcset_images_for_slots(image, "gallery", fetched_renditions=fetched_renditions)
+        image.modal = images_for_slots[modal_slot]
+        image.thumbnail = images_for_slots[thumbnail_slot]
+
+
+def prepare_context_for_gallery(images: QuerySet[AbstractImage], context: dict) -> dict:
+    """
+    Add the previous and next image and the thumbnail and modal image data to each
+    image of the gallery and then the images to the context.
+    """
+    add_prev_next(images)
+    add_image_thumbnails(images, context=context)
+    context["images"] = images
+    return context
+
+
+def get_gallery_block_template(default_template_name: str, context: Optional[dict]) -> str:
+    if context is None:
+        return default_template_name
+
+    template_base_dir = context.get("template_base_dir")
+    if template_base_dir is None:
+        return default_template_name
+
+    template_from_theme = f"cast/{template_base_dir}/gallery.html"
+    try:
+        get_template(template_from_theme)
+        return template_from_theme
+    except TemplateDoesNotExist:
+        return default_template_name
+
+
 class GalleryBlock(ListBlock):
-    default_template_name = "cast/gallery.html"
+    class Meta:
+        icon = "image"
+        label = "Gallery"
+        template = "cast/gallery.html"
 
-    @staticmethod
-    def add_prev_next(gallery: QuerySet[Gallery]) -> None:
-        for previous_image, current_image, next_image in previous_and_next(gallery):
-            current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
-            current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
+    def get_template(self, images: Optional[QuerySet[AbstractImage]] = None, context: Optional[dict] = None) -> str:
+        default_template_name = super().get_template(images, context)
+        return get_gallery_block_template(default_template_name, context)
 
-    def get_template(self, context: Optional[dict] = None) -> str:
-        if context is None:
-            return self.default_template_name
+    def get_context(self, images: QuerySet[AbstractImage], parent_context: Optional[dict] = None) -> dict:
+        context = super().get_context(images, parent_context=parent_context)
+        return prepare_context_for_gallery(images, context)
 
-        template_base_dir = context.get("template_base_dir")
-        if template_base_dir is None:
-            return self.default_template_name
 
-        template_from_theme = f"cast/{template_base_dir}/gallery.html"
-        try:
-            get_template(template_from_theme)
-            return template_from_theme
-        except TemplateDoesNotExist:
-            return self.default_template_name
+class GalleryBlockWithLayout(StructBlock):
+    """
+    A gallery block with a layout. The layout parameter controls
+    which template is used to render the gallery.
+    """
 
-    @staticmethod
-    def add_image_thumbnails(gallery: QuerySet[Gallery], parent_context: dict) -> None:
-        modal_slot, thumbnail_slot = (
-            Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
-        )
-        for image in gallery:
-            fetched_renditions = {
-                r.filter_spec: r for r in parent_context.get("renditions_for_posts", {}) if r.image_id == image.pk
-            }
-            images_for_slots = get_srcset_images_for_slots(image, "gallery", fetched_renditions=fetched_renditions)
-            image.modal = images_for_slots[modal_slot]
-            image.thumbnail = images_for_slots[thumbnail_slot]
+    gallery = GalleryBlock(ImageChooserBlock())
+    layout = ChoiceBlock(
+        choices=[
+            ("default", _("Web Component with Modal")),
+            ("htmx", _("HTMX based layout")),
+        ],
+        default="default",
+    )
 
-    def get_context(self, gallery: QuerySet[Gallery], parent_context: Optional[dict] = None) -> dict:
-        if parent_context is None:
-            parent_context = {}
-        self.add_prev_next(gallery)
-        self.add_image_thumbnails(gallery, parent_context=parent_context)
-        return super().get_context(gallery, parent_context=parent_context)
+    class Meta:
+        icon = "image"
+        label = "Gallery with Layout"
+
+    def get_template(self, value=None, context=None):
+        default_template_name = super().get_template(value, context)
+        return get_gallery_block_template(default_template_name, context)
+
+    def get_context(self, value, parent_context: Optional[dict] = None):
+        context = super().get_context(value, parent_context=parent_context)
+        return prepare_context_for_gallery(value["gallery"], context)
 
 
 class VideoChooserBlock(ChooserBlock):

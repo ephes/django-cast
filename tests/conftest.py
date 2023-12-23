@@ -311,7 +311,8 @@ def body(python_body):
 def body_with_gallery(python_body, gallery):
     image_pks = [img.pk for img in gallery.images.all()]
     gallery_body = deepcopy(python_body)
-    gallery_body[0]["value"].append({"type": "gallery", "value": image_pks})
+    gallery_with_layout = {"layout": "default", "gallery": image_pks}
+    gallery_body[0]["value"].append({"type": "gallery", "value": gallery_with_layout})
     return json.dumps(gallery_body)
 
 
@@ -360,6 +361,7 @@ def post_in_podcast(podcast, body):
 
 @pytest.fixture()
 def post_with_gallery(blog, body_with_gallery):
+    print("body with gallery: ", body_with_gallery)
     return PostFactory(
         owner=blog.owner,
         parent=blog,

@@ -38,6 +38,7 @@ from cast.blocks import (
     CastImageChooserBlock,
     CodeBlock,
     GalleryBlock,
+    GalleryBlockWithLayout,
     VideoChooserBlock,
 )
 from cast.models import get_or_create_gallery
@@ -59,7 +60,7 @@ class ContentBlock(blocks.StreamBlock):
     paragraph: blocks.RichTextBlock = blocks.RichTextBlock()
     code: CodeBlock = CodeBlock(icon="code")
     image: CastImageChooserBlock = CastImageChooserBlock(template="cast/image/image.html")
-    gallery: GalleryBlock = GalleryBlock(ImageChooserBlock())
+    gallery: GalleryBlockWithLayout = GalleryBlockWithLayout()
     embed: EmbedBlock = EmbedBlock()
     video: VideoChooserBlock = VideoChooserBlock(template="cast/video/video.html", icon="media")
     audio: AudioChooserBlock = AudioChooserBlock(template="cast/audio/audio.html", icon="media")
@@ -297,7 +298,8 @@ class Post(Page):
         for content_block in body:
             for block in content_block.value:
                 if block.block_type == "gallery":
-                    image_ids = [i.id for i in block.value]
+                    images = block.value.get("gallery", [])
+                    image_ids = [i.id for i in images]
                     media_model = get_or_create_gallery(image_ids)
                 else:
                     media_model = block.value
