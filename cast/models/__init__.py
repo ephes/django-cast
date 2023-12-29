@@ -1,7 +1,7 @@
 from .audio import Audio, ChapterMark, sync_chapter_marks
 from .file import File
 from .gallery import Gallery, get_or_create_gallery
-from .index_pages import Blog, HtmxHttpRequest, Podcast
+from .index_pages import Blog, Podcast
 from .itunes import ItunesArtWork
 from .moderation import SpamFilter
 from .pages import Episode, HomePage, Post, sync_media_ids
@@ -24,7 +24,6 @@ __all__ = [
     "get_template_base_dir",
     "get_template_base_dir_choices",
     "HomePage",
-    "HtmxHttpRequest",
     "ItunesArtWork",
     "Post",
     "PostCategory",

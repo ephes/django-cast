@@ -2,7 +2,8 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 
 from ..forms import SelectThemeForm
-from ..models import HtmxHttpRequest, get_template_base_dir
+from ..models import get_template_base_dir
+from .htmx_helpers import HtmxHttpRequest
 
 
 def set_template_base_dir(request: HtmxHttpRequest, template_base_dir: str) -> None:
