@@ -140,6 +140,7 @@ def prepare_context_for_gallery(images: QuerySet[AbstractImage], context: dict) 
     """
     add_prev_next(images)
     add_image_thumbnails(images, context=context)
+    context["image_pks"] = ",".join([str(image.pk) for image in images])
     context["images"] = images
     return context
 
@@ -196,10 +197,14 @@ class GalleryBlockWithLayout(StructBlock):
 
     def get_template(self, value=None, context=None):
         default_template_name = super().get_template(value, context)
+        print("value: ", value)
+        if value["layout"] == "htmx":
+            return "cast/bootstrap5/gallery_htmx.html"
         return get_gallery_block_template(default_template_name, context)
 
     def get_context(self, value, parent_context: Optional[dict] = None):
         context = super().get_context(value, parent_context=parent_context)
+        context["post_pk"] = context["page"].pk
         return prepare_context_for_gallery(value["gallery"], context)
 
 
