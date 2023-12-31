@@ -145,7 +145,8 @@ def prepare_context_for_gallery(images: QuerySet[AbstractImage], context: dict) 
     return context
 
 
-def get_gallery_block_template(default_template_name: str, context: Optional[dict]) -> str:
+def get_gallery_block_template(default_template_name: str, context: Optional[dict], layout: str = "default") -> str:
+    print("default_template_name: ", default_template_name, "context: ", context, "layout: ", layout)
     if context is None:
         return default_template_name
 
@@ -153,7 +154,10 @@ def get_gallery_block_template(default_template_name: str, context: Optional[dic
     if template_base_dir is None:
         return default_template_name
 
-    template_from_theme = f"cast/{template_base_dir}/gallery.html"
+    if layout == "htmx":
+        template_from_theme = f"cast/{template_base_dir}/gallery_htmx.html"
+    else:
+        template_from_theme = f"cast/{template_base_dir}/gallery.html"
     try:
         get_template(template_from_theme)
         return template_from_theme
@@ -194,13 +198,15 @@ class GalleryBlockWithLayout(StructBlock):
     class Meta:
         icon = "image"
         label = "Gallery with Layout"
+        template = "cast/gallery.html"
 
     def get_template(self, value=None, context=None):
         default_template_name = super().get_template(value, context)
-        print("value: ", value)
-        if value["layout"] == "htmx":
-            return "cast/bootstrap5/gallery_htmx.html"
-        return get_gallery_block_template(default_template_name, context)
+        layout = "default"
+        if value is not None:
+            if (layout_from_value := value.get("layout")) is not None:
+                layout = layout_from_value
+        return get_gallery_block_template(default_template_name, context, layout=layout)
 
     def get_context(self, value, parent_context: Optional[dict] = None):
         context = super().get_context(value, parent_context=parent_context)

@@ -1,0 +1,54 @@
+<div class="modal-dialog modal-lg cast-gallery-lg" role="document">
+  <div class="modal-content cast-gallery-content">
+    <div class="modal-header cast-gallery-header">
+      <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+    <div class="modal-body cast-gallery-body">
+      <a href="{{ current_image.file.url }}">
+        <picture class="modal-picture">
+          <source
+            class="modal-source"
+            srcset="{{ current_image.modal.srcset.avif }}"
+            sizes="{{ current_image.modal.sizes }}"
+            type="image/avif"
+          >
+          <img
+            class="modal-image cast-image"
+            alt="{{ current_image.default_alt_text }}"
+            src="{{ current_image.modal.src.jpeg }}"
+            srcset="{{ current_image.modal.srcset.jpeg }}"
+            sizes="{{ current_image.modal.sizes }}"
+          >
+        </picture>
+      </a>
+    </div>
+    <div class="modal-footer cast-gallery-footer">
+      <button
+        id="data-prev"
+        type="button"
+        class="btn btn-primary {% if not prev_image %}disabled{% endif %}"
+        {% if prev_image %}
+          hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_pk={{ prev_image.pk }}&block_id={{ block_id }}"
+          hx-trigger="click, keyup[key=='ArrowLeft'] from:body"
+          hx-target="#imageGalleryModal-{{ block_id }}"
+        {% endif %}
+      >
+        Prev
+      </button>
+      <button
+        id="data-next"
+        type="button"
+        class="btn btn-primary {% if not next_image %}disabled{% endif %}"
+        {% if next_image %}
+          hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_pk={{ next_image.pk }}&block_id={{ block_id }}"
+          hx-trigger="click, keyup[key=='ArrowRight'] from:body"
+          hx-target="#imageGalleryModal-{{ block_id }}"
+        {% endif %}
+      >
+        Next
+      </button>
+    </div>
+  </div>
+</div>

@@ -8,6 +8,7 @@ from cast.blocks import (
     CastImageChooserBlock,
     CodeBlock,
     GalleryBlock,
+    GalleryBlockWithLayout,
     get_srcset_images_for_slots,
 )
 from cast.models import Gallery
@@ -180,3 +181,18 @@ def test_gallery_block_get_context_parent_context_none():
     cb = GalleryBlock(ImageChooserBlock())
     context = cb.get_context(Gallery.objects.none(), parent_context=None)
     assert "value" in context
+
+
+def test_gallery_block_with_layout_get_template_htmx():
+    block = GalleryBlockWithLayout()
+    template = block.get_template({"layout": "htmx"}, context={"template_base_dir": "bootstrap4"})
+    assert template == "cast/bootstrap4/gallery_htmx.html"
+
+
+def test_gallery_block_with_layout_get_template_value_is_none():
+    block = GalleryBlockWithLayout()
+    template = block.get_template(None, context={"template_base_dir": "bootstrap4"})
+    assert template == "cast/bootstrap4/gallery.html"
+
+    template = block.get_template({}, context={"template_base_dir": "bootstrap4"})
+    assert template == "cast/bootstrap4/gallery.html"
