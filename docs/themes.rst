@@ -54,6 +54,8 @@ Galleries can have different layouts. Currently there are two layouts:
 - `default` - This is the default layout which will use the `cast/minimal/gallery.html` template
 - `htmx` - Which will use the `cast/minimal/gallery_htmx.html` template
 
+If you don't want to implement the htmx layout, you can just copy your
+`cast/minimal/gallery.html` template to `cast/minimal/gallery_htmx.html`.
 
 How to Change the Theme for the whole Site
 ==========================================
