@@ -46,6 +46,15 @@ your custom template in the Wagtail admin interface.
     ``settings.CAST_CUSTOM_THEMES``.
 
 
+Galleries
+=========
+
+Galleries can have different layouts. Currently there are two layouts:
+
+- `default` - This is the default layout which will use the `cast/minimal/gallery.html` template
+- `htmx` - Which will use the `cast/minimal/gallery_htmx.html` template
+
+
 How to Change the Theme for the whole Site
 ==========================================
 
