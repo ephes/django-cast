@@ -1,8 +1,11 @@
-0.2.26 (2023-12-20)
+0.2.26 (2023-12-31)
 -------------------
 
 Use a web component for the image gallery. Have a proper build pipeline
-for the web components Javascript and some tests.
+for the web components Javascript and some tests. Have a working htmx layout
+for the gallery. It's still a bit slower compared to the web component, but
+it's a start.
 
 - #114 Use web component for image gallery
 - Some cleanup regarding javascript paths etc. - using a global cast prefix for example
+- #116 Gallery layout using htmx for bootstrap4 and 5 themes
