@@ -19,13 +19,13 @@ repos:
       - id: django-upgrade
         args: [--target-version, "4.1"]
   - repo: https://github.com/psf/black
-    rev: 23.11.0
+    rev: 23.12.1
     hooks:
       - id: black
         language_version: python3.11
   - repo: https://github.com/timothycrosley/isort
     # isort config is in setup.cfg
-    rev: 5.13.0
+    rev: 5.13.2
     hooks:
       - id: isort
         language_version: python3
@@ -41,7 +41,7 @@ repos:
       - id: djhtml
         args: [-t, "2"]
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.7.1'  # Use the sha / tag you want to point at
+    rev: 'v1.8.0'  # Use the sha / tag you want to point at
     hooks:
       - id: mypy
         exclude: "[a-zA-Z]*/(migrations)|(docs)|(example)/(.)*"
