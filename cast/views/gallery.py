@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from django import forms
 from django.http import HttpResponse
@@ -11,8 +11,8 @@ from .htmx_helpers import HtmxHttpRequest
 
 
 class CommaSeparatedIntegerField(forms.Field):
-    def to_python(self, value: str) -> list[int]:
-        if not value:
+    def to_python(self, value: Any | None) -> list[int]:  # Any | None from super -> do not override
+        if value is None or not value.strip():
             return []
         return [int(item.strip()) for item in value.split(",")]
 
