@@ -12,7 +12,7 @@ repos:
     rev: v3.15.0
     hooks:
       - id: pyupgrade
-        args: [--py39-plus]
+        args: [--py310-plus]
   - repo: https://github.com/adamchainz/django-upgrade
     rev: 1.15.0
     hooks:
@@ -22,7 +22,7 @@ repos:
     rev: 23.12.1
     hooks:
       - id: black
-        language_version: python3.11
+        language_version: python3.12
   - repo: https://github.com/timothycrosley/isort
     # isort config is in setup.cfg
     rev: 5.13.2
@@ -64,7 +64,7 @@ repos:
           - django-taggit
           - django-threadedcomments
           - django-vite
-          - psycopg2
+          - psycopg[binary]
           - Pygments
           - python-slugify
           - setuptools
