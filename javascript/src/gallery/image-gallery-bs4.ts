@@ -1,33 +1,56 @@
 export default class ImageGalleryBs4 extends HTMLElement {
+    currentImage: HTMLElement | null;
 	constructor () {
 		super();
         this.currentImage = null;
 	}
-    static register(tagName) {
-        console.log("Registering image-gallery-bs4");
+    static register(tagName: string):void {
+        console.log("Registering image-gallery-bs4!");
         if ("customElements" in window) {
             customElements.define(tagName || "image-gallery-bs4", ImageGalleryBs4);
         }
     }
-    replaceImage (direction) {
+    replaceImage (direction: string):void {
         if (this.currentImage) {
             const which = this.currentImage.getAttribute(direction);
             if (which === "false") {
                 return;
             }
-            const targetElement = this.querySelector('#' + which)
+            const targetElement:HTMLElement|null = this.querySelector("#" + which)
             if (targetElement) {
                 this.setModalImage(targetElement);
             }
         }
     }
-    setModalImage (img) {
+    setModalImage(img: HTMLElement):void {
         this.currentImage = img;
+        if (!img.parentNode) {
+            console.error("No parent node for image: ", img);
+            return;
+        }
         const thumbnailPicture = img.parentNode;
-        const fullUrl = thumbnailPicture.parentNode.getAttribute("data-full");
-        const thumbnailSource = thumbnailPicture.querySelector('source');
-        const modalBody = this.querySelector(".modal-body");
-        const modalFooter = this.querySelector(".modal-footer");
+        if (!thumbnailPicture.parentNode) {
+            console.error("No parent node for thumbnail picture: ", thumbnailPicture);
+            return;
+        }
+        const fullUrl = (thumbnailPicture.parentNode as Element).getAttribute("data-full") ?? "";
+        const thumbnailSource = thumbnailPicture.querySelector("source");
+        if (!thumbnailSource) {
+            console.error("No thumbnail source for picture: ", thumbnailPicture);
+            return;
+        }
+        const modalBody = this.querySelector(`#${this.id} .modal-body`);
+        if (!modalBody) {
+            console.error("No modal body for modal: ", this);
+            return;
+        }
+        console.log("modalBody: ", modalBody)
+        // console.log("modalBody parent.parent.parent: ", modalBody.parentNode.parentNode.parentNode);
+        const modalFooter = this.querySelector(`#${this.id} .modal-footer`);
+        if (!modalFooter) {
+            console.error("No modal footer for modal: ", this);
+            return;
+        }
 
         const sourceAttributes = [
             { attr: "data-modal-srcset", prop: "srcset" },
@@ -37,6 +60,10 @@ export default class ImageGalleryBs4 extends HTMLElement {
         ];
 
         const modalSource = modalBody.querySelector("source");
+        if (!modalSource) {
+            console.error("No modal source for modal body: ", modalBody);
+            return;
+        }
         for (const { attr, prop } of sourceAttributes) {
             const value = thumbnailSource.getAttribute(attr);
             if (value) {
@@ -56,7 +83,11 @@ export default class ImageGalleryBs4 extends HTMLElement {
         ];
 
         const modalImage = modalBody.querySelector("img");
-        modalImage.parentNode.parentNode.setAttribute("href", fullUrl);
+        if (!modalImage) {
+            console.error("No modal image for modal body: ", modalBody);
+            return;
+        }
+        (modalImage.parentNode?.parentNode as Element).setAttribute("href", fullUrl);
         for (const { attr, prop } of imgAttributes) {
             const value = img.getAttribute(attr);
             if (value) {
@@ -64,9 +95,9 @@ export default class ImageGalleryBs4 extends HTMLElement {
             }
         }
 
-        let buttons = ''
+        let buttons = "";
         // prev button
-        const prev = modalImage.getAttribute('data-prev');
+        const prev = modalImage.getAttribute("data-prev");
         if (prev !== "false") {
             buttons = buttons + '<button id="data-prev" type="button" class="btn btn-primary">Prev</button>'
         } else {
@@ -74,7 +105,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
         }
 
         // next button
-        const next = modalImage.getAttribute('data-next');
+        const next = modalImage.getAttribute("data-next");
         if (next !== "false") {
             buttons = buttons + '<button id="data-next" type="button" class="btn btn-primary">Next</button>'
         } else {
@@ -82,40 +113,64 @@ export default class ImageGalleryBs4 extends HTMLElement {
         }
         modalFooter.innerHTML = buttons;
     }
-	connectedCallback () {
-		// console.log('connected!', this);
-        // add event listeners to thumbnail links - click -> open modal image
-        let thumbnailLinks = this.querySelectorAll('.cast-gallery-container > a');
+
+    private handleThumbnailClick(event: Event) {
+        event.preventDefault();
+        this.setModalImage(event.target as HTMLElement);
+    }
+
+    private handleFooterClick(event: Event) {
+        const target = event.target as Element;
+        if (target.matches("#data-prev, #data-next")) {
+            this.replaceImage(target.id);
+        }
+    }
+
+    private handleKeydown(event: KeyboardEvent) {
+        if (event.key === "ArrowLeft") {
+            this.replaceImage("data-prev");
+        }
+        if (event.key === "ArrowRight") {
+            this.replaceImage("data-next");
+        }
+    }
+
+    connectedCallback() {
+        // Add event listeners to thumbnail links - click -> open modal image
+        let thumbnailLinks = this.querySelectorAll(".cast-gallery-container > a");
         thumbnailLinks.forEach((link) => {
-            if (!link.classList.contains('event-added')) {
-                link.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    this.setModalImage(event.target);
-                });
-                link.classList.add('event-added');
+            if (!link.classList.contains("event-added")) {
+                link.addEventListener("click", this.handleThumbnailClick.bind(this));
+                link.classList.add("event-added");
             }
         });
 
-        // add event listeners to modal buttons - click -> replace image
+        // Add event listeners to modal buttons - click -> replace image
         const modalFooter = this.querySelector(".modal-footer");
         if (modalFooter) {
-            modalFooter.addEventListener("click", (event) => {
-                if (event.target.matches("#data-prev, #data-next")) {
-                    this.replaceImage(event.target.id);
-                }
-            });
+            modalFooter.addEventListener("click", this.handleFooterClick.bind(this));
         }
 
-        // add event listeners to modal - keydown -> replace image
-        this.addEventListener('keydown', function (e) {
-            if (e.keyCode === 37) {
-                this.replaceImage('data-prev')
-            }
-            if (e.keyCode === 39) {
-                this.replaceImage('data-next')
-            }
+        // Add event listeners to modal - keydown -> replace image
+        this.addEventListener("keydown", this.handleKeydown.bind(this));
+    }
+
+    disconnectedCallback() {
+        // Remove event listeners from thumbnail links
+        let thumbnailLinks = this.querySelectorAll(".cast-gallery-container > a");
+        thumbnailLinks.forEach((link) => {
+            link.removeEventListener("click", this.handleThumbnailClick);
         });
-	}
+
+        // Remove event listeners from modal footer buttons
+        const modalFooter = this.querySelector(".modal-footer");
+        if (modalFooter) {
+            modalFooter.removeEventListener("click", this.handleFooterClick);
+        }
+
+        // Remove keydown event listener from the component
+        this.removeEventListener("keydown", this.handleKeydown);
+    }
 }
 
 // Define the new web component

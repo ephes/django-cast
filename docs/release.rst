@@ -23,8 +23,8 @@ Build the Javascript (image-gallery component):
    $ cd dist/
    $ mv .vite/manifest.json manifest.json
    $ rm -r .vite
-   $ rm ../../cast/static/cast/js/vite/*
-   $ cp * ../../cast/static/cast/js/vite/
+   $ rm ../../cast/static/cast/vite/*
+   $ cp * ../../cast/static/cast/vite/
 
 Create the Release on GitHub
 ----------------------------

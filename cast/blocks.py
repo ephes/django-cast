@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Union
 
 from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -97,7 +97,7 @@ class CastImageChooserBlock(ImageChooserBlock):
     to get the srcset and sizes attributes in the template.
     """
 
-    def get_context(self, image: AbstractImage, parent_context: Optional[dict] = None) -> dict:
+    def get_context(self, image: AbstractImage, parent_context: dict | None = None) -> dict:
         if parent_context is None:
             parent_context = {}
         fetched_renditions = {
@@ -145,8 +145,7 @@ def prepare_context_for_gallery(images: QuerySet[AbstractImage], context: dict) 
     return context
 
 
-def get_gallery_block_template(default_template_name: str, context: Optional[dict], layout: str = "default") -> str:
-    print("default_template_name: ", default_template_name, "context: ", context, "layout: ", layout)
+def get_gallery_block_template(default_template_name: str, context: dict | None, layout: str = "default") -> str:
     if context is None:
         return default_template_name
 
@@ -171,11 +170,11 @@ class GalleryBlock(ListBlock):
         label = "Gallery"
         template = "cast/gallery.html"
 
-    def get_template(self, images: Optional[QuerySet[AbstractImage]] = None, context: Optional[dict] = None) -> str:
+    def get_template(self, images: QuerySet[AbstractImage] | None = None, context: dict | None = None) -> str:
         default_template_name = super().get_template(images, context)
         return get_gallery_block_template(default_template_name, context)
 
-    def get_context(self, images: QuerySet[AbstractImage], parent_context: Optional[dict] = None) -> dict:
+    def get_context(self, images: QuerySet[AbstractImage], parent_context: dict | None = None) -> dict:
         context = super().get_context(images, parent_context=parent_context)
         return prepare_context_for_gallery(images, context)
 
@@ -208,7 +207,8 @@ class GalleryBlockWithLayout(StructBlock):
                 layout = layout_from_value
         return get_gallery_block_template(default_template_name, context, layout=layout)
 
-    def get_context(self, value, parent_context: Optional[dict] = None):
+    def get_context(self, value, parent_context: dict | None = None):
+        # print("parent context: ", parent_context)
         context = super().get_context(value, parent_context=parent_context)
         context["post_pk"] = context["page"].pk
         return prepare_context_for_gallery(value["gallery"], context)
@@ -227,7 +227,7 @@ class VideoChooserBlock(ChooserBlock):
 
         return AdminVideoChooser()
 
-    def get_form_state(self, value: Optional[Union["Video", int]]) -> Optional[dict]:
+    def get_form_state(self, value: Union["Video", int] | None) -> dict | None:
         return self.widget.get_value_data(value)
 
 
@@ -244,7 +244,7 @@ class AudioChooserBlock(ChooserBlock):
 
         return AdminAudioChooser()
 
-    def get_form_state(self, value: Optional[Union["Video", int]]) -> Optional[dict]:
+    def get_form_state(self, value: Union["Video", int] | None) -> dict | None:
         return self.widget.get_value_data(value)
 
 
@@ -252,7 +252,7 @@ class CodeBlock(StructBlock):
     language = CharBlock(help_text="The language of the code block")
     source = TextBlock(rows=8, help_text="The source code of the block")
 
-    def render_basic(self, value: Optional[dict], context=None) -> str:
+    def render_basic(self, value: dict | None, context=None) -> str:
         if value is not None:
             try:
                 lexer = get_lexer_by_name(value["language"], stripall=True)

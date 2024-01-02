@@ -8,9 +8,13 @@
     <span class="author">{{ page.owner.username | title}}</span>
   </header>
   {% for block in page.body %}
+    {# this is either an overview or detail block #}
     {% if block.block_type != "detail" or render_detail %}
       <section class="block-{{ block.block_type }}">
-        {% include_block block %}
+        {% for block in block.value %}
+          {# this is a block of content like image, gallery or audio #}
+          {% include_block block %}
+        {% endfor %}
       </section>
       {% block detail_link %}{% endblock %}
     {% endif %}
