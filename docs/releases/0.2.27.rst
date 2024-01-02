@@ -1,0 +1,7 @@
+0.2.27 (2024-01-02)
+-------------------
+
+Bugfix release. Multiple galleries per post were not working when using the
+default gallery layout.
+
+- #117 Fix multiple galleries per post
