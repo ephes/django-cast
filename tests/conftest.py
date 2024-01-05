@@ -361,7 +361,6 @@ def post_in_podcast(podcast, body):
 
 @pytest.fixture()
 def post_with_gallery(blog, body_with_gallery):
-    print("body with gallery: ", body_with_gallery)
     return PostFactory(
         owner=blog.owner,
         parent=blog,
