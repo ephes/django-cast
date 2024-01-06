@@ -147,7 +147,7 @@ def m4a_audio(fixture_dir):
 
 # Models
 @pytest.fixture()
-def user(settings):
+def user():
     user = UserFactory()
     user._password = "password"
     group = Group.objects.get(name="Moderators")
