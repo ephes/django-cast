@@ -209,3 +209,28 @@ def test_gallery_block_with_layout_get_empty_images_from_cache():
     # images which don't have type dict or int
     values = block._get_images_from_cache([{"gallery": [None]}], None)
     assert values[0]["gallery"] == []
+
+
+def test_gallery_block_with_layout_get_context():
+    class Page:
+        pk = 1
+
+    class File:
+        name = ""
+
+    class Image:
+        pk = 1
+        prev = None
+        next = None
+        file = File()
+
+    class PostData:
+        images = {1: Image()}
+
+    block = GalleryBlockWithLayout()
+    block.post_data = PostData()
+    with pytest.raises(ValueError):
+        block.get_context(
+            {"gallery": [{"type": "item", "value": 1}]},
+            {"template_base_dir": "bootstrap4", "page": Page()},
+        )
