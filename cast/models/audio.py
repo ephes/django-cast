@@ -155,7 +155,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         return items
 
     @property
-    def chapters(self) -> list[dict[str, str]]:
+    def chapters(self) -> list[dict[str, str | None]]:
         items = []
         # chapter marks have to be ordered by start for
         # podlove web player - dunno why, 2019-04-19 jochen
@@ -164,8 +164,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
                 {
                     "start": str(chapter.start).split(".")[0],
                     "title": chapter.title,
-                    "href": chapter.link,
-                    "image": chapter.image,
+                    "href": chapter.link,  # could be None
+                    "image": chapter.image,  # could be None
                 }
             )
         return items

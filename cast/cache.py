@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from django.db.models import QuerySet
 from django.http import HttpRequest
@@ -91,7 +91,7 @@ class PostData:
         blog: "Blog",
         template_base_dir: str,
         post_queryset: QuerySet["Post"],
-    ) -> Self:
+    ) -> "PostData":
         queryset = post_queryset
         queryset = queryset.select_related("owner")
         queryset = queryset.prefetch_related(

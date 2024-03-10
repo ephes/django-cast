@@ -1,5 +1,4 @@
 from collections.abc import Iterable
-from typing import Optional
 
 from django.db import models
 from model_utils.models import TimeStampedModel
@@ -15,7 +14,7 @@ class Gallery(TimeStampedModel):
         return {i.pk for i in self.images.all()}
 
 
-def get_or_create_gallery(image_ids: Iterable[int]) -> Optional[Gallery]:
+def get_or_create_gallery(image_ids: Iterable[int]) -> Gallery | None:
     candidate_images = Image.objects.filter(id__in=image_ids)  # FIXME filter permissions
     if candidate_images.count() == 0:
         return None
@@ -24,8 +23,8 @@ def get_or_create_gallery(image_ids: Iterable[int]) -> Optional[Gallery]:
     # FIXME filter permissions - fetch only images / galleries that
     # this user has permission to view
     candidate_galleries = Gallery.objects.filter(images__in=filtered_image_ids).prefetch_related("images")
-    for gallery in candidate_galleries:
-        gallery_to_image_ids[frozenset(i.id for i in gallery.images.all())] = gallery
+    for candidate_gallery in candidate_galleries:
+        gallery_to_image_ids[frozenset(i.id for i in candidate_gallery.images.all())] = candidate_gallery
     gallery = gallery_to_image_ids.get(frozenset(filtered_image_ids))
     if gallery is None:
         gallery = Gallery.objects.create()

@@ -39,8 +39,8 @@ class NaiveBayes:
     def __init__(
         self,
         tokenize: Callable = regex_tokenize,
-        prior_probabilities: Optional[Probabilities] = None,
-        word_label_counts: Optional[dict[str, Counts]] = None,
+        prior_probabilities: Probabilities | None = None,
+        word_label_counts: dict[str, Counts] | None = None,
     ):
         self.tokenize = tokenize
         if prior_probabilities is None:
@@ -103,7 +103,7 @@ class NaiveBayes:
             )
         return probabilities
 
-    def predict_label(self, message: str) -> Optional[str]:
+    def predict_label(self, message: str) -> str | None:
         probabilities = self.predict(message)
         if len(probabilities) == 0:
             return None
@@ -303,5 +303,5 @@ class SpamFilter(TimeStampedModel):
         self.save()
 
     @classmethod
-    def get_default(cls) -> "SpamFilter":
+    def get_default(cls) -> Optional["SpamFilter"]:
         return cls.objects.first()

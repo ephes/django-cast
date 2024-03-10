@@ -237,7 +237,9 @@ class Podcast(Blog):
     """A podcast is a blog with some extra fields for podcasting."""
 
     # atm it's only used for podcast image
-    itunes_artwork = models.ForeignKey(ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL)
+    itunes_artwork = models.ForeignKey(
+        ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL, related_name="podcasts"
+    )
     itunes_categories = models.CharField(
         _("itunes_categories"),
         max_length=512,

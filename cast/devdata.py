@@ -194,8 +194,8 @@ def add_audio_to_body(*, body: Body, audio: Audio = Auto):
     return body
 
 
-def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[str, int] = None) -> Blog:
-    if media_numbers is None:
+def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[str, int] = Auto) -> Blog:
+    if not media_numbers:
         media_numbers = {k: 1 for k in ["images", "videos", "audios", "galleries"]}
     blog = create_blog()
     body = deepcopy(create_python_body())
