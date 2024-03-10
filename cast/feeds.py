@@ -9,6 +9,7 @@ from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 from django.utils.safestring import SafeText
 
 from .models import Audio, Blog, Episode, Podcast, Post
+from .models.pages import PostData
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,10 @@ logger = logging.getLogger(__name__)
 class LatestEntriesFeed(Feed):
     object: Blog
     request: HttpRequest
+
+    def __init__(self):
+        super().__init__()
+        self.post_data = None
 
     def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
         slug = kwargs["slug"]
@@ -32,18 +37,35 @@ class LatestEntriesFeed(Feed):
         return self.object.get_full_url()
 
     def items(self) -> QuerySet[Post]:
-        queryset = Post.objects.live().descendant_of(self.object).order_by("-visible_date")
+        blog = self.object
+        queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
+        self.post_data = PostData.create_from_post_queryset(
+            request=self.request,
+            blog=blog,
+            post_queryset=queryset,
+            template_base_dir="bootstrap4",
+        )
         return queryset
 
     def item_title(self, item) -> SafeText:
         return item.title
 
     def item_description(self, item) -> SafeText:
-        item.description = item.get_description(request=self.request, render_detail=True, escape_html=False)
+        post_data = self.post_data
+        # def blocker(*args):
+        #     raise Exception("No database access allowed here.")
+        # with connection.execute_wrapper(blocker):
+        item.description = item.get_description(
+            request=self.request, render_detail=True, escape_html=False, post_data=post_data
+        )
         return item.description
 
     def item_link(self, item) -> SafeText:
         return item.get_full_url()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return context
 
 
 class ITunesElements:

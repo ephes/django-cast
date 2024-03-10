@@ -218,13 +218,13 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
         episodes = self.episodes.all()
         if episode_id is not None:
             episodes = episodes.filter(pk=episode_id)
-        episodes = list(episodes)
+        episodes = list(episodes)  # type: ignore
         if len(episodes) == 1:
             return episodes[0]
         return None
 
     @property
-    def episode_url(self) -> Optional[str]:
+    def episode_url(self) -> str | None:
         """Return the url to the episode this audio file belongs to."""
         episode_id = None
         if hasattr(self, "_episode_id"):

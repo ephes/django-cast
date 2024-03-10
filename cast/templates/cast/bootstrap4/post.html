@@ -7,13 +7,13 @@
 
 {% load django_vite %}
 
-{% if page.comments_enabled %}
+{% if comments_are_enabled %}
   {% load comments %}
 {% endif %}
 
 {% block css %}
   {{ block.super }}
-  {% if page.comments_are_enabled %}
+  {% if comments_are_enabled %}
     <link rel="stylesheet" type="text/css" href="{% static 'fluent_comments/css/ajaxcomments.css' %}" />
   {% endif %}
 {% endblock css %}
@@ -32,13 +32,12 @@
 {% block content %}
   {% include "./post_body.html" with render_detail=True %}
 
-  {% if page.comments_are_enabled %}
+  {% if comments_are_enabled %}
     {% render_comment_list for page %}
     {% render_comment_form for page %}
   {% endif %}
 
-
-  <p><a href="{{ page.get_parent.url }}">Return to blog</a></p>
+  <p><a href="{{ blog_url }}">Return to blog</a></p>
 
 {% endblock %}
 
@@ -50,9 +49,9 @@
   <!-- full query is needed for comments -->
   <script defer src="{% static 'cast/js/jquery/jquery-3.7.1.min.js' %}"></script>
   <script defer type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
-  {% if page.has_audio %}
+  {% if has_audio %}
     <script src="{% static 'cast/js/web-player/embed.4.js' %}"></script>
-    {% for pk, audio in page.media_lookup.audio.items %}
+    {% for pk, audio in audio_items %}
       <script>podlovePlayer("#audio_{{ audio.pk }}", "{{ audio.podlove_url }}");</script>
     {% endfor %}
   {% endif %}

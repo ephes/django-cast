@@ -1,7 +1,7 @@
 import logging
 import uuid
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.conf import settings
@@ -43,6 +43,7 @@ from cast.blocks import (
 )
 from cast.models import get_or_create_gallery
 
+from ..cache import PostData
 from ..renditions import ImageType, RenditionFilters
 from .theme import TemplateBaseDirectory
 
@@ -137,7 +138,7 @@ class Post(Page):
     # managers
     tags = ClusterTaggableManager(through=PostTag, blank=True, verbose_name=_("tags"))
 
-    _local_template_name: Optional[str] = None
+    _local_template_name: str | None = None
 
     # wagtail
     body = StreamField(
@@ -193,6 +194,8 @@ class Post(Page):
         it has a .blog attribute containing the model which has all the
         attributes like blog.comments_enabled etc.
         """
+        if hasattr(self, "_post_data"):
+            return self._post_data.blog
         return self.get_parent().blog
 
     def get_template_base_dir(self, request: HttpRequest) -> str:
@@ -205,7 +208,9 @@ class Post(Page):
     def get_template(self, request: HttpRequest, *args, local_template_name: str = "post.html", **kwargs) -> str:
         if self._local_template_name is not None:
             local_template_name = self._local_template_name
-        template_base_dir = self.get_template_base_dir(request)
+        template_base_dir = kwargs.get("template_base_dir", None)
+        if template_base_dir is None:
+            template_base_dir = self.get_template_base_dir(request)
         template = f"cast/{template_base_dir}/{local_template_name}"
         return template
 
@@ -263,12 +268,15 @@ class Post(Page):
             else:
                 return False
 
-    @property
-    def comments_are_enabled(self) -> bool:
-        return appsettings.CAST_COMMENTS_ENABLED and self.blog.comments_enabled and self.comments_enabled
+    def get_comments_are_enabled(self, blog: "Blog") -> bool:
+        return appsettings.CAST_COMMENTS_ENABLED and blog.comments_enabled and self.comments_enabled
 
     @property
-    def comments_security_data(self) -> dict[str, Union[str, int]]:
+    def comments_are_enabled(self) -> bool:
+        return self.get_comments_are_enabled(self.blog)
+
+    @property
+    def comments_security_data(self) -> dict[str, str | int]:
         from django_comments.forms import CommentSecurityForm
 
         form = CommentSecurityForm(self)
@@ -281,12 +289,43 @@ class Post(Page):
         """
         return type(self)._meta.app_label + "." + type(self).__name__  # FIXME butt ugly
 
+    def get_url(self, request=None, current_site=None):
+        return super().get_url(request=request, current_site=current_site)
+
+    def get_context_without_database(self, request: HttpRequest, context: dict[str, Any], post_data) -> dict[str, Any]:
+        """
+        Get the context for the post without any database queries.
+        """
+        context["template_base_dir"] = post_data.template_base_dir
+        blog = post_data.blog
+        context["blog"] = blog
+        context["comments_are_enabled"] = self.get_comments_are_enabled(blog)
+        context["root_nav_links"] = post_data.root_nav_links
+        context["has_audio"] = post_data.has_audio_by_id[self.pk]
+        context["page_url"] = post_data.page_url_by_id[self.pk]
+        context["owner_username"] = post_data.owner_username_by_id[self.pk]
+        context["blog_url"] = post_data.blog_url
+        context["audio_items"] = post_data.audios_by_post_id.get(self.pk, {}).items()
+        request.cast_site_template_base_dir = post_data.template_base_dir  # type: ignore
+        return context
+
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
+        context["post_data"] = post_data = kwargs.get("post_data", None)
+        if post_data is not None:
+            return self.get_context_without_database(request, context, post_data)
         # needed for blocks with themed templates
         context["template_base_dir"] = self.get_template_base_dir(request)
-        context["blog"] = self.blog  # needed for SPA themes
+        blog = self.blog
+        context["comments_are_enabled"] = self.get_comments_are_enabled(blog)
+        context["blog"] = blog
+        context["root_nav_links"] = [(p.get_url(), p.title) for p in blog.get_root().get_children().live()]
+        context["has_audio"] = self.has_audio
+        context["page_url"] = self.get_url(request=request)
+        context["owner_username"] = self.owner.username
+        context["blog_url"] = blog.get_url(request=request)
+        context["audio_items"] = self.media_lookup["audio"].items()
         return context
 
     @property
@@ -299,13 +338,25 @@ class Post(Page):
             for block in content_block.value:
                 if block.block_type == "gallery":
                     images = block.value.get("gallery", [])
-                    image_ids = [i.id for i in images]
+                    image_ids = []
+                    for image in images:
+                        if isinstance(image, dict):
+                            image_ids.append(image["value"])
+                        elif isinstance(image, Image):
+                            image_ids.append(image.pk)
+                        elif isinstance(image, int):
+                            image_ids.append(image)
                     media_model = get_or_create_gallery(image_ids)
                 else:
                     media_model = block.value
                 if block.block_type in self.media_model_lookup:
                     if media_model is not None:
-                        from_body.setdefault(block.block_type, set()).add(media_model.id)
+                        if hasattr(media_model, "id"):
+                            from_body.setdefault(block.block_type, set()).add(media_model.id)
+                        elif isinstance(media_model, int):
+                            from_body.setdefault(block.block_type, set()).add(media_model)
+                        else:
+                            raise ValueError(f"media model {media_model} is not an instance of int or a model")
         return from_body
 
     @property
@@ -333,9 +384,17 @@ class Post(Page):
             yield from post.get_all_images()
 
     @staticmethod
-    def get_all_renditions_from_queryset(posts: Iterable["Post"]) -> Iterator[Rendition]:
+    def get_all_renditions_from_queryset_flat(posts: Iterable["Post"]) -> Iterator[Rendition]:
         for image_type, image in Post.get_all_images_from_queryset(posts):
             yield from image.renditions.all()
+
+    @staticmethod
+    def get_all_renditions_from_queryset(posts: Iterable["Post"]) -> dict[int, list[Rendition]]:
+        all_renditions = Post.get_all_renditions_from_queryset_flat(posts)
+        renditions_for_posts: dict[int, list[Rendition]] = {}
+        for rendition in all_renditions:
+            renditions_for_posts.setdefault(rendition.image_id, []).append(rendition)
+        return renditions_for_posts
 
     @staticmethod
     def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[int, str]]:
@@ -393,7 +452,7 @@ class Post(Page):
         return obsolete_rendition_pks, missing_renditions_by_image_id
 
     @property
-    def comments(self) -> list[dict[str, Union[int, None, str]]]:
+    def comments(self) -> list[dict[str, int | None | str]]:
         ctype = ContentType.objects.get_for_model(self)
         site_id = getattr(settings, "SITE_ID", None)
         qs = comment_model.objects.filter(
@@ -443,13 +502,14 @@ class Post(Page):
         render_detail: bool = False,
         escape_html: bool = True,
         remove_newlines: bool = True,
+        post_data: PostData | None = None,
     ) -> SafeText:
         """
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
         """
         self._local_template_name = "post_body.html"
-        description = self.serve(request, render_detail=render_detail).rendered_content
+        description = self.serve(request, render_detail=render_detail, post_data=post_data).rendered_content
         if remove_newlines:
             description = description.replace("\n", "")
         if escape_html:
@@ -459,6 +519,20 @@ class Post(Page):
     def get_absolute_url(self) -> str:
         """This is needed for django-fluentcomments."""
         return self.full_url
+
+    def get_site(self):
+        if hasattr(self, "_post_data"):
+            return self._post_data.site
+        return super().get_site()
+
+    def serve(self, request, *args, **kwargs):
+        post_data = kwargs.get("post_data", None)
+        if post_data is not None:
+            # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
+            self._post_data = post_data
+            kwargs["template_base_dir"] = post_data.template_base_dir
+            return super().serve(request, *args, **kwargs)
+        return super().serve(request, *args, **kwargs)
 
     def save(self, *args, **kwargs) -> None:
         save_return = super().save(*args, **kwargs)

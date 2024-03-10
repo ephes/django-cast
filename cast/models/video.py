@@ -23,7 +23,7 @@ class VideoQuerySet(SearchableQuerySetMixin, models.QuerySet):
     pass
 
 
-def get_video_dimensions(lines: list[str]) -> tuple[Optional[int], Optional[int]]:
+def get_video_dimensions(lines: list[str]) -> tuple[int | None, int | None]:
     """Has its own function to be easier to test."""
 
     def get_width_height(my_video_type, my_line) -> tuple[int, int]:
@@ -89,7 +89,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         return "video"
 
     @staticmethod
-    def _get_video_dimensions(video_url: str) -> tuple[Optional[int], Optional[int]]:
+    def _get_video_dimensions(video_url: str) -> tuple[int | None, int | None]:
         ffprobe_cmd = f'ffprobe -i "{video_url}"'
         result = subprocess.check_output(ffprobe_cmd, shell=True, stderr=subprocess.STDOUT)
         lines = result.decode("utf8").split("\n")
@@ -147,7 +147,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             "avi": "video/x-msvideo",
         }.get(ending, "video/mp4")
 
-    def save(self, *args, **kwargs) -> Optional["Video"]:
+    def save(self, *args, **kwargs) -> Optional["Video"]:  # type: ignore[override]
         generate_poster = kwargs.pop("poster", True)
         # need to save original first - django file handling is driving me nuts
         result = super().save(*args, **kwargs)

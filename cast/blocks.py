@@ -12,9 +12,10 @@ from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
 from wagtail.blocks import CharBlock, ChoiceBlock, ListBlock, StructBlock, TextBlock
 from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
-from wagtail.images.models import AbstractImage, AbstractRendition
+from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
+from .cache import PostData
 from .renditions import (
     Height,
     ImageForSlot,
@@ -97,18 +98,34 @@ class CastImageChooserBlock(ImageChooserBlock):
     to get the srcset and sizes attributes in the template.
     """
 
-    def get_context(self, image: AbstractImage, parent_context: dict | None = None) -> dict:
+    def get_image_and_renditions(self, image_id, context: dict) -> tuple[Image, dict[str, Rendition]]:
+        post_data: PostData | None = context.get("post_data")
+        if post_data is None:
+            image = super().to_python(image_id)
+            image_renditions = context.get("renditions_for_posts", {}).get(image.pk, [])
+        else:
+            image = post_data.images[image_id]
+            image_renditions = post_data.renditions_for_posts.get(image.pk, [])
+        fetched_renditions = {r.filter_spec: r for r in image_renditions}
+        return image, fetched_renditions
+
+    def get_context(self, image_pk: int, parent_context: dict | None = None) -> dict:
         if parent_context is None:
             parent_context = {}
-        fetched_renditions = {
-            r.filter_spec: r for r in parent_context.get("renditions_for_posts", {}) if r.image_id == image.pk
-        }
+        image, fetched_renditions = self.get_image_and_renditions(image_pk, parent_context)
         images_for_slots = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
         [image.regular] = images_for_slots.values()
         return super().get_context(image, parent_context=parent_context)
 
+    def bulk_to_python(self, items):
+        """Overwrite this method to avoid database queries."""
+        return items
 
-def add_prev_next(images: QuerySet[AbstractImage]) -> None:
+    def extract_references(self, value):
+        yield self.model_class, str(value), "", ""
+
+
+def add_prev_next(images: Iterable[AbstractImage]) -> None:
     """
     For each image in the queryset, add the previous and next image.
     """
@@ -117,23 +134,24 @@ def add_prev_next(images: QuerySet[AbstractImage]) -> None:
         current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
 
 
-def add_image_thumbnails(images: QuerySet[AbstractImage], context: dict) -> None:
+def add_image_thumbnails(images: Iterable[AbstractImage], context: dict) -> None:
     """
     For each image in the queryset, add the thumbnail and modal image data to the image.
     """
     modal_slot, thumbnail_slot = (
         Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
     )
+    post_data = context.get("post_data")
+    renditions_for_posts = {} if post_data is None else post_data.renditions_for_posts
     for image in images:
-        fetched_renditions = {
-            r.filter_spec: r for r in context.get("renditions_for_posts", {}) if r.image_id == image.pk
-        }
+        image_renditions = renditions_for_posts.get(image.pk, [])
+        fetched_renditions = {r.filter_spec: r for r in image_renditions}
         images_for_slots = get_srcset_images_for_slots(image, "gallery", fetched_renditions=fetched_renditions)
         image.modal = images_for_slots[modal_slot]
         image.thumbnail = images_for_slots[thumbnail_slot]
 
 
-def prepare_context_for_gallery(images: QuerySet[AbstractImage], context: dict) -> dict:
+def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) -> dict:
     """
     Add the previous and next image and the thumbnail and modal image data to each
     image of the gallery and then the images to the context.
@@ -193,6 +211,7 @@ class GalleryBlockWithLayout(StructBlock):
         ],
         default="default",
     )
+    post_data: PostData | None = None
 
     class Meta:
         icon = "image"
@@ -208,13 +227,36 @@ class GalleryBlockWithLayout(StructBlock):
         return get_gallery_block_template(default_template_name, context, layout=layout)
 
     def get_context(self, value, parent_context: dict | None = None):
-        # print("parent context: ", parent_context)
         context = super().get_context(value, parent_context=parent_context)
-        context["post_pk"] = context["page"].pk
+        context["post_pk"] = context["page"].pk  # FIXME remove this?
+        if isinstance(value["gallery"][0], dict) and self.post_data is not None:
+            value = self._get_images_from_cache([value], self.post_data)[0]
         return prepare_context_for_gallery(value["gallery"], context)
+
+    def _get_images_from_cache(self, values, post_data: PostData):
+        images = []
+        for item in values[0]["gallery"]:
+            if isinstance(item, dict) and item.get("type") == "item":
+                images.append(post_data.images[item["value"]])
+            elif isinstance(item, int):
+                images.append(post_data.images[item])
+        values[0]["gallery"] = images
+        return values
+
+    def bulk_to_python(self, values):
+        """Overwrite this method to be able to use the post_data images cache."""
+        if self.post_data is not None:
+            try:
+                return self._get_images_from_cache(values, self.post_data)
+            except KeyError:
+                # if fetching from cache fails, just return super().bulk_to_python
+                pass
+        return super().bulk_to_python(values)
 
 
 class VideoChooserBlock(ChooserBlock):
+    post_data: PostData | None = None
+
     @cached_property
     def target_model(self) -> type["Video"]:
         from .models import Video
@@ -230,8 +272,19 @@ class VideoChooserBlock(ChooserBlock):
     def get_form_state(self, value: Union["Video", int] | None) -> dict | None:
         return self.widget.get_value_data(value)
 
+    def bulk_to_python(self, values):
+        if self.post_data is not None:
+            try:
+                return [self.post_data.videos[value] for value in values]
+            except KeyError:
+                # if fetching from cache fails, just return super().bulk_to_python
+                pass
+        return super().bulk_to_python(values)
+
 
 class AudioChooserBlock(ChooserBlock):
+    post_data: PostData | None = None
+
     @cached_property
     def target_model(self) -> type["Audio"]:
         from .models import Audio
@@ -246,6 +299,15 @@ class AudioChooserBlock(ChooserBlock):
 
     def get_form_state(self, value: Union["Video", int] | None) -> dict | None:
         return self.widget.get_value_data(value)
+
+    def bulk_to_python(self, values):
+        if self.post_data is not None:
+            try:
+                return [self.post_data.audios[value] for value in values]
+            except KeyError:
+                # if fetching from cache fails, just return super().bulk_to_python
+                pass
+        return super().bulk_to_python(values)
 
 
 class CodeBlock(StructBlock):

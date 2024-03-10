@@ -152,6 +152,56 @@ class TestPostModel:
         post = Post()
         assert post._media_ids_from_body([block]) == {}
 
+    def test_media_ids_from_body_images_in_galleries(self):
+        class GalleryBlock:
+            block_type = "gallery"
+            # test dict type, int and invalid (None) of "images" in the gallery
+            value = {"gallery": [{"value": 2}, 1, None]}
+
+        class ContentBlock:
+            value = [GalleryBlock()]
+
+        block = ContentBlock()
+        post = Post()
+        assert post._media_ids_from_body([block]) == {}
+
+    def test_media_ids_from_body_is_int(self):
+        class AudioBlock:
+            block_type = "audio"
+            value = 1
+
+        class ContentBlock:
+            value = [AudioBlock()]
+
+        block = ContentBlock()
+        post = Post()
+        assert post._media_ids_from_body([block]) == {"audio": {1}}
+
+    def test_media_ids_from_body_is_invalid(self):
+        class AudioBlock:
+            block_type = "audio"
+            value = "asdf"
+
+        class ContentBlock:
+            value = [AudioBlock()]
+
+        block = ContentBlock()
+        post = Post()
+        with pytest.raises(ValueError):
+            post._media_ids_from_body([block])
+
+    def test_get_site(self):
+        post = Post()
+        site = post.get_site()
+        assert site is None
+
+        class PostData:
+            site = "foobar"
+
+        post._post_data = PostData()
+
+        assert post.get_site() == "foobar"
+
     def test_get_description_escape(self, mocker, simple_request):
         class Rendered:
             rendered_content = "<h1>foo</h1>"

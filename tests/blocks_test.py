@@ -169,10 +169,11 @@ def test_get_srcset_images_for_slots_fetched_renditions_contain_all_filter_strin
     assert images_for_slot[slot].src["jpeg"] == "https://example.com/test.jpg"
 
 
-def test_image_chooser_block_get_context_parent_context_none():
+@pytest.mark.django_db
+def test_image_chooser_block_get_context_parent_context_none(image):
     """Just make sure parent context is set to {} if it is None."""
     cicb = CastImageChooserBlock()
-    context = cicb.get_context(StubWagtailImage(), parent_context=None)
+    context = cicb.get_context(image.pk, parent_context=None)
     assert "value" in context
 
 
@@ -196,3 +197,15 @@ def test_gallery_block_with_layout_get_template_value_is_none():
 
     template = block.get_template({}, context={"template_base_dir": "bootstrap4"})
     assert template == "cast/bootstrap4/gallery.html"
+
+
+def test_gallery_block_with_layout_get_empty_images_from_cache():
+    block = GalleryBlockWithLayout()
+
+    # no images
+    values = block._get_images_from_cache([{"gallery": []}], None)
+    assert values[0]["gallery"] == []
+
+    # images which don't have type dict or int
+    values = block._get_images_from_cache([{"gallery": [None]}], None)
+    assert values[0]["gallery"] == []

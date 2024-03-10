@@ -9,7 +9,6 @@ import pytest
 import pytz
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test.client import RequestFactory
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
@@ -582,29 +581,24 @@ def dummy_handler():
     return DummyHandler()
 
 
-@pytest.fixture()
-def request_factory():
-    return RequestFactory()
-
-
 @pytest.fixture
-def simple_request(request_factory):
-    request = request_factory.get("/")
+def simple_request(rf):
+    request = rf.get("/")
     request.htmx = HtmxDetails(request)
     request.session = {}
     return request
 
 
 @pytest.fixture
-def htmx_request(request_factory):
-    request = request_factory.get("/", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="paging-area")
+def htmx_request(rf):
+    request = rf.get("/", HTTP_HX_REQUEST="true", HTTP_HX_TARGET="paging-area")
     request.htmx = HtmxDetails(request)
     return request
 
 
 @pytest.fixture
-def htmx_request_without_target(request_factory):
-    request = request_factory.get("/", HTTP_HX_REQUEST="true", HTTP_HX_TARGET=None)
+def htmx_request_without_target(rf):
+    request = rf.get("/", HTTP_HX_REQUEST="true", HTTP_HX_TARGET=None)
     request.htmx = HtmxDetails(request)
     return request
 

@@ -2,17 +2,15 @@
 
 <article>
   <header>
-    <h2><a class="text-dark text-decoration-none" href="{% pageurl page %}">{{ page.title }}</a></h2>
+    <h2><a class="text-dark text-decoration-none" href="{{ page_url }}">{{ page.title }}</a></h2>
     <!-- link is on one line to avoid underlined whitespace -->
-    <a href="{% pageurl page %}"><time date-time='{{ page.visible_date|date:"c" }}'>{{ page.visible_date|date }}</time>,</a>
-    <span class="author">{{ page.owner.username | title}}</span>
+    <a href="{{ page_url }}"><time date-time='{{ page.visible_date|date:"c" }}'>{{ page.visible_date|date }}</time>,</a>
+    <span class="author">{{ owner_username | title}}</span>
   </header>
   {% for block in page.body %}
-    {# this is either an overview or detail block #}
     {% if block.block_type != "detail" or render_detail %}
       <section class="block-{{ block.block_type }}">
         {% for block in block.value %}
-          {# this is a block of content like image, gallery or audio #}
           <section class="block-{{ block.block_type }}">
             {% include_block block %}
           </section>

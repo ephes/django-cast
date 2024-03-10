@@ -89,11 +89,19 @@ def test_cast_custom_theme_settings_show_up(settings):
 
 
 @pytest.mark.django_db
-def test_context_processors_site_template_base_dir(request_factory):
-    request = request_factory.get("/")
+def test_context_processors_site_template_base_dir(rf):
+    request = rf.get("/")
     context = site_template_base_dir(request)
     assert context["cast_site_template_base_dir"] == "bootstrap4"
     assert context["cast_base_template"] == "cast/bootstrap4/base.html"
+
+
+def test_context_processors_get_site_template_base_dir_from_request(rf):
+    request = rf.get("/")
+    request.cast_site_template_base_dir = "plain"
+    context = site_template_base_dir(request)
+    assert context["cast_site_template_base_dir"] == "plain"
+    assert context["cast_base_template"] == "cast/plain/base.html"
 
 
 @pytest.mark.django_db
