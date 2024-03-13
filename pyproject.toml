@@ -57,7 +57,7 @@ dependencies = [
     "python-slugify",
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
-    "wagtail < 6",
+    "wagtail",
 ]
 
 [project.optional-dependencies]
@@ -106,7 +106,7 @@ DJANGO_SETTINGS_MODULE = "tests.settings"
 minversion = "6.0"
 testpaths = ["tests"]
 filterwarnings = [
-    "ignore::wagtail.utils.deprecation.RemovedInWagtail60Warning",
+    "ignore::wagtail.utils.deprecation.RemovedInWagtail70Warning",
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]

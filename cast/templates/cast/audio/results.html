@@ -1,32 +1,32 @@
-d{% load i18n wagtailadmin_tags %}
+{% load i18n wagtailadmin_tags %}
 
 {% if audios %}
-    {% if is_searching %}
-        <h2>
-        {% blocktrans count counter=audios|length %}
-            There is one match
-        {% plural %}
-            There are {{ counter }} matches
-        {% endblocktrans %}
-        </h2>
+  {% if is_searching %}
+    <h2>
+      {% blocktrans count counter=audios|length %}
+        There is one match
+      {% plural %}
+        There are {{ counter }} matches
+      {% endblocktrans %}
+    </h2>
 
-        {% search_other %}
-    {% endif %}
+    {% search_other %}
+  {% endif %}
 
-    {% include "cast/audio/list.html" %}
+  {% include "cast/audio/list.html" %}
 
-    {% include "wagtailadmin/shared/pagination_nav.html" with items=audios is_searching=is_searching linkurl="castaudio:index" %}
+  {% include "wagtailadmin/shared/pagination_nav.html" with items=audios is_searching=is_searching linkurl="castaudio:index" %}
 {% else %}
-    {% if is_searching %}
-         <h2>{% blocktrans %}Sorry, no audio files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
+  {% if is_searching %}
+    <h2>{% blocktrans %}Sorry, no audio files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
 
-         {% search_other %}
+    {% search_other %}
+  {% else %}
+    {% url 'castaudio:add' as castaudio_add_audio_url %}
+    {% if current_collection %}
+      <p>{% blocktrans %}You haven't uploaded any audios in this collection. You can upload <a href="{{ castaudio_add_audio_url }}">audio</a> files.{% endblocktrans %}</p>
     {% else %}
-        {% url 'castaudio:add' as castaudio_add_audio_url %}
-        {% if current_collection %}
-            <p>{% blocktrans %}You haven't uploaded any audios in this collection. You can upload <a href="{{ castaudio_add_audio_url }}">audio</a> files.{% endblocktrans %}</p>
-        {% else %}
-            <p>{% blocktrans %}You haven't uploaded any audios. You can upload <a href="{{ castaudio_add_audio_url }}">audio</a> files.{% endblocktrans %}</p>
-        {% endif %}
+      <p>{% blocktrans %}You haven't uploaded any audios. You can upload <a href="{{ castaudio_add_audio_url }}">audio</a> files.{% endblocktrans %}</p>
     {% endif %}
+  {% endif %}
 {% endif %}
