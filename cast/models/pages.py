@@ -323,7 +323,10 @@ class Post(Page):
         context["root_nav_links"] = [(p.get_url(), p.title) for p in blog.get_root().get_children().live()]
         context["has_audio"] = self.has_audio
         context["page_url"] = self.get_url(request=request)
-        context["owner_username"] = self.owner.username
+        if self.owner is not None:
+            context["owner_username"] = self.owner.username
+        else:
+            context["owner_username"] = "unknown"
         context["blog_url"] = blog.get_url(request=request)
         context["audio_items"] = self.media_lookup["audio"].items()
         return context

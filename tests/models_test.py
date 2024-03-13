@@ -299,6 +299,16 @@ class TestPostModel:
             (f"#audio_{audio.pk}", audio.podlove_url),
         ]
 
+    def test_get_context_owner_none(self, rf, post):
+        """owner can be None when editing a draft."""
+        request = rf.get("/")
+        context = post.get_context(request)
+        assert context["owner_username"] == post.owner.username
+
+        post.owner = None
+        context = post.get_context(request)
+        assert context["owner_username"] == "unknown"
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db
