@@ -101,6 +101,7 @@ class CastImageChooserBlock(ImageChooserBlock):
     def get_image_and_renditions(self, image_id, context: dict) -> tuple[Image, dict[str, Rendition]]:
         post_data: PostData | None = context.get("post_data")
         if post_data is None:
+            print("image id? ", image_id)
             image = super().to_python(image_id)
             image_renditions = context.get("renditions_for_posts", {}).get(image.pk, [])
         else:
@@ -109,9 +110,15 @@ class CastImageChooserBlock(ImageChooserBlock):
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
         return image, fetched_renditions
 
-    def get_context(self, image_pk: int, parent_context: dict | None = None) -> dict:
+    def get_context(self, image_or_pk: int | Image, parent_context: dict | None = None) -> dict:
         if parent_context is None:
             parent_context = {}
+        if isinstance(image_or_pk, Image):
+            # FIXME: dunno why this is here :/ 2024-03-14 Jochen
+            image = image_or_pk
+            image_pk = image.pk
+        else:
+            image_pk = image_or_pk
         image, fetched_renditions = self.get_image_and_renditions(image_pk, parent_context)
         images_for_slots = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
         [image.regular] = images_for_slots.values()

@@ -177,6 +177,16 @@ def test_image_chooser_block_get_context_parent_context_none(image):
     assert "value" in context
 
 
+@pytest.mark.django_db
+def test_image_chooser_block_get_context_image_or_pk(image):
+    """Make sure get_context handles both an image or an image pk."""
+    cicb = CastImageChooserBlock()
+    context = cicb.get_context(image, parent_context=None)
+    assert context["value"] == image
+    context = cicb.get_context(image.pk, parent_context=None)
+    assert context["value"] == image
+
+
 def test_gallery_block_get_context_parent_context_none():
     """Just make sure parent context is set to {} if it is None."""
     cb = GalleryBlock(ImageChooserBlock())
