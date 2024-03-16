@@ -1,8 +1,7 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import QuerySet
 from django.http import HttpRequest
-from wagtail.blocks.base import Block
 from wagtail.images.models import Image, Rendition
 from wagtail.models import Site
 from wagtail.rich_text.pages import PageLinkHandler
@@ -19,7 +18,7 @@ LinkTuples = list[tuple[str, str]]
 
 
 class PostData:
-    registered_blocks: list[Block] = []
+    registered_blocks: list[Any] = []
 
     def __init__(
         self,
@@ -63,7 +62,7 @@ class PostData:
         )
 
     @classmethod
-    def register_block(cls, block: Block) -> None:
+    def register_block(cls, block: Any) -> None:
         cls.registered_blocks.append(block)
 
     @staticmethod
