@@ -18,13 +18,16 @@ class LatestEntriesFeed(Feed):
     object: Blog
     request: HttpRequest
 
-    def __init__(self):
+    def __init__(self, post_data: PostData = None):
         super().__init__()
-        self.post_data = None
+        self.post_data = post_data
 
     def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
         slug = kwargs["slug"]
-        self.object = get_object_or_404(Blog, slug=slug)
+        if self.post_data is None:
+            self.object = get_object_or_404(Blog, slug=slug)
+        else:
+            self.object = self.post_data.blog
         self.request = request
 
     def title(self) -> str:
@@ -38,13 +41,16 @@ class LatestEntriesFeed(Feed):
 
     def items(self) -> QuerySet[Post]:
         blog = self.object
-        queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
-        self.post_data = PostData.create_from_post_queryset(
-            request=self.request,
-            blog=blog,
-            post_queryset=queryset,
-            template_base_dir="bootstrap4",
-        )
+        if self.post_data is None or len(self.post_data.post_by_id) == 0:
+            queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
+            self.post_data = PostData.create_from_post_queryset(
+                request=self.request,
+                blog=blog,
+                post_queryset=queryset,
+                template_base_dir="bootstrap4",
+            )
+        else:
+            queryset = self.post_data.post_queryset
         return queryset
 
     def item_title(self, item) -> SafeText:

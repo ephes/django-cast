@@ -37,6 +37,7 @@ class PostData:
         videos: dict[int, "Video"],
         audios: dict[int, "Audio"],
         audios_by_post_id: AudiosByPostID,
+        post_queryset: QuerySet["Post"],
     ):
         self.site = site
         self.blog = blog
@@ -52,6 +53,7 @@ class PostData:
         self.videos = videos
         self.audios = audios
         self.audios_by_post_id = audios_by_post_id
+        self.post_queryset = post_queryset
         self.patch_page_link_handler(self.post_by_id)
         self.set_post_data_for_blocks()
 
@@ -142,5 +144,6 @@ class PostData:
             owner_username_by_id=owner_username_by_id,
             videos=videos,
             audios=audios,
+            post_queryset=post_queryset,
             audios_by_post_id=audios_by_post_id,
         )

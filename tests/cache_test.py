@@ -12,10 +12,12 @@ import pytest
 import sqlparse
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection, reset_queries
+from django.urls import reverse
 from wagtail.models import Site
 
 from cast.cache import PostData
 from cast.devdata import create_blog, create_post, generate_blog_with_media
+from cast.feeds import LatestEntriesFeed
 from cast.models import Blog, Post
 
 
@@ -74,6 +76,7 @@ def test_render_empty_post_without_hitting_the_database(rf):
         videos={},
         audios={},
         audios_by_post_id={},
+        post_queryset=[post],
     )
     request = rf.get(page_url)
     post.serve(request, post_data=post_data).render()
@@ -113,6 +116,7 @@ def linked_posts():
         audios={},
         audios_by_post_id={},
         blog_url=blog.get_url(),
+        post_queryset=list[source],
     )
 
     class LinkedPosts(NamedTuple):
@@ -207,6 +211,26 @@ def test_render_media_post_without_hitting_the_database(rf, media_post):
     assert 'class="cast-gallery-modal"' in html
     assert 'class="block-video"' in html
     assert 'class="block-audio"' in html
+    # And the database should not be hit
+    show_queries(connection.queries)
+    assert len(connection.queries) == 0
+
+
+@pytest.mark.django_db
+def test_render_feed_without_hitting_the_database(rf, media_post):
+    # Given a post with media and a feed
+    feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": media_post.blog.slug})
+    # When we render the feed
+    request = rf.get(feed_url)
+    view = LatestEntriesFeed(post_data=media_post.post_data)
+    # first call is just to populate SITE_CACHE
+    view(request, slug=media_post.blog.slug)
+    reset_queries()
+    # now count the queries
+    response = view(request, slug=media_post.blog.slug)
+    # Then the media should be rendered
+    html = response.content.decode("utf-8")
+    media_post.post.title in html
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0
