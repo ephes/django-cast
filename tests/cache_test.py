@@ -1,3 +1,9 @@
+"""
+This file contains tests for the post data cache. Make sure
+all queries happen in one place and there are no additional
+queries when rendering posts.
+"""
+
 import json
 from pathlib import Path
 from typing import NamedTuple
