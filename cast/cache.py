@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import QuerySet
 from django.http import HttpRequest
@@ -18,6 +18,8 @@ LinkTuples = list[tuple[str, str]]
 
 
 class PostData:
+    registered_blocks: list[Any] = []
+
     def __init__(
         self,
         *,  # no positional arguments
@@ -59,6 +61,10 @@ class PostData:
             f"template_base_dir={self.template_base_dir})"
         )
 
+    @classmethod
+    def register_block(cls, block: Any) -> None:
+        cls.registered_blocks.append(block)
+
     @staticmethod
     def patch_page_link_handler(post_by_id):
         def build_cached_get_instance(page_cache):
@@ -76,11 +82,8 @@ class PostData:
         return PageLinkHandler
 
     def set_post_data_for_blocks(self):
-        from . import blocks
-
-        blocks.GalleryBlockWithLayout.post_data = self  # noqa
-        blocks.VideoChooserBlock.post_data = self  # noqa
-        blocks.AudioChooserBlock.post_data = self  # noqa
+        for block in self.registered_blocks:
+            block.post_data = self
 
     @classmethod
     def create_from_post_queryset(

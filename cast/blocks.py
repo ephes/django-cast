@@ -331,3 +331,12 @@ class CodeBlock(StructBlock):
             return mark_safe(highlighted)
         else:
             return ""
+
+
+def register_blocks_for_post_data() -> None:
+    PostData.register_block(GalleryBlockWithLayout)
+    PostData.register_block(VideoChooserBlock)
+    PostData.register_block(AudioChooserBlock)
+
+
+register_blocks_for_post_data()
