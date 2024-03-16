@@ -292,7 +292,9 @@ class Post(Page):
     def get_url(self, request=None, current_site=None):
         return super().get_url(request=request, current_site=current_site)
 
-    def get_context_without_database(self, request: HttpRequest, context: dict[str, Any], post_data) -> dict[str, Any]:
+    def get_context_without_database(
+        self, request: HttpRequest, context: dict[str, Any], post_data: PostData
+    ) -> dict[str, Any]:
         """
         Get the context for the post without any database queries.
         """

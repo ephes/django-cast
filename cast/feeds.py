@@ -18,7 +18,7 @@ class LatestEntriesFeed(Feed):
     object: Blog
     request: HttpRequest
 
-    def __init__(self, post_data: PostData = None):
+    def __init__(self, post_data: PostData | None = None):
         super().__init__()
         self.post_data = post_data
 
