@@ -4,3 +4,5 @@
 Feed performance improvements.
 
 - #118 Fix performance for feeds with many items / images
+- #121 Add support for `Wagtail 6 <https://docs.wagtail.org/en/latest/releases/6.0.html>`_.
+- some pre-commit and javascript updates
