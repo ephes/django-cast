@@ -536,7 +536,6 @@ class Post(Page):
             # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
             self._post_data = post_data
             kwargs["template_base_dir"] = post_data.template_base_dir
-            return super().serve(request, *args, **kwargs)
         return super().serve(request, *args, **kwargs)
 
     def save(self, *args, **kwargs) -> None:
