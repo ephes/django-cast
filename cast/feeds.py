@@ -20,14 +20,14 @@ class LatestEntriesFeed(Feed):
 
     def __init__(self, post_data: PostData | None = None):
         super().__init__()
-        self.post_data = post_data
+        self.predefined_post_data = post_data
 
     def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
         slug = kwargs["slug"]
-        if self.post_data is None:
-            self.object = get_object_or_404(Blog, slug=slug)
+        if self.predefined_post_data is not None:
+            self.object = self.predefined_post_data.blog
         else:
-            self.object = self.post_data.blog
+            self.object = get_object_or_404(Blog, slug=slug)
         self.request = request
 
     def title(self) -> str:
@@ -41,7 +41,10 @@ class LatestEntriesFeed(Feed):
 
     def items(self) -> QuerySet[Post]:
         blog = self.object
-        if self.post_data is None or len(self.post_data.post_by_id) == 0:
+        if self.predefined_post_data is not None:
+            queryset = self.predefined_post_data.post_queryset
+            self.post_data = self.predefined_post_data
+        else:
             queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
             self.post_data = PostData.create_from_post_queryset(
                 request=self.request,
@@ -49,20 +52,17 @@ class LatestEntriesFeed(Feed):
                 post_queryset=queryset,
                 template_base_dir="bootstrap4",
             )
-        else:
-            queryset = self.post_data.post_queryset
         return queryset
 
     def item_title(self, item) -> SafeText:
         return item.title
 
     def item_description(self, item) -> SafeText:
-        post_data = self.post_data
         # def blocker(*args):
         #     raise Exception("No database access allowed here.")
         # with connection.execute_wrapper(blocker):
         item.description = item.get_description(
-            request=self.request, render_detail=True, escape_html=False, post_data=post_data
+            request=self.request, render_detail=True, escape_html=False, post_data=self.post_data
         )
         return item.description
 
