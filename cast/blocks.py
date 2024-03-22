@@ -15,7 +15,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .cache import PostData
+from .cache import PostData, QuerysetData
 from .renditions import (
     Height,
     ImageForSlot,
@@ -98,10 +98,11 @@ class CastImageChooserBlock(ImageChooserBlock):
     to get the srcset and sizes attributes in the template.
     """
 
+    queryset_data: QuerysetData | None = None
+
     def get_image_and_renditions(self, image_id, context: dict) -> tuple[Image, dict[str, Rendition]]:
         post_data: PostData | None = context.get("post_data")
         if post_data is None:
-            print("image id? ", image_id)
             image = super().to_python(image_id)
             image_renditions = context.get("renditions_for_posts", {}).get(image.pk, [])
         else:
@@ -130,6 +131,16 @@ class CastImageChooserBlock(ImageChooserBlock):
 
     def extract_references(self, value):
         yield self.model_class, str(value), "", ""
+
+    def get_prep_value(self, value):
+        """
+        This is needed to make a CastImageChooserBlock serializable. I have
+        no idea why this is needed, but it is.
+        """
+        if isinstance(value, int):
+            return value
+        else:
+            return value.pk
 
 
 def add_prev_next(images: Iterable[AbstractImage]) -> None:
@@ -218,7 +229,7 @@ class GalleryBlockWithLayout(StructBlock):
         ],
         default="default",
     )
-    post_data: PostData | None = None
+    queryset_data: QuerysetData | None = None
 
     class Meta:
         icon = "image"
@@ -235,26 +246,26 @@ class GalleryBlockWithLayout(StructBlock):
 
     def get_context(self, value, parent_context: dict | None = None):
         context = super().get_context(value, parent_context=parent_context)
-        context["post_pk"] = context["page"].pk  # FIXME remove this?
-        if isinstance(value["gallery"][0], dict) and self.post_data is not None:
-            value = self._get_images_from_cache([value], self.post_data)[0]
+        # context["post_pk"] = context["page"].pk  # FIXME remove this?
+        if isinstance(value["gallery"][0], dict) and self.queryset_data is not None:
+            value = self._get_images_from_cache([value], self.queryset_data)[0]
         return prepare_context_for_gallery(value["gallery"], context)
 
-    def _get_images_from_cache(self, values, post_data: PostData):
+    def _get_images_from_cache(self, values, queryset_data: QuerysetData):
         images = []
         for item in values[0]["gallery"]:
             if isinstance(item, dict) and item.get("type") == "item":
-                images.append(post_data.images[item["value"]])
+                images.append(queryset_data.images[item["value"]])
             elif isinstance(item, int):
-                images.append(post_data.images[item])
+                images.append(queryset_data.images[item])
         values[0]["gallery"] = images
         return values
 
     def bulk_to_python(self, values):
         """Overwrite this method to be able to use the post_data images cache."""
-        if self.post_data is not None:
+        if self.queryset_data is not None:
             try:
-                return self._get_images_from_cache(values, self.post_data)
+                return self._get_images_from_cache(values, self.queryset_data)
             except KeyError:
                 # if fetching from cache fails, just return super().bulk_to_python
                 pass
@@ -262,7 +273,7 @@ class GalleryBlockWithLayout(StructBlock):
 
 
 class VideoChooserBlock(ChooserBlock):
-    post_data: PostData | None = None
+    queryset_data: QuerysetData | None = None
 
     @cached_property
     def target_model(self) -> type["Video"]:
@@ -280,9 +291,9 @@ class VideoChooserBlock(ChooserBlock):
         return self.widget.get_value_data(value)
 
     def bulk_to_python(self, values):
-        if self.post_data is not None:
+        if self.queryset_data is not None:
             try:
-                return [self.post_data.videos[value] for value in values]
+                return [self.queryset_data.videos[value] for value in values]
             except KeyError:
                 # if fetching from cache fails, just return super().bulk_to_python
                 pass
@@ -290,7 +301,7 @@ class VideoChooserBlock(ChooserBlock):
 
 
 class AudioChooserBlock(ChooserBlock):
-    post_data: PostData | None = None
+    queryset_data: QuerysetData | None = None
 
     @cached_property
     def target_model(self) -> type["Audio"]:
@@ -308,9 +319,9 @@ class AudioChooserBlock(ChooserBlock):
         return self.widget.get_value_data(value)
 
     def bulk_to_python(self, values):
-        if self.post_data is not None:
+        if self.queryset_data is not None:
             try:
-                return [self.post_data.audios[value] for value in values]
+                return [self.queryset_data.audios[value] for value in values]
             except KeyError:
                 # if fetching from cache fails, just return super().bulk_to_python
                 pass
@@ -334,9 +345,10 @@ class CodeBlock(StructBlock):
 
 
 def register_blocks_for_post_data() -> None:
-    PostData.register_block(GalleryBlockWithLayout)
-    PostData.register_block(VideoChooserBlock)
-    PostData.register_block(AudioChooserBlock)
+    QuerysetData.register_block(GalleryBlockWithLayout)
+    QuerysetData.register_block(VideoChooserBlock)
+    QuerysetData.register_block(AudioChooserBlock)
+    QuerysetData.register_block(ImageChooserBlock)
 
 
 register_blocks_for_post_data()

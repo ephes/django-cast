@@ -15,7 +15,7 @@ from django.db import connection, reset_queries
 from django.urls import reverse
 from wagtail.models import Site
 
-from cast.cache import PostData
+from cast.cache import PagedPostData, PostData, QuerysetData
 from cast.devdata import create_blog, create_post, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
 from cast.models import Blog, Post
@@ -47,8 +47,8 @@ def test_post_data_repr(rf, blog, site):
 
 
 @pytest.mark.django_db
-def test_post_data_patch_page_link_handler_page_not_cached():
-    page_link_handler = PostData.patch_page_link_handler({})
+def test_queryset_data_patch_page_link_handler_page_not_cached():
+    page_link_handler = QuerysetData.patch_page_link_handler({})
     root = page_link_handler.get_instance({"id": 1})
     assert root.id == 1
 
@@ -62,21 +62,24 @@ def test_render_empty_post_without_hitting_the_database(rf):
     post = Post(content_type=ContentType("cast", "post"))
     root_nav_links = [("/home/", "Home"), ("/about/", "About")]
     page_url = "/foo-bar-baz/"
-    post_data = PostData(
-        site=object(),
-        blog=None,
+    queryset_data = QuerysetData(
         post_by_id={},
         images={},
         renditions_for_posts={},
-        root_nav_links=root_nav_links,
         has_audio_by_id={post.pk: False},
-        page_url_by_id={post.pk: page_url},
-        owner_username_by_id={post.pk: "owner"},
-        blog_url="/blog/",
         videos={},
         audios={},
         audios_by_post_id={},
         post_queryset=[post],
+        owner_username_by_id={post.pk: "owner"},
+    )
+    post_data = PostData(
+        site=object(),
+        blog=None,
+        root_nav_links=root_nav_links,
+        page_url_by_id={post.pk: page_url},
+        blog_url="/blog/",
+        queryset_data=queryset_data,
     )
     request = rf.get(page_url)
     post.serve(request, post_data=post_data).render()
@@ -102,21 +105,24 @@ def linked_posts():
     source = create_post(body=json.dumps(source_body), blog=blog, num=2)
     site = Site.objects.first()
     root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
-    post_data = PostData(
-        site=site,
-        blog=blog,
+    queryset_data = QuerysetData(
         post_by_id={target.pk: target.specific},
         images={},
-        renditions_for_posts={},
-        root_nav_links=root_nav_links,
-        has_audio_by_id={source.pk: False, target.pk: False},
-        page_url_by_id={source.pk: source.get_url(), target.pk: target.get_url()},
-        owner_username_by_id={source.pk: source.owner.username, target.pk: target.owner.username},
         videos={},
         audios={},
         audios_by_post_id={},
-        blog_url=blog.get_url(),
+        renditions_for_posts={},
+        has_audio_by_id={source.pk: False, target.pk: False},
         post_queryset=list[source],
+        owner_username_by_id={source.pk: source.owner.username, target.pk: target.owner.username},
+    )
+    post_data = PostData(
+        site=site,
+        blog=blog,
+        root_nav_links=root_nav_links,
+        page_url_by_id={source.pk: source.get_url(), target.pk: target.get_url()},
+        blog_url=blog.get_url(),
+        queryset_data=queryset_data,
     )
 
     class LinkedPosts(NamedTuple):
@@ -231,6 +237,55 @@ def test_render_feed_without_hitting_the_database(rf, media_post):
     # Then the media should be rendered
     html = response.content.decode("utf-8")
     media_post.post.title in html
+    # And the database should not be hit
+    show_queries(connection.queries)
+    assert len(connection.queries) == 0
+
+
+def get_paginated_post_list(rf, blog):
+    post = blog.unfiltered_published_posts.first()
+    _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    post_data = PagedPostData.create_from_blog_index_request(request=rf.get("/"), blog=blog)
+
+    class PaginatedPostList(NamedTuple):
+        post: Post
+        blog: Blog
+        post_data: PagedPostData
+
+    return PaginatedPostList(post=post, blog=blog, post_data=post_data)
+
+
+@pytest.fixture
+def paginated_post_list(rf, settings):
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    blog = generate_blog_with_media(number_of_posts=1)
+    post_list = get_paginated_post_list(rf, blog)
+    teardown_paths = [Path(post_list.post.videos.first().original.path)]
+    yield post_list
+    # teardown - remove the files created during the test
+    for path in teardown_paths:
+        if path.exists():
+            path.unlink()
+
+
+@pytest.mark.django_db
+def test_render_blog_index_without_hitting_the_database(rf, paginated_post_list):
+    # Given a post with media in a blog
+    blog = paginated_post_list.blog
+    # When we render the blog index
+    request = rf.get(blog.get_url())
+    request.htmx = False
+    # call this once without blocker to populate SITE_CACHE
+    blog.serve(request, post_data=paginated_post_list.post_data).render()
+    reset_queries()
+    # with connection.execute_wrapper(blocker):
+    response = blog.serve(request, post_data=paginated_post_list.post_data).render()
+    # Then the media should be rendered
+    html = response.content.decode("utf-8")
+    assert 'class="cast-image"' in html
+    assert 'class="cast-gallery-modal"' in html
+    assert 'class="block-video"' in html
+    assert 'class="block-audio"' in html
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0

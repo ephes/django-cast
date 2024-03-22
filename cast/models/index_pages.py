@@ -20,6 +20,7 @@ from cast import appsettings
 from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
+from ..cache import PagedPostData
 from ..views import HtmxHttpRequest
 from .pages import Post
 from .theme import get_template_base_dir, get_template_base_dir_choices
@@ -93,7 +94,9 @@ class Blog(Page):
         return get_template_base_dir(request, self.template_base_dir)
 
     def get_template(self, request: HtmxHttpRequest, *args, **kwargs) -> str:
-        template_base_dir = self.get_template_base_dir(request)
+        template_base_dir = kwargs.get("template_base_dir", None)
+        if template_base_dir is None:
+            template_base_dir = self.get_template_base_dir(request)
         template_name = "blog_list_of_posts.html"  # full template
         if request.htmx:
             target_to_template_name = {
@@ -218,8 +221,27 @@ class Blog(Page):
             }
         )
 
+    def get_context_without_database(
+        self, request: HtmxHttpRequest, context: dict[str, Any], post_data: PagedPostData
+    ) -> ContextDict:
+        get_params = request.GET.copy()
+        # context["filterset"] = filterset = post_data.filterset
+        context["parameters"] = self.get_other_get_params(get_params)
+        context |= post_data.paginate_context
+        context["posts"] = context["object_list"]  # convenience
+        context["blog"] = self
+        context["has_selectable_themes"] = True
+        context["template_base_dir"] = post_data.template_base_dir
+        context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
+        context["theme_form"] = post_data.theme_form
+        context["root_nav_links"] = post_data.root_nav_links
+        return context
+
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
+        context["post_data"] = post_data = kwargs.get("post_data", None)
+        if post_data is not None:
+            return self.get_context_without_database(request, context, post_data)
         get_params = request.GET.copy()
         context["filterset"] = filterset = self.get_filterset(get_params)
         context["parameters"] = self.get_other_get_params(get_params)
@@ -231,6 +253,14 @@ class Blog(Page):
         context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
         context["theme_form"] = self.get_theme_form(request)
         return context
+
+    def serve(self, request, *args, **kwargs):
+        post_data = kwargs.get("post_data", None)
+        if post_data is not None:
+            # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
+            self._post_data = post_data
+            kwargs["template_base_dir"] = post_data.template_base_dir
+        return super().serve(request, *args, **kwargs)
 
 
 class Podcast(Blog):
