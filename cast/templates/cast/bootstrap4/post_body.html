@@ -16,7 +16,9 @@
           </section>
         {% endfor %}
       </section>
-      {% block detail_link %}{% endblock %}
+      {% if not render_detail %}
+        {% block detail_link %}{% endblock %}
+      {% endif %}
     {% endif %}
   {% endfor %}
 </article>
