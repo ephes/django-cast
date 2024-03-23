@@ -173,6 +173,10 @@ class PodcastFeed(Feed):
     object: Podcast
     request: HttpRequest
 
+    def __init__(self, post_data: PostData | None = None):
+        super().__init__()
+        self.predefined_post_data = post_data
+
     def set_audio_format(self, audio_format: str) -> None:
         format_to_mime = Audio.mime_lookup
         if audio_format not in format_to_mime:
@@ -206,11 +210,13 @@ class PodcastFeed(Feed):
 
     def items(self, podcast: Podcast) -> QuerySet[Episode]:
         queryset = (
-            Episode.objects.live()
-            .descendant_of(podcast)
-            .filter(podcast_audio__isnull=False)
-            .select_related("podcast_audio")
-            .order_by("-visible_date")
+            Episode.objects.live().descendant_of(podcast).filter(podcast_audio__isnull=False).order_by("-visible_date")
+        )
+        self.post_data = PostData.create_from_post_queryset(
+            request=self.request,
+            blog=podcast,
+            post_queryset=queryset,
+            template_base_dir="bootstrap4",
         )
         return queryset
 
@@ -218,7 +224,9 @@ class PodcastFeed(Feed):
         return item.title
 
     def item_description(self, item):
-        item.description = item.get_description(request=self.request, render_detail=True, escape_html=False)
+        item.description = item.get_description(
+            request=self.request, render_detail=True, escape_html=False, post_data=self.post_data
+        )
         return item.description
 
     def item_link(self, item):
