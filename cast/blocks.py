@@ -132,16 +132,6 @@ class CastImageChooserBlock(ImageChooserBlock):
     def extract_references(self, value):
         yield self.model_class, str(value), "", ""
 
-    def get_prep_value(self, value):
-        """
-        This is needed to make a CastImageChooserBlock serializable. I have
-        no idea why this is needed, but it is.
-        """
-        if isinstance(value, int):
-            return value
-        else:
-            return value.pk
-
 
 def add_prev_next(images: Iterable[AbstractImage]) -> None:
     """
