@@ -1,0 +1,8 @@
+0.2.29 (2024-03-23)
+-------------------
+
+Bugfixes:
+
+- #122 Sometimes galleries had no id -> re-publishing posts with those galleries fixed this
+- #124 Implicit feed caching caused delivering sometimes the wrong feed
+- #125 Use absolute link in feed when linking to a post (podcast clients break on relative links)
