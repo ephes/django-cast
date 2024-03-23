@@ -128,6 +128,7 @@ class PostData:
         template_base_dir: str = "bootstrap4",
         queryset_data: QuerysetData,
         page_url_by_id: PageUrlByID,
+        absolute_page_url_by_id: PageUrlByID,
         root_nav_links: LinkTuples,
     ):
         self.site = site
@@ -136,6 +137,7 @@ class PostData:
         self.template_base_dir = template_base_dir
         self.root_nav_links = root_nav_links
         self.page_url_by_id = page_url_by_id
+        self.absolute_page_url_by_id = absolute_page_url_by_id
         self.queryset_data = queryset_data
         self.renditions_for_posts = queryset_data.renditions_for_posts
         self.images = queryset_data.images
@@ -168,8 +170,11 @@ class PostData:
             site = Site.find_for_request(request)
         root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
         page_url_by_id: PageUrlByID = {}
+        absolute_page_url_by_id: PageUrlByID = {}
         for post in queryset_data.queryset:
             page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
+            absolute_page_url_by_id[post.pk] = post.full_url
+
         return cls(
             site=site,
             blog=blog,
@@ -177,6 +182,7 @@ class PostData:
             template_base_dir=template_base_dir,
             root_nav_links=root_nav_links,
             page_url_by_id=page_url_by_id,
+            absolute_page_url_by_id=absolute_page_url_by_id,
             blog_url=blog.get_url(request=request, current_site=site),
         )
 

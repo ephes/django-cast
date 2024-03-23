@@ -62,6 +62,7 @@ def test_render_empty_post_without_hitting_the_database(rf):
     post = Post(content_type=ContentType("cast", "post"))
     root_nav_links = [("/home/", "Home"), ("/about/", "About")]
     page_url = "/foo-bar-baz/"
+    absolute_page_url = "http://testserver/foo-bar-baz/"
     queryset_data = QuerysetData(
         post_by_id={},
         images={},
@@ -78,6 +79,7 @@ def test_render_empty_post_without_hitting_the_database(rf):
         blog=None,
         root_nav_links=root_nav_links,
         page_url_by_id={post.pk: page_url},
+        absolute_page_url_by_id={post.pk: absolute_page_url},
         blog_url="/blog/",
         queryset_data=queryset_data,
     )
@@ -121,6 +123,7 @@ def linked_posts():
         blog=blog,
         root_nav_links=root_nav_links,
         page_url_by_id={source.pk: source.get_url(), target.pk: target.get_url()},
+        absolute_page_url_by_id={source.pk: source.full_url, target.pk: target.full_url},
         blog_url=blog.get_url(),
         queryset_data=queryset_data,
     )
