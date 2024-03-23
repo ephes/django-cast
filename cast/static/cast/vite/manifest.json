@@ -1,6 +1,7 @@
 {
   "src/gallery/image-gallery-bs4.ts": {
     "file": "main-7NHMBFGV.js",
+    "name": "main",
     "src": "src/gallery/image-gallery-bs4.ts",
     "isEntry": true
   }
