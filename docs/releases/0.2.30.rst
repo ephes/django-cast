@@ -2,3 +2,5 @@
 -------------------
 
 not sure yet..
+
+- #123 Fixed an audio key error when a preview page is saved
