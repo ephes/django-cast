@@ -335,7 +335,7 @@ class Post(Page):
         else:
             context["owner_username"] = "unknown"
         context["blog_url"] = blog.get_url(request=request)
-        context["audio_items"] = self.media_lookup["audio"].items()
+        context["audio_items"] = self.media_lookup.get("audio", {}).items()
         return context
 
     @property
@@ -500,7 +500,7 @@ class Post(Page):
         Get the podlove player data for posts containing audio elements.
         """
         result = []
-        for pk, audio in self.media_lookup["audio"].items():
+        for pk, audio in self.media_lookup.get("audio", {}).items():
             element_id = f"#audio_{pk}"
             result.append((element_id, audio.podlove_url))
         return result
