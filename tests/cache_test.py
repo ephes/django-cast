@@ -5,6 +5,7 @@ queries when rendering posts.
 """
 
 import json
+import pickle
 from pathlib import Path
 from typing import NamedTuple
 
@@ -71,6 +72,8 @@ def test_render_empty_post_without_hitting_the_database(rf):
         videos={},
         audios={},
         audios_by_post_id={},
+        videos_by_post_id={},
+        images_by_post_id={},
         post_queryset=[post],
         owner_username_by_id={post.pk: "owner"},
     )
@@ -113,6 +116,8 @@ def linked_posts():
         videos={},
         audios={},
         audios_by_post_id={},
+        videos_by_post_id={},
+        images_by_post_id={},
         renditions_for_posts={},
         has_audio_by_id={source.pk: False, target.pk: False},
         post_queryset=list[source],
@@ -171,8 +176,10 @@ def get_media_post(rf, blog):
 
 @pytest.fixture
 def gallery_post(rf):
+    QuerysetData.unset_post_data_for_blocks()
     blog = generate_blog_with_media(number_of_posts=1, media_numbers={"galleries": 1, "images_in_galleries": 3})
-    return get_media_post(rf, blog)
+    yield get_media_post(rf, blog)
+    QuerysetData.unset_post_data_for_blocks()  # omitting this line will cause a test failure elsewhere
 
 
 @pytest.mark.django_db
@@ -192,14 +199,16 @@ def test_render_gallery_post_without_hitting_the_database(rf, gallery_post):
     assert len(connection.queries) == 0
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def media_post(rf, settings):
+    QuerysetData.unset_post_data_for_blocks()
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=1)
     media_post = get_media_post(rf, blog)
     teardown_paths = [Path(media_post.post.videos.first().original.path)]
     yield media_post
     # teardown - remove the files created during the test
+    QuerysetData.unset_post_data_for_blocks()  # omitting this line will cause a test failure elsewhere
     for path in teardown_paths:
         if path.exists():
             path.unlink()
@@ -209,6 +218,8 @@ def media_post(rf, settings):
 def test_render_media_post_without_hitting_the_database(rf, media_post):
     # Given a post with a gallery, an image, a video and an audio
     request = rf.get(media_post.post_data.page_url_by_id[media_post.post.pk])
+    # make sure renditions are created
+    media_post.post.serve(request, post_data=media_post.post_data).render()
     reset_queries()
     # When we render the post
     # with connection.execute_wrapper(blocker):
@@ -227,6 +238,8 @@ def test_render_media_post_without_hitting_the_database(rf, media_post):
 
 @pytest.mark.django_db
 def test_render_feed_without_hitting_the_database(rf, media_post):
+    # Set up the cache
+    media_post.post_data.queryset_data.set_post_data_for_blocks()
     # Given a post with media and a feed
     feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": media_post.blog.slug})
     # When we render the feed
@@ -239,7 +252,7 @@ def test_render_feed_without_hitting_the_database(rf, media_post):
     response = view(request, slug=media_post.blog.slug)
     # Then the media should be rendered
     html = response.content.decode("utf-8")
-    media_post.post.title in html
+    assert media_post.post.title in html
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0
@@ -258,14 +271,16 @@ def get_paginated_post_list(rf, blog):
     return PaginatedPostList(post=post, blog=blog, post_data=post_data)
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def paginated_post_list(rf, settings):
+    QuerysetData.unset_post_data_for_blocks()
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=1)
     post_list = get_paginated_post_list(rf, blog)
     teardown_paths = [Path(post_list.post.videos.first().original.path)]
     yield post_list
     # teardown - remove the files created during the test
+    QuerysetData.unset_post_data_for_blocks()  # omitting this line will cause a test failure elsewhere
     for path in teardown_paths:
         if path.exists():
             path.unlink()
@@ -289,6 +304,40 @@ def test_render_blog_index_without_hitting_the_database(rf, paginated_post_list)
     assert 'class="cast-gallery-modal"' in html
     assert 'class="block-video"' in html
     assert 'class="block-audio"' in html
+    # And the database should not be hit
+    show_queries(connection.queries)
+    assert len(connection.queries) == 0
+
+
+@pytest.mark.django_db
+def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf, settings):
+    # Given a post with media in a blog
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    blog = generate_blog_with_media(number_of_posts=1)
+    post = blog.unfiltered_published_posts.first()
+    author_name = post.owner.username.capitalize()
+    request = rf.get(blog.get_url())
+    request.htmx = False
+    _ = post.serve(rf.get("/")).render()  # force renditions to be created
+
+    # Set up the cache
+    cachable_data = PagedPostData.data_for_blog_index_cachable(request=request, blog=blog)
+    pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
+    cachable_data = pickle.loads(pickled)
+    paged_post_data = PagedPostData.create_from_cachable_data(data=cachable_data)
+
+    # When we render the blog index
+    # call this once without blocker to populate SITE_CACHE
+    reset_queries()
+    # with connection.execute_wrapper(blocker):
+    response = blog.serve(request, post_data=paged_post_data).render()
+    # Then the media should be rendered
+    html = response.content.decode("utf-8")
+    assert 'class="cast-image"' in html
+    assert 'class="cast-gallery-modal"' in html
+    assert 'class="block-video"' in html
+    assert 'class="block-audio"' in html
+    assert author_name in html
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0

@@ -139,6 +139,7 @@ class Post(Page):
     tags = ClusterTaggableManager(through=PostTag, blank=True, verbose_name=_("tags"))
 
     _local_template_name: str | None = None
+    _media_lookup: dict[str, dict[int, Any]] | None = None
 
     # wagtail
     body = StreamField(
@@ -222,6 +223,8 @@ class Post(Page):
 
     @property
     def media_lookup(self) -> dict[str, dict[int, Any]]:
+        if self._media_lookup is not None:
+            return self._media_lookup
         try:
             return {
                 "image": {i.pk: i for i in self.images.all()},
@@ -308,11 +311,12 @@ class Post(Page):
             context["page_url"] = post_data.absolute_page_url_by_id[self.pk]
         else:
             context["page_url"] = post_data.page_url_by_id[self.pk]
-        print("page url: ", context["page_url"])
         context["owner_username"] = post_data.owner_username_by_id[self.pk]
         context["blog_url"] = post_data.blog_url
-        context["audio_items"] = post_data.audios_by_post_id.get(self.pk, {}).items()
-        request.cast_site_template_base_dir = post_data.template_base_dir  # type: ignore
+        context["audio_items"] = []
+        for audio_id in post_data.audios_by_post_id.get(self.pk, []):
+            audio = post_data.audios[audio_id]
+            context["audio_items"].append((audio_id, audio))
         return context
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":

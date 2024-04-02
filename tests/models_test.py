@@ -96,6 +96,10 @@ class TestBlogModel:
     def test_has_selectable_themes(self, blog, simple_request):
         assert blog.get_context(simple_request)["has_selectable_themes"]
 
+    def test_get_paged_post_data(self, blog, simple_request):
+        paged_post_data = blog.get_paged_post_data(simple_request)
+        assert len(paged_post_data.queryset_data.queryset) == 0
+
 
 class TestPostModel:
     pytestmark = pytest.mark.django_db

@@ -227,12 +227,13 @@ class Blog(Page):
         get_params = request.GET.copy()
         # context["filterset"] = filterset = post_data.filterset
         context["parameters"] = self.get_other_get_params(get_params)
+
         context |= post_data.paginate_context
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
         context["has_selectable_themes"] = True
         context["template_base_dir"] = post_data.template_base_dir
-        context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
+        context["use_audio_player"] = any([p.pk for p in post_data.post_queryset if p.pk in post_data.has_audio_by_id])
         context["theme_form"] = post_data.theme_form
         context["root_nav_links"] = post_data.root_nav_links
         return context
@@ -254,7 +255,17 @@ class Blog(Page):
         context["theme_form"] = self.get_theme_form(request)
         return context
 
-    def serve(self, request, *args, **kwargs):
+    def get_paged_post_data(self, request: HtmxHttpRequest) -> PagedPostData:
+        from ..cache import PagedPostData
+
+        data = PagedPostData.data_for_blog_index_cachable(request=request, blog=self)
+        return PagedPostData.create_from_cachable_data(data=data)
+
+    def serve(self, request: HtmxHttpRequest, *args, **kwargs):
+        print("request get: ", len(request.GET) == 0)
+        # no_get_parameters = len(request.GET) == 0
+        # if no_get_parameters:
+        #     kwargs["post_data"] = self.get_paged_post_data(request)
         post_data = kwargs.get("post_data", None)
         if post_data is not None:
             # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
