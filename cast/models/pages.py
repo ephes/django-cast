@@ -312,7 +312,6 @@ class Post(Page):
             self.page_url = post_data.absolute_page_url_by_id[self.pk]
         else:
             self.page_url = post_data.page_url_by_id[self.pk]
-        print("render for feed: ", context["render_for_feed"])
         context["owner_username"] = post_data.owner_username_by_id[self.pk]
         context["blog_url"] = post_data.blog_url
         context["audio_items"] = []
