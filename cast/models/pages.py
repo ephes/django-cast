@@ -307,10 +307,12 @@ class Post(Page):
         context["comments_are_enabled"] = self.get_comments_are_enabled(blog)
         context["root_nav_links"] = post_data.root_nav_links
         context["has_audio"] = post_data.has_audio_by_id[self.pk]
-        if context["absolute_detail_url"]:
+        if context["render_for_feed"]:
+            # use absolute urls for feed
             self.page_url = post_data.absolute_page_url_by_id[self.pk]
         else:
             self.page_url = post_data.page_url_by_id[self.pk]
+        print("render for feed: ", context["render_for_feed"])
         context["owner_username"] = post_data.owner_username_by_id[self.pk]
         context["blog_url"] = post_data.blog_url
         context["audio_items"] = []
@@ -322,7 +324,7 @@ class Post(Page):
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
-        context["absolute_detail_url"] = kwargs.get("absolute_detail_url", False)
+        context["render_for_feed"] = kwargs.get("render_for_feed", False)
         context["post_data"] = post_data = kwargs.get("post_data", None)
         if post_data is not None:
             return self.get_context_without_database(request, context, post_data)
@@ -524,7 +526,7 @@ class Post(Page):
         """
         self._local_template_name = "post_body.html"
         description = self.serve(
-            request, render_detail=render_detail, post_data=post_data, absolute_detail_url=True
+            request, render_detail=render_detail, post_data=post_data, render_for_feed=True
         ).rendered_content
         if remove_newlines:
             description = description.replace("\n", "")

@@ -2,7 +2,12 @@
 
 <article>
   <header>
-    <h2><a class="text-dark text-decoration-none" href="{{ page.page_url }}">{{ page.title }}</a></h2>
+    <h2>
+      <a class="text-dark text-decoration-none" href="{{ page.page_url }}">{{ page.title }}</a>
+      {% if render_for_feed and comments_are_enabled %}
+        (hier klicken, um zu kommentieren)
+      {% endif %}
+    </h2>
     <!-- link is on one line to avoid underlined whitespace -->
     <a href="{{ page.page_url }}"><time date-time='{{ page.visible_date|date:"c" }}'>{{ page.visible_date|date }}</time>,</a>
     <span class="author">{{ post.owner.username | title}}</span>
