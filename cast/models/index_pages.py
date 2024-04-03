@@ -262,10 +262,9 @@ class Blog(Page):
         return PagedPostData.create_from_cachable_data(data=data)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs):
-        # print("request get: ", len(request.GET) == 0)
-        no_get_parameters = len(request.GET) == 0
-        if no_get_parameters:
-            kwargs["post_data"] = self.get_paged_post_data(request)
+        # no_get_parameters = len(request.GET) == 0
+        # if no_get_parameters:
+        #     kwargs["post_data"] = self.get_paged_post_data(request)
         post_data = kwargs.get("post_data", None)
         if post_data is not None:
             # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
