@@ -1,11 +1,12 @@
 {% load wagtailcore_tags %}
+{% load i18n %}
 
 <article>
   <header>
     <h2>
       <a class="text-dark text-decoration-none" href="{{ page.page_url }}">{{ page.title }}</a>
       {% if render_for_feed and comments_are_enabled %}
-        (hier klicken, um zu kommentieren)
+        {% trans %}(click here to comment){% endtrans %}
       {% endif %}
     </h2>
     <!-- link is on one line to avoid underlined whitespace -->
