@@ -365,7 +365,6 @@ class PagedPostData:
         data["audios_by_post_id"] = queryset_data.audios_by_post_id
         data["has_audio_by_id"] = queryset_data.has_audio_by_id
         data["owner_username_by_id"] = queryset_data.owner_username_by_id
-
         return data
 
     @staticmethod
@@ -387,6 +386,15 @@ class PagedPostData:
         QuerysetData.unset_post_data_for_blocks()
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
         data = PagedPostData.add_queryset_data(data, queryset_data)
+
+        # page_url by id
+        page_url_by_id: PageUrlByID = {}
+        absolute_page_url_by_id: PageUrlByID = {}
+        for post in queryset_data.queryset:
+            page_url_by_id[post.pk] = post.get_url(request=request, current_site=Site(**data["site"]))
+            absolute_page_url_by_id[post.pk] = post.full_url
+        data["page_url_by_id"] = page_url_by_id
+        data["absolute_page_url_by_id"] = absolute_page_url_by_id
         return data
 
     @classmethod
@@ -428,6 +436,7 @@ class PagedPostData:
                 media_lookup.setdefault("audio", {}).update({audio_pk: audios[audio_pk]})
             post._media_lookup = media_lookup
             post.owner = user_model(username=data["owner_username_by_id"][post.pk])
+            post.page_url = data["page_url_by_id"][post.pk]
 
         queryset_data = QuerysetData(
             post_queryset=post_queryset,

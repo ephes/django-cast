@@ -308,9 +308,9 @@ class Post(Page):
         context["root_nav_links"] = post_data.root_nav_links
         context["has_audio"] = post_data.has_audio_by_id[self.pk]
         if context["absolute_detail_url"]:
-            context["page_url"] = post_data.absolute_page_url_by_id[self.pk]
+            self.page_url = post_data.absolute_page_url_by_id[self.pk]
         else:
-            context["page_url"] = post_data.page_url_by_id[self.pk]
+            self.page_url = post_data.page_url_by_id[self.pk]
         context["owner_username"] = post_data.owner_username_by_id[self.pk]
         context["blog_url"] = post_data.blog_url
         context["audio_items"] = []
@@ -333,7 +333,7 @@ class Post(Page):
         context["blog"] = blog
         context["root_nav_links"] = [(p.get_url(), p.title) for p in blog.get_root().get_children().live()]
         context["has_audio"] = self.has_audio
-        context["page_url"] = self.get_url(request=request)
+        self.page_url = self.get_url(request=request)
         if self.owner is not None:
             context["owner_username"] = self.owner.username
         else:

@@ -316,6 +316,7 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     blog = generate_blog_with_media(number_of_posts=1)
     post = blog.unfiltered_published_posts.first()
     author_name = post.owner.username.capitalize()
+    post_detail_url = post.get_url()
     request = rf.get(blog.get_url())
     request.htmx = False
     _ = post.serve(rf.get("/")).render()  # force renditions to be created
@@ -338,6 +339,7 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     assert 'class="block-video"' in html
     assert 'class="block-audio"' in html
     assert author_name in html
+    assert post_detail_url in html
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0
