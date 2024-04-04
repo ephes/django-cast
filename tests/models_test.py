@@ -80,15 +80,18 @@ class TestBlogModel:
             def has_previous(self):
                 return True
 
-            def has_next(self):
-                return False
-
             def previous_page_number(self):
                 return 1
 
+            def has_next(self):
+                return True
+
+            def next_page_number(self):
+                return 2
+
         context = blog.get_next_and_previous_pages(Page())
-        assert context["has_next"] is False
-        assert context["next_page_number"] is None
+        assert context["has_next"] is True
+        assert context["next_page_number"] == 2
         assert context["has_previous"] is True
         assert context["previous_page_number"] == 1
 

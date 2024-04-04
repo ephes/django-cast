@@ -155,6 +155,8 @@ class Blog(Page):
             previous_page_number = page.previous_page_number()
         has_next = page.has_next()
         next_page_number = None
+        if has_next:
+            next_page_number = page.next_page_number()
         return {
             "has_previous": has_previous,
             "previous_page_number": previous_page_number,
