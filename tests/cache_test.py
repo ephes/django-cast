@@ -16,6 +16,7 @@ from django.db import connection, reset_queries
 from django.urls import reverse
 from wagtail.models import Site
 
+from cast import appsettings
 from cast.cache import PagedPostData, PostData, QuerysetData
 from cast.devdata import create_blog, create_post, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
@@ -309,11 +310,41 @@ def test_render_blog_index_without_hitting_the_database(rf, paginated_post_list)
     assert len(connection.queries) == 0
 
 
+@pytest.fixture()
+def use_post_data_setting_enabled():
+    previous = appsettings.CAST_USE_POST_DATA
+    appsettings.CAST_USE_POST_DATA = True
+    yield appsettings.CAST_USE_POST_DATA
+    appsettings.CAST_USE_POST_DATA = previous
+
+
+@pytest.mark.django_db
+def test_use_post_data_setting_true(rf, post, settings, use_post_data_setting_enabled):
+    # Given post data setting set to True
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    blog = post.blog
+    author_name = post.owner.username.capitalize()
+    post_detail_url = post.get_url()
+    request = rf.get(blog.get_url())
+    request.htmx = False
+
+    # When we render the blog index
+    response = blog.serve(request).render()
+    # Then post data should be generated on the fly and the media should be rendered
+    assert isinstance(response.context_data["post_data"], PagedPostData)
+    html = response.content.decode("utf-8")
+    assert author_name in html
+    assert post_detail_url in html
+    assert response.context_data["is_paginated"] is False
+    # And the database should be hit
+    assert len(connection.queries) > 0
+
+
 @pytest.mark.django_db
 def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf, settings):
     # Given a post with media in a blog
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
-    blog = generate_blog_with_media(number_of_posts=1)
+    blog = generate_blog_with_media(number_of_posts=6)
     post = blog.unfiltered_published_posts.first()
     author_name = post.owner.username.capitalize()
     post_detail_url = post.get_url()
@@ -340,6 +371,7 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     assert 'class="block-audio"' in html
     assert author_name in html
     assert post_detail_url in html
+    assert response.context_data["is_paginated"] is True
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0

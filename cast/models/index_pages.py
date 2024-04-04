@@ -5,7 +5,9 @@ from datetime import datetime
 from typing import Any
 
 import django.forms.forms
-from django.core.paginator import InvalidPage, Paginator
+from django.core.paginator import InvalidPage
+from django.core.paginator import Page as DjangoPage
+from django.core.paginator import Paginator
 from django.db import models
 from django.http import Http404
 from django.http.request import QueryDict
@@ -146,7 +148,23 @@ class Blog(Page):
         return queryset
 
     @staticmethod
-    def paginate_queryset(context: ContextDict, posts_queryset: models.QuerySet, get_params: QueryDict) -> ContextDict:
+    def get_next_and_previous_pages(page: DjangoPage) -> dict[str, int | None | bool]:
+        previous_page_number = None
+        has_previous = page.has_previous()
+        if has_previous:
+            previous_page_number = page.previous_page_number()
+        has_next = page.has_next()
+        next_page_number = None
+        return {
+            "has_previous": has_previous,
+            "previous_page_number": previous_page_number,
+            "has_next": has_next,
+            "next_page_number": next_page_number,
+        }
+
+    def paginate_queryset(
+        self, context: ContextDict, posts_queryset: models.QuerySet, get_params: QueryDict
+    ) -> ContextDict:
         paginator = Paginator(posts_queryset, appsettings.POST_LIST_PAGINATION)
         page_from_url = "1"
         if "page" in get_params:
@@ -164,15 +182,15 @@ class Blog(Page):
             raise Http404(
                 _("Invalid page (%(page_number)s): %(message)s") % {"page_number": page_number, "message": str(e)}
             )
-        object_list = list(page.object_list)
+        page_range = page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1)  # type: ignore
         pagination_context = {
-            "paginator": paginator,
-            "page_obj": page,
+            "ellipsis": paginator.ELLIPSIS,  # type: ignore
+            "page_number": page.number,
+            "page_range": list(page_range),
+            "object_list": page.object_list,
             "is_paginated": page.has_other_pages(),
-            "object_list": object_list,
-            "renditions_for_posts": Post.get_all_renditions_from_queryset(object_list),
-            "page_range": page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1),  # type: ignore
         }
+        pagination_context |= self.get_next_and_previous_pages(page)
         context.update(pagination_context)
         return context
 
@@ -262,10 +280,10 @@ class Blog(Page):
         return PagedPostData.create_from_cachable_data(data=data)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs):
-        # no_get_parameters = len(request.GET) == 0
-        # if no_get_parameters:
-        #     kwargs["post_data"] = self.get_paged_post_data(request)
         post_data = kwargs.get("post_data", None)
+        if appsettings.CAST_USE_POST_DATA and post_data is None:
+            kwargs["post_data"] = self.get_paged_post_data(request)
+            print("kwargs['post_data']", kwargs["post_data"])
         if post_data is not None:
             # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
             self._post_data = post_data

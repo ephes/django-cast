@@ -5,11 +5,11 @@
         <!-- previous page -->
         <li class="page-item">
           <a
-            hx-get="?page={{ page_obj.previous_page_number }}{{ parameters }}"
+            hx-get="?page={{ previous_page_number }}{{ parameters }}"
             hx-target="#paging-area"
             hx-swap="innerHTML show:top"
             hx-replace-url="true"
-            href="?page={{ page_obj.previous_page_number }}{{ parameters }}"
+            href="?page={{ previous_page_number }}{{ parameters }}"
             class="page-link"
           >
             Previous
@@ -25,12 +25,12 @@
       {% endif %}
       <!-- page numbers -->
       {% for num in page_range %}
-        {% if num == page_obj.paginator.ELLIPSIS %}
+        {% if num == ellipsis %}
           <!-- ... -->
           <li class="page-item disabled">
             <span class="page-link">{{ num }}</span>
           </li>
-        {% elif num == page_obj.number %}
+        {% elif num == page_number %}
           <!-- currently active page -->
           <li class="page-item active">
             <span class="page-link">{{ num }}</span>
@@ -49,7 +49,7 @@
           </li>
         {% endif %}
       {% endfor %}
-      {% if page_obj.has_next %}
+      {% if has_next %}
         <!-- next page -->
         <li class="page-item">
           <a
@@ -57,7 +57,7 @@
             hx-target="#paging-area"
             hx-swap="innerHTML show:top"
             hx-replace-url="true"
-            href="?page={{ page_obj.next_page_number }}{{ parameters }}"
+            href="?page={{ next_page_number }}{{ parameters }}"
             class="page-link"
           >
             Next

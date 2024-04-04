@@ -378,11 +378,24 @@ class PagedPostData:
         data = PagedPostData.add_root_nav_links(data)
         data["template_base_dir"] = blog.get_template_base_dir(request)
         data["theme_form"] = {"initial": {"template_base_dir": data["template_base_dir"], "next": request.path}}
-        # filterset not yet implemented FIXME
+
+        # filters and pagination
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
         paginate_context = blog.paginate_queryset({}, blog.get_published_posts(filterset.qs), get_params)
-        queryset = paginate_context["page_obj"].object_list
+        data["pagination"] = {
+            "has_previous": paginate_context["has_previous"],
+            "previous_page_number": paginate_context["previous_page_number"],
+            "ellipsis": paginate_context["ellipsis"],
+            "page_range": paginate_context["page_range"],
+            "page_number": paginate_context["page_number"],
+            "has_next": paginate_context["has_next"],
+            "next_page_number": paginate_context["next_page_number"],
+            "is_paginated": paginate_context["is_paginated"],
+            "object_list": paginate_context["object_list"],
+        }
+        # queryset data
+        queryset = data["pagination"]["object_list"]
         QuerysetData.unset_post_data_for_blocks()
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
         data = PagedPostData.add_queryset_data(data, queryset_data)
@@ -416,7 +429,8 @@ class PagedPostData:
         filterset = None
         post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
-        paginate_context = {"object_list": post_queryset, "page_obj": {"number": 1, "paginator": {"num_pages": 1}}}
+        paginate_context = data["pagination"]
+        paginate_context["object_list"] = post_queryset
         audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
         images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
         videos = {video_pk: Video(**video_data) for video_pk, video_data in data["videos"].items()}
@@ -479,7 +493,7 @@ class PagedPostData:
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
         paginate_context = blog.paginate_queryset({}, blog.get_published_posts(filterset.qs), get_params)
-        queryset = paginate_context["page_obj"].object_list
+        queryset = paginate_context["object_list"]
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
         theme_form = blog.get_theme_form(request)
         return {

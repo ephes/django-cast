@@ -101,9 +101,6 @@ def create_body():
 
 
 def create_post(*, blog: Blog = Auto, body: str = Auto, num: int = 1) -> Post:
-    print("blog all: ", Blog.objects.all())
-    print("posts all: ", Post.objects.all())
-    print("galleries all: ", Gallery.objects.all())
     if not blog:  # pragma: no cover
         blog = create_blog()
     post = Post(

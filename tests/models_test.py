@@ -73,7 +73,24 @@ class TestBlogModel:
 
     def test_paginate_queryset_request_is_none(self, blog):
         context = blog.paginate_queryset({}, blog.get_filterset(QueryDict()).qs, QueryDict())
-        assert context["page_obj"].number == 1
+        assert context["page_number"] == 1
+
+    def test_paginate_has_previous(self, blog):
+        class Page:
+            def has_previous(self):
+                return True
+
+            def has_next(self):
+                return False
+
+            def previous_page_number(self):
+                return 1
+
+        context = blog.get_next_and_previous_pages(Page())
+        assert context["has_next"] is False
+        assert context["next_page_number"] is None
+        assert context["has_previous"] is True
+        assert context["previous_page_number"] == 1
 
     def test_wagtail_api_pages_url(self, blog):
         assert blog.wagtail_api_pages_url == "/cast/api/wagtail/pages/"
