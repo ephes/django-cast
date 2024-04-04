@@ -268,6 +268,8 @@ class Blog(Page):
         context["parameters"] = self.get_other_get_params(get_params)
         context = self.paginate_queryset(context, self.get_published_posts(filterset.qs), get_params)
         context["posts"] = context["object_list"]  # convenience
+        for post in context["posts"]:
+            post.page_url = post.get_url(request)
         context["blog"] = self
         context["has_selectable_themes"] = True
         context["template_base_dir"] = self.get_template_base_dir(request)
