@@ -29,4 +29,4 @@ Javascript
 .. code-block:: bash
 
    $ cd javascript
-   $ npx vittest run
+   $ npx vitest run
