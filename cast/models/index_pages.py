@@ -253,7 +253,7 @@ class Blog(Page):
         context["blog"] = self
         context["has_selectable_themes"] = True
         context["template_base_dir"] = post_data.template_base_dir
-        context["use_audio_player"] = any([p.pk for p in post_data.post_queryset if p.pk in post_data.has_audio_by_id])
+        context["use_audio_player"] = any([p.pk for p in context["posts"] if post_data.has_audio_by_id[p.pk]])
         context["theme_form"] = post_data.theme_form
         context["root_nav_links"] = post_data.root_nav_links
         return context
