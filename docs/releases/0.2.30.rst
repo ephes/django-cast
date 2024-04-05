@@ -5,3 +5,4 @@ not sure yet..
 
 - #123 Fixed an audio key error when a preview page is saved
 - #125 Add a hint (click to comment ) to feed descriptions of posts where comments are enabled
+- #128 Update vite + jsdom + new javascript build
