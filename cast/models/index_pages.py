@@ -245,7 +245,7 @@ class Blog(Page):
         self, request: HtmxHttpRequest, context: dict[str, Any], post_data: PagedPostData
     ) -> ContextDict:
         get_params = request.GET.copy()
-        # context["filterset"] = filterset = post_data.filterset
+        context["filterset"] = post_data.filterset
         context["parameters"] = self.get_other_get_params(get_params)
 
         context |= post_data.paginate_context
@@ -287,7 +287,6 @@ class Blog(Page):
         post_data = kwargs.get("post_data", None)
         if appsettings.CAST_USE_POST_DATA and post_data is None:
             kwargs["post_data"] = self.get_paged_post_data(request)
-            print("kwargs['post_data']", kwargs["post_data"])
         if post_data is not None:
             # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
             self._post_data = post_data

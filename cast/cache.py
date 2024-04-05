@@ -9,6 +9,7 @@ from wagtail.images.models import Image, Rendition
 from wagtail.models import Site
 from wagtail.rich_text.pages import PageLinkHandler
 
+from .filters import PostFilterset
 from .views import HtmxHttpRequest
 
 if TYPE_CHECKING:
@@ -382,6 +383,19 @@ class PagedPostData:
         # filters and pagination
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
+        data["filterset"] = {"get_params": get_params.dict()}
+        date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
+        data["filterset"]["date_facets_choices"] = date_facet_choices
+        if "category_facets" in filterset.form.fields:
+            category_facet_choices = [(k, v) for k, v in filterset.form.fields["category_facets"].choices if k != ""]
+        else:
+            category_facet_choices = []
+        data["filterset"]["category_facets_choices"] = category_facet_choices
+        if "tag_facets" in filterset.form.fields:
+            tag_facet_choices = [(k, v) for k, v in filterset.form.fields["tag_facets"].choices if k != ""]
+        else:
+            tag_facet_choices = []
+        data["filterset"]["tag_facets_choices"] = tag_facet_choices
         paginate_context = blog.paginate_queryset({}, blog.get_published_posts(filterset.qs), get_params)
         data["pagination"] = {
             "has_previous": paginate_context["has_previous"],
@@ -426,7 +440,6 @@ class PagedPostData:
 
         site = Site(**data["site"])
         template_base_dir = data["template_base_dir"]
-        filterset = None
         post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
         paginate_context = data["pagination"]
@@ -467,6 +480,12 @@ class PagedPostData:
         )
         theme_form = SelectThemeForm(**data["theme_form"])
         root_nav_links = data["root_nav_links"]
+
+        filterset = PostFilterset(data["filterset"]["get_params"])
+        filterset.filters["date_facets"].set_field_choices(data["filterset"]["date_facets_choices"])
+        filterset.filters["category_facets"].set_field_choices(data["filterset"]["category_facets_choices"])
+        filterset.filters["tag_facets"].set_field_choices(data["filterset"]["tag_facets_choices"])
+        delattr(filterset, "_form")
 
         return cls(
             **{

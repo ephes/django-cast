@@ -1,7 +1,7 @@
 import string
 from collections.abc import Iterable, Mapping
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import django_filters
 from django.core import validators
@@ -29,7 +29,7 @@ from cast.models.snippets import PostCategory
 class CountFacetWidget(Widget):
     data: QueryDict
 
-    def __init__(self, attrs: Optional[dict[str, str]] = None):
+    def __init__(self, attrs: dict[str, str] | None = None):
         super().__init__(attrs)
         self.choices: list[tuple[str, str]] = []
 
@@ -42,7 +42,7 @@ class CountFacetWidget(Widget):
         return value
 
     def render(
-        self, name: str, value: Any, attrs: Optional[dict[str, Any]] = None, renderer: Optional[BaseRenderer] = None
+        self, name: str, value: Any, attrs: dict[str, Any] | None = None, renderer: BaseRenderer | None = None
     ) -> SafeText:
         if value is None:
             value = ""
@@ -354,8 +354,8 @@ class PostFilterset(django_filters.FilterSet):
 
     def __init__(
         self,
-        data: Optional[QueryDict] = None,
-        queryset: Optional[models.QuerySet] = None,
+        data: QueryDict | None = None,
+        queryset: models.QuerySet | None = None,
     ):
         if data is None:
             data = QueryDict("")
@@ -369,7 +369,8 @@ class PostFilterset(django_filters.FilterSet):
         for filter_name in self.filters.copy().keys():
             if filter_name not in configured_filters:
                 del self.filters[filter_name]
-        self.set_facet_counts(self.qs)
+        if queryset.exists():
+            self.set_facet_counts(self.qs)
         self.remove_form_fields_that_should_be_hidden()
 
     def set_facet_counts(self, queryset: models.QuerySet) -> None:
