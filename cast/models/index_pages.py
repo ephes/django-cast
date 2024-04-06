@@ -11,6 +11,7 @@ from django.core.paginator import Paginator
 from django.db import models
 from django.http import Http404
 from django.http.request import QueryDict
+from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.panels import FieldPanel
@@ -283,7 +284,7 @@ class Blog(Page):
         data = PagedPostData.data_for_blog_index_cachable(request=request, blog=self)
         return PagedPostData.create_from_cachable_data(data=data)
 
-    def serve(self, request: HtmxHttpRequest, *args, **kwargs):
+    def serve(self, request: HtmxHttpRequest, *args, **kwargs) -> TemplateResponse:
         post_data = kwargs.get("post_data", None)
         if appsettings.CAST_USE_POST_DATA and post_data is None:
             kwargs["post_data"] = self.get_paged_post_data(request)
