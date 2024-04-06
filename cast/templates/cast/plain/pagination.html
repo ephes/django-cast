@@ -1,15 +1,15 @@
 {% if is_paginated %}
   <nav aria-label="Page navigation" class="cast-page-navigation">
     <ul class="cast-pagination">
-      {% if page_obj.has_previous %}
+      {% if has_previous %}
         <!-- previous page -->
         <li class="cast-page-item">
           <a
-            hx-get="?page={{ page_obj.previous_page_number }}{{ parameters }}"
+            hx-get="?page={{ previous_page_number }}{{ parameters }}"
             hx-target="#paging-area"
             hx-swap="innerHTML show:top"
             hx-replace-url="true"
-            href="?page={{ page_obj.previous_page_number }}{{ parameters }}"
+            href="?page={{ previous_page_number }}{{ parameters }}"
             class="cast-page-link"
           >
             Previous
@@ -25,12 +25,12 @@
       {% endif %}
       <!-- page numbers -->
       {% for num in page_range %}
-        {% if num == page_obj.paginator.ELLIPSIS %}
+        {% if num == ellipsis %}
           <!-- ... -->
           <li class="cast-page-item disabled">
             <span class="cast-page-link-disabled">{{ num }}</span>
           </li>
-        {% elif num == page_obj.number %}
+        {% elif num == page_number %}
           <!-- currently active page -->
           <li class="cast-page-item active">
             <span class="cast-page-link-active">{{ num }}</span>
@@ -49,15 +49,15 @@
           </li>
         {% endif %}
       {% endfor %}
-      {% if page_obj.has_next %}
+      {% if has_next %}
         <!-- next page -->
         <li class="cast-page-item">
           <a
-            hx-get="?page={{ page_obj.next_page_number }}{{ parameters }}"
+            hx-get="?page={{ next_page_number }}{{ parameters }}"
             hx-target="#paging-area"
             hx-swap="innerHTML show:top"
             hx-replace-url="true"
-            href="?page={{ page_obj.next_page_number }}{{ parameters }}"
+            href="?page={{ next_page_number }}{{ parameters }}"
             class="cast-page-link"
           >
             Next
@@ -66,7 +66,7 @@
       {% else %}
         <!-- we are already on the last page -->
         <li class="cast-page-item disabled">
-          <span class="cast-page-link">
+          <span class="cast-page-link-disabled">
             Next
           </span>
         </li>
