@@ -243,12 +243,10 @@ class Blog(Page):
         )
 
     def get_context_without_database(self, context: dict[str, Any], post_data: PagedPostData) -> ContextDict:
-        context["filterset"] = post_data.filterset
-
         context |= post_data.paginate_context
-        context["posts"] = context["object_list"]  # convenience
+        context["filterset"] = post_data.filterset
         context["template_base_dir"] = post_data.template_base_dir
-        context["use_audio_player"] = any([p.pk for p in context["posts"] if post_data.has_audio_by_id[p.pk]])
+        context["use_audio_player"] = any([p.pk for p in context["object_list"] if post_data.has_audio_by_id[p.pk]])
         context["root_nav_links"] = post_data.root_nav_links
         return context
 
@@ -256,11 +254,10 @@ class Blog(Page):
         get_params = request.GET.copy()
         context["filterset"] = filterset = self.get_filterset(get_params)
         context = self.paginate_queryset(context, self.get_published_posts(filterset.qs), get_params)
-        context["posts"] = context["object_list"]  # convenience
-        for post in context["posts"]:
+        for post in context["object_list"]:
             post.page_url = post.get_url(request)
         context["template_base_dir"] = self.get_template_base_dir(request)
-        context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
+        context["use_audio_player"] = any([post.has_audio for post in context["object_list"]])
         return context
 
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
@@ -272,6 +269,7 @@ class Blog(Page):
         else:
             context = self.get_context_with_database(request, context)
 
+        context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
         context["has_selectable_themes"] = True
         context["parameters"] = self.get_other_get_params(get_params)
