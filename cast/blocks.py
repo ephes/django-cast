@@ -236,7 +236,6 @@ class GalleryBlockWithLayout(StructBlock):
 
     def get_context(self, value, parent_context: dict | None = None):
         context = super().get_context(value, parent_context=parent_context)
-        # context["post_pk"] = context["page"].pk  # FIXME remove this?
         if isinstance(value["gallery"][0], dict) and self.queryset_data is not None:
             value = self._get_images_from_cache([value], self.queryset_data)[0]
         return prepare_context_for_gallery(value["gallery"], context)
