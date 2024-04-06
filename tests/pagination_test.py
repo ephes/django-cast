@@ -24,10 +24,14 @@ def test_pagination_template_is_paginated_long(simple_request):
     page = paginator.page(9)
     context = {
         "is_paginated": page.has_other_pages(),
-        "paginator": paginator,
-        "page_obj": page,
         "object_list": page.object_list,
         "page_range": page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1),
+        "page_number": page.number,
+        "has_previous": page.has_previous(),
+        "previous_page_number": page.previous_page_number(),
+        "has_next": page.has_next(),
+        "next_page_number": page.next_page_number(),
+        "ellipsis": paginator.ELLIPSIS,
     }
     r = render(simple_request, "cast/plain/pagination.html", context)
     html = r.content.decode("utf-8").strip()
