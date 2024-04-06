@@ -232,13 +232,13 @@ class Blog(Page):
     def pagination_page_size(self) -> int:
         return appsettings.POST_LIST_PAGINATION
 
-    def get_theme_form(self, request: HtmxHttpRequest) -> django.forms.forms.Form:
+    def get_theme_form(self, next_path: str, template_base_dir: str) -> django.forms.forms.Form:
         from ..forms import SelectThemeForm
 
         return SelectThemeForm(
             initial={
-                "template_base_dir": self.get_template_base_dir(request),
-                "next": request.path,
+                "template_base_dir": template_base_dir,
+                "next": next_path,
             }
         )
 
@@ -255,15 +255,10 @@ class Blog(Page):
         context["has_selectable_themes"] = True
         context["template_base_dir"] = post_data.template_base_dir
         context["use_audio_player"] = any([p.pk for p in context["posts"] if post_data.has_audio_by_id[p.pk]])
-        context["theme_form"] = post_data.theme_form
         context["root_nav_links"] = post_data.root_nav_links
         return context
 
-    def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
-        context = super().get_context(request, *args, **kwargs)
-        context["post_data"] = post_data = kwargs.get("post_data", None)
-        if post_data is not None:
-            return self.get_context_without_database(request, context, post_data)
+    def get_context_with_database(self, request: HtmxHttpRequest, context: dict[str, Any]) -> ContextDict:
         get_params = request.GET.copy()
         context["filterset"] = filterset = self.get_filterset(get_params)
         context["parameters"] = self.get_other_get_params(get_params)
@@ -275,7 +270,16 @@ class Blog(Page):
         context["has_selectable_themes"] = True
         context["template_base_dir"] = self.get_template_base_dir(request)
         context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
-        context["theme_form"] = self.get_theme_form(request)
+        return context
+
+    def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
+        context = super().get_context(request, *args, **kwargs)
+        context["post_data"] = post_data = kwargs.get("post_data", None)
+        if post_data is not None:
+            context = self.get_context_without_database(request, context, post_data)
+        else:
+            context = self.get_context_with_database(request, context)
+        context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
         return context
 
     def get_paged_post_data(self, request: HtmxHttpRequest) -> PagedPostData:

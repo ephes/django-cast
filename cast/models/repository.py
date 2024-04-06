@@ -279,7 +279,6 @@ class PagedPostData:
         site: Site,
         template_base_dir: str,
         filterset: Any,
-        theme_form: Any,
         queryset_data: QuerysetData,
         paginate_context: dict[str, Any],
         root_nav_links: LinkTuples,
@@ -289,7 +288,6 @@ class PagedPostData:
         self.filterset = filterset
         self.paginate_context = paginate_context
         self.queryset_data = queryset_data
-        self.theme_form = theme_form
         self.root_nav_links = root_nav_links
         self.renditions_for_posts = queryset_data.renditions_for_posts
         self.images = queryset_data.images
@@ -378,7 +376,6 @@ class PagedPostData:
         data = PagedPostData.add_site_raw(data)
         data = PagedPostData.add_root_nav_links(data)
         data["template_base_dir"] = blog.get_template_base_dir(request)
-        data["theme_form"] = {"initial": {"template_base_dir": data["template_base_dir"], "next": request.path}}
 
         # filters and pagination
         get_params = request.GET.copy()
@@ -435,7 +432,6 @@ class PagedPostData:
         """
         from wagtail.images.models import Image, Rendition
 
-        from ..forms import SelectThemeForm
         from . import Audio, Post, Video
 
         site = Site(**data["site"])
@@ -478,7 +474,6 @@ class PagedPostData:
             has_audio_by_id=data["has_audio_by_id"],
             renditions_for_posts=renditions_for_posts,
         )
-        theme_form = SelectThemeForm(**data["theme_form"])
         root_nav_links = data["root_nav_links"]
 
         filterset = PostFilterset(data["filterset"]["get_params"])
@@ -494,7 +489,6 @@ class PagedPostData:
                 "filterset": filterset,
                 "paginate_context": paginate_context,
                 "queryset_data": queryset_data,
-                "theme_form": theme_form,
                 "root_nav_links": root_nav_links,
             }
         )
@@ -514,14 +508,12 @@ class PagedPostData:
         paginate_context = blog.paginate_queryset({}, blog.get_published_posts(filterset.qs), get_params)
         queryset = paginate_context["object_list"]
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
-        theme_form = blog.get_theme_form(request)
         return {
             "site": site,
             "template_base_dir": template_base_dir,
             "filterset": filterset,
             "paginate_context": paginate_context,
             "queryset_data": queryset_data,
-            "theme_form": theme_form,
             "root_nav_links": root_nav_links,
         }
 
