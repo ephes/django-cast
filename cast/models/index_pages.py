@@ -247,8 +247,6 @@ class Blog(Page):
 
         context |= post_data.paginate_context
         context["posts"] = context["object_list"]  # convenience
-        context["blog"] = self
-        context["has_selectable_themes"] = True
         context["template_base_dir"] = post_data.template_base_dir
         context["use_audio_player"] = any([p.pk for p in context["posts"] if post_data.has_audio_by_id[p.pk]])
         context["root_nav_links"] = post_data.root_nav_links
@@ -261,8 +259,6 @@ class Blog(Page):
         context["posts"] = context["object_list"]  # convenience
         for post in context["posts"]:
             post.page_url = post.get_url(request)
-        context["blog"] = self
-        context["has_selectable_themes"] = True
         context["template_base_dir"] = self.get_template_base_dir(request)
         context["use_audio_player"] = any([post.has_audio for post in context["posts"]])
         return context
@@ -276,6 +272,8 @@ class Blog(Page):
         else:
             context = self.get_context_with_database(request, context)
 
+        context["blog"] = self
+        context["has_selectable_themes"] = True
         context["parameters"] = self.get_other_get_params(get_params)
         context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
         return context
