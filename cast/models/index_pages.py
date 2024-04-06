@@ -242,12 +242,8 @@ class Blog(Page):
             }
         )
 
-    def get_context_without_database(
-        self, request: HtmxHttpRequest, context: dict[str, Any], post_data: PagedPostData
-    ) -> ContextDict:
-        get_params = request.GET.copy()
+    def get_context_without_database(self, context: dict[str, Any], post_data: PagedPostData) -> ContextDict:
         context["filterset"] = post_data.filterset
-        context["parameters"] = self.get_other_get_params(get_params)
 
         context |= post_data.paginate_context
         context["posts"] = context["object_list"]  # convenience
@@ -261,7 +257,6 @@ class Blog(Page):
     def get_context_with_database(self, request: HtmxHttpRequest, context: dict[str, Any]) -> ContextDict:
         get_params = request.GET.copy()
         context["filterset"] = filterset = self.get_filterset(get_params)
-        context["parameters"] = self.get_other_get_params(get_params)
         context = self.paginate_queryset(context, self.get_published_posts(filterset.qs), get_params)
         context["posts"] = context["object_list"]  # convenience
         for post in context["posts"]:
@@ -275,10 +270,13 @@ class Blog(Page):
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         context["post_data"] = post_data = kwargs.get("post_data", None)
+        get_params = request.GET.copy()
         if post_data is not None:
-            context = self.get_context_without_database(request, context, post_data)
+            context = self.get_context_without_database(context, post_data)
         else:
             context = self.get_context_with_database(request, context)
+
+        context["parameters"] = self.get_other_get_params(get_params)
         context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
         return context
 
