@@ -43,8 +43,8 @@ from cast.blocks import (
 )
 from cast.models import get_or_create_gallery
 
-from ..cache import PostData
 from ..renditions import ImageType, RenditionFilters
+from .repository import PostData
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:

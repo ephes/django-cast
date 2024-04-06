@@ -15,7 +15,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .cache import PostData, QuerysetData
+from .models.repository import PostData, QuerysetData
 from .renditions import (
     Height,
     ImageForSlot,

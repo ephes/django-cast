@@ -23,9 +23,9 @@ from cast import appsettings
 from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
-from ..cache import PagedPostData
 from ..views import HtmxHttpRequest
 from .pages import Post
+from .repository import PagedPostData
 from .theme import get_template_base_dir, get_template_base_dir_choices
 
 logger = logging.getLogger(__name__)
@@ -279,7 +279,7 @@ class Blog(Page):
         return context
 
     def get_paged_post_data(self, request: HtmxHttpRequest) -> PagedPostData:
-        from ..cache import PagedPostData
+        from .repository import PagedPostData
 
         data = PagedPostData.data_for_blog_index_cachable(request=request, blog=self)
         return PagedPostData.create_from_cachable_data(data=data)

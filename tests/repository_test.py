@@ -17,10 +17,10 @@ from django.urls import reverse
 from wagtail.models import Site
 
 from cast import appsettings
-from cast.cache import PagedPostData, PostData, QuerysetData
 from cast.devdata import create_blog, create_post, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
 from cast.models import Blog, Post
+from cast.models.repository import PagedPostData, PostData, QuerysetData
 
 
 def show_queries(queries):
