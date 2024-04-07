@@ -286,10 +286,6 @@ class Blog(Page):
         post_data = kwargs.get("post_data", None)
         if appsettings.CAST_USE_POST_DATA and post_data is None:
             kwargs["post_data"] = self.get_paged_post_data(request)
-        if post_data is not None:
-            # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
-            self._post_data = post_data
-            kwargs["template_base_dir"] = post_data.template_base_dir
         return super().serve(request, *args, **kwargs)
 
 
