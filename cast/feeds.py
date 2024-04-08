@@ -9,7 +9,7 @@ from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 from django.utils.safestring import SafeText
 
 from .models import Audio, Blog, Episode, Podcast, Post
-from .models.pages import PostData
+from .models.repository import PostRepositoryForFeed
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +18,14 @@ class LatestEntriesFeed(Feed):
     object: Blog
     request: HttpRequest
 
-    def __init__(self, post_data: PostData | None = None):
+    def __init__(self, repository: PostRepositoryForFeed | None = None):
         super().__init__()
-        self.predefined_post_data = post_data
+        self.predefined_repository = repository
 
     def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
         slug = kwargs["slug"]
-        if self.predefined_post_data is not None:
-            self.object = self.predefined_post_data.blog
+        if self.predefined_repository is not None:
+            self.object = self.predefined_repository.blog
         else:
             self.object = get_object_or_404(Blog, slug=slug)
         self.request = request
@@ -41,12 +41,12 @@ class LatestEntriesFeed(Feed):
 
     def items(self) -> QuerySet[Post]:
         blog = self.object
-        if self.predefined_post_data is not None:
-            queryset = self.predefined_post_data.post_queryset
-            self.post_data = self.predefined_post_data
+        if self.predefined_repository is not None:
+            queryset = self.predefined_repository.post_queryset
+            self.repository = self.predefined_repository
         else:
             queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
-            self.post_data = PostData.create_from_post_queryset(
+            self.repository = PostRepositoryForFeed.create_from_post_queryset(
                 request=self.request,
                 blog=blog,
                 post_queryset=queryset,
@@ -62,7 +62,7 @@ class LatestEntriesFeed(Feed):
         #     raise Exception("No database access allowed here.")
         # with connection.execute_wrapper(blocker):
         item.description = item.get_description(
-            request=self.request, render_detail=True, escape_html=False, post_data=self.post_data
+            request=self.request, render_detail=True, escape_html=False, repository=self.repository
         )
         return item.description
 
@@ -173,9 +173,9 @@ class PodcastFeed(Feed):
     object: Podcast
     request: HttpRequest
 
-    def __init__(self, post_data: PostData | None = None):
+    def __init__(self, repository: PostRepositoryForFeed | None = None):
         super().__init__()
-        self.predefined_post_data = post_data
+        self.predefined_repository = repository
 
     def set_audio_format(self, audio_format: str) -> None:
         format_to_mime = Audio.mime_lookup
@@ -212,7 +212,7 @@ class PodcastFeed(Feed):
         queryset = (
             Episode.objects.live().descendant_of(podcast).filter(podcast_audio__isnull=False).order_by("-visible_date")
         )
-        self.post_data = PostData.create_from_post_queryset(
+        self.repository = PostRepositoryForFeed.create_from_post_queryset(
             request=self.request,
             blog=podcast,
             post_queryset=queryset,
@@ -225,7 +225,7 @@ class PodcastFeed(Feed):
 
     def item_description(self, item):
         item.description = item.get_description(
-            request=self.request, render_detail=True, escape_html=False, post_data=self.post_data
+            request=self.request, render_detail=True, escape_html=False, repository=self.repository
         )
         return item.description
 

@@ -15,7 +15,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .models.repository import PostRepository, QuerysetData
+from .models.repository import EmptyRepository, PostRepository, QuerysetData
 from .renditions import (
     Height,
     ImageForSlot,
@@ -109,7 +109,7 @@ class CastImageChooserBlock(ImageChooserBlock):
 
     def get_context(self, image_or_pk: int | Image, parent_context: dict | None = None) -> dict:
         if parent_context is None:
-            parent_context = {}
+            parent_context = {"repository": EmptyRepository()}
         if isinstance(image_or_pk, Image):
             # FIXME: dunno why this is here :/ 2024-03-14 Jochen
             image = image_or_pk
@@ -197,6 +197,8 @@ class GalleryBlock(ListBlock):
         return get_gallery_block_template(default_template_name, context)
 
     def get_context(self, images: QuerySet[AbstractImage], parent_context: dict | None = None) -> dict:
+        if parent_context is None:
+            parent_context = {"repository": EmptyRepository()}
         context = super().get_context(images, parent_context=parent_context)
         return prepare_context_for_gallery(images, context)
 

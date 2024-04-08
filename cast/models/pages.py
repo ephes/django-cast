@@ -44,7 +44,7 @@ from cast.blocks import (
 from cast.models import get_or_create_gallery
 
 from ..renditions import ImageType, RenditionFilters
-from .repository import EmptyRepository, PostData
+from .repository import EmptyRepository, PostRepository, PostRepositoryForFeed
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
@@ -195,8 +195,8 @@ class Post(Page):
         it has a .blog attribute containing the model which has all the
         attributes like blog.comments_enabled etc.
         """
-        if hasattr(self, "_post_data"):
-            return self._post_data.blog
+        if hasattr(self, "_repository"):
+            return self._repository.blog
         return self.get_parent().blog
 
     def get_template_base_dir(self, request: HttpRequest) -> str:
@@ -296,41 +296,40 @@ class Post(Page):
         return super().get_url(request=request, current_site=current_site)
 
     def get_context_without_database(
-        self, request: HttpRequest, context: dict[str, Any], post_data: PostData
+        self, request: HttpRequest, context: dict[str, Any], repository: PostRepositoryForFeed
     ) -> dict[str, Any]:
         """
         Get the context for the post without any database queries.
         """
-        context["template_base_dir"] = post_data.template_base_dir
-        blog = post_data.blog
+        context["template_base_dir"] = repository.template_base_dir
+        blog = repository.blog
         context["blog"] = blog
         context["comments_are_enabled"] = self.get_comments_are_enabled(blog)
-        context["root_nav_links"] = post_data.root_nav_links
-        context["has_audio"] = post_data.has_audio_by_id[self.pk]
+        context["root_nav_links"] = repository.root_nav_links
+        context["has_audio"] = repository.has_audio_by_id[self.pk]
         if context["render_for_feed"]:
             # use absolute urls for feed
-            self.page_url = post_data.absolute_page_url_by_id[self.pk]
+            self.page_url = repository.absolute_page_url_by_id[self.pk]
         else:
-            self.page_url = post_data.page_url_by_id[self.pk]
-        context["owner_username"] = post_data.owner_username_by_id[self.pk]
-        context["blog_url"] = post_data.blog_url
+            self.page_url = repository.page_url_by_id[self.pk]
+        context["owner_username"] = repository.owner_username_by_id[self.pk]
+        context["blog_url"] = repository.blog_url
         context["audio_items"] = []
-        for audio_id in post_data.audios_by_post_id.get(self.pk, []):
-            audio = post_data.audios[audio_id]
+        for audio_id in repository.audios_by_post_id.get(self.pk, []):
+            audio = repository.audios[audio_id]
             context["audio_items"].append((audio_id, audio))
         return context
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
-        context["repository"] = kwargs.get("repository", EmptyRepository())
+        repository = kwargs.get("repository")
+        if repository is None:
+            repository = EmptyRepository()
+        context["repository"] = repository
         context["render_detail"] = kwargs.get("render_detail", False)
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
-        # context["post_data"] = post_data = kwargs.get("post_data", None)
-        post_data = kwargs.get("post_data", None)
-        print("post data in get_context? ", post_data)
-        print("repository in get_context? ", "repository" in kwargs)
-        if post_data is not None:
-            return self.get_context_without_database(request, context, post_data)
+        if repository is not None and isinstance(repository, PostRepositoryForFeed):
+            return self.get_context_without_database(request, context, repository)
         # needed for blocks with themed templates
         context["template_base_dir"] = self.get_template_base_dir(request)
         blog = self.blog
@@ -521,7 +520,7 @@ class Post(Page):
         render_detail: bool = False,
         escape_html: bool = True,
         remove_newlines: bool = True,
-        post_data: PostData | None = None,
+        repository: PostRepositoryForFeed | None = None,
     ) -> SafeText:
         """
         Get a description for the feed or twitter player card. Needs to be
@@ -529,7 +528,7 @@ class Post(Page):
         """
         self._local_template_name = "post_body.html"
         description = self.serve(
-            request, render_detail=render_detail, post_data=post_data, render_for_feed=True
+            request, render_detail=render_detail, repository=repository, render_for_feed=True
         ).rendered_content
         if remove_newlines:
             description = description.replace("\n", "")
@@ -542,17 +541,23 @@ class Post(Page):
         return self.full_url
 
     def get_site(self):
-        if hasattr(self, "_post_data"):
-            return self._post_data.site
+        if hasattr(self, "_repository"):
+            return self._repository.site
         return super().get_site()
 
+    @staticmethod
+    def get_repository(kwargs: dict[str, Any]) -> PostRepository:
+        repository = kwargs.get("repository")
+        if repository is not None:
+            return repository
+        return EmptyRepository()
+
     def serve(self, request, *args, **kwargs):
-        kwargs["repository"] = kwargs.get("repository", EmptyRepository())
-        post_data = kwargs.get("post_data", None)
-        if post_data is not None:
+        kwargs["repository"] = repository = self.get_repository(kwargs)
+        if not isinstance(repository, EmptyRepository):
             # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
-            self._post_data = post_data
-            kwargs["template_base_dir"] = post_data.template_base_dir
+            self._repository = repository
+            kwargs["template_base_dir"] = repository.template_base_dir
         return super().serve(request, *args, **kwargs)
 
     def save(self, *args, **kwargs) -> None:

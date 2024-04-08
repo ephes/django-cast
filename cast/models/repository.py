@@ -30,6 +30,9 @@ RenditionsForPost = dict[int, list[Rendition]]
 class PostRepository:
     renditions_for_posts: RenditionsForPost
     image_by_id: ImageById
+    blog: "Blog"
+    post_queryset: QuerySet["Post"]
+    template_base_dir: str
 
 
 class EmptyRepository(PostRepository):
@@ -38,8 +41,12 @@ class EmptyRepository(PostRepository):
     """
 
     def __init__(self):
+        from cast.models import Blog, Post
+
         self.renditions_for_posts = {}
         self.image_by_id = {}
+        self.blog = Blog()
+        self.post_queryset = Post.objects.none()
 
 
 class QuerysetData:
@@ -156,7 +163,7 @@ class QuerysetData:
         )
 
 
-class PostData:
+class PostRepositoryForFeed(PostRepository):
     def __init__(
         self,
         *,  # no positional arguments
@@ -179,6 +186,7 @@ class PostData:
         self.queryset_data = queryset_data
         self.renditions_for_posts = queryset_data.renditions_for_posts
         self.images = queryset_data.images
+        self.image_by_id = queryset_data.images
         self.post_by_id = queryset_data.post_by_id
         self.owner_username_by_id = queryset_data.owner_username_by_id
         self.has_audio_by_id = queryset_data.has_audio_by_id
@@ -202,7 +210,7 @@ class PostData:
         blog: "Blog",
         template_base_dir: str,
         post_queryset: QuerySet["Post"],
-    ) -> "PostData":
+    ) -> "PostRepositoryForFeed":
         queryset_data = QuerysetData.create_from_post_queryset(post_queryset)
         if site is None:
             site = Site.find_for_request(request)

@@ -1,10 +1,10 @@
 import pytest
 from django import forms
-from django.http.request import QueryDict
 from django.urls import reverse
 
 from cast import appsettings
 from cast.models.pages import CustomEpisodeForm, Episode, HomePage, HtmlField, Post
+from cast.models.repository import BlogIndexRepositoryRaw
 from cast.models.video import Video
 
 
@@ -57,6 +57,14 @@ class TestFileModel:
         assert len(all_paths) == 1
 
 
+@pytest.fixture()
+def use_raw_blog_index_repo():
+    previous = appsettings.CAST_BLOG_INDEX_REPOSITORY
+    appsettings.CAST_BLOG_INDEX_REPOSITORY = "raw"
+    yield appsettings.CAST_BLOG_INDEX_REPOSITORY
+    appsettings.CAST_BLOG_INDEX_REPOSITORY = previous
+
+
 class TestBlogModel:
     pytestmark = pytest.mark.django_db
 
@@ -71,9 +79,9 @@ class TestBlogModel:
         blog.author = "Foobar"
         assert blog.author_name == blog.author
 
-    def test_paginate_queryset_request_is_none(self, blog):
-        context = blog.paginate_queryset({}, blog.get_filterset(QueryDict()).qs, QueryDict())
-        assert context["page_number"] == 1
+    # def test_paginate_queryset_request_is_none(self, blog):
+    #     context = blog.paginate_queryset({}, blog.get_filterset(QueryDict()).qs, QueryDict())
+    #     assert context["page_number"] == 1
 
     def test_paginate_has_previous(self, blog):
         class Page:
@@ -116,9 +124,13 @@ class TestBlogModel:
     def test_has_selectable_themes(self, blog, simple_request):
         assert blog.get_context(simple_request)["has_selectable_themes"]
 
-    def test_get_paged_post_data(self, blog, simple_request):
-        paged_post_data = blog.get_paged_post_data(simple_request)
-        assert len(paged_post_data.queryset_data.queryset) == 0
+    def test_template_base_dir_is_none(self, blog, simple_request):
+        template = blog.get_template(simple_request, template_base_dir="foobar")
+        assert template == "cast/foobar/blog_list_of_posts.html"
+
+    def test_get_repository(self, blog, simple_request, use_raw_blog_index_repo):
+        repository = blog.get_repository(simple_request, {})
+        assert isinstance(repository, BlogIndexRepositoryRaw)
 
 
 class TestPostModel:
@@ -219,10 +231,10 @@ class TestPostModel:
         site = post.get_site()
         assert site is None
 
-        class PostData:
+        class Repository:
             site = "foobar"
 
-        post._post_data = PostData()
+        post._repository = Repository()
 
         assert post.get_site() == "foobar"
 

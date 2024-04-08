@@ -255,7 +255,6 @@ class Blog(Page):
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         context["repository"] = repository = self.get_repository(request, kwargs)
-        print("repository: ", repository)
         get_params = request.GET.copy()
         context = self.get_context_from_repository(context, repository)
         context["posts"] = context["object_list"]  # convenience

@@ -12,6 +12,7 @@ from cast.blocks import (
     get_srcset_images_for_slots,
 )
 from cast.models import Gallery
+from cast.models.repository import EmptyRepository
 from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Rectangle, Width
 
 
@@ -187,10 +188,15 @@ def test_image_chooser_block_get_context_image_or_pk(image):
     assert context["value"] == image
 
 
+@pytest.mark.django_db
 def test_gallery_block_get_context_parent_context_none():
     """Just make sure parent context is set to {} if it is None."""
     cb = GalleryBlock(ImageChooserBlock())
     context = cb.get_context(Gallery.objects.none(), parent_context=None)
+    assert "value" in context
+
+    cb = GalleryBlock(ImageChooserBlock())
+    context = cb.get_context([], parent_context={"repository": EmptyRepository()})
     assert "value" in context
 
 
@@ -221,6 +227,7 @@ def test_gallery_block_with_layout_get_empty_images_from_cache():
     assert values[0]["gallery"] == []
 
 
+@pytest.mark.django_db
 def test_gallery_block_with_layout_get_context():
     class Page:
         pk = 1
@@ -242,5 +249,5 @@ def test_gallery_block_with_layout_get_context():
     with pytest.raises(ValueError):
         block.get_context(
             {"gallery": [{"type": "item", "value": 1}]},
-            {"template_base_dir": "bootstrap4", "page": Page()},
+            {"template_base_dir": "bootstrap4", "page": Page(), "repository": EmptyRepository()},
         )
