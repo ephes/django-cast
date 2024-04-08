@@ -29,19 +29,11 @@
           <a class="navbar-brand" href="/">Home</a>
           <div class="collapse navbar-collapse" id="navbarSupportedContent">
             <ul class="navbar-nav mr-auto">
-              {% if root_nav_links %}
-                {% for link, text in root_nav_links %}
-                  <li class="nav-item">
-                    <a class="nav-link" href="{{ link }}">{{ text }}</a>
-                  </li>
-                {% endfor %}
-              {% else %}
-                {% for child_page in page.get_site.root_page.get_children.live %}
-                  <li class="nav-item">
-                    <a class="nav-link" href="{% slugurl child_page.slug %}">{{ child_page.title }}</a>
-                  </li>
-                {% endfor %}
-              {% endif %}
+              {% for link, text in root_nav_links %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{{ link }}">{{ text }}</a>
+                </li>
+              {% endfor %}
             </ul>
           </div>
         </nav>

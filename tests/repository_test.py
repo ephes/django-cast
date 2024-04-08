@@ -20,7 +20,12 @@ from cast import appsettings
 from cast.devdata import create_blog, create_post, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
 from cast.models import Blog, Post
-from cast.models.repository import PagedPostData, PostData, QuerysetData
+from cast.models.repository import (
+    BlogIndexRepositoryRaw,
+    BlogIndexRepositorySimple,
+    PostData,
+    QuerysetData,
+)
 
 
 def show_queries(queries):
@@ -177,10 +182,10 @@ def get_media_post(rf, blog):
 
 @pytest.fixture
 def gallery_post(rf):
-    QuerysetData.unset_post_data_for_blocks()
+    QuerysetData.unset_queryset_data_for_blocks()
     blog = generate_blog_with_media(number_of_posts=1, media_numbers={"galleries": 1, "images_in_galleries": 3})
     yield get_media_post(rf, blog)
-    QuerysetData.unset_post_data_for_blocks()  # omitting this line will cause a test failure elsewhere
+    QuerysetData.unset_queryset_data_for_blocks()  # omitting this line will cause a test failure elsewhere
 
 
 @pytest.mark.django_db
@@ -202,14 +207,14 @@ def test_render_gallery_post_without_hitting_the_database(rf, gallery_post):
 
 @pytest.fixture(scope="function")
 def media_post(rf, settings):
-    QuerysetData.unset_post_data_for_blocks()
+    QuerysetData.unset_queryset_data_for_blocks()
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=1)
     media_post = get_media_post(rf, blog)
     teardown_paths = [Path(media_post.post.videos.first().original.path)]
     yield media_post
     # teardown - remove the files created during the test
-    QuerysetData.unset_post_data_for_blocks()  # omitting this line will cause a test failure elsewhere
+    QuerysetData.unset_queryset_data_for_blocks()  # omitting this line will cause a test failure elsewhere
     for path in teardown_paths:
         if path.exists():
             path.unlink()
@@ -240,7 +245,7 @@ def test_render_media_post_without_hitting_the_database(rf, media_post):
 @pytest.mark.django_db
 def test_render_feed_without_hitting_the_database(rf, media_post):
     # Set up the cache
-    media_post.post_data.queryset_data.set_post_data_for_blocks()
+    media_post.post_data.queryset_data.set_queryset_data_for_blocks()
     # Given a post with media and a feed
     feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": media_post.blog.slug})
     # When we render the feed
@@ -250,7 +255,8 @@ def test_render_feed_without_hitting_the_database(rf, media_post):
     view(request, slug=media_post.blog.slug)
     reset_queries()
     # now count the queries
-    response = view(request, slug=media_post.blog.slug)
+    with connection.execute_wrapper(blocker):
+        response = view(request, slug=media_post.blog.slug)
     # Then the media should be rendered
     html = response.content.decode("utf-8")
     assert media_post.post.title in html
@@ -259,46 +265,46 @@ def test_render_feed_without_hitting_the_database(rf, media_post):
     assert len(connection.queries) == 0
 
 
-def get_paginated_post_list(rf, blog):
+def get_paginated_repository(rf, blog):
     post = blog.unfiltered_published_posts.first()
     _ = post.serve(rf.get("/")).render()  # force renditions to be created
-    post_data = PagedPostData.create_from_blog_index_request(request=rf.get("/"), blog=blog)
+    repository = BlogIndexRepositoryRaw.create_from_blog_index_request(request=rf.get("/"), blog=blog)
 
-    class PaginatedPostList(NamedTuple):
+    class PaginatedRepository(NamedTuple):
         post: Post
         blog: Blog
-        post_data: PagedPostData
+        repository: BlogIndexRepositoryRaw
 
-    return PaginatedPostList(post=post, blog=blog, post_data=post_data)
+    return PaginatedRepository(post=post, blog=blog, repository=repository)
 
 
 @pytest.fixture(scope="function")
-def paginated_post_list(rf, settings):
-    QuerysetData.unset_post_data_for_blocks()
+def paginated_repo(rf, settings):
+    QuerysetData.unset_queryset_data_for_blocks()
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=1)
-    post_list = get_paginated_post_list(rf, blog)
-    teardown_paths = [Path(post_list.post.videos.first().original.path)]
-    yield post_list
+    paginated_repo = get_paginated_repository(rf, blog)
+    teardown_paths = [Path(paginated_repo.post.videos.first().original.path)]
+    yield paginated_repo
     # teardown - remove the files created during the test
-    QuerysetData.unset_post_data_for_blocks()  # omitting this line will cause a test failure elsewhere
+    QuerysetData.unset_queryset_data_for_blocks()  # omitting this line will cause a test failure elsewhere
     for path in teardown_paths:
         if path.exists():
             path.unlink()
 
 
 @pytest.mark.django_db
-def test_render_blog_index_without_hitting_the_database(rf, paginated_post_list):
+def test_render_blog_index_without_hitting_the_database(rf, paginated_repo):
     # Given a post with media in a blog
-    blog = paginated_post_list.blog
+    blog = paginated_repo.blog
     # When we render the blog index
     request = rf.get(blog.get_url())
     request.htmx = False
     # call this once without blocker to populate SITE_CACHE
-    blog.serve(request, post_data=paginated_post_list.post_data).render()
+    blog.serve(request, repository=paginated_repo.repository).render()
     reset_queries()
     # with connection.execute_wrapper(blocker):
-    response = blog.serve(request, post_data=paginated_post_list.post_data).render()
+    response = blog.serve(request, repository=paginated_repo.repository).render()
     # Then the media should be rendered
     html = response.content.decode("utf-8")
     assert 'class="cast-image"' in html
@@ -311,15 +317,15 @@ def test_render_blog_index_without_hitting_the_database(rf, paginated_post_list)
 
 
 @pytest.fixture()
-def use_post_data_setting_enabled():
-    previous = appsettings.CAST_USE_POST_DATA
-    appsettings.CAST_USE_POST_DATA = True
-    yield appsettings.CAST_USE_POST_DATA
-    appsettings.CAST_USE_POST_DATA = previous
+def use_normal_blog_index_repo():
+    previous = appsettings.CAST_BLOG_INDEX_REPOSITORY
+    appsettings.CAST_BLOG_INDEX_REPOSITORY = "normal"
+    yield appsettings.CAST_BLOG_INDEX_REPOSITORY
+    appsettings.CAST_BLOG_INDEX_REPOSITORY = previous
 
 
 @pytest.mark.django_db
-def test_use_post_data_setting_true(rf, post, settings, use_post_data_setting_enabled):
+def test_use_normal_blog_index_repo_setting(rf, post, settings, use_normal_blog_index_repo):
     # Given post data setting set to True
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = post.blog
@@ -331,7 +337,7 @@ def test_use_post_data_setting_true(rf, post, settings, use_post_data_setting_en
     # When we render the blog index
     response = blog.serve(request).render()
     # Then post data should be generated on the fly and the media should be rendered
-    assert isinstance(response.context_data["post_data"], PagedPostData)
+    assert isinstance(response.context_data["repository"], BlogIndexRepositorySimple)
     html = response.content.decode("utf-8")
     assert author_name in html
     assert post_detail_url in html
@@ -353,16 +359,16 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     _ = post.serve(rf.get("/")).render()  # force renditions to be created
 
     # Set up the cache
-    cachable_data = PagedPostData.data_for_blog_index_cachable(request=request, blog=blog)
+    cachable_data = BlogIndexRepositoryRaw.data_for_blog_index_cachable(request=request, blog=blog)
     pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
     cachable_data = pickle.loads(pickled)
-    paged_post_data = PagedPostData.create_from_cachable_data(data=cachable_data)
+    repository = BlogIndexRepositoryRaw.create_from_cachable_data(data=cachable_data)
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
     reset_queries()
     # with connection.execute_wrapper(blocker):
-    response = blog.serve(request, post_data=paged_post_data).render()
+    response = blog.serve(request, repository=repository).render()
     # Then the media should be rendered
     html = response.content.decode("utf-8")
     assert 'class="cast-image"' in html

@@ -21,7 +21,7 @@ CAST_REGULAR_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]] = getattr(
 CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]] = getattr(
     settings, "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", [(1110, 740), (120, 80)]
 )
-CAST_USE_POST_DATA: bool = getattr(settings, "CAST_USE_POST_DATA", False)
+CAST_BLOG_INDEX_REPOSITORY: str = getattr(settings, "CAST_BLOG_INDEX_REPOSITORY", "normal")
 
 SettingValue = Union[str, bool, int]
 

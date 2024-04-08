@@ -44,7 +44,7 @@ from cast.blocks import (
 from cast.models import get_or_create_gallery
 
 from ..renditions import ImageType, RenditionFilters
-from .repository import PostData
+from .repository import EmptyRepository, PostData
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
@@ -322,9 +322,13 @@ class Post(Page):
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
+        context["repository"] = kwargs.get("repository", EmptyRepository())
         context["render_detail"] = kwargs.get("render_detail", False)
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
-        context["post_data"] = post_data = kwargs.get("post_data", None)
+        # context["post_data"] = post_data = kwargs.get("post_data", None)
+        post_data = kwargs.get("post_data", None)
+        print("post data in get_context? ", post_data)
+        print("repository in get_context? ", "repository" in kwargs)
         if post_data is not None:
             return self.get_context_without_database(request, context, post_data)
         # needed for blocks with themed templates
@@ -543,6 +547,7 @@ class Post(Page):
         return super().get_site()
 
     def serve(self, request, *args, **kwargs):
+        kwargs["repository"] = kwargs.get("repository", EmptyRepository())
         post_data = kwargs.get("post_data", None)
         if post_data is not None:
             # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called

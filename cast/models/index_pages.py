@@ -25,7 +25,11 @@ from cast.models.itunes import ItunesArtWork
 
 from ..views import HtmxHttpRequest
 from .pages import Post
-from .repository import PagedPostData
+from .repository import (
+    BlogIndexRepository,
+    BlogIndexRepositoryRaw,
+    BlogIndexRepositorySimple,
+)
 from .theme import get_template_base_dir, get_template_base_dir_choices
 
 logger = logging.getLogger(__name__)
@@ -165,9 +169,7 @@ class Blog(Page):
             "next_page_number": next_page_number,
         }
 
-    def paginate_queryset(
-        self, context: ContextDict, posts_queryset: models.QuerySet, get_params: QueryDict
-    ) -> ContextDict:
+    def get_pagination_context(self, posts_queryset: models.QuerySet["Post"], get_params: QueryDict) -> ContextDict:
         paginator = Paginator(posts_queryset, appsettings.POST_LIST_PAGINATION)
         page_from_url = "1"
         if "page" in get_params:
@@ -194,8 +196,7 @@ class Blog(Page):
             "is_paginated": page.has_other_pages(),
         }
         pagination_context |= self.get_next_and_previous_pages(page)
-        context.update(pagination_context)
-        return context
+        return pagination_context
 
     @staticmethod
     def get_other_get_params(get_params: QueryDict) -> str:
@@ -242,33 +243,21 @@ class Blog(Page):
             }
         )
 
-    def get_context_without_database(self, context: dict[str, Any], post_data: PagedPostData) -> ContextDict:
-        context |= post_data.paginate_context
-        context["filterset"] = post_data.filterset
-        context["template_base_dir"] = post_data.template_base_dir
-        context["use_audio_player"] = any([p.pk for p in context["object_list"] if post_data.has_audio_by_id[p.pk]])
-        context["root_nav_links"] = post_data.root_nav_links
-        return context
-
-    def get_context_with_database(self, request: HtmxHttpRequest, context: dict[str, Any]) -> ContextDict:
-        get_params = request.GET.copy()
-        context["filterset"] = filterset = self.get_filterset(get_params)
-        context = self.paginate_queryset(context, self.get_published_posts(filterset.qs), get_params)
-        for post in context["object_list"]:
-            post.page_url = post.get_url(request)
-        context["template_base_dir"] = self.get_template_base_dir(request)
-        context["use_audio_player"] = any([post.has_audio for post in context["object_list"]])
+    @staticmethod
+    def get_context_from_repository(context: ContextDict, repository: BlogIndexRepository) -> ContextDict:
+        context |= repository.pagination_context  # includes object_list
+        context["filterset"] = repository.filterset
+        context["template_base_dir"] = repository.template_base_dir
+        context["use_audio_player"] = repository.use_audio_player
+        context["root_nav_links"] = repository.root_nav_links
         return context
 
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
-        context["post_data"] = post_data = kwargs.get("post_data", None)
+        context["repository"] = repository = self.get_repository(request, kwargs)
+        print("repository: ", repository)
         get_params = request.GET.copy()
-        if post_data is not None:
-            context = self.get_context_without_database(context, post_data)
-        else:
-            context = self.get_context_with_database(request, context)
-
+        context = self.get_context_from_repository(context, repository)
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
         context["has_selectable_themes"] = True
@@ -276,16 +265,16 @@ class Blog(Page):
         context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
         return context
 
-    def get_paged_post_data(self, request: HtmxHttpRequest) -> PagedPostData:
-        from .repository import PagedPostData
-
-        data = PagedPostData.data_for_blog_index_cachable(request=request, blog=self)
-        return PagedPostData.create_from_cachable_data(data=data)
+    def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexRepository:
+        if "repository" in kwargs:
+            return kwargs["repository"]
+        if appsettings.CAST_BLOG_INDEX_REPOSITORY == "raw":
+            data = BlogIndexRepositoryRaw.data_for_blog_index_cachable(request=request, blog=self)
+            return BlogIndexRepositoryRaw.create_from_cachable_data(data=data)
+        return BlogIndexRepositorySimple.create_from_blog(request=request, blog=self)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs) -> TemplateResponse:
-        post_data = kwargs.get("post_data", None)
-        if appsettings.CAST_USE_POST_DATA and post_data is None:
-            kwargs["post_data"] = self.get_paged_post_data(request)
+        kwargs["repository"] = self.get_repository(request, kwargs)
         return super().serve(request, *args, **kwargs)
 
 

@@ -22,7 +22,24 @@ HasAudioByID = dict[int, bool]
 AudiosByPostID = dict[int, set["Audio"]]
 VideosByPostID = dict[int, set["Video"]]
 ImagesByPostID = dict[int, set["Image"]]
+ImageById = dict[int, Image]
 LinkTuples = list[tuple[str, str]]
+RenditionsForPost = dict[int, list[Rendition]]
+
+
+class PostRepository:
+    renditions_for_posts: RenditionsForPost
+    image_by_id: ImageById
+
+
+class EmptyRepository(PostRepository):
+    """
+    This can be used as a default repository.
+    """
+
+    def __init__(self):
+        self.renditions_for_posts = {}
+        self.image_by_id = {}
 
 
 class QuerysetData:
@@ -39,14 +56,14 @@ class QuerysetData:
         post_queryset: Any,  # FIXME: Post queryset or list[Post], but does not work
         post_by_id: PostByID,
         audios: dict[int, "Audio"],
-        images: dict[int, Image],
+        images: ImageById,
         videos: dict[int, "Video"],
         audios_by_post_id: AudiosByPostID,
         videos_by_post_id: VideosByPostID,
         images_by_post_id: ImagesByPostID,
         owner_username_by_id: dict[int, str],
         has_audio_by_id: HasAudioByID,
-        renditions_for_posts: dict[int, list[Rendition]],
+        renditions_for_posts: RenditionsForPost,
     ):
         self.queryset = post_queryset
         self.post_by_id = post_by_id
@@ -60,7 +77,7 @@ class QuerysetData:
         self.has_audio_by_id = has_audio_by_id
         self.renditions_for_posts = renditions_for_posts
         self.patch_page_link_handler(self.post_by_id)
-        self.set_post_data_for_blocks()
+        self.set_queryset_data_for_blocks()
 
     @staticmethod
     def patch_page_link_handler(post_by_id):
@@ -82,12 +99,12 @@ class QuerysetData:
     def register_block(cls, block: Any) -> None:
         cls.registered_blocks.append(block)
 
-    def set_post_data_for_blocks(self):
+    def set_queryset_data_for_blocks(self):
         for block in self.registered_blocks:
             block.queryset_data = self
 
     @classmethod
-    def unset_post_data_for_blocks(cls):
+    def unset_queryset_data_for_blocks(cls):
         for block in cls.registered_blocks:
             block.queryset_data = None
 
@@ -272,33 +289,42 @@ def rendtition_to_dict(rendition):
     }
 
 
-class PagedPostData:
+class BlogIndexRepository(PostRepository):
     def __init__(
         self,
         *,
-        site: Site,
+        # site: Site,
         template_base_dir: str,
         filterset: Any,
-        queryset_data: QuerysetData,
-        paginate_context: dict[str, Any],
+        queryset_data: QuerysetData | None = None,
+        pagination_context: dict[str, Any],
         root_nav_links: LinkTuples,
+        use_audio_player: bool = False,
     ):
-        self.site = site
+        # self.site = site
         self.template_base_dir = template_base_dir
         self.filterset = filterset
-        self.paginate_context = paginate_context
-        self.queryset_data = queryset_data
+        self.pagination_context = pagination_context
         self.root_nav_links = root_nav_links
-        self.renditions_for_posts = queryset_data.renditions_for_posts
-        self.images = queryset_data.images
-        self.post_by_id = queryset_data.post_by_id
-        self.owner_username_by_id = queryset_data.owner_username_by_id
-        self.has_audio_by_id = queryset_data.has_audio_by_id
-        self.videos = queryset_data.videos
-        self.audios = queryset_data.audios
-        self.audios_by_post_id = queryset_data.audios_by_post_id
-        self.post_queryset = queryset_data.queryset
+        self.use_audio_player = use_audio_player
+        # queryset data
+        self.queryset_data = queryset_data
+        if queryset_data is not None:
+            self.renditions_for_posts = queryset_data.renditions_for_posts
+            self.images = queryset_data.images
+            self.image_by_id = queryset_data.images
+            self.post_by_id = queryset_data.post_by_id
+            self.owner_username_by_id = queryset_data.owner_username_by_id
+            self.has_audio_by_id = queryset_data.has_audio_by_id
+            self.videos = queryset_data.videos
+            self.audios = queryset_data.audios
+            self.audios_by_post_id = queryset_data.audios_by_post_id
+            self.post_queryset = queryset_data.queryset
+        else:
+            self.image_by_id = {}
 
+
+class BlogIndexRepositoryRaw(BlogIndexRepository):
     @staticmethod
     def add_site_raw(data: dict[str, Any]) -> dict:
         site_statement = """
@@ -373,8 +399,8 @@ class PagedPostData:
         blog: "Blog",
     ) -> dict:
         data: dict[str, Any] = {}
-        data = PagedPostData.add_site_raw(data)
-        data = PagedPostData.add_root_nav_links(data)
+        data = BlogIndexRepositoryRaw.add_site_raw(data)
+        data = BlogIndexRepositoryRaw.add_root_nav_links(data)
         data["template_base_dir"] = blog.get_template_base_dir(request)
 
         # filters and pagination
@@ -393,23 +419,13 @@ class PagedPostData:
         else:
             tag_facet_choices = []
         data["filterset"]["tag_facets_choices"] = tag_facet_choices
-        paginate_context = blog.paginate_queryset({}, blog.get_published_posts(filterset.qs), get_params)
-        data["pagination"] = {
-            "has_previous": paginate_context["has_previous"],
-            "previous_page_number": paginate_context["previous_page_number"],
-            "ellipsis": paginate_context["ellipsis"],
-            "page_range": paginate_context["page_range"],
-            "page_number": paginate_context["page_number"],
-            "has_next": paginate_context["has_next"],
-            "next_page_number": paginate_context["next_page_number"],
-            "is_paginated": paginate_context["is_paginated"],
-            "object_list": paginate_context["object_list"],
-        }
+        data["pagination_context"] = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
         # queryset data
-        queryset = data["pagination"]["object_list"]
-        QuerysetData.unset_post_data_for_blocks()
+        queryset = data["pagination_context"]["object_list"]
+        del data["pagination_context"]["object_list"]  # not cachable
+        QuerysetData.unset_queryset_data_for_blocks()
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
-        data = PagedPostData.add_queryset_data(data, queryset_data)
+        data = BlogIndexRepositoryRaw.add_queryset_data(data, queryset_data)
 
         # page_url by id
         page_url_by_id: PageUrlByID = {}
@@ -426,7 +442,7 @@ class PagedPostData:
         cls,
         *,
         data: dict[str, Any],
-    ) -> "PagedPostData":
+    ) -> "BlogIndexRepositoryRaw":
         """
         This method recreates usable models from the cachable data.
         """
@@ -434,12 +450,12 @@ class PagedPostData:
 
         from . import Audio, Post, Video
 
-        site = Site(**data["site"])
+        # site = Site(**data["site"])
         template_base_dir = data["template_base_dir"]
         post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
-        paginate_context = data["pagination"]
-        paginate_context["object_list"] = post_queryset
+        pagination_context = data["pagination_context"]
+        pagination_context["object_list"] = post_queryset
         audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
         images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
         videos = {video_pk: Video(**video_data) for video_pk, video_data in data["videos"].items()}
@@ -449,6 +465,7 @@ class PagedPostData:
             renditions_for_posts[post_pk] = [Rendition(**rendition_data) for rendition_data in renditions]
 
         user_model = get_user_model()
+        use_audio_player = False
         for post in post_queryset:
             media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
             for image_pk in data["images_by_post_id"].get(post.pk, []):
@@ -460,6 +477,9 @@ class PagedPostData:
             post._media_lookup = media_lookup
             post.owner = user_model(username=data["owner_username_by_id"][post.pk])
             post.page_url = data["page_url_by_id"][post.pk]
+
+            if data["has_audio_by_id"][post.pk]:
+                use_audio_player = True
 
         queryset_data = QuerysetData(
             post_queryset=post_queryset,
@@ -484,12 +504,13 @@ class PagedPostData:
 
         return cls(
             **{
-                "site": site,
+                # "site": site,
                 "template_base_dir": template_base_dir,
                 "filterset": filterset,
-                "paginate_context": paginate_context,
+                "pagination_context": pagination_context,
                 "queryset_data": queryset_data,
                 "root_nav_links": root_nav_links,
+                "use_audio_player": use_audio_player,
             }
         )
 
@@ -505,14 +526,14 @@ class PagedPostData:
         template_base_dir = blog.get_template_base_dir(request)
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
-        paginate_context = blog.paginate_queryset({}, blog.get_published_posts(filterset.qs), get_params)
-        queryset = paginate_context["object_list"]
+        pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
+        queryset = pagination_context["object_list"]
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
         return {
-            "site": site,
+            # "site": site,
             "template_base_dir": template_base_dir,
             "filterset": filterset,
-            "paginate_context": paginate_context,
+            "pagination_context": pagination_context,
             "queryset_data": queryset_data,
             "root_nav_links": root_nav_links,
         }
@@ -523,5 +544,33 @@ class PagedPostData:
         *,
         request: HtmxHttpRequest,
         blog: "Blog",
-    ) -> "PagedPostData":
-        return cls(**PagedPostData.data_for_blog_index(request=request, blog=blog))
+    ) -> "BlogIndexRepositoryRaw":
+        return cls(**BlogIndexRepositoryRaw.data_for_blog_index(request=request, blog=blog))
+
+
+class BlogIndexRepositorySimple(BlogIndexRepository):
+    @classmethod
+    def create_from_blog(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexRepositorySimple":
+        get_params = request.GET.copy()
+        filterset = blog.get_filterset(get_params)
+        pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
+        use_audio_player = False
+        for post in pagination_context["object_list"]:
+            post.page_url = post.get_url(request)
+            if post.has_audio:
+                use_audio_player = True
+        template_base_dir = blog.get_template_base_dir(request)
+        root_nav_links = []
+        site = blog.get_site()
+        if site is not None:
+            for page in site.root_page.get_children().live():
+                root_nav_links.append((page.get_url(request), page.title))
+        kwargs = {
+            "filterset": filterset,
+            "pagination_context": pagination_context,
+            "template_base_dir": template_base_dir,
+            "use_audio_player": use_audio_player,
+            "root_nav_links": root_nav_links,
+        }
+
+        return cls(**kwargs)  # type: ignore

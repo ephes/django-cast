@@ -15,7 +15,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .models.repository import PostData, QuerysetData
+from .models.repository import PostRepository, QuerysetData
 from .renditions import (
     Height,
     ImageForSlot,
@@ -98,16 +98,12 @@ class CastImageChooserBlock(ImageChooserBlock):
     to get the srcset and sizes attributes in the template.
     """
 
-    queryset_data: QuerysetData | None = None
-
-    def get_image_and_renditions(self, image_id, context: dict) -> tuple[Image, dict[str, Rendition]]:
-        post_data: PostData | None = context.get("post_data")
-        if post_data is None:
+    def get_image_and_renditions(self, image_id: int, context: dict) -> tuple[Image, dict[str, Rendition]]:
+        repository: PostRepository = context["repository"]
+        image = repository.image_by_id.get(image_id)
+        if image is None:
             image = super().to_python(image_id)
-            image_renditions = context.get("renditions_for_posts", {}).get(image.pk, [])
-        else:
-            image = post_data.images[image_id]
-            image_renditions = post_data.renditions_for_posts.get(image.pk, [])
+        image_renditions = repository.renditions_for_posts.get(image.pk, [])
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
         return image, fetched_renditions
 
@@ -149,8 +145,8 @@ def add_image_thumbnails(images: Iterable[AbstractImage], context: dict) -> None
     modal_slot, thumbnail_slot = (
         Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
     )
-    post_data = context.get("post_data")
-    renditions_for_posts = {} if post_data is None else post_data.renditions_for_posts
+    repository: PostRepository = context["repository"]
+    renditions_for_posts = repository.renditions_for_posts
     for image in images:
         image_renditions = renditions_for_posts.get(image.pk, [])
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
@@ -237,10 +233,10 @@ class GalleryBlockWithLayout(StructBlock):
     def get_context(self, value, parent_context: dict | None = None):
         context = super().get_context(value, parent_context=parent_context)
         if isinstance(value["gallery"][0], dict) and self.queryset_data is not None:
-            value = self._get_images_from_cache([value], self.queryset_data)[0]
+            value = self._get_images_from_queryset_data([value], self.queryset_data)[0]
         return prepare_context_for_gallery(value["gallery"], context)
 
-    def _get_images_from_cache(self, values, queryset_data: QuerysetData):
+    def _get_images_from_queryset_data(self, values, queryset_data: QuerysetData):
         images = []
         for item in values[0]["gallery"]:
             if isinstance(item, dict) and item.get("type") == "item":
@@ -251,10 +247,10 @@ class GalleryBlockWithLayout(StructBlock):
         return values
 
     def bulk_to_python(self, values):
-        """Overwrite this method to be able to use the post_data images cache."""
+        """Overwrite this method to be able to use the images from queryset_data."""
         if self.queryset_data is not None:
             try:
-                return self._get_images_from_cache(values, self.queryset_data)
+                return self._get_images_from_queryset_data(values, self.queryset_data)
             except KeyError:
                 # if fetching from cache fails, just return super().bulk_to_python
                 pass
@@ -333,11 +329,11 @@ class CodeBlock(StructBlock):
             return ""
 
 
-def register_blocks_for_post_data() -> None:
+def register_blocks_for_queryset_data() -> None:
     QuerysetData.register_block(GalleryBlockWithLayout)
     QuerysetData.register_block(VideoChooserBlock)
     QuerysetData.register_block(AudioChooserBlock)
     QuerysetData.register_block(ImageChooserBlock)
 
 
-register_blocks_for_post_data()
+register_blocks_for_queryset_data()
