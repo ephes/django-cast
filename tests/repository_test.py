@@ -20,7 +20,7 @@ from wagtail.models import Site
 from cast import appsettings
 from cast.devdata import create_blog, create_post, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
-from cast.models import Blog, Post
+from cast.models import Audio, Blog, Post
 from cast.models.repository import (
     BlogIndexRepositoryRaw,
     BlogIndexRepositorySimple,
@@ -440,3 +440,39 @@ def test_blog_index_repo_simple_has_audio_true(rf, post_with_audio):
     request = rf.get("/")
     repository = BlogIndexRepositorySimple.create_from_blog(request=request, blog=post_with_audio.blog)
     assert repository.use_audio_player is True
+
+
+# Just create html pages without hitting the database
+# - blog index
+# - post detail
+# - feed
+
+
+class PostDetailRepository:
+    template_base_dir = "bootstrap4"
+    blog = None
+    root_nav_links = [("http://testserver/", "Home"), ("http://testserver/about/", "About")]
+    comments_are_enabled = False
+    has_audio = False
+    page_url = "/some-post/"
+    absolute_page_url = "http://testserver/some-post/"
+    owner_username = "owner"
+    blog_url = "/some-blog/"
+    audio_items: list[tuple[int, Audio]] = []
+
+    def __init__(self, blog):
+        self.blog = blog
+
+
+@pytest.mark.django_db
+def test_render_post_detail_without_hitting_the_database(rf):
+    request = rf.get("/some-post/")
+    post = Post(title="Some post")
+    reset_queries()
+    blog = Blog(title="Some blog")
+    with connection.execute_wrapper(blocker):
+        response = post.serve(request, repository=PostDetailRepository(blog)).render()
+    # Then the media should be rendered
+    html = response.content.decode("utf-8")
+    print(html)
+    assert False
