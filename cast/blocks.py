@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Protocol, TypeAlias, Union
 
 from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -15,7 +15,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .models.repository import EmptyRepository, PostRepository, QuerysetData
+from .models.repository import QuerysetData
 from .renditions import (
     Height,
     ImageForSlot,
@@ -92,6 +92,24 @@ def get_srcset_images_for_slots(
     return images_for_slots
 
 
+ImageByID: TypeAlias = dict[int, Image]
+RenditionsForPosts: TypeAlias = dict[int, list[Rendition]]
+
+
+class HasImagesAndRenditions(Protocol):
+    image_by_id: ImageByID
+    renditions_for_posts: RenditionsForPosts
+
+
+class ImageProxyRepository:
+    """
+    A repository that can be used if no repository was set.
+    """
+
+    image_by_id: ImageByID = {}
+    renditions_for_posts: RenditionsForPosts = {}
+
+
 class CastImageChooserBlock(ImageChooserBlock):
     """
     Just add a thumbnail to the image because we then can use the thumbnail
@@ -99,17 +117,17 @@ class CastImageChooserBlock(ImageChooserBlock):
     """
 
     def get_image_and_renditions(self, image_id: int, context: dict) -> tuple[Image, dict[str, Rendition]]:
-        repository: PostRepository = context["repository"]
+        repository: HasImagesAndRenditions = context["repository"]
         image = repository.image_by_id.get(image_id)
         if image is None:
-            image = super().to_python(image_id)
+            image = self.to_python(image_id)
         image_renditions = repository.renditions_for_posts.get(image.pk, [])
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
         return image, fetched_renditions
 
     def get_context(self, image_or_pk: int | Image, parent_context: dict | None = None) -> dict:
         if parent_context is None:
-            parent_context = {"repository": EmptyRepository()}
+            parent_context = {"repository": ImageProxyRepository()}
         if isinstance(image_or_pk, Image):
             # FIXME: dunno why this is here :/ 2024-03-14 Jochen
             image = image_or_pk
@@ -145,7 +163,7 @@ def add_image_thumbnails(images: Iterable[AbstractImage], context: dict) -> None
     modal_slot, thumbnail_slot = (
         Rectangle(Width(w), Height(h)) for w, h in settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
     )
-    repository: PostRepository = context["repository"]
+    repository: HasRenditionsForPosts = context["repository"]
     renditions_for_posts = repository.renditions_for_posts
     for image in images:
         image_renditions = renditions_for_posts.get(image.pk, [])
@@ -186,6 +204,18 @@ def get_gallery_block_template(default_template_name: str, context: dict | None,
         return default_template_name
 
 
+class HasRenditionsForPosts(Protocol):
+    renditions_for_posts: RenditionsForPosts
+
+
+class GalleryProxyRepository:
+    """
+    A repository that can be used if no repository was set.
+    """
+
+    renditions_for_posts: RenditionsForPosts = {}
+
+
 class GalleryBlock(ListBlock):
     class Meta:
         icon = "image"
@@ -198,7 +228,7 @@ class GalleryBlock(ListBlock):
 
     def get_context(self, images: QuerySet[AbstractImage], parent_context: dict | None = None) -> dict:
         if parent_context is None:
-            parent_context = {"repository": EmptyRepository()}
+            parent_context = {"repository": GalleryProxyRepository()}
         context = super().get_context(images, parent_context=parent_context)
         return prepare_context_for_gallery(images, context)
 
