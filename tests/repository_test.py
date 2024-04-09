@@ -14,6 +14,7 @@ import sqlparse
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection, reset_queries
 from django.urls import reverse
+from wagtail.images.models import Rendition
 from wagtail.models import Site
 
 from cast import appsettings
@@ -25,6 +26,8 @@ from cast.models.repository import (
     BlogIndexRepositorySimple,
     PostRepositoryForFeed,
     QuerysetData,
+    get_facet_choices,
+    serialize_renditions,
 )
 
 
@@ -381,3 +384,59 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0
+
+
+def test_serialize_renditions():
+    rendition = Rendition(file="foo.jpg", filter_spec="foobarfilter", width=100, height=200)
+    renditions = serialize_renditions({1: [rendition]})
+    rendition = Rendition(**renditions[1][0])
+    assert rendition.file == "foo.jpg"
+
+
+def test_get_facet_choices():
+    class Facet:
+        choices = [("foo", "Foo"), ("bar", "Bar")]
+
+    # choices are found
+    choices = get_facet_choices({"foobar": Facet()}, "foobar")
+    assert choices == Facet.choices
+
+    # no choices found
+    choices = get_facet_choices({}, "foobar")
+    assert choices == []
+
+
+@pytest.mark.django_db
+def test_create_from_cachable_data_use_audio_player_false():
+    data = {
+        "template_base_dir": "bootstrap4",
+        "post_by_id": {1: {"pk": 1}},
+        "posts": [1],
+        "page_url_by_id": {1: "/foo-bar-baz/"},
+        "pagination_context": {},
+        "audios": {},
+        "images": {},
+        "videos": {},
+        "renditions_for_posts": {},
+        "audios_by_post_id": {},
+        "videos_by_post_id": {},
+        "images_by_post_id": {},
+        "owner_username_by_id": {1: "owner"},
+        "has_audio_by_id": {1: False},
+        "root_nav_links": [],
+        "filterset": {
+            "get_params": {},
+            "date_facets_choices": [],
+            "category_facets_choices": [],
+            "tag_facets_choices": [],
+        },
+    }
+    repository = BlogIndexRepositoryRaw.create_from_cachable_data(data=data)
+    assert repository.use_audio_player is False
+
+
+@pytest.mark.django_db
+def test_blog_index_repo_simple_has_audio_true(rf, post_with_audio):
+    request = rf.get("/")
+    repository = BlogIndexRepositorySimple.create_from_blog(request=request, blog=post_with_audio.blog)
+    assert repository.use_audio_player is True

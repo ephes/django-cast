@@ -1,5 +1,6 @@
 import json
-from typing import TYPE_CHECKING, Any
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -25,6 +26,7 @@ ImagesByPostID = dict[int, set["Image"]]
 ImageById = dict[int, Image]
 LinkTuples = list[tuple[str, str]]
 RenditionsForPost = dict[int, list[Rendition]]
+SerializedRenditions = dict[int, list[dict]]
 
 
 class PostRepository:
@@ -287,7 +289,7 @@ def image_to_dict(image):
     }
 
 
-def rendtition_to_dict(rendition):
+def rendition_to_dict(rendition):
     return {
         "pk": rendition.pk,
         "filter_spec": rendition.filter_spec,
@@ -330,6 +332,32 @@ class BlogIndexRepository(PostRepository):
             self.post_queryset = queryset_data.queryset
         else:
             self.image_by_id = {}
+
+
+def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedRenditions:
+    renditions = {}
+    for post_pk, renditions_for_post in renditions_for_posts.items():
+        renditions[post_pk] = [rendition_to_dict(rendition) for rendition in renditions_for_post]
+    return renditions
+
+
+def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPost:
+    return {
+        post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
+    }
+
+
+Choice: TypeAlias = tuple[str, str]
+
+
+class HasChoices(Protocol):
+    choices: Iterable[Choice]
+
+
+def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
+    if field_name in fields:
+        return [(k, v) for k, v in fields[field_name].choices if k != ""]
+    return []
 
 
 class BlogIndexRepositoryRaw(BlogIndexRepository):
@@ -387,10 +415,7 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         data["images"] = images
 
         # renditions
-        renditions = {}
-        for post_pk, renditions_for_post in queryset_data.renditions_for_posts.items():
-            renditions[post_pk] = [rendtition_to_dict(rendition) for rendition in renditions_for_post]
-        data["renditions_for_post"] = renditions
+        data["renditions_for_posts"] = serialize_renditions(queryset_data.renditions_for_posts)
         data["posts"] = [post.pk for post in queryset_data.queryset]
 
         data["images_by_post_id"] = queryset_data.images_by_post_id
@@ -417,16 +442,8 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         data["filterset"] = {"get_params": get_params.dict()}
         date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
         data["filterset"]["date_facets_choices"] = date_facet_choices
-        if "category_facets" in filterset.form.fields:
-            category_facet_choices = [(k, v) for k, v in filterset.form.fields["category_facets"].choices if k != ""]
-        else:
-            category_facet_choices = []
-        data["filterset"]["category_facets_choices"] = category_facet_choices
-        if "tag_facets" in filterset.form.fields:
-            tag_facet_choices = [(k, v) for k, v in filterset.form.fields["tag_facets"].choices if k != ""]
-        else:
-            tag_facet_choices = []
-        data["filterset"]["tag_facets_choices"] = tag_facet_choices
+        data["filterset"]["category_facets_choices"] = get_facet_choices(filterset.form.fields, "category_facets")
+        data["filterset"]["tag_facets_choices"] = get_facet_choices(filterset.form.fields, "tag_facets")
         data["pagination_context"] = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
         # queryset data
         queryset = data["pagination_context"]["object_list"]
@@ -454,7 +471,7 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         """
         This method recreates usable models from the cachable data.
         """
-        from wagtail.images.models import Image, Rendition
+        from wagtail.images.models import Image
 
         from . import Audio, Post, Video
 
@@ -468,9 +485,7 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
         videos = {video_pk: Video(**video_data) for video_pk, video_data in data["videos"].items()}
 
-        renditions_for_posts = {}
-        for post_pk, renditions in data["renditions_for_post"].items():
-            renditions_for_posts[post_pk] = [Rendition(**rendition_data) for rendition_data in renditions]
+        renditions_for_posts = deserialize_renditions(data["renditions_for_posts"])
 
         user_model = get_user_model()
         use_audio_player = False
