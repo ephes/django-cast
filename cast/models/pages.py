@@ -365,9 +365,9 @@ class Post(Page):
         context = self.get_context_from_repository(context, repository)
         if context["render_for_feed"]:
             # use absolute urls for feed
-            self.page_url = repository.absolute_page_url_by_id[self.pk]
+            self.page_url = context["absolute_page_url"]
         else:
-            self.page_url = repository.page_url_by_id[self.pk]
+            self.page_url = context["page_url"]
         return context
         # if repository is not None and isinstance(repository, PostRepositoryForFeed):
         #     return self.get_context_without_database(request, context, repository)
