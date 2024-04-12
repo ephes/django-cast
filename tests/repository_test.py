@@ -18,12 +18,18 @@ from wagtail.images.models import Rendition
 from wagtail.models import Site
 
 from cast import appsettings
-from cast.devdata import create_blog, create_post, generate_blog_with_media
+from cast.devdata import (
+    create_blog,
+    create_post,
+    create_python_body,
+    generate_blog_with_media,
+)
 from cast.feeds import LatestEntriesFeed
-from cast.models import Audio, Blog, Post
+from cast.models import Blog, Post
 from cast.models.repository import (
     BlogIndexRepositoryRaw,
     BlogIndexRepositorySimple,
+    PostDetailRepository,
     PostRepositoryForFeed,
     QuerysetData,
     get_facet_choices,
@@ -448,31 +454,71 @@ def test_blog_index_repo_simple_has_audio_true(rf, post_with_audio):
 # - feed
 
 
-class PostDetailRepository:
-    template_base_dir = "bootstrap4"
-    blog = None
-    root_nav_links = [("http://testserver/", "Home"), ("http://testserver/about/", "About")]
-    comments_are_enabled = False
-    has_audio = False
-    page_url = "/some-post/"
-    absolute_page_url = "http://testserver/some-post/"
-    owner_username = "owner"
-    blog_url = "/some-blog/"
-    audio_items: list[tuple[int, Audio]] = []
-
-    def __init__(self, blog):
-        self.blog = blog
+# class PostDetailRepository:
+#     template_base_dir = "bootstrap4"
+#     blog = Blog(id=1, title="Some blog")
+#     root_nav_links = [("http://testserver/", "Home"), ("http://testserver/about/", "About")]
+#     comments_are_enabled = False  # FIXME setting this to True causes database queries
+#     has_audio = True
+#     page_url = "/some-post/"
+#     absolute_page_url = "http://testserver/some-post/"
+#     owner_username = "owner"
+#     blog_url = "/some-blog/"
+#     audio_items: list[tuple[int, Audio]] = [(1, Audio(id=1, title="Some audio", collection=None))]
 
 
-@pytest.mark.django_db
+def create_post_with_media():
+    body = create_python_body()
+    audio_for_body = {"type": "audio", "value": 1}
+    body[0]["value"].append(audio_for_body)
+
+    serialized_body = json.dumps(body)
+    return Post(id=1, title="Some post", body=serialized_body)
+
+
 def test_render_post_detail_without_hitting_the_database(rf):
     request = rf.get("/some-post/")
-    post = Post(title="Some post")
+    repository = PostDetailRepository(
+        template_base_dir="bootstrap4",
+        blog=Blog(id=1, title="Some blog"),
+        root_nav_links=[("http://testserver/", "Home"), ("http://testserver/about/", "About")],
+        comments_are_enabled=False,  # FIXME setting this to True causes database queries
+        has_audio=True,
+        page_url="/some-post/",
+        absolute_page_url="http://testserver/some-post/",
+        owner_username="owner",
+        blog_url="/some-blog/",
+    )
+    post = create_post_with_media()
+    # _qd = QuerysetData(
+    #     post_queryset=[post],
+    #     post_by_id={post.pk: post},
+    #     audios={repository.audio_items[0][0]: repository.audio_items[0][1]},
+    #     audios_by_post_id={post.id: {repository.audio_items[0][1]}},
+    #     images={},
+    #     images_by_post_id={},
+    #     videos={},
+    #     videos_by_post_id={},
+    #     has_audio_by_id={post.pk: True},
+    #     owner_username_by_id={post.pk: repository.owner_username},
+    #     renditions_for_posts={},
+    # )
     reset_queries()
-    blog = Blog(title="Some blog")
     with connection.execute_wrapper(blocker):
-        response = post.serve(request, repository=PostDetailRepository(blog)).render()
+        response = post.serve(request, repository=repository).render()
     # Then the media should be rendered
     html = response.content.decode("utf-8")
-    print(html)
-    assert False
+    assert "web-player/embed.4.js" in html  # audio player because has_audio is True
+    assert post.title in html
+    assert repository.page_url in html
+    assert repository.owner_username.capitalize() in html
+    assert "audio_1" in html
+    context = response.context_data
+    assert context["template_base_dir"] == repository.template_base_dir
+    assert context["blog"] == repository.blog
+    assert context["root_nav_links"] == repository.root_nav_links
+    assert context["comments_are_enabled"] == repository.comments_are_enabled
+    assert context["page_url"] == repository.page_url
+    assert context["page"].page_url == repository.page_url
+    assert context["absolute_page_url"] == repository.absolute_page_url
+    assert len(connection.queries) == 0

@@ -21,6 +21,7 @@ PostByID = dict[int, "Post"]
 PageUrlByID = dict[int, str]
 HasAudioByID = dict[int, bool]
 AudiosByPostID = dict[int, set["Audio"]]
+AudioById = dict[int, "Audio"]
 VideosByPostID = dict[int, set["Video"]]
 ImagesByPostID = dict[int, set["Image"]]
 ImageById = dict[int, Image]
@@ -64,7 +65,7 @@ class QuerysetData:
         *,
         post_queryset: Any,  # FIXME: Post queryset or list[Post], but does not work
         post_by_id: PostByID,
-        audios: dict[int, "Audio"],
+        audios: dict[int, "Audio"],  # used in blocks
         images: ImageById,
         videos: dict[int, "Video"],
         audios_by_post_id: AudiosByPostID,
@@ -163,6 +164,35 @@ class QuerysetData:
             renditions_for_posts=Post.get_all_renditions_from_queryset(queryset),
             owner_username_by_id=owner_username_by_id,
         )
+
+
+class PostDetailRepository:
+    """
+    This class is a container for the data that is needed to render a post detail page.
+    """
+
+    def __init__(
+        self,
+        *,
+        template_base_dir: str,
+        blog: "Blog",
+        root_nav_links: LinkTuples,
+        comments_are_enabled: bool,
+        has_audio: bool,
+        page_url: str,
+        absolute_page_url: str,
+        owner_username: str,
+        blog_url: str,
+    ):
+        self.template_base_dir = template_base_dir
+        self.blog = blog
+        self.root_nav_links = root_nav_links
+        self.comments_are_enabled = comments_are_enabled
+        self.has_audio = has_audio
+        self.page_url = page_url
+        self.absolute_page_url = absolute_page_url
+        self.owner_username = owner_username
+        self.blog_url = blog_url
 
 
 class PostRepositoryForFeed(PostRepository):

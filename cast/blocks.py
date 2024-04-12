@@ -15,7 +15,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .models.repository import QuerysetData
+from .models.repository import AudioById, QuerysetData
 from .renditions import (
     Height,
     ImageForSlot,
@@ -317,8 +317,16 @@ class VideoChooserBlock(ChooserBlock):
         return super().bulk_to_python(values)
 
 
+class HasAudios(Protocol):
+    audios: AudioById
+
+
+class EmptyAudios:
+    audios: AudioById = {}
+
+
 class AudioChooserBlock(ChooserBlock):
-    queryset_data: QuerysetData | None = None
+    repository: HasAudios = EmptyAudios()
 
     @cached_property
     def target_model(self) -> type["Audio"]:
@@ -336,12 +344,11 @@ class AudioChooserBlock(ChooserBlock):
         return self.widget.get_value_data(value)
 
     def bulk_to_python(self, values):
-        if self.queryset_data is not None:
-            try:
-                return [self.queryset_data.audios[value] for value in values]
-            except KeyError:
-                # if fetching from cache fails, just return super().bulk_to_python
-                pass
+        try:
+            return [self.repository.audios[value] for value in values]
+        except KeyError:
+            # if fetching from cache fails, just return super().bulk_to_python
+            pass
         return super().bulk_to_python(values)
 
 
