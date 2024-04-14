@@ -44,16 +44,19 @@ from cast.blocks import (
 from cast.models import get_or_create_gallery
 
 from ..renditions import ImageType, RenditionFilters
+from ..views import HtmxHttpRequest
 from .repository import (
+    AudioById,
     EmptyRepository,
+    ImageById,
     LinkTuples,
-    PostRepository,
+    PostDetailRepository,
     PostRepositoryForFeed,
+    VideoById,
 )
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
-    from .audio import Audio
     from .index_pages import Blog, ContextDict, Podcast
 
 logger = logging.getLogger(__name__)
@@ -133,7 +136,9 @@ class HasPostDetails(Protocol):
     absolute_page_url: str
     owner_username: str
     blog_url: str
-    audio_items: list[tuple[int, "Audio"]]
+    audio_by_id: AudioById
+    video_by_id: VideoById
+    image_by_id: ImageById
 
 
 class Post(Page):
@@ -214,8 +219,6 @@ class Post(Page):
         it has a .blog attribute containing the model which has all the
         attributes like blog.comments_enabled etc.
         """
-        if hasattr(self, "_repository"):
-            return self._repository.blog
         return self.get_parent().blog
 
     def get_template_base_dir(self, request: HttpRequest) -> str:
@@ -314,31 +317,6 @@ class Post(Page):
     def get_url(self, request=None, current_site=None):
         return super().get_url(request=request, current_site=current_site)
 
-    # def get_context_without_database(
-    #     self, request: HttpRequest, context: ContextDict, repository: PostRepositoryForFeed
-    # ) -> ContextDict:
-    #     """
-    #     Get the context for the post without any database queries.
-    #     """
-    #     context["template_base_dir"] = repository.template_base_dir
-    #     blog = repository.blog
-    #     context["blog"] = blog
-    #     context["comments_are_enabled"] = self.get_comments_are_enabled(blog)
-    #     context["root_nav_links"] = repository.root_nav_links
-    #     context["has_audio"] = repository.has_audio_by_id[self.pk]
-    #     if context["render_for_feed"]:
-    #         # use absolute urls for feed
-    #         self.page_url = repository.absolute_page_url_by_id[self.pk]
-    #     else:
-    #         self.page_url = repository.page_url_by_id[self.pk]
-    #     context["owner_username"] = repository.owner_username_by_id[self.pk]
-    #     context["blog_url"] = repository.blog_url
-    #     context["audio_items"] = []
-    #     for audio_id in repository.audios_by_post_id.get(self.pk, []):
-    #         audio = repository.audios[audio_id]
-    #         context["audio_items"].append((audio_id, audio))
-    #     return context
-
     @staticmethod
     def get_context_from_repository(context: "ContextDict", repository: HasPostDetails) -> "ContextDict":
         context["template_base_dir"] = repository.template_base_dir
@@ -351,7 +329,7 @@ class Post(Page):
         context["absolute_page_url"] = repository.absolute_page_url
         context["owner_username"] = repository.owner_username
         context["blog_url"] = repository.blog_url
-        context["audio_items"] = repository.audio_items
+        context["audio_items"] = list(repository.audio_by_id.items())
         return context
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
@@ -369,23 +347,6 @@ class Post(Page):
         else:
             self.page_url = context["page_url"]
         return context
-        # if repository is not None and isinstance(repository, PostRepositoryForFeed):
-        #     return self.get_context_without_database(request, context, repository)
-        # # needed for blocks with themed templates
-        # context["template_base_dir"] = self.get_template_base_dir(request)
-        # blog = self.blog
-        # context["comments_are_enabled"] = self.get_comments_are_enabled(blog)
-        # context["blog"] = blog
-        # context["root_nav_links"] = [(p.get_url(), p.title) for p in blog.get_root().get_children().live()]
-        # context["has_audio"] = self.has_audio
-        # self.page_url = self.get_url(request=request)
-        # if self.owner is not None:
-        #     context["owner_username"] = self.owner.username
-        # else:
-        #     context["owner_username"] = "unknown"
-        # context["blog_url"] = blog.get_url(request=request)
-        # context["audio_items"] = self.media_lookup.get("audio", {}).items()
-        # return context
 
     @property
     def media_ids_from_db(self) -> TypeToIdSet:
@@ -557,7 +518,7 @@ class Post(Page):
     def get_description(
         self,
         *,
-        request: HttpRequest,
+        request: HtmxHttpRequest,
         render_detail: bool = False,
         escape_html: bool = True,
         remove_newlines: bool = True,
@@ -586,19 +547,16 @@ class Post(Page):
             return self._repository.site
         return super().get_site()
 
-    @staticmethod
-    def get_repository(kwargs: dict[str, Any]) -> PostRepository:
+    def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> PostDetailRepository:
         repository = kwargs.get("repository")
         if repository is not None:
             return repository
-        return EmptyRepository()
+        return PostDetailRepository.create_from_django_models(request=request, post=self)
 
-    def serve(self, request, *args, **kwargs):
-        kwargs["repository"] = repository = self.get_repository(kwargs)
-        if not isinstance(repository, EmptyRepository):
-            # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
-            self._repository = repository
-            kwargs["template_base_dir"] = repository.template_base_dir
+    def serve(self, request: HtmxHttpRequest, *args, **kwargs):
+        kwargs["repository"] = repository = self.get_repository(request, kwargs)
+        # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
+        kwargs["template_base_dir"] = repository.template_base_dir
         return super().serve(request, *args, **kwargs)
 
     def save(self, *args, **kwargs) -> None:

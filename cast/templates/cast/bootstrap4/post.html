@@ -20,7 +20,7 @@
 
 {% block meta %}
   {{ block.super }}
-  {% if page.blog.noindex %}
+  {% if blog.noindex %}
     <meta name="robots" content="noindex">
   {% endif %}
 {% endblock %}

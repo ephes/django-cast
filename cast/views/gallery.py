@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from django import forms
 from django.http import HttpResponse
@@ -31,7 +31,7 @@ class GalleryModalForm(forms.Form):
         return cleaned_data
 
 
-def get_prev_next_pk(image_pks: list[int], current_image_pk: int) -> tuple[Optional[int], Optional[int]]:
+def get_prev_next_pk(image_pks: list[int], current_image_pk: int) -> tuple[int | None, int | None]:
     """
     Given a list of image pks and the current image pk, return the prev and next image pk.
     """
@@ -59,7 +59,6 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
     image_pks = form.cleaned_data["image_pks"]
     current_image_pk = form.cleaned_data["current_image_pk"]
     block_id = form.cleaned_data["block_id"]
-    print("gallery_modal for current_image, image_pks and block_id: ", current_image_pk, image_pks)
     prev_pk, next_pk = get_prev_next_pk(image_pks, current_image_pk)
 
     images_to_fetch = [pk for pk in (prev_pk, current_image_pk, next_pk) if pk is not None]

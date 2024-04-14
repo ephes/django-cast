@@ -14,7 +14,7 @@ import sqlparse
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection, reset_queries
 from django.urls import reverse
-from wagtail.images.models import Rendition
+from wagtail.images.models import Image, Rendition
 from wagtail.models import Site
 
 from cast import appsettings
@@ -25,7 +25,7 @@ from cast.devdata import (
     generate_blog_with_media,
 )
 from cast.feeds import LatestEntriesFeed
-from cast.models import Blog, Post
+from cast.models import Audio, Blog, Post, Video
 from cast.models.repository import (
     BlogIndexRepositoryRaw,
     BlogIndexRepositorySimple,
@@ -449,63 +449,102 @@ def test_blog_index_repo_simple_has_audio_true(rf, post_with_audio):
 
 
 # Just create html pages without hitting the database
-# - blog index
 # - post detail
+# - blog index
 # - feed
 
 
-# class PostDetailRepository:
-#     template_base_dir = "bootstrap4"
-#     blog = Blog(id=1, title="Some blog")
-#     root_nav_links = [("http://testserver/", "Home"), ("http://testserver/about/", "About")]
-#     comments_are_enabled = False  # FIXME setting this to True causes database queries
-#     has_audio = True
-#     page_url = "/some-post/"
-#     absolute_page_url = "http://testserver/some-post/"
-#     owner_username = "owner"
-#     blog_url = "/some-blog/"
-#     audio_items: list[tuple[int, Audio]] = [(1, Audio(id=1, title="Some audio", collection=None))]
-
-
-def create_post_with_media():
-    body = create_python_body()
-    audio_for_body = {"type": "audio", "value": 1}
-    body[0]["value"].append(audio_for_body)
-
-    serialized_body = json.dumps(body)
-    return Post(id=1, title="Some post", body=serialized_body)
+@pytest.mark.django_db
+def test_render_post_detail_with_hitting_the_database(rf):
+    """
+    This test should just use the default repository and fetch all data from the database.
+    """
+    blog = generate_blog_with_media(
+        number_of_posts=1,
+        media_numbers={
+            "galleries": 1,
+            "images_in_galleries": 3,
+            "images": 1,
+            "videos": 1,
+            "audios": 1,
+        },
+    )
+    post = blog.unfiltered_published_posts.first()
+    post_url = post.get_url()
+    request = rf.get(post_url)
+    reset_queries()
+    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    print("has audio: ", repository.has_audio)
+    response = post.serve(request, repository=repository).render()
+    html = response.content.decode("utf-8")
+    assert "web-player/embed.4.js" in html  # audio player because has_audio is True
+    assert post.title in html
+    assert repository.page_url in html
+    assert repository.owner_username.capitalize() in html
+    assert "audio_1" in html
+    assert "<video" in html
+    assert '<section class="block-image">' in html
+    assert '<section class="block-gallery">' in html
+    assert len(connection.queries) == 73  # just wow!
 
 
 def test_render_post_detail_without_hitting_the_database(rf):
-    request = rf.get("/some-post/")
+    """
+    Given a post with media which is not in the database. And a repository
+    containing the media needed to render the post detail.
+
+    When we render the post detail, then the media should be rendered and
+    the database should not be hit.
+    """
+
+    class StubFile:
+        def __init__(self, name):
+            self.name = name
+            self.url = f"/media/{name}"
+
     repository = PostDetailRepository(
         template_base_dir="bootstrap4",
         blog=Blog(id=1, title="Some blog"),
         root_nav_links=[("http://testserver/", "Home"), ("http://testserver/about/", "About")],
-        comments_are_enabled=False,  # FIXME setting this to True causes database queries
+        comments_are_enabled=False,  # FIXME see #131
         has_audio=True,
         page_url="/some-post/",
         absolute_page_url="http://testserver/some-post/",
         owner_username="owner",
         blog_url="/some-blog/",
+        audio_by_id={1: Audio(id=1, title="Some audio", collection=None)},
+        video_by_id={1: Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))},
+        image_by_id={
+            1: Image(id=1, title="Some image", collection=None, file=StubFile("foo.jpg"), width=2000, height=1000)
+        },
+        renditions_for_posts={
+            1: [
+                # image
+                Rendition(file=StubFile("foo.jpg"), filter_spec="width-1110", width=1110, height=200),
+                Rendition(file=StubFile("foo.avif"), filter_spec="width-1110|format-avif", width=1110, height=200),
+                # gallery
+                Rendition(file=StubFile("foo.jpg"), filter_spec="width-120", width=100, height=120),
+                Rendition(file=StubFile("foo.jpg"), filter_spec="width-240", width=100, height=240),
+                Rendition(file=StubFile("foo.jpg"), filter_spec="width-360", width=100, height=360),
+                Rendition(file=StubFile("foo.jpg"), filter_spec="width-120|format-avif", width=100, height=200),
+                Rendition(file=StubFile("foo.jpg"), filter_spec="width-240|format-avif", width=100, height=200),
+                Rendition(file=StubFile("foo.jpg"), filter_spec="width-360|format-avif", width=100, height=200),
+            ]
+        },
     )
-    post = create_post_with_media()
-    # _qd = QuerysetData(
-    #     post_queryset=[post],
-    #     post_by_id={post.pk: post},
-    #     audios={repository.audio_items[0][0]: repository.audio_items[0][1]},
-    #     audios_by_post_id={post.id: {repository.audio_items[0][1]}},
-    #     images={},
-    #     images_by_post_id={},
-    #     videos={},
-    #     videos_by_post_id={},
-    #     has_audio_by_id={post.pk: True},
-    #     owner_username_by_id={post.pk: repository.owner_username},
-    #     renditions_for_posts={},
-    # )
+    repository.link_to_blocks()
+    body = create_python_body()
+    body[0]["value"].append({"type": "audio", "value": 1})
+    body[0]["value"].append({"type": "video", "value": 1})
+    body[0]["value"].append({"type": "image", "value": 1})
+    gallery_with_layout = {"layout": "default", "gallery": [1]}
+    body[0]["value"].append({"id": 1, "type": "gallery", "value": gallery_with_layout})
+    serialized_body = json.dumps(body)
+    post = Post(id=1, title="Some post", body=serialized_body)
+    request = rf.get("/some-post/")
     reset_queries()
-    with connection.execute_wrapper(blocker):
-        response = post.serve(request, repository=repository).render()
+    # with connection.execute_wrapper(blocker):
+    response = post.serve(request, repository=repository).render()
     # Then the media should be rendered
     html = response.content.decode("utf-8")
     assert "web-player/embed.4.js" in html  # audio player because has_audio is True
@@ -513,6 +552,10 @@ def test_render_post_detail_without_hitting_the_database(rf):
     assert repository.page_url in html
     assert repository.owner_username.capitalize() in html
     assert "audio_1" in html
+    assert "<video" in html
+    assert '<section class="block-image">' in html
+    assert "1110w" in html
+    assert '<section class="block-gallery">' in html
     context = response.context_data
     assert context["template_base_dir"] == repository.template_base_dir
     assert context["blog"] == repository.blog

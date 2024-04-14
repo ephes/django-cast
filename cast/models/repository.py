@@ -14,20 +14,30 @@ from ..filters import PostFilterset
 from ..views import HtmxHttpRequest
 
 if TYPE_CHECKING:
+    from cast.blocks import (
+        AudioChooserBlock,
+        GalleryBlockWithLayout,
+        ImageChooserBlock,
+        VideoChooserBlock,
+    )
     from cast.models import Audio, Blog, Post, Video
 
 
-PostByID = dict[int, "Post"]
-PageUrlByID = dict[int, str]
-HasAudioByID = dict[int, bool]
-AudiosByPostID = dict[int, set["Audio"]]
-AudioById = dict[int, "Audio"]
-VideosByPostID = dict[int, set["Video"]]
-ImagesByPostID = dict[int, set["Image"]]
-ImageById = dict[int, Image]
-LinkTuples = list[tuple[str, str]]
-RenditionsForPost = dict[int, list[Rendition]]
-SerializedRenditions = dict[int, list[dict]]
+PostByID: TypeAlias = dict[int, "Post"]
+PageUrlByID: TypeAlias = dict[int, str]
+HasAudioByID: TypeAlias = dict[int, bool]
+AudiosByPostID: TypeAlias = dict[int, set["Audio"]]
+AudioById: TypeAlias = dict[int, "Audio"]
+VideosByPostID: TypeAlias = dict[int, set["Video"]]
+VideoById: TypeAlias = dict[int, "Video"]
+ImagesByPostID: TypeAlias = dict[int, set["Image"]]
+ImageById: TypeAlias = dict[int, Image]
+RenditionsForPosts: TypeAlias = dict[int, list[Rendition]]
+LinkTuples: TypeAlias = list[tuple[str, str]]
+RenditionsForPost: TypeAlias = dict[int, list[Rendition]]
+SerializedRenditions: TypeAlias = dict[int, list[dict]]
+if TYPE_CHECKING:
+    CastBlock: TypeAlias = "AudioChooserBlock" | "VideoChooserBlock" | "ImageChooserBlock" | "GalleryBlockWithLayout"
 
 
 class PostRepository:
@@ -50,6 +60,19 @@ class EmptyRepository(PostRepository):
         self.image_by_id = {}
         self.blog = Blog()
         self.post_queryset = Post.objects.none()
+
+
+class BlockRegistry:
+    blocks: list["CastBlock"] = []
+
+    @classmethod
+    def register(cls, block: "CastBlock") -> None:
+        cls.blocks.append(block)
+
+    @classmethod
+    def set_repository_for_blocks(cls, repository: Any) -> None:
+        for block in cls.blocks:
+            block.repository = repository
 
 
 class QuerysetData:
@@ -183,6 +206,10 @@ class PostDetailRepository:
         absolute_page_url: str,
         owner_username: str,
         blog_url: str,
+        audio_by_id: AudioById,
+        video_by_id: VideoById,
+        image_by_id: ImageById,
+        renditions_for_posts: RenditionsForPost,
     ):
         self.template_base_dir = template_base_dir
         self.blog = blog
@@ -193,6 +220,48 @@ class PostDetailRepository:
         self.absolute_page_url = absolute_page_url
         self.owner_username = owner_username
         self.blog_url = blog_url
+        self.audio_by_id = audio_by_id
+        self.video_by_id = video_by_id
+        self.image_by_id = image_by_id
+        self.renditions_for_posts = renditions_for_posts
+
+    def link_to_blocks(self):
+        BlockRegistry.set_repository_for_blocks(self)
+
+    @classmethod
+    def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailRepository":
+        # blog = post.blog
+        # site = blog.get_site()
+        # root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
+        # page_url = post.get_url()
+        # absolute_page_url = post.full_url
+        # owner_username = post.owner.username
+        # blog_url = blog.get_url()
+        # has_audio = post.has_audio
+        # comments_are_enabled = post.comments_enabled
+        # audio_by_id = {audio.pk: audio for audio in post.audios.all()}
+        # video_by_id = {video.pk: video for video in post.videos.all()}
+        # image_by_id = {image.pk: image for image_type, image in post.get_all_images()}
+        # renditions_for_posts = post.get_all_renditions()
+        blog = post.blog
+        owner_username = "unknown"
+        if post.owner is not None:
+            owner_username = post.owner.username
+        return cls(
+            template_base_dir=post.get_template_base_dir(request),
+            blog=blog,
+            comments_are_enabled=post.get_comments_are_enabled(blog),
+            root_nav_links=[(p.get_url(), p.title) for p in blog.get_root().get_children().live()],
+            has_audio=post.has_audio,
+            page_url=post.get_url(request=request),
+            absolute_page_url=post.get_full_url(request=request),
+            owner_username=owner_username,
+            blog_url=blog.get_url(request=request),
+            audio_by_id=post.media_lookup.get("audio", {}),
+            video_by_id=post.media_lookup.get("video", {}),
+            image_by_id=post.media_lookup.get("image", {}),
+            renditions_for_posts=post.get_all_renditions_from_queryset([post]),
+        )
 
 
 class PostRepositoryForFeed(PostRepository):

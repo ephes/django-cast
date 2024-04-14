@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Protocol, TypeAlias, Union
+from typing import TYPE_CHECKING, Protocol, Union
 
 from django.db.models import QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -15,7 +15,14 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .models.repository import AudioById, QuerysetData
+from .models.repository import (
+    AudioById,
+    BlockRegistry,
+    ImageById,
+    QuerysetData,
+    RenditionsForPosts,
+    VideoById,
+)
 from .renditions import (
     Height,
     ImageForSlot,
@@ -92,21 +99,17 @@ def get_srcset_images_for_slots(
     return images_for_slots
 
 
-ImageByID: TypeAlias = dict[int, Image]
-RenditionsForPosts: TypeAlias = dict[int, list[Rendition]]
-
-
 class HasImagesAndRenditions(Protocol):
-    image_by_id: ImageByID
+    image_by_id: ImageById
     renditions_for_posts: RenditionsForPosts
 
 
-class ImageProxyRepository:
+class EmptyImageRepository:
     """
     A repository that can be used if no repository was set.
     """
 
-    image_by_id: ImageByID = {}
+    image_by_id: ImageById = {}
     renditions_for_posts: RenditionsForPosts = {}
 
 
@@ -127,7 +130,7 @@ class CastImageChooserBlock(ImageChooserBlock):
 
     def get_context(self, image_or_pk: int | Image, parent_context: dict | None = None) -> dict:
         if parent_context is None:
-            parent_context = {"repository": ImageProxyRepository()}
+            parent_context = {"repository": EmptyImageRepository()}
         if isinstance(image_or_pk, Image):
             # FIXME: dunno why this is here :/ 2024-03-14 Jochen
             image = image_or_pk
@@ -247,7 +250,7 @@ class GalleryBlockWithLayout(StructBlock):
         ],
         default="default",
     )
-    queryset_data: QuerysetData | None = None
+    repository: HasImagesAndRenditions = EmptyImageRepository()
 
     class Meta:
         icon = "image"
@@ -268,29 +271,36 @@ class GalleryBlockWithLayout(StructBlock):
             value = self._get_images_from_queryset_data([value], self.queryset_data)[0]
         return prepare_context_for_gallery(value["gallery"], context)
 
-    def _get_images_from_queryset_data(self, values, queryset_data: QuerysetData):
+    def _get_images_from_repository(self, values, repository: HasImagesAndRenditions):
         images = []
         for item in values[0]["gallery"]:
             if isinstance(item, dict) and item.get("type") == "item":
-                images.append(queryset_data.images[item["value"]])
+                images.append(repository.image_by_id[item["value"]])
             elif isinstance(item, int):
-                images.append(queryset_data.images[item])
+                images.append(repository.image_by_id[item])
         values[0]["gallery"] = images
         return values
 
     def bulk_to_python(self, values):
         """Overwrite this method to be able to use the images from queryset_data."""
-        if self.queryset_data is not None:
-            try:
-                return self._get_images_from_queryset_data(values, self.queryset_data)
-            except KeyError:
-                # if fetching from cache fails, just return super().bulk_to_python
-                pass
+        try:
+            return self._get_images_from_repository(values, self.repository)
+        except KeyError:
+            # if fetching from cache fails, just return super().bulk_to_python
+            pass
         return super().bulk_to_python(values)
 
 
+class HasVideos(Protocol):
+    video_by_id: VideoById
+
+
+class EmptyVideos:
+    video_by_id: VideoById = {}
+
+
 class VideoChooserBlock(ChooserBlock):
-    queryset_data: QuerysetData | None = None
+    repository: HasVideos = EmptyVideos()
 
     @cached_property
     def target_model(self) -> type["Video"]:
@@ -308,21 +318,20 @@ class VideoChooserBlock(ChooserBlock):
         return self.widget.get_value_data(value)
 
     def bulk_to_python(self, values):
-        if self.queryset_data is not None:
-            try:
-                return [self.queryset_data.videos[value] for value in values]
-            except KeyError:
-                # if fetching from cache fails, just return super().bulk_to_python
-                pass
+        try:
+            return [self.repository.video_by_id[value] for value in values]
+        except KeyError:
+            # if fetching from cache fails, just return super().bulk_to_python
+            pass
         return super().bulk_to_python(values)
 
 
 class HasAudios(Protocol):
-    audios: AudioById
+    audio_by_id: AudioById
 
 
 class EmptyAudios:
-    audios: AudioById = {}
+    audio_by_id: AudioById = {}
 
 
 class AudioChooserBlock(ChooserBlock):
@@ -345,7 +354,7 @@ class AudioChooserBlock(ChooserBlock):
 
     def bulk_to_python(self, values):
         try:
-            return [self.repository.audios[value] for value in values]
+            return [self.repository.audio_by_id[value] for value in values]
         except KeyError:
             # if fetching from cache fails, just return super().bulk_to_python
             pass
@@ -375,4 +384,11 @@ def register_blocks_for_queryset_data() -> None:
     QuerysetData.register_block(ImageChooserBlock)
 
 
+def register_blocks() -> None:
+    BlockRegistry.register(AudioChooserBlock)
+    BlockRegistry.register(VideoChooserBlock)
+    BlockRegistry.register(GalleryBlockWithLayout)
+
+
 register_blocks_for_queryset_data()
+register_blocks()
