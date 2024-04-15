@@ -19,7 +19,6 @@ from .models.repository import (
     AudioById,
     BlockRegistry,
     ImageById,
-    QuerysetData,
     RenditionsForPosts,
     VideoById,
 )
@@ -377,18 +376,10 @@ class CodeBlock(StructBlock):
             return ""
 
 
-def register_blocks_for_queryset_data() -> None:
-    QuerysetData.register_block(GalleryBlockWithLayout)
-    QuerysetData.register_block(VideoChooserBlock)
-    QuerysetData.register_block(AudioChooserBlock)
-    QuerysetData.register_block(ImageChooserBlock)
-
-
 def register_blocks() -> None:
     BlockRegistry.register(AudioChooserBlock)
     BlockRegistry.register(VideoChooserBlock)
     BlockRegistry.register(GalleryBlockWithLayout)
 
 
-register_blocks_for_queryset_data()
 register_blocks()

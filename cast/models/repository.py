@@ -37,7 +37,12 @@ LinkTuples: TypeAlias = list[tuple[str, str]]
 RenditionsForPost: TypeAlias = dict[int, list[Rendition]]
 SerializedRenditions: TypeAlias = dict[int, list[dict]]
 if TYPE_CHECKING:
-    CastBlock: TypeAlias = "AudioChooserBlock" | "VideoChooserBlock" | "ImageChooserBlock" | "GalleryBlockWithLayout"
+    CastBlock: TypeAlias = (
+        type["AudioChooserBlock"]
+        | type["VideoChooserBlock"]
+        | type["ImageChooserBlock"]
+        | type["GalleryBlockWithLayout"]
+    )
 
 
 class PostRepository:
