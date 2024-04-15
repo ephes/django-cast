@@ -17,7 +17,6 @@ from django.urls import reverse
 from wagtail.images.models import Image, Rendition
 from wagtail.models import Site
 
-from cast import appsettings
 from cast.devdata import (
     create_blog,
     create_post,
@@ -324,17 +323,9 @@ def test_render_blog_index_without_hitting_the_database(rf, paginated_repo):
     assert len(connection.queries) == 0
 
 
-@pytest.fixture()
-def use_normal_blog_index_repo():
-    previous = appsettings.CAST_BLOG_INDEX_REPOSITORY
-    appsettings.CAST_BLOG_INDEX_REPOSITORY = "normal"
-    yield appsettings.CAST_BLOG_INDEX_REPOSITORY
-    appsettings.CAST_BLOG_INDEX_REPOSITORY = previous
-
-
 @pytest.mark.django_db
-def test_use_normal_blog_index_repo_setting(rf, post, settings, use_normal_blog_index_repo):
-    # Given post data setting set to True
+def test_render_blog_index_with_django_models_repository(rf, post, settings):
+    # Given a blog with a post
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = post.blog
     author_name = post.owner.username.capitalize()

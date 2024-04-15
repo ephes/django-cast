@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
 
 from django import forms
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.http import HttpRequest, HttpResponse
@@ -63,6 +64,7 @@ logger = logging.getLogger(__name__)
 
 
 comment_model = get_comment_model()
+user_model = get_user_model()
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -341,6 +343,7 @@ class Post(Page):
         context["render_detail"] = kwargs.get("render_detail", False)
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
         context = self.get_context_from_repository(context, repository)
+        self.owner = user_model(username=context["owner_username"])
         if context["render_for_feed"]:
             # use absolute urls for feed
             self.page_url = context["absolute_page_url"]

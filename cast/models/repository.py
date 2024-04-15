@@ -415,7 +415,6 @@ class BlogIndexRepository:
     def __init__(
         self,
         *,
-        # site: Site,
         template_base_dir: str,
         filterset: Any,
         queryset_data: QuerysetData | None = None,
@@ -423,7 +422,6 @@ class BlogIndexRepository:
         root_nav_links: LinkTuples,
         use_audio_player: bool = False,
     ):
-        # self.site = site
         self.template_base_dir = template_base_dir
         self.filterset = filterset
         self.pagination_context = pagination_context
@@ -637,7 +635,6 @@ class BlogIndexRepository:
         queryset = pagination_context["object_list"]
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
         return {
-            # "site": site,
             "template_base_dir": template_base_dir,
             "filterset": filterset,
             "pagination_context": pagination_context,
@@ -670,12 +667,10 @@ class BlogIndexRepository:
         if site is not None:
             for page in site.root_page.get_children().live():
                 root_nav_links.append((page.get_url(request), page.title))
-        kwargs = {
-            "filterset": filterset,
-            "pagination_context": pagination_context,
-            "template_base_dir": template_base_dir,
-            "use_audio_player": use_audio_player,
-            "root_nav_links": root_nav_links,
-        }
-
-        return cls(**kwargs)  # type: ignore
+        return cls(
+            filterset=filterset,
+            pagination_context=pagination_context,
+            template_base_dir=template_base_dir,
+            use_audio_player=use_audio_player,
+            root_nav_links=root_nav_links,
+        )

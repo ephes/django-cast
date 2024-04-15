@@ -11,7 +11,7 @@
     </h2>
     <!-- link is on one line to avoid underlined whitespace -->
     <a href="{{ page.page_url }}"><time date-time='{{ page.visible_date|date:"c" }}'>{{ page.visible_date|date }}</time>,</a>
-    <span class="author">{{ owner_username | title}}</span>
+    <span class="author">{{ page.owner.username | title}}</span>
   </header>
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
