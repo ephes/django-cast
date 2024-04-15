@@ -265,12 +265,6 @@ class GalleryBlockWithLayout(StructBlock):
                 layout = layout_from_value
         return get_gallery_block_template(default_template_name, context, layout=layout)
 
-    def get_context(self, value, parent_context: dict | None = None):
-        context = super().get_context(value, parent_context=parent_context)
-        if isinstance(value["gallery"][0], dict) and self.queryset_data is not None:
-            value = self._get_images_from_queryset_data([value], self.queryset_data)[0]
-        return prepare_context_for_gallery(value["gallery"], context)
-
     def _get_images_from_repository(self, values, repository: HasImagesAndRenditions):
         images = []
         for item in values[0]["gallery"]:
@@ -282,13 +276,19 @@ class GalleryBlockWithLayout(StructBlock):
         return values
 
     def bulk_to_python(self, values):
-        """Overwrite this method to be able to use the images from queryset_data."""
+        """Overwrite this method to be able to use the images from repository."""
         try:
             return self._get_images_from_repository(values, self.repository)
         except KeyError:
             # if fetching from cache fails, just return super().bulk_to_python
             pass
         return super().bulk_to_python(values)
+
+    def get_context(self, value, parent_context: dict | None = None):
+        context = super().get_context(value, parent_context=parent_context)
+        if isinstance(value["gallery"][0], dict) and self.repository is not None:
+            value = self._get_images_from_repository([value], self.repository)[0]
+        return prepare_context_for_gallery(value["gallery"], context)
 
 
 class HasVideos(Protocol):
