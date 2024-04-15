@@ -93,9 +93,9 @@ class QuerysetData:
         *,
         post_queryset: Any,  # FIXME: Post queryset or list[Post], but does not work
         post_by_id: PostByID,
-        audios: dict[int, "Audio"],  # used in blocks
+        audios: AudioById,  # used in blocks
         images: ImageById,
-        videos: dict[int, "Video"],
+        videos: VideoById,
         audios_by_post_id: AudiosByPostID,
         videos_by_post_id: VideosByPostID,
         images_by_post_id: ImagesByPostID,
@@ -115,7 +115,6 @@ class QuerysetData:
         self.has_audio_by_id = has_audio_by_id
         self.renditions_for_posts = renditions_for_posts
         self.patch_page_link_handler(self.post_by_id)
-        self.set_queryset_data_for_blocks()
 
     @staticmethod
     def patch_page_link_handler(post_by_id):
@@ -132,19 +131,6 @@ class QuerysetData:
 
         PageLinkHandler.get_instance = build_cached_get_instance(post_by_id)
         return PageLinkHandler
-
-    @classmethod
-    def register_block(cls, block: Any) -> None:
-        cls.registered_blocks.append(block)
-
-    def set_queryset_data_for_blocks(self):
-        for block in self.registered_blocks:
-            block.queryset_data = self
-
-    @classmethod
-    def unset_queryset_data_for_blocks(cls):
-        for block in cls.registered_blocks:
-            block.queryset_data = None
 
     @classmethod
     def create_from_post_queryset(cls, queryset: QuerySet["Post"]) -> "QuerysetData":
@@ -256,7 +242,7 @@ class PostDetailRepository:
         )
 
 
-class PostRepositoryForFeed(PostRepository):
+class FeedRepository:
     def __init__(
         self,
         *,  # no positional arguments
@@ -303,7 +289,7 @@ class PostRepositoryForFeed(PostRepository):
         blog: "Blog",
         template_base_dir: str,
         post_queryset: QuerySet["Post"],
-    ) -> "PostRepositoryForFeed":
+    ) -> "FeedRepository":
         queryset_data = QuerysetData.create_from_post_queryset(post_queryset)
         if site is None:
             site = Site.find_for_request(request)
@@ -332,6 +318,25 @@ class PostRepositoryForFeed(PostRepository):
             page_url_by_id=page_url_by_id,
             absolute_page_url_by_id=absolute_page_url_by_id,
             blog_url=blog.get_url(request=request, current_site=site),
+        )
+
+    def get_post_detail_repository(self, post: "Post") -> PostDetailRepository:
+        post_id = post.id
+        blog = self.blog
+        return PostDetailRepository(
+            template_base_dir=self.template_base_dir,
+            blog=blog,
+            root_nav_links=self.root_nav_links,
+            comments_are_enabled=post.get_comments_are_enabled(blog),
+            has_audio=self.has_audio_by_id[post_id],
+            page_url=self.page_url_by_id[post_id],
+            absolute_page_url=self.absolute_page_url_by_id[post_id],
+            owner_username=self.owner_username_by_id[post_id],
+            blog_url=self.blog_url,
+            audio_by_id=self.audios,
+            video_by_id=self.videos,
+            image_by_id=self.images,
+            renditions_for_posts=self.renditions_for_posts,
         )
 
 
@@ -535,7 +540,6 @@ class BlogIndexRepository:
         # queryset data
         queryset = data["pagination_context"]["object_list"]
         del data["pagination_context"]["object_list"]  # not cachable
-        QuerysetData.unset_queryset_data_for_blocks()
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
         data = BlogIndexRepository.add_queryset_data(data, queryset_data)
 

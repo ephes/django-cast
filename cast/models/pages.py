@@ -1,7 +1,7 @@
 import logging
 import uuid
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast
 
 from django import forms
 from django.conf import settings
@@ -52,7 +52,6 @@ from .repository import (
     ImageById,
     LinkTuples,
     PostDetailRepository,
-    PostRepositoryForFeed,
     VideoById,
 )
 from .theme import TemplateBaseDirectory
@@ -521,16 +520,19 @@ class Post(Page):
     def get_description(
         self,
         *,
-        request: HtmxHttpRequest,
+        request: HttpRequest,
         render_detail: bool = False,
         escape_html: bool = True,
         remove_newlines: bool = True,
-        repository: PostRepositoryForFeed | None = None,
+        repository: PostDetailRepository | None = None,
     ) -> SafeText:
         """
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
         """
+        request = cast(HtmxHttpRequest, request)
+        if repository is None:
+            repository = self.get_repository(request, {})
         self._local_template_name = "post_body.html"
         description = self.serve(
             request, render_detail=render_detail, repository=repository, render_for_feed=True

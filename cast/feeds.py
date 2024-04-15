@@ -2,14 +2,14 @@ import logging
 from datetime import datetime
 
 from django.contrib.syndication.views import Feed
-from django.db.models import QuerySet
+from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
-from django.utils.safestring import SafeText
+from django.utils.safestring import SafeText, mark_safe
 
 from .models import Audio, Blog, Episode, Podcast, Post
-from .models.repository import PostRepositoryForFeed
+from .models.repository import FeedRepository
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class LatestEntriesFeed(Feed):
     object: Blog
     request: HttpRequest
 
-    def __init__(self, repository: PostRepositoryForFeed | None = None):
+    def __init__(self, repository: FeedRepository | None = None):
         super().__init__()
         self.predefined_repository = repository
 
@@ -46,7 +46,7 @@ class LatestEntriesFeed(Feed):
             self.repository = self.predefined_repository
         else:
             queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
-            self.repository = PostRepositoryForFeed.create_from_post_queryset(
+            self.repository = FeedRepository.create_from_post_queryset(
                 request=self.request,
                 blog=blog,
                 post_queryset=queryset,
@@ -54,17 +54,20 @@ class LatestEntriesFeed(Feed):
             )
         return queryset
 
-    def item_title(self, item) -> SafeText:
-        return item.title
+    def item_title(self, post: Model) -> SafeText:
+        assert isinstance(post, Post)
+        return mark_safe(post.title)
 
-    def item_description(self, item) -> SafeText:
+    def item_description(self, post: Model) -> SafeText:
         # def blocker(*args):
         #     raise Exception("No database access allowed here.")
         # with connection.execute_wrapper(blocker):
-        item.description = item.get_description(
-            request=self.request, render_detail=True, escape_html=False, repository=self.repository
+        assert isinstance(post, Post)
+        repository = self.repository.get_post_detail_repository(post)
+        post.description = post.get_description(
+            request=self.request, render_detail=True, escape_html=False, repository=repository
         )
-        return item.description
+        return post.description
 
     def item_link(self, item) -> SafeText:
         return item.get_full_url()
@@ -173,7 +176,7 @@ class PodcastFeed(Feed):
     object: Podcast
     request: HttpRequest
 
-    def __init__(self, repository: PostRepositoryForFeed | None = None):
+    def __init__(self, repository: FeedRepository | None = None):
         super().__init__()
         self.predefined_repository = repository
 
@@ -212,7 +215,7 @@ class PodcastFeed(Feed):
         queryset = (
             Episode.objects.live().descendant_of(podcast).filter(podcast_audio__isnull=False).order_by("-visible_date")
         )
-        self.repository = PostRepositoryForFeed.create_from_post_queryset(
+        self.repository = FeedRepository.create_from_post_queryset(
             request=self.request,
             blog=podcast,
             post_queryset=queryset,

@@ -27,8 +27,8 @@ from cast.feeds import LatestEntriesFeed
 from cast.models import Audio, Blog, Post, Video
 from cast.models.repository import (
     BlogIndexRepository,
+    FeedRepository,
     PostDetailRepository,
-    PostRepositoryForFeed,
     QuerysetData,
     get_facet_choices,
     serialize_renditions,
@@ -54,7 +54,7 @@ def debug_settings(settings):
 @pytest.mark.django_db
 def test_post_data_repr(rf, blog, site):
     request = rf.get("/")
-    post_data = PostRepositoryForFeed.create_from_post_queryset(
+    post_data = FeedRepository.create_from_post_queryset(
         request=request, blog=blog, site=site, post_queryset=Post.objects.none(), template_base_dir="bootstrap4"
     )
     assert repr(post_data) == "PostData(renditions_for_posts=0, template_base_dir=bootstrap4)"
@@ -90,7 +90,7 @@ def test_render_empty_post_without_hitting_the_database(rf):
         post_queryset=[post],
         owner_username_by_id={post.pk: "owner"},
     )
-    repository = PostRepositoryForFeed(
+    repository = FeedRepository(
         site=object(),
         blog=None,
         root_nav_links=root_nav_links,
@@ -136,7 +136,7 @@ def linked_posts():
         post_queryset=list[source],
         owner_username_by_id={source.pk: source.owner.username, target.pk: target.owner.username},
     )
-    repository = PostRepositoryForFeed(
+    repository = FeedRepository(
         site=site,
         blog=blog,
         root_nav_links=root_nav_links,
@@ -149,7 +149,7 @@ def linked_posts():
     class LinkedPosts(NamedTuple):
         source: Post
         target: Post
-        repository: PostRepositoryForFeed
+        repository: FeedRepository
 
     linked_posts = LinkedPosts(source=source, target=target, repository=repository)
     return linked_posts
@@ -175,14 +175,14 @@ def get_media_post(rf, blog):
     post = blog.unfiltered_published_posts.first()
     _ = post.serve(rf.get("/")).render()  # force renditions to be created
     post_queryset = blog.unfiltered_published_posts
-    repository = PostRepositoryForFeed.create_from_post_queryset(
+    repository = FeedRepository.create_from_post_queryset(
         request=rf.get("/"), blog=blog, post_queryset=post_queryset, template_base_dir="bootstrap4"
     )
 
     class MediaPost(NamedTuple):
         post: Post
         blog: Blog
-        repository: PostRepositoryForFeed
+        repository: FeedRepository
 
     return MediaPost(post=post, blog=blog, repository=repository)
 
@@ -249,24 +249,43 @@ def test_render_media_post_without_hitting_the_database(rf, media_post):
     assert len(connection.queries) == 0
 
 
+@pytest.fixture
+def post_for_feed(rf, settings):
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    blog = generate_blog_with_media(number_of_posts=1)
+    post = blog.unfiltered_published_posts.first()
+    _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    teardown_paths = [Path(post.videos.first().original.path)]
+    yield post
+    # teardown - remove the files created during the test
+    for path in teardown_paths:
+        if path.exists():
+            path.unlink()
+
+
 @pytest.mark.django_db
-def test_render_feed_without_hitting_the_database(rf, media_post):
-    # Set up the cache
-    media_post.repository.queryset_data.set_queryset_data_for_blocks()
+def test_render_feed_without_hitting_the_database(rf, post_for_feed):
     # Given a post with media and a feed
-    feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": media_post.blog.slug})
+    post = post_for_feed
+    blog = post.blog
+    post_queryset = blog.unfiltered_published_posts
+    repository = FeedRepository.create_from_post_queryset(
+        request=rf.get("/"), blog=blog, post_queryset=post_queryset, template_base_dir="bootstrap4"
+    )
+    # Given a post with media and a feed
+    feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug})
     # When we render the feed
     request = rf.get(feed_url)
-    view = LatestEntriesFeed(repository=media_post.repository)
+    view = LatestEntriesFeed(repository=repository)
     # first call is just to populate SITE_CACHE
-    view(request, slug=media_post.blog.slug)
+    view(request, slug=blog.slug)
     reset_queries()
     # now count the queries
     # with connection.execute_wrapper(blocker):
-    response = view(request, slug=media_post.blog.slug)
+    response = view(request, slug=blog.slug)
     # Then the media should be rendered
     html = response.content.decode("utf-8")
-    assert media_post.post.title in html
+    assert post.title in html
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0
