@@ -230,19 +230,6 @@ class PostDetailRepository:
 
     @classmethod
     def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailRepository":
-        # blog = post.blog
-        # site = blog.get_site()
-        # root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
-        # page_url = post.get_url()
-        # absolute_page_url = post.full_url
-        # owner_username = post.owner.username
-        # blog_url = blog.get_url()
-        # has_audio = post.has_audio
-        # comments_are_enabled = post.comments_enabled
-        # audio_by_id = {audio.pk: audio for audio in post.audios.all()}
-        # video_by_id = {video.pk: video for video in post.videos.all()}
-        # image_by_id = {image.pk: image for image_type, image in post.get_all_images()}
-        # renditions_for_posts = post.get_all_renditions()
         blog = post.blog
         owner_username = "unknown"
         if post.owner is not None:
@@ -398,7 +385,33 @@ def rendition_to_dict(rendition):
     }
 
 
-class BlogIndexRepository(PostRepository):
+def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedRenditions:
+    renditions = {}
+    for post_pk, renditions_for_post in renditions_for_posts.items():
+        renditions[post_pk] = [rendition_to_dict(rendition) for rendition in renditions_for_post]
+    return renditions
+
+
+def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPost:
+    return {
+        post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
+    }
+
+
+Choice: TypeAlias = tuple[str, str]
+
+
+class HasChoices(Protocol):
+    choices: Iterable[Choice]
+
+
+def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
+    if field_name in fields:
+        return [(k, v) for k, v in fields[field_name].choices if k != ""]
+    return []
+
+
+class BlogIndexRepository:
     def __init__(
         self,
         *,
@@ -432,34 +445,6 @@ class BlogIndexRepository(PostRepository):
         else:
             self.image_by_id = {}
 
-
-def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedRenditions:
-    renditions = {}
-    for post_pk, renditions_for_post in renditions_for_posts.items():
-        renditions[post_pk] = [rendition_to_dict(rendition) for rendition in renditions_for_post]
-    return renditions
-
-
-def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPost:
-    return {
-        post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
-    }
-
-
-Choice: TypeAlias = tuple[str, str]
-
-
-class HasChoices(Protocol):
-    choices: Iterable[Choice]
-
-
-def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
-    if field_name in fields:
-        return [(k, v) for k, v in fields[field_name].choices if k != ""]
-    return []
-
-
-class BlogIndexRepositoryRaw(BlogIndexRepository):
     @staticmethod
     def add_site_raw(data: dict[str, Any]) -> dict:
         site_statement = """
@@ -531,8 +516,8 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         blog: "Blog",
     ) -> dict:
         data: dict[str, Any] = {}
-        data = BlogIndexRepositoryRaw.add_site_raw(data)
-        data = BlogIndexRepositoryRaw.add_root_nav_links(data)
+        data = BlogIndexRepository.add_site_raw(data)
+        data = BlogIndexRepository.add_root_nav_links(data)
         data["template_base_dir"] = blog.get_template_base_dir(request)
 
         # filters and pagination
@@ -549,7 +534,7 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         del data["pagination_context"]["object_list"]  # not cachable
         QuerysetData.unset_queryset_data_for_blocks()
         queryset_data = QuerysetData.create_from_post_queryset(queryset)
-        data = BlogIndexRepositoryRaw.add_queryset_data(data, queryset_data)
+        data = BlogIndexRepository.add_queryset_data(data, queryset_data)
 
         # page_url by id
         page_url_by_id: PageUrlByID = {}
@@ -566,7 +551,7 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         cls,
         *,
         data: dict[str, Any],
-    ) -> "BlogIndexRepositoryRaw":
+    ) -> "BlogIndexRepository":
         """
         This method recreates usable models from the cachable data.
         """
@@ -666,13 +651,11 @@ class BlogIndexRepositoryRaw(BlogIndexRepository):
         *,
         request: HtmxHttpRequest,
         blog: "Blog",
-    ) -> "BlogIndexRepositoryRaw":
-        return cls(**BlogIndexRepositoryRaw.data_for_blog_index(request=request, blog=blog))
+    ) -> "BlogIndexRepository":
+        return cls(**BlogIndexRepository.data_for_blog_index(request=request, blog=blog))
 
-
-class BlogIndexRepositorySimple(BlogIndexRepository):
     @classmethod
-    def create_from_blog(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexRepositorySimple":
+    def create_from_django_models(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexRepository":
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
         pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)

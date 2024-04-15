@@ -25,11 +25,7 @@ from cast.models.itunes import ItunesArtWork
 
 from ..views import HtmxHttpRequest
 from .pages import Post
-from .repository import (
-    BlogIndexRepository,
-    BlogIndexRepositoryRaw,
-    BlogIndexRepositorySimple,
-)
+from .repository import BlogIndexRepository
 from .theme import get_template_base_dir, get_template_base_dir_choices
 
 logger = logging.getLogger(__name__)
@@ -268,9 +264,9 @@ class Blog(Page):
         if "repository" in kwargs:
             return kwargs["repository"]
         if appsettings.CAST_BLOG_INDEX_REPOSITORY == "raw":
-            data = BlogIndexRepositoryRaw.data_for_blog_index_cachable(request=request, blog=self)
-            return BlogIndexRepositoryRaw.create_from_cachable_data(data=data)
-        return BlogIndexRepositorySimple.create_from_blog(request=request, blog=self)
+            data = BlogIndexRepository.data_for_blog_index_cachable(request=request, blog=self)
+            return BlogIndexRepository.create_from_cachable_data(data=data)
+        return BlogIndexRepository.create_from_django_models(request=request, blog=self)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs) -> TemplateResponse:
         kwargs["repository"] = self.get_repository(request, kwargs)
