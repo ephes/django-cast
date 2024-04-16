@@ -188,22 +188,37 @@ def get_media_post(rf, blog):
 
 
 @pytest.fixture
+def post_of_blog(rf, settings):
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    blog = generate_blog_with_media(number_of_posts=1)
+    post = blog.unfiltered_published_posts.first()
+    _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    teardown_paths = [Path(post.videos.first().original.path)]
+    yield post
+    # teardown - remove the files created during the test
+    for path in teardown_paths:
+        if path.exists():
+            path.unlink()
+
+
+@pytest.fixture
 def gallery_post(rf):
-    QuerysetData.unset_queryset_data_for_blocks()
     blog = generate_blog_with_media(number_of_posts=1, media_numbers={"galleries": 1, "images_in_galleries": 3})
-    yield get_media_post(rf, blog)
-    QuerysetData.unset_queryset_data_for_blocks()  # omitting this line will cause a test failure elsewhere
+    post = blog.unfiltered_published_posts.first()
+    _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    yield post
 
 
 @pytest.mark.django_db
 def test_render_gallery_post_without_hitting_the_database(rf, gallery_post):
     # Given a post with a gallery
-    request = rf.get(gallery_post.repository.page_url_by_id[gallery_post.post.pk])
+    post = gallery_post
+    request = rf.get(post.get_url())
+    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
     reset_queries()
     # When we render the post
     # with connection.execute_wrapper(blocker):
-    # response = gallery_post.post.serve(request, post_data=gallery_post.post_data).render()
-    response = gallery_post.post.serve(request, repository=gallery_post.repository).render()
+    response = post.serve(request, repository=repository).render()
     # Then the gallery should be rendered
     html = response.content.decode("utf-8")
     assert 'class="cast-gallery-modal"' in html
@@ -246,20 +261,6 @@ def test_render_post_detail_without_hitting_the_database_duplicate(rf, post_of_b
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0
-
-
-@pytest.fixture
-def post_of_blog(rf, settings):
-    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
-    blog = generate_blog_with_media(number_of_posts=1)
-    post = blog.unfiltered_published_posts.first()
-    _ = post.serve(rf.get("/")).render()  # force renditions to be created
-    teardown_paths = [Path(post.videos.first().original.path)]
-    yield post
-    # teardown - remove the files created during the test
-    for path in teardown_paths:
-        if path.exists():
-            path.unlink()
 
 
 @pytest.mark.django_db
@@ -427,7 +428,7 @@ def test_create_from_cachable_data_use_audio_player_false():
 @pytest.mark.django_db
 def test_blog_index_repo_simple_has_audio_true(rf, post_with_audio):
     request = rf.get("/")
-    repository = BlogIndexRepository.create_from_blog(request=request, blog=post_with_audio.blog)
+    repository = BlogIndexRepository.create_from_django_models(request=request, blog=post_with_audio.blog)
     assert repository.use_audio_player is True
 
 
