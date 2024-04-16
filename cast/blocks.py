@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from itertools import chain, islice, tee
 from typing import TYPE_CHECKING, Protocol, Union
 
-from django.db.models import QuerySet
+from django.db.models import Model, QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
 from django.utils.functional import cached_property
 from django.utils.safestring import mark_safe
@@ -290,17 +290,29 @@ class GalleryBlockWithLayout(StructBlock):
         return prepare_context_for_gallery(value["gallery"], context)
 
 
+class RepositoryChooserBlock(ChooserBlock):
+    def bulk_to_python(self, values):
+        """
+        Postpone the fetching of the database objects to the get_context method
+        because the repository is not available in the bulk_to_python method.
+        """
+        return values
+
+    def extract_references(self, value):
+        if value is not None:
+            yield self.model_class, str(value), "", ""
+
+    def get_context(self, value, parent_context=None):
+        repository = parent_context["repository"]
+        value = self.from_repository_to_python(repository, value)
+        return super().get_context(value, parent_context=parent_context)
+
+
 class HasVideos(Protocol):
     video_by_id: VideoById
 
 
-class EmptyVideos:
-    video_by_id: VideoById = {}
-
-
-class VideoChooserBlock(ChooserBlock):
-    repository: HasVideos = EmptyVideos()
-
+class VideoChooserBlock(RepositoryChooserBlock):
     @cached_property
     def target_model(self) -> type["Video"]:
         from .models import Video
@@ -316,26 +328,18 @@ class VideoChooserBlock(ChooserBlock):
     def get_form_state(self, value: Union["Video", int] | None) -> dict | None:
         return self.widget.get_value_data(value)
 
-    def bulk_to_python(self, values):
+    def from_repository_to_python(self, repository: HasVideos, value: int) -> Model:
         try:
-            return [self.repository.video_by_id[value] for value in values]
+            return repository.video_by_id[value]
         except KeyError:
-            # if fetching from cache fails, just return super().bulk_to_python
-            pass
-        return super().bulk_to_python(values)
+            return super().to_python(value)
 
 
 class HasAudios(Protocol):
     audio_by_id: AudioById
 
 
-class EmptyAudios:
-    audio_by_id: AudioById = {}
-
-
-class AudioChooserBlock(ChooserBlock):
-    repository: HasAudios = EmptyAudios()
-
+class AudioChooserBlock(RepositoryChooserBlock):
     @cached_property
     def target_model(self) -> type["Audio"]:
         from .models import Audio
@@ -348,16 +352,14 @@ class AudioChooserBlock(ChooserBlock):
 
         return AdminAudioChooser()
 
-    def get_form_state(self, value: Union["Video", int] | None) -> dict | None:
+    def get_form_state(self, value: Union["Audio", int] | None) -> dict | None:
         return self.widget.get_value_data(value)
 
-    def bulk_to_python(self, values):
+    def from_repository_to_python(self, repository: HasAudios, value: int) -> Model:
         try:
-            return [self.repository.audio_by_id[value] for value in values]
+            return repository.audio_by_id[value]
         except KeyError:
-            # if fetching from cache fails, just return super().bulk_to_python
-            pass
-        return super().bulk_to_python(values)
+            return super().to_python(value)
 
 
 class CodeBlock(StructBlock):
