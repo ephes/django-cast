@@ -219,11 +219,11 @@ def test_gallery_block_with_layout_get_empty_images_from_cache():
     block = GalleryBlockWithLayout()
 
     # no images
-    values = block._get_images_from_queryset_data([{"gallery": []}], None)
+    values = block._get_images_from_repository([{"gallery": []}], None)
     assert values[0]["gallery"] == []
 
     # images which don't have type dict or int
-    values = block._get_images_from_queryset_data([{"gallery": [None]}], None)
+    values = block._get_images_from_repository([{"gallery": [None]}], None)
     assert values[0]["gallery"] == []
 
 
