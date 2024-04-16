@@ -247,12 +247,11 @@ class TestPostModel:
         description = post.get_description(request=simple_request, escape_html=True)
         assert "&lt" in description
 
-    def test_get_description_newlines(self, mocker, simple_request):
+    def test_get_description_newlines(self, mocker, simple_request, post):
         class Rendered:
             rendered_content = "<h1>foo</h1>\n"
 
         mocker.patch("cast.models.Post.serve", return_value=Rendered())
-        post = Post()
         description = post.get_description(request=simple_request, remove_newlines=False)
         assert "\n" in description
 
