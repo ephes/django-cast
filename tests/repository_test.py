@@ -30,6 +30,7 @@ from cast.models.repository import (
     PostDetailRepository,
     QuerysetData,
     get_facet_choices,
+    patch_page_link_handler,
     serialize_renditions,
 )
 
@@ -61,7 +62,7 @@ def test_post_data_repr(rf, blog, site):
 
 @pytest.mark.django_db
 def test_queryset_data_patch_page_link_handler_page_not_cached():
-    page_link_handler = QuerysetData.patch_page_link_handler({})
+    page_link_handler = patch_page_link_handler({})
     root = page_link_handler.get_instance({"id": 1})
     assert root.id == 1
 
@@ -73,30 +74,21 @@ def test_render_empty_post_without_hitting_the_database(rf):
     """
     reset_queries()
     post = Post(content_type=ContentType("cast", "post"))
-    root_nav_links = [("/home/", "Home"), ("/about/", "About")]
     page_url = "/foo-bar-baz/"
-    absolute_page_url = "http://testserver/foo-bar-baz/"
-    queryset_data = QuerysetData(
-        post_by_id={},
-        images={},
+    repository = PostDetailRepository(
+        template_base_dir="bootstrap4",
+        blog=Blog(id=1, title="Some blog"),
+        root_nav_links=[("/home/", "Home"), ("/about/", "About")],
+        comments_are_enabled=False,
+        has_audio=False,
+        page_url=page_url,
+        absolute_page_url=f"http://testserver{page_url}",
+        owner_username="owner",
+        blog_url="/some-blog/",
+        audio_by_id={},
+        video_by_id={},
+        image_by_id={},
         renditions_for_posts={},
-        has_audio_by_id={post.pk: False},
-        videos={},
-        audios={},
-        audios_by_post_id={},
-        videos_by_post_id={},
-        images_by_post_id={},
-        post_queryset=[post],
-        owner_username_by_id={post.pk: "owner"},
-    )
-    repository = FeedRepository(
-        site=object(),
-        blog=None,
-        root_nav_links=root_nav_links,
-        page_url_by_id={post.pk: page_url},
-        absolute_page_url_by_id={post.pk: absolute_page_url},
-        blog_url="/blog/",
-        queryset_data=queryset_data,
     )
     request = rf.get(page_url)
     post.serve(request, repository=repository).render()
@@ -135,6 +127,7 @@ def test_internal_page_link_is_cached(rf, linked_posts):
     page_path = linked_posts.source.get_url_parts(None)[-1]
     request = rf.get(page_path)
     repository = PostDetailRepository.create_from_django_models(request=request, post=linked_posts.source)
+    patch_page_link_handler({linked_posts.target.pk: linked_posts.target})
     reset_queries()
     # When we render the source post
     # with connection.execute_wrapper(blocker):

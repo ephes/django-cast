@@ -80,6 +80,22 @@ class BlockRegistry:
             block.repository = repository
 
 
+def patch_page_link_handler(post_by_id):
+    def build_cached_get_instance(page_cache):
+        @classmethod  # noqa has to be classmethod to override the original
+        def cached_get_instance(_cls, attrs):
+            page_id = int(attrs["id"])
+            if page_id in page_cache:
+                return page_cache[page_id]
+            else:
+                return super(PageLinkHandler, _cls).get_instance(attrs).specific
+
+        return cached_get_instance
+
+    PageLinkHandler.get_instance = build_cached_get_instance(post_by_id)
+    return PageLinkHandler
+
+
 class QuerysetData:
     """
     This class is a container for the data that is needed to render a list of posts
@@ -114,23 +130,7 @@ class QuerysetData:
         self.owner_username_by_id = owner_username_by_id
         self.has_audio_by_id = has_audio_by_id
         self.renditions_for_posts = renditions_for_posts
-        self.patch_page_link_handler(self.post_by_id)
-
-    @staticmethod
-    def patch_page_link_handler(post_by_id):
-        def build_cached_get_instance(page_cache):
-            @classmethod  # noqa has to be classmethod to override the original
-            def cached_get_instance(_cls, attrs):
-                page_id = int(attrs["id"])
-                if page_id in page_cache:
-                    return page_cache[page_id]
-                else:
-                    return super(PageLinkHandler, _cls).get_instance(attrs).specific
-
-            return cached_get_instance
-
-        PageLinkHandler.get_instance = build_cached_get_instance(post_by_id)
-        return PageLinkHandler
+        patch_page_link_handler(self.post_by_id)
 
     @classmethod
     def create_from_post_queryset(cls, queryset: QuerySet["Post"]) -> "QuerysetData":
