@@ -227,8 +227,9 @@ class PodcastFeed(Feed):
         return item.title
 
     def item_description(self, item):
+        repository = self.repository.get_post_detail_repository(item)
         item.description = item.get_description(
-            request=self.request, render_detail=True, escape_html=False, repository=self.repository
+            request=self.request, render_detail=True, escape_html=False, repository=repository
         )
         return item.description
 
