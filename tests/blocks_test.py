@@ -241,11 +241,11 @@ def test_gallery_block_with_layout_get_context():
         next = None
         file = File()
 
-    class QuerysetData:
-        images = {1: Image()}
+    class Repository:
+        image_by_id = {1: Image()}
 
     block = GalleryBlockWithLayout()
-    block.queryset_data = QuerysetData()
+    block.repository = Repository()
     with pytest.raises(ValueError):
         block.get_context(
             {"gallery": [{"type": "item", "value": 1}]},

@@ -4,7 +4,7 @@ from django.urls import reverse
 
 from cast import appsettings
 from cast.models.pages import CustomEpisodeForm, Episode, HomePage, HtmlField, Post
-from cast.models.repository import BlogIndexRepositoryRaw
+from cast.models.repository import BlogIndexRepository
 from cast.models.video import Video
 
 
@@ -130,7 +130,7 @@ class TestBlogModel:
 
     def test_get_repository(self, blog, simple_request, use_raw_blog_index_repo):
         repository = blog.get_repository(simple_request, {})
-        assert isinstance(repository, BlogIndexRepositoryRaw)
+        assert isinstance(repository, BlogIndexRepository)
 
 
 class TestPostModel:
