@@ -48,7 +48,6 @@ from ..renditions import ImageType, RenditionFilters
 from ..views import HtmxHttpRequest
 from .repository import (
     AudioById,
-    EmptyRepository,
     ImageById,
     LinkTuples,
     PostDetailRepository,
@@ -335,10 +334,8 @@ class Post(Page):
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
-        repository = kwargs.get("repository")
-        if repository is None:
-            repository = EmptyRepository()
-        context["repository"] = repository
+        request = cast(HtmxHttpRequest, request)
+        context["repository"] = repository = self.get_repository(request, kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
         context = self.get_context_from_repository(context, repository)
