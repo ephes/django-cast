@@ -180,7 +180,12 @@ class QuerysetData:
         )
 
 
-class PostDetailRepository:
+class LinkToBlocksMixin:
+    def link_to_blocks(self):
+        BlockRegistry.set_repository_for_blocks(self)
+
+
+class PostDetailRepository(LinkToBlocksMixin):
     """
     This class is a container for the data that is needed to render a post detail page.
     """
@@ -215,9 +220,6 @@ class PostDetailRepository:
         self.video_by_id = video_by_id
         self.image_by_id = image_by_id
         self.renditions_for_posts = renditions_for_posts
-
-    def link_to_blocks(self):
-        BlockRegistry.set_repository_for_blocks(self)
 
     @classmethod
     def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailRepository":
@@ -421,7 +423,7 @@ def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]
     return []
 
 
-class BlogIndexRepository:
+class BlogIndexRepository(LinkToBlocksMixin):
     def __init__(
         self,
         *,
@@ -446,8 +448,8 @@ class BlogIndexRepository:
             self.post_by_id = queryset_data.post_by_id
             self.owner_username_by_id = queryset_data.owner_username_by_id
             self.has_audio_by_id = queryset_data.has_audio_by_id
-            self.videos = queryset_data.videos
-            self.audios = queryset_data.audios
+            self.video_by_id = queryset_data.videos
+            self.audio_by_id = queryset_data.audios
             self.audios_by_post_id = queryset_data.audios_by_post_id
             self.post_queryset = queryset_data.queryset
         else:

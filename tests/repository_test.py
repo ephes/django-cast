@@ -15,7 +15,6 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import connection, reset_queries
 from django.urls import reverse
 from wagtail.images.models import Image, Rendition
-from wagtail.models import Site
 
 from cast.devdata import (
     create_blog,
@@ -121,37 +120,12 @@ def linked_posts():
         },
     ]
     source = create_post(body=json.dumps(source_body), blog=blog, num=2)
-    site = Site.objects.first()
-    root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
-    queryset_data = QuerysetData(
-        post_by_id={target.pk: target.specific},
-        images={},
-        videos={},
-        audios={},
-        audios_by_post_id={},
-        videos_by_post_id={},
-        images_by_post_id={},
-        renditions_for_posts={},
-        has_audio_by_id={source.pk: False, target.pk: False},
-        post_queryset=list[source],
-        owner_username_by_id={source.pk: source.owner.username, target.pk: target.owner.username},
-    )
-    repository = FeedRepository(
-        site=site,
-        blog=blog,
-        root_nav_links=root_nav_links,
-        page_url_by_id={source.pk: source.get_url(), target.pk: target.get_url()},
-        absolute_page_url_by_id={source.pk: source.full_url, target.pk: target.full_url},
-        blog_url=blog.get_url(),
-        queryset_data=queryset_data,
-    )
 
     class LinkedPosts(NamedTuple):
         source: Post
         target: Post
-        repository: FeedRepository
 
-    linked_posts = LinkedPosts(source=source, target=target, repository=repository)
+    linked_posts = LinkedPosts(source=source, target=target)
     return linked_posts
 
 
@@ -160,10 +134,11 @@ def test_internal_page_link_is_cached(rf, linked_posts):
     # Given two posts in a blog, one of which (source) links to the other (target)
     page_path = linked_posts.source.get_url_parts(None)[-1]
     request = rf.get(page_path)
+    repository = PostDetailRepository.create_from_django_models(request=request, post=linked_posts.source)
     reset_queries()
     # When we render the source post
     # with connection.execute_wrapper(blocker):
-    response = linked_posts.source.serve(request, repository=linked_posts.repository).render()
+    response = linked_posts.source.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     # Then the internal link should be rendered
     assert '<a href="/test-blog/test-post-1/">just an internal link</a>' in html
@@ -356,12 +331,13 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
     cachable_data = pickle.loads(pickled)
     repository = BlogIndexRepository.create_from_cachable_data(data=cachable_data)
+    repository.link_to_blocks()
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
     reset_queries()
-    # with connection.execute_wrapper(blocker):
-    response = blog.serve(request, repository=repository).render()
+    with connection.execute_wrapper(blocker):
+        response = blog.serve(request, repository=repository).render()
     # Then the media should be rendered
     html = response.content.decode("utf-8")
     assert 'class="cast-image"' in html
