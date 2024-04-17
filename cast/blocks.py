@@ -16,13 +16,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .models.repository import (
-    AudioById,
-    BlockRegistry,
-    ImageById,
-    RenditionsForPosts,
-    VideoById,
-)
+from .models.repository import AudioById, ImageById, RenditionsForPosts, VideoById
 from .renditions import (
     Height,
     ImageForSlot,
@@ -404,12 +398,3 @@ class CodeBlock(StructBlock):
             return mark_safe(highlighted)
         else:
             return ""
-
-
-def register_blocks() -> None:
-    BlockRegistry.register(AudioChooserBlock)
-    BlockRegistry.register(VideoChooserBlock)
-    BlockRegistry.register(GalleryBlockWithLayout)
-
-
-register_blocks()

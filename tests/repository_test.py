@@ -324,7 +324,6 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
     cachable_data = pickle.loads(pickled)
     repository = BlogIndexRepository.create_from_cachable_data(data=cachable_data)
-    repository.link_to_blocks()
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
@@ -485,7 +484,6 @@ def test_render_post_detail_without_hitting_the_database(rf):
             ]
         },
     )
-    repository.link_to_blocks()
     body = create_python_body()
     body[0]["value"].append({"type": "audio", "value": 1})
     body[0]["value"].append({"type": "video", "value": 1})

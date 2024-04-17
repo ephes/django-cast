@@ -45,19 +45,6 @@ if TYPE_CHECKING:
     )
 
 
-class BlockRegistry:
-    blocks: list["CastBlock"] = []
-
-    @classmethod
-    def register(cls, block: "CastBlock") -> None:
-        cls.blocks.append(block)
-
-    @classmethod
-    def set_repository_for_blocks(cls, repository: Any) -> None:
-        for block in cls.blocks:
-            block.repository = repository
-
-
 def patch_page_link_handler(post_by_id):
     def build_cached_get_instance(page_cache):
         @classmethod  # noqa has to be classmethod to override the original
@@ -158,12 +145,7 @@ class QuerysetData:
         )
 
 
-class LinkToBlocksMixin:
-    def link_to_blocks(self):
-        BlockRegistry.set_repository_for_blocks(self)
-
-
-class PostDetailRepository(LinkToBlocksMixin):
+class PostDetailRepository:
     """
     This class is a container for the data that is needed to render a post detail page.
     """
@@ -401,7 +383,7 @@ def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]
     return []
 
 
-class BlogIndexRepository(LinkToBlocksMixin):
+class BlogIndexRepository:
     def __init__(
         self,
         *,
