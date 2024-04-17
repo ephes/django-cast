@@ -219,12 +219,12 @@ def test_gallery_block_with_layout_get_empty_images_from_cache():
     block = GalleryBlockWithLayout()
 
     # no images
-    values = block._get_images_from_repository([{"gallery": []}], None)
-    assert values[0]["gallery"] == []
+    values = block._get_images_from_repository(None, {"gallery": []})
+    assert values["gallery"] == []
 
     # images which don't have type dict or int
-    values = block._get_images_from_repository([{"gallery": [None]}], None)
-    assert values[0]["gallery"] == []
+    values = block._get_images_from_repository(None, {"gallery": [None]})
+    assert values["gallery"] == []
 
 
 @pytest.mark.django_db
@@ -243,11 +243,11 @@ def test_gallery_block_with_layout_get_context():
 
     class Repository:
         image_by_id = {1: Image()}
+        renditions_for_posts = {}
 
     block = GalleryBlockWithLayout()
-    block.repository = Repository()
     with pytest.raises(ValueError):
         block.get_context(
             {"gallery": [{"type": "item", "value": 1}]},
-            {"template_base_dir": "bootstrap4", "page": Page(), "repository": EmptyRepository()},
+            {"template_base_dir": "bootstrap4", "page": Page(), "repository": Repository()},
         )

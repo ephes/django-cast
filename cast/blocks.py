@@ -228,6 +228,12 @@ class GalleryBlock(ListBlock):
         default_template_name = super().get_template(images, context)
         return get_gallery_block_template(default_template_name, context)
 
+    def extract_references(self, value):
+        from .models import Gallery
+
+        if value is not None:
+            yield Gallery, str(value), "", ""
+
     def get_context(self, images: QuerySet[AbstractImage], parent_context: dict | None = None) -> dict:
         if parent_context is None:
             parent_context = {"repository": GalleryProxyRepository()}
@@ -249,7 +255,6 @@ class GalleryBlockWithLayout(StructBlock):
         ],
         default="default",
     )
-    repository: HasImagesAndRenditions = EmptyImageRepository()
 
     class Meta:
         icon = "image"
@@ -264,29 +269,44 @@ class GalleryBlockWithLayout(StructBlock):
                 layout = layout_from_value
         return get_gallery_block_template(default_template_name, context, layout=layout)
 
-    def _get_images_from_repository(self, values, repository: HasImagesAndRenditions):
+    def _get_images_from_repository(self, repository: HasImagesAndRenditions, values):
         images = []
-        for item in values[0]["gallery"]:
+        for item in values["gallery"]:
             if isinstance(item, dict) and item.get("type") == "item":
                 images.append(repository.image_by_id[item["value"]])
             elif isinstance(item, int):
                 images.append(repository.image_by_id[item])
-        values[0]["gallery"] = images
+            elif isinstance(item, Image):
+                images.append(item)
+        values["gallery"] = images
         return values
 
     def bulk_to_python(self, values):
-        """Overwrite this method to be able to use the images from repository."""
+        """Postpone the fetching of the database objects to the get_context method."""
+        return values
+
+    def bulk_to_python_from_database(self, values):
+        image_ids_or_images = list(filter(None, values["gallery"]))
+        if len(image_ids_or_images) == 0:
+            return values
+        if isinstance(image_ids_or_images[0], Image):
+            return values
+        assert isinstance(image_ids_or_images[0], int)
+        # we have to fetch the images from the database
+        image_ids = image_ids_or_images
+        values["gallery"] = list(Image.objects.filter(pk__in=image_ids))
+        return values
+
+    def from_repository_to_python(self, repository: HasImagesAndRenditions, values):
         try:
-            return self._get_images_from_repository(values, self.repository)
+            return self._get_images_from_repository(repository, values)
         except KeyError:
-            # if fetching from cache fails, just return super().bulk_to_python
-            pass
-        return super().bulk_to_python(values)
+            return self.bulk_to_python_from_database(values)
 
     def get_context(self, value, parent_context: dict | None = None):
+        repository = parent_context["repository"]
+        value = self.from_repository_to_python(repository, value)
         context = super().get_context(value, parent_context=parent_context)
-        if isinstance(value["gallery"][0], dict) and self.repository is not None:
-            value = self._get_images_from_repository([value], self.repository)[0]
         return prepare_context_for_gallery(value["gallery"], context)
 
 
