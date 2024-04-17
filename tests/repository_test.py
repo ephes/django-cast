@@ -490,7 +490,7 @@ def test_render_post_detail_without_hitting_the_database(rf):
     body[0]["value"].append({"type": "audio", "value": 1})
     body[0]["value"].append({"type": "video", "value": 1})
     body[0]["value"].append({"type": "image", "value": 1})
-    gallery_with_layout = {"layout": "default", "gallery": [1]}
+    gallery_with_layout = {"layout": "default", "gallery": [{"id": 1, "type": "item", "value": 1}]}
     body[0]["value"].append({"id": 1, "type": "gallery", "value": gallery_with_layout})
     serialized_body = json.dumps(body)
     post = Post(id=1, title="Some post", body=serialized_body)

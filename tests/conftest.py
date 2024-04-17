@@ -4,6 +4,7 @@ import os
 import shutil
 from copy import deepcopy
 from datetime import datetime
+from uuid import uuid4
 
 import pytest
 import pytz
@@ -308,10 +309,13 @@ def body(python_body):
 
 @pytest.fixture()
 def body_with_gallery(python_body, gallery):
-    image_pks = [img.pk for img in gallery.images.all()]
+    images = gallery.images.all()
     gallery_body = deepcopy(python_body)
-    gallery_with_layout = {"layout": "default", "gallery": image_pks}
-    gallery_body[0]["value"].append({"type": "gallery", "value": gallery_with_layout})
+    image_items = []
+    for image in images:
+        image_items.append({"id": str(uuid4()), "type": "item", "value": image.pk})
+    gallery_with_layout = {"layout": "default", "gallery": image_items}
+    gallery_body[0]["value"].append({"id": str(uuid4()), "type": "gallery", "value": gallery_with_layout})
     return json.dumps(gallery_body)
 
 

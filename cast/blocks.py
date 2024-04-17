@@ -1,6 +1,7 @@
+from abc import abstractmethod
 from collections.abc import Iterable
 from itertools import chain, islice, tee
-from typing import TYPE_CHECKING, Protocol, Union
+from typing import TYPE_CHECKING, Any, Protocol, Union
 
 from django.db.models import Model, QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -269,13 +270,12 @@ class GalleryBlockWithLayout(StructBlock):
                 layout = layout_from_value
         return get_gallery_block_template(default_template_name, context, layout=layout)
 
-    def _get_images_from_repository(self, repository: HasImagesAndRenditions, values):
+    @staticmethod
+    def _get_images_from_repository(repository: HasImagesAndRenditions, values):
         images = []
         for item in values["gallery"]:
             if isinstance(item, dict) and item.get("type") == "item":
                 images.append(repository.image_by_id[item["value"]])
-            elif isinstance(item, int):
-                images.append(repository.image_by_id[item])
             elif isinstance(item, Image):
                 images.append(item)
         values["gallery"] = images
@@ -285,12 +285,15 @@ class GalleryBlockWithLayout(StructBlock):
         """Postpone the fetching of the database objects to the get_context method."""
         return values
 
-    def bulk_to_python_from_database(self, values):
+    @staticmethod
+    def bulk_to_python_from_database(values):
         image_ids_or_images = list(filter(None, values["gallery"]))
         if len(image_ids_or_images) == 0:
             return values
         if isinstance(image_ids_or_images[0], Image):
             return values
+        if isinstance(image_ids_or_images[0], dict):
+            image_ids_or_images = [item["value"] for item in image_ids_or_images]
         assert isinstance(image_ids_or_images[0], int)
         # we have to fetch the images from the database
         image_ids = image_ids_or_images
@@ -321,6 +324,10 @@ class RepositoryChooserBlock(ChooserBlock):
     def extract_references(self, value):
         if value is not None:
             yield self.model_class, str(value), "", ""
+
+    @abstractmethod
+    def from_repository_to_python(self, repository: Any, value: int) -> Model:
+        raise NotImplementedError
 
     def get_context(self, value, parent_context=None):
         repository = parent_context["repository"]

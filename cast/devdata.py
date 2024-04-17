@@ -2,6 +2,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -124,9 +125,11 @@ def add_gallery_to_body(*, body: Body, gallery: Gallery = Auto) -> Body:
     if not gallery:  # pragma: no cover
         gallery = create_gallery()
     images = gallery.images.all()  # type: ignore
-    image_pks = [img.pk for img in images]
-    gallery_with_layout = {"layout": "default", "gallery": image_pks}
-    body[0]["value"].append({"type": "gallery", "value": gallery_with_layout})
+    image_items = []
+    for image in images:
+        image_items.append({"id": str(uuid4()), "type": "item", "value": image.pk})
+    gallery_with_layout = {"layout": "default", "gallery": image_items}
+    body[0]["value"].append({"id": str(uuid4()), "type": "gallery", "value": gallery_with_layout})
     return body
 
 
