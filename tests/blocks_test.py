@@ -9,10 +9,10 @@ from cast.blocks import (
     CodeBlock,
     GalleryBlock,
     GalleryBlockWithLayout,
+    GalleryProxyRepository,
     get_srcset_images_for_slots,
 )
 from cast.models import Gallery
-from cast.models.repository import EmptyRepository
 from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Rectangle, Width
 
 
@@ -196,7 +196,7 @@ def test_gallery_block_get_context_parent_context_none():
     assert "value" in context
 
     cb = GalleryBlock(ImageChooserBlock())
-    context = cb.get_context([], parent_context={"repository": EmptyRepository()})
+    context = cb.get_context([], parent_context={"repository": GalleryProxyRepository()})
     assert "value" in context
 
 

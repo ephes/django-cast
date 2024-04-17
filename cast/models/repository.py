@@ -53,20 +53,6 @@ class PostRepository:
     template_base_dir: str
 
 
-class EmptyRepository(PostRepository):
-    """
-    This can be used as a default repository.
-    """
-
-    def __init__(self):
-        from cast.models import Blog, Post
-
-        self.renditions_for_posts = {}
-        self.image_by_id = {}
-        self.blog = Blog()
-        self.post_queryset = Post.objects.none()
-
-
 class BlockRegistry:
     blocks: list["CastBlock"] = []
 
