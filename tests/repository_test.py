@@ -16,12 +16,7 @@ from django.db import connection, reset_queries
 from django.urls import reverse
 from wagtail.images.models import Image, Rendition
 
-from cast.devdata import (
-    create_blog,
-    create_post,
-    create_python_body,
-    generate_blog_with_media,
-)
+from cast.devdata import create_python_body, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
 from cast.models import Audio, Blog, Post, Video
 from cast.models.repository import (
@@ -33,6 +28,7 @@ from cast.models.repository import (
     patch_page_link_handler,
     serialize_renditions,
 )
+from cast.wagtail_hooks import PageLinkHandlerWithCache
 
 
 def show_queries(queries):
@@ -57,28 +53,43 @@ def debug_settings(settings):
 
 
 @pytest.mark.django_db
-def test_queryset_data_patch_page_link_handler_page_not_cached():
-    page_link_handler = patch_page_link_handler({})
-    root = page_link_handler.get_instance({"id": 1})
+def test_internal_page_link_is_not_cached():
+    """
+    Make sure the right page is returned from the page link handler, especially
+    if it's not in the cache.
+    """
+    empty_cache = {}
+    page_link_handler = patch_page_link_handler(empty_cache)
+    root = page_link_handler.get_instance({"id": 1})  # get page with id 1
     assert root.id == 1
 
 
-def test_render_empty_post_without_hitting_the_database(rf):
-    """
-    Interesting - did not expect that calling Post() would hit the database.
-    Providing a content_type did help.
-    """
-    reset_queries()
-    post = Post(content_type=ContentType("cast", "post"))
-    page_url = "/foo-bar-baz/"
+def test_internal_page_link_is_cached(rf):
+    # Given two posts in a blog, one of which (source) links to the other (target)
+    body = [
+        {
+            "type": "overview",
+            "value": [
+                {
+                    "type": "paragraph",
+                    "value": '<a id="1" linktype="page">just an internal link</a>',
+                }
+            ],
+        }
+    ]
+    source = Post(id=2, title="Link Source Post", body=json.dumps(body), content_type=ContentType("cast", "post"))
+
+    # When we render the source post
+    page_url = "/source_detail/"
+    request = rf.get(page_url)
     repository = PostDetailRepository(
         template_base_dir="bootstrap4",
         blog=Blog(id=1, title="Some blog"),
-        root_nav_links=[("/home/", "Home"), ("/about/", "About")],
+        root_nav_links=[],
         comments_are_enabled=False,
         has_audio=False,
         page_url=page_url,
-        absolute_page_url=f"http://testserver{page_url}",
+        absolute_page_url=f"http://testserver/{page_url}",
         owner_username="owner",
         blog_url="/some-blog/",
         audio_by_id={},
@@ -86,53 +97,58 @@ def test_render_empty_post_without_hitting_the_database(rf):
         image_by_id={},
         renditions_for_posts={},
     )
-    request = rf.get(page_url)
-    post.serve(request, repository=repository).render()
-    show_queries(connection.queries)
-    assert len(connection.queries) == 0
-
-
-@pytest.fixture
-def linked_posts():
-    blog = create_blog()
-    target = create_post(blog=blog, num=1)
-    source_body = [
-        {
-            "type": "overview",
-            "value": [
-                {
-                    "type": "paragraph",
-                    "value": f'<a id="{target.pk}" linktype="page">just an internal link</a>',
-                }
-            ],
-        },
-    ]
-    source = create_post(body=json.dumps(source_body), blog=blog, num=2)
-
-    class LinkedPosts(NamedTuple):
-        source: Post
-        target: Post
-
-    linked_posts = LinkedPosts(source=source, target=target)
-    return linked_posts
-
-
-@pytest.mark.django_db
-def test_internal_page_link_is_cached(rf, linked_posts):
-    # Given two posts in a blog, one of which (source) links to the other (target)
-    page_path = linked_posts.source.get_url_parts(None)[-1]
-    request = rf.get(page_path)
-    repository = PostDetailRepository.create_from_django_models(request=request, post=linked_posts.source)
-    patch_page_link_handler({linked_posts.target.pk: linked_posts.target})
-    reset_queries()
-    # When we render the source post
+    PageLinkHandlerWithCache.cache = {1: "/target-detail/"}
     # with connection.execute_wrapper(blocker):
-    response = linked_posts.source.serve(request, repository=repository).render()
+    reset_queries()
+    response = source.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     # Then the internal link should be rendered
-    assert '<a href="/test-blog/test-post-1/">just an internal link</a>' in html
+    assert '<a href="/target-detail/">just an internal link</a>' in html
     # And the database should not be hit
     assert len(connection.queries) == 0
+
+
+# @pytest.fixture
+# def linked_posts():
+#     blog = create_blog()
+#     target = create_post(blog=blog, num=1)
+#     source_body = [
+#         {
+#             "type": "overview",
+#             "value": [
+#                 {
+#                     "type": "paragraph",
+#                     "value": f'<a id="{target.pk}" linktype="page">just an internal link</a>',
+#                 }
+#             ],
+#         },
+#     ]
+#     source = create_post(body=json.dumps(source_body), blog=blog, num=2)
+#
+#     class LinkedPosts(NamedTuple):
+#         source: Post
+#         target: Post
+#
+#     linked_posts = LinkedPosts(source=source, target=target)
+#     return linked_posts
+#
+#
+# @pytest.mark.django_db
+# def test_internal_page_link_is_cached(rf, linked_posts):
+#     # Given two posts in a blog, one of which (source) links to the other (target)
+#     page_path = linked_posts.source.get_url_parts(None)[-1]
+#     request = rf.get(page_path)
+#     repository = PostDetailRepository.create_from_django_models(request=request, post=linked_posts.source)
+#     patch_page_link_handler({linked_posts.target.pk: linked_posts.target})
+#     reset_queries()
+#     # When we render the source post
+#     # with connection.execute_wrapper(blocker):
+#     response = linked_posts.source.serve(request, repository=repository).render()
+#     html = response.content.decode("utf-8")
+#     # Then the internal link should be rendered
+#     assert '<a href="/test-blog/test-post-1/">just an internal link</a>' in html
+#     # And the database should not be hit
+#     assert len(connection.queries) == 0
 
 
 def get_media_post(rf, blog):

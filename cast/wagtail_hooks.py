@@ -7,6 +7,7 @@ from wagtail import hooks
 from wagtail.admin.menu import MenuItem
 from wagtail.admin.panels import FieldPanel
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
+from wagtail.rich_text.pages import PageLinkHandler
 from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
 
@@ -97,3 +98,25 @@ class TagsSnippetViewSet(SnippetViewSet):
 
 
 register_snippet(TagsSnippetViewSet)
+
+
+class PageLinkHandlerWithCache(PageLinkHandler):
+    """
+    This is a custom PageLinkHandler that has a cache to store urls
+    for internal pages. This is useful when you have all the pages
+    anyway in a repository, and you don't want to hit the database
+    while rendering links.
+    """
+
+    cache: dict[int, str] = {}
+
+    @classmethod
+    def expand_db_attributes(cls, attrs):
+        if (cached_url := cls.cache.get(int(attrs["id"]))) is not None:
+            return f'<a href="{cached_url}">'
+        return super().expand_db_attributes(attrs)
+
+
+@hooks.register("register_rich_text_features")
+def register_page_link(features):
+    features.register_link_type(PageLinkHandlerWithCache)
