@@ -2,14 +2,16 @@ from typing import cast
 
 import pytest
 from wagtail.images.blocks import ImageChooserBlock
-from wagtail.images.models import AbstractImage, AbstractRendition
+from wagtail.images.models import AbstractImage, AbstractRendition, Image
 
 from cast.blocks import (
+    AudioChooserBlock,
     CastImageChooserBlock,
     CodeBlock,
     GalleryBlock,
     GalleryBlockWithLayout,
     GalleryProxyRepository,
+    VideoChooserBlock,
     get_srcset_images_for_slots,
 )
 from cast.models import Gallery
@@ -52,7 +54,7 @@ def test_code_block_value(value, expected):
         {"template_base_dir": "nonexistent"},  # template_base_dir does not exist
     ],
 )
-def test_gallery_block_template_default(context):
+def test_gallery_block_template_defauflt(context):
     block = GalleryBlock(ImageChooserBlock())
     assert block.get_template(images=None, context=context) == block.meta.template
 
@@ -222,9 +224,18 @@ def test_gallery_block_with_layout_get_empty_images_from_cache():
     values = block._get_images_from_repository(None, {"gallery": []})
     assert values["gallery"] == []
 
-    # images which don't have type dict or int
-    values = block._get_images_from_repository(None, {"gallery": [None]})
-    assert values["gallery"] == []
+
+def test_gallery_block_with_layout_return_early():
+    block = GalleryBlockWithLayout()
+
+    # no images
+    values = block.bulk_to_python_from_database({"gallery": []})
+    assert values == {"gallery": []}
+
+    # real images
+    values_in = {"gallery": [Image(id=1, title="Some image", collection=None)]}
+    values_out = block.bulk_to_python_from_database(values_in)
+    assert values_out == values_in
 
 
 @pytest.mark.django_db
@@ -251,3 +262,25 @@ def test_gallery_block_with_layout_get_context():
             {"gallery": [{"type": "item", "value": 1}]},
             {"template_base_dir": "bootstrap4", "page": Page(), "repository": Repository()},
         )
+
+
+@pytest.mark.django_db
+def test_audio_chooser_from_repository_to_python_database(audio):
+
+    class Repository:
+        audio_by_id = {}
+
+    block = AudioChooserBlock()
+    model = block.from_repository_to_python(Repository(), audio.pk)
+    assert model == audio
+
+
+@pytest.mark.django_db
+def test_video_chooser_from_repository_to_python_database(video):
+
+    class Repository:
+        video_by_id = {}
+
+    block = VideoChooserBlock()
+    model = block.from_repository_to_python(Repository(), video.pk)
+    assert model == video

@@ -225,8 +225,7 @@ class GalleryBlock(ListBlock):
         return get_gallery_block_template(default_template_name, context)
 
     def extract_references(self, value):
-        if value is not None:
-            yield Gallery, str(value), "", ""
+        yield Gallery, str(value), "", ""
 
     def get_context(self, images: QuerySet[AbstractImage], parent_context: dict | None = None) -> dict:
         if parent_context is None:
@@ -269,7 +268,8 @@ class GalleryBlockWithLayout(StructBlock):
         for item in values["gallery"]:
             if isinstance(item, dict) and item.get("type") == "item":
                 images.append(repository.image_by_id[item["value"]])
-            elif isinstance(item, Image):
+            else:
+                # it's an Image object
                 images.append(item)
         values["gallery"] = images
         return values
@@ -285,8 +285,7 @@ class GalleryBlockWithLayout(StructBlock):
             return values
         if isinstance(image_ids_or_images[0], Image):
             return values
-        if isinstance(image_ids_or_images[0], dict):
-            image_ids_or_images = [item["value"] for item in image_ids_or_images]
+        image_ids_or_images = [item["value"] for item in image_ids_or_images]
         assert isinstance(image_ids_or_images[0], int)
         # we have to fetch the images from the database
         image_ids = image_ids_or_images
@@ -316,8 +315,7 @@ class RepositoryChooserBlock(ChooserBlock):
         return values
 
     def extract_references(self, value):
-        if value is not None:
-            yield self.model_class, str(value), "", ""
+        yield self.model_class, str(value), "", ""
 
     @abstractmethod
     def from_repository_to_python(self, repository: Any, value: int) -> Model:
