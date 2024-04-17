@@ -36,13 +36,17 @@ from cast.models.repository import (
 
 
 def show_queries(queries):
+    """
+    Helper function to show the queries executed during a test.
+    """
     for num, query in enumerate(queries, 1):
         print(f"{num} ----------------------------------")
         formatted_sql = sqlparse.format(query["sql"], reindent=True, keyword_case="upper")
         print(formatted_sql)
 
 
-def blocker(*args):
+def blocker(*_args):
+    """Get a traceback when a query is executed."""
     raise Exception("No database access allowed here.")
 
 
