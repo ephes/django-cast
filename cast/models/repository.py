@@ -236,25 +236,17 @@ class FeedRepository:
         self.audios_by_post_id = queryset_data.audios_by_post_id
         self.post_queryset = queryset_data.queryset
 
-    def __repr__(self):
-        return (
-            f"PostData(renditions_for_posts={len(self.renditions_for_posts)}, "
-            f"template_base_dir={self.template_base_dir})"
-        )
-
     @classmethod
     def create_from_post_queryset(
         cls,
         *,
         request: HttpRequest,
-        site: Site | None = None,
         blog: "Blog",
         template_base_dir: str,
         post_queryset: QuerySet["Post"],
     ) -> "FeedRepository":
         queryset_data = QuerysetData.create_from_post_queryset(post_queryset)
-        if site is None:
-            site = Site.find_for_request(request)
+        site = Site.find_for_request(request)
         root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
         page_url_by_id: PageUrlByID = {}
         absolute_page_url_by_id: PageUrlByID = {}

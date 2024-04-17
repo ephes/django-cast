@@ -48,16 +48,8 @@ def blocker(*args):
 
 @pytest.fixture(autouse=True)
 def debug_settings(settings):
+    """Set DEBUG to True for all tests to be able to see the queries."""
     settings.DEBUG = True
-
-
-@pytest.mark.django_db
-def test_post_data_repr(rf, blog, site):
-    request = rf.get("/")
-    post_data = FeedRepository.create_from_post_queryset(
-        request=request, blog=blog, site=site, post_queryset=Post.objects.none(), template_base_dir="bootstrap4"
-    )
-    assert repr(post_data) == "PostData(renditions_for_posts=0, template_base_dir=bootstrap4)"
 
 
 @pytest.mark.django_db
