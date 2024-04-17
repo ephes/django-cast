@@ -307,6 +307,7 @@ class GalleryBlockWithLayout(StructBlock):
             return self.bulk_to_python_from_database(values)
 
     def get_context(self, value, parent_context: dict | None = None):
+        assert parent_context is not None
         repository = parent_context["repository"]
         value = self.from_repository_to_python(repository, value)
         context = super().get_context(value, parent_context=parent_context)

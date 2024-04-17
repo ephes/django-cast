@@ -45,14 +45,6 @@ if TYPE_CHECKING:
     )
 
 
-class PostRepository:
-    renditions_for_posts: RenditionsForPost
-    image_by_id: ImageById
-    blog: "Blog"
-    post_queryset: QuerySet["Post"]
-    template_base_dir: str
-
-
 class BlockRegistry:
     blocks: list["CastBlock"] = []
 
