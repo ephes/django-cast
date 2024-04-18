@@ -111,6 +111,10 @@ class PageLinkHandlerWithCache(PageLinkHandler):
     cache: dict[int, str] = {}
 
     @classmethod
+    def cache_url(cls, page_id: int, url: str):
+        cls.cache[page_id] = url
+
+    @classmethod
     def expand_db_attributes(cls, attrs):
         if (cached_url := cls.cache.get(int(attrs["id"]))) is not None:
             return f'<a href="{cached_url}">'

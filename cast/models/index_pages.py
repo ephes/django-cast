@@ -269,7 +269,8 @@ class Blog(Page):
         return BlogIndexRepository.create_from_django_models(request=request, blog=self)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs) -> TemplateResponse:
-        kwargs["repository"] = self.get_repository(request, kwargs)
+        kwargs["repository"] = repository = self.get_repository(request, kwargs)
+        kwargs["template_base_dir"] = repository.template_base_dir
         return super().serve(request, *args, **kwargs)
 
 

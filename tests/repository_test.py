@@ -18,6 +18,7 @@ from wagtail.images.models import Image, Rendition
 
 from cast.devdata import create_python_body, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
+from cast.filters import PostFilterset
 from cast.models import Audio, Blog, Post, Video
 from cast.models.repository import (
     BlogIndexRepository,
@@ -25,7 +26,6 @@ from cast.models.repository import (
     PostDetailRepository,
     QuerysetData,
     get_facet_choices,
-    patch_page_link_handler,
     serialize_renditions,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
@@ -52,20 +52,75 @@ def debug_settings(settings):
     settings.DEBUG = True
 
 
+def post_detail_repository(**kwargs):
+    defaults = dict(
+        post_id=1,
+        template_base_dir="bootstrap4",
+        blog=Blog(id=1, title="Some blog"),
+        root_nav_links=[],
+        comments_are_enabled=False,
+        has_audio=False,
+        page_url="/some-post/",
+        absolute_page_url="http://testserver/some-post/",
+        owner_username="owner",
+        blog_url="/some-blog/",
+        audio_by_id={},
+        video_by_id={},
+        image_by_id={},
+        renditions_for_posts={},
+    )
+    defaults.update(kwargs)
+    return PostDetailRepository(**defaults)
+
+
+def queryset_data(**kwargs):
+    defaults = dict(
+        post_queryset=[],
+        post_by_id={},
+        audios={},
+        images={},
+        videos={},
+        audios_by_post_id={},
+        videos_by_post_id={},
+        images_by_post_id={},
+        owner_username_by_id={},
+        has_audio_by_id={},
+        renditions_for_posts={},
+        page_url_by_id={},
+        absolute_page_url_by_id={},
+    )
+    defaults.update(kwargs)
+    return QuerysetData(**defaults)
+
+
+def blog_index_repository(**kwargs):
+    defaults = dict(
+        template_base_dir="bootstrap4",
+        filterset=PostFilterset(None),
+        queryset_data=None,
+        pagination_context={"object_list": []},
+        root_nav_links=[],
+        use_audio_player=False,
+    )
+    defaults.update(kwargs)
+    return BlogIndexRepository(**defaults)
+
+
+# Test page link handler with cache
+
+
 @pytest.mark.django_db
 def test_internal_page_link_is_not_cached():
     """
     Make sure the right page is returned from the page link handler, especially
     if it's not in the cache.
     """
-    empty_cache = {}
-    page_link_handler = patch_page_link_handler(empty_cache)
-    root = page_link_handler.get_instance({"id": 1})  # get page with id 1
-    assert root.id == 1
+    tag = PageLinkHandlerWithCache.expand_db_attributes({"id": 23})  # get page with non-existing id
+    assert tag == "<a>"
 
 
 def test_internal_page_link_is_cached(rf):
-    # Given two posts in a blog, one of which (source) links to the other (target)
+    # Given a posts in a blog which links to itself
     body = [
         {
             "type": "overview",
@@ -77,33 +132,36 @@ def test_internal_page_link_is_cached(rf):
             ],
         }
     ]
-    source = Post(id=2, title="Link Source Post", body=json.dumps(body), content_type=ContentType("cast", "post"))
+    post = Post(id=1, title="Link Source Post", body=json.dumps(body), content_type=ContentType("cast", "post"))
 
     # When we render the source post
-    page_url = "/source_detail/"
+    page_url = "/source-detail/"
     request = rf.get(page_url)
-    repository = PostDetailRepository(
-        template_base_dir="bootstrap4",
-        blog=Blog(id=1, title="Some blog"),
-        root_nav_links=[],
-        comments_are_enabled=False,
-        has_audio=False,
-        page_url=page_url,
-        absolute_page_url=f"http://testserver/{page_url}",
-        owner_username="owner",
-        blog_url="/some-blog/",
-        audio_by_id={},
-        video_by_id={},
-        image_by_id={},
-        renditions_for_posts={},
-    )
-    PageLinkHandlerWithCache.cache = {1: "/target-detail/"}
+    repository = post_detail_repository(post_id=post.id, page_url=page_url)  # this will cache the page url
     # with connection.execute_wrapper(blocker):
     reset_queries()
-    response = source.serve(request, repository=repository).render()
+    response = post.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     # Then the internal link should be rendered
-    assert '<a href="/target-detail/">just an internal link</a>' in html
+    assert f'<a href="{page_url}">just an internal link</a>' in html
+    # And the database should not be hit
+    assert len(connection.queries) == 0
+
+    # Same test, but now we render the blog index
+    PageLinkHandlerWithCache.cache.clear()  # reset the cache
+    blog = Blog(id=1, title="Some blog", slug="some-blog")
+    repository = blog_index_repository(
+        pagination_context={"object_list": [post]},
+        queryset_data=queryset_data(page_url_by_id={post.id: page_url}),  # this will cache the page url
+    )
+    request = rf.get("/blog-index/")
+    request.htmx = False
+    # with connection.execute_wrapper(blocker):
+    reset_queries()
+    response = blog.serve(request, repository=repository).render()
+    html = response.content.decode("utf-8")
+    # Then the internal link should be rendered
+    assert f'<a href="{page_url}">just an internal link</a>' in html
     # And the database should not be hit
     assert len(connection.queries) == 0
 
@@ -383,6 +441,7 @@ def test_create_from_cachable_data_use_audio_player_false():
         "post_by_id": {1: {"pk": 1}},
         "posts": [1],
         "page_url_by_id": {1: "/foo-bar-baz/"},
+        "absolute_page_url_by_id": {1: "http://testserver/foo-bar-baz/"},
         "pagination_context": {},
         "audios": {},
         "images": {},
@@ -467,6 +526,7 @@ def test_render_post_detail_without_hitting_the_database(rf):
             self.url = f"/media/{name}"
 
     repository = PostDetailRepository(
+        post_id=1,
         template_base_dir="bootstrap4",
         blog=Blog(id=1, title="Some blog"),
         root_nav_links=[("http://testserver/", "Home"), ("http://testserver/about/", "About")],

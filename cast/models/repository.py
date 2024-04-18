@@ -8,7 +8,6 @@ from django.db.models import QuerySet
 from django.http import HttpRequest
 from wagtail.images.models import Image, Rendition
 from wagtail.models import Site
-from wagtail.rich_text.pages import PageLinkHandler
 
 from ..filters import PostFilterset
 from ..views import HtmxHttpRequest
@@ -45,20 +44,10 @@ if TYPE_CHECKING:
     )
 
 
-def patch_page_link_handler(post_by_id):
-    def build_cached_get_instance(page_cache):
-        @classmethod  # noqa has to be classmethod to override the original
-        def cached_get_instance(_cls, attrs):
-            page_id = int(attrs["id"])
-            if page_id in page_cache:
-                return page_cache[page_id]
-            else:
-                return super(PageLinkHandler, _cls).get_instance(attrs).specific
+def cache_page_url(post_id: int, url: str) -> None:
+    from ..wagtail_hooks import PageLinkHandlerWithCache
 
-        return cached_get_instance
-
-    PageLinkHandler.get_instance = build_cached_get_instance(post_by_id)
-    return PageLinkHandler
+    PageLinkHandlerWithCache.cache_url(post_id, url)
 
 
 class QuerysetData:
@@ -66,8 +55,6 @@ class QuerysetData:
     This class is a container for the data that is needed to render a list of posts
     and that only depends on the queryset of those posts.
     """
-
-    registered_blocks: list[Any] = []
 
     def __init__(
         self,
@@ -83,6 +70,8 @@ class QuerysetData:
         owner_username_by_id: dict[int, str],
         has_audio_by_id: HasAudioByID,
         renditions_for_posts: RenditionsForPost,
+        page_url_by_id: PageUrlByID,
+        absolute_page_url_by_id: PageUrlByID,
     ):
         self.queryset = post_queryset
         self.post_by_id = post_by_id
@@ -95,10 +84,13 @@ class QuerysetData:
         self.owner_username_by_id = owner_username_by_id
         self.has_audio_by_id = has_audio_by_id
         self.renditions_for_posts = renditions_for_posts
-        patch_page_link_handler(self.post_by_id)
+        self.page_url_by_id = page_url_by_id
+        self.absolute_page_url_by_id = absolute_page_url_by_id
 
     @classmethod
-    def create_from_post_queryset(cls, queryset: QuerySet["Post"]) -> "QuerysetData":
+    def create_from_post_queryset(
+        cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"]
+    ) -> "QuerysetData":
         queryset = queryset.select_related("owner")
         queryset = queryset.prefetch_related(
             "audios",
@@ -114,10 +106,15 @@ class QuerysetData:
         audios_by_post_id: AudiosByPostID = {}
         videos_by_post_id: VideosByPostID = {}
         images_by_post_id: ImagesByPostID = {}
+        page_url_by_id: PageUrlByID = {}
+        absolute_page_url_by_id: PageUrlByID = {}
         for post in queryset:
             post_by_id[post.pk] = post.specific
             owner_username_by_id[post.pk] = post.owner.username
             has_audio_by_id[post.pk] = post.has_audio
+            page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
+            absolute_page_url_by_id[post.pk] = post.full_url
+
             for image_type, image in post.get_all_images():
                 images[image.pk] = image
                 images_by_post_id.setdefault(post.pk, set()).add(image.pk)
@@ -142,6 +139,8 @@ class QuerysetData:
             has_audio_by_id=has_audio_by_id,
             renditions_for_posts=Post.get_all_renditions_from_queryset(queryset),
             owner_username_by_id=owner_username_by_id,
+            page_url_by_id=page_url_by_id,
+            absolute_page_url_by_id=absolute_page_url_by_id,
         )
 
 
@@ -153,6 +152,7 @@ class PostDetailRepository:
     def __init__(
         self,
         *,
+        post_id: int,
         template_base_dir: str,
         blog: "Blog",
         root_nav_links: LinkTuples,
@@ -167,6 +167,7 @@ class PostDetailRepository:
         image_by_id: ImageById,
         renditions_for_posts: RenditionsForPost,
     ):
+        self.post_id = post_id
         self.template_base_dir = template_base_dir
         self.blog = blog
         self.root_nav_links = root_nav_links
@@ -181,6 +182,8 @@ class PostDetailRepository:
         self.image_by_id = image_by_id
         self.renditions_for_posts = renditions_for_posts
 
+        cache_page_url(post_id, page_url)
+
     @classmethod
     def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailRepository":
         blog = post.blog
@@ -188,6 +191,7 @@ class PostDetailRepository:
         if post.owner is not None:
             owner_username = post.owner.username
         return cls(
+            post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
             blog=blog,
             comments_are_enabled=post.get_comments_are_enabled(blog),
@@ -213,8 +217,6 @@ class FeedRepository:
         blog_url: str,
         template_base_dir: str = "bootstrap4",
         queryset_data: QuerysetData,
-        page_url_by_id: PageUrlByID,
-        absolute_page_url_by_id: PageUrlByID,
         root_nav_links: LinkTuples,
     ):
         self.site = site
@@ -222,9 +224,9 @@ class FeedRepository:
         self.blog_url = blog_url
         self.template_base_dir = template_base_dir
         self.root_nav_links = root_nav_links
-        self.page_url_by_id = page_url_by_id
-        self.absolute_page_url_by_id = absolute_page_url_by_id
         self.queryset_data = queryset_data
+        self.page_url_by_id = queryset_data.page_url_by_id
+        self.absolute_page_url_by_id = queryset_data.absolute_page_url_by_id
         self.renditions_for_posts = queryset_data.renditions_for_posts
         self.images = queryset_data.images
         self.image_by_id = queryset_data.images
@@ -245,15 +247,10 @@ class FeedRepository:
         template_base_dir: str,
         post_queryset: QuerySet["Post"],
     ) -> "FeedRepository":
-        queryset_data = QuerysetData.create_from_post_queryset(post_queryset)
         site = Site.find_for_request(request)
+        queryset_data = QuerysetData.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
         root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
-        page_url_by_id: PageUrlByID = {}
-        absolute_page_url_by_id: PageUrlByID = {}
         for post in queryset_data.queryset:
-            page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
-            absolute_page_url_by_id[post.pk] = post.full_url
-
             media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
             for image_pk in queryset_data.images_by_post_id.get(post.pk, []):
                 media_lookup.setdefault("image", {}).update({image_pk: queryset_data.images[image_pk]})
@@ -269,8 +266,6 @@ class FeedRepository:
             queryset_data=queryset_data,
             template_base_dir=template_base_dir,
             root_nav_links=root_nav_links,
-            page_url_by_id=page_url_by_id,
-            absolute_page_url_by_id=absolute_page_url_by_id,
             blog_url=blog.get_url(request=request, current_site=site),
         )
 
@@ -278,6 +273,7 @@ class FeedRepository:
         post_id = post.id
         blog = self.blog
         return PostDetailRepository(
+            post_id=post_id,
             template_base_dir=self.template_base_dir,
             blog=blog,
             root_nav_links=self.root_nav_links,
@@ -404,6 +400,11 @@ class BlogIndexRepository:
             self.audio_by_id = queryset_data.audios
             self.audios_by_post_id = queryset_data.audios_by_post_id
             self.post_queryset = queryset_data.queryset
+            self.page_url_by_id = queryset_data.page_url_by_id
+            self.absolute_page_url_by_id = queryset_data.absolute_page_url_by_id
+
+            for post_id, page_url in self.page_url_by_id.items():
+                cache_page_url(post_id, page_url)
         else:
             self.image_by_id = {}
 
@@ -494,7 +495,9 @@ class BlogIndexRepository:
         # queryset data
         queryset = data["pagination_context"]["object_list"]
         del data["pagination_context"]["object_list"]  # not cachable
-        queryset_data = QuerysetData.create_from_post_queryset(queryset)
+        queryset_data = QuerysetData.create_from_post_queryset(
+            request=request, site=Site(**data["site"]), queryset=queryset
+        )
         data = BlogIndexRepository.add_queryset_data(data, queryset_data)
 
         # page_url by id
@@ -561,6 +564,8 @@ class BlogIndexRepository:
             owner_username_by_id=data["owner_username_by_id"],
             has_audio_by_id=data["has_audio_by_id"],
             renditions_for_posts=renditions_for_posts,
+            page_url_by_id=data["page_url_by_id"],
+            absolute_page_url_by_id=data["absolute_page_url_by_id"],
         )
         root_nav_links = data["root_nav_links"]
 
@@ -596,7 +601,7 @@ class BlogIndexRepository:
         filterset = blog.get_filterset(get_params)
         pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
         queryset = pagination_context["object_list"]
-        queryset_data = QuerysetData.create_from_post_queryset(queryset)
+        queryset_data = QuerysetData.create_from_post_queryset(request=request, site=site, queryset=queryset)
         return {
             "template_base_dir": template_base_dir,
             "filterset": filterset,
