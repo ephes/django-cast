@@ -97,10 +97,6 @@ def create_python_body() -> Body:
     return body
 
 
-def create_body():
-    return json.dumps(create_python_body())
-
-
 def create_post(*, blog: Blog = Auto, body: str = Auto, num: int = 1) -> Post:
     if not blog:  # pragma: no cover
         blog = create_blog()
@@ -108,7 +104,7 @@ def create_post(*, blog: Blog = Auto, body: str = Auto, num: int = 1) -> Post:
         title="Test Post",
         slug=f"test-post-{num}",
         owner=blog.owner,
-        body=body or create_body(),
+        body=body or json.dumps(create_python_body()),
     )
     blog.add_child(instance=post)
     return post
