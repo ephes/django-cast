@@ -134,8 +134,8 @@ def test_internal_page_link_is_not_cached():
     assert tag == "<a>"
 
 
-def test_internal_page_link_is_cached(rf):
-    # Given a posts in a blog which links to itself
+@pytest.fixture
+def post_with_link_to_itself():
     body = [
         {
             "type": "overview",
@@ -148,13 +148,19 @@ def test_internal_page_link_is_cached(rf):
         }
     ]
     post = Post(id=1, title="Link Source Post", body=json.dumps(body), content_type=ContentType("cast", "post"))
+    return post
 
-    # When we render the source post
+
+def test_internal_page_link_is_cached_post_detail(rf, post_with_link_to_itself):
+    PageLinkHandlerWithCache.cache.clear()  # reset the page link cache
+    # Given a post which links to itself
+    post = post_with_link_to_itself
     page_url = "/source-detail/"
     request = rf.get(page_url)
-    repository = post_detail_repository(post_id=post.id, page_url=page_url)  # this will cache the page url
-    # with connection.execute_wrapper(blocker):
+    # Using the post detail repository will cache the page url in the page link handler
+    repository = post_detail_repository(post_id=post.id, page_url=page_url)
     reset_queries()
+    # When we render the post detail page
     response = post.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     # Then the internal link should be rendered
@@ -162,17 +168,22 @@ def test_internal_page_link_is_cached(rf):
     # And the database should not be hit
     assert len(connection.queries) == 0
 
-    # Same test, but now we render the blog index
-    PageLinkHandlerWithCache.cache.clear()  # reset the cache
+
+def test_internal_page_link_is_cached_blog_index(rf, post_with_link_to_itself):
+    PageLinkHandlerWithCache.cache.clear()  # reset the page link cache
+    # Given a post which links to itself and a blog containing the post
+    post = post_with_link_to_itself
+    page_url = "/source-detail/"
     blog = Blog(id=1, title="Some blog", slug="some-blog")
+    # Using the blog index repository will cache the page url in the page link handler
     repository = blog_index_repository(
         pagination_context={"object_list": [post]},
         queryset_data=queryset_data(page_url_by_id={post.id: page_url}),  # this will cache the page url
     )
     request = rf.get("/blog-index/")
     request.htmx = False
-    # with connection.execute_wrapper(blocker):
     reset_queries()
+    # When we render the blog index page
     response = blog.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     # Then the internal link should be rendered
@@ -180,10 +191,16 @@ def test_internal_page_link_is_cached(rf):
     # And the database should not be hit
     assert len(connection.queries) == 0
 
-    # Same test, but now with feed repository
-    PageLinkHandlerWithCache.cache.clear()  # reset the cache
+
+def test_internal_page_link_is_cached_feed(rf, post_with_link_to_itself):
+    PageLinkHandlerWithCache.cache.clear()  # reset the page link cache
+    # Given a post which links to itself and a blog containing the post
+    post = post_with_link_to_itself
+    page_url = "/source-detail/"
+    blog = Blog(id=1, title="Some blog", slug="some-blog")
     django_site = DjangoSite(domain="testserver", name="testserver")
     sites_models.SITE_CACHE[1] = django_site  # cache site to avoid db hit
+    # Using the feed repository will cache the page url in the page link handler
     repository = feed_repository(
         queryset_data=queryset_data(
             post_queryset=[post],
@@ -194,10 +211,10 @@ def test_internal_page_link_is_cached(rf):
         ),
     )
     request = rf.get("/feed/")
-    # with connection.execute_wrapper(blocker):
     reset_queries()
-    view = LatestEntriesFeed(repository=repository)
-    response = view(request, slug=blog.slug)
+    feed_view = LatestEntriesFeed(repository=repository)
+    # When we render the feed
+    response = feed_view(request, slug=blog.slug)
     # Then the internal link should be rendered
     html = response.content.decode("utf-8")
     assert f'&lt;a href="{page_url}"&gt;just an internal link&lt;/a&gt;' in html
