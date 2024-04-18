@@ -238,6 +238,9 @@ class FeedRepository:
         self.audios_by_post_id = queryset_data.audios_by_post_id
         self.post_queryset = queryset_data.queryset
 
+        for post_id, page_url in self.page_url_by_id.items():
+            cache_page_url(post_id, page_url)
+
     @classmethod
     def create_from_post_queryset(
         cls,

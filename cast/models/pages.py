@@ -317,6 +317,11 @@ class Post(Page):
     def get_url(self, request=None, current_site=None):
         return super().get_url(request=request, current_site=current_site)
 
+    def get_full_url(self, request=None):
+        if hasattr(self, "page_url"):
+            return self.page_url
+        return super().get_full_url(request=request)
+
     @staticmethod
     def get_context_from_repository(context: "ContextDict", repository: HasPostDetails) -> "ContextDict":
         context["template_base_dir"] = repository.template_base_dir

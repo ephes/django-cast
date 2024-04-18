@@ -12,6 +12,8 @@ from typing import NamedTuple
 import pytest
 import sqlparse
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.sites import models as sites_models
+from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
 from django.urls import reverse
 from wagtail.images.models import Image, Rendition
@@ -97,13 +99,26 @@ def blog_index_repository(**kwargs):
     defaults = dict(
         template_base_dir="bootstrap4",
         filterset=PostFilterset(None),
-        queryset_data=None,
+        queryset_data=queryset_data(),
         pagination_context={"object_list": []},
         root_nav_links=[],
         use_audio_player=False,
     )
     defaults.update(kwargs)
     return BlogIndexRepository(**defaults)
+
+
+def feed_repository(**kwargs):
+    defaults = dict(
+        site=DjangoSite(),
+        blog=Blog(id=1, title="Some blog"),
+        blog_url="/some-blog/",
+        template_base_dir="bootstrap4",
+        queryset_data=queryset_data(),
+        root_nav_links=[],
+    )
+    defaults.update(kwargs)
+    return FeedRepository(**defaults)
 
 
 # Test page link handler with cache
@@ -165,48 +180,29 @@ def test_internal_page_link_is_cached(rf):
     # And the database should not be hit
     assert len(connection.queries) == 0
 
-
-# @pytest.fixture
-# def linked_posts():
-#     blog = create_blog()
-#     target = create_post(blog=blog, num=1)
-#     source_body = [
-#         {
-#             "type": "overview",
-#             "value": [
-#                 {
-#                     "type": "paragraph",
-#                     "value": f'<a id="{target.pk}" linktype="page">just an internal link</a>',
-#                 }
-#             ],
-#         },
-#     ]
-#     source = create_post(body=json.dumps(source_body), blog=blog, num=2)
-#
-#     class LinkedPosts(NamedTuple):
-#         source: Post
-#         target: Post
-#
-#     linked_posts = LinkedPosts(source=source, target=target)
-#     return linked_posts
-#
-#
-# @pytest.mark.django_db
-# def test_internal_page_link_is_cached(rf, linked_posts):
-#     # Given two posts in a blog, one of which (source) links to the other (target)
-#     page_path = linked_posts.source.get_url_parts(None)[-1]
-#     request = rf.get(page_path)
-#     repository = PostDetailRepository.create_from_django_models(request=request, post=linked_posts.source)
-#     patch_page_link_handler({linked_posts.target.pk: linked_posts.target})
-#     reset_queries()
-#     # When we render the source post
-#     # with connection.execute_wrapper(blocker):
-#     response = linked_posts.source.serve(request, repository=repository).render()
-#     html = response.content.decode("utf-8")
-#     # Then the internal link should be rendered
-#     assert '<a href="/test-blog/test-post-1/">just an internal link</a>' in html
-#     # And the database should not be hit
-#     assert len(connection.queries) == 0
+    # Same test, but now with feed repository
+    PageLinkHandlerWithCache.cache.clear()  # reset the cache
+    django_site = DjangoSite(domain="testserver", name="testserver")
+    sites_models.SITE_CACHE[1] = django_site  # cache site to avoid db hit
+    repository = feed_repository(
+        queryset_data=queryset_data(
+            post_queryset=[post],
+            has_audio_by_id={post.id: False},
+            page_url_by_id={post.id: page_url},  # this will cache the page url
+            absolute_page_url_by_id={post.id: f"http://testserver{page_url}"},
+            owner_username_by_id={post.id: "owner"},
+        ),
+    )
+    request = rf.get("/feed/")
+    # with connection.execute_wrapper(blocker):
+    reset_queries()
+    view = LatestEntriesFeed(repository=repository)
+    response = view(request, slug=blog.slug)
+    # Then the internal link should be rendered
+    html = response.content.decode("utf-8")
+    assert f'&lt;a href="{page_url}"&gt;just an internal link&lt;/a&gt;' in html
+    # And the database should not be hit
+    assert len(connection.queries) == 0
 
 
 def get_media_post(rf, blog):

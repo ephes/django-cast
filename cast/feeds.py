@@ -37,6 +37,8 @@ class LatestEntriesFeed(Feed):
         return self.object.description
 
     def link(self) -> str:
+        if self.predefined_repository is not None:
+            return self.predefined_repository.blog_url
         return self.object.get_full_url()
 
     def items(self) -> QuerySet[Post]:
