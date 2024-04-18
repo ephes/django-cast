@@ -48,7 +48,7 @@ class LatestEntriesFeed(Feed):
             self.repository = self.predefined_repository
         else:
             queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
-            self.repository = FeedRepository.create_from_post_queryset(
+            self.repository = FeedRepository.create_from_django_models(
                 request=self.request,
                 blog=blog,
                 post_queryset=queryset,
@@ -217,7 +217,7 @@ class PodcastFeed(Feed):
         queryset = (
             Episode.objects.live().descendant_of(podcast).filter(podcast_audio__isnull=False).order_by("-visible_date")
         )
-        self.repository = FeedRepository.create_from_post_queryset(
+        self.repository = FeedRepository.create_from_django_models(
             request=self.request,
             blog=podcast,
             post_queryset=queryset,

@@ -242,7 +242,7 @@ class FeedRepository:
             cache_page_url(post_id, page_url)
 
     @classmethod
-    def create_from_post_queryset(
+    def create_from_django_models(
         cls,
         *,
         request: HttpRequest,
@@ -380,7 +380,7 @@ class BlogIndexRepository:
         *,
         template_base_dir: str,
         filterset: Any,
-        queryset_data: QuerysetData | None = None,
+        queryset_data: QuerysetData,
         pagination_context: dict[str, Any],
         root_nav_links: LinkTuples,
         use_audio_player: bool = False,
@@ -392,24 +392,21 @@ class BlogIndexRepository:
         self.use_audio_player = use_audio_player
         # queryset data
         self.queryset_data = queryset_data
-        if queryset_data is not None:
-            self.renditions_for_posts = queryset_data.renditions_for_posts
-            self.images = queryset_data.images
-            self.image_by_id = queryset_data.images
-            self.post_by_id = queryset_data.post_by_id
-            self.owner_username_by_id = queryset_data.owner_username_by_id
-            self.has_audio_by_id = queryset_data.has_audio_by_id
-            self.video_by_id = queryset_data.videos
-            self.audio_by_id = queryset_data.audios
-            self.audios_by_post_id = queryset_data.audios_by_post_id
-            self.post_queryset = queryset_data.queryset
-            self.page_url_by_id = queryset_data.page_url_by_id
-            self.absolute_page_url_by_id = queryset_data.absolute_page_url_by_id
+        self.renditions_for_posts = queryset_data.renditions_for_posts
+        self.images = queryset_data.images
+        self.image_by_id = queryset_data.images
+        self.post_by_id = queryset_data.post_by_id
+        self.owner_username_by_id = queryset_data.owner_username_by_id
+        self.has_audio_by_id = queryset_data.has_audio_by_id
+        self.video_by_id = queryset_data.videos
+        self.audio_by_id = queryset_data.audios
+        self.audios_by_post_id = queryset_data.audios_by_post_id
+        self.post_queryset = queryset_data.queryset
+        self.page_url_by_id = queryset_data.page_url_by_id
+        self.absolute_page_url_by_id = queryset_data.absolute_page_url_by_id
 
-            for post_id, page_url in self.page_url_by_id.items():
-                cache_page_url(post_id, page_url)
-        else:
-            self.image_by_id = {}
+        for post_id, page_url in self.page_url_by_id.items():
+            cache_page_url(post_id, page_url)
 
     @staticmethod
     def add_site_raw(data: dict[str, Any]) -> dict:
@@ -590,38 +587,6 @@ class BlogIndexRepository:
             }
         )
 
-    @staticmethod
-    def data_for_blog_index(
-        *,
-        request: HtmxHttpRequest,
-        blog: "Blog",
-    ) -> dict:
-        """This works, but the result is not cachable since it's not possible to pickle it."""
-        site = Site.find_for_request(request)
-        root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
-        template_base_dir = blog.get_template_base_dir(request)
-        get_params = request.GET.copy()
-        filterset = blog.get_filterset(get_params)
-        pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
-        queryset = pagination_context["object_list"]
-        queryset_data = QuerysetData.create_from_post_queryset(request=request, site=site, queryset=queryset)
-        return {
-            "template_base_dir": template_base_dir,
-            "filterset": filterset,
-            "pagination_context": pagination_context,
-            "queryset_data": queryset_data,
-            "root_nav_links": root_nav_links,
-        }
-
-    @classmethod
-    def create_from_blog_index_request(
-        cls,
-        *,
-        request: HtmxHttpRequest,
-        blog: "Blog",
-    ) -> "BlogIndexRepository":
-        return cls(**BlogIndexRepository.data_for_blog_index(request=request, blog=blog))
-
     @classmethod
     def create_from_django_models(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexRepository":
         get_params = request.GET.copy()
@@ -638,10 +603,14 @@ class BlogIndexRepository:
         if site is not None:
             for page in site.root_page.get_children().live():
                 root_nav_links.append((page.get_url(request), page.title))
+        queryset_data = QuerysetData.create_from_post_queryset(
+            request=request, site=site, queryset=pagination_context["object_list"]
+        )
         return cls(
             filterset=filterset,
             pagination_context=pagination_context,
             template_base_dir=template_base_dir,
             use_audio_player=use_audio_player,
             root_nav_links=root_nav_links,
+            queryset_data=queryset_data,
         )
