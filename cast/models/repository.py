@@ -190,6 +190,9 @@ class PostDetailRepository:
         owner_username = "unknown"
         if post.owner is not None:
             owner_username = post.owner.username
+        image_by_id = {}  # post.media_lookup.get("image", {}) is not enough because gallery images are missing
+        for _, image in post.get_all_images():
+            image_by_id[image.pk] = image
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
@@ -203,7 +206,7 @@ class PostDetailRepository:
             blog_url=blog.get_url(request=request),
             audio_by_id=post.media_lookup.get("audio", {}),
             video_by_id=post.media_lookup.get("video", {}),
-            image_by_id=post.media_lookup.get("image", {}),
+            image_by_id=image_by_id,
             renditions_for_posts=post.get_all_renditions_from_queryset([post]),
         )
 
@@ -212,10 +215,10 @@ class FeedRepository:
     def __init__(
         self,
         *,  # no positional arguments
+        template_base_dir: str = "bootstrap4",
         site: Site,
         blog: "Blog",
         blog_url: str,
-        template_base_dir: str = "bootstrap4",
         queryset_data: QuerysetData,
         root_nav_links: LinkTuples,
     ):

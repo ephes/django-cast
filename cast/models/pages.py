@@ -423,8 +423,17 @@ class Post(Page):
     @staticmethod
     def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[int, str]]:
         for image_type, image in images_with_type:
-            rfs = RenditionFilters.from_wagtail_image_with_type(image, image_type)
-            for filter_string in rfs.filter_strings:
+            print("image_type, image: ", image_type, image)
+            rendition_filters = RenditionFilters.from_wagtail_image_with_type(image, image_type)
+            slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
+            filter_strings_to_fetch = rendition_filters.filter_strings
+            print("filter_strings_to_fetch: ", filter_strings_to_fetch)
+            for slot in slots:
+                for image_format in image_formats:
+                    filter_string = f"{slot}-{image_format}"
+                    if filter_string in filter_strings_to_fetch:
+                        yield image.pk, filter_string
+            for filter_string in rendition_filters.filter_strings:
                 yield image.pk, filter_string
 
     def get_all_images(self) -> ImagesWithType:
@@ -449,6 +458,7 @@ class Post(Page):
         Get all obsolete and missing rendition strings from a queryset of posts.
         """
         required_renditions = set(Post.get_all_filterstrings(images_with_type))
+        print("required_renditions: ", required_renditions)
         all_image_ids = {image_id for image_id, filter_string in required_renditions}
         renditions_queryset = Rendition.objects.filter(image__in=all_image_ids)
         existing_rendition_to_id = {
@@ -474,6 +484,17 @@ class Post(Page):
         for image_id, filter_spec in missing_renditions:
             missing_renditions_by_image_id.setdefault(image_id, set()).add(filter_spec)
         return obsolete_rendition_pks, missing_renditions_by_image_id
+
+    @staticmethod
+    def create_all_missing_renditions(posts: Iterable["Post"]) -> None:
+        """
+        Create all required renditions for all images in the iterable posts.
+        """
+        images_with_type = Post.get_all_images_from_queryset(posts)
+        _, missing_renditions = Post.get_obsolete_and_missing_rendition_strings(images_with_type)
+        for image_id, filter_specs in missing_renditions.items():
+            image = Image.objects.get(id=image_id)
+            image.get_renditions(*filter_specs)
 
     @property
     def comments(self) -> list[dict[str, int | None | str]]:

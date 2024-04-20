@@ -61,12 +61,16 @@ def get_srcset_images_for_slots(
     slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
     rendition_filter_strings = rendition_filters.filter_strings
     if len(rendition_filter_strings) > 0:
+        # if there are rendition filter strings
         renditions = {}
         if fetched_renditions is not None:
             renditions = fetched_renditions
+        # we remove all fetched renditions from the filter strings
         filter_strings_to_fetch = [fs for fs in rendition_filter_strings if fs not in renditions]
         if len(filter_strings_to_fetch) > 0:
+            # and fetch the remaining ones
             renditions.update(image.get_renditions(*filter_strings_to_fetch))
+        # here we fill the filter_to_url dict with the existing renditions
         rendition_filters.set_filter_to_url_via_wagtail_renditions(renditions)
     for slot in slots:
         try:

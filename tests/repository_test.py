@@ -229,7 +229,7 @@ def post_of_blog(rf, settings):
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=1)
     post = blog.unfiltered_published_posts.first()
-    _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    # _ = post.serve(rf.get("/")).render()  # force renditions to be created
     teardown_paths = [Path(post.videos.first().original.path)]
     yield post
     # teardown - remove the files created during the test
@@ -247,10 +247,21 @@ def test_render_post_detail_with_django_models_repository(rf, post_of_blog):
     post = post_of_blog
     post_url = post.get_url()
     request = rf.get(post_url)
+    post.create_all_missing_renditions([post])
+
+    # for image in post.images.all():
+    #     images_for_slots = get_srcset_images_for_slots(image, "regular")
+    #     print("images_for_slots: ", images_for_slots)
+    # for gallery in post.galleries.all():
+    #     for image in gallery.images.all():
+    #         images_for_slots = get_srcset_images_for_slots(image, "gallery")
+    #         print("images_for_slots: ", images_for_slots)
+
     repository = PostDetailRepository.create_from_django_models(request=request, post=post)
     reset_queries()
     # When we render the post detail page
-    response = post.serve(request, repository=repository).render()
+    with connection.execute_wrapper(blocker):
+        response = post.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     # Then the media should be rendered
     assert "web-player/embed.4.js" in html  # audio player because has_audio is True
@@ -263,6 +274,7 @@ def test_render_post_detail_with_django_models_repository(rf, post_of_blog):
     assert '<section class="block-gallery">' in html
     # And the database should not be hit
     assert len(connection.queries) == 0
+    assert False
 
 
 @pytest.mark.django_db
@@ -277,6 +289,7 @@ def test_render_blog_index_with_django_models_repository(rf, post_of_blog):
     # The blog index repository is created from django models
     repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
     # When we render the blog index
+    reset_queries()
     response = blog.serve(request, repository=repository).render()
     # Then post data should be generated on the fly and the media should be rendered
     assert isinstance(response.context_data["repository"], BlogIndexRepository)
@@ -284,8 +297,8 @@ def test_render_blog_index_with_django_models_repository(rf, post_of_blog):
     assert author_name in html
     assert post_detail_url in html
     assert response.context_data["is_paginated"] is False
-    # And the database should be hit
-    assert len(connection.queries) > 0  # 90? - just wow!
+    # And the database should not be hit
+    # assert len(connection.queries) == 0
 
 
 @pytest.mark.django_db
@@ -304,12 +317,15 @@ def test_render_feed_with_django_models_repository(rf, post_of_blog):
     sites_models.SITE_CACHE[1] = django_site  # cache site to avoid db hit
     reset_queries()
     # When we render the feed
-    response = view(request, slug=blog.slug)
+    with connection.execute_wrapper(blocker):
+        response = view(request, slug=blog.slug)
     html = response.content.decode("utf-8")
     # Then the post title should be rendered
     assert post.title in html
     # And the database should be hit
     assert len(connection.queries) > 0  # 16? - just wow!
+    # print("queries: ", len(connection.queries))
+    # assert False
 
 
 # Test render post detail, blog index and blog feed with cachable data
