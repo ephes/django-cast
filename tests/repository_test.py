@@ -6,6 +6,7 @@ queries when rendering posts.
 
 import json
 import pickle
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -421,14 +422,8 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert len(connection.queries) == 0
 
 
-def test_render_blog_index_without_hitting_the_database(rf, post, renditions_for_post):
-    """
-    Given a blog including a post with media which is not in the database. And a repository
-    containing the media needed to render the blog index page.
-
-    When we render the blog index page, then the media should be rendered and
-    the database should not be hit.
-    """
+@pytest.fixture
+def blog_data(post, renditions_for_post):
     post.pk = 1
     audio = Audio(id=1, title="Some audio", collection=None)
     video = Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))
@@ -458,6 +453,18 @@ def test_render_blog_index_without_hitting_the_database(rf, post, renditions_for
             "tag_facets_choices": [],
         },
     }
+    return data
+
+
+def test_render_blog_index_without_hitting_the_database(rf, blog_data):
+    """
+    Given a blog including a post with media which is not in the database. And a repository
+    containing the media needed to render the blog index page.
+
+    When we render the blog index page, then the media should be rendered and
+    the database should not be hit.
+    """
+    data = blog_data
     reset_queries()
     # with connection.execute_wrapper(blocker):
     repository = BlogIndexRepository.create_from_cachable_data(data=data)
@@ -479,45 +486,21 @@ def test_render_blog_index_without_hitting_the_database(rf, post, renditions_for
     assert len(connection.queries) == 0
 
 
-def test_render_feed_without_hitting_the_database(rf, post, renditions_for_post):
+def test_render_feed_without_hitting_the_database(rf, blog_data):
     """
     Given a blog including a post with media which is not in the database. And a repository
     containing the media needed to render the feed.
 
     When we render the blog feed, then the database should not be hit.
     """
-    post.pk = 1
-    audio = Audio(id=1, title="Some audio", collection=None)
-    video = Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))
-    image = Image(id=1, title="Some image", collection=None, file=StubFile("foo.jpg"), width=2000, height=1000)
-    serialized_renditions = serialize_renditions(renditions_for_post)
-    data = {
-        "site": {"id": 1},
-        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
-        "blog_url": "/some-blog/",
-        "template_base_dir": "bootstrap4",
-        "post_by_id": {1: post_to_dict(post)},
-        "posts": [1],
-        "pagination_context": {},
-        "audios": {1: audio_to_dict(audio)},
-        "images": {1: image_to_dict(image)},
-        "videos": {1: video_to_dict(video)},
-        "images_by_post_id": {1: [1]},
-        "videos_by_post_id": {1: [1]},
-        "audios_by_post_id": {1: [1]},
-        "renditions_for_posts": serialized_renditions,
-        "owner_username_by_id": {1: "owner"},
-        "page_url_by_id": {1: "/some-post/"},
-        "absolute_page_url_by_id": {1: "http://testserver/some-post/"},
-        "has_audio_by_id": {1: True},
-        "root_nav_links": [("http://testserver/", "Home"), ("http://testserver/about/", "About")],
-        "filterset": {
-            "get_params": {},
-            "date_facets_choices": [],
-            "category_facets_choices": [],
-            "tag_facets_choices": [],
-        },
-    }
+    data = deepcopy(blog_data)
+    data.update(
+        {
+            "site": {"id": 1},
+            "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
+            "blog_url": "/some-blog/",
+        }
+    )
     reset_queries()
     repository = FeedRepository.create_from_cachable_data(data=data)
     feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": "some-blog"})
@@ -530,7 +513,7 @@ def test_render_feed_without_hitting_the_database(rf, post, renditions_for_post)
     # with connection.execute_wrapper(blocker):
     response = view(request, slug="some-blog")
     html = response.content.decode("utf-8")
-    assert post.title in html
+    assert data["post_by_id"][1]["title"] in html
     # And the database should be hit
     assert len(connection.queries) == 0
 
