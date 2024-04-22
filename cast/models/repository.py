@@ -296,8 +296,8 @@ class FeedRepository:
 
 
 def audio_to_dict(audio) -> dict:
-    return {
-        "pk": audio.pk,
+    data = {
+        "id": audio.pk,
         "duration": audio.duration,
         "title": audio.title,
         "subtitle": audio.subtitle,
@@ -307,20 +307,31 @@ def audio_to_dict(audio) -> dict:
         "oga": audio.oga.name,
         "opus": audio.opus.name,
     }
+    if audio.collection_id is not None:
+        data["collection_id"] = audio.collection_id
+    else:
+        data["collection"] = None
+    return data
 
 
 def video_to_dict(video) -> dict:
-    return {
-        "pk": video.pk,
+    data = {
+        "id": video.pk,
         "title": video.title,
         "original": video.original.name,
         "poster": video.poster.name,
         "poster_seconds": video.poster_seconds,
     }
+    if video.collection_id is not None:
+        data["collection_id"] = video.collection_id
+    else:
+        data["collection"] = None
+    return data
 
 
 def post_to_dict(post):
     return {
+        "id": post.pk,
         "pk": post.pk,
         "uuid": post.uuid,
         "title": post.title,
@@ -331,13 +342,18 @@ def post_to_dict(post):
 
 
 def image_to_dict(image):
-    return {
+    data = {
         "pk": image.pk,
         "title": image.title,
         "file": image.file.name,
         "width": image.width,
         "height": image.height,
     }
+    if image.collection_id is not None:
+        data["collection_id"] = image.collection_id
+    else:
+        data["collection"] = None
+    return data
 
 
 def rendition_to_dict(rendition):

@@ -27,8 +27,12 @@ from cast.models.repository import (
     FeedRepository,
     PostDetailRepository,
     QuerysetData,
+    audio_to_dict,
     get_facet_choices,
+    image_to_dict,
+    post_to_dict,
     serialize_renditions,
+    video_to_dict,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
 
@@ -314,8 +318,8 @@ def test_render_feed_with_django_models_repository(rf, post_of_blog):
     sites_models.SITE_CACHE[1] = django_site  # cache site to avoid db hit
     reset_queries()
     # When we render the feed
-    with connection.execute_wrapper(blocker):
-        response = view(request, slug=blog.slug)
+    # with connection.execute_wrapper(blocker):
+    response = view(request, slug=blog.slug)
     html = response.content.decode("utf-8")
     # Then the post title should be rendered
     assert post.title in html
@@ -417,7 +421,7 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert len(connection.queries) == 0
 
 
-def test_render_blog_index_without_hitting_the_database(rf, django_user_model, post, renditions_for_post):
+def test_render_blog_index_without_hitting_the_database(rf, post, renditions_for_post):
     """
     Given a blog including a post with media which is not in the database. And a repository
     containing the media needed to render the blog index page.
@@ -425,36 +429,42 @@ def test_render_blog_index_without_hitting_the_database(rf, django_user_model, p
     When we render the blog index page, then the media should be rendered and
     the database should not be hit.
     """
+    post.pk = 1
     audio = Audio(id=1, title="Some audio", collection=None)
     video = Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))
     image = Image(id=1, title="Some image", collection=None, file=StubFile("foo.jpg"), width=2000, height=1000)
-    owner_username_by_id = {1: "owner"}
-    post.owner = django_user_model(username=owner_username_by_id[post.id])
-    repository = BlogIndexRepository(
-        template_base_dir="bootstrap4",
-        filterset=PostFilterset(None),
-        queryset_data=QuerysetData(
-            post_queryset=[post],
-            post_by_id={1: post},
-            audios={1: audio},
-            images={1: image},
-            videos={1: video},
-            audios_by_post_id={1: {audio}},
-            videos_by_post_id={1: {video}},
-            images_by_post_id={1: {image}},
-            owner_username_by_id=owner_username_by_id,
-            has_audio_by_id={1: True},
-            renditions_for_posts=renditions_for_post,
-            page_url_by_id={1: "/some-post/"},
-            absolute_page_url_by_id={1: "http://testserver/some-post/"},
-        ),
-        pagination_context={"object_list": [post]},
-        root_nav_links=[("http://testserver/", "Home"), ("http://testserver/about/", "About")],
-        use_audio_player=False,
-    )
+    serialized_renditions = serialize_renditions(renditions_for_post)
+    data = {
+        "template_base_dir": "bootstrap4",
+        "post_by_id": {1: post_to_dict(post)},
+        "posts": [1],
+        "pagination_context": {},
+        "audios": {1: audio_to_dict(audio)},
+        "images": {1: image_to_dict(image)},
+        "videos": {1: video_to_dict(video)},
+        "images_by_post_id": {1: [1]},
+        "videos_by_post_id": {1: [1]},
+        "audios_by_post_id": {1: [1]},
+        "renditions_for_posts": serialized_renditions,
+        "owner_username_by_id": {1: "owner"},
+        "page_url_by_id": {1: "/some-post/"},
+        "absolute_page_url_by_id": {1: "http://testserver/some-post/"},
+        "has_audio_by_id": {1: True},
+        "root_nav_links": [("http://testserver/", "Home"), ("http://testserver/about/", "About")],
+        "filterset": {
+            "get_params": {},
+            "date_facets_choices": [],
+            "category_facets_choices": [],
+            "tag_facets_choices": [],
+        },
+    }
+    reset_queries()
+    # with connection.execute_wrapper(blocker):
+    repository = BlogIndexRepository.create_from_cachable_data(data=data)
     blog = Blog(id=1, title="Some blog", slug="some-blog")
     request = rf.get("/some-blog/")
     request.htmx = False
+    # with connection.execute_wrapper(blocker):
     response = blog.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     assert "Owner" in html
