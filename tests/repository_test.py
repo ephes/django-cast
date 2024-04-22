@@ -231,7 +231,7 @@ def test_internal_page_link_is_cached_feed(rf, post_with_link_to_itself):
 
 
 @pytest.fixture
-def post_of_blog(settings):
+def post_in_blog(settings):
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=1)
     post = blog.unfiltered_published_posts.first()
@@ -245,12 +245,12 @@ def post_of_blog(settings):
 
 
 @pytest.mark.django_db
-def test_render_post_detail_with_django_models_repository(rf, post_of_blog):
+def test_render_post_detail_with_django_models_repository(rf, post_in_blog):
     """
     This test should just use the default repository and fetch all data from the database.
     """
     # Given a post with a gallery, an image, a video and an audio
-    post = post_of_blog
+    post = post_in_blog
     post_url = post.get_url()
     request = rf.get(post_url)
     repository = PostDetailRepository.create_from_django_models(request=request, post=post)
@@ -273,9 +273,9 @@ def test_render_post_detail_with_django_models_repository(rf, post_of_blog):
 
 
 @pytest.mark.django_db
-def test_render_blog_index_with_django_models_repository(rf, post_of_blog):
+def test_render_blog_index_with_django_models_repository(rf, post_in_blog):
     # Given a blog with a post
-    post = post_of_blog
+    post = post_in_blog
     blog = post.blog
     author_name = post.owner.username.capitalize()
     post_detail_url = post.get_url()
@@ -304,9 +304,9 @@ def test_render_blog_index_with_django_models_repository(rf, post_of_blog):
 
 
 @pytest.mark.django_db
-def test_render_feed_with_django_models_repository(rf, post_of_blog):
+def test_render_feed_with_django_models_repository(rf, post_in_blog):
     # Given a post in a blog having a feed
-    post = post_of_blog
+    post = post_in_blog
     blog = post.blog
     post_queryset = blog.unfiltered_published_posts
     repository = FeedRepository.create_from_django_models(
