@@ -274,6 +274,70 @@ class FeedRepository:
             blog_url=blog.get_url(request=request, current_site=site),
         )
 
+    @classmethod
+    def create_from_cachable_data(
+        cls,
+        *,
+        data: dict[str, Any],
+    ) -> "FeedRepository":
+        """
+        This method recreates usable models from the cachable data.
+        """
+        from wagtail.images.models import Image
+
+        from . import Audio, Blog, Post, Video
+
+        site = Site(**data["site"])
+        blog = Blog(**data["blog"])
+        template_base_dir = data["template_base_dir"]
+        post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
+        post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
+        audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
+        images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
+        videos = {video_pk: Video(**video_data) for video_pk, video_data in data["videos"].items()}
+
+        renditions_for_posts = deserialize_renditions(data["renditions_for_posts"])
+
+        user_model = get_user_model()
+        for post in post_queryset:
+            media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
+            for image_pk in data["images_by_post_id"].get(post.pk, []):
+                media_lookup.setdefault("image", {}).update({image_pk: images[image_pk]})
+            for video_pk in data["videos_by_post_id"].get(post.pk, []):
+                media_lookup.setdefault("video", {}).update({video_pk: videos[video_pk]})
+            for audio_pk in data["audios_by_post_id"].get(post.pk, []):
+                media_lookup.setdefault("audio", {}).update({audio_pk: audios[audio_pk]})
+            post._media_lookup = media_lookup
+            post.owner = user_model(username=data["owner_username_by_id"][post.pk])
+            post.page_url = data["page_url_by_id"][post.pk]
+
+        queryset_data = QuerysetData(
+            post_queryset=post_queryset,
+            post_by_id=post_by_id,
+            audios=audios,
+            images=images,
+            videos=videos,
+            audios_by_post_id=data["audios_by_post_id"],
+            videos_by_post_id=data["videos_by_post_id"],
+            images_by_post_id=data["images_by_post_id"],
+            owner_username_by_id=data["owner_username_by_id"],
+            has_audio_by_id=data["has_audio_by_id"],
+            renditions_for_posts=renditions_for_posts,
+            page_url_by_id=data["page_url_by_id"],
+            absolute_page_url_by_id=data["absolute_page_url_by_id"],
+        )
+        root_nav_links = data["root_nav_links"]
+        return cls(
+            **{
+                "site": site,
+                "blog": blog,
+                "blog_url": data["blog_url"],
+                "template_base_dir": template_base_dir,
+                "queryset_data": queryset_data,
+                "root_nav_links": root_nav_links,
+            }
+        )
+
     def get_post_detail_repository(self, post: "Post") -> PostDetailRepository:
         post_id = post.id
         blog = self.blog
