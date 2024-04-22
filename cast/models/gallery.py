@@ -4,6 +4,11 @@ from django.db import models
 from model_utils.models import TimeStampedModel
 from wagtail.images.models import Image
 
+from cast.models.image_renditions import (
+    create_missing_renditions_for_images,
+    get_obsolete_and_missing_rendition_strings,
+)
+
 
 class Gallery(TimeStampedModel):
     images: models.ManyToManyField = models.ManyToManyField(Image)  # FIXME mypy are you ok?
@@ -12,6 +17,11 @@ class Gallery(TimeStampedModel):
     @property
     def image_ids(self) -> set[int]:
         return {i.pk for i in self.images.all()}
+
+    def create_renditions(self):
+        images_with_type = [("gallery", image) for image in self.images.all()]
+        _, missing_renditions = get_obsolete_and_missing_rendition_strings(images_with_type)
+        create_missing_renditions_for_images(missing_renditions)
 
 
 def get_or_create_gallery(image_ids: Iterable[int]) -> Gallery | None:

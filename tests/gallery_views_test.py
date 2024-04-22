@@ -49,6 +49,7 @@ def test_get_prev_next_pk(current_image_pk, image_pks, expected_prev_next):
 
 @pytest.mark.django_db
 def test_htmx_gallery_modal_happy(client, gallery):
+    gallery.create_renditions()
     image_pks = ",".join([str(image.pk) for image in gallery.images.all()])
     current_image_pk = image_pks[0]
     block_id = "block_id"

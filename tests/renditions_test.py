@@ -110,7 +110,10 @@ def test_rendition_filters_build_filters():
     ]
     image = rect(w4000, h6000)  # 2:3 portrait
     # When we get the filters for the image
-    filters_dict = RenditionFilters.build_filters(image, slots, image_formats=["avif", "jpeg"])
+    rendition_filters = RenditionFilters(
+        image=image, slots=slots, image_formats=["avif", "jpeg"], original_format="jpeg"
+    )
+    filters_dict = rendition_filters.build_filters()
     filters = RenditionFilters.get_all_filters(filters_dict)
     # Then we get 3 filters for the thumbnail and 3 filters for the modal image
     widths = sorted({f.width for f in filters})
@@ -143,3 +146,29 @@ def test_rendition_filters_get_filter_by_slot_format_and_fitting_width():
     with pytest.raises(ValueError):
         # Then we get a ValueError
         rendition_filters.get_filter_by_slot_format_and_fitting_width(slot, "jpeg", w53)
+
+
+class RenditionStub:
+    def __init__(self, url):
+        self.url = url
+
+
+# def test_get_renditions_to_fetch():
+#     # Given a list of renditions and a list of filters
+#     [slot] = slots = IMAGE_TYPE_TO_SLOTS["regular"]
+#     image = Rectangle(w6000, h4000)
+#     rendition_filters = RenditionFilters(
+#         image=image, original_format="png", slots=slots, image_formats=["avif", "jpeg"])
+#     renditions = {}
+#     for filter_string in rendition_filters.filter_strings:
+#         width = filter_string.split("|")[0].split("-")[-1]
+#         image_format = filter_string.split("|")[-1].split("-")[-1]
+#         renditions[filter_string] = RenditionStub(f"foobar-{width}.{image_format}")
+#     rendition_filters.set_filter_to_url_via_wagtail_renditions(renditions)
+#     print(rendition_filters.filter_strings)
+#     image_for_slot = rendition_filters.get_image_for_slot(slot)
+#     print(image_for_slot)
+#     # print(rendition_filters.filter_to_url)
+#     # When we get the renditions to fetch
+#     # Then we get the expected renditions to fetch
+#     assert False

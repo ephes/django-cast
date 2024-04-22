@@ -81,6 +81,16 @@ class RenditionFilter:
         return "|".join(filter_parts)
 
 
+@dataclass
+class FormatRenditionFilter(RenditionFilter):
+    """
+    A rendition filter for format conversion only.
+    """
+
+    def get_wagtail_filter_str(self, _original_format: ImageFormat) -> str:
+        return f"format-{self.format}"
+
+
 def get_rendition_filters_for_image_and_slot(
     image: Rectangle,  # dimensions of the original image
     slot: Rectangle,  # slot the image needs to fit into
@@ -159,7 +169,7 @@ class RenditionFilters:
         self.slot_to_fitting_width: dict[Rectangle, Width] = {}
         for slot in slots:
             self.slot_to_fitting_width[slot] = Width(calculate_fitting_width(image, slot))
-        self.filters = self.build_filters(self.image, self.slots, self.image_formats)
+        self.filters = self.build_filters()
         self.filter_to_url: dict[str, str] = {}
 
     @classmethod
@@ -175,17 +185,27 @@ class RenditionFilters:
         )
 
     def set_filter_to_url_via_wagtail_renditions(self, renditions: dict[str, AbstractRendition]) -> None:
-        self.filter_to_url = {fs: renditions[fs].url for fs in self.filter_strings}
+        # self.filter_to_url = {fs: renditions[fs].url for fs in self.filter_strings}
+        self.filter_to_url = {fs: renditions[fs].url for fs in renditions}
 
-    @staticmethod
-    def build_filters(image: Rectangle, slots: list[Rectangle], image_formats: ImageFormats) -> Filters:
+    def build_filters(self) -> Filters:
         """
         Build all filters for all slots and image formats.
         """
+        slots, image = self.slots, self.image
+        image_formats, original_format = self.image_formats, self.original_format
         filters: Filters = {slot: {} for slot in slots}
         for slot in slots:
             for image_format in image_formats:
-                filters[slot][image_format] = get_rendition_filters_for_image_and_slot(image, slot, image_format)
+                filters[slot][image_format] = format_filters = get_rendition_filters_for_image_and_slot(
+                    image, slot, image_format
+                )
+                if len(format_filters) == 0 and image_format != original_format:
+                    # if no filters found for the image format and the image format is not the original format
+                    # add a format filter to convert the image to the desired format. This happens if the image
+                    # is too small to be scaled to the slot.
+                    fitting_width = self.slot_to_fitting_width[slot]
+                    format_filters.append(FormatRenditionFilter(slot=slot, width=fitting_width, format=image_format))
         return filters
 
     def get_filter_by_slot_format_and_fitting_width(

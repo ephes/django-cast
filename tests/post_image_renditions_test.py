@@ -1,6 +1,10 @@
 import pytest
 
 from cast.models import Post
+from cast.models.image_renditions import (
+    get_all_filterstrings,
+    get_obsolete_and_missing_rendition_strings,
+)
 
 
 @pytest.mark.django_db
@@ -28,6 +32,7 @@ def test_post_image_from_gallery_in_get_all_images_from_queryset(post_with_galle
 
 @pytest.mark.django_db
 def test_post_get_all_renditions_from_queryset(post_with_image):
+    # image = post_with_image.images.first()
     post_queryset = Post.objects.filter(pk=post_with_image.pk).prefetch_related("galleries__images")
     all_renditions = list(Post.get_all_renditions_from_queryset(post_queryset))
     assert all_renditions == []
@@ -47,7 +52,7 @@ def test_post_get_all_required_filter_strings():
     # Given an iterator ofr images with types
     images = [("regular", StubWagtailImage())]
     # When we get all required filter strings for the image
-    required_filter_strings = {fs for ipk, fs in Post.get_all_filterstrings(images)}  # type: ignore
+    required_filter_strings = {fs for ipk, fs in get_all_filterstrings(images)}  # type: ignore
     # Then the required filter strings should be in the list
     assert "width-1110" in required_filter_strings
 
@@ -70,7 +75,7 @@ def test_post_get_obsolete_and_missing_rendition_strings(mocker):
     rendition_queryset = RenditionQuerysetStub()
     mocker.patch("cast.models.pages.Rendition.objects.filter", return_value=rendition_queryset)
     # When we get all obsolete and missing renditions for the images
-    obsolete_renditions, missing_renditions = Post.get_obsolete_and_missing_rendition_strings(images)
+    obsolete_renditions, missing_renditions = get_obsolete_and_missing_rendition_strings(images)
     # Then the obsolete renditions should be empty
     assert obsolete_renditions == {rendition_queryset.pk}
     # Then the missing renditions should be in the list

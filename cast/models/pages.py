@@ -1,7 +1,7 @@
 import logging
 import uuid
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from django import forms
 from django.conf import settings
@@ -44,8 +44,8 @@ from cast.blocks import (
 )
 from cast.models import get_or_create_gallery
 
-from ..renditions import ImageType, RenditionFilters
 from ..views import HtmxHttpRequest
+from .image_renditions import ImagesWithType
 from .repository import (
     AudioById,
     ImageById,
@@ -121,9 +121,6 @@ class HtmlField(Field):
         return post.get_description(
             request=self.context["request"], render_detail=self.render_detail, escape_html=False, remove_newlines=False
         )
-
-
-ImagesWithType: TypeAlias = Iterator[tuple[ImageType, Image]]
 
 
 class HasPostDetails(Protocol):
@@ -420,22 +417,6 @@ class Post(Page):
             renditions_for_posts.setdefault(rendition.image_id, []).append(rendition)
         return renditions_for_posts
 
-    @staticmethod
-    def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[int, str]]:
-        for image_type, image in images_with_type:
-            print("image_type, image: ", image_type, image)
-            rendition_filters = RenditionFilters.from_wagtail_image_with_type(image, image_type)
-            slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
-            filter_strings_to_fetch = rendition_filters.filter_strings
-            print("filter_strings_to_fetch: ", filter_strings_to_fetch)
-            for slot in slots:
-                for image_format in image_formats:
-                    filter_string = f"{slot}-{image_format}"
-                    if filter_string in filter_strings_to_fetch:
-                        yield image.pk, filter_string
-            for filter_string in rendition_filters.filter_strings:
-                yield image.pk, filter_string
-
     def get_all_images(self) -> ImagesWithType:
         """
         Use it like this:
@@ -449,52 +430,6 @@ class Post(Page):
         for gallery in self.galleries.all():
             for image in gallery.images.all():
                 yield "gallery", image
-
-    @staticmethod
-    def get_obsolete_and_missing_rendition_strings(
-        images_with_type: ImagesWithType,
-    ) -> tuple[set[int], dict[int, set[str]]]:
-        """
-        Get all obsolete and missing rendition strings from a queryset of posts.
-        """
-        required_renditions = set(Post.get_all_filterstrings(images_with_type))
-        print("required_renditions: ", required_renditions)
-        all_image_ids = {image_id for image_id, filter_string in required_renditions}
-        renditions_queryset = Rendition.objects.filter(image__in=all_image_ids)
-        existing_rendition_to_id = {
-            (image_id, filter_spec): pk
-            for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec")
-        }
-        existing_renditions = set(existing_rendition_to_id.keys())
-        obsolete_renditions_unfiltered = existing_renditions - required_renditions
-
-        # remove wagtail generated renditions from obsolete_renditions
-        obsolete_renditions = set()
-        wagtail_filter_specs = {"max-165x165", "max-800x600"}
-        for image_id, filter_spec in obsolete_renditions_unfiltered:
-            if filter_spec not in wagtail_filter_specs:
-                obsolete_renditions.add((image_id, filter_spec))
-        obsolete_rendition_pks = {
-            existing_rendition_to_id[(image_id, filter_spec)] for image_id, filter_spec in obsolete_renditions
-        }
-
-        # build missing renditions aggregated by image id
-        missing_renditions = required_renditions - existing_renditions
-        missing_renditions_by_image_id: dict[int, set[str]] = {}  # why mypy?
-        for image_id, filter_spec in missing_renditions:
-            missing_renditions_by_image_id.setdefault(image_id, set()).add(filter_spec)
-        return obsolete_rendition_pks, missing_renditions_by_image_id
-
-    @staticmethod
-    def create_all_missing_renditions(posts: Iterable["Post"]) -> None:
-        """
-        Create all required renditions for all images in the iterable posts.
-        """
-        images_with_type = Post.get_all_images_from_queryset(posts)
-        _, missing_renditions = Post.get_obsolete_and_missing_rendition_strings(images_with_type)
-        for image_id, filter_specs in missing_renditions.items():
-            image = Image.objects.get(id=image_id)
-            image.get_renditions(*filter_specs)
 
     @property
     def comments(self) -> list[dict[str, int | None | str]]:
@@ -590,6 +525,7 @@ class Post(Page):
     def save(self, *args, **kwargs) -> None:
         save_return = super().save(*args, **kwargs)
         self.sync_media_ids()
+        # create_missing_renditions_for_posts([self])
         return save_return
 
 

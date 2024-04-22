@@ -5,6 +5,7 @@ from rich.progress import track
 from wagtail.images.models import Image, Rendition
 
 from ...models import Blog, Post
+from ...models.image_renditions import get_obsolete_and_missing_rendition_strings
 
 
 class Command(BaseCommand):
@@ -45,7 +46,7 @@ By default all posts are synced.
 
         posts_queryset = posts_queryset.prefetch_related("images", "galleries__images")
         all_images = Post.get_all_images_from_queryset(posts_queryset)
-        obsolete_renditions, missing_renditions = Post.get_obsolete_and_missing_rendition_strings(all_images)
+        obsolete_renditions, missing_renditions = get_obsolete_and_missing_rendition_strings(all_images)
         Rendition.objects.filter(id__in=obsolete_renditions).delete()
         missing_renditions = list(missing_renditions.items())
         print("len missing renditions: ", len(missing_renditions))

@@ -21,6 +21,7 @@ from cast.devdata import create_python_body, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
 from cast.filters import PostFilterset
 from cast.models import Audio, Blog, Post, Video
+from cast.models.image_renditions import create_missing_renditions_for_posts
 from cast.models.repository import (
     BlogIndexRepository,
     FeedRepository,
@@ -229,7 +230,7 @@ def post_of_blog(rf, settings):
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=1)
     post = blog.unfiltered_published_posts.first()
-    # _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    create_missing_renditions_for_posts([post])  # force renditions to be created
     teardown_paths = [Path(post.videos.first().original.path)]
     yield post
     # teardown - remove the files created during the test
@@ -247,7 +248,7 @@ def test_render_post_detail_with_django_models_repository(rf, post_of_blog):
     post = post_of_blog
     post_url = post.get_url()
     request = rf.get(post_url)
-    post.create_all_missing_renditions([post])
+    create_missing_renditions_for_posts([post])
 
     # for image in post.images.all():
     #     images_for_slots = get_srcset_images_for_slots(image, "regular")
@@ -274,7 +275,6 @@ def test_render_post_detail_with_django_models_repository(rf, post_of_blog):
     assert '<section class="block-gallery">' in html
     # And the database should not be hit
     assert len(connection.queries) == 0
-    assert False
 
 
 @pytest.mark.django_db
@@ -323,7 +323,7 @@ def test_render_feed_with_django_models_repository(rf, post_of_blog):
     # Then the post title should be rendered
     assert post.title in html
     # And the database should be hit
-    assert len(connection.queries) > 0  # 16? - just wow!
+    assert len(connection.queries) == 0  # 16? - just wow!
     # print("queries: ", len(connection.queries))
     # assert False
 
@@ -430,7 +430,8 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     post_detail_url = post.get_url()
     request = rf.get(blog.get_url())
     request.htmx = False
-    _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    # _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    create_missing_renditions_for_posts([post])  # force renditions to be created
 
     # Set up the cache
     cachable_data = BlogIndexRepository.data_for_blog_index_cachable(request=request, blog=blog)

@@ -66,7 +66,7 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
 
     for image in images:
         fetched_renditions = {r.filter_spec: r for r in image.renditions.all() if r.image_id == image.pk}
-        images_for_slots = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
+        images_for_slots = get_srcset_images_for_slots(image, "regular", renditions=fetched_renditions)
         [image.modal] = images_for_slots.values()
 
     pk_to_image = {image.pk: image for image in images}

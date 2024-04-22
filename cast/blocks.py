@@ -50,28 +50,15 @@ def previous_and_next(all_items: Iterable) -> Iterable:
 def get_srcset_images_for_slots(
     image: AbstractImage,
     image_type: ImageType,
-    fetched_renditions: dict[str, AbstractRendition] | None = None,
+    renditions: dict[str, AbstractRendition],
 ) -> dict[Rectangle, ImageForSlot]:
     """
-    Get the srcset images for the given slots and image formats. This will fetch
-    renditions from wagtail and return a list of ImageInSlot objects.
+    Get the srcset images for the given slots and image formats. This will return a list of ImageInSlot objects.
     """
     images_for_slots = {}
     rendition_filters = RenditionFilters.from_wagtail_image_with_type(image=image, image_type=image_type)
     slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
-    rendition_filter_strings = rendition_filters.filter_strings
-    if len(rendition_filter_strings) > 0:
-        # if there are rendition filter strings
-        renditions = {}
-        if fetched_renditions is not None:
-            renditions = fetched_renditions
-        # we remove all fetched renditions from the filter strings
-        filter_strings_to_fetch = [fs for fs in rendition_filter_strings if fs not in renditions]
-        if len(filter_strings_to_fetch) > 0:
-            # and fetch the remaining ones
-            renditions.update(image.get_renditions(*filter_strings_to_fetch))
-        # here we fill the filter_to_url dict with the existing renditions
-        rendition_filters.set_filter_to_url_via_wagtail_renditions(renditions)
+    rendition_filters.set_filter_to_url_via_wagtail_renditions(renditions)
     for slot in slots:
         try:
             images_for_slots[slot] = rendition_filters.get_image_for_slot(slot)
@@ -82,16 +69,14 @@ def get_srcset_images_for_slots(
                 if image_format == rendition_filters.original_format:
                     src[image_format] = image.file.url
                 else:
-                    # convert to image_format
-                    rendition = image.get_rendition(f"format-{image_format}")
+                    rendition = renditions[f"format-{image_format}"]
                     src[image_format] = rendition.url
             srcset = {}
             for image_format in image_formats:
                 if image_format == rendition_filters.original_format:
                     srcset[image_format] = f"{image.file.url} {image.width}w"
                 else:
-                    # convert to image_format
-                    rendition = image.get_rendition(f"format-{image_format}")
+                    rendition = renditions[f"format-{image_format}"]
                     srcset[image_format] = f"{rendition.url} {rendition.width}w"
             width = rendition_filters.slot_to_fitting_width[slot]
             images_for_slots[slot] = ImageForSlot(Rectangle(width, slot.height), src, srcset)
@@ -127,11 +112,10 @@ class CastImageChooserBlock(ImageChooserBlock):
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
         return image, fetched_renditions
 
-    def get_context(self, image_pk: int, parent_context: dict | None = None) -> dict:
-        if parent_context is None:
-            parent_context = {"repository": EmptyImageRepository()}
+    def get_context(self, image_pk: int, parent_context: dict) -> dict:
+        assert parent_context is not None
         image, fetched_renditions = self.get_image_and_renditions(image_pk, parent_context)
-        images_for_slots = get_srcset_images_for_slots(image, "regular", fetched_renditions=fetched_renditions)
+        images_for_slots = get_srcset_images_for_slots(image, "regular", renditions=fetched_renditions)
         [image.regular] = images_for_slots.values()
         return super().get_context(image, parent_context=parent_context)
 
@@ -164,7 +148,7 @@ def add_image_thumbnails(images: Iterable[AbstractImage], context: dict) -> None
     for image in images:
         image_renditions = renditions_for_posts.get(image.pk, [])
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
-        images_for_slots = get_srcset_images_for_slots(image, "gallery", fetched_renditions=fetched_renditions)
+        images_for_slots = get_srcset_images_for_slots(image, "gallery", renditions=fetched_renditions)
         image.modal = images_for_slots[modal_slot]
         image.thumbnail = images_for_slots[thumbnail_slot]
 

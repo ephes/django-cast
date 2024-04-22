@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     )
     from cast.models import Audio, Blog, Post, Video
 
-
 PostByID: TypeAlias = dict[int, "Post"]
 PageUrlByID: TypeAlias = dict[int, str]
 HasAudioByID: TypeAlias = dict[int, bool]
