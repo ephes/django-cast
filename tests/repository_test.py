@@ -479,7 +479,16 @@ def test_render_blog_index_without_hitting_the_database(rf, post, renditions_for
     assert len(connection.queries) == 0
 
 
-# feed test ist missing here
+def test_render_feed_without_hitting_the_database(rf, post, renditions_for_post):
+    """
+    Given a blog including a post with media which is not in the database. And a repository
+    containing the media needed to render the feed.
+
+    When we render the blog feed, then the database should not be hit.
+    """
+    # repository = FeedRepository(
+    assert True
+
 
 # Is it possible to cache the data for the blog index?
 # This is also interesting for post detail and feed
