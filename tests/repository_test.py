@@ -327,7 +327,43 @@ def test_render_feed_with_django_models_repository(rf, post_of_blog):
 # provided without hitting the database
 
 
-def test_render_post_detail_without_hitting_the_database(rf):
+class StubFile:
+    def __init__(self, name):
+        self.name = name
+        self.url = f"/media/{name}"
+
+
+@pytest.fixture
+def post():
+    body = create_python_body()
+    body[0]["value"].append({"type": "audio", "value": 1})
+    body[0]["value"].append({"type": "video", "value": 1})
+    body[0]["value"].append({"type": "image", "value": 1})
+    gallery_with_layout = {"layout": "default", "gallery": [{"id": 1, "type": "item", "value": 1}]}
+    body[0]["value"].append({"id": 1, "type": "gallery", "value": gallery_with_layout})
+    serialized_body = json.dumps(body)
+    return Post(id=1, title="Some post", body=serialized_body)
+
+
+@pytest.fixture
+def renditions_for_post():
+    return {
+        1: [
+            # image
+            Rendition(file=StubFile("foo.jpg"), filter_spec="width-1110", width=1110, height=200),
+            Rendition(file=StubFile("foo.avif"), filter_spec="width-1110|format-avif", width=1110, height=200),
+            # gallery
+            Rendition(file=StubFile("foo.jpg"), filter_spec="width-120", width=100, height=120),
+            Rendition(file=StubFile("foo.jpg"), filter_spec="width-240", width=100, height=240),
+            Rendition(file=StubFile("foo.jpg"), filter_spec="width-360", width=100, height=360),
+            Rendition(file=StubFile("foo.jpg"), filter_spec="width-120|format-avif", width=100, height=200),
+            Rendition(file=StubFile("foo.jpg"), filter_spec="width-240|format-avif", width=100, height=200),
+            Rendition(file=StubFile("foo.jpg"), filter_spec="width-360|format-avif", width=100, height=200),
+        ]
+    }
+
+
+def test_render_post_detail_without_hitting_the_database(rf, post, renditions_for_post):
     """
     Given a post with media which is not in the database. And a repository
     containing the media needed to render the post detail.
@@ -335,11 +371,6 @@ def test_render_post_detail_without_hitting_the_database(rf):
     When we render the post detail, then the media should be rendered and
     the database should not be hit.
     """
-
-    class StubFile:
-        def __init__(self, name):
-            self.name = name
-            self.url = f"/media/{name}"
 
     repository = PostDetailRepository(
         post_id=1,
@@ -357,29 +388,8 @@ def test_render_post_detail_without_hitting_the_database(rf):
         image_by_id={
             1: Image(id=1, title="Some image", collection=None, file=StubFile("foo.jpg"), width=2000, height=1000)
         },
-        renditions_for_posts={
-            1: [
-                # image
-                Rendition(file=StubFile("foo.jpg"), filter_spec="width-1110", width=1110, height=200),
-                Rendition(file=StubFile("foo.avif"), filter_spec="width-1110|format-avif", width=1110, height=200),
-                # gallery
-                Rendition(file=StubFile("foo.jpg"), filter_spec="width-120", width=100, height=120),
-                Rendition(file=StubFile("foo.jpg"), filter_spec="width-240", width=100, height=240),
-                Rendition(file=StubFile("foo.jpg"), filter_spec="width-360", width=100, height=360),
-                Rendition(file=StubFile("foo.jpg"), filter_spec="width-120|format-avif", width=100, height=200),
-                Rendition(file=StubFile("foo.jpg"), filter_spec="width-240|format-avif", width=100, height=200),
-                Rendition(file=StubFile("foo.jpg"), filter_spec="width-360|format-avif", width=100, height=200),
-            ]
-        },
+        renditions_for_posts=renditions_for_post,
     )
-    body = create_python_body()
-    body[0]["value"].append({"type": "audio", "value": 1})
-    body[0]["value"].append({"type": "video", "value": 1})
-    body[0]["value"].append({"type": "image", "value": 1})
-    gallery_with_layout = {"layout": "default", "gallery": [{"id": 1, "type": "item", "value": 1}]}
-    body[0]["value"].append({"id": 1, "type": "gallery", "value": gallery_with_layout})
-    serialized_body = json.dumps(body)
-    post = Post(id=1, title="Some post", body=serialized_body)
     request = rf.get("/some-post/")
     request.htmx = False
     reset_queries()
@@ -407,9 +417,59 @@ def test_render_post_detail_without_hitting_the_database(rf):
     assert len(connection.queries) == 0
 
 
-# blog index test is missing here
-# feed test ist missing here
+def test_render_blog_index_without_hitting_the_database(rf, django_user_model, post, renditions_for_post):
+    """
+    Given a blog including a post with media which is not in the database. And a repository
+    containing the media needed to render the blog index page.
 
+    When we render the blog index page, then the media should be rendered and
+    the database should not be hit.
+    """
+    audio = Audio(id=1, title="Some audio", collection=None)
+    video = Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))
+    image = Image(id=1, title="Some image", collection=None, file=StubFile("foo.jpg"), width=2000, height=1000)
+    owner_username_by_id = {1: "owner"}
+    post.owner = django_user_model(username=owner_username_by_id[post.id])
+    repository = BlogIndexRepository(
+        template_base_dir="bootstrap4",
+        filterset=PostFilterset(None),
+        queryset_data=QuerysetData(
+            post_queryset=[post],
+            post_by_id={1: post},
+            audios={1: audio},
+            images={1: image},
+            videos={1: video},
+            audios_by_post_id={1: {audio}},
+            videos_by_post_id={1: {video}},
+            images_by_post_id={1: {image}},
+            owner_username_by_id=owner_username_by_id,
+            has_audio_by_id={1: True},
+            renditions_for_posts=renditions_for_post,
+            page_url_by_id={1: "/some-post/"},
+            absolute_page_url_by_id={1: "http://testserver/some-post/"},
+        ),
+        pagination_context={"object_list": [post]},
+        root_nav_links=[("http://testserver/", "Home"), ("http://testserver/about/", "About")],
+        use_audio_player=False,
+    )
+    blog = Blog(id=1, title="Some blog", slug="some-blog")
+    request = rf.get("/some-blog/")
+    request.htmx = False
+    response = blog.serve(request, repository=repository).render()
+    html = response.content.decode("utf-8")
+    assert "Owner" in html
+    assert "audio_1" in html
+    assert "<video" in html
+    assert '<section class="block-image">' in html
+    assert "1110w" in html
+    assert '<section class="block-gallery">' in html
+    context = response.context_data
+    assert context["template_base_dir"] == repository.template_base_dir
+    assert context["root_nav_links"] == repository.root_nav_links
+    assert len(connection.queries) == 0
+
+
+# feed test ist missing here
 
 # Is it possible to cache the data for the blog index?
 # This is also interesting for post detail and feed
