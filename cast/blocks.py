@@ -210,8 +210,7 @@ class GalleryBlock(ListBlock):
     def dict_images_to_id_list(self, values: list[dict]) -> list[int]:
         parsed = []
         for item in values:
-            if item["type"] == "item":
-                parsed.append(item["value"])
+            parsed.append(item["value"])
         return parsed
 
     def get_form_state(self, value):
