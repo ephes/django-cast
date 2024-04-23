@@ -21,14 +21,8 @@ def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[in
     """
     for image_type, image in images_with_type:
         rendition_filters = RenditionFilters.from_wagtail_image_with_type(image, image_type)
-        slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
         filter_strings_to_fetch = rendition_filters.filter_strings
-        for slot in slots:
-            for image_format in image_formats:
-                filter_string = f"{slot}-{image_format}"
-                if filter_string in filter_strings_to_fetch:
-                    yield image.pk, filter_string
-        for filter_string in rendition_filters.filter_strings:
+        for filter_string in filter_strings_to_fetch:
             yield image.pk, filter_string
 
 
