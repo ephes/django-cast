@@ -106,7 +106,7 @@ class CastImageChooserBlock(ImageChooserBlock):
     @staticmethod
     def get_image_and_renditions(image_id: int, context: dict) -> tuple[Image, dict[str, Rendition]]:
         repository: HasImagesAndRenditions = context["repository"]
-        image = repository.image_by_id.get(image_id)
+        image = repository.image_by_id[image_id]
         image_renditions = repository.renditions_for_posts.get(image.pk, [])
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
         return image, fetched_renditions
