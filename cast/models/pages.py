@@ -522,6 +522,13 @@ class Post(Page):
         kwargs["template_base_dir"] = repository.template_base_dir
         return super().serve(request, *args, **kwargs)
 
+    def serve_preview(self, request, mode_name, *args, **kwargs):
+        # sync media ids before preview, because otherwise the repository
+        # will not have the correct media ids and fail to get the correct
+        # renditions and fail with a w1110 not found rendition key error.
+        self.sync_media_ids()
+        return super().serve_preview(request, mode_name)
+
     def save(self, *args, **kwargs) -> None:
         save_return = super().save(*args, **kwargs)
         self.sync_media_ids()

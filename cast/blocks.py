@@ -112,8 +112,14 @@ class CastImageChooserBlock(ImageChooserBlock):
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
         return image, fetched_renditions
 
-    def get_context(self, image_pk: int, parent_context: dict) -> dict:
+    def get_context(self, image_or_pk: int | Image, parent_context: dict) -> dict:
         assert parent_context is not None
+        if isinstance(image_or_pk, int):
+            image_pk = image_or_pk
+        else:
+            # In the preview mode, the image is already an Image object.
+            # Do not try to remove this, it's really needed.
+            image_pk = image_or_pk.pk
         image, fetched_renditions = self.get_image_and_renditions(image_pk, parent_context)
         images_for_slots = get_srcset_images_for_slots(image, "regular", renditions=fetched_renditions)
         [image.regular] = images_for_slots.values()
@@ -201,6 +207,24 @@ class GalleryBlock(ListBlock):
         icon = "image"
         label = "Gallery"
         template = "cast/gallery.html"
+
+    def dict_images_to_id_list(self, values: list[dict]) -> list[int]:
+        parsed = []
+        for item in values:
+            if item["type"] == "item":
+                parsed.append(item["value"])
+        return parsed
+
+    def get_form_state(self, value):
+        """
+        I don't know why this is needed, but it is needed to make the editor work
+        for galleries. Do not try to remove it, or at least test if galleries are
+        still working in the editor. FIXME.
+        """
+        if isinstance(value, list):
+            image_ids = self.dict_images_to_id_list(value)
+            return super().get_form_state(image_ids)
+        return super().get_form_state(value)
 
     def get_template(self, images: QuerySet[AbstractImage] | None = None, context: dict | None = None) -> str:
         default_template_name = super().get_template(images, context)
