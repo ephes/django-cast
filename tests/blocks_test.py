@@ -247,6 +247,37 @@ def test_gallery_block_with_layout_return_early():
     assert values_out == values_in
 
 
+def test_gallery_block_with_layout_from_repository_to_python(mocker):
+    class Image:
+        pk = 1
+
+    class Repository:
+        image_by_id: dict = {}
+        renditions_for_posts: dict = {}
+
+    block = GalleryBlockWithLayout()
+
+    # values ist not a list of image dicts, but a list of images
+    values = {
+        "gallery": [Image()],
+    }
+    result = block.from_repository_to_python(Repository(), values)
+    assert result == values
+
+    # values raises a KeyError and bulk_to_python_from_database is called
+    mocker.patch.object(block, "bulk_to_python_from_database", return_value=values)
+    result = block.from_repository_to_python(Repository(), {})
+    assert result == values
+
+
+@pytest.mark.django_db
+def test_gallery_block_with_layout_bulk_to_python_from_database(image):
+    block = GalleryBlockWithLayout()
+    values = {"gallery": [{"type": "item", "value": image.pk}]}
+    result = block.bulk_to_python_from_database(values)
+    assert result == {"gallery": [image]}
+
+
 @pytest.mark.django_db
 def test_gallery_block_with_layout_get_context():
     class Page:
