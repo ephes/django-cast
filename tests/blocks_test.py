@@ -274,6 +274,18 @@ def test_gallery_block_with_layout_get_context():
 
 
 @pytest.mark.django_db
+def test_gallery_block_get_form_state(image):
+    block = GalleryBlock(ImageChooserBlock())
+    # empty input -> empty output
+    items = block.get_form_state([])
+    assert items == []
+
+    # input with one item
+    items = block.get_form_state([{"type": "item", "value": image.pk}])
+    assert items[0]["value"]["id"] == image.pk
+
+
+@pytest.mark.django_db
 def test_audio_chooser_from_repository_to_python_database(audio):
 
     class Repository:
