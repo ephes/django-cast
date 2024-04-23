@@ -74,3 +74,14 @@ def test_get_or_create_gallery_get_already_existing(image):
     expected_gallery.images.add(*image_ids)
     actual_gallery = get_or_create_gallery(image_ids)
     assert actual_gallery == expected_gallery
+
+
+@pytest.mark.django_db
+def test_serve_preview_calls_media_sync(rf, post_with_image):
+    image = post_with_image.images.first()
+    post_with_image.images.remove(image)  # remove image link
+    assert image not in post_with_image.images.all()
+
+    request = rf.get("/post/1/")
+    post_with_image.serve_preview(request, "draft")
+    assert image in post_with_image.images.all()
