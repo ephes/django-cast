@@ -257,7 +257,8 @@ class RenditionFilters:
             format_filter = self.get_filter_by_slot_format_and_fitting_width(slot, image_format, fitting_width)
             format_filter_string = format_filter.get_wagtail_filter_str(self.original_format)
             url = self.filter_to_url.get(format_filter_string)
-            if url is not None:  # FIXME this only happens during tests, dunno why - probably a wagtail bug
+            if url is not None:  # pragma: no cover
+                # FIXME this only happens during tests, dunno why - probably a wagtail bug
                 src[image_format] = url
         return src
 
