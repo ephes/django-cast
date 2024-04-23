@@ -84,18 +84,6 @@ class StubWagtailImage:
         return {fs: StubImage() for fs in filter_strings}
 
 
-# def test_get_srcset_images_for_slots_get_renditions_is_called_when_filters_not_empty():
-#     # Given an image that should generate multiple renditions for a slot
-#     slot = Rectangle(Width(120), Height(80))
-#     images_for_slots = get_srcset_images_for_slots(cast(AbstractImage, StubWagtailImage()), "gallery")
-#     # When we get the srcset images for the slot
-#     image_for_slot = images_for_slots[slot]
-#     split_srcset = image_for_slot.srcset["jpeg"].replace(",", "").split(" ")  # type: ignore
-#     srcset_widths = sorted([int(t.rstrip("w")) for t in split_srcset if t.endswith("w")])
-#     # Then the srcset widths should be 120 * 1, 120 * 2, 120 * 3
-#     assert srcset_widths == [120, 240, 360]
-
-
 class Stub1PxImage:
     class File:
         name = "test.jpg"
@@ -189,14 +177,6 @@ def test_get_srcset_images_for_slots_fetched_renditions_contain_all_filter_strin
     fetched_renditions = {fs: rendition for fs in all_filter_strings}
     images_for_slot = get_srcset_images_for_slots(image, "regular", renditions=fetched_renditions)
     assert images_for_slot[slot].src["jpeg"] == "https://example.com/test.jpg"
-
-
-# @pytest.mark.django_db
-# def test_image_chooser_block_get_context_parent_context_none(image):
-#     """Just make sure parent context is set to {} if it is None."""
-#     cicb = CastImageChooserBlock()
-#     context = cicb.get_context(image.pk, parent_context=None)
-#     assert "value" in context
 
 
 @pytest.mark.django_db
