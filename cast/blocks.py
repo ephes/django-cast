@@ -103,11 +103,10 @@ class CastImageChooserBlock(ImageChooserBlock):
     to get the srcset and sizes attributes in the template.
     """
 
-    def get_image_and_renditions(self, image_id: int, context: dict) -> tuple[Image, dict[str, Rendition]]:
+    @staticmethod
+    def get_image_and_renditions(image_id: int, context: dict) -> tuple[Image, dict[str, Rendition]]:
         repository: HasImagesAndRenditions = context["repository"]
         image = repository.image_by_id.get(image_id)
-        if image is None:
-            image = self.to_python(image_id)
         image_renditions = repository.renditions_for_posts.get(image.pk, [])
         fetched_renditions = {r.filter_spec: r for r in image_renditions}
         return image, fetched_renditions
