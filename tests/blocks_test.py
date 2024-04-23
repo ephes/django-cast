@@ -6,6 +6,7 @@ from wagtail.images.models import AbstractImage, AbstractRendition, Image
 
 from cast.blocks import (
     AudioChooserBlock,
+    CastImageChooserBlock,
     CodeBlock,
     GalleryBlock,
     GalleryBlockWithLayout,
@@ -292,3 +293,32 @@ def test_video_chooser_from_repository_to_python_database(video):
     block = VideoChooserBlock()
     model = block.from_repository_to_python(Repository(), video.pk)
     assert model == video
+
+
+class EmptyRepository:
+    image_by_id: dict = {}
+    renditions_for_posts: dict = {}
+
+
+class Rendition:
+    def __init__(self, filter_spec, url):
+        self.filter_spec = filter_spec
+        self.url = url
+
+
+@pytest.mark.django_db
+def test_image_chooser_block_get_context_image_or_pk(image):
+    """Make sure get_context handles both an image or an image pk."""
+    cicb = CastImageChooserBlock()
+    repository = EmptyRepository()
+    repository.image_by_id = {image.pk: image}
+    repository.renditions_for_posts = {
+        image.pk: [
+            Rendition("format-jpeg", "https://example.com/test.jpg"),
+            Rendition("format-avif", "https://example.com/test.avif"),
+        ]
+    }
+    context = cicb.get_context(image, parent_context={"repository": repository})
+    assert context["value"] == image
+    context = cicb.get_context(image.pk, parent_context={"repository": repository})
+    assert context["value"] == image
