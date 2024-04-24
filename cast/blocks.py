@@ -16,7 +16,6 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .models import Gallery
 from .models.repository import AudioById, ImageById, RenditionsForPosts, VideoById
 from .renditions import (
     Height,
@@ -227,9 +226,6 @@ class GalleryBlock(ListBlock):
     def get_template(self, images: QuerySet[AbstractImage] | None = None, context: dict | None = None) -> str:
         default_template_name = super().get_template(images, context)
         return get_gallery_block_template(default_template_name, context)
-
-    def extract_references(self, value):
-        yield Gallery, str(value), "", ""
 
     def get_context(self, images: QuerySet[AbstractImage], parent_context: dict | None = None) -> dict:
         if parent_context is None:
