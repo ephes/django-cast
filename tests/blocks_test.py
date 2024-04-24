@@ -14,7 +14,7 @@ from cast.blocks import (
     VideoChooserBlock,
     get_srcset_images_for_slots,
 )
-from cast.models import Gallery
+from cast.models import Audio, Gallery, Video
 from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Width
 
 
@@ -307,6 +307,17 @@ def test_audio_chooser_from_repository_to_python_database(audio):
     assert model == audio
 
 
+def test_audio_chooser_block_from_repository_to_python_return_early():
+    class Repository:
+        audio_by_id = {}
+
+    audio = Audio(id=1, title="Some audio", collection=None)
+
+    block = AudioChooserBlock()
+    model = block.from_repository_to_python(Repository(), audio)
+    assert model == audio
+
+
 @pytest.mark.django_db
 def test_video_chooser_from_repository_to_python_database(video):
 
@@ -315,6 +326,17 @@ def test_video_chooser_from_repository_to_python_database(video):
 
     block = VideoChooserBlock()
     model = block.from_repository_to_python(Repository(), video.pk)
+    assert model == video
+
+
+def test_video_chooser_block_from_repository_to_python_return_early():
+    class Repository:
+        video_by_id = {}
+
+    video = Video(id=1, title="Some video", collection=None)
+
+    block = VideoChooserBlock()
+    model = block.from_repository_to_python(Repository(), video)
     assert model == video
 
 
