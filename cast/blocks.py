@@ -258,6 +258,13 @@ class GalleryBlockWithLayout(StructBlock):
         label = "Gallery with Layout"
         template = "cast/gallery.html"
 
+    def extract_references(self, value):
+        # We don't have the gallery id at this point and not overwriting
+        # this method will return a concatenated string of all image items
+        # which will lead to postgres complaining about the length of the
+        # `wagtailcore_referenceindex.to_object_id` field.
+        return []
+
     def get_template(self, value=None, context=None):
         default_template_name = super().get_template(value, context)
         layout = "default"
