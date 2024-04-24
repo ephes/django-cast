@@ -338,7 +338,6 @@ class Post(Page):
         context = super().get_context(request, **kwargs)
         request = cast(HtmxHttpRequest, request)
         context["repository"] = repository = self.get_repository(request, kwargs)
-        print("get context repo: ", repository.renditions_for_posts)
         context["render_detail"] = kwargs.get("render_detail", False)
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
         context = self.get_context_from_repository(context, repository)
