@@ -532,7 +532,6 @@ class Post(Page):
     def save(self, *args, **kwargs) -> None:
         save_return = super().save(*args, **kwargs)
         self.sync_media_ids()
-        # create_missing_renditions_for_posts([self])
         return save_return
 
 
