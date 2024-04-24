@@ -45,7 +45,7 @@ from cast.blocks import (
 from cast.models import get_or_create_gallery
 
 from ..views import HtmxHttpRequest
-from .image_renditions import ImagesWithType
+from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
 from .repository import (
     AudioById,
     ImageById,
@@ -338,6 +338,7 @@ class Post(Page):
         context = super().get_context(request, **kwargs)
         request = cast(HtmxHttpRequest, request)
         context["repository"] = repository = self.get_repository(request, kwargs)
+        print("get context repo: ", repository.renditions_for_posts)
         context["render_detail"] = kwargs.get("render_detail", False)
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
         context = self.get_context_from_repository(context, repository)
@@ -527,11 +528,13 @@ class Post(Page):
         # will not have the correct media ids and fail to get the correct
         # renditions and fail with a w1110 not found rendition key error.
         self.sync_media_ids()
+        create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset in preview
         return super().serve_preview(request, mode_name)
 
     def save(self, *args, **kwargs) -> None:
         save_return = super().save(*args, **kwargs)
         self.sync_media_ids()
+        create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset
         return save_return
 
 
