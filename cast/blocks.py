@@ -352,6 +352,9 @@ class VideoChooserBlock(RepositoryChooserBlock):
         return self.widget.get_value_data(value)
 
     def from_repository_to_python(self, repository: HasVideos, value: int) -> Model:
+        if isinstance(value, self.target_model):
+            # this happens in the edit / preview mode
+            return value
         try:
             return repository.video_by_id[value]
         except KeyError:
@@ -379,6 +382,9 @@ class AudioChooserBlock(RepositoryChooserBlock):
         return self.widget.get_value_data(value)
 
     def from_repository_to_python(self, repository: HasAudios, value: int) -> Model:
+        if isinstance(value, self.target_model):
+            # this happens in the edit / preview mode
+            return value
         try:
             return repository.audio_by_id[value]
         except KeyError:
