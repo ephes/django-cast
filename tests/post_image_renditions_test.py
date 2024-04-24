@@ -32,10 +32,10 @@ def test_post_image_from_gallery_in_get_all_images_from_queryset(post_with_galle
 
 @pytest.mark.django_db
 def test_post_get_all_renditions_from_queryset(post_with_image):
-    # image = post_with_image.images.first()
+    image = post_with_image.images.first()
     post_queryset = Post.objects.filter(pk=post_with_image.pk).prefetch_related("galleries__images")
     all_renditions = list(Post.get_all_renditions_from_queryset(post_queryset))
-    assert all_renditions == []
+    assert all_renditions == [image.pk]
 
 
 class StubWagtailImage:
