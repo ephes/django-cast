@@ -1,8 +1,14 @@
-0.2.30 (2024-04-01)
+0.2.30 (2024-04-25)
 -------------------
 
-not sure yet..
+Render feed, blog index and post detail without hitting the database
+using only data from the respective repositories is now working. The
+repository is passed from the feed / blog / post models to the blocks
+just using the template context. And there's no need for monkeypatching
+the page link handler anymore, since a new page link handler is now
+set via the `register_rich_text_features` wagtail hook.
 
 - #123 Fixed an audio key error when a preview page is saved
 - #125 Add a hint (click to comment ) to feed descriptions of posts where comments are enabled
 - #128 Update vite + jsdom + new javascript build
+- #126 Render feed / blog index / post detail using only data from repository, not database
