@@ -58,11 +58,11 @@ class TestFileModel:
 
 
 @pytest.fixture()
-def use_raw_blog_index_repo():
-    previous = appsettings.CAST_BLOG_INDEX_REPOSITORY
-    appsettings.CAST_BLOG_INDEX_REPOSITORY = "raw"
-    yield appsettings.CAST_BLOG_INDEX_REPOSITORY
-    appsettings.CAST_BLOG_INDEX_REPOSITORY = previous
+def use_django_blog_index_repo():
+    previous = appsettings.CAST_REPOSITORY
+    appsettings.CAST_REPOSITORY = "django"
+    yield appsettings.CAST_REPOSITORY
+    appsettings.CAST_REPOSITORY = previous
 
 
 class TestBlogModel:
@@ -128,7 +128,7 @@ class TestBlogModel:
         template = blog.get_template(simple_request, template_base_dir="foobar")
         assert template == "cast/foobar/blog_list_of_posts.html"
 
-    def test_get_repository(self, blog, simple_request, use_raw_blog_index_repo):
+    def test_get_django_repository(self, blog, simple_request, use_django_blog_index_repo):
         repository = blog.get_repository(simple_request, {})
         assert isinstance(repository, BlogIndexRepository)
 

@@ -147,3 +147,17 @@ use tags, you can do it like this:
     CAST_FILTERSET_FACETS = [
         "search", "date", "date_facets", "category_facets"
     ]
+
+
+**********
+Repository
+**********
+
+How to fetch data from the database. By default, the repository fetches
+all the data using optimized sql. If you want to fetch data using the
+Django ORM, you can set the ``CAST_REPOSITORY`` variable in your settings
+to ``"django"``.
+
+.. code-block:: python
+
+    CAST_REPOSITORY = "django"

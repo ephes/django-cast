@@ -1,4 +1,4 @@
-0.2.30 (2024-04-25)
+0.2.30 (2024-04-26)
 -------------------
 
 Render feed, blog index and post detail without hitting the database

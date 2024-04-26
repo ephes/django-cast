@@ -18,7 +18,7 @@ from django.db import connection, reset_queries
 from django.urls import reverse
 from wagtail.images.models import Image, Rendition
 
-from cast.devdata import create_python_body, generate_blog_with_media
+from cast.devdata import create_post, create_python_body, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
 from cast.filters import PostFilterset
 from cast.models import Audio, Blog, Post, Video
@@ -610,4 +610,22 @@ def test_create_from_cachable_data_use_audio_player_false():
         },
     }
     repository = BlogIndexRepository.create_from_cachable_data(data=data)
+    assert repository.use_audio_player is False
+
+
+@pytest.mark.django_db
+def test_blog_index_repository_via_django_models_site_is_none(rf):
+    """Make sure the repository can be created from django models when site is None."""
+    blog = Blog(id=1, title="Some blog", template_base_dir="plain")
+    request = rf.get("/foobar/")
+    repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
+    assert repository.root_nav_links == []
+
+
+@pytest.mark.django_db
+def test_blog_index_repository_via_django_models_no_audio_player(rf, blog):
+    """Make sure has_audio is False if there's no post with audio."""
+    request = rf.get("/foobar/")
+    create_post(blog=blog)
+    repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
     assert repository.use_audio_player is False

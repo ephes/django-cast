@@ -263,10 +263,12 @@ class Blog(Page):
     def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexRepository:
         if "repository" in kwargs:
             return kwargs["repository"]
-        if appsettings.CAST_BLOG_INDEX_REPOSITORY == "raw":
+        if appsettings.CAST_REPOSITORY == "default":
             data = BlogIndexRepository.data_for_blog_index_cachable(request=request, blog=self)
             return BlogIndexRepository.create_from_cachable_data(data=data)
-        return BlogIndexRepository.create_from_django_models(request=request, blog=self)
+        else:
+            # fetch data using Django models as a fall back
+            return BlogIndexRepository.create_from_django_models(request=request, blog=self)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs) -> TemplateResponse:
         kwargs["repository"] = repository = self.get_repository(request, kwargs)
