@@ -251,6 +251,9 @@ class Blog(Page):
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         context["repository"] = repository = self.get_repository(request, kwargs)
+        # now that we have the repository, we can set the template base dir
+        # to avoid db queries in context_processors
+        request.cast_site_template_base_dir = repository.template_base_dir
         get_params = request.GET.copy()
         context = self.get_context_from_repository(context, repository)
         context["posts"] = context["object_list"]  # convenience
