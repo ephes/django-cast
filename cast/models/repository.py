@@ -210,6 +210,222 @@ class PostDetailRepository:
         )
 
 
+def audio_to_dict(audio) -> dict:
+    data = {
+        "id": audio.pk,
+        "duration": audio.duration,
+        "title": audio.title,
+        "subtitle": audio.subtitle,
+        "data": audio.data,
+        "m4a": audio.m4a.name,
+        "mp3": audio.mp3.name,
+        "oga": audio.oga.name,
+        "opus": audio.opus.name,
+    }
+    if audio.collection_id is not None:
+        data["collection_id"] = audio.collection_id
+    else:
+        data["collection"] = None
+    return data
+
+
+def video_to_dict(video) -> dict:
+    data = {
+        "id": video.pk,
+        "title": video.title,
+        "original": video.original.name,
+        "poster": video.poster.name,
+        "poster_seconds": video.poster_seconds,
+    }
+    if video.collection_id is not None:
+        data["collection_id"] = video.collection_id
+    else:
+        data["collection"] = None
+    return data
+
+
+def blog_to_dict(blog):
+    return {
+        "id": blog.pk,
+        "pk": blog.pk,
+        "author": blog.author,
+        "uuid": blog.uuid,
+        "email": blog.email,
+        "comments_enabled": blog.comments_enabled,
+        "noindex": blog.noindex,
+        "template_base_dir": blog.template_base_dir,
+        "description": blog.description,
+    }
+
+
+def post_to_dict(post):
+    return {
+        "id": post.pk,
+        "pk": post.pk,
+        "uuid": post.uuid,
+        "title": post.title,
+        "visible_date": post.visible_date,
+        "comments_enabled": post.comments_enabled,
+        "body": json.dumps(list(post.body.raw_data)),
+    }
+
+
+def image_to_dict(image):
+    data = {
+        "pk": image.pk,
+        "title": image.title,
+        "file": image.file.name,
+        "width": image.width,
+        "height": image.height,
+    }
+    if image.collection_id is not None:
+        data["collection_id"] = image.collection_id
+    else:
+        data["collection"] = None
+    return data
+
+
+def rendition_to_dict(rendition):
+    return {
+        "pk": rendition.pk,
+        "filter_spec": rendition.filter_spec,
+        "file": rendition.file.name,
+        "width": rendition.width,
+        "height": rendition.height,
+    }
+
+
+def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedRenditions:
+    renditions = {}
+    for post_pk, renditions_for_post in renditions_for_posts.items():
+        renditions[post_pk] = [rendition_to_dict(rendition) for rendition in renditions_for_post]
+    return renditions
+
+
+def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPost:
+    return {
+        post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
+    }
+
+
+Choice: TypeAlias = tuple[str, str]
+
+
+class HasChoices(Protocol):
+    choices: Iterable[Choice]
+
+
+def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
+    if field_name in fields:
+        return [(k, v) for k, v in fields[field_name].choices if k != ""]
+    return []
+
+
+def add_site_raw(data: dict[str, Any]) -> dict:
+    site_statement = """
+        select
+            id,
+            hostname,
+            port,
+            site_name,
+            root_page_id,
+            is_default_site
+        from
+            wagtailcore_site
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(site_statement)
+        columns = [col[0] for col in cursor.description]
+        row_tuple = cursor.fetchone()
+        data["site"] = dict(zip(columns, row_tuple))
+    return data
+
+
+def add_root_nav_links(data: dict[str, Any]) -> dict:
+    site = Site(**data["site"])
+    root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
+    data["root_nav_links"] = root_nav_links
+    return data
+
+
+def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict:
+    # posts
+    post_by_id = {}
+    for pk, post in queryset_data.post_by_id.items():
+        post_by_id[pk] = post_to_dict(post)
+    data["post_by_id"] = post_by_id
+
+    # audios
+    audios = {}
+    for pk, audio in queryset_data.audios.items():
+        audios[pk] = audio_to_dict(audio)
+    data["audios"] = audios
+
+    # videos
+    videos = {}
+    for pk, video in queryset_data.videos.items():
+        videos[pk] = video_to_dict(video)
+    data["videos"] = videos
+
+    # images
+    images = {}
+    for pk, image in queryset_data.images.items():
+        images[pk] = image_to_dict(image)
+    data["images"] = images
+
+    # renditions
+    data["renditions_for_posts"] = serialize_renditions(queryset_data.renditions_for_posts)
+    data["posts"] = [post.pk for post in queryset_data.queryset]
+
+    data["images_by_post_id"] = queryset_data.images_by_post_id
+    data["videos_by_post_id"] = queryset_data.videos_by_post_id
+    data["audios_by_post_id"] = queryset_data.audios_by_post_id
+    data["has_audio_by_id"] = queryset_data.has_audio_by_id
+    data["owner_username_by_id"] = queryset_data.owner_username_by_id
+    return data
+
+
+def data_for_blog_cachable(
+    *,
+    request: HtmxHttpRequest,
+    blog: "Blog",
+) -> dict:
+    """
+    Fetch all the data of a blog in a cachable (dict) format.
+    """
+    data: dict[str, Any] = {"blog": blog_to_dict(blog)}
+    data = add_site_raw(data)
+    data = add_root_nav_links(data)
+    data["template_base_dir"] = blog.get_template_base_dir(request)
+
+    # filters and pagination
+    get_params = request.GET.copy()
+    filterset = blog.get_filterset(get_params)
+    data["filterset"] = {"get_params": get_params.dict()}
+    date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
+    data["filterset"]["date_facets_choices"] = date_facet_choices
+    data["filterset"]["category_facets_choices"] = get_facet_choices(filterset.form.fields, "category_facets")
+    data["filterset"]["tag_facets_choices"] = get_facet_choices(filterset.form.fields, "tag_facets")
+    data["pagination_context"] = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
+    # queryset data
+    queryset = data["pagination_context"]["object_list"]
+    del data["pagination_context"]["object_list"]  # not cachable
+    queryset_data = QuerysetData.create_from_post_queryset(
+        request=request, site=Site(**data["site"]), queryset=queryset
+    )
+    data = add_queryset_data(data, queryset_data)
+
+    # page_url by id
+    page_url_by_id: PageUrlByID = {}
+    absolute_page_url_by_id: PageUrlByID = {}
+    for post in queryset_data.queryset:
+        page_url_by_id[post.pk] = post.get_url(request=request, current_site=Site(**data["site"]))
+        absolute_page_url_by_id[post.pk] = post.full_url
+    data["page_url_by_id"] = page_url_by_id
+    data["absolute_page_url_by_id"] = absolute_page_url_by_id
+    return data
+
+
 class FeedRepository:
     def __init__(
         self,
@@ -273,6 +489,16 @@ class FeedRepository:
             root_nav_links=root_nav_links,
             blog_url=blog.get_url(request=request, current_site=site),
         )
+
+    @staticmethod
+    def data_for_feed_cachable(
+        *,
+        request: HtmxHttpRequest,
+        blog: "Blog",
+    ) -> dict:
+        data = data_for_blog_cachable(request=request, blog=blog)
+        data["blog_url"] = blog.get_url(request=request)
+        return data
 
     @classmethod
     def create_from_cachable_data(
@@ -359,103 +585,6 @@ class FeedRepository:
         )
 
 
-def audio_to_dict(audio) -> dict:
-    data = {
-        "id": audio.pk,
-        "duration": audio.duration,
-        "title": audio.title,
-        "subtitle": audio.subtitle,
-        "data": audio.data,
-        "m4a": audio.m4a.name,
-        "mp3": audio.mp3.name,
-        "oga": audio.oga.name,
-        "opus": audio.opus.name,
-    }
-    if audio.collection_id is not None:
-        data["collection_id"] = audio.collection_id
-    else:
-        data["collection"] = None
-    return data
-
-
-def video_to_dict(video) -> dict:
-    data = {
-        "id": video.pk,
-        "title": video.title,
-        "original": video.original.name,
-        "poster": video.poster.name,
-        "poster_seconds": video.poster_seconds,
-    }
-    if video.collection_id is not None:
-        data["collection_id"] = video.collection_id
-    else:
-        data["collection"] = None
-    return data
-
-
-def post_to_dict(post):
-    return {
-        "id": post.pk,
-        "pk": post.pk,
-        "uuid": post.uuid,
-        "title": post.title,
-        "visible_date": post.visible_date,
-        "comments_enabled": post.comments_enabled,
-        "body": json.dumps(list(post.body.raw_data)),
-    }
-
-
-def image_to_dict(image):
-    data = {
-        "pk": image.pk,
-        "title": image.title,
-        "file": image.file.name,
-        "width": image.width,
-        "height": image.height,
-    }
-    if image.collection_id is not None:
-        data["collection_id"] = image.collection_id
-    else:
-        data["collection"] = None
-    return data
-
-
-def rendition_to_dict(rendition):
-    return {
-        "pk": rendition.pk,
-        "filter_spec": rendition.filter_spec,
-        "file": rendition.file.name,
-        "width": rendition.width,
-        "height": rendition.height,
-    }
-
-
-def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedRenditions:
-    renditions = {}
-    for post_pk, renditions_for_post in renditions_for_posts.items():
-        renditions[post_pk] = [rendition_to_dict(rendition) for rendition in renditions_for_post]
-    return renditions
-
-
-def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPost:
-    return {
-        post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
-    }
-
-
-Choice: TypeAlias = tuple[str, str]
-
-
-class HasChoices(Protocol):
-    choices: Iterable[Choice]
-
-
-def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
-    if field_name in fields:
-        return [(k, v) for k, v in fields[field_name].choices if k != ""]
-    return []
-
-
 class BlogIndexRepository:
     def __init__(
         self,
@@ -491,106 +620,12 @@ class BlogIndexRepository:
             cache_page_url(post_id, page_url)
 
     @staticmethod
-    def add_site_raw(data: dict[str, Any]) -> dict:
-        site_statement = """
-            select
-                id,
-                hostname,
-                port,
-                site_name,
-                root_page_id,
-                is_default_site
-            from
-                wagtailcore_site
-        """
-        with connection.cursor() as cursor:
-            cursor.execute(site_statement)
-            columns = [col[0] for col in cursor.description]
-            row_tuple = cursor.fetchone()
-            data["site"] = dict(zip(columns, row_tuple))
-        return data
-
-    @staticmethod
-    def add_root_nav_links(data: dict[str, Any]) -> dict:
-        site = Site(**data["site"])
-        root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
-        data["root_nav_links"] = root_nav_links
-        return data
-
-    @staticmethod
-    def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict:
-        # posts
-        post_by_id = {}
-        for pk, post in queryset_data.post_by_id.items():
-            post_by_id[pk] = post_to_dict(post)
-        data["post_by_id"] = post_by_id
-
-        # audios
-        audios = {}
-        for pk, audio in queryset_data.audios.items():
-            audios[pk] = audio_to_dict(audio)
-        data["audios"] = audios
-
-        # videos
-        videos = {}
-        for pk, video in queryset_data.videos.items():
-            videos[pk] = video_to_dict(video)
-        data["videos"] = videos
-
-        # images
-        images = {}
-        for pk, image in queryset_data.images.items():
-            images[pk] = image_to_dict(image)
-        data["images"] = images
-
-        # renditions
-        data["renditions_for_posts"] = serialize_renditions(queryset_data.renditions_for_posts)
-        data["posts"] = [post.pk for post in queryset_data.queryset]
-
-        data["images_by_post_id"] = queryset_data.images_by_post_id
-        data["videos_by_post_id"] = queryset_data.videos_by_post_id
-        data["audios_by_post_id"] = queryset_data.audios_by_post_id
-        data["has_audio_by_id"] = queryset_data.has_audio_by_id
-        data["owner_username_by_id"] = queryset_data.owner_username_by_id
-        return data
-
-    @staticmethod
     def data_for_blog_index_cachable(
         *,
         request: HtmxHttpRequest,
         blog: "Blog",
     ) -> dict:
-        data: dict[str, Any] = {}
-        data = BlogIndexRepository.add_site_raw(data)
-        data = BlogIndexRepository.add_root_nav_links(data)
-        data["template_base_dir"] = blog.get_template_base_dir(request)
-
-        # filters and pagination
-        get_params = request.GET.copy()
-        filterset = blog.get_filterset(get_params)
-        data["filterset"] = {"get_params": get_params.dict()}
-        date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
-        data["filterset"]["date_facets_choices"] = date_facet_choices
-        data["filterset"]["category_facets_choices"] = get_facet_choices(filterset.form.fields, "category_facets")
-        data["filterset"]["tag_facets_choices"] = get_facet_choices(filterset.form.fields, "tag_facets")
-        data["pagination_context"] = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
-        # queryset data
-        queryset = data["pagination_context"]["object_list"]
-        del data["pagination_context"]["object_list"]  # not cachable
-        queryset_data = QuerysetData.create_from_post_queryset(
-            request=request, site=Site(**data["site"]), queryset=queryset
-        )
-        data = BlogIndexRepository.add_queryset_data(data, queryset_data)
-
-        # page_url by id
-        page_url_by_id: PageUrlByID = {}
-        absolute_page_url_by_id: PageUrlByID = {}
-        for post in queryset_data.queryset:
-            page_url_by_id[post.pk] = post.get_url(request=request, current_site=Site(**data["site"]))
-            absolute_page_url_by_id[post.pk] = post.full_url
-        data["page_url_by_id"] = page_url_by_id
-        data["absolute_page_url_by_id"] = absolute_page_url_by_id
-        return data
+        return data_for_blog_cachable(request=request, blog=blog)
 
     @classmethod
     def create_from_cachable_data(
