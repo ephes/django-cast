@@ -35,12 +35,12 @@
         {% if blog.is_podcast %}
           <ul>
             <li>
-              <a href="{% url "cast:podcast_feed_rss" slug=page.blog.slug audio_format='m4a' %}">
+              <a href="{% url "cast:podcast_feed_rss" slug=podcast.slug audio_format='m4a' %}">
                 Podcast RSS MP4
               </a>
             </li>
             <li>
-              <a href="{% url "cast:podcast_feed_atom" slug=page.blog.slug audio_format='m4a' %}">
+              <a href="{% url "cast:podcast_feed_atom" slug=podcast.slug audio_format='m4a' %}">
                 Podcast Atom MP4
               </a>
             </li>

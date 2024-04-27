@@ -327,3 +327,8 @@ class Podcast(Blog):
             return json.loads(self.itunes_categories)
         except json.decoder.JSONDecodeError:
             return {}
+
+    def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
+        context = super().get_context(request, *args, **kwargs)
+        context["podcast"] = self  # conveniece
+        return context

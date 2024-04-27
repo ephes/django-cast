@@ -282,7 +282,7 @@ def episode_to_dict(post):
         "visible_date": post.visible_date,
         "comments_enabled": post.comments_enabled,
         "body": json.dumps(list(post.body.raw_data)),
-        "podcast_audio_id": post.podcast_audio.pk,
+        "podcast_audio": audio_to_dict(post.podcast_audio),
         "keywords": post.keywords,
         "explicit": post.explicit,
         "block": post.block,
@@ -564,7 +564,10 @@ class FeedRepository:
         template_base_dir = data["template_base_dir"]
         is_podcast = data.get("is_podcast", False)
         if is_podcast:
-            post_by_id = {post_pk: Episode(**post_data) for post_pk, post_data in data["post_by_id"].items()}
+            post_by_id = {}
+            for post_pk, post_data in data["post_by_id"].items():
+                post_data["podcast_audio"] = Audio(**post_data["podcast_audio"])
+                post_by_id[post_pk] = Episode(**post_data)
         else:
             post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
@@ -640,6 +643,7 @@ class BlogIndexRepository:
         self,
         *,
         template_base_dir: str,
+        blog: "Blog",
         filterset: Any,
         queryset_data: QuerysetData,
         pagination_context: dict[str, Any],
@@ -647,6 +651,7 @@ class BlogIndexRepository:
         use_audio_player: bool = False,
     ):
         self.template_base_dir = template_base_dir
+        self.blog = blog
         self.filterset = filterset
         self.pagination_context = pagination_context
         self.root_nav_links = root_nav_links
@@ -688,11 +693,18 @@ class BlogIndexRepository:
         """
         from wagtail.images.models import Image
 
-        from . import Audio, Post, Video
+        from . import Audio, Blog, Episode, Post, Video
 
         # site = Site(**data["site"])
         template_base_dir = data["template_base_dir"]
-        post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
+
+        post_by_id = {}
+        for post_pk, post_data in data["post_by_id"].items():
+            if "podcast_audio" in post_data:
+                post_data["podcast_audio"] = Audio(**post_data["podcast_audio"])
+                post_by_id[post_pk] = Episode(**post_data)
+            else:
+                post_by_id[post_pk] = Post(**post_data)
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
         pagination_context = data["pagination_context"]
         pagination_context["object_list"] = post_queryset
@@ -745,6 +757,7 @@ class BlogIndexRepository:
         return cls(
             **{
                 # "site": site,
+                "blog": Blog(**data["blog"]),
                 "template_base_dir": template_base_dir,
                 "filterset": filterset,
                 "pagination_context": pagination_context,
@@ -774,6 +787,7 @@ class BlogIndexRepository:
             request=request, site=site, queryset=pagination_context["object_list"]
         )
         return cls(
+            blog=blog,
             filterset=filterset,
             pagination_context=pagination_context,
             template_base_dir=template_base_dir,

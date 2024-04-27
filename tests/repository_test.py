@@ -21,7 +21,7 @@ from wagtail.images.models import Image, Rendition
 from cast.devdata import create_post, create_python_body, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed
 from cast.filters import PostFilterset
-from cast.models import Audio, Blog, Post, Video
+from cast.models import Audio, Blog, Podcast, Post, Video
 from cast.models.image_renditions import create_missing_renditions_for_posts
 from cast.models.repository import (
     BlogIndexRepository,
@@ -103,6 +103,7 @@ def queryset_data(**kwargs):
 def blog_index_repository(**kwargs):
     defaults = dict(
         template_base_dir="bootstrap4",
+        blog=Blog(id=1, title="Some blog", slug="some-blog"),
         filterset=PostFilterset(None),
         queryset_data=queryset_data(),
         pagination_context={"object_list": []},
@@ -182,6 +183,7 @@ def test_internal_page_link_is_cached_blog_index(rf, post_with_link_to_itself):
     blog = Blog(id=1, title="Some blog", slug="some-blog")
     # Using the blog index repository will cache the page url in the page link handler
     repository = blog_index_repository(
+        blog=blog,
         pagination_context={"object_list": [post]},
         queryset_data=queryset_data(page_url_by_id={post.id: page_url}),  # this will cache the page url
     )
@@ -431,6 +433,7 @@ def blog_data(post, renditions_for_post):
     serialized_renditions = serialize_renditions(renditions_for_post)
     data = {
         "template_base_dir": "bootstrap4",
+        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
         "post_by_id": {1: post_to_dict(post)},
         "posts": [1],
         "pagination_context": {},
@@ -468,11 +471,43 @@ def test_render_blog_index_without_hitting_the_database(rf, blog_data):
     reset_queries()
     # with connection.execute_wrapper(blocker):
     repository = BlogIndexRepository.create_from_cachable_data(data=data)
-    blog = Blog(id=1, title="Some blog", slug="some-blog")
+    blog = repository.blog
     request = rf.get("/some-blog/")
     request.htmx = False
     # with connection.execute_wrapper(blocker):
     response = blog.serve(request, repository=repository).render()
+    html = response.content.decode("utf-8")
+    assert "Owner" in html
+    assert "audio_1" in html
+    assert "<video" in html
+    assert '<section class="block-image">' in html
+    assert "1110w" in html
+    assert '<section class="block-gallery">' in html
+    context = response.context_data
+    assert context["template_base_dir"] == repository.template_base_dir
+    assert context["root_nav_links"] == repository.root_nav_links
+    assert len(connection.queries) == 0
+
+
+def test_render_podcast_index_without_hitting_the_database(rf, blog_data):
+    """
+    Given a podcast including a post with media which is not in the database. And a repository
+    containing the media needed to render the podcast index page.
+
+    When we render the podcast index page, then the media should be rendered and
+    the database should not be hit.
+    """
+    data = blog_data
+    # add postcast_audio
+    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
+    reset_queries()
+    # with connection.execute_wrapper(blocker):
+    repository = BlogIndexRepository.create_from_cachable_data(data=data)
+    podcast = Podcast(id=1, title="Some podcast", slug="some-podcast")
+    request = rf.get("/some-podcast/")
+    request.htmx = False
+    # with connection.execute_wrapper(blocker):
+    response = podcast.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     assert "Owner" in html
     assert "audio_1" in html
@@ -626,6 +661,7 @@ def test_get_facet_choices():
 def test_create_from_cachable_data_use_audio_player_false():
     data = {
         "template_base_dir": "bootstrap4",
+        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
         "post_by_id": {1: {"pk": 1}},
         "posts": [1],
         "page_url_by_id": {1: "/foo-bar-baz/"},
