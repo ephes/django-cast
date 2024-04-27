@@ -8,8 +8,11 @@ from django.shortcuts import get_object_or_404
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 from django.utils.safestring import SafeText, mark_safe
 
+from cast import appsettings
+
 from .models import Audio, Blog, Episode, Podcast, Post
 from .models.repository import FeedRepository
+from .views import HtmxHttpRequest
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +23,31 @@ class LatestEntriesFeed(Feed):
 
     def __init__(self, repository: FeedRepository | None = None):
         super().__init__()
-        self.predefined_repository = repository
+        self.repository = repository
+
+    def get_repository(self, request: HtmxHttpRequest, blog: Blog) -> FeedRepository:
+        if self.repository is not None:
+            if not self.repository.used:
+                # don't use the same repository twice
+                return self.repository  # use predefined repository
+        # create new repository
+        if appsettings.CAST_REPOSITORY == "default":
+            # default repository from cachable data
+            cachable_data = FeedRepository.data_for_feed_cachable(request=request, blog=blog)
+            return FeedRepository.create_from_cachable_data(data=cachable_data)
+        else:
+            # create repository from django models
+            blog.refresh_from_db()  # FIXME this is stale sometimes
+            return FeedRepository.create_from_django_models(
+                request=request,
+                blog=blog,
+                post_queryset=Post.objects.live().descendant_of(blog).order_by("-visible_date"),
+            )
 
     def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
         slug = kwargs["slug"]
-        if self.predefined_repository is not None:
-            self.object = self.predefined_repository.blog
+        if self.repository is not None:
+            self.object = self.repository.blog
         else:
             self.object = get_object_or_404(Blog, slug=slug)
         self.request = request
@@ -37,23 +59,14 @@ class LatestEntriesFeed(Feed):
         return self.object.description
 
     def link(self) -> str:
-        if self.predefined_repository is not None:
-            return self.predefined_repository.blog_url
+        if self.repository is not None:
+            return self.repository.blog_url
         return self.object.get_full_url()
 
     def items(self) -> QuerySet[Post]:
-        blog = self.object
-        if self.predefined_repository is not None:
-            queryset = self.predefined_repository.post_queryset
-            self.repository = self.predefined_repository
-        else:
-            queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
-            self.repository = FeedRepository.create_from_django_models(
-                request=self.request,
-                blog=blog,
-                post_queryset=queryset,
-                template_base_dir="bootstrap4",
-            )
+        queryset = self.repository.post_queryset
+        # mark repository as used - the post_queryset might be empty if used twice
+        self.repository.used = True
         return queryset
 
     def item_title(self, post: Model) -> SafeText:
@@ -61,9 +74,6 @@ class LatestEntriesFeed(Feed):
         return mark_safe(post.title)
 
     def item_description(self, post: Model) -> SafeText:
-        # def blocker(*args):
-        #     raise Exception("No database access allowed here.")
-        # with connection.execute_wrapper(blocker):
         assert isinstance(post, Post)
         repository = self.repository.get_post_detail_repository(post)
         post.description = post.get_description(
@@ -77,6 +87,15 @@ class LatestEntriesFeed(Feed):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         return context
+
+    def get_feed(self, obj, request):
+        # If we want to cache the site to avoid one additional db query, we should do it here
+        blog = self.object
+        self.repository = repository = self.get_repository(self.request, blog)
+        # now that we have the repository, we can set the template base dir
+        # to avoid db queries in context_processors
+        self.request.cast_site_template_base_dir = repository.template_base_dir
+        return super().get_feed(obj, request)
 
 
 class ITunesElements:

@@ -518,8 +518,7 @@ def test_render_feed_without_hitting_the_database(rf, blog_data):
     assert len(connection.queries) == 0
 
 
-# Is it possible to cache the data for the blog index?
-# This is also interesting for post detail and feed
+# Render post detail from cachable data is still missing
 
 
 @pytest.mark.django_db
@@ -558,6 +557,45 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     # And the database should not be hit
     show_queries(connection.queries)
     assert len(connection.queries) == 0
+
+
+@pytest.mark.django_db
+def test_render_blog_feed_with_data_from_cache_without_hitting_the_database(rf, settings):
+    # Given a post with media in a blog
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    blog = generate_blog_with_media(number_of_posts=6)
+    post = blog.unfiltered_published_posts.first()
+    author_name = post.owner.username.capitalize()
+    post_detail_url = post.get_url()
+    request = rf.get(blog.get_url())
+    request.htmx = False
+    # _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    create_missing_renditions_for_posts([post])  # force renditions to be created
+    # _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    create_missing_renditions_for_posts([post])  # force renditions to be created
+
+    # Set up the cache
+    cachable_data = FeedRepository.data_for_feed_cachable(request=request, blog=blog)
+    pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
+    cachable_data = pickle.loads(pickled)
+    repository = FeedRepository.create_from_cachable_data(data=cachable_data)
+
+    # When we render the blog index
+    # call this once without blocker to populate SITE_CACHE
+    reset_queries()
+    # with connection.execute_wrapper(blocker):
+    response = LatestEntriesFeed(repository=repository)(request, slug=blog.slug)
+    # Then the media should be rendered
+    html = response.content.decode("utf-8")
+    assert 'class="cast-image"' in html
+    assert 'class="cast-gallery-modal"' in html
+    assert 'class="block-video"' in html
+    assert 'class="block-audio"' in html
+    assert author_name in html
+    assert post_detail_url in html
+    # And the database should not be hit
+    # show_queries(connection.queries)
+    assert len(connection.queries) == 1  # site is not cached
 
 
 # Small tests for repository coverage

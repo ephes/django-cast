@@ -7,7 +7,13 @@ import pytz
 from django.http import Http404
 from django.urls import reverse
 
-from cast.feeds import AtomITunesFeedGenerator, ITunesElements, PodcastFeed
+from cast import appsettings
+from cast.feeds import (
+    AtomITunesFeedGenerator,
+    ITunesElements,
+    LatestEntriesFeed,
+    PodcastFeed,
+)
 from cast.models import Post
 
 
@@ -45,6 +51,14 @@ class TestFeedCreation:
         assert "itunes:category" in dummy_handler.ee
 
 
+@pytest.fixture()
+def use_django_repository():
+    previous = appsettings.CAST_REPOSITORY
+    appsettings.CAST_REPOSITORY = "django"
+    yield appsettings.CAST_REPOSITORY
+    appsettings.CAST_REPOSITORY = previous
+
+
 class TestGeneratedFeeds:
     pytestmark = pytest.mark.django_db
 
@@ -57,6 +71,23 @@ class TestGeneratedFeeds:
         content = r.content.decode("utf-8")
         assert "xml" in content
         assert post.title in content
+
+    def test_get_latest_entries_feed_from_django_models(
+        self, client, post, use_dummy_cache_backend, use_django_repository
+    ):
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert "xml" in content
+        assert post.title in content
+
+    def test_get_link_if_no_repository(self, blog):
+        feed_view = LatestEntriesFeed()
+        feed_view.object = blog
+        assert feed_view.link() == f"http://localhost/{blog.slug}/"
 
     def test_get_podcast_m4a_feed_rss(self, client, episode, use_dummy_cache_backend):
         feed_url = reverse(

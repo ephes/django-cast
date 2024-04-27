@@ -249,6 +249,7 @@ def blog_to_dict(blog):
         "id": blog.pk,
         "pk": blog.pk,
         "author": blog.author,
+        "slug": blog.slug,
         "uuid": blog.uuid,
         "email": blog.email,
         "comments_enabled": blog.comments_enabled,
@@ -389,6 +390,8 @@ def data_for_blog_cachable(
     *,
     request: HtmxHttpRequest,
     blog: "Blog",
+    is_paginated: bool = True,  # feed is not paginated
+    post_queryset: QuerySet["Post"] | None = None,  # queryset is build from filterset / get_params if None
 ) -> dict:
     """
     Fetch all the data of a blog in a cachable (dict) format.
@@ -399,19 +402,21 @@ def data_for_blog_cachable(
     data["template_base_dir"] = blog.get_template_base_dir(request)
 
     # filters and pagination
-    get_params = request.GET.copy()
-    filterset = blog.get_filterset(get_params)
-    data["filterset"] = {"get_params": get_params.dict()}
-    date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
-    data["filterset"]["date_facets_choices"] = date_facet_choices
-    data["filterset"]["category_facets_choices"] = get_facet_choices(filterset.form.fields, "category_facets")
-    data["filterset"]["tag_facets_choices"] = get_facet_choices(filterset.form.fields, "tag_facets")
-    data["pagination_context"] = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
+    if is_paginated:
+        get_params = request.GET.copy()
+        filterset = blog.get_filterset(get_params)
+        data["filterset"] = {"get_params": get_params.dict()}
+        date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
+        data["filterset"]["date_facets_choices"] = date_facet_choices
+        data["filterset"]["category_facets_choices"] = get_facet_choices(filterset.form.fields, "category_facets")
+        data["filterset"]["tag_facets_choices"] = get_facet_choices(filterset.form.fields, "tag_facets")
+        data["pagination_context"] = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
     # queryset data
-    queryset = data["pagination_context"]["object_list"]
-    del data["pagination_context"]["object_list"]  # not cachable
+    if post_queryset is None:
+        post_queryset = data["pagination_context"]["object_list"]
+        del data["pagination_context"]["object_list"]  # not cachable
     queryset_data = QuerysetData.create_from_post_queryset(
-        request=request, site=Site(**data["site"]), queryset=queryset
+        request=request, site=Site(**data["site"]), queryset=post_queryset
     )
     data = add_queryset_data(data, queryset_data)
 
@@ -436,6 +441,7 @@ class FeedRepository:
         blog_url: str,
         queryset_data: QuerysetData,
         root_nav_links: LinkTuples,
+        used: bool = False,
     ):
         self.site = site
         self.blog = blog
@@ -454,6 +460,7 @@ class FeedRepository:
         self.videos = queryset_data.videos
         self.audios = queryset_data.audios
         self.audios_by_post_id = queryset_data.audios_by_post_id
+        self.used = used
         self.post_queryset = queryset_data.queryset
 
         for post_id, page_url in self.page_url_by_id.items():
@@ -465,7 +472,7 @@ class FeedRepository:
         *,
         request: HttpRequest,
         blog: "Blog",
-        template_base_dir: str,
+        template_base_dir: str = "bootstrap4",
         post_queryset: QuerySet["Post"],
     ) -> "FeedRepository":
         site = Site.find_for_request(request)
@@ -496,7 +503,11 @@ class FeedRepository:
         request: HtmxHttpRequest,
         blog: "Blog",
     ) -> dict:
-        data = data_for_blog_cachable(request=request, blog=blog)
+        from .pages import Post
+
+        blog.refresh_from_db()  # sometimes the blog object is stale / maybe because of serialization? FIXME
+        post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
+        data = data_for_blog_cachable(request=request, blog=blog, post_queryset=post_queryset, is_paginated=False)
         data["blog_url"] = blog.get_url(request=request)
         return data
 
@@ -625,7 +636,7 @@ class BlogIndexRepository:
         request: HtmxHttpRequest,
         blog: "Blog",
     ) -> dict:
-        return data_for_blog_cachable(request=request, blog=blog)
+        return data_for_blog_cachable(request=request, blog=blog, is_paginated=True, post_queryset=None)
 
     @classmethod
     def create_from_cachable_data(
