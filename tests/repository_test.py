@@ -499,6 +499,7 @@ def test_render_feed_without_hitting_the_database(rf, blog_data):
             "site": {"id": 1},
             "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
             "blog_url": "/some-blog/",
+            "is_podcast": False,
         }
     )
     reset_queries()

@@ -10,16 +10,15 @@ from django.utils.safestring import SafeText, mark_safe
 
 from cast import appsettings
 
-from .models import Audio, Blog, Episode, Podcast, Post
+from .models import Audio, Blog, Podcast, Post
 from .models.repository import FeedRepository
 from .views import HtmxHttpRequest
 
 logger = logging.getLogger(__name__)
 
 
-class LatestEntriesFeed(Feed):
-    object: Blog
-    request: HttpRequest
+class RepositoryMixin:
+    is_podcast: bool = False
 
     def __init__(self, repository: FeedRepository | None = None):
         super().__init__()
@@ -33,7 +32,9 @@ class LatestEntriesFeed(Feed):
         # create new repository
         if appsettings.CAST_REPOSITORY == "default":
             # default repository from cachable data
-            cachable_data = FeedRepository.data_for_feed_cachable(request=request, blog=blog)
+            cachable_data = FeedRepository.data_for_feed_cachable(
+                request=request, blog=blog, is_podcast=self.is_podcast
+            )
             return FeedRepository.create_from_cachable_data(data=cachable_data)
         else:
             # create repository from django models
@@ -43,6 +44,26 @@ class LatestEntriesFeed(Feed):
                 blog=blog,
                 post_queryset=Post.objects.live().descendant_of(blog).order_by("-visible_date"),
             )
+
+    def items(self) -> QuerySet[Post]:
+        queryset = self.repository.post_queryset
+        # mark repository as used - the post_queryset might be empty if used twice
+        self.repository.used = True
+        return queryset
+
+    def get_feed(self, obj, request):
+        # If we want to cache the site to avoid one additional db query, we should do it here
+        blog = self.object
+        self.repository = repository = self.get_repository(self.request, blog)
+        # now that we have the repository, we can set the template base dir
+        # to avoid db queries in context_processors
+        self.request.cast_site_template_base_dir = repository.template_base_dir
+        return super().get_feed(obj, request)
+
+
+class LatestEntriesFeed(RepositoryMixin, Feed):
+    object: Blog
+    request: HttpRequest
 
     def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
         slug = kwargs["slug"]
@@ -63,12 +84,6 @@ class LatestEntriesFeed(Feed):
             return self.repository.blog_url
         return self.object.get_full_url()
 
-    def items(self) -> QuerySet[Post]:
-        queryset = self.repository.post_queryset
-        # mark repository as used - the post_queryset might be empty if used twice
-        self.repository.used = True
-        return queryset
-
     def item_title(self, post: Model) -> SafeText:
         assert isinstance(post, Post)
         return mark_safe(post.title)
@@ -87,15 +102,6 @@ class LatestEntriesFeed(Feed):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         return context
-
-    def get_feed(self, obj, request):
-        # If we want to cache the site to avoid one additional db query, we should do it here
-        blog = self.object
-        self.repository = repository = self.get_repository(self.request, blog)
-        # now that we have the repository, we can set the template base dir
-        # to avoid db queries in context_processors
-        self.request.cast_site_template_base_dir = repository.template_base_dir
-        return super().get_feed(obj, request)
 
 
 class ITunesElements:
@@ -187,7 +193,7 @@ class RssITunesFeedGenerator(ITunesElements, Rss201rev2Feed):
         return rss_attrs
 
 
-class PodcastFeed(Feed):
+class PodcastFeed(RepositoryMixin, Feed):
     """
     A feed of podcasts for iTunes and other compatible podcatchers.
     """
@@ -196,10 +202,7 @@ class PodcastFeed(Feed):
     mime_type: str
     object: Podcast
     request: HttpRequest
-
-    def __init__(self, repository: FeedRepository | None = None):
-        super().__init__()
-        self.predefined_repository = repository
+    is_podcast: bool = True
 
     def set_audio_format(self, audio_format: str) -> None:
         format_to_mime = Audio.mime_lookup
@@ -231,18 +234,6 @@ class PodcastFeed(Feed):
 
     def itunes_categories(self, blog: Blog) -> list[str]:
         return blog.itunes_categories.split(",")
-
-    def items(self, podcast: Podcast) -> QuerySet[Episode]:
-        queryset = (
-            Episode.objects.live().descendant_of(podcast).filter(podcast_audio__isnull=False).order_by("-visible_date")
-        )
-        self.repository = FeedRepository.create_from_django_models(
-            request=self.request,
-            blog=podcast,
-            post_queryset=queryset,
-            template_base_dir="bootstrap4",
-        )
-        return queryset
 
     def item_title(self, item):
         return item.title

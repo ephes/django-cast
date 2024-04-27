@@ -264,10 +264,28 @@ def post_to_dict(post):
         "id": post.pk,
         "pk": post.pk,
         "uuid": post.uuid,
+        "slug": post.slug,
         "title": post.title,
         "visible_date": post.visible_date,
         "comments_enabled": post.comments_enabled,
         "body": json.dumps(list(post.body.raw_data)),
+    }
+
+
+def episode_to_dict(post):
+    return {
+        "id": post.pk,
+        "pk": post.pk,
+        "uuid": post.uuid,
+        "slug": post.slug,
+        "title": post.title,
+        "visible_date": post.visible_date,
+        "comments_enabled": post.comments_enabled,
+        "body": json.dumps(list(post.body.raw_data)),
+        "podcast_audio_id": post.podcast_audio.pk,
+        "keywords": post.keywords,
+        "explicit": post.explicit,
+        "block": post.block,
     }
 
 
@@ -351,9 +369,14 @@ def add_root_nav_links(data: dict[str, Any]) -> dict:
 
 def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict:
     # posts
+    from .pages import Episode
+
     post_by_id = {}
     for pk, post in queryset_data.post_by_id.items():
-        post_by_id[pk] = post_to_dict(post)
+        if isinstance(post, Episode):
+            post_by_id[pk] = episode_to_dict(post)
+        else:
+            post_by_id[pk] = post_to_dict(post)
     data["post_by_id"] = post_by_id
 
     # audios
@@ -502,13 +525,25 @@ class FeedRepository:
         *,
         request: HtmxHttpRequest,
         blog: "Blog",
+        is_podcast: bool = False,
     ) -> dict:
-        from .pages import Post
-
         blog.refresh_from_db()  # sometimes the blog object is stale / maybe because of serialization? FIXME
-        post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
+        if is_podcast:
+            from .pages import Episode
+
+            post_queryset = (
+                Episode.objects.live()
+                .descendant_of(blog)
+                .filter(podcast_audio__isnull=False)
+                .order_by("-visible_date")
+            )
+        else:
+            from .pages import Post
+
+            post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
         data = data_for_blog_cachable(request=request, blog=blog, post_queryset=post_queryset, is_paginated=False)
         data["blog_url"] = blog.get_url(request=request)
+        data["is_podcast"] = is_podcast
         return data
 
     @classmethod
@@ -522,12 +557,16 @@ class FeedRepository:
         """
         from wagtail.images.models import Image
 
-        from . import Audio, Blog, Post, Video
+        from . import Audio, Blog, Episode, Post, Video
 
         site = Site(**data["site"])
         blog = Blog(**data["blog"])
         template_base_dir = data["template_base_dir"]
-        post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
+        is_podcast = data.get("is_podcast", False)
+        if is_podcast:
+            post_by_id = {post_pk: Episode(**post_data) for post_pk, post_data in data["post_by_id"].items()}
+        else:
+            post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
         audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
         images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}

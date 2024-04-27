@@ -125,9 +125,6 @@ class TestGeneratedFeeds:
 
         d = feedparser.parse(r.content)
         assert len(d.entries) == 1
-        print(episode)
-        print(episode.blog)
-        print(episode.podcast)
         assert Post.objects.live().descendant_of(episode.blog).count() == 1
 
     def test_podcast_feed_contains_visible_date_as_pubdate(
