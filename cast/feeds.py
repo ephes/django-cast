@@ -46,6 +46,7 @@ class RepositoryMixin:
             )
 
     def items(self) -> QuerySet[Post]:
+        assert self.repository is not None
         queryset = self.repository.post_queryset
         # mark repository as used - the post_queryset might be empty if used twice
         self.repository.used = True
@@ -90,6 +91,7 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
 
     def item_description(self, post: Model) -> SafeText:
         assert isinstance(post, Post)
+        assert self.repository is not None
         repository = self.repository.get_post_detail_repository(post)
         post.description = post.get_description(
             request=self.request, render_detail=True, escape_html=False, repository=repository
