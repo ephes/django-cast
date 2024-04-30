@@ -543,7 +543,6 @@ class FeedRepository:
             post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
         data = data_for_blog_cachable(request=request, blog=blog, post_queryset=post_queryset, is_paginated=False)
         data["blog_url"] = blog.get_url(request=request)
-        data["is_podcast"] = is_podcast
         return data
 
     @classmethod
@@ -562,14 +561,16 @@ class FeedRepository:
         site = Site(**data["site"])
         blog = Blog(**data["blog"])
         template_base_dir = data["template_base_dir"]
-        is_podcast = data.get("is_podcast", False)
-        if is_podcast:
-            post_by_id = {}
-            for post_pk, post_data in data["post_by_id"].items():
+        post_by_id = {}
+        podcast_fields = ["podcast_audio", "block", "keywords", "explicit"]
+        for post_pk, post_data in data["post_by_id"].items():
+            is_podcast = any(field in post_data for field in podcast_fields)
+            if "podcast_audio" in post_data:
                 post_data["podcast_audio"] = Audio(**post_data["podcast_audio"])
+            if is_podcast:
                 post_by_id[post_pk] = Episode(**post_data)
-        else:
-            post_by_id = {post_pk: Post(**post_data) for post_pk, post_data in data["post_by_id"].items()}
+            else:
+                post_by_id[post_pk] = Post(**post_data)
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
         audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
         images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
