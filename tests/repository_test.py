@@ -191,6 +191,7 @@ def test_internal_page_link_is_cached_blog_index(rf, post_with_link_to_itself):
     request.htmx = False
     reset_queries()
     # When we render the blog index page
+    # with connection.execute_wrapper(blocker):
     response = blog.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
     # Then the internal link should be rendered
