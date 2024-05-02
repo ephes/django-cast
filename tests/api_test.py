@@ -154,6 +154,22 @@ class TestPodcastAudio:
         response = podlove_view.retrieve(MockRequest())
         assert response.status_code == 200
 
+    def test_podlove_podlove_detail_endpoint_show_metadata_without_artwork(self, api_client, episode):
+        """Test whether the podlove detail endpoint includes show metadata, but no artwork."""
+        audio = episode.podcast_audio
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
+
+        r = api_client.get(podlove_detail_url, format="json")
+        assert r.status_code == 200
+
+        podlove_data = r.json()
+        podcast = episode.blog.specific
+        assert "show" in podlove_data
+        assert podlove_data["show"]["title"] == podcast.title
+        assert podlove_data["show"]["subtitle"] == podcast.description
+        assert "poster" not in podlove_data["show"]
+        assert podlove_data["show"]["link"] == podcast.full_url
+
     def test_podlove_podlove_detail_endpoint_show_metadata(self, api_client, episode_with_artwork):
         """Test whether the podlove detail endpoint includes show metadata."""
         episode = episode_with_artwork

@@ -43,15 +43,16 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         post = self.context.get("post")  # Get the Post object from the context
         if post is None:
             return {}
-        podcast = post.blog.specific
-        print("podcast: ", podcast)
-        return {
-            "title": podcast.title,
-            "subtitle": podcast.description,
+        blog = post.blog.specific
+        metadata = {
+            "title": blog.title,
+            "subtitle": blog.description,
             # "summary": "Ein bisschen Beschreibungstext",  # FIXME not implemented
-            "poster": podcast.itunes_artwork.original.url,
-            "link": podcast.full_url,
+            "link": blog.full_url,
         }
+        if hasattr(blog, "itunes_artwork") and blog.itunes_artwork is not None:
+            metadata["poster"] = blog.itunes_artwork.original.url
+        return metadata
 
     @staticmethod
     def get_version(_instance: Audio) -> int:
