@@ -154,6 +154,31 @@ class TestPodcastAudio:
         response = podlove_view.retrieve(MockRequest())
         assert response.status_code == 200
 
+    def test_podlove_podlove_detail_endpoint_show_metadata(self, api_client, episode_with_artwork):
+        """Test whether the podlove detail endpoint includes show metadata."""
+        episode = episode_with_artwork
+        audio = episode.podcast_audio
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
+
+        r = api_client.get(podlove_detail_url, format="json")
+        assert r.status_code == 200
+
+        podlove_data = r.json()
+        podcast = episode.blog.specific
+        assert "show" in podlove_data
+        assert podlove_data["show"]["title"] == podcast.title
+        assert podlove_data["show"]["subtitle"] == podcast.description
+        assert podlove_data["show"]["poster"] == podcast.itunes_artwork.original.url
+        assert podlove_data["show"]["link"] == podcast.full_url
+
+    def test_podlove_player_config(self, api_client):
+        """Test whether the podlove player config endpoint returns the player config."""
+        url = reverse("cast:api:player_config")
+        response = api_client.get(url, format="json")
+        assert response.status_code == 200
+        config = response.json()
+        assert "activeTab" in config
+
 
 class TestCommentTrainingData:
     pytestmark = pytest.mark.django_db
@@ -317,7 +342,6 @@ def test_update_theme_invalid(api_client):
     # Then we expect an error message to be returned and
     # the theme is not stored in the session
     result = r.json()
-    print(result)
     assert result["error"] == "Theme slug is invalid"
     assert api_client.session.get("template_base_dir") is None
 

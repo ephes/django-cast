@@ -234,9 +234,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
             return episode.full_url
         return None
 
-    @property
-    def podlove_url(self) -> str:
-        return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk})
+    def get_podlove_url(self, post_pk: int) -> str:
+        return reverse("cast:api:audio_podlove_detail", kwargs={"pk": self.pk, "post_id": post_pk})
 
     @property
     def duration_str(self) -> str:

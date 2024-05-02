@@ -23,10 +23,11 @@ urlpatterns: list[Any] = [
     path("audios/", views.AudioListView.as_view(), name="audio_list"),
     re_path(r"^audios/(?P<pk>\d+)/?$", views.AudioDetailView.as_view(), name="audio_detail"),
     re_path(
-        r"^audios/podlove/(?P<pk>\d+)/?$",
+        r"^audios/podlove/(?P<pk>\d+)/(?:post/(?P<post_id>\d+)/)?$",
         views.AudioPodloveDetailView.as_view(),
         name="audio_podlove_detail",
     ),
+    path("audios/player_config/", views.PlayerConfig.as_view(), name="player_config"),
     # facet counts
     path("facet_counts/", views.FacetCountListView.as_view(), name="facet-counts-list"),
     re_path(r"facet_counts/(?P<pk>\d+)/?$", views.FacetCountsDetailView.as_view(), name="facet-counts-detail"),

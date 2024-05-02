@@ -330,7 +330,7 @@ class TestPostModel:
         post = post_with_audio
         [audio] = post.audios.all()
         assert post.podlove_players == [
-            (f"#audio_{audio.pk}", audio.podlove_url),
+            (f"#audio_{audio.pk}", audio.get_podlove_url(post.pk)),
         ]
 
     def test_get_context_owner_none(self, rf, post):

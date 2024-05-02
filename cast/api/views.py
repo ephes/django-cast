@@ -5,6 +5,7 @@ from typing import Any, cast
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import CreateView
 from rest_framework import generics, status
@@ -23,6 +24,7 @@ from ..forms import SelectThemeForm, VideoForm
 from ..models import (
     Audio,
     Blog,
+    Post,
     SpamFilter,
     Video,
     get_template_base_dir,
@@ -120,8 +122,96 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
                 instance.set_episode_id(episode_id)
             except (ValueError, TypeError):
                 pass
-        serializer = self.get_serializer(instance)
+
+        # Retrieve post_id from kwargs and add it to context
+        if not hasattr(self, "request"):
+            # those attributes need to be set before calling get_serializer_context
+            self.request = request
+            self.format_kwarg = None
+        context = self.get_serializer_context()
+        post_id = kwargs.get("post_id")
+        if post_id:
+            post = get_object_or_404(Post, pk=post_id)
+            context["post"] = post
+
+        serializer = self.get_serializer(instance, context=context)
         return Response(serializer.data)
+
+
+class PlayerConfig(generics.RetrieveAPIView):
+    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+        return Response(
+            {
+                "activeTab": None,
+                "subscribe-button": None,
+                "share": {
+                    "channels": ["facebook", "twitter", "whats-app", "linkedin", "pinterest", "xing", "mail", "link"],
+                    # "outlet": "https://ukw.fm/wp-content/plugins/podlove-web-player/web-player/share.html",
+                    "sharePlaytime": True,
+                },
+                "related-episodes": {"source": "disabled", "value": None},
+                "version": 5,
+                "theme": {
+                    "tokens": {
+                        "brand": "#E64415",
+                        "brandDark": "#235973",
+                        "brandDarkest": "#1A3A4A",
+                        "brandLightest": "#E9F1F5",
+                        "shadeDark": "#807E7C",
+                        "shadeBase": "#807E7C",
+                        "contrast": "#000",
+                        "alt": "#fff",
+                    },
+                    "fonts": {
+                        "ci": {
+                            "name": "ci",
+                            "family": [
+                                "-apple-system",
+                                "BlinkMacSystemFont",
+                                "Segoe UI",
+                                "Roboto",
+                                "Helvetica",
+                                "Arial",
+                                "sans-serif",
+                                "Apple Color Emoji",
+                            ],
+                            "src": [],
+                            "weight": 800,
+                        },
+                        "regular": {
+                            "name": "regular",
+                            "family": [
+                                "-apple-system",
+                                "BlinkMacSystemFont",
+                                "Segoe UI",
+                                "Roboto",
+                                "Helvetica",
+                                "Arial",
+                                "sans-serif",
+                                "Apple Color Emoji",
+                            ],
+                            "src": [],
+                            "weight": 300,
+                        },
+                        "bold": {
+                            "name": "bold",
+                            "family": [
+                                "-apple-system",
+                                "BlinkMacSystemFont",
+                                "Segoe UI",
+                                "Roboto",
+                                "Helvetica",
+                                "Arial",
+                                "sans-serif",
+                                "Apple Color Emoji",
+                            ],
+                            "src": [],
+                            "weight": 700,
+                        },
+                    },
+                },
+            }
+        )
 
 
 class FacetCountListView(generics.ListCreateAPIView):

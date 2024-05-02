@@ -124,6 +124,7 @@ class HtmlField(Field):
 
 
 class HasPostDetails(Protocol):
+    post_id: int
     template_base_dir: str
     blog: "Blog"
     root_nav_links: LinkTuples
@@ -332,6 +333,9 @@ class Post(Page):
         context["owner_username"] = repository.owner_username
         context["blog_url"] = repository.blog_url
         context["audio_items"] = list(repository.audio_by_id.items())
+        if context["page"].pk is None:
+            context["page"].pk = repository.post_id
+        print("page in context: ", context["page"].pk)
         return context
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
@@ -472,7 +476,7 @@ class Post(Page):
         result = []
         for pk, audio in self.media_lookup.get("audio", {}).items():
             element_id = f"#audio_{pk}"
-            result.append((element_id, audio.podlove_url))
+            result.append((element_id, audio.get_podlove_url(self.pk)))
         return result
 
     def get_description(

@@ -28,6 +28,8 @@ class AudioSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
+    version = serializers.SerializerMethodField()
+    show = serializers.SerializerMethodField()
     audio = serializers.ListField()
     chapters = serializers.ListField()
     duration = serializers.CharField(source="duration_str")
@@ -35,7 +37,25 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Audio
-        fields = ("title", "subtitle", "audio", "duration", "chapters", "link")
+        fields = ("version", "show", "title", "subtitle", "audio", "duration", "chapters", "link")
+
+    def get_show(self, instance: Audio) -> dict:
+        post = self.context.get("post")  # Get the Post object from the context
+        if post is None:
+            return {}
+        podcast = post.blog.specific
+        print("podcast: ", podcast)
+        return {
+            "title": podcast.title,
+            "subtitle": podcast.description,
+            # "summary": "Ein bisschen Beschreibungstext",  # FIXME not implemented
+            "poster": podcast.itunes_artwork.original.url,
+            "link": podcast.full_url,
+        }
+
+    @staticmethod
+    def get_version(_instance: Audio) -> int:
+        return 5
 
 
 class SimpleBlogSerializer(serializers.HyperlinkedModelSerializer):

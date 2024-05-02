@@ -95,10 +95,12 @@
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
 
   {% if use_audio_player %}
-    <script src={% static 'cast/js/web-player/embed.4.js' %}></script>
+    <script src={% static 'cast/js/web-player/embed.5.js' %}></script>
     {% for post in posts %}
       {% for pk, audio in post.media_lookup.audio.items %}
-        <script>podlovePlayer("#audio_{{ audio.pk }}", "{{ audio.podlove_url }}");</script>
+        <script>
+          podlovePlayer("#audio_{{ audio.pk }}", "{% url 'cast:api:audio_podlove_detail' pk=audio.pk post_id=post.pk %}", "{% url 'cast:api:player_config' %}");
+        </script>
       {% endfor %}
     {% endfor %}
   {% endif %}

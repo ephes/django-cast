@@ -482,6 +482,18 @@ def episode(podcast, audio, body):
 
 
 @pytest.fixture()
+def episode_with_artwork(podcast_with_artwork, audio, body):
+    return EpisodeFactory(
+        owner=podcast_with_artwork.owner,
+        parent=podcast_with_artwork,
+        title="test podcast episode",
+        slug="test-podcast-entry",
+        podcast_audio=audio,
+        body=body,
+    )
+
+
+@pytest.fixture()
 def podcast_episode_with_same_audio(blog, audio, body):
     return EpisodeFactory(
         owner=blog.owner,

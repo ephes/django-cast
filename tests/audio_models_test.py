@@ -89,9 +89,6 @@ class TestAudioModel:
         _ = audio.get_chaptermark_data_from_file("mp3")
         assert field.url == run.call_args[0][0][2]
 
-    def test_audio_podlove_url(self, audio):
-        assert audio.podlove_url == "/cast/api/audios/podlove/1"
-
     def test_get_episode_url_from_audio(self, episode):
         audio = episode.podcast_audio
 
