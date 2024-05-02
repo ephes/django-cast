@@ -1,8 +1,12 @@
-0.2.31 (2024-04-28)
+0.2.31 (2024-05-03)
 -------------------
 
 It would be nice if the feed repository could use the same statements that are used
 to fetch the data for the blog index. Further optimizations of the statements would
 be beneficial for both use cases.
 
+Now podlove web player 5 is used by default. This is important because adding a
+transcript feature depends on this player version.
+
 - #132 Create the feed repository from cachable data, too
+- #65 Use podlove web player 5
