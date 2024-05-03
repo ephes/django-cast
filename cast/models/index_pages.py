@@ -221,6 +221,10 @@ class Blog(Page):
         return reverse("cast:api:theme-update")
 
     @property
+    def podlove_player_config_url(self) -> str:
+        return reverse("cast:api:player_config")
+
+    @property
     def comment_post_url(self) -> str:
         ajax_post_url = reverse("comments-post-comment-ajax")
         return ajax_post_url

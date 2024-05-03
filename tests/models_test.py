@@ -118,6 +118,9 @@ class TestBlogModel:
     def test_theme_update_api_url(self, blog):
         assert blog.theme_update_api_url == reverse("cast:api:theme-update")
 
+    def test_player_config_api_url(self, blog):
+        assert blog.podlove_player_config_url == reverse("cast:api:player_config")
+
     def test_comment_post_url(self, blog):
         assert blog.comment_post_url == reverse("comments-post-comment-ajax")
 
