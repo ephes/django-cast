@@ -12,4 +12,6 @@ if you want to heavily customize the appearance of the player.
 
 - #65 Use podlove web player 5
 - #132 Create the feed repository from cachable data, too
+- #135 Support for wagtail 6.1
 - #137 Make `audio.html` template themeable via `template_base_dir`
+- #138 Small mypy fix
