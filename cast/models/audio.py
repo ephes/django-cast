@@ -35,7 +35,7 @@ class FileField(Protocol):
     path: str
 
 
-class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore
+class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     duration = models.DurationField(null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)
@@ -72,6 +72,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore
     ]
 
     objects: PageManager["Audio"] = AudioQuerySet.as_manager()
+    episodes: models.QuerySet["Episode"]  # mypy needs this
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
     @property

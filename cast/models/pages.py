@@ -45,6 +45,7 @@ from cast.blocks import (
 from cast.models import get_or_create_gallery
 
 from ..views import HtmxHttpRequest
+from .audio import Audio
 from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
 from .repository import (
     AudioById,
@@ -565,7 +566,7 @@ class Episode(Post):
     """A podcast episode is just a Post with some additional fields."""
 
     podcast_audio = models.ForeignKey(
-        "cast.Audio",
+        Audio,  # need to do this instead of better "cast.Audio" because mypy would complain otherwise
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
