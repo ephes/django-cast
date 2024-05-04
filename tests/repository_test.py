@@ -705,3 +705,9 @@ def test_blog_index_repository_via_django_models_no_audio_player(rf, blog):
     create_post(blog=blog)
     repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
     assert repository.use_audio_player is False
+
+
+def test_page_link_handler_expand_db_attributes_single():
+    PageLinkHandlerWithCache.cache_url(1, "/foo-bar/")
+    tag = PageLinkHandlerWithCache.expand_db_attributes({"id": 1})
+    assert tag == '<a href="/foo-bar/">'

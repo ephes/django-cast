@@ -35,7 +35,7 @@ class FileField(Protocol):
     path: str
 
 
-class Audio(CollectionMember, index.Indexed, TimeStampedModel):
+class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     duration = models.DurationField(null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)

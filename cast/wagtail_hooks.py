@@ -120,6 +120,21 @@ class PageLinkHandlerWithCache(PageLinkHandler):
             return f'<a href="{cached_url}">'
         return super().expand_db_attributes(attrs)
 
+    @classmethod
+    def expand_db_attributes_many(cls, attrs_list: list[dict]) -> list[str]:
+        """Required for Wagtail >= 6.1"""
+        links, all_cached = [], True
+        for attrs in attrs_list:
+            if (cached_url := cls.cache.get(int(attrs["id"]))) is not None:
+                links.append(f'<a href="{cached_url}">')
+            else:
+                all_cached = False
+                break
+        if all_cached:
+            return links
+        # if not all cached, fallback to the super method
+        return super().expand_db_attributes_many(attrs_list)
+
 
 @hooks.register("register_rich_text_features")
 def register_page_link(features):
