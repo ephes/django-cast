@@ -169,7 +169,12 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     return context
 
 
-def get_gallery_block_template(default_template_name: str, context: dict | None, layout: str = "default") -> str:
+def get_block_template(default_template_name: str, context: dict | None, *, file_name: str) -> str:
+    """
+    Get the template name for the block from the default template name, the context and the
+    local file name. This is needed to be able to overwrite the default template with a
+    theme specific template controlled by "template_base_dir" in the context.
+    """
     if context is None:
         return default_template_name
 
@@ -177,10 +182,7 @@ def get_gallery_block_template(default_template_name: str, context: dict | None,
     if template_base_dir is None:
         return default_template_name
 
-    if layout == "htmx":
-        template_from_theme = f"cast/{template_base_dir}/gallery_htmx.html"
-    else:
-        template_from_theme = f"cast/{template_base_dir}/gallery.html"
+    template_from_theme = f"cast/{template_base_dir}/{file_name}"
     try:
         get_template(template_from_theme)
         return template_from_theme
@@ -225,7 +227,7 @@ class GalleryBlock(ListBlock):
 
     def get_template(self, images: QuerySet[AbstractImage] | None = None, context: dict | None = None) -> str:
         default_template_name = super().get_template(images, context)
-        return get_gallery_block_template(default_template_name, context)
+        return get_block_template(default_template_name, context, file_name="gallery.html")
 
     def get_context(self, images: QuerySet[AbstractImage], parent_context: dict | None = None) -> dict:
         if parent_context is None:
@@ -267,7 +269,11 @@ class GalleryBlockWithLayout(StructBlock):
         if value is not None:
             if (layout_from_value := value.get("layout")) is not None:
                 layout = layout_from_value
-        return get_gallery_block_template(default_template_name, context, layout=layout)
+        if layout == "htmx":
+            template_file_name = "gallery_htmx.html"
+        else:
+            template_file_name = "gallery.html"
+        return get_block_template(default_template_name, context, file_name=template_file_name)
 
     @staticmethod
     def _get_images_from_repository(repository: HasImagesAndRenditions, values):
@@ -369,6 +375,10 @@ class HasAudios(Protocol):
 
 
 class AudioChooserBlock(RepositoryChooserBlock):
+    def get_template(self, value=None, context=None):
+        default_template_name = super().get_template(value, context)
+        return get_block_template(default_template_name, context, file_name="audio.html")
+
     @cached_property
     def target_model(self) -> type["Audio"]:
         from .models import Audio
