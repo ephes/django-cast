@@ -45,6 +45,9 @@ your custom template in the Wagtail admin interface.
     implement the `get_dirs` method, you have to add it to
     ``settings.CAST_CUSTOM_THEMES``.
 
+An list of additional templates that can be overwritten:
+
+- `cast/custom/audio.html`
 
 Galleries
 =========

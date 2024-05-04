@@ -1,4 +1,4 @@
-0.2.31 (2024-05-03)
+0.2.31 (2024-05-05)
 -------------------
 
 It would be nice if the feed repository could use the same statements that are used
@@ -6,7 +6,10 @@ to fetch the data for the blog index. Further optimizations of the statements wo
 be beneficial for both use cases.
 
 Now podlove web player 5 is used by default. This is important because adding a
-transcript feature depends on this player version.
+transcript feature depends on this player version. It is now also possible to
+overwrite the template that is used for an audio block in a theme. This is useful
+if you want to heavily customize the appearance of the player.
 
-- #132 Create the feed repository from cachable data, too
 - #65 Use podlove web player 5
+- #132 Create the feed repository from cachable data, too
+- #137 Make `audio.html` template themeable via `template_base_dir`
