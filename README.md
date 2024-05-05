@@ -39,8 +39,7 @@ See [the deployment documentation](https://django-cast.readthedocs.io/en/develop
 Although switching to Wagtail was a big step, there is still a lot to do. Things that are on the roadmap:
 
 - Improve the documentation
-- Update the [Podlove Web Player](https://podlove.org/podlove-web-player/) version
-- Design improvements for the default theme (it's still bootstrap 4 atm)
+- Design improvements for the default theme
 - Collaborators for podcast episodes
 - Transcripts for podcast episodes
 
