@@ -1,17 +1,15 @@
 0.2.31 (2024-05-05)
 -------------------
 
-It would be nice if the feed repository could use the same statements that are used
-to fetch the data for the blog index. Further optimizations of the statements would
-be beneficial for both use cases.
-
-Now podlove web player 5 is used by default. This is important because adding a
+Podlove web player 5 is now used by default. Version 4 will still continue
+to work, but it'is not officially supported anymore. This is important because adding a
 transcript feature depends on this player version. It is now also possible to
 overwrite the template that is used for an audio block in a theme. This is useful
 if you want to heavily customize the appearance of the player.
 
 - #65 Use podlove web player 5
 - #132 Create the feed repository from cachable data, too
+- #133 Test for each post whether it is a podcast episode
 - #135 Support for wagtail 6.1
 - #137 Make `audio.html` template themeable via `template_base_dir`
 - #138 Small mypy fix
