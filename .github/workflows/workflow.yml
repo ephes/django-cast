@@ -27,7 +27,7 @@ jobs:
         python manage.py migrate
         pytest --cov=cast --cov-report=xml
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         directory: ./coverage/reports/
         env_vars: OS,PYTHON
@@ -35,4 +35,5 @@ jobs:
         files: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
+        token: ${{ secrets.CODECOV_TOKEN }}
         verbose: true
