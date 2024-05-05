@@ -1,0 +1,10 @@
+0.2.32 (2024-05-12)
+-------------------
+
+Some ideas:
+
+- fix cover image for twitter player cards
+- add subtitle for posts
+- add cover images for posts
+
+- #139 Fixed codecov upload
