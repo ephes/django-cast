@@ -35,5 +35,5 @@ jobs:
         files: ./coverage.xml
         flags: unittests
         name: codecov-umbrella
-        token: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ secrets.CODECOV_TOKEN }}  # configure in actions section of secrets
         verbose: true
