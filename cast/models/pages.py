@@ -150,6 +150,14 @@ class Post(Page):
         default=True,
         help_text=_("Whether comments are enabled for this post."),
     )
+    cover = models.ForeignKey(
+        Image,
+        help_text=_("An optional cover image."),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     images: models.ManyToManyField = models.ManyToManyField(Image, blank=True)  # FIXME mypy are you ok?
     videos: models.ManyToManyField = models.ManyToManyField("cast.Video", blank=True)
@@ -180,6 +188,7 @@ class Post(Page):
         APIField("uuid"),
         APIField("visible_date"),
         APIField("comments_are_enabled"),
+        APIField("cover"),
         APIField("body"),
         APIField("html_overview", serializer=HtmlField(source="*", render_detail=False)),
         APIField("html_detail", serializer=HtmlField(source="*", render_detail=True)),
@@ -192,6 +201,7 @@ class Post(Page):
         FieldPanel("visible_date"),
         FieldPanel("categories", widget=forms.CheckboxSelectMultiple),
         FieldPanel("tags"),
+        FieldPanel("cover", classname="collapsed"),
         FieldPanel("body"),
     ]
     parent_page_types = ["cast.Blog", "cast.Podcast"]
