@@ -2,6 +2,8 @@
 Responsive Images
 *****************
 
+.. _response_images_overview:
+
 Responsive images adapt to different screen sizes, ensuring optimal
 display across devices. This project uses two types of responsive images:
 

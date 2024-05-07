@@ -1,0 +1,52 @@
+****
+Post
+****
+
+Posts are Wagtail pages that have a :ref:`blog <blog_overview>` page as a parent.
+
+Visible Date
+============
+
+You can set the `visible_date` of a post, which will be showed in templates
+and used for sorting posts shown on the blog index page.
+
+Cover Image
+===========
+
+You can set a cover image for a post.
+
+Tags
+====
+
+You can add tags to a post. Tags can be used to filter posts on the blog index page.
+
+Body
+====
+
+The body of a post is a streamfield. You can add different types of blocks to the body of a post.
+
+Overview
+--------
+
+Overview blocks are used to display a summary of the post on the blog index page or
+in feeds.
+
+Detail
+------
+
+Detail blocks are used to display the full content of the post. Usually it is shown
+on the post detail page.
+
+Types of Blocks
+---------------
+
+Following types of blocks are available for the body of a post:
+
+- Heading
+- Paragraph - Rich Text which can include headings, images, links, etc.
+- :ref:`Image <image_overview>` - A single image
+- :ref:`Gallery <gallery_overview>` with Layout - A gallery of images with different layout options
+- Embed - Embed a video or other content from a URL
+- :ref:`Video <video_overview>`
+- :ref:`Audio <audio_overview>` - Displayed using the Podlove Web Player
+- Code - Code block with syntax highlighting

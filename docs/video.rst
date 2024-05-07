@@ -2,6 +2,8 @@
 Video
 *****
 
+.. _video_overview:
+
 You can upload video files to the server and play them back in the browser.
 
 Videos have a `title` a file field `original` pointing to the original video
