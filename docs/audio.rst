@@ -23,7 +23,7 @@ Playback
 ========
 
 For playback of audio content `Podlove Web Player <https://podlove.org/podlove-web-player/>`_
-version 4 is used.
+version 5 is used.
 
 .. Hint::
 
