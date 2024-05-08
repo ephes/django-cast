@@ -134,6 +134,7 @@ class HasPostDetails(Protocol):
     absolute_page_url: str
     owner_username: str
     blog_url: str
+    cover_image_url: str
     audio_by_id: AudioById
     video_by_id: VideoById
     image_by_id: ImageById
@@ -342,6 +343,7 @@ class Post(Page):
         context["absolute_page_url"] = repository.absolute_page_url
         context["owner_username"] = repository.owner_username
         context["blog_url"] = repository.blog_url
+        context["cover_image_url"] = repository.cover_image_url
         context["audio_items"] = list(repository.audio_by_id.items())
         if context["page"].pk is None:
             context["page"].pk = repository.post_id

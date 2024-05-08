@@ -29,6 +29,7 @@ AudioById: TypeAlias = dict[int, "Audio"]
 VideosByPostID: TypeAlias = dict[int, set["Video"]]
 VideoById: TypeAlias = dict[int, "Video"]
 ImagesByPostID: TypeAlias = dict[int, set["Image"]]
+CoverURLByPostID: TypeAlias = dict[int, str]
 ImageById: TypeAlias = dict[int, Image]
 RenditionsForPosts: TypeAlias = dict[int, list[Rendition]]
 LinkTuples: TypeAlias = list[tuple[str, str]]
@@ -71,6 +72,7 @@ class QuerysetData:
         renditions_for_posts: RenditionsForPost,
         page_url_by_id: PageUrlByID,
         absolute_page_url_by_id: PageUrlByID,
+        cover_by_post_id: CoverURLByPostID,
     ):
         self.queryset = post_queryset
         self.post_by_id = post_by_id
@@ -85,12 +87,13 @@ class QuerysetData:
         self.renditions_for_posts = renditions_for_posts
         self.page_url_by_id = page_url_by_id
         self.absolute_page_url_by_id = absolute_page_url_by_id
+        self.cover_by_post_id = cover_by_post_id
 
     @classmethod
     def create_from_post_queryset(
         cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"]
     ) -> "QuerysetData":
-        queryset = queryset.select_related("owner")
+        queryset = queryset.select_related("owner", "cover")
         queryset = queryset.prefetch_related(
             "audios",
             "images",
@@ -102,6 +105,7 @@ class QuerysetData:
         )
         post_by_id: PostByID = {}
         images, has_audio_by_id, owner_username_by_id, videos, audios = {}, {}, {}, {}, {}
+        cover_by_post_id: CoverURLByPostID = {}
         audios_by_post_id: AudiosByPostID = {}
         videos_by_post_id: VideosByPostID = {}
         images_by_post_id: ImagesByPostID = {}
@@ -113,6 +117,10 @@ class QuerysetData:
             has_audio_by_id[post.pk] = post.has_audio
             page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
             absolute_page_url_by_id[post.pk] = post.full_url
+            cover_image_url = ""
+            if post.cover is not None:
+                cover_image_url = post.cover.file.url
+            cover_by_post_id[post.pk] = cover_image_url
 
             for image_type, image in post.get_all_images():
                 images[image.pk] = image
@@ -140,6 +148,7 @@ class QuerysetData:
             owner_username_by_id=owner_username_by_id,
             page_url_by_id=page_url_by_id,
             absolute_page_url_by_id=absolute_page_url_by_id,
+            cover_by_post_id=cover_by_post_id,
         )
 
 
@@ -161,6 +170,7 @@ class PostDetailRepository:
         absolute_page_url: str,
         owner_username: str,
         blog_url: str,
+        cover_image_url: str,
         audio_by_id: AudioById,
         video_by_id: VideoById,
         image_by_id: ImageById,
@@ -176,6 +186,7 @@ class PostDetailRepository:
         self.absolute_page_url = absolute_page_url
         self.owner_username = owner_username
         self.blog_url = blog_url
+        self.cover_image_url = cover_image_url
         self.audio_by_id = audio_by_id
         self.video_by_id = video_by_id
         self.image_by_id = image_by_id
@@ -192,6 +203,9 @@ class PostDetailRepository:
         image_by_id = {}  # post.media_lookup.get("image", {}) is not enough because gallery images are missing
         for _, image in post.get_all_images():
             image_by_id[image.pk] = image
+        cover_image_url = ""
+        if post.cover is not None:
+            cover_image_url = post.cover.file.url
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
@@ -203,6 +217,7 @@ class PostDetailRepository:
             absolute_page_url=post.get_full_url(request=request),
             owner_username=owner_username,
             blog_url=blog.get_url(request=request),
+            cover_image_url=cover_image_url,
             audio_by_id=post.media_lookup.get("audio", {}),
             video_by_id=post.media_lookup.get("video", {}),
             image_by_id=image_by_id,
@@ -404,6 +419,7 @@ def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict
     data["images_by_post_id"] = queryset_data.images_by_post_id
     data["videos_by_post_id"] = queryset_data.videos_by_post_id
     data["audios_by_post_id"] = queryset_data.audios_by_post_id
+    data["cover_by_post_id"] = queryset_data.cover_by_post_id
     data["has_audio_by_id"] = queryset_data.has_audio_by_id
     data["owner_username_by_id"] = queryset_data.owner_username_by_id
     return data
@@ -605,6 +621,7 @@ class FeedRepository:
             renditions_for_posts=renditions_for_posts,
             page_url_by_id=data["page_url_by_id"],
             absolute_page_url_by_id=data["absolute_page_url_by_id"],
+            cover_by_post_id=data["cover_by_post_id"],
         )
         root_nav_links = data["root_nav_links"]
         return cls(
@@ -636,6 +653,7 @@ class FeedRepository:
             video_by_id=self.videos,
             image_by_id=self.images,
             renditions_for_posts=self.renditions_for_posts,
+            cover_image_url=self.queryset_data.cover_by_post_id.get(post_id, ""),
         )
 
 
@@ -746,6 +764,7 @@ class BlogIndexRepository:
             renditions_for_posts=renditions_for_posts,
             page_url_by_id=data["page_url_by_id"],
             absolute_page_url_by_id=data["absolute_page_url_by_id"],
+            cover_by_post_id=data["cover_by_post_id"],
         )
         root_nav_links = data["root_nav_links"]
 

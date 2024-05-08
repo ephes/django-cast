@@ -74,6 +74,7 @@ def post_detail_repository(**kwargs):
         audio_by_id={},
         video_by_id={},
         image_by_id={},
+        cover_image_url="",
         renditions_for_posts={},
     )
     defaults.update(kwargs)
@@ -94,6 +95,7 @@ def queryset_data(**kwargs):
         has_audio_by_id={},
         renditions_for_posts={},
         page_url_by_id={},
+        cover_by_post_id={},
         absolute_page_url_by_id={},
     )
     defaults.update(kwargs)
@@ -391,6 +393,7 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
         absolute_page_url="http://testserver/some-post/",
         owner_username="owner",
         blog_url="/some-blog/",
+        cover_image_url="/media/foo.jpg",
         audio_by_id={1: Audio(id=1, title="Some audio", collection=None)},
         video_by_id={1: Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))},
         image_by_id={
@@ -422,6 +425,7 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert context["page_url"] == repository.page_url
     assert context["page"].page_url == repository.page_url
     assert context["absolute_page_url"] == repository.absolute_page_url
+    assert context["cover_image_url"] == repository.cover_image_url
     assert len(connection.queries) == 0
 
 
@@ -444,6 +448,7 @@ def blog_data(post, renditions_for_post):
         "images_by_post_id": {1: [1]},
         "videos_by_post_id": {1: [1]},
         "audios_by_post_id": {1: [1]},
+        "cover_by_post_id": {},
         "renditions_for_posts": serialized_renditions,
         "owner_username_by_id": {1: "owner"},
         "page_url_by_id": {1: "/some-post/"},
@@ -675,6 +680,7 @@ def test_create_from_cachable_data_use_audio_player_false():
         "audios_by_post_id": {},
         "videos_by_post_id": {},
         "images_by_post_id": {},
+        "cover_by_post_id": {},
         "owner_username_by_id": {1: "owner"},
         "has_audio_by_id": {1: False},
         "root_nav_links": [],
