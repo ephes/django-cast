@@ -1,7 +1,7 @@
 import logging
 import uuid
 from collections.abc import Iterable, Iterator
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 
 from django import forms
 from django.conf import settings
@@ -151,7 +151,7 @@ class Post(Page):
         default=True,
         help_text=_("Whether comments are enabled for this post."),
     )
-    cover = models.ForeignKey(
+    cover_image = models.ForeignKey(
         Image,
         help_text=_("An optional cover image."),
         null=True,
@@ -159,6 +159,7 @@ class Post(Page):
         on_delete=models.SET_NULL,
         related_name="+",
     )
+    cover_alt_text = models.CharField(max_length=255, blank=True, default="")
 
     images: models.ManyToManyField = models.ManyToManyField(Image, blank=True)  # FIXME mypy are you ok?
     videos: models.ManyToManyField = models.ManyToManyField("cast.Video", blank=True)
@@ -189,7 +190,8 @@ class Post(Page):
         APIField("uuid"),
         APIField("visible_date"),
         APIField("comments_are_enabled"),
-        APIField("cover"),
+        APIField("cover_image"),
+        APIField("cover_alt_text"),
         APIField("body"),
         APIField("html_overview", serializer=HtmlField(source="*", render_detail=False)),
         APIField("html_detail", serializer=HtmlField(source="*", render_detail=True)),
@@ -202,7 +204,18 @@ class Post(Page):
         FieldPanel("visible_date"),
         FieldPanel("categories", widget=forms.CheckboxSelectMultiple),
         FieldPanel("tags"),
-        FieldPanel("cover", classname="collapsed"),
+        MultiFieldPanel(
+            [
+                FieldPanel("cover_image"),
+                FieldPanel("cover_alt_text"),
+            ],
+            heading="Cover Image",
+            classname="collapsed",
+            help_text=_(
+                "The cover image for this post. It will be used in the feed, "
+                "in the twitter card and maybe on the blog index page."
+            ),
+        ),
         FieldPanel("body"),
     ]
     parent_page_types = ["cast.Blog", "cast.Podcast"]
@@ -628,6 +641,18 @@ class Episode(Post):
             classname="collapsed",
         ),
         FieldPanel("tags"),
+        MultiFieldPanel(
+            [
+                FieldPanel("cover_image"),
+                FieldPanel("cover_alt_text"),
+            ],
+            heading="Cover Image",
+            classname="collapsed",
+            help_text=_(
+                "The cover image for this episode. It will be used in the podcast feed, "
+                "in the twitter player card and maybe on the blog index page."
+            ),
+        ),
         FieldPanel("body"),
         FieldPanel("keywords"),
         FieldPanel("explicit"),
@@ -644,9 +669,19 @@ class Episode(Post):
         """
         return super().get_template(request, *args, local_template_name="episode.html", **kwargs)
 
+    @staticmethod
+    def get_cover_image_url(context: "ContextDict", podcast: Optional["Podcast"]) -> str:
+        if context.get("cover_image_url", ""):
+            return context["cover_image_url"]
+        if podcast is None or podcast.itunes_artwork is None:
+            return ""
+        return podcast.itunes_artwork.original.url
+
     def get_context(self, request, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         context["episode"] = self
+        context["cover_image_url"] = self.get_cover_image_url(context, self.podcast)
+        context["cover_alt_text"] = self.cover_alt_text if self.cover_alt_text else "iTunes Artwork"
         if hasattr(request, "build_absolute_uri"):
             blog_slug = context["repository"].blog.slug
             player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": blog_slug})
@@ -655,14 +690,17 @@ class Episode(Post):
         return context
 
     @property
-    def podcast(self) -> "Podcast":
+    def podcast(self) -> Optional["Podcast"]:
         """
         The get_parent() method returns wagtail parent page, which is not
         necessarily a Blog model, but maybe the root page. If it's a Blog
         it has a .blog attribute containing the model which has all the
         attributes like blog.comments_enabled etc.
         """
-        return self.get_parent().specific
+        parent = self.get_parent()
+        if parent is not None:
+            return parent.specific
+        return None
 
     def get_enclosure_url(self, audio_format: str) -> str:
         return getattr(self.podcast_audio, audio_format).url

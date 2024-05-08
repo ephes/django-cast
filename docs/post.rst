@@ -23,7 +23,7 @@ I usually generate one using the `shot-scraper <https://github.com/simonw/shot-s
     shot-scraper shot https://wersdoerfer.de/blogs/ephes_blog/ -w 800 -h 400 --retina --quality 60
 
 This will generate a screenshot of the blog post and save it as a jpeg. But you can also
-use png.
+use png. It is also possible to set a separate alt text for the cover image.
 
 Tags
 ====

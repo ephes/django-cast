@@ -93,7 +93,7 @@ class QuerysetData:
     def create_from_post_queryset(
         cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"]
     ) -> "QuerysetData":
-        queryset = queryset.select_related("owner", "cover")
+        queryset = queryset.select_related("owner", "cover_image")
         queryset = queryset.prefetch_related(
             "audios",
             "images",
@@ -118,8 +118,8 @@ class QuerysetData:
             page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
             absolute_page_url_by_id[post.pk] = post.full_url
             cover_image_url = ""
-            if post.cover is not None:
-                cover_image_url = post.cover.file.url
+            if post.cover_image is not None:
+                cover_image_url = post.cover_image.file.url
             cover_by_post_id[post.pk] = cover_image_url
 
             for image_type, image in post.get_all_images():
@@ -204,8 +204,8 @@ class PostDetailRepository:
         for _, image in post.get_all_images():
             image_by_id[image.pk] = image
         cover_image_url = ""
-        if post.cover is not None:
-            cover_image_url = post.cover.file.url
+        if post.cover_image is not None:
+            cover_image_url = post.cover_image.file.url
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),

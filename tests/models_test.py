@@ -390,6 +390,29 @@ class TestEpisodeModel:
         episode = Episode()
         assert episode.page_type == "cast.Episode"
 
+    def test_get_cover_image_url(self):
+        episode = Episode(id=1)  #
+        # no cover_image
+        cover_image_url = episode.get_cover_image_url({}, None)
+        assert cover_image_url == ""
+
+        # test return early, because episode.cover_image was set
+        cover_image_url = episode.get_cover_image_url({"cover_image_url": "https://example.org/cover.jpg"}, None)
+        assert cover_image_url == "https://example.org/cover.jpg"
+
+        # get cover image from iTunes artwork
+        class Original:
+            url = "https://example.org/itunes.jpg"
+
+        class Artwork:
+            original = Original()
+
+        class Podcast:
+            itunes_artwork = Artwork()
+
+        cover_image_url = episode.get_cover_image_url({}, Podcast())
+        assert cover_image_url == "https://example.org/itunes.jpg"
+
 
 @pytest.mark.django_db
 def test_custom_episode_form():

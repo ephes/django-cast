@@ -722,7 +722,7 @@ def test_page_link_handler_expand_db_attributes_single():
 @pytest.mark.django_db
 def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_none(rf, blog, image):
     post = create_post(blog=blog)
-    post.cover = image
+    post.cover_image = image
     post.save()
 
     request = rf.get("/foobar/")
