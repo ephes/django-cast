@@ -331,6 +331,13 @@ class Post(Page):
             return self.page_url
         return super().get_full_url(request=request)
 
+    def get_updated_timestamp(self) -> int:
+        """Use the last_published_at timestamp if available, otherwise the visible_date."""
+        if self.last_published_at is not None:
+            return int(self.last_published_at.timestamp())
+        else:
+            return int(self.visible_date.timestamp())
+
     @staticmethod
     def get_context_from_repository(context: "ContextDict", repository: HasPostDetails) -> "ContextDict":
         context["template_base_dir"] = repository.template_base_dir
@@ -347,7 +354,6 @@ class Post(Page):
         context["audio_items"] = list(repository.audio_by_id.items())
         if context["page"].pk is None:
             context["page"].pk = repository.post_id
-        print("page in context: ", context["page"].pk)
         return context
 
     def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
@@ -356,6 +362,7 @@ class Post(Page):
         context["repository"] = repository = self.get_repository(request, kwargs)
         context["render_detail"] = kwargs.get("render_detail", False)
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
+        context["updated_timestamp"] = self.get_updated_timestamp()
         context = self.get_context_from_repository(context, repository)
         self.owner = user_model(username=context["owner_username"])
         if context["render_for_feed"]:

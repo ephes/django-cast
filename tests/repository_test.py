@@ -717,3 +717,22 @@ def test_page_link_handler_expand_db_attributes_single():
     PageLinkHandlerWithCache.cache_url(1, "/foo-bar/")
     tag = PageLinkHandlerWithCache.expand_db_attributes({"id": 1})
     assert tag == '<a href="/foo-bar/">'
+
+
+@pytest.mark.django_db
+def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_none(rf, blog, image):
+    post = create_post(blog=blog)
+    post.cover = image
+    post.save()
+
+    request = rf.get("/foobar/")
+
+    # make sure the cover is not None for queryset data
+    queryset_data = QuerysetData.create_from_post_queryset(
+        request=request, site=None, queryset=blog.unfiltered_published_posts
+    )
+    assert queryset_data.cover_by_post_id[post.id] == image.file.url
+
+    # make sure the cover is not None for post detail repository
+    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    assert repository.cover_image_url == image.file.url

@@ -23,6 +23,16 @@
   {% if blog.noindex %}
     <meta name="robots" content="noindex">
   {% endif %}
+  <!-- twitter card / opengraph -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:image" content="{{ cover_image_url }}">
+
+  <meta property="og:url" content="{{ page_url }}">
+  <meta property="og:title" content="{{ post.title }}">
+  <meta property="og:image" content="{{ cover_image_url }}">
+  <meta property="og:type" content="article">
+  <meta property="og:description" content="{{ post.search_description }}">
+  <meta property="og:updated_time" content="{{ updated_timestamp }}">
 {% endblock %}
 
 {% block body_class %}template-blogpage{% endblock %}

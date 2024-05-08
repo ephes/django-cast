@@ -1,6 +1,7 @@
 import pytest
 from django import forms
 from django.urls import reverse
+from django.utils import timezone
 
 from cast import appsettings
 from cast.models.pages import CustomEpisodeForm, Episode, HomePage, HtmlField, Post
@@ -345,6 +346,11 @@ class TestPostModel:
         post.owner = None
         context = post.get_context(request)
         assert context["owner_username"] == "unknown"
+
+    def test_get_updated_timestamp(self):
+        post = Post()
+        post.last_published_at = timezone.now()
+        assert post.get_updated_timestamp() == int(post.last_published_at.timestamp())
 
 
 class TestEpisodeModel:
