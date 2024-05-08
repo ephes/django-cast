@@ -13,7 +13,17 @@ and used for sorting posts shown on the blog index page.
 Cover Image
 ===========
 
-You can set a cover image for a post.
+You can set a cover image for a post. For posts that don't have a cover image,
+I usually generate one using the `shot-scraper <https://github.com/simonw/shot-scraper>`_ tool:
+
+.. code-block:: shell
+
+    pipx install shot-scraper
+    shot-scraper install  # installs chromium headless
+    shot-scraper shot https://wersdoerfer.de/blogs/ephes_blog/ -w 800 -h 400 --retina --quality 60
+
+This will generate a screenshot of the blog post and save it as a jpeg. But you can also
+use png.
 
 Tags
 ====
