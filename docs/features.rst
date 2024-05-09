@@ -9,6 +9,8 @@ Features
 .. include:: comments.rst
 .. include:: blog.rst
 .. include:: post.rst
+.. include:: podcast.rst
+.. include:: episode.rst
 .. include:: tags.rst
 .. include:: image.rst
 .. include:: gallery.rst

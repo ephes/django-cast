@@ -1,8 +1,8 @@
+.. _audio_overview:
+
 *****
 Audio
 *****
-
-.. _audio_overview:
 
 You can upload audio files to the server and play them back in the browser.
 

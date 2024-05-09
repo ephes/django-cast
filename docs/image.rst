@@ -1,8 +1,8 @@
+.. _image_overview:
+
 *****
 Image
 *****
-
-.. _image_overview:
 
 Images are mostly just the normal Wagtail Images. But they are
 rendered using a `picture` tag supporting `srcset` and `sizes` attributes

@@ -1,8 +1,8 @@
+.. _video_overview:
+
 *****
 Video
 *****
-
-.. _video_overview:
 
 You can upload video files to the server and play them back in the browser.
 
