@@ -1,9 +1,10 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from cast.api.serializers import AudioPodloveSerializer
 from cast.api.views import (
     AudioPodloveDetailView,
     FilteredPagesAPIViewSet,
@@ -167,8 +168,14 @@ class TestPodcastAudio:
         assert "show" in podlove_data
         assert podlove_data["show"]["title"] == podcast.title
         assert podlove_data["show"]["subtitle"] == podcast.description
-        assert "poster" not in podlove_data["show"]
+        assert podlove_data["show"]["poster"] == ""
         assert podlove_data["show"]["link"] == podcast.full_url
+
+    def test_podlove_podlove_detail_endpoint_show_metadata_with_cover_image(self, image, episode):
+        serializer = AudioPodloveSerializer(context={"post": episode})
+        episode.cover_image = image
+        metadata = serializer.get_show(episode.podcast_audio)
+        assert metadata["poster"] == image.file.url
 
     def test_podlove_podlove_detail_endpoint_show_metadata(self, api_client, episode_with_artwork):
         """Test whether the podlove detail endpoint includes show metadata."""
@@ -221,9 +228,9 @@ class TestCommentTrainingData:
 @pytest.mark.parametrize(
     "date, post_filter, len_result",
     [
-        (timezone.datetime(2022, 8, 22), "true", 0),  # wrong date facet -> not found
+        (datetime(2022, 8, 22), "true", 0),  # wrong date facet -> not found
         (timezone.now(), "true", 1),  # correct date facet -> found
-        (timezone.datetime(2022, 8, 22), "false", 1),  # wrong date facet and no post filter -> found
+        (datetime(2022, 8, 22), "false", 1),  # wrong date facet and no post filter -> found
     ],
 )
 def test_wagtail_pages_api_with_post_filter(date, post_filter, len_result, rf, blog, post):

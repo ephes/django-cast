@@ -39,19 +39,22 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         model = Audio
         fields = ("version", "show", "title", "subtitle", "audio", "duration", "chapters", "link")
 
-    def get_show(self, instance: Audio) -> dict:
+    def get_show(self, _instance: Audio) -> dict:
         post = self.context.get("post")  # Get the Post object from the context
         if post is None:
             return {}
-        blog = post.blog.specific
+        episode = post.specific
+        podcast = post.blog.specific
         metadata = {
-            "title": blog.title,
-            "subtitle": blog.description,
-            # "summary": "Ein bisschen Beschreibungstext",  # FIXME not implemented
-            "link": blog.full_url,
+            "title": podcast.title,
+            "subtitle": podcast.description,
+            "summary": podcast.search_description,  # FIXME is this correct?
+            "link": podcast.full_url,
         }
-        if hasattr(blog, "itunes_artwork") and blog.itunes_artwork is not None:
-            metadata["poster"] = blog.itunes_artwork.original.url
+        context = self.context.copy()
+        if episode.cover_image is not None:
+            context["cover_image_url"] = episode.cover_image.file.url
+        metadata["poster"] = episode.get_cover_image_url(context, podcast)
         return metadata
 
     @staticmethod
