@@ -13,8 +13,13 @@ and used for sorting posts shown on the blog index page.
 Cover Image
 ===========
 
-You can set a cover image for a post. For posts that don't have a cover image,
-I usually generate one using the `shot-scraper <https://github.com/simonw/shot-scraper>`_ tool:
+The cover image for a post is used for meta tags like `twitter:image` or
+`og:image`. But you can also use it in the templates for the blog index page
+or the post detail page. If you set `cover_alt_text`, it can be used as the
+`alt` attribute of the cover image.
+
+For posts that don't have a cover image, I usually generate one using the
+`shot-scraper <https://github.com/simonw/shot-scraper>`_ tool:
 
 .. code-block:: shell
 
@@ -33,16 +38,18 @@ You can add tags to a post. Tags can be used to filter posts on the blog index p
 Body
 ====
 
-The body of a post is a streamfield. You can add different types of blocks to the body of a post.
+The body of a post is a `StreamField <https://docs.wagtail.org/en/stable/topics/streamfield.html>`_.
+You can add different types of blocks to the body of a post. There are two types of blocks you can
+add to the body of a post:
 
-Overview
---------
+1. Overview
+-----------
 
 Overview blocks are used to display a summary of the post on the blog index page or
 in feeds.
 
-Detail
-------
+2. Detail
+---------
 
 Detail blocks are used to display the full content of the post. Usually it is shown
 on the post detail page.
@@ -50,7 +57,7 @@ on the post detail page.
 Types of Blocks
 ---------------
 
-Following types of blocks are available for the body of a post:
+Inside the Overview and Detail blocks following types of blocks are available:
 
 - Heading
 - Paragraph - Rich Text which can include headings, images, links, etc.
