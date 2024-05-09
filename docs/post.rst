@@ -35,6 +35,20 @@ Tags
 
 You can add tags to a post. Tags can be used to filter posts on the blog index page.
 
+Promote > Title
+===============
+
+There is a field called `title` in the promote tab of the Wagtail admin which is used to
+set the title of the post for search engine results as the clickable headline. This will
+also be used for the `og:title` and `twitter:title` meta tags.
+
+Promote > Description
+=====================
+
+The `description` field in the promote tab of the Wagtail admin is used to set the description
+of the post for search engine results. This will also be used for the `og:description` and
+`twitter:description` meta tags.
+
 Body
 ====
 
