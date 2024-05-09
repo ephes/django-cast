@@ -120,8 +120,7 @@ class Blog(Page):
     def author_name(self) -> str:
         if self.author is not None:
             return self.author
-        else:
-            return self.owner.get_full_name()
+        return ""
 
     @property
     def unfiltered_published_posts(self) -> models.QuerySet[Post]:
@@ -318,6 +317,20 @@ class Podcast(Blog):
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
+
+    content_panels = Page.content_panels + [
+        FieldPanel("description", classname="full"),
+        FieldPanel("email"),
+        FieldPanel("author"),
+        FieldPanel(
+            "itunes_artwork", help_text=_("The image that will be used in the podcast feed as the iTunes artwork.")
+        ),
+        FieldPanel("template_base_dir"),
+    ]
+
+    promote_panels = Page.promote_panels + [
+        FieldPanel("noindex"),
+    ]
 
     subpage_types = ["cast.Post", "cast.Episode"]
     is_podcast = True

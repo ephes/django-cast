@@ -27,8 +27,6 @@ is then used to populate following attributes in the feed:
 - `itunes:name`
 - `author_name` in atom feed
 
-If the `author`-field is not set `blog.owner.get_full_name()` is used instead.
-
 Template Base Dir
 =================
 
