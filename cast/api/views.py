@@ -214,7 +214,7 @@ class PlayerConfig(generics.RetrieveAPIView):
         )
 
 
-class FacetCountListView(generics.ListCreateAPIView):
+class FacetCountListView(generics.ListAPIView):
     serializer_class = SimpleBlogSerializer
     queryset = Blog.objects.all().live().order_by("-first_published_at")
     pagination_class = StandardResultsSetPagination

@@ -272,6 +272,16 @@ def test_facet_counts_list(api_client, blog):
     assert result["id"] == blog.pk
 
 
+def test_facet_counts_list_post(api_client):
+    """
+    Someone sent a lot of post data to the facet counts list endpoint.
+    Make sure she gets a proper 405 instead of a 500 next time.
+    """
+    url = reverse("cast:api:facet-counts-list")
+    r = api_client.post(url, data={})
+    assert r.status_code == 405
+
+
 @pytest.mark.django_db
 def test_facet_counts_detail(api_client, blog, post):
     """

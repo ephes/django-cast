@@ -4,3 +4,4 @@
 Some fixes.
 
 - #141 Fixed rendering the API version of an episode
+- #142 Fixed internal server error on post to facet counts list endpoint
