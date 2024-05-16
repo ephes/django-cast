@@ -403,6 +403,15 @@ class AudioChooserBlock(RepositoryChooserBlock):
         except KeyError:
             return super().to_python(value)
 
+    def get_prep_value(self, value):
+        """
+        This is called with an int value when a page with audio is retrieved
+        via the API like this: /api/wagtail/pages/67/
+        """
+        if isinstance(value, int):
+            return value
+        return super().get_prep_value(value)
+
 
 class CodeBlock(StructBlock):
     language = CharBlock(help_text="The language of the code block")

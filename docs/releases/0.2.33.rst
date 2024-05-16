@@ -1,0 +1,6 @@
+0.2.33 (2024-05-19)
+-------------------
+
+Some fixes.
+
+- #141 Fixed rendering the API version of an episode

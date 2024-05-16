@@ -318,6 +318,17 @@ def test_audio_chooser_block_from_repository_to_python_return_early():
     assert model == audio
 
 
+def test_audio_chooser_block_get_prep_value_int_or_none():
+    # this happens when /api/pages/23/ is called
+    block = AudioChooserBlock()
+    value = block.get_prep_value(1)
+    assert value == 1
+
+    # for coverage test None
+    value = block.get_prep_value(None)
+    assert value is None
+
+
 @pytest.mark.django_db
 def test_video_chooser_from_repository_to_python_database(video):
 
