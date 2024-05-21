@@ -15,7 +15,8 @@ urlpatterns: list[Any] = [
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",
-        view=cache_page(5 * 60)(feeds.LatestEntriesFeed()),
+        # view=cache_page(5 * 60)(feeds.LatestEntriesFeed()),
+        view=feeds.LatestEntriesFeed(),
         name="latest_entries_feed",
     ),
     path(
