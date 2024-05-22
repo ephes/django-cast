@@ -54,7 +54,7 @@ class RepositoryMixin:
 
     def get_feed(self, obj, request):
         # If we want to cache the site to avoid one additional db query, we should do it here
-        blog = self.object
+        blog = obj
         self.repository = repository = self.get_repository(self.request, blog)
         # now that we have the repository, we can set the template base dir
         # to avoid db queries in context_processors
@@ -66,13 +66,20 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
     object: Blog
     request: HttpRequest
 
-    def get_object(self, request: HttpRequest, *args, **kwargs) -> None:
+    def get_object(self, request: HttpRequest, *args, **kwargs) -> Blog:
+        self.request = request  # need request for item.serve(request) later on
         slug = kwargs["slug"]
+        blog = None
         if self.repository is not None:
-            self.object = self.repository.blog
-        else:
-            self.object = get_object_or_404(Blog, slug=slug)
-        self.request = request
+            # use predefined repository which is kind of dangerous but makes testing easier.
+            # Forgetting to check whether the repository is used led to a bug which resulted in
+            # using the wrong blog for the feed :(.
+            if not self.repository.used:
+                blog = self.repository.blog
+        if blog is None:
+            blog = get_object_or_404(Blog, slug=slug)
+        self.object = blog
+        return self.object
 
     def title(self) -> str:
         return self.object.title
