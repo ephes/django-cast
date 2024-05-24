@@ -1,7 +1,9 @@
-0.2.33 (2024-05-19)
+0.2.33 (2024-05-26)
 -------------------
 
 Some fixes.
 
 - #141 Fixed rendering the API version of an episode
 - #142 Fixed internal server error on post to facet counts list endpoint
+- #143 Fixed serving posts from blog A in feed of blog B
+- #144 Updated htmx to 2.0.0 beta 4
