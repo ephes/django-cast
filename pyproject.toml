@@ -56,7 +56,7 @@ dependencies = [
     "python-slugify",
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
-    "wagtail",
+    "wagtail < 6.1",
 ]
 
 [project.optional-dependencies]
