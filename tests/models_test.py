@@ -4,6 +4,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from cast import appsettings
+from cast.models import Blog, Podcast
+from cast.models.itunes import ItunesArtWork
 from cast.models.pages import CustomEpisodeForm, Episode, HomePage, HtmlField, Post
 from cast.models.repository import BlogIndexRepository
 from cast.models.video import Video
@@ -135,6 +137,9 @@ class TestBlogModel:
     def test_get_django_repository(self, blog, simple_request, use_django_blog_index_repo):
         repository = blog.get_repository(simple_request, {})
         assert isinstance(repository, BlogIndexRepository)
+
+    def test_get_cover_image_url_for_blog(self):
+        assert "" == Blog(id=1).get_cover_image_url()
 
 
 class TestPostModel:
@@ -352,6 +357,28 @@ class TestPostModel:
         post.last_published_at = timezone.now()
         assert post.get_updated_timestamp() == int(post.last_published_at.timestamp())
 
+    def test_get_cover_image_url(self):
+        post = Post(id=1)  #
+        # no cover_image
+        cover_image_url = post.get_cover_image_url({}, None)
+        assert cover_image_url == ""
+
+        # test return early, because episode.cover_image was set
+        cover_image_url = post.get_cover_image_url({"cover_image_url": "https://example.org/cover.jpg"}, None)
+        assert cover_image_url == "https://example.org/cover.jpg"
+
+        # get cover image from iTunes artwork
+        class Original:
+            url = "https://example.org/itunes.jpg"
+            width = 600
+            height = 200
+
+        artwork = ItunesArtWork(original=Original())
+        podcast = Podcast(id=1, itunes_artwork=artwork)
+
+        cover_image_url = post.get_cover_image_url({}, podcast)
+        assert cover_image_url == "https://example.org/itunes.jpg"
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db
@@ -389,29 +416,6 @@ class TestEpisodeModel:
     def test_page_type(self):
         episode = Episode()
         assert episode.page_type == "cast.Episode"
-
-    def test_get_cover_image_url(self):
-        episode = Episode(id=1)  #
-        # no cover_image
-        cover_image_url = episode.get_cover_image_url({}, None)
-        assert cover_image_url == ""
-
-        # test return early, because episode.cover_image was set
-        cover_image_url = episode.get_cover_image_url({"cover_image_url": "https://example.org/cover.jpg"}, None)
-        assert cover_image_url == "https://example.org/cover.jpg"
-
-        # get cover image from iTunes artwork
-        class Original:
-            url = "https://example.org/itunes.jpg"
-
-        class Artwork:
-            original = Original()
-
-        class Podcast:
-            itunes_artwork = Artwork()
-
-        cover_image_url = episode.get_cover_image_url({}, Podcast())
-        assert cover_image_url == "https://example.org/itunes.jpg"
 
 
 @pytest.mark.django_db

@@ -7,3 +7,5 @@ Some fixes.
 - #142 Fixed internal server error on post to facet counts list endpoint
 - #143 Fixed serving posts from blog A in feed of blog B
 - #144 Updated htmx to 2.0.0 beta 4
+- #145 Pin wagtail to < 6.1 because of broken audio and video choosers
+- #146 Fixed missing get_cover_image method on Post model -> audio player now works again for non-Episodes

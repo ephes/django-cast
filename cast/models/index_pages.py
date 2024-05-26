@@ -242,6 +242,9 @@ class Blog(Page):
             }
         )
 
+    def get_cover_image_url(self):
+        return ""
+
     @staticmethod
     def get_context_from_repository(context: ContextDict, repository: BlogIndexRepository) -> ContextDict:
         context |= repository.pagination_context  # includes object_list
@@ -344,6 +347,11 @@ class Podcast(Blog):
             return json.loads(self.itunes_categories)
         except json.decoder.JSONDecodeError:
             return {}
+
+    def get_cover_image_url(self):
+        if self.itunes_artwork is not None:
+            return self.itunes_artwork.original.url
+        return ""
 
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)

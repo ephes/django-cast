@@ -511,6 +511,14 @@ class Post(Page):
             result.append((element_id, audio.get_podlove_url(self.pk)))
         return result
 
+    @staticmethod
+    def get_cover_image_url(context: "ContextDict", blog: Optional["Blog"]) -> str:
+        if context.get("cover_image_url", ""):
+            return context["cover_image_url"]
+        if blog is not None:
+            return blog.get_cover_image_url()
+        return ""
+
     def get_description(
         self,
         *,
@@ -668,14 +676,6 @@ class Episode(Post):
         Use get_template() from the parent class, but pass a local template name.
         """
         return super().get_template(request, *args, local_template_name="episode.html", **kwargs)
-
-    @staticmethod
-    def get_cover_image_url(context: "ContextDict", podcast: Optional["Podcast"]) -> str:
-        if context.get("cover_image_url", ""):
-            return context["cover_image_url"]
-        if podcast is None or podcast.itunes_artwork is None:
-            return ""
-        return podcast.itunes_artwork.original.url
 
     def get_context(self, request, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
