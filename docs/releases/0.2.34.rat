@@ -4,3 +4,4 @@
 Cover image for Blogs does also make sense.
 
 - #136 Added cover image for Blog, too
+- #147 Fixed podlovePlayer not working after htmx pagination
