@@ -380,6 +380,7 @@ class Podcast(Blog):
             # fallback to itunes artwork
             if self.itunes_artwork is not None:
                 context["cover_image_url"] = self.itunes_artwork.original.url
+                context["cover_alt_text"] = "iTunes Artwork"
         return context
 
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:

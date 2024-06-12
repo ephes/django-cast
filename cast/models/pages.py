@@ -513,7 +513,9 @@ class Post(Page):
 
     @staticmethod
     def get_cover_image_context(context: "ContextDict", blog: Optional["Blog"]) -> dict[str, str]:
-        if (cover_image_url_from_post := context.get("cover_image_url")) is not None:
+        if (
+            cover_image_url_from_post := context.get("cover_image_url")
+        ) is not None and cover_image_url_from_post != "":
             # if the cover image is set in the context, use it
             return {"cover_image_url": cover_image_url_from_post, "cover_alt_text": context.get("cover_alt_text", "")}
         if blog is not None:
@@ -683,9 +685,9 @@ class Episode(Post):
     def get_context(self, request, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         context["episode"] = self
-        # context.update(self.get_cover_image_context(context, self.podcast))
-        context["cover_image_url"] = self.get_cover_image_context(context, self.podcast)
-        context["cover_alt_text"] = self.cover_alt_text if self.cover_alt_text else "iTunes Artwork"
+        cover_image_context = self.get_cover_image_context(context, self.podcast)
+        context.update(cover_image_context)
+        print("episode cover_image context: ", cover_image_context)
         if hasattr(request, "build_absolute_uri"):
             blog_slug = context["repository"].blog.slug
             player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": blog_slug})
