@@ -54,7 +54,8 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         context = self.context.copy()
         if episode.cover_image is not None:
             context["cover_image_url"] = episode.cover_image.file.url
-        metadata["poster"] = episode.get_cover_image_url(context, podcast)
+        cover_image_context = episode.get_cover_image_context(context, podcast)
+        metadata["poster"] = cover_image_context["cover_image_url"]
         return metadata
 
     @staticmethod

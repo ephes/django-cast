@@ -20,7 +20,8 @@ The cover image for a post is used for meta tags like `twitter:image` or
 or the post detail page. If you set `cover_alt_text`, it can be used as the
 `alt` attribute of the cover image.
 
-For posts that don't have a cover image, I usually generate one using the
+For posts without a cover image, the :ref:`blog <blog_overview>`’s cover
+image will be used. Alternatively, I often generate one using the
 `shot-scraper <https://github.com/simonw/shot-scraper>`_ tool:
 
 .. code-block:: shell

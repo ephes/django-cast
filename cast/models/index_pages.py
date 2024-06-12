@@ -14,9 +14,10 @@ from django.http.request import QueryDict
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from wagtail.admin.panels import FieldPanel
+from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.api import APIField
 from wagtail.fields import RichTextField
+from wagtail.images.models import Image
 from wagtail.models import Page, PageManager
 
 from cast import appsettings
@@ -53,6 +54,15 @@ class Blog(Page):
         default=True,
         help_text=_("Whether comments are enabled for this blog." ""),
     )
+    cover_image = models.ForeignKey(
+        Image,
+        help_text=_("An optional cover image."),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    cover_alt_text = models.CharField(max_length=255, blank=True, default="")
     noindex = models.BooleanField(
         "noindex",
         default=False,
@@ -79,6 +89,18 @@ class Blog(Page):
         FieldPanel("email"),
         FieldPanel("author"),
         FieldPanel("template_base_dir"),
+        MultiFieldPanel(
+            [
+                FieldPanel("cover_image"),
+                FieldPanel("cover_alt_text"),
+            ],
+            heading="Cover Image",
+            classname="collapsed",
+            help_text=_(
+                "The cover image for this post. It will be used in the feed, "
+                "in the twitter card and maybe on the blog index page."
+            ),
+        ),
     ]
     promote_panels = Page.promote_panels + [
         FieldPanel("noindex"),
@@ -242,8 +264,12 @@ class Blog(Page):
             }
         )
 
-    def get_cover_image_url(self):
-        return ""
+    def get_cover_image_context(self) -> dict[str, str]:
+        context = {"cover_image_url": "", "cover_alt_text": ""}
+        if self.cover_image is not None:
+            context["cover_image_url"] = self.cover_image.file.url
+            context["cover_alt_text"] = self.cover_alt_text
+        return context
 
     @staticmethod
     def get_context_from_repository(context: ContextDict, repository: BlogIndexRepository) -> ContextDict:
@@ -348,10 +374,13 @@ class Podcast(Blog):
         except json.decoder.JSONDecodeError:
             return {}
 
-    def get_cover_image_url(self):
-        if self.itunes_artwork is not None:
-            return self.itunes_artwork.original.url
-        return ""
+    def get_cover_image_context(self) -> dict[str, str]:
+        context = super().get_cover_image_context()
+        if context["cover_image_url"] == "":
+            # fallback to itunes artwork
+            if self.itunes_artwork is not None:
+                context["cover_image_url"] = self.itunes_artwork.original.url
+        return context
 
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)

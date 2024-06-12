@@ -138,8 +138,31 @@ class TestBlogModel:
         repository = blog.get_repository(simple_request, {})
         assert isinstance(repository, BlogIndexRepository)
 
-    def test_get_cover_image_url_for_blog(self):
-        assert "" == Blog(id=1).get_cover_image_url()
+    def test_get_cover_image_url_for_blog(self, mocker):
+        # just empty cover image
+        blog = Blog(id=1)
+        assert blog.get_cover_image_context() == {"cover_image_url": "", "cover_alt_text": ""}
+
+        # cover image via blog.cover_image - using mock object because of the ImageField setter
+        mock_image = mocker.MagicMock()
+        mock_image.file.url = "https://example.org/cover.jpg"
+        mocker.patch("cast.models.Blog.cover_image", mock_image)
+        assert blog.get_cover_image_context() == {
+            "cover_image_url": "https://example.org/cover.jpg",
+            "cover_alt_text": "",
+        }
+
+
+class TestPodcastModel:
+    def test_cover_image_from_super(self, mocker):
+        podcast = Podcast(id=1)
+        mocker_image = mocker.MagicMock()
+        mocker_image.file.url = "https://example.org/cover.jpg"
+        mocker.patch("cast.models.Blog.cover_image", mocker_image)
+        assert podcast.get_cover_image_context() == {
+            "cover_image_url": "https://example.org/cover.jpg",
+            "cover_alt_text": "",
+        }
 
 
 class TestPostModel:
@@ -357,14 +380,15 @@ class TestPostModel:
         post.last_published_at = timezone.now()
         assert post.get_updated_timestamp() == int(post.last_published_at.timestamp())
 
-    def test_get_cover_image_url(self):
+    def test_get_cover_image_context(self):
         post = Post(id=1)  #
         # no cover_image
-        cover_image_url = post.get_cover_image_url({}, None)
-        assert cover_image_url == ""
+        context = post.get_cover_image_context({}, None)
+        assert context == {"cover_alt_text": "", "cover_image_url": ""}
 
         # test return early, because episode.cover_image was set
-        cover_image_url = post.get_cover_image_url({"cover_image_url": "https://example.org/cover.jpg"}, None)
+        context = post.get_cover_image_context({"cover_image_url": "https://example.org/cover.jpg"}, None)
+        cover_image_url = context["cover_image_url"]
         assert cover_image_url == "https://example.org/cover.jpg"
 
         # get cover image from iTunes artwork
@@ -376,7 +400,8 @@ class TestPostModel:
         artwork = ItunesArtWork(original=Original())
         podcast = Podcast(id=1, itunes_artwork=artwork)
 
-        cover_image_url = post.get_cover_image_url({}, podcast)
+        context = post.get_cover_image_context({}, podcast)
+        cover_image_url = context["cover_image_url"]
         assert cover_image_url == "https://example.org/itunes.jpg"
 
 
