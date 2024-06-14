@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import CreateView
@@ -275,7 +275,29 @@ class UpdateThemeView(APIView):
         return Response({"message": "Theme updated successfully"}, status=status.HTTP_200_OK)
 
 
-class FilteredPagesAPIViewSet(PagesAPIViewSet):
+class RemoveNullBytesMixin:
+    """
+    Workaround for query parameters containing null bytes. There
+    should be proper input validation in Wagtail APIViewSets, but
+    this is a quick fix for now.
+    """
+
+    request: HttpRequest
+
+    def cleanup_null_bytes(self):
+        for key, value in self.request.GET.items():
+            if "\x00" in value:
+                mutable_copy = self.request.GET.copy()
+                mutable_copy[key] = value.replace("\x00", "")
+                self.request.GET = mutable_copy
+
+    def filter_queryset(self, queryset: QuerySet) -> QuerySet:
+        self.cleanup_null_bytes()
+        # pycharm gets it, mypy doesn't
+        return super().filter_queryset(queryset)  # type: ignore
+
+
+class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
     def get_filtered_queryset(self) -> QuerySet:
         # allow additional query parameters from PostFilterset + use_post_filter flag
         additional_query_params = PostFilterset.Meta.fields + ["use_post_filter"] + ["date_before", "date_after"]
@@ -286,18 +308,23 @@ class FilteredPagesAPIViewSet(PagesAPIViewSet):
         get_params = self.request.GET.copy()
         if "search" in get_params:
             del get_params["search"]
-        self.request.GET = get_params
+        self.request.GET = get_params  # type: ignore
         queryset = super().get_queryset()
         filterset = PostFilterset(data=original_get_params, queryset=queryset)
         return filterset.qs
 
     def get_queryset(self):
+        print("get queryset!")
         if self.request.GET.dict().get("use_post_filter", "false") == "true":
             return self.get_filtered_queryset()
         return super().get_queryset()
 
 
+class CastImagesAPIViewSet(RemoveNullBytesMixin, ImagesAPIViewSet):
+    pass
+
+
 # Wagtail API
 wagtail_api_router = WagtailAPIRouter("cast:api:wagtail")
 wagtail_api_router.register_endpoint("pages", FilteredPagesAPIViewSet)
-wagtail_api_router.register_endpoint("images", ImagesAPIViewSet)
+wagtail_api_router.register_endpoint("images", CastImagesAPIViewSet)

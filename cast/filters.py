@@ -8,6 +8,7 @@ from django.core import validators
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from django.db import models
+from django.db.models import Expression
 from django.db.models.fields import BLANK_CHOICE_DASH
 from django.db.models.functions import TruncMonth
 from django.forms import Widget
@@ -181,7 +182,7 @@ class DateFacetFilter(DateFacetChoicesMixin, django_filters.filters.ChoiceFilter
             month: num_posts
             for month, num_posts in (
                 queryset.order_by()
-                .annotate(month=TruncMonth("visible_date"))
+                .annotate(month=TruncMonth(cast(Expression, models.F("visible_date"))))
                 .values("month")
                 .annotate(num_posts=models.Count("pk"))
             ).values_list("month", "num_posts")
