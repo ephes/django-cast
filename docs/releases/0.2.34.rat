@@ -1,9 +1,12 @@
 0.2.34 (2024-06-16)
 -------------------
 
-Cover image for Blogs does also make sense.
+Cover image for Blogs does also make sense. Removed the
+pin to `Wagtail 6.1` since the audio and video choosers
+are working again.
 
 - #136 Added cover image for Blog, too
+- #145 Surprisingly simple fix for the audio and video choosers in Wagtail 6.1
 - #147 Fixed podlovePlayer not working after htmx pagination
 - #148 Fixed remove null bytes in api request query parameters
 - #149 Removed some unused dependencies
