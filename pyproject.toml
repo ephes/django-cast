@@ -36,27 +36,25 @@ classifiers = [
 ]
 
 dependencies = [
-    "coreapi",
-    "crispy-bootstrap4",
-    "django",
-    "django-allauth",
-    "django-crispy-forms",
-    "django-contrib-comments",
-    "django-environ",
-    "django-filter",
-    "django-fluent-comments",
-    "django-htmx",
-    "django-model-utils",
+    "coreapi",  # coreapi` must be installed for schema support to work.
+    "crispy-bootstrap4",  # bootstrap4 theme
+    "django",  # Django itself
+    "django-crispy-forms",  # bootstrap4 theme
+    "django-contrib-comments",  # comments framework
+    "django-environ",  # needed by pluggy and pytest
+    "django-filter",  # filter section on blog index
+    "django-fluent-comments",  # comments framework
+    "django-htmx",  # htmx support
+    "django-model-utils",  # model mixins
     "django-tag-parser",
-    "django-threadedcomments",
-    "django-vite",
-    "markdown",
-    "Pygments",
-    "python-akismet",
-    "python-slugify",
+    "django-threadedcomments",  # comments framework
+    "django-vite",  # vite support for things like gallery-modal web components
+    "Pygments",  # syntax highlighting for code blocks
+    "python-akismet",  # needed to be installed for comments, but is not used
+    "python-slugify",  # slugify for page slugs
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
-    "wagtail < 6.1",
+    "wagtail < 6.1",  # audio and video choosers are broken in wagtail 6.1
 ]
 
 [project.optional-dependencies]
