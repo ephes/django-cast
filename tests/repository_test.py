@@ -719,6 +719,20 @@ def test_page_link_handler_expand_db_attributes_single():
     assert tag == '<a href="/foo-bar/">'
 
 
+def test_page_link_handler_expand_db_attributes_many(mocker):
+    # all urls are cached
+    PageLinkHandlerWithCache.cache_url(1, "/foo-bar/")
+    PageLinkHandlerWithCache.cache_url(2, "/bar-foo/")
+    tags = PageLinkHandlerWithCache.expand_db_attributes_many([{"id": 1}, {"id": 2}])
+    assert tags[0] == '<a href="/foo-bar/">'
+    assert tags[1] == '<a href="/bar-foo/">'
+
+    # super is called - only happens in Wagtail >= 6.1
+    mocker.patch("wagtail.rich_text.pages.PageLinkHandler.expand_db_attributes_many")
+    tags = PageLinkHandlerWithCache.expand_db_attributes_many([{"id": 1}, {"id": 3}])
+    assert tags.is_called_once()
+
+
 @pytest.mark.django_db
 def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_none(rf, blog, image):
     post = create_post(blog=blog)
