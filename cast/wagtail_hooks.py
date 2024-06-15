@@ -40,18 +40,6 @@ def register_video_menu_item() -> VideoMenuItem:
     )
 
 
-@hooks.register("insert_editor_js")
-def editor_js() -> str:
-    return format_html(
-        """
-        <script>
-            window.chooserUrls.videoChooser = '{0}';
-        </script>
-        """,
-        reverse("castvideo:chooser"),
-    )
-
-
 class AudioMenuItem(MenuItem):
     def is_shown(self, request: HttpRequest) -> bool:
         permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
@@ -70,14 +58,29 @@ def register_audio_menu_item() -> AudioMenuItem:
 
 
 @hooks.register("insert_editor_js")
-def editor_js_audio() -> str:
+def editor_js_audio_and_video_chooser_urls() -> str:
+    """
+    This hook is used to insert the audio and video chooser urls. This
+    simple code stopped working in Wagtail 6.1:
+        <script>
+            window.chooserUrls = '{0}';
+        </script>
+    Throwing this error:
+        TypeError: Cannot set properties of undefined (setting 'audioChooser')
+            at edit/:100:45
+    I don't know why, and I don't have time to investigate. So I'm setting
+    both urls in one hook and it works again.
+    """
     return format_html(
         """
         <script>
+            // window.chooserUrls = {{}};
             window.chooserUrls.audioChooser = '{0}';
+            window.chooserUrls.videoChooser = '{1}';
         </script>
         """,
         reverse("castaudio:chooser"),
+        reverse("castvideo:chooser"),
     )
 
 

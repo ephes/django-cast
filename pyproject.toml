@@ -54,7 +54,7 @@ dependencies = [
     "python-slugify",  # slugify for page slugs
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
-    "wagtail < 6.1",  # audio and video choosers are broken in wagtail 6.1
+    "wagtail",  # wagtail itself
 ]
 
 [project.optional-dependencies]
