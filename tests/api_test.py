@@ -268,7 +268,7 @@ def test_wagtail_pages_api_with_post_filter_and_fulltext_search(rf, blog, post):
 def test_wagtail_api_viewsets_filter_null_bytes(rf, field_name, api_viewset_class):
     # Given a request filtering for a slug containing a null byte
     input_with_null_byte = "1%00%EF%BF%BD%EF%BF%BD%EF%BF%BD%EF%BF%BD%252527%252522"
-    request = rf.get(f"?{field_name}={input_with_null_byte}")
+    request = rf.get(f"?{field_name}={input_with_null_byte}&harmless=foo")
     viewset = api_viewset_class()
     viewset.request = request
     queryset = viewset.get_queryset()
