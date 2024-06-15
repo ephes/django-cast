@@ -404,6 +404,11 @@ class TestPostModel:
         cover_image_url = context["cover_image_url"]
         assert cover_image_url == "https://example.org/itunes.jpg"
 
+    def test_get_cached_media_lookup(self):
+        post = Post(id=1)
+        post._media_lookup = "foobar"
+        assert post.media_lookup == post._media_lookup
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db
