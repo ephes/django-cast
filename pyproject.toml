@@ -73,6 +73,7 @@ doc = [
 dev = [
     "black",
     "flake8",
+    "django-allauth",  # for mypy
     "django-environ",
     "django_extensions",
     "django-stubs[compatible-mypy]",
