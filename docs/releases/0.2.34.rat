@@ -1,7 +1,8 @@
-0.2.34 (2024-06-03)
+0.2.34 (2024-06-16)
 -------------------
 
 Cover image for Blogs does also make sense.
 
 - #136 Added cover image for Blog, too
 - #147 Fixed podlovePlayer not working after htmx pagination
+- #148 Fixed remove null bytes in api request query parameters
