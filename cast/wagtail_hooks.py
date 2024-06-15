@@ -74,7 +74,7 @@ def editor_js_audio_and_video_chooser_urls() -> str:
     return format_html(
         """
         <script>
-            // window.chooserUrls = {{}};
+            window.chooserUrls = {{}};
             window.chooserUrls.audioChooser = '{0}';
             window.chooserUrls.videoChooser = '{1}';
         </script>
