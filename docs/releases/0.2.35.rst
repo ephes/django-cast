@@ -1,0 +1,4 @@
+0.2.35 (2024-06-23)
+-------------------
+
+- Add defer to loading the javascript for the podlove web player

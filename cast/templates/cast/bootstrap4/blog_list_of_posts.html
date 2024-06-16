@@ -95,7 +95,7 @@
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
 
   {% if use_audio_player %}
-    <script src={% static 'cast/js/web-player/embed.5.js' %}></script>
+    <script defer src={% static 'cast/js/web-player/embed.5.js' %}></script>
     <script>
       function initializePodlovePlayers() {
         document.querySelectorAll('section.block-audio div[id^="audio_"]').forEach(div => {
