@@ -1,7 +1,7 @@
 0.2.34 (2024-06-16)
 -------------------
 
-Cover image for Blogs does also make sense. Removed the
+Cover image for Blogs do also make sense. Removed the
 pin to `Wagtail 6.1` since the audio and video choosers
 are working again.
 
