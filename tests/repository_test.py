@@ -728,7 +728,7 @@ def test_page_link_handler_expand_db_attributes_many(mocker):
     assert tags[1] == '<a href="/bar-foo/">'
 
     # super is called - only happens in Wagtail >= 6.1
-    mocker.patch("wagtail.rich_text.pages.PageLinkHandler.expand_db_attributes_many")
+    mocker.patch("wagtail.rich_text.pages.PageLinkHandler.expand_db_attributes_many", create=True)
     tags = PageLinkHandlerWithCache.expand_db_attributes_many([{"id": 1}, {"id": 3}])
     assert tags.is_called_once()
 
