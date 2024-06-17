@@ -135,6 +135,7 @@ class HasPostDetails(Protocol):
     owner_username: str
     blog_url: str
     cover_image_url: str
+    cover_alt_text: str
     audio_by_id: AudioById
     video_by_id: VideoById
     image_by_id: ImageById
@@ -364,6 +365,7 @@ class Post(Page):
         context["owner_username"] = repository.owner_username
         context["blog_url"] = repository.blog_url
         context["cover_image_url"] = repository.cover_image_url
+        context["cover_alt_text"] = repository.cover_alt_text
         context["audio_items"] = list(repository.audio_by_id.items())
         if context["page"].pk is None:
             context["page"].pk = repository.post_id
@@ -378,6 +380,7 @@ class Post(Page):
         context["updated_timestamp"] = self.get_updated_timestamp()
         context = self.get_context_from_repository(context, repository)
         self.owner = user_model(username=context["owner_username"])
+        context.update(self.get_cover_image_context(context, blog=context["blog"]))
         if context["render_for_feed"]:
             # use absolute urls for feed
             self.page_url = context["absolute_page_url"]
@@ -687,7 +690,6 @@ class Episode(Post):
         context["episode"] = self
         cover_image_context = self.get_cover_image_context(context, self.podcast)
         context.update(cover_image_context)
-        print("episode cover_image context: ", cover_image_context)
         if hasattr(request, "build_absolute_uri"):
             blog_slug = context["repository"].blog.slug
             player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": blog_slug})

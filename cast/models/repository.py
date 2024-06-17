@@ -30,6 +30,7 @@ VideosByPostID: TypeAlias = dict[int, set["Video"]]
 VideoById: TypeAlias = dict[int, "Video"]
 ImagesByPostID: TypeAlias = dict[int, set["Image"]]
 CoverURLByPostID: TypeAlias = dict[int, str]
+CoverAltByPostID: TypeAlias = dict[int, str]
 ImageById: TypeAlias = dict[int, Image]
 RenditionsForPosts: TypeAlias = dict[int, list[Rendition]]
 LinkTuples: TypeAlias = list[tuple[str, str]]
@@ -73,6 +74,7 @@ class QuerysetData:
         page_url_by_id: PageUrlByID,
         absolute_page_url_by_id: PageUrlByID,
         cover_by_post_id: CoverURLByPostID,
+        cover_alt_by_post_id: CoverAltByPostID,
     ):
         self.queryset = post_queryset
         self.post_by_id = post_by_id
@@ -88,6 +90,7 @@ class QuerysetData:
         self.page_url_by_id = page_url_by_id
         self.absolute_page_url_by_id = absolute_page_url_by_id
         self.cover_by_post_id = cover_by_post_id
+        self.cover_alt_by_post_id = cover_alt_by_post_id
 
     @classmethod
     def create_from_post_queryset(
@@ -106,6 +109,7 @@ class QuerysetData:
         post_by_id: PostByID = {}
         images, has_audio_by_id, owner_username_by_id, videos, audios = {}, {}, {}, {}, {}
         cover_by_post_id: CoverURLByPostID = {}
+        cover_alt_by_post_id: CoverAltByPostID = {}
         audios_by_post_id: AudiosByPostID = {}
         videos_by_post_id: VideosByPostID = {}
         images_by_post_id: ImagesByPostID = {}
@@ -121,6 +125,10 @@ class QuerysetData:
             if post.cover_image is not None:
                 cover_image_url = post.cover_image.file.url
             cover_by_post_id[post.pk] = cover_image_url
+            cover_alt_text = ""
+            if post.cover_alt_text is not None:
+                cover_alt_text = post.cover_alt_text
+            cover_alt_by_post_id[post.pk] = cover_alt_text
 
             for image_type, image in post.get_all_images():
                 images[image.pk] = image
@@ -149,6 +157,7 @@ class QuerysetData:
             page_url_by_id=page_url_by_id,
             absolute_page_url_by_id=absolute_page_url_by_id,
             cover_by_post_id=cover_by_post_id,
+            cover_alt_by_post_id=cover_alt_by_post_id,
         )
 
 
@@ -171,6 +180,7 @@ class PostDetailRepository:
         owner_username: str,
         blog_url: str,
         cover_image_url: str,
+        cover_alt_text: str,
         audio_by_id: AudioById,
         video_by_id: VideoById,
         image_by_id: ImageById,
@@ -187,6 +197,7 @@ class PostDetailRepository:
         self.owner_username = owner_username
         self.blog_url = blog_url
         self.cover_image_url = cover_image_url
+        self.cover_alt_text = cover_alt_text
         self.audio_by_id = audio_by_id
         self.video_by_id = video_by_id
         self.image_by_id = image_by_id
@@ -206,6 +217,9 @@ class PostDetailRepository:
         cover_image_url = ""
         if post.cover_image is not None:
             cover_image_url = post.cover_image.file.url
+        cover_alt_text = ""
+        if post.cover_alt_text is not None:
+            cover_alt_text = post.cover_alt_text
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
@@ -218,6 +232,7 @@ class PostDetailRepository:
             owner_username=owner_username,
             blog_url=blog.get_url(request=request),
             cover_image_url=cover_image_url,
+            cover_alt_text=cover_alt_text,
             audio_by_id=post.media_lookup.get("audio", {}),
             video_by_id=post.media_lookup.get("video", {}),
             image_by_id=image_by_id,
@@ -420,6 +435,7 @@ def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict
     data["videos_by_post_id"] = queryset_data.videos_by_post_id
     data["audios_by_post_id"] = queryset_data.audios_by_post_id
     data["cover_by_post_id"] = queryset_data.cover_by_post_id
+    data["cover_alt_by_post_id"] = queryset_data.cover_alt_by_post_id
     data["has_audio_by_id"] = queryset_data.has_audio_by_id
     data["owner_username_by_id"] = queryset_data.owner_username_by_id
     return data
@@ -622,6 +638,7 @@ class FeedRepository:
             page_url_by_id=data["page_url_by_id"],
             absolute_page_url_by_id=data["absolute_page_url_by_id"],
             cover_by_post_id=data["cover_by_post_id"],
+            cover_alt_by_post_id=data["cover_alt_by_post_id"],
         )
         root_nav_links = data["root_nav_links"]
         return cls(
@@ -654,6 +671,7 @@ class FeedRepository:
             image_by_id=self.images,
             renditions_for_posts=self.renditions_for_posts,
             cover_image_url=self.queryset_data.cover_by_post_id.get(post_id, ""),
+            cover_alt_text=self.queryset_data.cover_alt_by_post_id.get(post_id, ""),
         )
 
 
@@ -765,6 +783,7 @@ class BlogIndexRepository:
             page_url_by_id=data["page_url_by_id"],
             absolute_page_url_by_id=data["absolute_page_url_by_id"],
             cover_by_post_id=data["cover_by_post_id"],
+            cover_alt_by_post_id=data["cover_alt_by_post_id"],
         )
         root_nav_links = data["root_nav_links"]
 

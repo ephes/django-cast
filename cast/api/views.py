@@ -314,7 +314,6 @@ class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
         return filterset.qs
 
     def get_queryset(self):
-        print("get queryset!")
         if self.request.GET.dict().get("use_post_filter", "false") == "true":
             return self.get_filtered_queryset()
         return super().get_queryset()

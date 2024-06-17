@@ -75,6 +75,7 @@ def post_detail_repository(**kwargs):
         video_by_id={},
         image_by_id={},
         cover_image_url="",
+        cover_alt_text="",
         renditions_for_posts={},
     )
     defaults.update(kwargs)
@@ -96,6 +97,7 @@ def queryset_data(**kwargs):
         renditions_for_posts={},
         page_url_by_id={},
         cover_by_post_id={},
+        cover_alt_by_post_id={},
         absolute_page_url_by_id={},
     )
     defaults.update(kwargs)
@@ -394,6 +396,7 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
         owner_username="owner",
         blog_url="/some-blog/",
         cover_image_url="/media/foo.jpg",
+        cover_alt_text="Cover alt text",
         audio_by_id={1: Audio(id=1, title="Some audio", collection=None)},
         video_by_id={1: Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))},
         image_by_id={
@@ -426,6 +429,7 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert context["page"].page_url == repository.page_url
     assert context["absolute_page_url"] == repository.absolute_page_url
     assert context["cover_image_url"] == repository.cover_image_url
+    assert context["cover_alt_text"] == repository.cover_alt_text
     assert len(connection.queries) == 0
 
 
@@ -449,6 +453,7 @@ def blog_data(post, renditions_for_post):
         "videos_by_post_id": {1: [1]},
         "audios_by_post_id": {1: [1]},
         "cover_by_post_id": {},
+        "cover_alt_by_post_id": {},
         "renditions_for_posts": serialized_renditions,
         "owner_username_by_id": {1: "owner"},
         "page_url_by_id": {1: "/some-post/"},
@@ -681,6 +686,7 @@ def test_create_from_cachable_data_use_audio_player_false():
         "videos_by_post_id": {},
         "images_by_post_id": {},
         "cover_by_post_id": {},
+        "cover_alt_by_post_id": {},
         "owner_username_by_id": {1: "owner"},
         "has_audio_by_id": {1: False},
         "root_nav_links": [],
@@ -737,6 +743,7 @@ def test_page_link_handler_expand_db_attributes_many(mocker):
 def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_none(rf, blog, image):
     post = create_post(blog=blog)
     post.cover_image = image
+    post.cover_alt_text = "foo alt text"
     post.save()
 
     request = rf.get("/foobar/")
@@ -750,3 +757,4 @@ def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_no
     # make sure the cover is not None for post detail repository
     repository = PostDetailRepository.create_from_django_models(request=request, post=post)
     assert repository.cover_image_url == image.file.url
+    assert repository.cover_alt_text == "foo alt text"
