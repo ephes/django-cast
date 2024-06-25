@@ -4,3 +4,4 @@
 - Add defer to loading the javascript for the podlove web player
 - #150 Make cover image alt text work by passing it through repositories
 - #152 Add a canonical link to the blog / podcast index page
+- #153 JavaScript dependency updates and new bundle
