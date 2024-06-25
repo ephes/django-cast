@@ -11,6 +11,7 @@
   {% if blog.noindex %}
     <meta name="robots" content="noindex">
   {% endif %}
+  <link rel="canonical" href="{{ canonical_url }}">
 {% endblock %}
 
 {% block content %}

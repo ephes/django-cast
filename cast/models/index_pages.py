@@ -290,6 +290,7 @@ class Blog(Page):
         context = self.get_context_from_repository(context, repository)
         context["posts"] = context["object_list"]  # convenience
         context["blog"] = self
+        context["canonical_url"] = self.full_url
         context["has_selectable_themes"] = True
         context["parameters"] = self.get_other_get_params(get_params)
         context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
