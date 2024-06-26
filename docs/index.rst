@@ -23,3 +23,4 @@ fill since Django Cast switched to Wagtail.
    models
    context-processors
    settings
+   authors

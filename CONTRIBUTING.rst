@@ -60,14 +60,15 @@ Ready to contribute? Here's how to set up `django-cast` for local development.
 1. Fork the `django-cast` repo on GitHub.
 2. Clone your fork locally::
 
-    $ git clone git@github.com:ephes/django-cast.git
+    $ git clone git@github.com:you/django-cast.git
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
 
-    $ mkvirtualenv cast
-    $ workon cast
-    $ cd django-cast/
-    $ python setup.py develop
+    $ cd django-cast
+    $ python -m venv .venv
+    $ source .venv/bin/activate
+    $ python -m pip install flit
+    $ flit install -s
 
 4. Create a branch for local development::
 
@@ -78,11 +79,9 @@ Ready to contribute? Here's how to set up `django-cast` for local development.
 5. When you're done making changes, check that your changes pass flake8 and the
    tests, including testing other Python versions with tox::
 
-        $ flake8 cast tests
-        $ python runtests.py test
+        $ pytest
         $ tox
 
-   To get flake8 and tox, just pip install them into your virtualenv.
 
 6. Commit your changes and push your branch to GitHub::
 
@@ -101,13 +100,4 @@ Before you submit a pull request, check that it meets these guidelines:
 2. If the pull request adds functionality, the docs should be updated. Put
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
-3. The pull request should work for Python 2.6, 2.7, and 3.3, and for PyPy. Check
-   https://travis-ci.org/ephes/django-cast/pull_requests
-   and make sure that the tests pass for all supported Python versions.
-
-Tips
-----
-
-To run a subset of tests::
-
-    $ python runtests.py tests -k test_get_post_detail
+3. The pull request should work for Python 3.10, 3.11, and 3.12.

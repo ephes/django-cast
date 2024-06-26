@@ -1,4 +1,1 @@
-Contributing
-============
-
-Just a dummy atm.
+.. include:: ../CONTRIBUTING.rst
