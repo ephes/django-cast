@@ -753,8 +753,24 @@ def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_no
         request=request, site=None, queryset=blog.unfiltered_published_posts
     )
     assert queryset_data.cover_by_post_id[post.id] == image.file.url
+    assert queryset_data.cover_alt_by_post_id[post.id] == post.cover_alt_text
 
     # make sure the cover is not None for post detail repository
     repository = PostDetailRepository.create_from_django_models(request=request, post=post)
     assert repository.cover_image_url == image.file.url
     assert repository.cover_alt_text == "foo alt text"
+
+    # make sure it is not None even if the cover is None
+    post.cover_image = None
+    post.cover_alt_text = ""  # cannot be null
+    post.save()
+
+    queryset_data = QuerysetData.create_from_post_queryset(
+        request=request, site=None, queryset=blog.unfiltered_published_posts
+    )
+    assert queryset_data.cover_by_post_id[post.id] == ""
+    assert queryset_data.cover_alt_by_post_id[post.id] == ""
+
+    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    assert repository.cover_image_url == ""
+    assert repository.cover_alt_text == ""

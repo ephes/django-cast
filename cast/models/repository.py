@@ -125,10 +125,7 @@ class QuerysetData:
             if post.cover_image is not None:
                 cover_image_url = post.cover_image.file.url
             cover_by_post_id[post.pk] = cover_image_url
-            cover_alt_text = ""
-            if post.cover_alt_text is not None:
-                cover_alt_text = post.cover_alt_text
-            cover_alt_by_post_id[post.pk] = cover_alt_text
+            cover_alt_by_post_id[post.pk] = post.cover_alt_text
 
             for image_type, image in post.get_all_images():
                 images[image.pk] = image
@@ -217,9 +214,6 @@ class PostDetailRepository:
         cover_image_url = ""
         if post.cover_image is not None:
             cover_image_url = post.cover_image.file.url
-        cover_alt_text = ""
-        if post.cover_alt_text is not None:
-            cover_alt_text = post.cover_alt_text
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
@@ -232,7 +226,7 @@ class PostDetailRepository:
             owner_username=owner_username,
             blog_url=blog.get_url(request=request),
             cover_image_url=cover_image_url,
-            cover_alt_text=cover_alt_text,
+            cover_alt_text=post.cover_alt_text,
             audio_by_id=post.media_lookup.get("audio", {}),
             video_by_id=post.media_lookup.get("video", {}),
             image_by_id=image_by_id,
