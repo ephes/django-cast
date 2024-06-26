@@ -5,7 +5,6 @@ from django.utils import timezone
 
 from cast import appsettings
 from cast.models import Blog, Podcast
-from cast.models.itunes import ItunesArtWork
 from cast.models.pages import CustomEpisodeForm, Episode, HomePage, HtmlField, Post
 from cast.models.repository import BlogIndexRepository
 from cast.models.video import Video
@@ -163,6 +162,13 @@ class TestPodcastModel:
             "cover_image_url": "https://example.org/cover.jpg",
             "cover_alt_text": "",
         }
+
+    def test_podcast_get_context(self, rf, mocker):
+        mocker.patch("cast.models.Blog.get_context", return_value={})
+        request = rf.get("/")
+        podcast = Podcast(id=1)
+        context = podcast.get_context(request)
+        assert context["podcast"] == podcast
 
 
 class TestPostModel:
@@ -390,19 +396,6 @@ class TestPostModel:
         context = post.get_cover_image_context({"cover_image_url": "https://example.org/cover.jpg"}, None)
         cover_image_url = context["cover_image_url"]
         assert cover_image_url == "https://example.org/cover.jpg"
-
-        # get cover image from iTunes artwork
-        class Original:
-            url = "https://example.org/itunes.jpg"
-            width = 600
-            height = 200
-
-        artwork = ItunesArtWork(original=Original())
-        podcast = Podcast(id=1, itunes_artwork=artwork)
-
-        context = post.get_cover_image_context({}, podcast)
-        cover_image_url = context["cover_image_url"]
-        assert cover_image_url == "https://example.org/itunes.jpg"
 
     def test_get_cached_media_lookup(self):
         post = Post(id=1)

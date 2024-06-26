@@ -232,6 +232,13 @@ def podcast(user, site):
 
 
 @pytest.fixture()
+def podcast_with_cover_image(user, site, image):
+    return PodcastFactory(
+        owner=user, title="test podcast", slug="test_podcast", parent=site.root_page, cover_image=image
+    )
+
+
+@pytest.fixture()
 def podcast_with_artwork(user, itunes_artwork, site):
     return PodcastFactory(
         owner=user,
@@ -486,6 +493,19 @@ def episode_with_artwork(podcast_with_artwork, audio, body):
     return EpisodeFactory(
         owner=podcast_with_artwork.owner,
         parent=podcast_with_artwork,
+        title="test podcast episode",
+        slug="test-podcast-entry",
+        podcast_audio=audio,
+        body=body,
+    )
+
+
+@pytest.fixture()
+def episode_with_podcast_with_cover_image(podcast_with_cover_image, audio, body):
+    podcast = podcast_with_cover_image
+    return EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
         title="test podcast episode",
         slug="test-podcast-entry",
         podcast_audio=audio,

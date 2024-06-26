@@ -13,9 +13,8 @@ In addition to the effect setting a cover image for a post has, setting a
 cover image for an episode will also be used as the episode's artwork in the
 podcast feed and in the Podlove Web Player.
 
-If no cover image is set for the episode, the blog’s cover image will be used.
-If the :ref:`blog <blog_overview>` does not have a cover image, the podcast’s
-iTunes artwork will be used as the episode’s cover image.
+If no cover image is set for the episode, the :ref:`blog <blog_overview>`’s cover
+image will be used.
 
 Podcast Audio
 =============

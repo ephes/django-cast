@@ -178,21 +178,23 @@ class TestPodcastAudio:
         metadata = serializer.get_show(episode.podcast_audio)
         assert metadata["poster"] == image.file.url
 
-    def test_podlove_podlove_detail_endpoint_show_metadata(self, api_client, episode_with_artwork):
+    def test_podlove_podlove_detail_endpoint_show_metadata(
+        self, api_client, image, episode_with_podcast_with_cover_image
+    ):
         """Test whether the podlove detail endpoint includes show metadata."""
-        episode = episode_with_artwork
+        episode = episode_with_podcast_with_cover_image
         audio = episode.podcast_audio
-        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
+        podcast = episode.blog.specific
 
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
         r = api_client.get(podlove_detail_url, format="json")
         assert r.status_code == 200
 
         podlove_data = r.json()
-        podcast = episode.blog.specific
         assert "show" in podlove_data
         assert podlove_data["show"]["title"] == podcast.title
         assert podlove_data["show"]["subtitle"] == podcast.description
-        assert podlove_data["show"]["poster"] == podcast.itunes_artwork.original.url
+        assert podlove_data["show"]["poster"] == podcast.cover_image.file.url
         assert podlove_data["show"]["link"] == podcast.full_url
 
     def test_podlove_player_config(self, api_client):

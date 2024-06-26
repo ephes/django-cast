@@ -68,6 +68,7 @@ repos:
           - Pygments
           - python-slugify
           - setuptools
+          - types-pytz
           - wagtail
           - wagtail_srcset
           - types-python-slugify

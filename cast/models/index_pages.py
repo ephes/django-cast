@@ -375,15 +375,6 @@ class Podcast(Blog):
         except json.decoder.JSONDecodeError:
             return {}
 
-    def get_cover_image_context(self) -> dict[str, str]:
-        context = super().get_cover_image_context()
-        if context["cover_image_url"] == "":
-            # fallback to itunes artwork
-            if self.itunes_artwork is not None:
-                context["cover_image_url"] = self.itunes_artwork.original.url
-                context["cover_alt_text"] = "iTunes Artwork"
-        return context
-
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         context["podcast"] = self  # conveniece
