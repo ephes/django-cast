@@ -1,7 +1,8 @@
-0.2.35 (2024-06-23)
+0.2.35 (2024-06-30)
 -------------------
 
 - Add defer to loading the javascript for the podlove web player
+- #56 removed old documentation
 - #136 Only use blog cover image as a fallback for episode cover images, not the iTunes artwork
 - #140 Workaround for the page_ptr ValueError in preview serving (ignore it)
 - #150 Make cover image alt text work by passing it through repositories
