@@ -578,8 +578,12 @@ class Post(Page):
         # sync media ids before preview, because otherwise the repository
         # will not have the correct media ids and fail to get the correct
         # renditions and fail with a w1110 not found rendition key error.
-        self.sync_media_ids()
-        create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset in preview
+        try:
+            self.sync_media_ids()
+            create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset in preview
+        except ValueError:
+            # will be raised on wagtail preview because page_ptr is not set
+            pass
         return super().serve_preview(request, mode_name)
 
     def save(self, *args, **kwargs) -> None:

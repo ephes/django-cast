@@ -409,6 +409,12 @@ class TestPostModel:
         post._media_lookup = "foobar"
         assert post.media_lookup == post._media_lookup
 
+    def test_ignore_value_error_in_serve_preview_during_sync_media_ids(self, rf, mocker, post):
+        mocker.patch("cast.models.Post.sync_media_ids", side_effect=ValueError())
+        request = rf.get("/")
+        post.serve_preview(request, "")
+        assert post.media_lookup == {"audio": {}, "image": {}, "video": {}, "gallery": {}}
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db
