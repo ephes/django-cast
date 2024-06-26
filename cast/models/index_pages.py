@@ -356,6 +356,18 @@ class Podcast(Blog):
             "itunes_artwork", help_text=_("The image that will be used in the podcast feed as the iTunes artwork.")
         ),
         FieldPanel("template_base_dir"),
+        MultiFieldPanel(
+            [
+                FieldPanel("cover_image"),
+                FieldPanel("cover_alt_text"),
+            ],
+            heading="Cover Image",
+            classname="collapsed",
+            help_text=_(
+                "The cover image for this post. It will be used in the feed, "
+                "in the twitter card and maybe on the blog index page."
+            ),
+        ),
     ]
 
     promote_panels = Page.promote_panels + [
