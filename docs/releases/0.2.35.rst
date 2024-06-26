@@ -2,6 +2,7 @@
 -------------------
 
 - Add defer to loading the javascript for the podlove web player
+- #136 Only use blog cover image as a fallback for episode cover images, not the iTunes artwork
 - #140 Workaround for the page_ptr ValueError in preview serving (ignore it)
 - #150 Make cover image alt text work by passing it through repositories
 - #152 Add a canonical link to the blog / podcast index page
