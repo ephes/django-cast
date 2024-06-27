@@ -404,6 +404,19 @@ def test_update_theme_invalid(api_client):
     assert api_client.session.get("template_base_dir") is None
 
 
+def test_update_theme_int_payload(api_client):
+    # Given an api url to update the theme
+    url = reverse("cast:api:theme-update")
+    # When we post an integer payload to the update theme endpoint
+    r = api_client.post(url, 23, format="json")
+    assert r.status_code == 400
+
+    # Then we expect an error message to be returned and
+    # the theme is not stored in the session
+    result = r.json()
+    assert result["error"] == "Invalid request"
+
+
 @pytest.mark.django_db
 def test_render_html_with_theme_from_session(api_client, post):
     # Given we have custom theme set in the session

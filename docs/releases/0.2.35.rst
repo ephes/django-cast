@@ -9,3 +9,4 @@
 - #152 Add a canonical link to the blog / podcast index page
 - #153 JavaScript dependency updates and new bundle
 - #154 Output all relative file paths + file contents to be able to pass it to the llm command
+- #155 Update theme endpoint breaks on integer json payloads
