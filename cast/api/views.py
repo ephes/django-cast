@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
-from django.http import HttpRequest, JsonResponse, QueryDict
+from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import CreateView
@@ -264,7 +264,7 @@ class UpdateThemeView(APIView):
     """
 
     def post(self, request: Request, *args, **kwargs) -> Response:
-        if not isinstance(request.data, QueryDict):
+        if not isinstance(request.data, dict):
             return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
 
         new_theme_slug = request.data.get("theme_slug", None)
