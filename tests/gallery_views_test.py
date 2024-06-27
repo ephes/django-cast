@@ -32,6 +32,13 @@ def test_gallery_modal_form_image_pks_empty():
     assert form.errors["image_pks"][0] == "This field is required."
 
 
+def test_gallery_modal_form_malicious_input():
+    data = {"current_image_pk": 4, "image_pks": "1,2,3,if(now()=sysdate()", "block_id": "block_id"}
+    form = GalleryModalForm(data)
+    assert not form.is_valid()
+    assert form.errors["image_pks"][0] == "Enter a list of image ids."
+
+
 @pytest.mark.parametrize(
     "current_image_pk,image_pks,expected_prev_next",
     [

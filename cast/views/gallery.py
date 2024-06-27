@@ -3,6 +3,7 @@ from typing import Any
 from django import forms
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from wagtail.images.models import Image
 
@@ -14,7 +15,10 @@ class CommaSeparatedIntegerField(forms.Field):
     def to_python(self, value: Any | None) -> list[int]:  # Any | None from super -> do not override
         if value is None or not value.strip():
             return []
-        return [int(item.strip()) for item in value.split(",")]
+        try:
+            return [int(item.strip()) for item in value.split(",")]  # image_pks
+        except ValueError:
+            raise forms.ValidationError(_("Enter a list of image ids."))
 
 
 class GalleryModalForm(forms.Form):

@@ -10,3 +10,4 @@
 - #153 JavaScript dependency updates and new bundle
 - #154 Output all relative file paths + file contents to be able to pass it to the llm command
 - #155 Update theme endpoint breaks on integer json payloads
+- #156 Image IDs for galleries have to be integer
