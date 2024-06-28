@@ -11,6 +11,7 @@ from cast.api.views import (
     FilteredPagesAPIViewSet,
     ThemeListView,
 )
+from cast.devdata import generate_blog_with_media
 from cast.models import PostCategory
 
 from .factories import UserFactory
@@ -355,6 +356,19 @@ def test_get_comments_via_post_detail(api_client, post, comment):
 
     comments = r.json()["comments"]
     assert comments[0]["comment"] == comment.comment
+
+
+@pytest.mark.django_db
+def test_wagtail_api_page_detail_with_chooser_happy(api_client):
+    """
+    Access the wagtail api page detail endpoint with a post that has an image
+    or video. This did throw a 500 error before -> sentry saw it -> fix it.
+    """
+    blog = generate_blog_with_media(media_numbers={"images": 1, "videos": 1})
+    post = blog.unfiltered_published_posts.first()
+    url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
+    r = api_client.get(url, format="json")
+    assert r.status_code == 200
 
 
 def test_theme_list_queryset_is_none():

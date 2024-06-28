@@ -11,3 +11,4 @@
 - #154 Output all relative file paths + file contents to be able to pass it to the llm command
 - #155 Update theme endpoint breaks on integer json payloads
 - #156 Image IDs for galleries have to be integer
+- #157 Fix some chooser blocks breaking on integer values for get_prep_value

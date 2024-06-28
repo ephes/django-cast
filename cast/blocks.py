@@ -96,7 +96,21 @@ class EmptyImageRepository:
     renditions_for_posts: RenditionsForPosts = {}
 
 
-class CastImageChooserBlock(ImageChooserBlock):
+class ChooserGetPrepValueMixin:
+    """
+    A mixin for the ChooserBlock that allows to set the value to an integer.
+    Without this, the page detail api endpoint throws an error because it
+    expects an instance or None, but already gets an integer.
+    See: https://github.com/ephes/django-cast/issues/157
+    """
+
+    def get_prep_value(self, value: Model | int | None) -> int | None:
+        if isinstance(value, int):
+            return value
+        return super().get_prep_value(value)  # type: ignore
+
+
+class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
     """
     Just add a thumbnail to the image because we then can use the thumbnail
     to get the srcset and sizes attributes in the template.
@@ -319,7 +333,7 @@ class GalleryBlockWithLayout(StructBlock):
         return prepare_context_for_gallery(value["gallery"], context)
 
 
-class RepositoryChooserBlock(ChooserBlock):
+class RepositoryChooserBlock(ChooserGetPrepValueMixin, ChooserBlock):
     def bulk_to_python(self, values):
         """
         Postpone the fetching of the database objects to the get_context method
