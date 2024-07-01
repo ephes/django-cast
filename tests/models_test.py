@@ -408,6 +408,15 @@ class TestPostModel:
         post.serve_preview(request, "")
         assert post.media_lookup == {"audio": {}, "image": {}, "video": {}, "gallery": {}}
 
+    def test_images_all_raises_value_error_on_preview(self, mocker):
+        post = Post(id=1)
+        images_mock = mocker.patch("cast.models.Post.images")
+        images_mock.all.side_effect = ValueError()
+        with pytest.raises(ValueError):
+            list(post.images.all())
+        all_images = list(post.get_all_images())
+        assert all_images == []
+
 
 class TestEpisodeModel:
     pytestmark = pytest.mark.django_db

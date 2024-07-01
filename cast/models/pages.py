@@ -464,11 +464,15 @@ class Post(Page):
             for image_type, image in post.get_all_images():
                 print(image_type, image)
         """
-        for image in self.images.all():
-            yield "regular", image
-        for gallery in self.galleries.all():
-            for image in gallery.images.all():
-                yield "gallery", image
+        try:
+            for image in self.images.all():
+                yield "regular", image
+            for gallery in self.galleries.all():
+                for image in gallery.images.all():
+                    yield "gallery", image
+        except ValueError:
+            # will be raised on wagtail preview because page_ptr is not set
+            pass
 
     @property
     def comments(self) -> list[dict[str, int | None | str]]:
@@ -579,7 +583,7 @@ class Post(Page):
         # will not have the correct media ids and fail to get the correct
         # renditions and fail with a w1110 not found rendition key error.
         try:
-            self.sync_media_ids()
+            self.sync_media_ids()  # raises ValueError
             create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset in preview
         except ValueError:
             # will be raised on wagtail preview because page_ptr is not set
