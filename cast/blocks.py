@@ -110,6 +110,17 @@ class ChooserGetPrepValueMixin:
         return super().get_prep_value(value)  # type: ignore
 
 
+class GalleryImageChooserBlock(ImageChooserBlock):
+    """
+    Fix for https://github.com/ephes/django-cast/issues/157
+    """
+
+    def get_prep_value(self, value: Model | dict | None) -> int | None:
+        if isinstance(value, dict):
+            return value["value"]
+        return super().get_prep_value(value)
+
+
 class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
     """
     Just add a thumbnail to the image because we then can use the thumbnail
@@ -256,7 +267,7 @@ class GalleryBlockWithLayout(StructBlock):
     which template is used to render the gallery.
     """
 
-    gallery = GalleryBlock(ImageChooserBlock())
+    gallery = GalleryBlock(GalleryImageChooserBlock())
     layout = ChoiceBlock(
         choices=[
             ("default", _("Web Component with Modal")),

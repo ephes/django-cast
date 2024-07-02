@@ -364,7 +364,7 @@ def test_wagtail_api_page_detail_with_chooser_happy(api_client):
     Access the wagtail api page detail endpoint with a post that has an image
     or video. This did throw a 500 error before -> sentry saw it -> fix it.
     """
-    blog = generate_blog_with_media(media_numbers={"images": 1, "videos": 1})
+    blog = generate_blog_with_media(media_numbers={"images": 1, "videos": 1, "galleries": 1})
     post = blog.unfiltered_published_posts.first()
     url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
     r = api_client.get(url, format="json")

@@ -4,3 +4,4 @@
 Bugfixes.
 
 - #140 Fixed the `page_ptr` stuff again. This time for real.
+- #157 Fixed the `get_prep_value` getting called with weird values again. This time for real.
