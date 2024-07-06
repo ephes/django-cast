@@ -33,6 +33,12 @@ Template Base Dir
 The `template_base_dir` field is used to specify the base directory for the
 templates used to render the blog. It's basically a theme switcher.
 
+Cover Image
+===========
+The `cover_image` field is used to specify the cover image for the blog.
+If posts have no cover image, the blog cover image will be used as a fallback.
+There's a `cover_alt_text` field to specify the alt text for the cover image.
+
 Promote > NoIndex
 =================
 
