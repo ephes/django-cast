@@ -4,6 +4,19 @@
 Blog
 ****
 
+Title
+=====
+
+The `title` field is used to populate the `title` attribute in the feed. And
+it is also used in the default templates to display the title of the blog on
+the blog index page.
+
+Subtitle
+========
+
+The `subtitle` field is used to populate the `subtitle` attribute on the podlove
+player.
+
 Description
 ===========
 
@@ -17,7 +30,7 @@ Email
 Contact address for the blog.
 
 Author
-===========
+======
 
 If you set the custom `CharField` field named `author` on a Blog-Page
 using the Wagtail or Django-Admin interface, the content of this field
@@ -38,6 +51,14 @@ Cover Image
 The `cover_image` field is used to specify the cover image for the blog.
 If posts have no cover image, the blog cover image will be used as a fallback.
 There's a `cover_alt_text` field to specify the alt text for the cover image.
+
+Promote > Title
+===============
+This title is show in search engine results linking to the blog.
+
+Promote > Description
+=====================
+This description is show in search engine results linking to the blog.
 
 Promote > NoIndex
 =================

@@ -228,7 +228,9 @@ def blog(user, site):
 
 @pytest.fixture()
 def podcast(user, site):
-    return PodcastFactory(owner=user, title="test podcast", slug="test_podcast", parent=site.root_page)
+    return PodcastFactory(
+        owner=user, title="test podcast", subtitle="test subtitle", slug="test_podcast", parent=site.root_page
+    )
 
 
 @pytest.fixture()

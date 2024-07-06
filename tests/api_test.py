@@ -169,7 +169,7 @@ class TestPodcastAudio:
         podcast = episode.blog.specific
         assert "show" in podlove_data
         assert podlove_data["show"]["title"] == podcast.title
-        assert podlove_data["show"]["subtitle"] == podcast.description
+        assert podlove_data["show"]["subtitle"] == podcast.subtitle
         assert podlove_data["show"]["poster"] == ""
         assert podlove_data["show"]["link"] == podcast.full_url
 
@@ -194,7 +194,7 @@ class TestPodcastAudio:
         podlove_data = r.json()
         assert "show" in podlove_data
         assert podlove_data["show"]["title"] == podcast.title
-        assert podlove_data["show"]["subtitle"] == podcast.description
+        assert podlove_data["show"]["subtitle"] == podcast.subtitle
         assert podlove_data["show"]["poster"] == podcast.cover_image.file.url
         assert podlove_data["show"]["link"] == podcast.full_url
 

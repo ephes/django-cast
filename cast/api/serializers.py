@@ -47,7 +47,7 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         podcast = post.blog.specific
         metadata = {
             "title": podcast.title,
-            "subtitle": podcast.description,
+            "subtitle": podcast.subtitle,
             "summary": podcast.search_description,  # FIXME is this correct?
             "link": podcast.full_url,
         }

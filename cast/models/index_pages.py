@@ -83,8 +83,16 @@ class Blog(Page):
     )
 
     # wagtail
+    subtitle = models.CharField(
+        verbose_name=_("subtitle"),
+        max_length=255,
+        default="",
+        blank=True,
+        help_text=_("The page subtitle as you'd like it to be seen by the public"),
+    )
     description = RichTextField(blank=True)
     content_panels = Page.content_panels + [
+        FieldPanel("subtitle", classname="collapsed"),
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
         FieldPanel("author"),
@@ -349,6 +357,7 @@ class Podcast(Blog):
     )
 
     content_panels = Page.content_panels + [
+        FieldPanel("subtitle", classname="collapsed"),
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
         FieldPanel("author"),
