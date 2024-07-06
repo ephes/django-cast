@@ -1,6 +1,8 @@
-<div
-  id="audio_{{ value.pk }}"
-  data-variant="xl"
-  data-url="{% url 'cast:api:audio_podlove_detail' pk=value.pk post_id=page.pk %}"
->
-</div>
+{% if page.pk %}
+  <div
+    id="audio_{{ value.pk }}"
+    data-variant="xl"
+    data-url="{% url 'cast:api:audio_podlove_detail' pk=value.pk post_id=page.pk %}"
+  >
+  </div>
+{% endif %}

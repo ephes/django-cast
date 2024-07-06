@@ -7,3 +7,4 @@ Bugfixes.
 - #157 Fixed the `get_prep_value` getting called with weird values again. This time for real.
 - #134 Added subtitle to blog / podcast
 - #136 Added some more documentation for `cover_image` and `cover_image_alt`
+- #158 Fixed a no reverse match error when trying to render the podlove player during preview
