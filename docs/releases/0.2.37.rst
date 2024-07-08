@@ -1,0 +1,6 @@
+0.2.37 (2024-07-14)
+-------------------
+
+Bugfixes and new subtitle field for blog and podcast.
+
+- #134 Added subtitle to blog / podcast
