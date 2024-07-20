@@ -4,3 +4,4 @@
 Bugfixes and new subtitle field for blog and podcast.
 
 - #159 Fixed author name in post detail page header for bs4 and base templates
+- #160 Squash migrations
