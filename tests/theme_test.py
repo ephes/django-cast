@@ -4,8 +4,9 @@ from pathlib import Path
 import pytest
 from django.template import engines
 from django.urls import reverse
+from wagtail.models import Site
 
-from cast.context_processors import site_template_base_dir
+from cast.context_processors import DEFAULT_TEMPLATE_BASE_DIR, site_template_base_dir
 from cast.models.theme import (
     get_required_template_names,
     get_template_base_dir_candidates,
@@ -150,3 +151,15 @@ def test_post_select_theme_view_happy(client):
     assert response.status_code == 302
     assert next_url == response.url
     assert client.session["template_base_dir"] == "plain"
+
+
+@pytest.mark.django_db
+def test_non_existent_theme_returns_default(rf):
+    """
+    Make sure that if there are no sites and the template base dir does not exist,
+    the default is returned.
+    """
+    Site.objects.all().delete()  # make sure there are no sites
+    request = rf.get("/")
+    context = site_template_base_dir(request)
+    assert context["cast_site_template_base_dir"] == DEFAULT_TEMPLATE_BASE_DIR
