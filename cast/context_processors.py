@@ -1,3 +1,4 @@
+from django.db import IntegrityError
 from django.http import HttpRequest
 
 from .models import TemplateBaseDirectory
@@ -15,8 +16,9 @@ def site_template_base_dir(request: HttpRequest) -> dict[str, str]:
     else:
         try:
             site_template_base_dir_name = TemplateBaseDirectory.for_request(request).name
-        except TemplateBaseDirectory.DoesNotExist:
+        except (TemplateBaseDirectory.DoesNotExist, IntegrityError):
             # If the site template base directory does not exist, use the default
+            # need to catch IntegrityError because of Wagtail5 support
             site_template_base_dir_name = DEFAULT_TEMPLATE_BASE_DIR
     return {
         "cast_site_template_base_dir": site_template_base_dir_name,
