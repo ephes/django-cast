@@ -140,3 +140,6 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
 ]
+
+[mypy.plugins.django-stubs]
+django_settings_module = "cast.settings"
