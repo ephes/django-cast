@@ -1,6 +1,7 @@
 0.2.38 (2024-08-04)
 -------------------
 
-Support for Wagtail 6.2.
+Support for Wagtail 6.2. Had to deactivate the mypy pre-commit hook because of
+it no longer being able to infer types of model fields.
 
 - #162 return a default template base dir name ("does_not_exist") instead of raising an exception when there are no wagtail sites
