@@ -36,7 +36,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "coreapi",  # coreapi` must be installed for schema support to work.
     "crispy-bootstrap4",  # bootstrap4 theme
     "django",  # Django itself
     "django-crispy-forms",  # bootstrap4 theme
