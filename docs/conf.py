@@ -9,7 +9,7 @@
 project = "Django Cast"
 copyright = "2022, Jochen Wersdörfer"
 author = "Jochen Wersdörfer"
-release = "0.2.38"
+release = "0.2.39"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
