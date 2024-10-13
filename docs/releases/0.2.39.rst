@@ -1,4 +1,4 @@
-0.2.39 (2024-09-15)
+0.2.39 (2024-10-13)
 -------------------
 
-Maybe fixed mypy?
+Support for Python 3.13 has been added. Support for Python 3.10 has been dropped.
