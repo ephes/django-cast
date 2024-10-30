@@ -1,0 +1,6 @@
+0.2.40 (2024-11-03)
+-------------------
+
+Improved the performance of the web player by
+- #167 Waiting for the load event before initializing the player (instead of using DOMContentLoaded)
+- #167 Only initializing the player once the player is visible in the viewport
