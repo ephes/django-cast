@@ -4,3 +4,4 @@
 Improved the performance of the web player by
 - #167 Waiting for the load event before initializing the player (instead of using DOMContentLoaded)
 - #167 Only initializing the player once the player is visible in the viewport
+- #167 Save space for the player in the layout, even if it's not visible
