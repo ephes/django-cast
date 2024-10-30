@@ -202,3 +202,15 @@
     */
     display: block;
 }
+
+.podlove-player-container {
+  width: 936px;  /* Desktop width */
+  height: 300px; /* Desktop height */
+}
+
+@media (max-width: 768px) {
+  .podlove-player-container {
+    width: 366px;  /* Mobile width */
+    height: 500px; /* Mobile height */
+  }
+}
