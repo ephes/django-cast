@@ -13,13 +13,6 @@
       setModalImage($(e.target))
     });
   </script>
-  {% if use_audio_player %}
-    {% for post in posts %}
-      {% for pk, audio in post.media_lookup.audio.items %}
-        <script>podlovePlayer("#audio_{{ audio.pk }}", "{{ audio.podlove_url }}");</script>
-      {% endfor %}
-    {% endfor %}
-  {% endif %}
 </main>
 
 <footer>
