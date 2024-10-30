@@ -118,9 +118,11 @@
         });
       }
 
-      document.body.addEventListener('htmx:afterSwap', (event) => {
+      document.body.addEventListener('htmx:afterSettle', (event) => {
         if (event.detail.target.id === 'paging-area') {
-          initializePodlovePlayers();
+          setTimeout(() => {
+            initializePodlovePlayers();
+          }, 1500); // Adjust the delay as needed -> wait to finish scrolling up
         }
       });
 
