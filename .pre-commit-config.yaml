@@ -9,7 +9,7 @@ repos:
       - id: check-yaml
       - id: check-toml
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.18.0
+    rev: v3.19.0
     hooks:
       - id: pyupgrade
         args: [--py310-plus]
@@ -36,7 +36,7 @@ repos:
       - id: flake8
         language_version: python3
   - repo: https://github.com/rtts/djhtml
-    rev: "3.0.6"  # replace with the latest tag on GitHub
+    rev: "3.0.7"  # replace with the latest tag on GitHub
     hooks:
       - id: djhtml
         args: [-t, "2"]
