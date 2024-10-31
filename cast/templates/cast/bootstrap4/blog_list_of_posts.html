@@ -94,42 +94,6 @@
 
   {% vite_hmr_client app="cast" %}
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
+  {% vite_asset 'src/audio/podlove-player.ts' app="cast" %}
 
-  {% if use_audio_player %}
-    <script defer src={% static 'cast/js/web-player/embed.5.js' %}></script>
-    <script>
-      function initializePodlovePlayerWhenVisible(div) {
-        const observer = new IntersectionObserver((entries, observer) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const audioId = div.id;
-              const url = div.getAttribute('data-url');
-              podlovePlayer(`#${audioId}`, url, "/api/audios/player_config/");
-              observer.unobserve(div); // Stop observing since we don't need to initialize again
-            }
-          });
-        });
-        observer.observe(div);
-      }
-
-      function initializePodlovePlayers() {
-        document.querySelectorAll('.podlove-player-container').forEach(div => {
-          initializePodlovePlayerWhenVisible(div);
-        });
-      }
-
-      document.body.addEventListener('htmx:afterSettle', (event) => {
-        if (event.detail.target.id === 'paging-area') {
-          setTimeout(() => {
-            initializePodlovePlayers();
-          }, 1500); // Adjust the delay as needed -> wait to finish scrolling up
-        }
-      });
-
-      // Attach to the load event to ensure the page has fully loaded
-      window.addEventListener('load', function() {
-        initializePodlovePlayers();
-      });
-    </script>
-  {% endif %}
 {% endblock javascript %}

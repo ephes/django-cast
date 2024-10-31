@@ -1,4 +1,10 @@
 {
+  "src/audio/podlove-player.ts": {
+    "file": "podlovePlayer-CCBWa9eP.js",
+    "name": "podlovePlayer",
+    "src": "src/audio/podlove-player.ts",
+    "isEntry": true
+  },
   "src/gallery/image-gallery-bs4.ts": {
     "file": "main-CCUgFhRa.js",
     "name": "main",
