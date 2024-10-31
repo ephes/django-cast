@@ -65,20 +65,24 @@ class PodlovePlayerElement extends HTMLElement {
     const audioId = this.getAttribute('id') || `podlove-player-${Date.now()}`;
     const url = this.getAttribute('data-url');
     const configUrl = this.getAttribute('data-config') || '/api/audios/player_config/';
+    const podloveTemplate = this.getAttribute('data-template');
     let embedUrl = this.getAttribute('data-embed') || 'https://cdn.podlove.org/web-player/5.x/embed.js';
 
     // If host ist localhost use local embed url
     const { protocol, hostname, port } = window.location;
-    console.log("protocol, hostname, port: ", protocol, hostname, port);
 
+
+    console.log("data template: ", podloveTemplate);
     const playerDiv = document.createElement('div');
     playerDiv.id = audioId;
+
+    // set the template attribute if it is set (needed for pp theme)
+    if (podloveTemplate !== null) {
+        playerDiv.setAttribute('data-template', podloveTemplate);
+    }
     container.appendChild(playerDiv);
 
     if (typeof podlovePlayer === 'function') {
-      // Initialize existing Podlove player
-      console.log("embed url: ", embedUrl);
-      console.log("starting podlove player with: ", playerDiv, url, configUrl);
       podlovePlayer(playerDiv, url, configUrl);
     } else {
       // If in dev mode on localhost and embedUrl starts with a slash, use the local embedUrl
@@ -86,16 +90,8 @@ class PodlovePlayerElement extends HTMLElement {
       if (hostname === 'localhost' && embedUrl.startsWith("/")) {
         embedUrl = `http://localhost:${port}${embedUrl}`;
       }
-      console.log("importing embed via url: ", embedUrl);
       // Dynamically load the Podlove player script
       import(embedUrl).then(() => {
-        // Create a div with a unique ID inside the shadow DOM
-        const playerDiv = document.createElement('div');
-
-        playerDiv.id = audioId;
-        container.appendChild(playerDiv);
-
-        // Initialize the Podlove player
         podlovePlayer(playerDiv, url, configUrl);
       });
     }
