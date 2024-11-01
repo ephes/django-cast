@@ -8,7 +8,16 @@ class PodlovePlayerElement extends HTMLElement {
 
   connectedCallback() {
     this.renderPlaceholder();
-    this.observeElement();
+
+    if (document.readyState === 'complete') {
+      // The page is already fully loaded
+      this.observeElement();
+    } else {
+      // Wait for the 'load' event before initializing
+      window.addEventListener('load', () => {
+        this.observeElement();
+      }, { once: true });
+    }
   }
 
   disconnectedCallback() {
