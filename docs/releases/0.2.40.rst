@@ -1,5 +1,6 @@
 0.2.40 (2024-11-03)
 -------------------
+Support for Wagtail 6.3
 
 Improved the performance of the web player by
 - #167 Waiting for the load event before initializing the player (instead of using DOMContentLoaded)
