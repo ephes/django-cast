@@ -37,7 +37,8 @@ export default defineConfig({
     target: "es2015",
     rollupOptions: {
       input: {
-        main: resolve("./src/gallery/image-gallery-bs4.ts")
+        main: resolve("./src/gallery/image-gallery-bs4.ts"),
+        podlovePlayer: resolve("./src/audio/podlove-player.ts")
       },
       output: {
         chunkFileNames: undefined,
