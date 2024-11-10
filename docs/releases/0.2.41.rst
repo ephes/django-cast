@@ -6,3 +6,4 @@ not yet finished.
 
 - #167 Fixed the styling of the audio player
 - #168 Add transcript model
+- Better icons for audio, video and transcript MenuItems

@@ -36,7 +36,7 @@ def register_video_menu_item() -> VideoMenuItem:
         _("Video"),
         reverse("castvideo:index"),
         name="video",
-        classnames="icon icon-media",
+        icon_name="desktop",
         order=300,
     )
 
@@ -53,7 +53,7 @@ def register_audio_menu_item() -> AudioMenuItem:
         _("Audio"),
         reverse("castaudio:index"),
         name="audio",
-        classnames="icon icon-media",
+        icon_name="media",
         order=300,
     )
 
@@ -72,7 +72,7 @@ def register_transcript_menu_item() -> TranscriptMenuItem:
         _("Transcript"),
         reverse("cast-transcript:index"),
         name="transcript",
-        classnames="icon icon-media",
+        icon_name="edit",
         order=300,
     )
 
