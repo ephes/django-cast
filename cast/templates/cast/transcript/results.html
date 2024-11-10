@@ -1,0 +1,31 @@
+{% load i18n wagtailadmin_tags %}
+{% if transcripts %}
+  {% if is_searching %}
+    <h2>
+      {% blocktrans count counter=transcripts|length %}
+        There is one match
+      {% plural %}
+        There are {{ counter }} matches
+      {% endblocktrans %}
+    </h2>
+
+    {% search_other %}
+  {% endif %}
+
+  {% include "cast/transcript/list.html" %}
+
+  {% include "wagtailadmin/shared/pagination_nav.html" with items=transcripts is_searching=is_searching linkurl="cast-transcript:index" %}
+{% else %}
+  {% if is_searching %}
+    <h2>{% blocktrans %}Sorry, no transcript files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
+
+    {% search_other %}
+  {% else %}
+    {% url 'cast-transcript:add' as casttranscript_add_transcript_url %}
+    {% if current_collection %}
+      <p>{% blocktrans %}You haven't uploaded any transcripts in this collection. You can upload <a href="{{ casttranscript_add_transcript_url }}">transcript</a> files.{% endblocktrans %}</p>
+    {% else %}
+      <p>{% blocktrans %}You haven't uploaded any transcripts. You can upload <a href="{{ casttranscript_add_transcript_url }}">transcript</a> files.{% endblocktrans %}</p>
+    {% endif %}
+  {% endif %}
+{% endif %}

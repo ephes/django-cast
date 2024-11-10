@@ -16,5 +16,6 @@ Features
 .. include:: gallery.rst
 .. include:: video.rst
 .. include:: audio.rst
+.. include:: transcript.rst
 .. include:: themes.rst
 .. include:: management-commands.rst

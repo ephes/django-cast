@@ -11,6 +11,7 @@ from .theme import (
     get_template_base_dir,
     get_template_base_dir_choices,
 )
+from .transcript import Transcript
 from .video import Video, get_video_dimensions
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "Episode",
     "sync_media_ids",
     "SpamFilter",
+    "Transcript",
     "Video",
     "get_video_dimensions",
     "Podcast",

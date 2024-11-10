@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Literal, Union
 
@@ -34,10 +35,11 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     chapters = serializers.ListField()
     duration = serializers.CharField(source="duration_str")
     link = serializers.URLField(source="episode_url")
+    transcripts = serializers.SerializerMethodField()
 
     class Meta:
         model = Audio
-        fields = ("version", "show", "title", "subtitle", "audio", "duration", "chapters", "link")
+        fields = ("version", "show", "title", "subtitle", "audio", "duration", "chapters", "link", "transcripts")
 
     def get_show(self, _instance: Audio) -> dict:
         post = self.context.get("post")  # Get the Post object from the context
@@ -61,6 +63,21 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     @staticmethod
     def get_version(_instance: Audio) -> int:
         return 5
+
+    @staticmethod
+    def get_transcripts(instance: Audio) -> list[dict]:
+        if not hasattr(instance, "transcript"):
+            return []
+        transcript = instance.transcript
+        if transcript.podlove is None:
+            return []
+        # Open the file and load its contents as JSON
+        with transcript.podlove.open("r") as file:
+            try:
+                data = json.load(file)  # assumes the file content is JSON
+                return data["transcripts"]
+            except json.JSONDecodeError:
+                return []
 
 
 class SimpleBlogSerializer(serializers.HyperlinkedModelSerializer):

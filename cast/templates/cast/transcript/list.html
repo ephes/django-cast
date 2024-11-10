@@ -1,0 +1,36 @@
+{% load i18n %}
+<table class="listing">
+  <col />
+  <col  />
+  <col width="16%" />
+  <thead>
+    <tr class="table-headers">
+      <th>
+        {% if not is_searching %}
+          <a href="{% url 'cast-transcript:index' %}{% if not ordering == "pk" %}?ordering=pk{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "pk" %}teal{% endif %}">
+            {% trans "ID" %}
+          </a>
+        {% else %}
+          {% trans "ID" %}
+        {% endif %}
+      </th>
+      <th>{% trans "Audio title" %}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for transcript in transcripts %}
+      <tr>
+        <td class="ID">
+          {% if choosing %}
+            <h2><a href="{% url 'cast-transcript:chosen' transcript.id %}" class="media-choice">{{ transcript.id }}</a></h2>
+          {% else %}
+            <h2><a href="{% url 'cast-transcript:edit' transcript.id %}">{{ transcript.id }}</a></h2>
+          {% endif %}
+        </td>
+        <td>
+          {{ transcript.audio.title }}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

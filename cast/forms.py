@@ -1,5 +1,5 @@
 from datetime import datetime, time
-from typing import Optional, cast
+from typing import cast
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -11,7 +11,7 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.models import Collection
 
-from .models import Audio, ChapterMark, Video, get_template_base_dir_choices
+from .models import Audio, ChapterMark, Transcript, Video, get_template_base_dir_choices
 
 
 class VideoForm(forms.ModelForm):
@@ -101,7 +101,7 @@ def parse_chaptermark_line(line: str) -> ChapterMark:
 
 
 class ChapterMarksField(forms.CharField):
-    def to_python(self, value: Optional[str]) -> list[ChapterMark]:  # type: ignore[override]
+    def to_python(self, value: str | None) -> list[ChapterMark]:  # type: ignore[override]
         if value is None:
             return []
         chaptermarks = []
@@ -164,6 +164,19 @@ class AudioForm(BaseCollectionMemberForm):
         if commit:
             self.save_chaptermarks(audio)
         return audio
+
+
+class TranscriptForm(BaseCollectionMemberForm):
+    permission_policy = FakePermissionPolicy()
+
+    class Meta:
+        model = Transcript
+        fields = list(Transcript.admin_form_fields) + ["collection"]
+        widgets = {
+            "podlove": forms.ClearableFileInput,
+            "vtt": forms.ClearableFileInput,
+            "dote": forms.ClearableFileInput,
+        }
 
 
 class NonEmptySearchForm(SearchForm):

@@ -11,8 +11,8 @@ from wagtail.rich_text.pages import PageLinkHandler
 from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
 
-from .admin_urls import audio, video
-from .models import Audio, Video
+from .admin_urls import audio, transcript, video
+from .models import Audio, Transcript, Video
 
 
 @hooks.register("register_admin_urls")
@@ -20,6 +20,7 @@ def register_admin_urls() -> list:
     return [
         path("audio/", include((audio, "castaudio"), namespace="castaudio")),
         path("media/", include((video, "castvideo"), namespace="castvideo")),
+        path("transcript/", include((transcript, "cast-transcript"), namespace="cast-transcript")),
     ]
 
 
@@ -52,6 +53,25 @@ def register_audio_menu_item() -> AudioMenuItem:
         _("Audio"),
         reverse("castaudio:index"),
         name="audio",
+        classnames="icon icon-media",
+        order=300,
+    )
+
+
+class TranscriptMenuItem(MenuItem):
+    def is_shown(self, request: HttpRequest) -> bool:
+        permission_policy = CollectionOwnershipPermissionPolicy(
+            Transcript, auth_model=Transcript, owner_field_name="user"
+        )
+        return permission_policy.user_has_any_permission(request.user, ["add", "change", "delete"])
+
+
+@hooks.register("register_admin_menu_item")
+def register_transcript_menu_item() -> TranscriptMenuItem:
+    return TranscriptMenuItem(
+        _("Transcript"),
+        reverse("cast-transcript:index"),
+        name="transcript",
         classnames="icon icon-media",
         order=300,
     )

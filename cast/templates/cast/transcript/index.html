@@ -1,0 +1,68 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n %}
+{% block titletag %}Transcripts{% endblock %}
+{% block extra_js %}
+  {{ block.super }}
+  <script>
+    window.headerSearch = {
+      url: "{% url 'cast-transcript:index' %}",
+      termInput: "#id_q",
+      targetOutput: "#media-results"
+    };
+
+    $(function() {
+      $('#collection_chooser_collection_id').change(function() {
+        this.form.submit();
+      })
+    });
+  </script>
+{% endblock %}
+
+{% block content %}
+  {% trans "Transcript" as transcript_str %}
+  <header class="nice-padding">
+    <div class="row">
+      <div class="left">
+        <div class="col">
+          <h1 class="icon icon-media">
+            {{ transcript_str }}
+          </h1>
+        </div>
+        <form class="col search-form" action="{% url 'cast-transcript:index' %}{% if query_parameters %}?{{ query_parameters }}{% endif %}" method="get" novalidate>
+          <ul class="fields">
+            {% for field in search_form %}
+              <li>
+                {% include "wagtailadmin/shared/field.html" %}
+              </li>
+            {% endfor %}
+            <li class="submit" style="display: none"><input type="submit" value="Search" class="button" /></li>
+          </ul>
+        </form>
+      </div>
+      {% if user_can_add %}
+        {% block add_actions %}
+          <div class="right">
+            <div class="col">
+              <div class="addbutton">
+                <a href="{% url 'cast-transcript:add' %}" class="button bicolor button--icon"><span class="icon-wrapper"><svg class="icon icon-plus icon" aria-hidden="true"><use href="#icon-plus"></use></svg></span>{% trans "Add transcript" %}</a>
+              </div>
+            </div>
+          </div>
+        {% endblock %}
+      {% endif %}
+    </div>
+  </header>
+  <div class="nice-padding">
+    {% if collections %}
+      <form class="image-search search-bar" action="{% url 'cast-transcript:index' %}" method="GET" novalidate>
+        <ul class="fields">
+          {% include "wagtailadmin/shared/collection_chooser.html" %}
+        </ul>
+      </form>
+    {% endif %}
+
+    <div id="media-results" class="media">
+      {% include "cast/transcript/results.html" %}
+    </div>
+  </div>
+{% endblock %}

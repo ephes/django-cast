@@ -7,11 +7,14 @@ from . import feeds
 from .views import meta
 from .views.gallery import gallery_modal
 from .views.theme import select_theme
+from .views.transcript import podlove_transcript_json
 
 app_name = "cast"
 urlpatterns: list[Any] = [
     # API
     path("api/", include("cast.api.urls", namespace="api")),
+    # Podlove Web Player JSON transcripts
+    path("transcripts/podlove/<int:pk>/", view=podlove_transcript_json, name="podlove-transcript-json"),
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",

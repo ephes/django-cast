@@ -1,4 +1,8 @@
 0.2.41 (2024-11-11)
 -------------------
 
-we'll see :)
+Started adding transcripts to the audio model. This is a work in progress and
+not yet finished.
+
+- #167 Fixed the styling of the audio player
+- #168 Add transcript model

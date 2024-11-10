@@ -1,0 +1,8 @@
+{% extends "wagtailadmin/widgets/chooser.html" %}
+{% block chooser_class %}media-chooser{% endblock %}
+
+{% block chosen_state_view %}
+  <span class="title">{{ title }}</span>
+{% endblock %}
+
+{% block edit_chosen_item_url %}{{ edit_url }}{% endblock %}
