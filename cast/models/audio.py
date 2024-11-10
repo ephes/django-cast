@@ -75,6 +75,9 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):
     episodes: models.QuerySet["Episode"]  # mypy needs this
     tags = TaggableManager(help_text=None, blank=True, verbose_name=_("tags"))
 
+    class Meta:
+        ordering = ("-created",)
+
     @property
     def uploaded_audio_files(self) -> Iterable[tuple[str, models.FileField]]:
         for name in self.audio_formats:
