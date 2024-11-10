@@ -37,13 +37,13 @@ class PodlovePlayerElement extends HTMLElement {
       .podlove-player-container {
         width: 100%;
         max-width: 936px;
-        height: 300px;
+        min-height: 300px;
         margin: 0 auto;
       }
       @media (max-width: 768px) {
         .podlove-player-container {
           max-width: 366px;
-          height: 500px;
+          min-height: 500px;
         }
       }
       .podlove-player-container iframe {
