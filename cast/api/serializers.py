@@ -75,7 +75,12 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         with transcript.podlove.open("r") as file:
             try:
                 data = json.load(file)  # assumes the file content is JSON
-                return data["transcripts"]
+                try:
+                    transcripts = data["transcripts"]
+                except KeyError:
+                    # maybe DOTe instead of Podlove -> empty list
+                    transcripts = []
+                return transcripts
             except json.JSONDecodeError:
                 return []
 
