@@ -11,21 +11,20 @@ jobs:
       PYTHON: '3.12'
     steps:
     - uses: actions/checkout@main
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+
     - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: 3.12
-        cache: pip
+      run: uv python install
+
     - name: Install ffmpeg
       uses: FedericoCarboni/setup-ffmpeg@v2
       id: setup-ffmpeg
     - name: Generate coverage report
       run: |
-        pip install --upgrade pip
-        pip install flit
-        flit install -s
-        python manage.py migrate
-        pytest --cov=cast --cov-report=xml
+        uv pip install -e .
+        uv run python manage.py migrate
+        uv run python -m pytest --cov=cast --cov-report=xml
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
