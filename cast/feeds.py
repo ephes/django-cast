@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import cast
 
 from django.contrib.syndication.views import Feed
 from django.db.models import Model, QuerySet
@@ -7,6 +8,7 @@ from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 from django.utils.safestring import SafeText, mark_safe
+from wagtail.images.models import Image
 
 from cast import appsettings
 
@@ -121,7 +123,7 @@ class ITunesElements:
             return
 
         haqe = handler.addQuickElement
-        itunes_artwork_url = podcast.itunes_artwork.original.url
+        itunes_artwork_url = cast(Image, podcast.itunes_artwork).original.url
         handler.addQuickElement("itunes:image", attrs={"href": itunes_artwork_url})
         handler.startElement("image", {})
         haqe("url", itunes_artwork_url)

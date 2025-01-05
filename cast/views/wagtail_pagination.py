@@ -1,11 +1,9 @@
-from typing import Union
-
 from django.core.paginator import Page, Paginator
 from django.db.models import QuerySet
 from django.http import HttpRequest
 
 from ..appsettings import MENU_ITEM_PAGINATION
-from ..models import Audio, Video
+from ..models import Audio, Transcript, Video
 
 DEFAULT_PAGE_KEY = "p"
 
@@ -14,7 +12,7 @@ pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
 
 def paginate(
     request: HttpRequest,
-    items: Union[QuerySet[Audio], QuerySet[Video]],
+    items: QuerySet[Audio] | QuerySet[Video] | QuerySet[Transcript],
     page_key: str = DEFAULT_PAGE_KEY,
     per_page: int = MENU_ITEM_PAGINATION,
 ) -> tuple[Paginator, Page]:

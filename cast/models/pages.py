@@ -142,17 +142,17 @@ class HasPostDetails(Protocol):
 
 
 class Post(Page):
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
-    visible_date = models.DateTimeField(
+    uuid: models.UUIDField = models.UUIDField(default=uuid.uuid4, editable=False)
+    visible_date: models.DateTimeField = models.DateTimeField(
         default=timezone.now,
         help_text=_("The visible date of the post which is used for sorting."),
         db_index=True,
     )
-    comments_enabled = models.BooleanField(
+    comments_enabled: models.BooleanField = models.BooleanField(
         default=True,
         help_text=_("Whether comments are enabled for this post."),
     )
-    cover_image = models.ForeignKey(
+    cover_image: models.ForeignKey[Image | None] = models.ForeignKey(
         Image,
         help_text=_("An optional cover image."),
         null=True,
@@ -160,7 +160,7 @@ class Post(Page):
         on_delete=models.SET_NULL,
         related_name="+",
     )
-    cover_alt_text = models.CharField(max_length=255, blank=True, default="")
+    cover_alt_text: models.CharField = models.CharField(max_length=255, blank=True, default="")
 
     images: models.ManyToManyField = models.ManyToManyField(Image, blank=True)  # FIXME mypy are you ok?
     videos: models.ManyToManyField = models.ManyToManyField("cast.Video", blank=True)
@@ -620,7 +620,7 @@ class CustomEpisodeForm(WagtailAdminPageForm):
 class Episode(Post):
     """A podcast episode is just a Post with some additional fields."""
 
-    podcast_audio = models.ForeignKey(
+    podcast_audio: models.ForeignKey = models.ForeignKey(
         "cast.Audio",
         null=True,
         blank=True,
@@ -630,7 +630,7 @@ class Episode(Post):
             "The audio file for this episode -if this is not set, the episode will not be included in the feed."
         ),
     )
-    keywords = models.CharField(
+    keywords: models.CharField = models.CharField(
         max_length=255,
         blank=True,
         default="",
@@ -640,12 +640,12 @@ class Episode(Post):
         ),
     )
     EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
-    explicit = models.PositiveSmallIntegerField(
+    explicit: models.PositiveSmallIntegerField = models.PositiveSmallIntegerField(
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
         default=1,
     )
-    block = models.BooleanField(
+    block: models.BooleanField = models.BooleanField(
         default=False,
         help_text=_(
             "Check to block this episode from iTunes because <br />its "
@@ -724,7 +724,9 @@ class Episode(Post):
     def get_enclosure_size(self, audio_format: str) -> int:
         if self.podcast_audio is None:
             return 0
-        return self.podcast_audio.get_file_size(audio_format)
+        from .audio import Audio
+
+        return cast(Audio, self.podcast_audio).get_file_size(audio_format)
 
 
 class HomePage(Page):
@@ -737,7 +739,7 @@ class HomePage(Page):
         ],
         use_json_field=True,
     )
-    alias_for_page = models.ForeignKey(
+    alias_for_page: models.ForeignKey = models.ForeignKey(
         Page,
         related_name="aliases_homepage",
         null=True,
@@ -755,5 +757,5 @@ class HomePage(Page):
 
     def serve(self, request, *args, **kwargs) -> HttpResponse:
         if self.alias_for_page is not None:
-            return redirect(self.alias_for_page.url, permanent=False)
+            return redirect(cast(Page, self.alias_for_page).url, permanent=False)
         return super().serve(request, *args, **kwargs)

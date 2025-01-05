@@ -27,12 +27,12 @@ def index(request: HttpRequest) -> HttpResponse:
         form = NonEmptySearchForm(request.GET, placeholder=_("Search transcript files"))
         if form.is_valid():
             query_string = form.cleaned_data["q"]
-            transcripts = transcripts.search(query_string)
+            transcripts = transcripts.filter(audio__title__icontains=query_string)
     else:
         form = NonEmptySearchForm(placeholder=_("Search transcripts"))
 
     # Pagination
-    paginator, transcripts = paginate(request, transcripts, per_page=MENU_ITEM_PAGINATION)
+    paginator, transcript_items = paginate(request, transcripts, per_page=MENU_ITEM_PAGINATION)
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -40,7 +40,7 @@ def index(request: HttpRequest) -> HttpResponse:
             request,
             "cast/transcript/results.html",
             {
-                "transcripts": transcripts,
+                "transcripts": transcript_items,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
             },
@@ -50,7 +50,7 @@ def index(request: HttpRequest) -> HttpResponse:
             request,
             "cast/transcript/index.html",
             {
-                "transcripts": transcripts,
+                "transcripts": transcript_items,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
                 "search_form": form,
@@ -146,18 +146,18 @@ def chooser(request: HttpRequest) -> HttpResponse:
         if search_form.is_valid():
             q = search_form.cleaned_data["q"]
 
-            transcripts = transcripts.search(q)
+            transcripts = transcripts.filter(audio__title__icontains=q)
             is_searching = True
         else:
             q = None
             is_searching = False
 
-        paginator, transcripts = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
+        paginator, transcript_items = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
         return render(
             request,
             "cast/transcript/chooser_results.html",
             {
-                "transcripts": transcripts,
+                "transcripts": transcript_items,
                 "query_string": q,
                 "is_searching": is_searching,
                 "pagination_template": pagination_template,
@@ -165,14 +165,14 @@ def chooser(request: HttpRequest) -> HttpResponse:
         )
     else:
         search_form = NonEmptySearchForm()
-        paginator, transcripts = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
+        paginator, transcript_items = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
 
     return render_modal_workflow(
         request,
         "cast/transcript/chooser_chooser.html",
         None,
         {
-            "transcripts": transcripts,
+            "transcripts": transcript_items,
             "uploadform": upload_form,
             "searchform": search_form,
             "is_searching": False,
@@ -236,10 +236,10 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
 
     search_form = NonEmptySearchForm()
 
-    paginator, transcripts = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
+    paginator, transcript_items = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
 
     context = {
-        "transcripts": transcripts,
+        "transcripts": transcript_items,
         "searchform": search_form,
         # "collections": collections,
         "uploadform": TranscriptForm(),

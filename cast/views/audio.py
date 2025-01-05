@@ -33,7 +33,7 @@ def index(request: HttpRequest) -> HttpResponse:
         form = NonEmptySearchForm(placeholder=_("Search media"))
 
     # Pagination
-    paginator, audios = paginate(request, audios, per_page=MENU_ITEM_PAGINATION)
+    paginator, audio_items = paginate(request, audios, per_page=MENU_ITEM_PAGINATION)
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -42,7 +42,7 @@ def index(request: HttpRequest) -> HttpResponse:
             "cast/audio/results.html",
             {
                 "ordering": ordering,
-                "audios": audios,
+                "audios": audio_items,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
             },
@@ -53,7 +53,7 @@ def index(request: HttpRequest) -> HttpResponse:
             "cast/audio/index.html",
             {
                 "ordering": ordering,
-                "audios": audios,
+                "audios": audio_items,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
                 "search_form": form,
@@ -190,12 +190,12 @@ def chooser(request: HttpRequest) -> HttpResponse:
             q = None
             is_searching = False
 
-        paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
+        paginator, audio_items = paginate(request, audios, per_page=CHOOSER_PAGINATION)
         return render(
             request,
             "cast/audio/chooser_results.html",
             {
-                "audios": audios,
+                "audios": audio_items,
                 "query_string": q,
                 "is_searching": is_searching,
                 "pagination_template": pagination_template,
@@ -203,14 +203,14 @@ def chooser(request: HttpRequest) -> HttpResponse:
         )
     else:
         search_form = NonEmptySearchForm()
-        paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
+        paginator, audio_items = paginate(request, audios, per_page=CHOOSER_PAGINATION)
 
     return render_modal_workflow(
         request,
         "cast/audio/chooser_chooser.html",
         None,
         {
-            "audios": audios,
+            "audios": audio_items,
             "uploadform": upload_form,
             "searchform": search_form,
             "is_searching": False,
@@ -276,10 +276,10 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
 
     search_form = NonEmptySearchForm()
 
-    paginator, audios = paginate(request, audios, per_page=CHOOSER_PAGINATION)
+    paginator, audio_items = paginate(request, audios, per_page=CHOOSER_PAGINATION)
 
     context = {
-        "audios": audios,
+        "audios": audio_items,
         "searchform": search_form,
         # "collections": collections,
         "uploadform": AudioForm(),

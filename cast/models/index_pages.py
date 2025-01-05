@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import django.forms.forms
 from django.core.paginator import InvalidPage
@@ -40,21 +40,21 @@ class Blog(Page):
     This is the index page for a blog. It contains a list of posts.
     """
 
-    author = models.CharField(
+    author: models.CharField = models.CharField(
         max_length=255,
         default=None,
         null=True,
         blank=True,
         help_text=_("Freeform text that will be used in the feed."),
     )
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False)
-    email = models.EmailField(null=True, default=None, blank=True)
-    comments_enabled = models.BooleanField(
+    uuid: models.UUIDField = models.UUIDField(default=uuid.uuid4, editable=False)
+    email: models.EmailField = models.EmailField(null=True, default=None, blank=True)
+    comments_enabled: models.BooleanField = models.BooleanField(
         _("comments_enabled"),
         default=True,
         help_text=_("Whether comments are enabled for this blog." ""),
     )
-    cover_image = models.ForeignKey(
+    cover_image: models.ForeignKey = models.ForeignKey(
         Image,
         help_text=_("An optional cover image."),
         null=True,
@@ -62,15 +62,15 @@ class Blog(Page):
         on_delete=models.SET_NULL,
         related_name="+",
     )
-    cover_alt_text = models.CharField(max_length=255, blank=True, default="")
-    noindex = models.BooleanField(
+    cover_alt_text: models.CharField = models.CharField(max_length=255, blank=True, default="")
+    noindex: models.BooleanField = models.BooleanField(
         "noindex",
         default=False,
         help_text=_(
             "Whether to add a noindex meta tag to this page and all subpages excluding them from search engines."
         ),
     )
-    template_base_dir = models.CharField(
+    template_base_dir: models.CharField = models.CharField(
         choices=get_template_base_dir_choices(),
         max_length=128,
         default=None,
@@ -83,7 +83,7 @@ class Blog(Page):
     )
 
     # wagtail
-    subtitle = models.CharField(
+    subtitle: models.CharField = models.CharField(
         verbose_name=_("subtitle"),
         max_length=255,
         default="",
@@ -275,7 +275,7 @@ class Blog(Page):
     def get_cover_image_context(self) -> dict[str, str]:
         context = {"cover_image_url": "", "cover_alt_text": ""}
         if self.cover_image is not None:
-            context["cover_image_url"] = self.cover_image.file.url
+            context["cover_image_url"] = cast(Image, self.cover_image).file.url
             context["cover_alt_text"] = self.cover_alt_text
         return context
 
@@ -324,10 +324,10 @@ class Podcast(Blog):
     """A podcast is a blog with some extra fields for podcasting."""
 
     # atm it's only used for podcast image
-    itunes_artwork = models.ForeignKey(
+    itunes_artwork: models.ForeignKey = models.ForeignKey(
         ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL, related_name="podcasts"
     )
-    itunes_categories = models.CharField(
+    itunes_categories: models.CharField = models.CharField(
         _("itunes_categories"),
         max_length=512,
         blank=True,
@@ -338,7 +338,7 @@ class Podcast(Blog):
             "https://validator.w3.org/feed/docs/error/InvalidItunesCategory.html"
         ),
     )
-    keywords = models.CharField(
+    keywords: models.CharField = models.CharField(
         _("keywords"),
         max_length=255,
         blank=True,
@@ -349,7 +349,7 @@ class Podcast(Blog):
         ),
     )
     EXPLICIT_CHOICES = ((1, _("yes")), (2, _("no")), (3, _("clean")))
-    explicit = models.PositiveSmallIntegerField(
+    explicit: models.PositiveSmallIntegerField = models.PositiveSmallIntegerField(
         _("explicit"),
         default=1,
         choices=EXPLICIT_CHOICES,

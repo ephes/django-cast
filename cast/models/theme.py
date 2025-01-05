@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Union
 
 from django.conf import settings
 from django.db import models
@@ -109,7 +108,7 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
     return choices
 
 
-def get_template_base_dir(request: HtmxHttpRequest, pre_selected: Union[str, None]) -> str:
+def get_template_base_dir(request: HtmxHttpRequest, pre_selected: str | None) -> str:
     if hasattr(request, "session") and (template_base_dir := request.session.get("template_base_dir")) is not None:
         return template_base_dir
     if pre_selected is not None:
@@ -126,7 +125,7 @@ class TemplateBaseDirectory(BaseSiteSetting):
     the wagtail admin.
     """
 
-    name = models.CharField(
+    name: models.CharField = models.CharField(
         choices=get_template_base_dir_choices(),
         max_length=128,
         default=TemplateName.BOOTSTRAP4,

@@ -33,7 +33,7 @@ def index(request: HttpRequest) -> HttpResponse:
         form = NonEmptySearchForm(placeholder=_("Search media"))
 
     # Pagination
-    paginator, videos = paginate(request, videos, per_page=MENU_ITEM_PAGINATION)
+    paginator, video_items = paginate(request, videos, per_page=MENU_ITEM_PAGINATION)
 
     # Create response
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -42,7 +42,7 @@ def index(request: HttpRequest) -> HttpResponse:
             "cast/video/results.html",
             {
                 "ordering": ordering,
-                "videos": videos,
+                "videos": video_items,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
             },
@@ -53,7 +53,7 @@ def index(request: HttpRequest) -> HttpResponse:
             "cast/video/index.html",
             {
                 "ordering": ordering,
-                "videos": videos,
+                "videos": video_items,
                 "query_string": query_string,
                 "is_searching": bool(query_string),
                 "search_form": form,
@@ -183,12 +183,12 @@ def chooser(request: HttpRequest) -> HttpResponse:
             q = None
             is_searching = False
 
-        paginator, videos = paginate(request, videos, per_page=CHOOSER_PAGINATION)
+        paginator, video_items = paginate(request, videos, per_page=CHOOSER_PAGINATION)
         return render(
             request,
             "cast/video/chooser_results.html",
             {
-                "videos": videos,
+                "videos": video_items,
                 "query_string": q,
                 "is_searching": is_searching,
                 "pagination_template": pagination_template,
@@ -196,14 +196,14 @@ def chooser(request: HttpRequest) -> HttpResponse:
         )
     else:
         search_form = NonEmptySearchForm()
-        paginator, videos = paginate(request, videos, per_page=CHOOSER_PAGINATION)
+        paginator, video_items = paginate(request, videos, per_page=CHOOSER_PAGINATION)
 
     return render_modal_workflow(
         request,
         "cast/video/chooser_chooser.html",
         None,
         {
-            "videos": videos,
+            "videos": video_items,
             "searchform": search_form,
             "uploadform": upload_form,
             "is_searching": False,
@@ -271,10 +271,10 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
 
     search_form = NonEmptySearchForm()
 
-    paginator, videos = paginate(request, videos, per_page=10)
+    paginator, video_items = paginate(request, videos, per_page=10)
 
     context = {
-        "videos": videos,
+        "videos": video_items,
         "searchform": search_form,
         # "collections": collections,
         "uploadform": VideoForm(),
