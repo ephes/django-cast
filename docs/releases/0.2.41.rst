@@ -1,10 +1,12 @@
-0.2.41 (2024-11-11)
+0.2.41 (2025-01-05)
 -------------------
 
 Started adding transcripts to the audio model. This is a work in progress and
-not yet finished.
+not yet finished. Switched from `flit` to `uv` because I started to use `uv`
+for all new projects and now gradually switch old ones over.
 
 - #167 Fixed the styling of the audio player
 - #168 Add transcript model
 - Better icons for audio, video and transcript MenuItems
 - Order the audio models by default by -created for forms with audio foreign key like TranscriptForm
+- #172 Switch from flit to uv

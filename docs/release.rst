@@ -9,6 +9,7 @@ Change the version number in following files:
 
 - cast/__init__.py
 - docs/conf.py
+- pyproject.toml
 - README.md
 
 Javascript
@@ -57,4 +58,5 @@ Create the package:
 
 .. code-block:: bash
 
-   $ flit publish
+   $ uv build
+   $ uv publish --token your-token

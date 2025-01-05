@@ -31,7 +31,7 @@ Steps
 #. Migrate the database structure
 	#. Add a new model inheriting from the old one and prefix the attributes you want to keep with `new_`
 	#. Create a new migration
-	#. Use `flit install -s` to install the `django-cast <https://github.com/ephes/django-cast>`_. package in the venv of your application
+	#. Use `uv pip install -e .` to install the `django-cast <https://github.com/ephes/django-cast>`_. package in the venv of your application
 	#. Migrate
 #. Migrate the database data manually
 	#. Use a jupyter notebook to copy the old models over to the new model [example]_
