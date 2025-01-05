@@ -27,12 +27,6 @@ Build the Javascript (image-gallery component):
    $ rm ../../cast/static/cast/vite/*
    $ cp * ../../cast/static/cast/vite/
 
-Create the Release on GitHub
-----------------------------
-
-1. Create a new tag on GitHub
-2. Copy the release notes from the previous version and change them accordingly
-3. Mark as pre-release
 
 Test Python Versions and Merge develop into main
 ------------------------------------------------
@@ -50,6 +44,13 @@ Merge the develop branch into the main branch:
    $ git checkout main
    $ git pull && git merge develop
    $ git push
+
+Create the Release on GitHub
+----------------------------
+
+1. Create a new tag on GitHub
+2. Copy the release notes from the previous version and change them accordingly
+3. Mark as pre-release
 
 Build the Release Wheels and Publish to PyPI
 --------------------------------------------
