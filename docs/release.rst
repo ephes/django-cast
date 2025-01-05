@@ -14,6 +14,13 @@ Change the version number in following files:
 
 Javascript
 ----------
+Update dependencies:
+
+.. code-block:: shell
+
+   $ cd javascript
+   $ npm outdated
+   $ npm update
 
 Build the Javascript (image-gallery component):
 

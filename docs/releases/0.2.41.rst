@@ -12,3 +12,4 @@ for all new projects and now gradually switch old ones over.
 - #172 Switch from flit to uv
 - #173 Mypy fixes
 - #161 Release process order
+- Updated Javascript dependencies

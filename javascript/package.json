@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "vite": "^5"
+    "vite": "^6"
   },
   "scripts": {
     "dev": "vite",
