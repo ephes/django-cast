@@ -83,8 +83,12 @@ db.sqlite3
 tests/test_database.sqlite3
 tests/test_database.sqlite3-journal
 
-# virtualfish
+# virtualenv
 .venv
+
+# uv
+
+uv.lock
 
 # example site media root
 example/media
