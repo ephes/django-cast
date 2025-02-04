@@ -82,6 +82,7 @@ dev-dependencies = [
     "pytest-django",
     "pytest-mock",
     "pytest-randomly",
+    "pytz",
     "typer",
     "types-python-slugify",
     "types-requests",
