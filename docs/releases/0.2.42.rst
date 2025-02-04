@@ -1,0 +1,6 @@
+0.2.42 (2025-02-04)
+-------------------
+
+Wagtail 6.4 compatibility.
+
+- #175 Wagtail 6.4 compatibility
