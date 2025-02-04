@@ -1,6 +1,16 @@
 0.2.42 (2025-02-04)
 -------------------
 
-Wagtail 6.4 compatibility.
+Wagtail 6.4 compatibility. You might to have to add something like that to your
+Django settings to make sure that the fulltext search works:
+
+.. code-block:: python
+
+    TASKS = {
+        "default": {
+            "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+            "ENQUEUE_ON_COMMIT": False,
+        }
+    }
 
 - #175 Wagtail 6.4 compatibility
