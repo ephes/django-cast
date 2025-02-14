@@ -23,7 +23,7 @@ jobs:
     - name: Generate coverage report
       run: |
         uv venv
-        uv pip install -e .
+        uv pip install -e .[dev]
         uv run python manage.py migrate
         uv run python -m pytest --cov=cast --cov-report=xml
     - name: Upload coverage to Codecov
