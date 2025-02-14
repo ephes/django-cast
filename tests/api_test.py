@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 
 import pytest
@@ -205,6 +206,52 @@ class TestPodcastAudio:
         assert response.status_code == 200
         config = response.json()
         assert "activeTab" in config
+
+    def test_audio_podlove_serializer_get_transcripts(self, mocker):
+        """Test whether the audio podlove serializer returns the correct transcripts."""
+        # Given an episode without transcripts
+        episode = mocker.MagicMock()
+        episode.podcast_audio = None
+        serializer = AudioPodloveSerializer(context={"post": episode})
+        # When we call the get_transcripts method, then we expect an empty list
+        assert serializer.get_transcripts(episode.podcast_audio) == []
+
+        # Given an episode with an audio with a transcript without a podlove file
+        # When we call the get_transcripts method, then we expect an empty list
+        audio = mocker.MagicMock()
+        audio.transcript = mocker.MagicMock()
+        audio.transcript.podlove = None
+        assert serializer.get_transcripts(audio) == []
+
+        # Given an episode with an audio with a transcript with a podlove file containing valid JSON
+        mock_file = mocker.MagicMock()
+        mock_file.__enter__.return_value = mock_file
+        mock_file.read.return_value = json.dumps({"transcripts": [{"text": "Hello"}]})
+
+        mock_podlove = mocker.MagicMock()
+        mock_podlove.open.return_value = mock_file
+
+        transcript = mocker.MagicMock()
+        transcript.podlove = mock_podlove
+
+        audio = mocker.MagicMock()
+        audio.transcript = transcript
+
+        # When we call the get_transcripts method, then we expect the transcripts to be returned
+        result = serializer.get_transcripts(audio)
+        assert result == [{"text": "Hello"}]
+
+        # Given an invalid key for the transcripts
+        mock_file.read.return_value = json.dumps({"invalid_key": [{"text": "Hello"}]})
+
+        # When we call the get_transcripts method, then we expect an empty list
+        assert serializer.get_transcripts(audio) == []
+
+        # Given invalid JSON in the podlove file
+        mock_file.read.return_value = "{ invalid json }"
+
+        # When we call the get_transcripts method, then we expect an empty list
+        assert serializer.get_transcripts(audio) == []
 
 
 class TestCommentTrainingData:
