@@ -14,3 +14,5 @@ Django settings to make sure that the fulltext search works:
     }
 
 - #175 Wagtail 6.4 compatibility
+- #176 Fix tox.ini use of uv
+- #176 Fix pyproject.toml dev dependencies

@@ -62,9 +62,8 @@ packages = ["cast"]
 [tool.hatch.build.targets.wheel]
 packages = ["cast"]
 
-
-[tool.uv]
-dev-dependencies = [
+[project.optional-dependencies]
+dev = [
     "black",
     "django-allauth",  # for mypy
     "django-environ",
