@@ -1,0 +1,6 @@
+0.2.43 (2025-02-22)
+-------------------
+
+Probably more transcript stuff.
+
+- #177 More transcript stuff
