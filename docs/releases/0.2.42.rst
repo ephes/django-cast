@@ -17,3 +17,4 @@ Django settings to make sure that the fulltext search works:
 - #176 Fix tox.ini use of uv
 - #176 Fix pyproject.toml dev dependencies
 - #176 Fix github actions
+- #168 Tests for transcripts -> coverage back at 100%

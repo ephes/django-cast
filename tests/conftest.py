@@ -18,6 +18,7 @@ from wagtail.images.models import Image
 from wagtail.models import Site
 
 from cast import appsettings
+from cast.devdata import create_transcript
 from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
 
 from .factories import (
@@ -145,6 +146,26 @@ def m4a_audio(fixture_dir):
     return simple_m4a
 
 
+@pytest.fixture()
+def podlove_transcript():
+    podlove = {
+        "transcripts": [
+            {
+                "start": "00:00:00.620",
+                "start_ms": 620,
+                "end": "00:00:05.160",
+                "end_ms": 5160,
+                "speaker": "",
+                "voice": "",
+                "text": "Ja, hallo liebe Hörerinnen und Hörer. Willkommen beim Python-Podcast in der 5ten Episode.",
+            }
+        ]
+    }
+    return SimpleUploadedFile(
+        name="pp_05.podlove.json", content=json.dumps(podlove).encode("utf-8"), content_type="application/json"
+    )
+
+
 # Models
 @pytest.fixture()
 def user():
@@ -207,6 +228,11 @@ def chaptermarks(audio):
     for start, title, href, image in cms:
         results.append(ChapterMark.objects.create(audio=audio, start=start, title=title))
     return results
+
+
+@pytest.fixture()
+def transcript(audio):
+    return create_transcript(audio=audio)
 
 
 @pytest.fixture()

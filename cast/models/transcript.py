@@ -30,3 +30,6 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     )
 
     admin_form_fields: tuple[str, ...] = ("audio", "podlove", "vtt", "dote")
+
+    class Meta:
+        ordering = ("-id",)

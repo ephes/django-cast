@@ -5,11 +5,12 @@ from typing import Any
 from uuid import uuid4
 
 from django.contrib.auth.models import Group, User
+from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from wagtail.images.models import Image
 from wagtail.models import Site
 
-from cast.models import Audio, Blog, Gallery, Post, Video
+from cast.models import Audio, Blog, Gallery, Post, Transcript, Video
 
 
 class _Auto:
@@ -50,6 +51,18 @@ def create_image() -> Image:
     image = Image(file=simple_png)
     image.save()
     return image
+
+
+def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto) -> Transcript:
+    if not audio:
+        audio = create_audio()
+    transcript = Transcript.objects.create(audio=audio)
+    if podlove:
+        podlove_content = json.dumps(podlove, indent=2)
+        transcript.podlove.save("podlove.json", ContentFile(podlove_content))
+        transcript.save()
+
+    return transcript
 
 
 def create_gallery(*, images: list[Image] = Auto) -> Gallery:

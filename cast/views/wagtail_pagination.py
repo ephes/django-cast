@@ -16,6 +16,8 @@ def paginate(
     page_key: str = DEFAULT_PAGE_KEY,
     per_page: int = MENU_ITEM_PAGINATION,
 ) -> tuple[Paginator, Page]:
+    # if not items.query.order_by:
+    #     items = items.order_by("id")
     paginator: Paginator = Paginator(items, per_page)
     page = paginator.get_page(request.GET.get(page_key))
     return paginator, page
