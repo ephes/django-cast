@@ -12,7 +12,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6",
     "@vue/test-utils": "^2",
-    "jsdom": "^25",
-    "vitest": "^2"
+    "jsdom": "^26",
+    "vitest": "^3"
   }
 }
