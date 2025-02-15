@@ -1,4 +1,4 @@
-0.2.42 (2025-02-04)
+0.2.42 (2025-02-15)
 -------------------
 
 Wagtail 6.4 compatibility. You might to have to add something like that to your
