@@ -3,4 +3,5 @@
 
 Probably more transcript stuff.
 
+- Tested with Django 5.2 pre-release -> all tests worked
 - #177 More transcript stuff

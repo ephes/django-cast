@@ -18,7 +18,12 @@ except ImportError:
 
 
 def get_comparable_django_version():
-    return int("".join(django.get_version().split(".")[:2]))
+    django_version = "".join(django.get_version().split(".")[:2])
+    try:
+        return int(django_version)
+    except ValueError:
+        # pre-release probably
+        return int(django_version.split("a")[0])
 
 
 pytestmark = pytest.mark.skipif(
