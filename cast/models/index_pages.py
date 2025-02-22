@@ -398,5 +398,5 @@ class Podcast(Blog):
 
     def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
-        context["podcast"] = self  # conveniece
+        context["podcast"] = self  # convenience
         return context
