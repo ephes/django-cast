@@ -28,8 +28,9 @@ logger = logging.getLogger(__name__)
 
 class RepositoryMixin:
     is_podcast: bool = False
+    request: HtmxHttpRequest
 
-    def __init__(self, repository: FeedRepository | None = None):
+    def __init__(self, repository: FeedRepository | None = None) -> None:
         super().__init__()
         self.repository = repository
 
@@ -61,22 +62,22 @@ class RepositoryMixin:
         self.repository.used = True
         return queryset
 
-    def get_feed(self, obj, request):
+    def get_feed(self, obj, request) -> SyndicationFeed:
         # If we want to cache the site to avoid one additional db query, we should do it here
         blog = obj
         self.repository = repository = self.get_repository(self.request, blog)
         # now that we have the repository, we can set the template base dir
         # to avoid db queries in context_processors
         self.request.cast_site_template_base_dir = repository.template_base_dir
-        return super().get_feed(obj, request)
+        return super().get_feed(obj, request)  # type: ignore
 
 
 class LatestEntriesFeed(RepositoryMixin, Feed):
     object: Blog
-    request: HttpRequest
+    request: HtmxHttpRequest
 
     def get_object(self, request: HttpRequest, *args, **kwargs) -> Blog:
-        self.request = request  # need request for item.serve(request) later on
+        self.request = cast(HtmxHttpRequest, request)  # need request for item.serve(request) later on
         slug = kwargs["slug"]
         blog = None
         if self.repository is not None:
@@ -117,7 +118,7 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
     def item_link(self, item) -> SafeText:
         return item.get_full_url()
 
-    def get_context_data(self, **kwargs):
+    def get_context_data(self, **kwargs) -> dict:
         context = super().get_context_data(**kwargs)
         return context
 
@@ -137,7 +138,8 @@ class ITunesElements:
         haqe("title", self.feed["title"])
         handler.endElement("image")
 
-    def add_itunes_categories(self, podcast: Podcast, handler) -> None:
+    @staticmethod
+    def add_itunes_categories(podcast: Podcast, handler) -> None:
         itunes_categories = podcast.itunes_categories_parsed
         if len(itunes_categories) == 0:
             return
@@ -147,9 +149,9 @@ class ITunesElements:
                 handler.addQuickElement("itunes:category", attrs={"text": subcategory})
             handler.endElement("itunes:category")
 
-    def add_root_elements(self, handler):
+    def add_root_elements(self, handler) -> None:
         """Add additional elements to the blog object"""
-        super().add_root_elements(handler)
+        super().add_root_elements(handler)  # type: ignore
         haqe = handler.addQuickElement
         blog = self.feed["blog"]
 
@@ -174,9 +176,9 @@ class ITunesElements:
         haqe("generator", generator)
         haqe("docs", "https://blogs.law.harvard.edu/tech/rss")
 
-    def add_item_elements(self, handler, item):
+    def add_item_elements(self, handler, item) -> None:
         """Add additional elements to the post object"""
-        super().add_item_elements(handler, item)
+        super().add_item_elements(handler, item)  # type: ignore
         haqe = handler.addQuickElement
 
         post = item["post"]
@@ -193,7 +195,7 @@ class ITunesElements:
         if post.block:
             haqe("itunes:block", "yes")
 
-    def namespace_attributes(self):
+    def namespace_attributes(self) -> dict:
         namespace_attributes = {}
         namespace_attributes.update({"xmlns:itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"})
         return namespace_attributes
@@ -203,10 +205,10 @@ class PodcastIndexElements:
     feed: dict
     request: HttpRequest
 
-    def add_item_elements(self, handler, item):
+    def add_item_elements(self, handler, item) -> None:
         """Add additional elements to the post object"""
         try:
-            super().add_item_elements(handler, item)
+            super().add_item_elements(handler, item)  # type: ignore
         except AttributeError:
             pass
 
@@ -227,21 +229,21 @@ class PodcastIndexElements:
                 url = self.request.build_absolute_uri(relative_url)
                 haqe("podcast:transcript", attrs={"type": "application/json", "url": url})
 
-    def namespace_attributes(self):
-        namespace_attributes = super().namespace_attributes()
+    def namespace_attributes(self) -> dict:
+        namespace_attributes = super().namespace_attributes()  # type: ignore
         namespace_attributes.update({"xmlns:podcast": "https://podcastindex.org/namespace/1.0/"})
         return namespace_attributes
 
 
 class AtomITunesFeedGenerator(PodcastIndexElements, ITunesElements, Atom1Feed):
-    def root_attributes(self):
+    def root_attributes(self) -> dict:
         atom_attrs = super().root_attributes()
         atom_attrs.update(self.namespace_attributes())
         return atom_attrs
 
 
 class RssITunesFeedGenerator(PodcastIndexElements, ITunesElements, Rss201rev2Feed):
-    def rss_attributes(self):
+    def rss_attributes(self) -> dict:
         rss_attrs = super().rss_attributes()
         rss_attrs.update(self.namespace_attributes())
         return rss_attrs
@@ -255,7 +257,7 @@ class PodcastFeed(RepositoryMixin, Feed):
     audio_format: str
     mime_type: str
     object: Podcast
-    request: HttpRequest
+    request: HtmxHttpRequest
     is_podcast: bool = True
 
     def set_audio_format(self, audio_format: str) -> None:
@@ -266,7 +268,7 @@ class PodcastFeed(RepositoryMixin, Feed):
             self.audio_format = audio_format
             self.mime_type = format_to_mime[audio_format]
 
-    def get_object(self, request, *args, **kwargs):
+    def get_object(self, request, *args, **kwargs) -> Podcast:
         self.set_audio_format(kwargs["audio_format"])
 
         slug = kwargs["slug"]
@@ -277,7 +279,7 @@ class PodcastFeed(RepositoryMixin, Feed):
     def link(self) -> str:
         return self.object.get_full_url()
 
-    def title(self, blog: Blog) -> str:
+    def title(self, _blog: Blog) -> str:
         return self.object.title
 
     def categories(self, blog: Blog) -> tuple[str]:
@@ -289,17 +291,19 @@ class PodcastFeed(RepositoryMixin, Feed):
     def itunes_categories(self, blog: Blog) -> list[str]:
         return blog.itunes_categories.split(",")
 
-    def item_title(self, item):
+    def item_title(self, item) -> str:
         return item.title
 
-    def item_description(self, item):
-        repository = self.repository.get_post_detail_repository(item)
+    def item_description(self, item) -> str:
+        repository = None
+        if self.repository is not None:
+            repository = self.repository.get_post_detail_repository(item)
         item.description = item.get_description(
             request=self.request, render_detail=True, escape_html=False, repository=repository
         )
         return item.description
 
-    def item_link(self, item):
+    def item_link(self, item) -> str:
         return item.get_full_url()
 
     def item_pubdate(self, item) -> datetime:
@@ -331,7 +335,7 @@ class PodcastFeed(RepositoryMixin, Feed):
 
     def get_feed(self, obj, request) -> SyndicationFeed:
         feed = super().get_feed(obj, request)
-        feed.request = request
+        feed.request = request  # type: ignore
         return feed
 
 
@@ -344,7 +348,7 @@ class AtomPodcastFeed(PodcastFeed):
     def author_name(self, blog: Blog) -> str:
         return blog.author_name
 
-    def author_email(self, blog):
+    def author_email(self, blog) -> str:
         return blog.email
 
     def link(self) -> str:

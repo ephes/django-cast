@@ -238,3 +238,15 @@ def test_podcast_feed_categories_and_keywords():
 
     # item_keywords -> item.keywords
     assert podcast_feed.item_keywords(blog) == blog.keywords
+
+
+def test_podcast_feed_item_description_repository_none(mocker):
+    # given a podcast feed with repository None
+    item = mocker.MagicMock()
+    feed = PodcastFeed()
+    feed.repository = None
+    feed.request = mocker.MagicMock()
+    # when calling item_description
+    feed.item_description(item)
+    # then item.get_description should be called, but not self.repository.get_post_detail_repository
+    item.get_description.assert_called_once()
