@@ -8,7 +8,12 @@ from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
 from django.urls.base import reverse
-from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
+from django.utils.feedgenerator import (
+    Atom1Feed,
+    Rss201rev2Feed,
+    SyndicationFeed,
+    rfc2822_date,
+)
 from django.utils.safestring import SafeText, mark_safe
 from wagtail.images.models import Image
 
@@ -196,6 +201,7 @@ class ITunesElements:
 
 class PodcastIndexElements:
     feed: dict
+    request: HttpRequest
 
     def add_item_elements(self, handler, item):
         """Add additional elements to the post object"""
@@ -213,10 +219,12 @@ class PodcastIndexElements:
             transcript = None
         if transcript is not None:
             if transcript.vtt is not None:
-                url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
+                relative_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
+                url = self.request.build_absolute_uri(relative_url)
                 haqe("podcast:transcript", attrs={"type": "text/vtt", "url": url})
             if transcript.podlove is not None:
-                url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.pk})
+                relative_url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.pk})
+                url = self.request.build_absolute_uri(relative_url)
                 haqe("podcast:transcript", attrs={"type": "application/json", "url": url})
 
     def namespace_attributes(self):
@@ -318,8 +326,13 @@ class PodcastFeed(RepositoryMixin, Feed):
     def feed_extra_kwargs(self, obj) -> dict:
         return {"blog": self.object}
 
-    def item_extra_kwargs(self, item):
+    def item_extra_kwargs(self, item) -> dict:
         return {"blog": self.object, "post": item}
+
+    def get_feed(self, obj, request) -> SyndicationFeed:
+        feed = super().get_feed(obj, request)
+        feed.request = request
+        return feed
 
 
 class AtomPodcastFeed(PodcastFeed):
