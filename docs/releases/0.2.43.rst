@@ -5,3 +5,4 @@ Include transcript urls in the podcast feed.
 
 - Tested with Django 5.2 pre-release -> all tests worked
 - #168 include transcript urls in the podcast feed
+- #168 FIX: do not render podlove-player in the feed
