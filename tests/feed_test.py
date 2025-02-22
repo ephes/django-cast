@@ -13,6 +13,7 @@ from cast.feeds import (
     ITunesElements,
     LatestEntriesFeed,
     PodcastFeed,
+    PodcastIndexElements,
 )
 from cast.models import Post
 
@@ -184,10 +185,33 @@ def test_itunes_elements_add_item_elements_post_block(mocker):
     mocker.patch("cast.feeds.Atom1Feed.add_item_elements")
     post = mocker.MagicMock()
     post.block = True
+    post.podcast_audio.transcript = None  # no transcript
     handler = mocker.MagicMock()
     atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
     atom_itunes_feed_generator.add_item_elements(handler, {"post": post})
-    handler.addQuickElement.assert_called_with("itunes:block", "yes")
+    handler.addQuickElement.assert_any_call("itunes:block", "yes")
+
+
+def test_podcast_index_add_item_elements_post_block(mocker):
+    mocker.patch("cast.feeds.Atom1Feed.add_item_elements")
+    post = mocker.MagicMock()
+    transcript_pk = 1
+    post.podcast_audio.transcript.pk = transcript_pk
+    post.podcast_audio.transcript.vtt = "foo"
+    handler = mocker.MagicMock()
+    atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
+    atom_itunes_feed_generator.add_item_elements(handler, {"post": post})
+    vtt_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript_pk})
+    handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "text/vtt", "url": vtt_url})
+    json_url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript_pk})
+    handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "application/json", "url": json_url})
+
+    # what if transcript.file is None?
+    handler = mocker.MagicMock()
+    post.podcast_audio.transcript.vtt = None
+    post.podcast_audio.transcript.podlove = None
+    PodcastIndexElements().add_item_elements(handler, {"post": post})
+    handler.addQuickElement.assert_not_called()
 
 
 def test_podcast_feed_categories_and_keywords():

@@ -3,9 +3,11 @@ from datetime import datetime
 from typing import cast
 
 from django.contrib.syndication.views import Feed
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
+from django.urls.base import reverse
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, rfc2822_date
 from django.utils.safestring import SafeText, mark_safe
 from wagtail.images.models import Image
@@ -187,17 +189,50 @@ class ITunesElements:
             haqe("itunes:block", "yes")
 
     def namespace_attributes(self):
-        return {"xmlns:itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+        namespace_attributes = {}
+        namespace_attributes.update({"xmlns:itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"})
+        return namespace_attributes
 
 
-class AtomITunesFeedGenerator(ITunesElements, Atom1Feed):
+class PodcastIndexElements:
+    feed: dict
+
+    def add_item_elements(self, handler, item):
+        """Add additional elements to the post object"""
+        try:
+            super().add_item_elements(handler, item)
+        except AttributeError:
+            pass
+
+        haqe = handler.addQuickElement
+
+        post = item["post"]
+        try:
+            transcript = post.podcast_audio.transcript
+        except ObjectDoesNotExist:
+            transcript = None
+        if transcript is not None:
+            if transcript.vtt is not None:
+                url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
+                haqe("podcast:transcript", attrs={"type": "text/vtt", "url": url})
+            if transcript.podlove is not None:
+                url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.pk})
+                haqe("podcast:transcript", attrs={"type": "application/json", "url": url})
+
+    def namespace_attributes(self):
+        namespace_attributes = super().namespace_attributes()
+        namespace_attributes.update({"xmlns:podcast": "https://podcastindex.org/namespace/1.0/"})
+        return namespace_attributes
+
+
+class AtomITunesFeedGenerator(PodcastIndexElements, ITunesElements, Atom1Feed):
     def root_attributes(self):
         atom_attrs = super().root_attributes()
         atom_attrs.update(self.namespace_attributes())
         return atom_attrs
 
 
-class RssITunesFeedGenerator(ITunesElements, Rss201rev2Feed):
+class RssITunesFeedGenerator(PodcastIndexElements, ITunesElements, Rss201rev2Feed):
     def rss_attributes(self):
         rss_attrs = super().rss_attributes()
         rss_attrs.update(self.namespace_attributes())

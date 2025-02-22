@@ -412,3 +412,38 @@ class TestGetTranscriptAsJson:
 
         # Then we get the transcript in the expected format
         assert r.json()["transcripts"] == podlove["transcripts"]
+
+
+class TestGetTranscriptAsWebVtt:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_transcript_as_vtt_not_found(self, client):
+        url = reverse("cast:webvtt-transcript", kwargs={"pk": 1})
+        r = client.get(url)
+        assert r.status_code == 404
+
+    def test_get_transcript_as_json_no_vtt(self, client):
+        # Given a transcript without a vtt file
+        transcript = create_transcript()
+
+        # When we request the transcript as JSON
+        url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 404 response with an error message
+        assert r.status_code == 404
+        assert r.content.decode("utf-8") == "WebVTT file not available"
+
+    def test_get_transcript_as_vtt_success(self, client):
+        # Given a transcript in vtt format
+        vtt = "WEBVTT\n\n00:00:00.620 --> 00:00:05.160\nJa, hallo liebe Hörerinnen und Hörer."
+        transcript = create_transcript(vtt=vtt)
+
+        # When we request the transcript as JSON
+        url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.id})
+        r = client.get(url)
+        assert r.status_code == 200
+
+        # Then we get the transcript in the expected format
+        content = r.content.decode("utf-8")
+        assert content == vtt

@@ -1,7 +1,7 @@
 0.2.43 (2025-02-22)
 -------------------
 
-Probably more transcript stuff.
+Include transcript urls in the podcast feed.
 
 - Tested with Django 5.2 pre-release -> all tests worked
-- #177 More transcript stuff
+- #168 include transcript urls in the podcast feed
