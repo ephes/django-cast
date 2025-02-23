@@ -53,7 +53,7 @@ def create_image() -> Image:
     return image
 
 
-def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto, vtt: str = Auto) -> Transcript:
+def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto, vtt: str = Auto, dote: dict = Auto) -> Transcript:
     if not audio:
         audio = create_audio()
     transcript = Transcript.objects.create(audio=audio)
@@ -63,6 +63,10 @@ def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto, vtt: str = A
         transcript.save()
     if vtt:
         transcript.vtt.save("test.vtt", ContentFile(vtt))
+        transcript.save()
+    if dote:
+        dote_content = json.dumps(dote, indent=2)
+        transcript.dote.save("dote.json", ContentFile(dote_content))
         transcript.save()
 
     return transcript

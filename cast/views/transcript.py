@@ -12,8 +12,8 @@ from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm, TranscriptForm
-from ..models import Transcript
-from . import AuthenticatedHttpRequest
+from ..models import Post, Transcript, get_template_base_dir
+from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
 
@@ -272,8 +272,8 @@ def podlove_transcript_json(_request: HttpRequest, pk) -> HttpResponse:
 def podcastindex_transcript_json(_request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podcastindex transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
-    if not transcript.podlove:
-        HttpResponse("podcastindex JSON file not available", status=404)
+    if not transcript.dote:
+        return HttpResponse("podcastindex JSON file not available", status=404)
     try:
         return JsonResponse(transcript.podcastindex_data)
     except json.JSONDecodeError:
@@ -288,3 +288,21 @@ def webvtt_transcript(_request: HttpRequest, pk: int) -> HttpResponse:
         with transcript.vtt.open("r") as file:
             return HttpResponse(file.read(), content_type="text/vtt")
     return HttpResponse("WebVTT file not available", status=404)
+
+
+def html_transcript(request: HtmxHttpRequest, transcript_pk: int, post_pk: int | None = None) -> HttpResponse:
+    """Return the transcript content as HTML."""
+    transcript = get_object_or_404(Transcript, pk=transcript_pk)
+    if post_pk is not None:
+        post = get_object_or_404(Post, pk=post_pk)
+        base_template_dir = post.get_template_base_dir(request)
+    else:
+        base_template_dir = get_template_base_dir(request, pre_selected=None)
+    if not transcript.podlove:
+        return HttpResponse("Transcript JSON not available", status=404)
+    # Open the file and load its contents as JSON
+    try:
+        data = transcript.podlove_data
+        return render(request, f"cast/{base_template_dir}/transcript.html", {"transcript": data})
+    except json.JSONDecodeError:
+        return HttpResponse("Invalid JSON format in podlove file", status=400)

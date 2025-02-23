@@ -1,0 +1,11 @@
+{% extends "./base.html" %}
+
+{% block content %}
+  {% for segment in transcript.transcripts %}
+    <div class="transcript-segment">
+      {{ segment.start }}
+      {{ segment.text }}
+      {{ segment.end }}
+    </div>
+  {% endfor %}
+{% endblock content %}

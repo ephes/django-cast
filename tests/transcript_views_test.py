@@ -414,6 +414,73 @@ class TestGetTranscriptAsJson:
         assert r.json()["transcripts"] == podlove["transcripts"]
 
 
+class TestGetTranscriptAsPodcastIndexJson:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_transcript_as_json_not_found(self, client):
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": 1})
+        r = client.get(url)
+        assert r.status_code == 404
+
+    def test_get_transcript_as_json_no_dote(self, client):
+        # Given a transcript without a dote file
+        transcript = create_transcript()
+
+        # When we request the transcript as JSON
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 404 response with an error message
+        assert r.status_code == 404
+        assert r.content.decode("utf-8") == "podcastindex JSON file not available"
+
+    def test_get_transcript_as_json_not_valid_json(self, client):
+        # Given a transcript that is not valid JSON
+        transcript = create_transcript()
+        transcript.dote.save("dote.json", ContentFile("not valid json"))
+        transcript.save()
+
+        # When we request the transcript as JSON
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 400 response with an error message
+        assert r.status_code == 400
+        assert r.content.decode("utf-8") == "Invalid JSON format in dote file"
+
+    def test_get_transcript_as_json_success(self, client):
+        # Given a transcript in podlove format
+        dote = {
+            "lines": [
+                {
+                    "startTime": "00:00:00,620",
+                    "endTime": "00:00:05,160",
+                    "speakerDesignation": "speaker",
+                    "text": "Ja, hallo liebe Hörerinnen und Hörer. Willkommen beim Python-Podcast der 5ten Episode.",
+                }
+            ]
+        }
+        transcript = create_transcript(dote=dote)
+
+        # When we request the transcript as JSON
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        r = client.get(url)
+        assert r.status_code == 200
+
+        # Then we get the transcript in the expected format
+        assert r.json() == {
+            "version": "1.0",
+            "segments": [
+                {
+                    "startTime": 0.62,
+                    "endTime": 5.16,
+                    "speaker": "speaker",
+                    "body": "Ja, hallo liebe Hörerinnen und Hörer. Willkommen beim Python-Podcast der 5ten Episode.",
+                },
+            ],
+        }
+
+
 class TestGetTranscriptAsWebVtt:
     pytestmark = pytest.mark.django_db
 
@@ -447,3 +514,76 @@ class TestGetTranscriptAsWebVtt:
         # Then we get the transcript in the expected format
         content = r.content.decode("utf-8")
         assert content == vtt
+
+
+@pytest.fixture
+def transcript_with_podlove():
+    podlove = {
+        "transcripts": [
+            {
+                "start": "00:00:00.620",
+                "start_ms": 620,
+                "end": "00:00:05.160",
+                "end_ms": 5160,
+                "speaker": "",
+                "voice": "",
+                "text": "Ja, hallo liebe Hörerinnen und Hörer. Willkommen beim Python-Podcast der 5ten Episode.",
+            }
+        ]
+    }
+    return create_transcript(podlove=podlove)
+
+
+class TestGetTranscriptAsHtml:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_transcript_as_html_not_found(self, client):
+        url = reverse("cast:html-transcript-no-post", kwargs={"transcript_pk": 1})
+        r = client.get(url)
+        assert r.status_code == 404
+
+    def test_get_transcript_as_html_no_podlove(self, client):
+        transcript = create_transcript()
+        url = reverse("cast:html-transcript-no-post", kwargs={"transcript_pk": transcript.pk})
+        r = client.get(url)
+        assert r.status_code == 404
+
+    def test_get_transcript_as_html_broken_json(self, client):
+        # Given a transcript that is not valid JSON
+        transcript = create_transcript()
+        transcript.podlove.save("podlove.json", ContentFile("not valid json"))
+        transcript.save()
+
+        # When we request the transcript as JSON
+        url = reverse("cast:html-transcript-no-post", kwargs={"transcript_pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 400 response with an error message
+        assert r.status_code == 400
+        assert r.content.decode("utf-8") == "Invalid JSON format in podlove file"
+
+    def test_get_transcript_as_html_success(self, client, transcript_with_podlove):
+        # Given a transcript in podlove format
+        transcript = transcript_with_podlove
+
+        # When we request the transcript as HTML
+        url = reverse("cast:html-transcript-no-post", kwargs={"transcript_pk": transcript.id})
+        r = client.get(url)
+        assert r.status_code == 200
+
+        # Then we get the transcript in the expected format
+        content = r.content.decode("utf-8")
+        assert "hallo liebe Hörerinnen und Hörer" in content
+
+    def test_get_transcript_as_html_success_from_post(self, client, transcript_with_podlove, post):
+        # Given a transcript in podlove format
+        transcript = transcript_with_podlove
+
+        # When we request the transcript as HTML
+        url = reverse("cast:html-transcript", kwargs={"transcript_pk": transcript.id, "post_pk": post.id})
+        r = client.get(url)
+        assert r.status_code == 200
+
+        # Then we get the transcript in the expected format
+        content = r.content.decode("utf-8")
+        assert "hallo liebe Hörerinnen und Hörer" in content

@@ -56,7 +56,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     @property
     def podcastindex_data(self) -> dict:
         data = self.dote_data
-        return convert_podlove_to_podcastindex_transcript(data)
+        if not data:
+            return data
+        return convert_dote_to_podcastindex_transcript(data)
 
 
 def time_to_seconds(time_str) -> float:
@@ -81,7 +83,7 @@ def convert_segments(segments) -> list[dict]:
     return converted
 
 
-def convert_podlove_to_podcastindex_transcript(transcript: dict) -> dict:
+def convert_dote_to_podcastindex_transcript(transcript: dict) -> dict:
     return {
         "version": "1.0",
         "segments": convert_segments(transcript["lines"]),

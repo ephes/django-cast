@@ -4,9 +4,15 @@ from django.urls import reverse
 from django.utils import timezone
 
 from cast import appsettings
+from cast.devdata import create_transcript
 from cast.models import Blog, Podcast
 from cast.models.pages import CustomEpisodeForm, Episode, HomePage, HtmlField, Post
 from cast.models.repository import BlogIndexRepository
+from cast.models.transcript import (
+    Transcript,
+    convert_dote_to_podcastindex_transcript,
+    time_to_seconds,
+)
 from cast.models.video import Video
 
 
@@ -506,3 +512,81 @@ def test_video_create_poster_video_url_without_http(mocker):
         video._create_poster()
     command = check_output.call_args_list[0][0][0]
     assert "example" in command
+
+
+@pytest.mark.django_db
+def test_transcript_podlove_data_no_podlove_or_dote():
+    transcript = Transcript()
+    assert transcript.podlove_data == {}
+    assert transcript.dote_data == {}
+    assert transcript.podcastindex_data == {}
+
+
+@pytest.fixture
+def dote():
+    return {
+        "lines": [
+            {
+                "startTime": "00:00:00,000",
+                "endTime": "00:00:01,000",
+                "speakerDesignation": "speaker",
+                "text": "text",
+            }
+        ]
+    }
+
+
+@pytest.mark.django_db
+def test_transcript_dote_data(dote):
+    transcript = create_transcript(dote=dote)
+    assert transcript.dote_data == dote
+
+
+@pytest.mark.django_db
+def test_transcript_podcastindex_data(dote):
+    transcript = create_transcript(dote=dote)
+    assert transcript.podcastindex_data == {
+        "version": "1.0",
+        "segments": [
+            {
+                "startTime": 0.0,
+                "endTime": 1.0,
+                "speaker": "speaker",
+                "body": "text",
+            }
+        ],
+    }
+
+
+def test_convert_dote_to_podcastindex_transcript(dote):
+    podcastindex = convert_dote_to_podcastindex_transcript(dote)
+    assert podcastindex == {
+        "version": "1.0",
+        "segments": [
+            {
+                "startTime": 0.0,
+                "endTime": 1.0,
+                "speaker": "speaker",
+                "body": "text",
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "time_str, expected",
+    [
+        ("00:00:00,000", 0.0),
+        ("00:00:01,000", 1.0),
+        ("00:01:00,000", 60.0),
+        ("01:00:00,000", 3600.0),
+        ("01:00:00,500", 3600.5),
+    ],
+)
+def test_time_to_seconds(time_str, expected):
+    assert time_to_seconds(time_str) == expected
+
+
+def test_time_to_seconds_invalid():
+    with pytest.raises(ValueError):
+        time_to_seconds("foobar")
