@@ -1,9 +1,11 @@
-0.2.43 (2025-02-22)
+0.2.43 (2025-02-23)
 -------------------
 
-Include transcript urls in the podcast feed.
+Include transcript urls in the podcast feed. Some transcript fixes
+and preparations for the upcoming transcript html detail view.
 
 - Tested with Django 5.2 pre-release -> all tests worked
 - #168 include transcript urls in the podcast feed
 - #168 FIX: do not render podlove-player in the feed
 - #168 use absolute urls for podcast:transcript elements
+- #168 There's a rudimentary html view for the transcript
