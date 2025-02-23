@@ -225,7 +225,7 @@ class PodcastIndexElements:
                 url = self.request.build_absolute_uri(relative_url)
                 haqe("podcast:transcript", attrs={"type": "text/vtt", "url": url})
             if transcript.podlove is not None:
-                relative_url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.pk})
+                relative_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.pk})
                 url = self.request.build_absolute_uri(relative_url)
                 haqe("podcast:transcript", attrs={"type": "application/json", "url": url})
 

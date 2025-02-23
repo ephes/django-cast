@@ -255,7 +255,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     )
 
 
-def podlove_transcript_json(_request: HttpRequest, pk):
+def podlove_transcript_json(_request: HttpRequest, pk) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     if transcript.podlove:
@@ -269,7 +269,19 @@ def podlove_transcript_json(_request: HttpRequest, pk):
     return HttpResponse("Podlove file not available", status=404)
 
 
+def podcastindex_transcript_json(_request: HttpRequest, pk: int) -> HttpResponse:
+    """Return the podcastindex transcript content as JSON because of CORS restrictions."""
+    transcript = get_object_or_404(Transcript, pk=pk)
+    if not transcript.podlove:
+        HttpResponse("podcastindex JSON file not available", status=404)
+    try:
+        return JsonResponse(transcript.podcastindex_data)
+    except json.JSONDecodeError:
+        return HttpResponse("Invalid JSON format in podlove file", status=400)
+
+
 def webvtt_transcript(_request: HttpRequest, pk: int) -> HttpResponse:
+    """Return the transcript content as WebVTT because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     if transcript.vtt:
         # Open the file and return its contents as WebVTT

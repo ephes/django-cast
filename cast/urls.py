@@ -7,7 +7,11 @@ from . import feeds
 from .views import meta
 from .views.gallery import gallery_modal
 from .views.theme import select_theme
-from .views.transcript import podlove_transcript_json, webvtt_transcript
+from .views.transcript import (
+    podcastindex_transcript_json,
+    podlove_transcript_json,
+    webvtt_transcript,
+)
 
 app_name = "cast"
 urlpatterns: list[Any] = [
@@ -15,6 +19,7 @@ urlpatterns: list[Any] = [
     path("api/", include("cast.api.urls", namespace="api")),
     # Podlove Web Player JSON transcripts
     path("transcripts/podlove/<int:pk>/", view=podlove_transcript_json, name="podlove-transcript-json"),
+    path("transcripts/podcastindex/<int:pk>/", view=podcastindex_transcript_json, name="podcastindex-transcript-json"),
     # WebVTT transcripts
     path("transcripts/vtt/<int:pk>/", view=webvtt_transcript, name="webvtt-transcript"),
     # Feeds

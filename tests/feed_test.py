@@ -206,7 +206,7 @@ def test_podcast_index_add_item_elements_post_block(rf, mocker):
     vtt_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript_pk})
     vtt_url = request.build_absolute_uri(vtt_url)
     handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "text/vtt", "url": vtt_url})
-    json_url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript_pk})
+    json_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript_pk})
     json_url = request.build_absolute_uri(json_url)
     handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "application/json", "url": json_url})
 
