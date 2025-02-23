@@ -46,8 +46,16 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         return data
 
     @property
+    def dote_data(self) -> dict:
+        data = {}
+        if self.dote:
+            with self.dote.open("r") as file:
+                data = json.load(file)
+        return data
+
+    @property
     def podcastindex_data(self) -> dict:
-        data = self.podlove_data
+        data = self.dote_data
         return convert_podlove_to_podcastindex_transcript(data)
 
 

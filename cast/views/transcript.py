@@ -277,7 +277,7 @@ def podcastindex_transcript_json(_request: HttpRequest, pk: int) -> HttpResponse
     try:
         return JsonResponse(transcript.podcastindex_data)
     except json.JSONDecodeError:
-        return HttpResponse("Invalid JSON format in podlove file", status=400)
+        return HttpResponse("Invalid JSON format in dote file", status=400)
 
 
 def webvtt_transcript(_request: HttpRequest, pk: int) -> HttpResponse:
