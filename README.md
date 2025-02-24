@@ -6,6 +6,7 @@
 [![name](https://badge.fury.io/py/django-cast.svg)](https://badge.fury.io/py/django-cast)
 [![name](https://codecov.io/gh/ephes/django-cast/branch/develop/graph/badge.svg)](https://codecov.io/gh/ephes/django-cast)
 [![name](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ephes/django-cast)
+[![Published on Django Packages](https://img.shields.io/badge/Published%20on-Django%20Packages-0c3c26)](https://djangopackages.org/packages/p/django-cast/)
 
 A blogging/podcasting package based on [Django](https://www.djangoproject.com/)
 and [Wagtail](https://wagtail.org).
