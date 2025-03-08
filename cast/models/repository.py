@@ -1,6 +1,6 @@
 import json
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeAlias, cast
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -19,13 +19,14 @@ if TYPE_CHECKING:
         ImageChooserBlock,
         VideoChooserBlock,
     )
-    from cast.models import Audio, Blog, Post, Video
+    from cast.models import Audio, Blog, Episode, Post, Transcript, Video
 
 PostByID: TypeAlias = dict[int, "Post"]
 PageUrlByID: TypeAlias = dict[int, str]
 HasAudioByID: TypeAlias = dict[int, bool]
 AudiosByPostID: TypeAlias = dict[int, set["Audio"]]
 AudioById: TypeAlias = dict[int, "Audio"]
+TranscriptByAudioId: TypeAlias = dict[int, "Transcript"]
 VideosByPostID: TypeAlias = dict[int, set["Video"]]
 VideoById: TypeAlias = dict[int, "Video"]
 ImagesByPostID: TypeAlias = dict[int, set["Image"]]
@@ -63,6 +64,8 @@ class QuerysetData:
         post_queryset: Any,  # FIXME: Post queryset or list[Post], but does not work
         post_by_id: PostByID,
         audios: AudioById,  # used in blocks
+        podcast_audio_by_episode_id: AudioById,  # used in podcast rss feed for podcast:transcript elements
+        transcript_by_audio_id: TranscriptByAudioId,  # used in podcast rss feed for podcast:transcript elements
         images: ImageById,
         videos: VideoById,
         audios_by_post_id: AudiosByPostID,
@@ -82,6 +85,8 @@ class QuerysetData:
         self.images = images
         self.videos = videos
         self.audios_by_post_id = audios_by_post_id
+        self.podcast_audio_by_episode_id = podcast_audio_by_episode_id
+        self.transcript_by_audio_id = transcript_by_audio_id
         self.videos_by_post_id = videos_by_post_id
         self.images_by_post_id = images_by_post_id
         self.owner_username_by_id = owner_username_by_id
@@ -94,9 +99,12 @@ class QuerysetData:
 
     @classmethod
     def create_from_post_queryset(
-        cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"]
+        cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"], is_podcast: bool = False
     ) -> "QuerysetData":
-        queryset = queryset.select_related("owner", "cover_image")
+        if False:
+            queryset = queryset.select_related("owner", "cover_image", "podcast_audio__transcript")
+        else:
+            queryset = queryset.select_related("owner", "cover_image")
         queryset = queryset.prefetch_related(
             "audios",
             "images",
@@ -111,6 +119,8 @@ class QuerysetData:
         cover_by_post_id: CoverURLByPostID = {}
         cover_alt_by_post_id: CoverAltByPostID = {}
         audios_by_post_id: AudiosByPostID = {}
+        podcast_audio_by_episode_id: AudioById = {}
+        transcript_by_audio_id: TranscriptByAudioId = {}
         videos_by_post_id: VideosByPostID = {}
         images_by_post_id: ImagesByPostID = {}
         page_url_by_id: PageUrlByID = {}
@@ -136,6 +146,8 @@ class QuerysetData:
             for audio in post.audios.all():
                 audios[audio.pk] = audio
                 audios_by_post_id.setdefault(post.pk, set()).add(audio.pk)
+            if hasattr(post, "podcast_audio"):
+                podcast_audio_by_episode_id[post.pk] = post.podcast_audio
 
         from .pages import Post
 
@@ -146,6 +158,8 @@ class QuerysetData:
             images=images,
             videos=videos,
             audios_by_post_id=audios_by_post_id,
+            podcast_audio_by_episode_id=podcast_audio_by_episode_id,
+            transcript_by_audio_id=transcript_by_audio_id,
             videos_by_post_id=videos_by_post_id,
             images_by_post_id=images_by_post_id,
             has_audio_by_id=has_audio_by_id,
@@ -234,6 +248,21 @@ class PostDetailRepository:
         )
 
 
+class EpisodeFeedRepository:
+    """
+    This class is a container for the data that is needed to render an episode in the feed.
+    """
+
+    def __init__(
+        self,
+        *,
+        podcast_audio: "Audio",
+        transcript: Optional["Transcript"],
+    ) -> None:
+        self.podcast_audio = podcast_audio
+        self.transcript = transcript
+
+
 def audio_to_dict(audio) -> dict:
     data = {
         "id": audio.pk,
@@ -248,6 +277,21 @@ def audio_to_dict(audio) -> dict:
     }
     if audio.collection_id is not None:
         data["collection_id"] = audio.collection_id
+    else:
+        data["collection"] = None
+    return data
+
+
+def transcript_to_dict(transcript) -> dict:
+    data = {
+        "id": transcript.pk,
+        "audio_id": transcript.audio_id,
+        "podlove": transcript.podlove.name,
+        "vtt": transcript.vtt.name,
+        "dote": transcript.dote.name,
+    }
+    if transcript.collection_id is not None:
+        data["collection_id"] = transcript.collection_id
     else:
         data["collection"] = None
     return data
@@ -409,6 +453,12 @@ def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict
         audios[pk] = audio_to_dict(audio)
     data["audios"] = audios
 
+    # transcripts
+    transcripts = {}
+    for episode_id, audio in queryset_data.podcast_audio_by_episode_id.items():
+        if hasattr(audio, "transcript"):
+            transcripts[audio.pk] = transcript_to_dict(audio.transcript)
+
     # videos
     videos = {}
     for pk, video in queryset_data.videos.items():
@@ -428,6 +478,10 @@ def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict
     data["images_by_post_id"] = queryset_data.images_by_post_id
     data["videos_by_post_id"] = queryset_data.videos_by_post_id
     data["audios_by_post_id"] = queryset_data.audios_by_post_id
+    data["podcast_audio_by_episode_id"] = {
+        episode_id: audio_to_dict(audio) for episode_id, audio in queryset_data.podcast_audio_by_episode_id.items()
+    }
+    data["transcripts"] = transcripts
     data["cover_by_post_id"] = queryset_data.cover_by_post_id
     data["cover_alt_by_post_id"] = queryset_data.cover_alt_by_post_id
     data["has_audio_by_id"] = queryset_data.has_audio_by_id
@@ -465,7 +519,7 @@ def data_for_blog_cachable(
         post_queryset = data["pagination_context"]["object_list"]
         del data["pagination_context"]["object_list"]  # not cachable
     queryset_data = QuerysetData.create_from_post_queryset(
-        request=request, site=Site(**data["site"]), queryset=post_queryset
+        request=request, site=Site(**data["site"]), queryset=post_queryset, is_podcast=blog.is_podcast
     )
     data = add_queryset_data(data, queryset_data)
 
@@ -560,6 +614,7 @@ class FeedRepository:
             post_queryset = (
                 Episode.objects.live()
                 .descendant_of(blog)
+                .select_related("podcast_audio__transcript")
                 .filter(podcast_audio__isnull=False)
                 .order_by("-visible_date")
             )
@@ -582,7 +637,7 @@ class FeedRepository:
         """
         from wagtail.images.models import Image
 
-        from . import Audio, Blog, Episode, Post, Video
+        from . import Audio, Blog, Episode, Post, Transcript, Video
 
         site = Site(**data["site"])
         blog = Blog(**data["blog"])
@@ -601,6 +656,14 @@ class FeedRepository:
         audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
         images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
         videos = {video_pk: Video(**video_data) for video_pk, video_data in data["videos"].items()}
+        podcast_audios = {
+            episode_pk: Audio(**audio_data)
+            for episode_pk, audio_data in data.get("podcast_audio_by_episode_id", {}).items()
+        }
+        transcripts = {
+            audio_pk: Transcript(**transcript_data)
+            for audio_pk, transcript_data in data.get("transcripts", {}).items()
+        }
 
         renditions_for_posts = deserialize_renditions(data["renditions_for_posts"])
 
@@ -624,6 +687,8 @@ class FeedRepository:
             images=images,
             videos=videos,
             audios_by_post_id=data["audios_by_post_id"],
+            podcast_audio_by_episode_id=podcast_audios,
+            transcript_by_audio_id=transcripts,
             videos_by_post_id=data["videos_by_post_id"],
             images_by_post_id=data["images_by_post_id"],
             owner_username_by_id=data["owner_username_by_id"],
@@ -666,6 +731,15 @@ class FeedRepository:
             renditions_for_posts=self.renditions_for_posts,
             cover_image_url=self.queryset_data.cover_by_post_id.get(post_id, ""),
             cover_alt_text=self.queryset_data.cover_alt_by_post_id.get(post_id, ""),
+        )
+
+    def get_episode_feed_detail_repository(self, episode: "Episode") -> EpisodeFeedRepository:
+        episode_id = episode.id
+        podcast_audio = self.queryset_data.podcast_audio_by_episode_id[episode_id]
+        transcript = self.queryset_data.transcript_by_audio_id.get(podcast_audio.id, None)
+        return EpisodeFeedRepository(
+            podcast_audio=podcast_audio,
+            transcript=transcript,
         )
 
 
@@ -769,6 +843,8 @@ class BlogIndexRepository:
             images=images,
             videos=videos,
             audios_by_post_id=data["audios_by_post_id"],
+            podcast_audio_by_episode_id={},  # not needed for blog
+            transcript_by_audio_id={},  # not needed for blog
             videos_by_post_id=data["videos_by_post_id"],
             images_by_post_id=data["images_by_post_id"],
             owner_username_by_id=data["owner_username_by_id"],

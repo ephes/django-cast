@@ -1,4 +1,5 @@
 import json
+import random
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from wagtail.images.models import Image
 from wagtail.models import Site
 
-from cast.models import Audio, Blog, Gallery, Post, Transcript, Video
+from cast.models import Audio, Blog, Episode, Gallery, Podcast, Post, Transcript, Video
 
 
 class _Auto:
@@ -53,25 +54,6 @@ def create_image() -> Image:
     return image
 
 
-def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto, vtt: str = Auto, dote: dict = Auto) -> Transcript:
-    if not audio:
-        audio = create_audio()
-    transcript = Transcript.objects.create(audio=audio)
-    if podlove:
-        podlove_content = json.dumps(podlove, indent=2)
-        transcript.podlove.save("podlove.json", ContentFile(podlove_content))
-        transcript.save()
-    if vtt:
-        transcript.vtt.save("test.vtt", ContentFile(vtt))
-        transcript.save()
-    if dote:
-        dote_content = json.dumps(dote, indent=2)
-        transcript.dote.save("dote.json", ContentFile(dote_content))
-        transcript.save()
-
-    return transcript
-
-
 def create_gallery(*, images: list[Image] = Auto) -> Gallery:
     gallery = Gallery.objects.create()
     gallery.images.add(*images)
@@ -88,6 +70,18 @@ def create_blog(*, owner: User = Auto, site: Site = Auto) -> Blog:
         site = create_site()
     site.root_page.add_child(instance=blog)
     return blog
+
+
+def create_podcast(*, owner: User = Auto, site: Site = Auto) -> Blog:
+    podcast = Podcast(
+        title="Test Podcast",
+        slug="test-podcast",
+        owner=owner or create_user(),
+    )
+    if not site:  # pragma: no cover
+        site = create_site()
+    site.root_page.add_child(instance=podcast)
+    return podcast
 
 
 Body = list[dict]
@@ -128,6 +122,22 @@ def create_post(*, blog: Blog = Auto, body: str = Auto, num: int = 1) -> Post:
     )
     blog.add_child(instance=post)
     return post
+
+
+def create_episode(*, blog: Blog = Auto, body: str = Auto, num: int = 1, podcast_audio: Auto) -> Episode:
+    if not blog:  # pragma: no cover
+        blog = create_podcast()
+    if not podcast_audio:  # pragma: no cover
+        podcast_audio = create_audio()
+    episode = Episode(
+        title="Test Episode",
+        slug=f"test-episode-{num}",
+        owner=blog.owner,
+        podcast_audio=podcast_audio,
+        body=body or json.dumps(create_python_body()),
+    )
+    blog.add_child(instance=episode)
+    return episode
 
 
 def add_image_to_body(*, body: Body, image: Image = Auto) -> Body:
@@ -206,6 +216,25 @@ def create_audio(*, mp3_file: SimpleUploadedFile = Auto, user: User = Auto) -> A
     return audio
 
 
+def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto, vtt: str = Auto, dote: dict = Auto) -> Transcript:
+    if not audio:
+        audio = create_audio()
+    transcript = Transcript.objects.create(audio=audio)
+    if podlove:
+        podlove_content = json.dumps(podlove, indent=2)
+        transcript.podlove.save("podlove.json", ContentFile(podlove_content))
+        transcript.save()
+    if vtt:
+        transcript.vtt.save("test.vtt", ContentFile(vtt))
+        transcript.save()
+    if dote:
+        dote_content = json.dumps(dote, indent=2)
+        transcript.dote.save("dote.json", ContentFile(dote_content))
+        transcript.save()
+
+    return transcript
+
+
 def add_audio_to_body(*, body: Body, audio: Audio = Auto):
     if not audio:  # pragma: no cover
         audio = create_audio()
@@ -213,10 +242,10 @@ def add_audio_to_body(*, body: Body, audio: Audio = Auto):
     return body
 
 
-def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[str, int] = Auto) -> Blog:
+def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[str, int] = Auto, podcast=False) -> Blog:
     if not media_numbers:  # pragma: no cover
         media_numbers = {k: 1 for k in ["images", "videos", "audios", "galleries"]}
-    blog = create_blog()
+    blog = create_podcast() if podcast else create_blog()
     body = deepcopy(create_python_body())
 
     # images
@@ -242,8 +271,17 @@ def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[st
     for audio in audios:
         body = add_audio_to_body(body=body, audio=audio)
 
+    # transcripts
+    if podcast:
+        for audio in audios:
+            create_transcript(audio=audio, vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n\nTest transcript)")
+
     # serialize the body and create the posts
     serialized_body = json.dumps(body)
     for num in range(number_of_posts):
-        create_post(blog=blog, num=num, body=serialized_body)
+        if podcast:
+            podcast_audio = random.choice(audios)
+            create_episode(blog=blog, num=num, body=serialized_body, podcast_audio=podcast_audio)
+        else:
+            create_post(blog=blog, num=num, body=serialized_body)
     return blog

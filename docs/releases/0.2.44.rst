@@ -1,4 +1,6 @@
-0.2.44 (2025-03-01)
+0.2.44 (2025-03-09)
 -------------------
 
-Transcript detail view?
+Get transcript models via repository.
+
+- #168 transcript models for feed are now contained in repository and don't need to be fetched from the database.

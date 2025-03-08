@@ -19,7 +19,7 @@ from django.urls import reverse
 from wagtail.images.models import Image, Rendition
 
 from cast.devdata import create_post, create_python_body, generate_blog_with_media
-from cast.feeds import LatestEntriesFeed
+from cast.feeds import LatestEntriesFeed, RssPodcastFeed
 from cast.filters import PostFilterset
 from cast.models import Audio, Blog, Podcast, Post, Video
 from cast.models.image_renditions import create_missing_renditions_for_posts
@@ -33,6 +33,7 @@ from cast.models.repository import (
     image_to_dict,
     post_to_dict,
     serialize_renditions,
+    transcript_to_dict,
     video_to_dict,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
@@ -90,6 +91,8 @@ def queryset_data(**kwargs):
         images={},
         videos={},
         audios_by_post_id={},
+        podcast_audio_by_episode_id={},
+        transcript_by_audio_id={},
         videos_by_post_id={},
         images_by_post_id={},
         owner_username_by_id={},
@@ -645,6 +648,53 @@ def test_render_blog_feed_with_data_from_cache_without_hitting_the_database(rf, 
     assert len(connection.queries) == 1  # site is not cached
 
 
+@pytest.mark.django_db
+def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(rf, settings):
+    # Given a post with media in a blog
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    blog = generate_blog_with_media(number_of_posts=6, podcast=True)
+    post = blog.unfiltered_published_posts.first()
+    author_name = post.owner.username.capitalize()
+    post_detail_url = post.get_url()
+    request = rf.get(blog.get_url())
+
+    request.htmx = False
+    # _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    create_missing_renditions_for_posts([post])  # force renditions to be created
+    # _ = post.serve(rf.get("/")).render()  # force renditions to be created
+    create_missing_renditions_for_posts([post])  # force renditions to be created
+
+    # Set up the cache
+    cachable_data = FeedRepository.data_for_feed_cachable(request=request, blog=blog, is_podcast=True)
+    pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
+    cachable_data = pickle.loads(pickled)
+    repository = FeedRepository.create_from_cachable_data(data=cachable_data)
+
+    # When we render the blog index
+    # call this once without blocker to populate SITE_CACHE
+    reset_queries()
+    # with connection.execute_wrapper(blocker):
+    response = RssPodcastFeed(repository=repository)(request, slug=blog.slug, audio_format="mp3")
+
+    # Then the media should be rendered
+    html = response.content.decode("utf-8")
+    assert 'class="cast-image"' in html
+    assert 'class="cast-gallery-modal"' in html
+    assert 'class="block-video"' in html
+    assert 'class="block-audio"' in html
+    assert "podcast:transcript" in html
+    assert author_name in html
+    assert post_detail_url in html
+    # And the database should not be hit
+    # show_queries(connection.queries)
+    # 4 Queries, because some things that are not cached:
+    # - site
+    # - podcast object needs to be fetched, because there's only repository.blog
+    # - podcast again, dunno why
+    # - one post, dunno why
+    assert len(connection.queries) == 4
+
+
 # Small tests for repository coverage
 
 
@@ -774,3 +824,22 @@ def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_no
     repository = PostDetailRepository.create_from_django_models(request=request, post=post)
     assert repository.cover_image_url == ""
     assert repository.cover_alt_text == ""
+
+
+def test_transcript_to_dict_no_collection():
+    class Podlove:
+        name = "foo"
+
+    class TranscriptFile:
+        name = "blub"
+
+    class Transcript:
+        pk = 1
+        audio_id = 1
+        podlove = Podlove()
+        vtt = TranscriptFile()
+        dote = TranscriptFile()
+        collection_id = None
+
+    result = transcript_to_dict(Transcript())
+    assert result["collection"] is None

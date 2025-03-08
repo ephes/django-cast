@@ -181,13 +181,15 @@ def test_itunes_elements_add_root_elements_index_error(mocker):
     assert add_returned is None
 
 
-def test_itunes_elements_add_item_elements_post_block(mocker):
+def test_itunes_elements_add_item_elements_post_block(rf, mocker):
     mocker.patch("cast.feeds.Atom1Feed.add_item_elements")
     post = mocker.MagicMock()
     post.block = True
     post.podcast_audio.transcript = None  # no transcript
     handler = mocker.MagicMock()
     atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
+    request = rf.get("/")
+    atom_itunes_feed_generator.request = request
     atom_itunes_feed_generator.add_item_elements(handler, {"post": post})
     handler.addQuickElement.assert_any_call("itunes:block", "yes")
 
@@ -200,24 +202,19 @@ def test_podcast_index_add_item_elements_post_block(rf, mocker):
     post.podcast_audio.transcript.pk = transcript_pk
     post.podcast_audio.transcript.vtt = "foo"
     handler = mocker.MagicMock()
+
+    vtt_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript_pk})
+    vtt_url = request.build_absolute_uri(vtt_url)
+    post.get_vtt_transcript_url.return_value = vtt_url
+    json_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript_pk})
+    json_url = request.build_absolute_uri(json_url)
+    post.get_podcastindex_transcript_url.return_value = json_url
+
     atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
     atom_itunes_feed_generator.request = request
     atom_itunes_feed_generator.add_item_elements(handler, {"post": post})
-    vtt_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript_pk})
-    vtt_url = request.build_absolute_uri(vtt_url)
     handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "text/vtt", "url": vtt_url})
-    json_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript_pk})
-    json_url = request.build_absolute_uri(json_url)
     handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "application/json", "url": json_url})
-
-    # what if transcript.file is None?
-    handler = mocker.MagicMock()
-    post.podcast_audio.transcript.vtt = None
-    post.podcast_audio.transcript.podlove = None
-    feed = PodcastIndexElements()
-    feed.request = request
-    feed.add_item_elements(handler, {"post": post})
-    handler.addQuickElement.assert_not_called()
 
 
 def test_podcast_feed_categories_and_keywords():
@@ -250,3 +247,20 @@ def test_podcast_feed_item_description_repository_none(mocker):
     feed.item_description(item)
     # then item.get_description should be called, but not self.repository.get_post_detail_repository
     item.get_description.assert_called_once()
+
+
+def test_podcsat_feed_link_repository_is_none(mocker):
+    feed = PodcastFeed()
+    feed.repository = None
+    feed.object = mocker.MagicMock()
+    feed.link()
+    # make sure feed.object.get_full_url is called
+    feed.object.get_full_url.assert_called_once()
+
+
+def test_podcast_index_elements_catch_no_super_add_item_elements(mocker):
+    elements = PodcastIndexElements()
+    elements.request = mocker.MagicMock()
+    handler = mocker.MagicMock()
+    result = elements.add_item_elements(handler, {"post": mocker.MagicMock()})
+    assert result is None

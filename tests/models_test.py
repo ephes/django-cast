@@ -461,6 +461,24 @@ class TestEpisodeModel:
         episode = Episode()
         assert episode.page_type == "cast.Episode"
 
+    def test_get_transcript_or_none_repository_none(self):
+        episode = Episode(id=1)
+        assert episode.get_transcript_or_none(None) is None
+
+    def test_get_vtt_transcript_url_no_transcript(self, rf, mocker):
+        episode = Episode(id=1)
+        request = rf.get("/")
+        repository = mocker.MagicMock()
+        repository.transcript.vtt = None
+        assert episode.get_vtt_transcript_url(request, repository) is None
+
+    def test_get_podcastindex_transcript_url_no_transcript(self, rf, mocker):
+        episode = Episode(id=1)
+        request = rf.get("/")
+        repository = mocker.MagicMock()
+        repository.transcript.dote = None
+        assert episode.get_podcastindex_transcript_url(request, repository) is None
+
 
 @pytest.mark.django_db
 def test_custom_episode_form():

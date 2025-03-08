@@ -7,6 +7,7 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -48,6 +49,7 @@ from ..views import HtmxHttpRequest
 from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
 from .repository import (
     AudioById,
+    EpisodeFeedRepository,
     ImageById,
     LinkTuples,
     PostDetailRepository,
@@ -57,6 +59,7 @@ from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
     from .index_pages import Blog, ContextDict, Podcast
+    from .transcript import Transcript
 
 logger = logging.getLogger(__name__)
 
@@ -727,6 +730,33 @@ class Episode(Post):
         from .audio import Audio
 
         return cast(Audio, self.podcast_audio).get_file_size(audio_format)
+
+    def get_transcript_or_none(self, repository: EpisodeFeedRepository | None) -> Optional["Transcript"]:
+        if repository is not None:
+            podcast_audio, transcript = repository.podcast_audio, repository.transcript
+        else:
+            podcast_audio = self.podcast_audio  # type: ignore
+            try:
+                transcript = podcast_audio.transcript
+            except (ObjectDoesNotExist, AttributeError):
+                transcript = None
+        return transcript
+
+    def get_vtt_transcript_url(self, request: HtmxHttpRequest, repository: EpisodeFeedRepository | None) -> str | None:
+        if (transcript := self.get_transcript_or_none(repository)) is not None:
+            if transcript.vtt is not None:
+                relative_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
+                return request.build_absolute_uri(relative_url)
+        return None
+
+    def get_podcastindex_transcript_url(
+        self, request: HtmxHttpRequest, repository: EpisodeFeedRepository
+    ) -> str | None:
+        if (transcript := self.get_transcript_or_none(repository)) is not None:
+            if transcript.dote is not None:
+                relative_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.pk})
+                return request.build_absolute_uri(relative_url)
+        return None
 
 
 class HomePage(Page):

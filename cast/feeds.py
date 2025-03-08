@@ -3,11 +3,9 @@ from datetime import datetime
 from typing import cast
 
 from django.contrib.syndication.views import Feed
-from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
-from django.urls.base import reverse
 from django.utils.feedgenerator import (
     Atom1Feed,
     Rss201rev2Feed,
@@ -69,7 +67,9 @@ class RepositoryMixin:
         # now that we have the repository, we can set the template base dir
         # to avoid db queries in context_processors
         self.request.cast_site_template_base_dir = repository.template_base_dir
-        return super().get_feed(obj, request)  # type: ignore
+        feed = super().get_feed(obj, request)  # type: ignore
+        feed.repository = repository  # pass repository to feed to be able to access it in PodcastIndexElements
+        return feed
 
 
 class LatestEntriesFeed(RepositoryMixin, Feed):
@@ -204,6 +204,7 @@ class ITunesElements:
 class PodcastIndexElements:
     feed: dict
     request: HttpRequest
+    repository: FeedRepository
 
     def add_item_elements(self, handler, item) -> None:
         """Add additional elements to the post object"""
@@ -213,21 +214,17 @@ class PodcastIndexElements:
             pass
 
         haqe = handler.addQuickElement
+        episode = item["post"]
+        repository = None
+        if hasattr(self, "repository"):
+            repository = self.repository.get_episode_feed_detail_repository(episode)
 
-        post = item["post"]
-        try:
-            transcript = post.podcast_audio.transcript
-        except ObjectDoesNotExist:
-            transcript = None
-        if transcript is not None:
-            if transcript.vtt is not None:
-                relative_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
-                url = self.request.build_absolute_uri(relative_url)
-                haqe("podcast:transcript", attrs={"type": "text/vtt", "url": url})
-            if transcript.podlove is not None:
-                relative_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.pk})
-                url = self.request.build_absolute_uri(relative_url)
-                haqe("podcast:transcript", attrs={"type": "application/json", "url": url})
+        if (vtt_transcript_url := episode.get_vtt_transcript_url(self.request, repository)) is not None:
+            haqe("podcast:transcript", attrs={"type": "text/vtt", "url": vtt_transcript_url})
+        if (
+            podcastindex_transcript_url := episode.get_podcastindex_transcript_url(self.request, repository)
+        ) is not None:
+            haqe("podcast:transcript", attrs={"type": "application/json", "url": podcastindex_transcript_url})
 
     def namespace_attributes(self) -> dict:
         namespace_attributes = super().namespace_attributes()  # type: ignore
@@ -277,6 +274,8 @@ class PodcastFeed(RepositoryMixin, Feed):
         return self.object
 
     def link(self) -> str:
+        if self.repository is not None:
+            return self.repository.blog_url
         return self.object.get_full_url()
 
     def title(self, _blog: Blog) -> str:
