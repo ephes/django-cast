@@ -4,3 +4,4 @@
 Get transcript models via repository.
 
 - #168 transcript models for feed are now contained in repository and don't need to be fetched from the database.
+- #179 better documentation on how to run the tests
