@@ -7,7 +7,7 @@ from ..models import Audio, Transcript, Video
 
 DEFAULT_PAGE_KEY = "p"
 
-pagination_template = "wagtailadmin/shared/ajax_pagination_nav.html"
+pagination_template = "wagtailadmin/shared/pagination_nav.html"
 
 
 def paginate(

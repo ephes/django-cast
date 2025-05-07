@@ -244,7 +244,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
         # "collections": collections,
         "uploadform": TranscriptForm(),
         "is_searching": False,
-        "pagination_template": "wagtailadmin/shared/ajax_pagination_nav.html",
+        "pagination_template": "wagtailadmin/shared/pagination_nav.html",
     }
     return render_modal_workflow(
         request,
