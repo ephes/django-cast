@@ -12,6 +12,7 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
 from wagtail.blocks import CharBlock, ChoiceBlock, ListBlock, StructBlock, TextBlock
+from wagtail.blocks.list_block import ListValue
 from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
@@ -245,8 +246,9 @@ class GalleryBlock(ListBlock):
         for galleries. Do not try to remove it, or at least test if galleries are
         still working in the editor. FIXME.
         """
-        if isinstance(value, list):
-            image_ids = self.dict_images_to_id_list(value)
+        if isinstance(value, (list, ListValue)):
+            not_none_values = list(filter(None, value))
+            image_ids = self.dict_images_to_id_list(not_none_values)
             return super().get_form_state(image_ids)
         return super().get_form_state(value)
 

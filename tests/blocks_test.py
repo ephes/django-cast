@@ -295,6 +295,10 @@ def test_gallery_block_get_form_state(image):
     items = block.get_form_state([{"type": "item", "value": image.pk}])
     assert items[0]["value"]["id"] == image.pk
 
+    # input with a tuple (to test against else of isinstance)
+    items = block.get_form_state((image.pk,))
+    assert items[0]["value"]["id"] == image.pk
+
 
 @pytest.mark.django_db
 def test_audio_chooser_from_repository_to_python_database(audio):
