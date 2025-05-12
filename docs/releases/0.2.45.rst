@@ -1,4 +1,6 @@
-0.2.45 (2025-03-16)
+0.2.45 (2025-05-12)
 -------------------
 
-Transcript detail page?
+Just official support for Wagtail 7 and Django 5.2.
+
+- #185 Wagtail 7 support
