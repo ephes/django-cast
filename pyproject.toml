@@ -81,6 +81,8 @@ dev = [
     "pytest-mock",
     "pytest-randomly",
     "pytz",
+    "tox",
+    "tox-uv",
     "typer",
     "types-python-slugify",
     "types-requests",
