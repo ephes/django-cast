@@ -9,12 +9,12 @@ repos:
       - id: check-yaml
       - id: check-toml
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.19.1
+    rev: v3.20.0
     hooks:
       - id: pyupgrade
         args: [--py310-plus]
   - repo: https://github.com/adamchainz/django-upgrade
-    rev: 1.23.1
+    rev: 1.25.0
     hooks:
       - id: django-upgrade
         args: [--target-version, "4.2"]
@@ -25,18 +25,18 @@ repos:
         language_version: python3.12
   - repo: https://github.com/timothycrosley/isort
     # isort config is in setup.cfg
-    rev: 6.0.0
+    rev: 6.0.1
     hooks:
       - id: isort
         language_version: python3
   - repo: https://github.com/PyCQA/flake8
     # flake8 config is in setup.cfg
-    rev: 7.1.2
+    rev: 7.3.0
     hooks:
       - id: flake8
         language_version: python3
   - repo: https://github.com/rtts/djhtml
-    rev: "3.0.7"  # replace with the latest tag on GitHub
+    rev: "3.0.8"  # replace with the latest tag on GitHub
     hooks:
       - id: djhtml
         args: [-t, "2"]
