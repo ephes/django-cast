@@ -51,7 +51,10 @@ python commands.py mypy
 python commands.py docs
 
 # Test against multiple Django/Wagtail versions
-uvx tox
+uv run tox
+
+# Quick development testing (faster)
+uvx tox -e fast
 
 # Note: The development server is typically run in a separate project 
 # where django-cast is installed as an editable package via:
@@ -173,4 +176,6 @@ When modifying models:
 
 ## Commit Guidelines
 - Do not bump the version number on every commit
-```
+
+## Memories
+- Use `uv run tox` instead of `uvx tox`
