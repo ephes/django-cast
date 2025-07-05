@@ -63,24 +63,23 @@ module-name = "cast"
 
 [dependency-groups]
 dev = [
-    "black",
     "django-allauth",  # for mypy
     "django-environ",
     "django_extensions",
     "django-stubs[compatible-mypy]",
     "factory_boy",
     "feedparser",
-    "flake8",
     "furo",
-    "isort",
     "jupyter",
     "mypy",
+    "pre-commit",
     "pytest >= 6",
     "pytest-cov >= 3",
     "pytest-django",
     "pytest-mock",
     "pytest-randomly",
     "pytz",
+    "ruff",
     "tox",
     "tox-uv",
     "typer",
@@ -92,11 +91,18 @@ dev = [
 Documentation = "https://django-cast.readthedocs.io/en/latest/"
 Source = "https://github.com/ephes/django-cast"
 
-[tool.isort]
-profile = "black"
-
-[tool.black]
+[tool.ruff]
 line-length = 119
+target-version = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+force-single-line = false
+combine-as-imports = true
+split-on-trailing-comma = true
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"

@@ -1,20 +1,20 @@
 {% load i18n %}
 {% if audios %}
-    {% if is_searching %}
-        <h2>
-        {% blocktrans count counter=audios.paginator.count %}
-            There is one match
-        {% plural %}
-            There are {{ counter }} matches
-        {% endblocktrans %}
-        </h2>
-    {% else %}
-        <h2>{% trans "Latest audio" %}</h2>
-    {% endif %}
+  {% if is_searching %}
+    <h2>
+      {% blocktrans count counter=audios.paginator.count %}
+        There is one match
+      {% plural %}
+        There are {{ counter }} matches
+      {% endblocktrans %}
+    </h2>
+  {% else %}
+    <h2>{% trans "Latest audio" %}</h2>
+  {% endif %}
 
-    {% include "cast/audio/list.html" with choosing=1 %}
+  {% include "cast/audio/list.html" with choosing=1 %}
 
-    {% include pagination_template with items=audios is_ajax=1 %}
+  {% include pagination_template with items=audios is_ajax=1 %}
 {% else %}
-    <p>{% blocktrans %}Sorry, no audio models match "<em>{{ query_string }}</em>"{% endblocktrans %}</p>
+  <p>{% blocktrans %}Sorry, no audio models match "<em>{{ query_string }}</em>"{% endblocktrans %}</p>
 {% endif %}

@@ -1,52 +1,52 @@
 {% load i18n %}
 <table class="listing">
-    <col />
-    <col  />
-    <col width="16%" />
-    <thead>
-        <tr class="table-headers">
-            <th>
-                {% if not is_searching %}
-                    <a href="{% url 'castaudio:index' %}{% if not ordering == "title" %}?ordering=title{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "title" %}teal{% endif %}">
-                        {% trans "Title" %}
-                    </a>
-                {% else %}
-                    {% trans "Title" %}
-                {% endif %}
-            </th>
-            <th>{% trans "File" %}</th>
-            <th>{% trans "Type" %}</th>
-            <th>
-                {% if not is_searching %}
-                    <a href="{% url 'castaudio:index' %}{% if not ordering == "-created" %}?ordering=-created{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "-created" %}teal{% endif %}">
-                        {% trans "Uploaded" %}
-                    </a>
-                {% else %}
-                    {% trans "Uploaded" %}
-                {% endif %}
-            </th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for audio in audios %}
-            <tr>
-                <td class="title">
-                    {% if choosing %}
-                        <h2><a href="{% url 'castaudio:chosen' audio.id %}" class="media-choice">{{ audio.title }}</a></h2>
-                    {% else %}
-                        <h2><a href="{% url 'castaudio:edit' audio.id %}">{{ audio.title }}</a></h2>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if choosing %}
-                        {{ audio.filename }}
-                    {% else %}
-                        <a href="{{ audio.url }}" class="nolink">{{ audio.filename }}</a>
-                    {% endif %}
-                </td>
-                <td>{{ audio.type }}</td>
-                <td><div class="human-readable-date" title="{{ audio.created|date:"d M Y H:i" }}">{{ audio.created|timesince }} ago</div></td>
-            </tr>
-        {% endfor %}
-    </tbody>
+  <col />
+  <col  />
+  <col width="16%" />
+  <thead>
+    <tr class="table-headers">
+      <th>
+        {% if not is_searching %}
+          <a href="{% url 'castaudio:index' %}{% if not ordering == "title" %}?ordering=title{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "title" %}teal{% endif %}">
+            {% trans "Title" %}
+          </a>
+        {% else %}
+          {% trans "Title" %}
+        {% endif %}
+      </th>
+      <th>{% trans "File" %}</th>
+      <th>{% trans "Type" %}</th>
+      <th>
+        {% if not is_searching %}
+          <a href="{% url 'castaudio:index' %}{% if not ordering == "-created" %}?ordering=-created{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "-created" %}teal{% endif %}">
+            {% trans "Uploaded" %}
+          </a>
+        {% else %}
+          {% trans "Uploaded" %}
+        {% endif %}
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for audio in audios %}
+      <tr>
+        <td class="title">
+          {% if choosing %}
+            <h2><a href="{% url 'castaudio:chosen' audio.id %}" class="media-choice">{{ audio.title }}</a></h2>
+          {% else %}
+            <h2><a href="{% url 'castaudio:edit' audio.id %}">{{ audio.title }}</a></h2>
+          {% endif %}
+        </td>
+        <td>
+          {% if choosing %}
+            {{ audio.filename }}
+          {% else %}
+            <a href="{{ audio.url }}" class="nolink">{{ audio.filename }}</a>
+          {% endif %}
+        </td>
+        <td>{{ audio.type }}</td>
+        <td><div class="human-readable-date" title="{{ audio.created|date:"d M Y H:i" }}">{{ audio.created|timesince }} ago</div></td>
+      </tr>
+    {% endfor %}
+  </tbody>
 </table>

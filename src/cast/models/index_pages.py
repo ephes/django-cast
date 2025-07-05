@@ -5,9 +5,7 @@ from datetime import datetime
 from typing import Any, cast
 
 import django.forms.forms
-from django.core.paginator import InvalidPage
-from django.core.paginator import Page as DjangoPage
-from django.core.paginator import Paginator
+from django.core.paginator import InvalidPage, Page as DjangoPage, Paginator
 from django.db import models
 from django.http import Http404
 from django.http.request import QueryDict

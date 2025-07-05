@@ -18,23 +18,12 @@ repos:
     hooks:
       - id: django-upgrade
         args: [--target-version, "4.2"]
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
     hooks:
-      - id: black
-        language_version: python3.12
-  - repo: https://github.com/timothycrosley/isort
-    # isort config is in setup.cfg
-    rev: 6.0.1
-    hooks:
-      - id: isort
-        language_version: python3
-  - repo: https://github.com/PyCQA/flake8
-    # flake8 config is in setup.cfg
-    rev: 7.3.0
-    hooks:
-      - id: flake8
-        language_version: python3
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
   - repo: https://github.com/rtts/djhtml
     rev: "3.0.8"  # replace with the latest tag on GitHub
     hooks:

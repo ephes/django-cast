@@ -302,7 +302,6 @@ def test_gallery_block_get_form_state(image):
 
 @pytest.mark.django_db
 def test_audio_chooser_from_repository_to_python_database(audio):
-
     class Repository:
         audio_by_id = {}
 
@@ -335,7 +334,6 @@ def test_audio_chooser_block_get_prep_value_int_or_none():
 
 @pytest.mark.django_db
 def test_video_chooser_from_repository_to_python_database(video):
-
     class Repository:
         video_by_id = {}
 

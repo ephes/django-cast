@@ -1,32 +1,32 @@
 {% load i18n wagtailadmin_tags %}
 
 {% if videos %}
-    {% if is_searching %}
-        <h2>
-        {% blocktrans count counter=videos|length %}
-            There is one match
-        {% plural %}
-            There are {{ counter }} matches
-        {% endblocktrans %}
-        </h2>
+  {% if is_searching %}
+    <h2>
+      {% blocktrans count counter=videos|length %}
+        There is one match
+      {% plural %}
+        There are {{ counter }} matches
+      {% endblocktrans %}
+    </h2>
 
-        {% search_other %}
-    {% endif %}
+    {% search_other %}
+  {% endif %}
 
-    {% include "cast/video/list.html" %}
+  {% include "cast/video/list.html" %}
 
-    {% include "wagtailadmin/shared/pagination_nav.html" with items=videos is_searching=is_searching linkurl="castvideo:index" %}
+  {% include "wagtailadmin/shared/pagination_nav.html" with items=videos is_searching=is_searching linkurl="castvideo:index" %}
 {% else %}
-    {% if is_searching %}
-         <h2>{% blocktrans %}Sorry, no videos files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
+  {% if is_searching %}
+    <h2>{% blocktrans %}Sorry, no videos files match "<em>{{ query_string }}</em>"{% endblocktrans %}</h2>
 
-         {% search_other %}
+    {% search_other %}
+  {% else %}
+    {% url 'castvideo:add_video' as castmedia_add_video_url %}
+    {% if current_collection %}
+      <p>{% blocktrans %}You haven't uploaded any videos in this collection. You can upload <a href="{{ castmedia_add_url }}">video</a> files.{% endblocktrans %}</p>
     {% else %}
-        {% url 'castvideo:add_video' as castmedia_add_video_url %}
-        {% if current_collection %}
-            <p>{% blocktrans %}You haven't uploaded any videos in this collection. You can upload <a href="{{ castmedia_add_url }}">video</a> files.{% endblocktrans %}</p>
-        {% else %}
-            <p>{% blocktrans %}You haven't uploaded any videos. You can upload <a href="{{ castmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
-        {% endif %}
+      <p>{% blocktrans %}You haven't uploaded any videos. You can upload <a href="{{ castmedia_add_video_url }}">video</a> files.{% endblocktrans %}</p>
     {% endif %}
+  {% endif %}
 {% endif %}

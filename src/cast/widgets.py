@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Union
+from typing import Union
 
 from django import forms
 from django.template.loader import render_to_string
@@ -32,7 +32,7 @@ class CastChooser(BaseChooser):
     def get_chooser_modal_url(self) -> str:
         return reverse(self.chooser_modal_url_name)
 
-    def render_html(self, name: str, value: Optional[dict], attrs: dict) -> str:
+    def render_html(self, name: str, value: dict | None, attrs: dict) -> str:
         value = value if value is not None else {}
         original_field_html = super().render_html(name, value.get("id"), attrs)
         original_field_html = add_display_none_to_chooser_button(original_field_html)
@@ -54,7 +54,7 @@ class AdminVideoChooser(CastChooser):
     choose_another_text = _("Choose another video item")
     link_to_chosen_text = _("Edit this video item")
 
-    def get_value_data(self, value: Optional[Union[Video, int]]) -> Optional[dict]:
+    def get_value_data(self, value: Video | int | None) -> dict | None:
         if value is None:
             return value
         if not isinstance(value, Video):
@@ -66,7 +66,7 @@ class AdminVideoChooser(CastChooser):
             "edit_link": reverse("castvideo:edit", args=[value.id]),
         }
 
-    def render_html(self, name: str, value: Optional[dict], attrs: dict) -> str:
+    def render_html(self, name: str, value: dict | None, attrs: dict) -> str:
         value = value if value is not None else {}
         original_field_html = super().render_html(name, value.get("id"), attrs)
         original_field_html = add_display_none_to_chooser_button(original_field_html)
@@ -82,7 +82,7 @@ class AdminVideoChooser(CastChooser):
         html = render_to_string("cast/video/chooser.html", context=context)
         return html
 
-    def render_js_init(self, id_: int, name: str, value: Optional[dict]) -> str:
+    def render_js_init(self, id_: int, name: str, value: dict | None) -> str:
         return f"createVideoChooser({json.dumps(id_)});"
 
     class Media:
@@ -120,7 +120,7 @@ class AdminAudioChooser(CastChooser):
     chooser_namespace = "castaudio"
     template_name = "cast/audio/chooser.html"
 
-    def get_value_data(self, value: Optional[Union["Video", int]]) -> Optional[dict]:
+    def get_value_data(self, value: Union["Video", int] | None) -> dict | None:
         if value is None:
             return value
         if not isinstance(value, Audio):
@@ -132,7 +132,7 @@ class AdminAudioChooser(CastChooser):
             "edit_link": reverse("castaudio:edit", args=[value.id]),
         }
 
-    def render_js_init(self, id_, name: str, value: Optional[dict]) -> str:
+    def render_js_init(self, id_, name: str, value: dict | None) -> str:
         return f"createAudioChooser({json.dumps(id_)});"
 
     class Media:

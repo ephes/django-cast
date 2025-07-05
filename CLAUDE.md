@@ -56,7 +56,7 @@ uv run tox
 # Quick development testing (faster)
 uvx tox -e fast
 
-# Note: The development server is typically run in a separate project 
+# Note: The development server is typically run in a separate project
 # where django-cast is installed as an editable package via:
 # uv sync
 ```
@@ -80,14 +80,11 @@ npm run coverage
 
 ### Code Quality
 ```bash
-# Format code with black
-black .
+# Format code and sort imports with ruff
+ruff format .
 
-# Sort imports
-isort .
-
-# Lint with flake8
-flake8
+# Lint with ruff
+ruff check --fix .
 
 # Run all pre-commit hooks
 pre-commit run --all-files
@@ -103,8 +100,8 @@ pre-commit run --all-files
 
 ## Code Style
 
-- Python: Black formatter with 119 char line length
-- Imports: isort with black profile, custom Django/Wagtail sections
+- Python: Ruff formatter with 119 char line length
+- Imports: Ruff import sorting (black-compatible)
 - Templates: djhtml formatting
 - Pre-commit hooks enforce all styling rules
 
