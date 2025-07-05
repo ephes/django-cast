@@ -55,7 +55,7 @@ uvx tox
 
 # Note: The development server is typically run in a separate project 
 # where django-cast is installed as an editable package via:
-# uv pip install -e /path/to/django-cast
+# uv sync
 ```
 
 ### JavaScript Build Commands
@@ -105,13 +105,29 @@ pre-commit run --all-files
 - Templates: djhtml formatting
 - Pre-commit hooks enforce all styling rules
 
+## Build System
+
+This project uses the **uv_build** backend (NOT hatchling). The configuration is in pyproject.toml:
+- Build backend: `uv_build`
+- Source layout: `src/cast/` directory structure
+- Module configuration: `module-root = "src"` and `module-name = "cast"`
+
+**IMPORTANT**: Always use `uv_build` as the build backend. Do not switch to hatchling or other backends.
+
+## Src Layout Considerations
+
+Since the project uses src layout (`src/cast/`), the following applies:
+- Tox configuration includes `PYTHONPATH={toxinidir}/src` to find the cast module
+- All imports reference `cast` (not `src.cast`)
+- Package is installed in editable mode with `uv pip install -e .`
+
 ## Important Files and Locations
 
-- Main app code: `cast/`
-- Models: `cast/models/`
-- API endpoints: `cast/api/`
-- Wagtail blocks: `cast/blocks.py`
-- Feed generation: `cast/feeds.py`
+- Main app code: `src/cast/` (uses src layout)
+- Models: `src/cast/models/`
+- API endpoints: `src/cast/api/`
+- Wagtail blocks: `src/cast/blocks.py`
+- Feed generation: `src/cast/feeds.py`
 - JavaScript source: `javascript/src/`
 - Tests: `tests/`
 - Example project: `example/`

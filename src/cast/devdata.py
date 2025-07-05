@@ -160,7 +160,7 @@ def add_gallery_to_body(*, body: Body, gallery: Gallery = Auto) -> Body:
 
 
 def get_tests_fixture_dir() -> Path:
-    return Path(__file__).parent.parent / "tests" / "fixtures"
+    return Path(__file__).parent.parent.parent / "tests" / "fixtures"
 
 
 def create_mp4_file(*, fixture_dir: Path = Auto) -> SimpleUploadedFile:

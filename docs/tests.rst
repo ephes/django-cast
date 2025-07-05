@@ -17,8 +17,7 @@ Then, create a virtualenv and install the project dependencies:
 
 .. code-block:: bash
 
-   $ uv venv
-   $ uv pip install -e .[dev]
+   $ uv sync
 
 Now create the test database:
 
