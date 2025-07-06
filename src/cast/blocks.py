@@ -336,7 +336,13 @@ class GalleryBlockWithLayout(StructBlock):
         assert isinstance(image_ids_or_images[0], int)
         # we have to fetch the images from the database
         image_ids = image_ids_or_images
-        values["gallery"] = list(Image.objects.filter(pk__in=image_ids))
+        
+        # Fetch all unique images first
+        unique_images = Image.objects.filter(pk__in=set(image_ids))
+        image_by_pk = {img.pk: img for img in unique_images}
+        
+        # Rebuild list preserving order and duplicates
+        values["gallery"] = [image_by_pk[image_id] for image_id in image_ids]
         return values
 
     def from_repository_to_python(self, repository: HasImagesAndRenditions, values):

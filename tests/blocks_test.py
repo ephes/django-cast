@@ -579,3 +579,58 @@ def test_all_gallery_templates_use_position_based_ids(image):
         # Should not have any PK-based IDs
         pk_based_id = f'id="img-{image.pk}"'
         assert pk_based_id not in rendered, f"Template {template_path} still has PK-based ID: {pk_based_id}"
+
+
+@pytest.mark.django_db
+def test_gallery_block_preserves_duplicate_images():
+    """Test that bulk_to_python_from_database preserves duplicate images."""
+    from cast.blocks import GalleryBlockWithLayout
+    from wagtail.images.models import Image
+    
+    # Create two different images  
+    image1 = Image(pk=1, title="Image 1")
+    image2 = Image(pk=2, title="Image 2")
+    
+    # Mock the database query to return our test images
+    def mock_filter(pk__in):
+        pk_set = set(pk__in)
+        return [img for img in [image1, image2] if img.pk in pk_set]
+    
+    # Patch Image.objects.filter to use our mock
+    import unittest.mock
+    with unittest.mock.patch.object(Image.objects, 'filter', side_effect=mock_filter):
+        # Test gallery with duplicate images: [1, 2, 1]
+        values = {
+            "gallery": [
+                {"type": "item", "value": 1},
+                {"type": "item", "value": 2}, 
+                {"type": "item", "value": 1}  # Duplicate of first image
+            ]
+        }
+        
+        block = GalleryBlockWithLayout()
+        result = block.bulk_to_python_from_database(values)
+        
+        # Should preserve all 3 images including the duplicate
+        images = result["gallery"]
+        assert len(images) == 3, f"Expected 3 images, got {len(images)}"
+        
+        # Check the order and duplicates are preserved
+        assert images[0].pk == 1, "First image should be pk=1"
+        assert images[1].pk == 2, "Second image should be pk=2"  
+        assert images[2].pk == 1, "Third image should be pk=1 (duplicate)"
+        
+        # Verify they're the same object instances
+        assert images[0] is images[2], "Duplicate images should be the same object instance"
+
+
+@pytest.mark.django_db
+def test_gallery_block_empty_gallery():
+    """Test that empty gallery is handled correctly."""
+    from cast.blocks import GalleryBlockWithLayout
+    
+    block = GalleryBlockWithLayout()
+    values = {"gallery": []}
+    result = block.bulk_to_python_from_database(values)
+    
+    assert result["gallery"] == []
