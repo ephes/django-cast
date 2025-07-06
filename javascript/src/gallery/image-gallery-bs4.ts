@@ -116,7 +116,13 @@ export default class ImageGalleryBs4 extends HTMLElement {
 
     private handleThumbnailClick(event: Event) {
         event.preventDefault();
-        this.setModalImage(event.target as HTMLElement);
+        // Find the img element within the clicked link, regardless of what was actually clicked
+        const target = event.target as HTMLElement;
+        const link = target.closest('.cast-gallery-modal') as HTMLElement;
+        const img = link?.querySelector('img') as HTMLElement;
+        if (img) {
+            this.setModalImage(img);
+        }
     }
 
     private handleFooterClick(event: Event) {
