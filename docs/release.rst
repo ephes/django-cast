@@ -31,8 +31,8 @@ Build the Javascript (image-gallery component):
    $ cd dist/
    $ mv .vite/manifest.json manifest.json
    $ rm -r .vite
-   $ rm ../../cast/static/cast/vite/*
-   $ cp * ../../cast/static/cast/vite/
+   $ rm ../../src/cast/static/cast/vite/*
+   $ cp * ../../src/cast/static/cast/vite/
 
 
 Test Python Versions and Merge develop into main
