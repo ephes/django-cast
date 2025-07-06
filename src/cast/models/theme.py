@@ -87,10 +87,11 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
     Return a list of choices for the template base directory setting.
     """
     # handle predefined choices
-    choices, seen = [], set()
+    choices: list[tuple[str, str]] = []
+    seen: set[str] = set()
     for template_name in TemplateName:
-        choices.append((template_name.value, template_name.label))
-        seen.add(template_name.value)
+        choices.append((template_name.value, str(template_name.label)))  # type: ignore[misc]
+        seen.add(template_name.value)  # type: ignore[misc]
 
     # handle custom choices via settings
     for template_name, display_name in getattr(settings, "CAST_CUSTOM_THEMES", []):
