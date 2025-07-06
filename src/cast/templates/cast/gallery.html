@@ -16,7 +16,7 @@
           data-modal-sizes="{{ image.modal.sizes }}"
         >
         <img
-          id="img-{{image.pk}}"
+          id="img-pos-{{ forloop.counter0 }}"
           class="cast-gallery-thumbnail"
           alt="{{ image.default_alt_text }}"
           src="{{ image.thumbnail.src.jpeg }}"

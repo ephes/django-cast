@@ -537,3 +537,45 @@ def test_gallery_template_position_based_ids_after_fix(image):
     # Should have no duplicate IDs
     assert rendered.count('id="img-pos-0"') == 1
     assert rendered.count('id="img-pos-1"') == 1
+
+
+@pytest.mark.django_db
+def test_all_gallery_templates_use_position_based_ids(image):
+    """Test that all gallery templates use position-based IDs consistently."""
+    from django.template import Context, Template
+    from django.template.loader import get_template
+    from cast.blocks import prepare_context_for_gallery
+    
+    # Create duplicate images
+    duplicate_images = [image, image]
+    
+    context = {
+        "repository": type('MockRepo', (), {
+            'renditions_for_posts': {image.pk: []},
+        })(),
+        "block": type('MockBlock', (), {'id': 'gallery-123'})(),
+        "template_base_dir": "bootstrap4",
+        "image_pks": f"{image.pk},{image.pk}"
+    }
+    
+    # Prepare gallery context
+    gallery_context = prepare_context_for_gallery(duplicate_images, context)
+    
+    # Test all gallery templates
+    templates_to_test = [
+        "cast/gallery.html", 
+        "cast/bootstrap4/gallery.html",
+        "cast/bootstrap4/gallery_htmx.html"
+    ]
+    
+    for template_path in templates_to_test:
+        template = get_template(template_path)
+        rendered = template.render(gallery_context)
+        
+        # Should have position-based IDs, not PK-based
+        assert 'id="img-pos-0"' in rendered, f"Template {template_path} missing img-pos-0"
+        assert 'id="img-pos-1"' in rendered, f"Template {template_path} missing img-pos-1"
+        
+        # Should not have any PK-based IDs
+        pk_based_id = f'id="img-{image.pk}"'
+        assert pk_based_id not in rendered, f"Template {template_path} still has PK-based ID: {pk_based_id}"
