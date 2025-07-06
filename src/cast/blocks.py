@@ -160,6 +160,8 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
 def add_prev_next(images: Iterable[AbstractImage]) -> None:
     """
     For each image in the queryset, add the previous and next image.
+    Note: This function is kept for backward compatibility, but prev/next
+    attributes are now calculated directly in templates to handle duplicates correctly.
     """
     for previous_image, current_image, next_image in previous_and_next(images):
         current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
@@ -188,10 +190,11 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     Add the previous and next image and the thumbnail and modal image data to each
     image of the gallery and then the images to the context.
     """
-    add_prev_next(images)
-    add_image_thumbnails(images, context=context)
-    context["image_pks"] = ",".join([str(image.pk) for image in images])
-    context["images"] = images
+    images_list = list(images)  # Ensure it's a list
+    add_prev_next(images_list)
+    add_image_thumbnails(images_list, context=context)
+    context["image_pks"] = ",".join([str(image.pk) for image in images_list])
+    context["images"] = images_list
     return context
 
 
@@ -329,7 +332,10 @@ class GalleryBlockWithLayout(StructBlock):
         assert isinstance(image_ids_or_images[0], int)
         # we have to fetch the images from the database
         image_ids = image_ids_or_images
-        values["gallery"] = list(Image.objects.filter(pk__in=image_ids))
+        # Fetch all images in one query but preserve the order
+        images_by_id = {img.pk: img for img in Image.objects.filter(pk__in=image_ids)}
+        # Reconstruct the list in the original order, allowing duplicates
+        values["gallery"] = [images_by_id[pk] for pk in image_ids if pk in images_by_id]
         return values
 
     def from_repository_to_python(self, repository: HasImagesAndRenditions, values):

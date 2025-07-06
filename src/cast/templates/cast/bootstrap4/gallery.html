@@ -17,7 +17,7 @@
             data-modal-sizes="{{ image.modal.sizes }}"
           >
           <img
-            id="img-{{image.pk}}"
+            id="img-{{forloop.counter0}}"
             class="cast-gallery-thumbnail"
             alt="{{ image.default_alt_text }}"
             src="{{ image.thumbnail.src.jpeg }}"
@@ -30,8 +30,8 @@
             data-modal-sizes="{{ image.modal.sizes }}"
             data-modal-width="{{ image.modal.width }}"
             data-modal-height="{{ image.modal.height }}"
-            data-prev="{{ image.prev }}"
-            data-next="{{ image.next }}"
+            data-prev="{% if forloop.first %}false{% else %}img-{{ forloop.counter0|add:"-1" }}{% endif %}"
+            data-next="{% if forloop.last %}false{% else %}img-{{ forloop.counter0|add:"1" }}{% endif %}"
             loading="lazy"
           />
         </picture>

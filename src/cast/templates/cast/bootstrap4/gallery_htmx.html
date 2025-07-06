@@ -1,7 +1,7 @@
 <div class="cast-gallery-container">
   {% for image in images %}
     <a
-      hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_pk={{ image.pk }}&block_id={{ block.id }}"
+      hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}"
       hx-trigger="click"
       hx-target="#imageGalleryModal-{{ block.id }}"
       class="cast-image-gallery-thumbnail cast-gallery-modal"
@@ -19,7 +19,7 @@
           data-modal-sizes="{{ image.modal.sizes }}"
         >
         <img
-          id="img-{{image.pk}}"
+          id="img-{{forloop.counter0}}"
           class="cast-gallery-thumbnail"
           alt="{{ image.default_alt_text }}"
           src="{{ image.thumbnail.src.jpeg }}"
@@ -32,8 +32,8 @@
           data-modal-sizes="{{ image.modal.sizes }}"
           data-modal-width="{{ image.modal.width }}"
           data-modal-height="{{ image.modal.height }}"
-          data-prev="{{ image.prev }}"
-          data-next="{{ image.next }}"
+          data-prev="{% if forloop.first %}false{% else %}img-{{ forloop.counter0|add:"-1" }}{% endif %}"
+          data-next="{% if forloop.last %}false{% else %}img-{{ forloop.counter0|add:"1" }}{% endif %}"
           loading="lazy"
         />
       </picture>
