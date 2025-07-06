@@ -160,10 +160,17 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
 def add_prev_next(images: Iterable[AbstractImage]) -> None:
     """
     For each image in the queryset, add the previous and next image.
+    Uses position-based IDs to handle duplicate images correctly.
     """
-    for previous_image, current_image, next_image in previous_and_next(images):
-        current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
-        current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
+    images_list = list(images)  # Convert to list to allow multiple iterations
+    
+    for i, (previous_image, current_image, next_image) in enumerate(previous_and_next(images_list)):
+        # Add position information to each image
+        current_image._gallery_position = i
+        
+        # Use position-based IDs instead of PK-based to handle duplicates
+        current_image.prev = "false" if previous_image is None else f"img-pos-{i-1}"
+        current_image.next = "false" if next_image is None else f"img-pos-{i+1}"
 
 
 def add_image_thumbnails(images: Iterable[AbstractImage], context: dict) -> None:

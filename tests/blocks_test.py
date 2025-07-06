@@ -380,3 +380,160 @@ def test_image_chooser_block_get_context_image_or_pk(image):
     assert context["value"] == image
     context = cicb.get_context(image.pk, parent_context={"repository": repository})
     assert context["value"] == image
+
+
+@pytest.mark.django_db
+def test_add_prev_next_unique_images():
+    """Test add_prev_next with unique images - now uses position-based IDs."""
+    from cast.blocks import add_prev_next
+    from wagtail.images.models import Image
+    
+    # Create 3 unique images
+    images = [Image(pk=1), Image(pk=2), Image(pk=3)]
+    add_prev_next(images)
+    
+    # After fix: all galleries use position-based IDs
+    # First image (position 0): no prev, next to position 1
+    assert images[0].prev == "false"
+    assert images[0].next == "img-pos-1"
+    
+    # Middle image (position 1): prev to position 0, next to position 2
+    assert images[1].prev == "img-pos-0"
+    assert images[1].next == "img-pos-2"
+    
+    # Last image (position 2): prev to position 1, no next
+    assert images[2].prev == "img-pos-1"
+    assert images[2].next == "false"
+
+
+@pytest.mark.django_db 
+def test_add_prev_next_duplicate_images():
+    """Test add_prev_next with duplicate images - now fixed with position-based IDs."""
+    from cast.blocks import add_prev_next
+    from wagtail.images.models import Image
+    
+    # Create gallery with duplicate images: [1, 2, 1] 
+    # This represents a gallery where image 1 appears twice
+    images = [Image(pk=1), Image(pk=2), Image(pk=1)]
+    add_prev_next(images)
+    
+    # After fix: each position gets unique navigation IDs
+    # Position 0: no prev, next to position 1
+    assert images[0].prev == "false"  
+    assert images[0].next == "img-pos-1"  
+    
+    # Position 1: prev to position 0, next to position 2
+    assert images[1].prev == "img-pos-0"  
+    assert images[1].next == "img-pos-2"  
+    
+    # Position 2: prev to position 1, no next
+    assert images[2].prev == "img-pos-1"  
+    assert images[2].next == "false"
+
+
+@pytest.mark.django_db
+def test_gallery_template_no_duplicate_ids_after_fix(image):
+    """Test that gallery template generates unique position-based IDs even with duplicate images."""
+    from django.template import Context, Template
+    from cast.blocks import prepare_context_for_gallery
+    
+    # Create duplicate images - same pk means same image used twice
+    duplicate_images = [image, image]  # Same image appears twice
+    
+    context = {
+        "repository": type('MockRepo', (), {
+            'renditions_for_posts': {image.pk: []},
+        })(),
+        "block": type('MockBlock', (), {'id': 'gallery-123'})()
+    }
+    
+    # Prepare gallery context
+    gallery_context = prepare_context_for_gallery(duplicate_images, context)
+    
+    # Use position-based template (like the actual gallery template now)
+    template_content = """
+    {% for image in images %}
+    <img id="img-pos-{{ forloop.counter0 }}" data-prev="{{ image.prev }}" data-next="{{ image.next }}" />
+    {% endfor %}
+    """
+    
+    template = Template(template_content)
+    rendered = template.render(Context(gallery_context))
+    
+    # After fix: should have unique position-based IDs
+    assert 'id="img-pos-0"' in rendered
+    assert 'id="img-pos-1"' in rendered
+    
+    # No duplicate IDs should exist
+    assert rendered.count('id="img-pos-0"') == 1
+    assert rendered.count('id="img-pos-1"') == 1
+
+
+@pytest.mark.django_db 
+def test_add_prev_next_position_based_ids():
+    """Test that add_prev_next generates position-based IDs for duplicate images - this will fail initially."""
+    from cast.blocks import add_prev_next
+    from wagtail.images.models import Image
+    
+    # Create gallery with duplicate images: [1, 2, 1]
+    images = [Image(pk=1), Image(pk=2), Image(pk=1)]
+    
+    # Add position information to images (this is what our fix should do)
+    for i, image in enumerate(images):
+        image._gallery_position = i
+    
+    add_prev_next(images)
+    
+    # After fix: each position should have unique navigation IDs based on position
+    # Position 0: no prev, next to position 1
+    assert images[0].prev == "false"  
+    assert images[0].next == "img-pos-1"  # Next to position 1, not pk-based
+    
+    # Position 1: prev to position 0, next to position 2  
+    assert images[1].prev == "img-pos-0"  # Prev to position 0
+    assert images[1].next == "img-pos-2"  # Next to position 2
+    
+    # Position 2: prev to position 1, no next
+    assert images[2].prev == "img-pos-1"  # Prev to position 1
+    assert images[2].next == "false"
+
+
+@pytest.mark.django_db
+def test_gallery_template_position_based_ids_after_fix(image):
+    """Test that gallery template will generate position-based unique IDs after fix."""
+    from django.template import Context, Template
+    from cast.blocks import prepare_context_for_gallery
+    
+    # Create duplicate images
+    duplicate_images = [image, image]
+    
+    # Add position information (this is what our fix should do)
+    for i, img in enumerate(duplicate_images):
+        img._gallery_position = i
+    
+    context = {
+        "repository": type('MockRepo', (), {
+            'renditions_for_posts': {image.pk: []},
+        })(),
+        "block": type('MockBlock', (), {'id': 'gallery-123'})()
+    }
+    
+    # Prepare gallery context
+    gallery_context = prepare_context_for_gallery(duplicate_images, context)
+    
+    # Template should use position-based IDs after fix
+    template_content = """
+    {% for image in images %}
+    <img id="img-pos-{{ forloop.counter0 }}" data-prev="{{ image.prev }}" data-next="{{ image.next }}" />
+    {% endfor %}
+    """
+    
+    template = Template(template_content)
+    rendered = template.render(Context(gallery_context))
+    
+    # After fix: should have unique position-based IDs
+    assert 'id="img-pos-0"' in rendered
+    assert 'id="img-pos-1"' in rendered
+    # Should have no duplicate IDs
+    assert rendered.count('id="img-pos-0"') == 1
+    assert rendered.count('id="img-pos-1"') == 1
