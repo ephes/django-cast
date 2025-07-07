@@ -1,0 +1,4 @@
+0.2.47 (TBD)
+------------
+
+Transcript detail page?

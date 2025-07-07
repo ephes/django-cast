@@ -1,4 +1,22 @@
-0.2.46 (2025-05-19)
+0.2.46 (2025-07-08)
 -------------------
 
-Transcript detail page?
+Build and Infrastructure:
+
+- #107 Migrate to uv_build backend and src layout
+- #187 Add tox and tox-uv to dev dependencies
+- #187 Optimize tox configuration with uv-venv-runner and wheel packaging
+- Replace black, isort, and flake8 with ruff
+- Add CLAUDE.md file with development guidance
+
+Bug Fixes:
+
+- #171 Fix gallery navigation with duplicate images
+- Fix mypy type errors in theme.py
+
+Testing and Documentation:
+
+- #171 Consolidate gallery tests into existing test files
+- #187 Update development documentation for tox usage
+- Minor documentation fixes after src layout migration
+- Small test fixes

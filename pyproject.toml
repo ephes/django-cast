@@ -1,6 +1,6 @@
 [project]
 name = "django-cast"
-version = "0.2.45"
+version = "0.2.46"
 authors = [
     {name = "Jochen Wersdörfer", email = "jochen-cast@wersdoerfer.de"},
     {name = "Dominik Geldmacher", email = "oryon@cyberise.de"},
