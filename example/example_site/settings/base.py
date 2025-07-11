@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 from pathlib import Path
 
+from cast import CAST_APPS, CAST_MIDDLEWARE
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Quick-start development settings - unsuitable for production
@@ -47,8 +49,6 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admin",
 ]
-# Import django-cast required apps and middleware
-from cast import CAST_APPS, CAST_MIDDLEWARE
 
 THIRD_PARTY_APPS = CAST_APPS
 LOCAL_APPS: list = [
