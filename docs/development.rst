@@ -1,12 +1,8 @@
-***********
+===========
 Development
-***********
+===========
 
 This guide covers everything you need to know to contribute to django-cast development.
-
-.. contents:: Table of Contents
-   :local:
-   :depth: 2
 
 Development Environment Setup
 =============================
@@ -279,11 +275,8 @@ When adding new features:
 3. Include usage examples
 4. Update the changelog if applicable
 
-Package Building and Releasing
-==============================
-
-Build System
-------------
+Package Building
+================
 
 Django-cast uses the ``uv_build`` backend (not hatchling). Configuration is in ``pyproject.toml``:
 
@@ -291,10 +284,7 @@ Django-cast uses the ``uv_build`` backend (not hatchling). Configuration is in `
 - Source layout: ``src/cast/``
 - Module configuration: ``module-root = "src"`` and ``module-name = "cast"``
 
-Building the Package
---------------------
-
-Build the package:
+To build the package locally:
 
 .. code-block:: bash
 
@@ -302,20 +292,7 @@ Build the package:
 
 This creates wheel and source distributions in the ``dist/`` directory.
 
-Release Process
----------------
-
-1. Update version in ``pyproject.toml``
-2. Update CHANGELOG.rst
-3. Create a pull request from ``develop`` to ``main``
-4. After merging, tag the release:
-
-   .. code-block:: bash
-
-      $ git tag -a v0.x.x -m "Release version 0.x.x"
-      $ git push origin v0.x.x
-
-5. GitHub Actions will automatically build and publish to PyPI
+For the complete release process, see :doc:`/release`.
 
 Development Workflow
 ====================

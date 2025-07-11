@@ -5,22 +5,34 @@ Django Cast
 Welcome to the Django Cast documentation! Django Cast is a blogging and podcasting
 package for `Django <https://https://www.djangoproject.com/>`_ based on `Wagtail <https://wagtail.org/>`_.
 
-This documentation is still in development and there are a lot of blanks to
-fill since Django Cast switched to Wagtail.
-
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Getting Started
 
    installation
-   contributing
    features
-   development
-   backup
    howto/index
-   release
-   releases/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: User Guide
+
+   backup
    models
    context-processors
    settings
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Developer Documentation
+
+   development
+   contributing
+   release
+   releases/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: About
+
    authors
