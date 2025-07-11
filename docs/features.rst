@@ -2,20 +2,24 @@
 Features
 ########
 
-.. include:: responsive-images.rst
-.. include:: frontend.rst
-.. include:: django-admin.rst
-.. include:: social-media.rst
-.. include:: comments.rst
-.. include:: blog.rst
-.. include:: post.rst
-.. include:: podcast.rst
-.. include:: episode.rst
-.. include:: tags.rst
-.. include:: image.rst
-.. include:: gallery.rst
-.. include:: video.rst
-.. include:: audio.rst
-.. include:: transcript.rst
-.. include:: themes.rst
-.. include:: management-commands.rst
+.. toctree::
+   :maxdepth: 2
+   :caption: Features Overview
+
+   responsive-images
+   frontend
+   django-admin
+   social-media
+   comments
+   blog
+   post
+   podcast
+   episode
+   tags
+   image
+   gallery
+   video
+   audio
+   transcript
+   themes
+   management-commands

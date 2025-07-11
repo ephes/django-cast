@@ -27,6 +27,7 @@ package for `Django <https://https://www.djangoproject.com/>`_ based on `Wagtail
    :caption: Developer Documentation
 
    development
+   tests
    contributing
    release
    releases/index

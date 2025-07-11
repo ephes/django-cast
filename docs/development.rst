@@ -84,6 +84,8 @@ For JavaScript development with hot reloading:
    $ cd javascript
    $ npm run dev
 
+.. _Running Tests:
+
 Running Tests
 =============
 

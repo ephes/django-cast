@@ -4,6 +4,13 @@ Howto
 
 This is mainly for me to remember how to do things 😁.
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Guides
+   
+   first-cast
+   integrate-cast
+
 ****************
 Database Changes
 ****************
