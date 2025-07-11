@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import TemplateView
+
 # from rest_framework.authtoken import views as authtokenviews  # TODO: Python 3.13 compatibility issue with coreapi
 # from rest_framework.documentation import include_docs_urls  # TODO: Python 3.13 compatibility with coreapi
 from wagtail import urls as wagtail_urls
