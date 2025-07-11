@@ -94,6 +94,7 @@ Source = "https://github.com/ephes/django-cast"
 [tool.ruff]
 line-length = 119
 target-version = "py310"
+exclude = ["*.ipynb"]
 
 [tool.ruff.format]
 quote-style = "double"
