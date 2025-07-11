@@ -334,9 +334,9 @@ Podcast artwork storage for iTunes requirements.
         original_height = PositiveIntegerField()
         original_width = PositiveIntegerField()
 
-*************************
+**************************
 Content Enhancement Models
-*************************
+**************************
 
 Models that add functionality to core content.
 
