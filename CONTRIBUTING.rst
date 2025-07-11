@@ -62,25 +62,26 @@ Ready to contribute? Here's how to set up `django-cast` for local development.
 
     $ git clone git@github.com:you/django-cast.git
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
+3. Install your local copy into a virtualenv using uv. This is how you set up your fork for local development::
 
     $ cd django-cast
-    $ python -m venv .venv
-    $ source .venv/bin/activate
-    $ python -m pip install flit
-    $ flit install -s
+    $ uv sync
 
-4. Create a branch for local development::
+4. Create a branch for local development from the develop branch::
 
+    $ git checkout develop
     $ git checkout -b name-of-your-bugfix-or-feature
 
    Now you can make your changes locally.
 
-5. When you're done making changes, check that your changes pass flake8 and the
+5. When you're done making changes, check that your changes pass linting and the
    tests, including testing other Python versions with tox::
 
-        $ pytest
-        $ tox
+        $ ruff format .
+        $ ruff check --fix .
+        $ uv run pytest
+        $ uv run mypy
+        $ uv run tox
 
 
 6. Commit your changes and push your branch to GitHub::
@@ -101,3 +102,4 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
 3. The pull request should work for Python 3.10, 3.11, and 3.12.
+4. Submit pull requests to the ``develop`` branch, not ``main``.
