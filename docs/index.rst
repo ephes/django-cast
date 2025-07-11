@@ -28,6 +28,7 @@ package for `Django <https://https://www.djangoproject.com/>`_ based on `Wagtail
    backup
    models
    streamfield
+   media
    context-processors
    settings
 
