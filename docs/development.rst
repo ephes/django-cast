@@ -69,7 +69,7 @@ Create and migrate the development database:
 Running the Development Server
 ------------------------------
 
-Django-cast is typically developed as an installed package in a separate project. 
+Django-cast is typically developed as an installed package in a separate project.
 For quick testing, you can use the example project:
 
 .. code-block:: bash
@@ -82,7 +82,7 @@ For JavaScript development with hot reloading:
 .. code-block:: bash
 
    $ cd javascript
-   $ npm run dev
+   $ npx vite
 
 .. _Running Tests:
 
@@ -102,7 +102,7 @@ For specific tests:
 
 .. code-block:: bash
 
-   $ uv run pytest tests/test_models.py::TestPostModel::test_post_creation
+   $ uv run pytest tests/models_test.py::TestPostModel::test_post_slug
 
 Test Coverage
 ~~~~~~~~~~~~~
@@ -119,7 +119,7 @@ Alternatively, use the commands script:
 
 .. code-block:: bash
 
-   $ python commands.py coverage
+   $ uv run commands.py coverage
 
 Test Database Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -139,19 +139,7 @@ Run JavaScript tests with Vitest:
 .. code-block:: bash
 
    $ cd javascript
-   $ npm test
-
-For watch mode during development:
-
-.. code-block:: bash
-
-   $ npm run test:watch
-
-Generate coverage report:
-
-.. code-block:: bash
-
-   $ npm run coverage
+   $ npx vitest run
 
 Testing Multiple Django/Wagtail Versions
 ----------------------------------------
@@ -184,13 +172,13 @@ Format your code:
 
 .. code-block:: bash
 
-   $ ruff format .
+   $ uv run ruff format .
 
 Fix linting issues:
 
 .. code-block:: bash
 
-   $ ruff check --fix .
+   $ uv run ruff check --fix .
 
 Pre-commit Hooks
 ----------------
@@ -376,18 +364,6 @@ Since the project uses src layout (``src/cast/``), ensure:
 - Package is installed in editable mode: ``uv pip install -e .``
 - Imports use ``cast`` (not ``src.cast``)
 - PYTHONPATH includes src directory when needed
-
-JavaScript Build Issues
------------------------
-
-If you encounter JavaScript build problems:
-
-.. code-block:: bash
-
-   $ cd javascript
-   $ rm -rf node_modules
-   $ npm install
-   $ npm run build
 
 Database Migration Conflicts
 ----------------------------
