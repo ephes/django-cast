@@ -17,16 +17,16 @@ Django Cast is a blogging and podcasting package built on Django and Wagtail CMS
 ### Page Hierarchy
 ```
 HomePage
-└── Blog (Index Page)
-    ├── Post (Content Page)
-    └── Podcast (Specialized Blog)
-        └── Episode (Specialized Post)
+├── Blog (Index Page)
+│   └── Post (Content Page)
+└── Podcast (Specialized Blog)
+    └── Episode (Specialized Post)
 ```
 
 ### Key Models
 - **Blog/Podcast**: Index pages containing settings and child posts
 - **Post/Episode**: Content pages with StreamField body and media attachments
-- **Audio/Video/Gallery**: Media models with user association and collection support
+- **Image/Audio/Video/Gallery**: Media models with user association and collection support
 - **ChapterMark/Transcript**: Audio enhancements for accessibility
 
 ### Design Patterns
@@ -45,20 +45,16 @@ uv run pytest
 python commands.py coverage
 
 # Type checking
-python commands.py mypy
+uv run mypy
 
 # Build documentation
-python commands.py docs
+uv run commands.py docs
 
 # Test against multiple Django/Wagtail versions
 uv run tox
 
-# Quick development testing (faster)
-uvx tox -e fast
-
 # Note: The development server is typically run in a separate project
-# where django-cast is installed as an editable package via:
-# uv sync
+# where django-cast is installed as an editable package
 ```
 
 ### JavaScript Build Commands
