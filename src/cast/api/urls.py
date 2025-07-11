@@ -10,6 +10,7 @@ app_name = "api"
 try:
     import coreapi  # noqa: F401
     from rest_framework.schemas import get_schema_view
+
     schema_view = get_schema_view(title="Cast API")
     schema_patterns = [path("schema/", schema_view)]
 except ImportError:

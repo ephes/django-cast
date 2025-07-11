@@ -24,7 +24,7 @@ from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Width
         (None, ""),  # make sure None is rendered as empty string
         (  # make sure source is rendered even if language is not found
             {"language": "nonexistent", "source": "blub"},
-            '<div class="highlight"><pre><span></span>blub\n' "</pre></div>\n",
+            '<div class="highlight"><pre><span></span>blub\n</pre></div>\n',
         ),
         (  # happy path
             {

@@ -104,7 +104,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             video_url = self.original.path
         width, height = self._get_video_dimensions(video_url)
         poster_cmd = (
-            'ffmpeg -ss {seconds} -i "{video_path}" -vframes 1' " -y -f image2 -s {width}x{height} {poster_path}"
+            'ffmpeg -ss {seconds} -i "{video_path}" -vframes 1 -y -f image2 -s {width}x{height} {poster_path}'
         ).format(
             video_path=video_url,
             seconds=self.poster_seconds,

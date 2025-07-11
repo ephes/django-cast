@@ -6,17 +6,14 @@ CAST_APPS = [
     # Form styling
     "crispy_forms",
     "crispy_bootstrap4",
-    
     # Filtering and API
     "django_filters",
     "django_htmx",
     "rest_framework",
-    
     # Comments system
     "fluent_comments",  # must be before django_comments
     "threadedcomments",
     "django_comments",
-    
     # Wagtail CMS
     "wagtail.api.v2",
     "wagtail.contrib.forms",
@@ -31,11 +28,9 @@ CAST_APPS = [
     "wagtail.search",
     "wagtail.admin",
     "wagtail",
-    
     # Wagtail dependencies
     "modelcluster",
     "taggit",
-    
     # Cast itself
     "cast.apps.CastConfig",
 ]

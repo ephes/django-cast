@@ -50,7 +50,7 @@ class Blog(Page):
     comments_enabled: models.BooleanField = models.BooleanField(
         _("comments_enabled"),
         default=True,
-        help_text=_("Whether comments are enabled for this blog." ""),
+        help_text=_("Whether comments are enabled for this blog."),
     )
     cover_image: models.ForeignKey = models.ForeignKey(
         Image,

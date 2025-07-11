@@ -62,7 +62,7 @@ class Command(BaseCommand):
             if path not in paths_from_models:
                 print(path)
                 stale_production[path] = size
-        print(f"stale production size: {sum(stale_production.values()) / 2 ** 20} Mb")
+        print(f"stale production size: {sum(stale_production.values()) / 2**20} Mb")
 
         if options["delete"]:
             for path in stale_production.keys():
