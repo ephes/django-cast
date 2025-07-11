@@ -16,6 +16,12 @@ package for `Django <https://https://www.djangoproject.com/>`_ based on `Wagtail
 
 .. toctree::
    :maxdepth: 1
+   :caption: Architecture
+
+   architecture
+
+.. toctree::
+   :maxdepth: 1
    :caption: User Guide
 
    backup
