@@ -91,6 +91,9 @@ dev = [
 Documentation = "https://django-cast.readthedocs.io/en/latest/"
 Source = "https://github.com/ephes/django-cast"
 
+[project.scripts]
+django-cast-quickstart = "cast.quickstart:main"
+
 [tool.ruff]
 line-length = 119
 target-version = "py310"
@@ -132,11 +135,12 @@ django_settings_module = "cast.settings"
 
 [tool.coverage.run]
 branch = true
-source = ["cast"]
+source = ["src/cast"]
 omit = [
-    "cast/migrations/*",
-    "cast/runner.py",
-    "cast/settings.py",
+    "src/cast/migrations/*",
+    "src/cast/runner.py",
+    "src/cast/settings.py",
+    "src/cast/quickstart.py",
 ]
 command_line = "runtests.py tests"
 

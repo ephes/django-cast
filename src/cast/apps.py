@@ -14,6 +14,8 @@ CAST_APPS = [
     "fluent_comments",  # must be before django_comments
     "threadedcomments",
     "django_comments",
+    # Vite support
+    "django_vite",
     # Wagtail CMS
     "wagtail.api.v2",
     "wagtail.contrib.forms",

@@ -7,7 +7,7 @@ from . import views
 app_name = "api"
 
 # Try to import coreapi and create schema view only if available
-try:
+try:  # pragma: no cover
     import coreapi  # noqa: F401
     from rest_framework.schemas import get_schema_view
 

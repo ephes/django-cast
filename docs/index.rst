@@ -9,7 +9,8 @@ package for `Django <https://https://www.djangoproject.com/>`_ based on `Wagtail
    :maxdepth: 1
    :caption: Getting Started
 
-   installation
+   quickstart
+   integrate
    features
    howto/index
 
@@ -27,7 +28,6 @@ package for `Django <https://https://www.djangoproject.com/>`_ based on `Wagtail
    :caption: Developer Documentation
 
    development
-   tests
    contributing
    release
    releases/index
