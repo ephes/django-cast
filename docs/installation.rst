@@ -28,48 +28,32 @@ one with the following ``django-admin`` command:
     django-admin startproject mysite
 
 
-Add following third party apps to your INSTALLED_APPS setting:
+Add the django-cast apps and middleware to your settings:
 
 .. code-block:: python
 
-   INSTALLED_APPS = (
-       ...
+   from cast import CAST_APPS, CAST_MIDDLEWARE
+
+   INSTALLED_APPS = [
+       # Django apps
+       "django.contrib.admin",
+       "django.contrib.auth",
+       "django.contrib.contenttypes",
+       "django.contrib.sessions",
+       "django.contrib.messages",
+       "django.contrib.staticfiles",
        "django.contrib.sites",
-       "cast.apps.CastConfig",
-       "crispy_forms",
-       "crispy_bootstrap4",
-       "django_filters",
-       "django_htmx",
-       "rest_framework",
-       "fluent_comments",
-       "threadedcomments",
-       "django_comments",
-       "wagtail.api.v2",
-       "wagtail.contrib.forms",
-       "wagtail.contrib.redirects",
-       "wagtail.contrib.settings",
-       "wagtail.embeds",
-       "wagtail.sites",
-       "wagtail.users",
-       "wagtail.snippets",
-       "wagtail.documents",
-       "wagtail.images",
-       "wagtail.search",
-       "wagtail.admin",
-       "wagtail",
-       "modelcluster",
-       "taggit",
-    )
+   ] + CAST_APPS
 
-Add some middleware to your MIDDLEWARE_CLASSES setting:
-
-.. code-block:: python
-
-   MIDDLEWARE = (
-       ...
-       "django_htmx.middleware.HtmxMiddleware",
-       "wagtail.contrib.redirects.middleware.RedirectMiddleware",
-   )
+   MIDDLEWARE = [
+       "django.middleware.security.SecurityMiddleware",
+       "django.contrib.sessions.middleware.SessionMiddleware",
+       "django.middleware.common.CommonMiddleware",
+       "django.middleware.csrf.CsrfViewMiddleware",
+       "django.contrib.auth.middleware.AuthenticationMiddleware",
+       "django.contrib.messages.middleware.MessageMiddleware",
+       "django.middleware.clickjacking.XFrameOptionsMiddleware",
+   ] + CAST_MIDDLEWARE
 
 Append some required configuration settings to your ``settings.py``:
 

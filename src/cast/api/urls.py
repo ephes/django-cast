@@ -1,15 +1,22 @@
 from typing import Any
 
 from django.urls import include, path, re_path
-from rest_framework.schemas import get_schema_view
 
 from . import views
 
 app_name = "api"
-schema_view = get_schema_view(title="Cast API")
 
-urlpatterns: list[Any] = [
-    path("schema/", schema_view),
+# Try to import coreapi and create schema view only if available
+try:
+    import coreapi  # noqa: F401
+    from rest_framework.schemas import get_schema_view
+    schema_view = get_schema_view(title="Cast API")
+    schema_patterns = [path("schema/", schema_view)]
+except ImportError:
+    # If coreapi is not installed, skip schema generation
+    schema_patterns = []
+
+urlpatterns: list[Any] = schema_patterns + [
     path("", views.api_root, name="root"),
     # video
     path("videos/", views.VideoListView.as_view(), name="video_list"),

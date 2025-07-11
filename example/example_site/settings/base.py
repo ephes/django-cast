@@ -47,33 +47,13 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admin",
 ]
-THIRD_PARTY_APPS = [
-    "crispy_forms",
-    "crispy_bootstrap4",
-    "django_filters",
-    "rest_framework",
-    "cast.apps.CastConfig",
-    "fluent_comments",
-    "threadedcomments",
-    "django_comments",
-    "wagtail.api.v2",
-    "wagtail.contrib.forms",
-    "wagtail.contrib.redirects",
-    "wagtail.contrib.settings",
-    "wagtail.embeds",
-    "wagtail.sites",
-    "wagtail.users",
-    "wagtail.snippets",
-    "wagtail.documents",
-    "wagtail.images",
-    "wagtail.search",
-    "wagtail.admin",
-    "wagtail",
-    "modelcluster",
-    "taggit",
-]
+# Import django-cast required apps and middleware
+from cast import CAST_APPS, CAST_MIDDLEWARE
+
+THIRD_PARTY_APPS = CAST_APPS
 LOCAL_APPS: list = [
     # Your stuff: custom apps go here
+    "rest_framework.authtoken",  # For API authentication in example
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -89,9 +69,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "wagtail.contrib.redirects.middleware.RedirectMiddleware",
-    "django_htmx.middleware.HtmxMiddleware",
-]
+] + CAST_MIDDLEWARE
 
 ROOT_URLCONF = "example_site.urls"
 
