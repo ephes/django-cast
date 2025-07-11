@@ -19,6 +19,7 @@ package for `Django <https://https://www.djangoproject.com/>`_ based on `Wagtail
    :caption: Architecture
 
    architecture
+   api
 
 .. toctree::
    :maxdepth: 1
