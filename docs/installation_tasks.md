@@ -2,10 +2,10 @@
 
 ## Immediate Tasks (High Priority)
 
-- [ ] Remove empty `example_site/` folder at root level
-- [ ] Create `cast.apps.CAST_APPS` constant containing all required apps
-- [ ] Create `cast.apps.CAST_MIDDLEWARE` constant for required middleware
-- [ ] Update installation.rst to use the new constants
+- [x] Remove empty `example_site/` folder at root level
+- [x] Create `cast.apps.CAST_APPS` constant containing all required apps
+- [x] Create `cast.apps.CAST_MIDDLEWARE` constant for required middleware
+- [x] Update installation.rst to use the new constants
 
 ## Documentation Improvements (High Priority)
 
@@ -45,7 +45,13 @@
 
 ## Testing and Validation
 
-- [ ] Test installation process on fresh virtualenv
-- [ ] Validate all documentation examples work
+- [x] Test installation process on fresh virtualenv
+- [x] Validate all documentation examples work
 - [ ] Create automated test for quickstart process
 - [ ] Add CI test for example project
+
+## Additional Completed Tasks
+
+- [x] Fix Python 3.13 compatibility issue with coreapi in API schema generation
+- [x] Update example project to use new constants
+- [x] Test example project runs successfully with migrations
