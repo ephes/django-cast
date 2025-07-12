@@ -1,4 +1,25 @@
-0.2.47 (TBD)
-------------
+0.2.47 (2025-07-12)
+-------------------
 
-Transcript detail page?
+New Features:
+
+- #190 Add django-cast-quickstart CLI command for quick project setup
+- #190 Add CAST_APPS and CAST_MIDDLEWARE constants for simplified installation
+
+Documentation:
+
+- #190 Major documentation restructure and improvements
+- #190 Add comprehensive architecture documentation
+- #190 Add comprehensive API documentation
+- #190 Enhance models documentation with comprehensive coverage
+- #190 Add comprehensive StreamField documentation
+- #190 Add comprehensive media handling documentation
+- Fix Furo theme issues and documentation build warnings
+- Improve documentation structure for better organization
+- Consolidate development documentation
+
+Build and Infrastructure:
+
+- Exclude Jupyter notebooks and migrations from ruff formatting
+- Fix E402 linting errors by moving imports to top of files
+- Minor code quality improvements with ruff
