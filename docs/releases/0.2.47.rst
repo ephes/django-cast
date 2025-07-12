@@ -23,3 +23,5 @@ Build and Infrastructure:
 - Exclude Jupyter notebooks and migrations from ruff formatting
 - Fix E402 linting errors by moving imports to top of files
 - Minor code quality improvements with ruff
+- Update JavaScript dependencies (Vite 7.0.2 → 7.0.4)
+- Rebuild production JavaScript bundles
