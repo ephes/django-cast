@@ -170,5 +170,14 @@ When modifying models:
 ## Commit Guidelines
 - Do not bump the version number on every commit
 
+## Version Bumping
+
+When bumping the version number for a new release:
+1. Update version in `pyproject.toml` (version = "X.Y.Z")
+2. Update version in `docs/conf.py` (release = "X.Y.Z")
+3. Update version in `src/cast/__init__.py` (__version__ = "X.Y.Z")
+4. Update version reference in `README.md` (Documentation for [current version X.Y.Z])
+5. Create new release notes file `docs/releases/X.Y.Z.rst` with standard template
+
 ## Memories
 - Use `uv run tox` instead of `uvx tox`
