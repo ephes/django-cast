@@ -98,7 +98,7 @@ Video file support with automatic poster generation.
 - Automatic poster frame extraction (requires FFmpeg)
 - Configurable poster timestamp
 - Dimension detection
-- Format support: MP4, MOV, AVI
+- Format support: Any format browsers can play
 - MIME type detection
 
 **Poster Generation**:
@@ -356,19 +356,6 @@ All media is filtered by user:
     # In admin
     # Automatically filtered by logged-in user
 
-Collections
-~~~~~~~~~~~
-
-Organize media with Wagtail collections:
-
-.. code-block:: python
-
-    from wagtail.models import Collection
-
-    # Assign to collection
-    audio.collection = Collection.objects.get(name="Podcasts")
-    audio.save()
-
 Search Integration
 ~~~~~~~~~~~~~~~~~~
 
@@ -412,37 +399,12 @@ Media blocks in post content:
 Best Practices
 --------------
 
-Storage
-~~~~~~~
-
-1. Use CDN for production media delivery
-2. Configure separate backup storage
-3. Set appropriate upload size limits
-4. Use S3 lifecycle policies for old renditions
-
-Performance
-~~~~~~~~~~~
-
-1. Pre-generate common renditions
-2. Use repository pattern for bulk operations
-3. Enable caching headers for media files
-4. Lazy-load images with loading="lazy"
-
-Formats
-~~~~~~~
-
-1. Provide multiple audio formats for compatibility
-2. Use modern image formats (AVIF) with fallbacks
-3. Optimize video encoding before upload
-4. Consider file size vs quality tradeoffs
-
 Maintenance
 ~~~~~~~~~~~
 
 1. Run `media_stale` periodically to clean orphaned files
-2. Monitor storage usage with `media_sizes`
-3. Backup media files regularly
-4. Test restore procedures
+2. Backup media files regularly
+3. Test restore procedures
 
 Troubleshooting
 ---------------
@@ -483,17 +445,3 @@ Ensure bucket policy allows required operations:
 - GetObject
 - PutObject
 - DeleteObject (if DELETE_WAGTAIL_IMAGES is True)
-
-Dependencies
-------------
-
-Required packages:
-
-- **Pillow**: Image processing
-- **FFmpeg**: Audio/video processing (system package)
-- **django-storages**: S3 and other cloud storage (optional)
-
-Optional enhancements:
-
-- **Willow**: Advanced image operations
-- **python-magic**: Better MIME type detection

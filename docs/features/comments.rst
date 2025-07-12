@@ -30,6 +30,6 @@ are considered spam. It's possible to re-train the spam filter via a
 action on the :code:`SpamFilter` model. The precision, recall and F1 performance
 indicators are also shown in the admin interface.
 
-.. image:: images/spam_filter_performance.png
+.. image:: ../images/spam_filter_performance.png
   :width: 800
   :alt: Show a spam filter row in the Django admin interface

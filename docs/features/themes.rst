@@ -11,10 +11,10 @@ which are stored in their session.
   CSS
 * Bootstrap 4 (bootstrap4) - This is a template that uses Bootstrap 4
   and is currently the default template
-* `Bootstrap 5 (bootstrap5) <https://https://github.com/ephes/cast-bootstrap5>`_
+* `Bootstrap 5 (bootstrap5) <https://github.com/ephes/cast-bootstrap5>`_
   - This is a template that uses Bootstrap 5 and is the theme that I usually
   use for my own projects
-* `Vue.js <https://https://github.com/ephes/cast-vue>`_ - This is a template
+* `Vue.js <https://github.com/ephes/cast-vue>`_ - This is a template
   that uses Vue.js and demonstrates how to combine an SPA frontend with
   django-cast
 
@@ -65,11 +65,11 @@ How to Change the Theme for the whole Site
 
 This setting can be found at `settings > Template base directory`:
 
-.. image:: images/template_base_dir_setting.png
+.. image:: ../images/template_base_dir_setting.png
   :width: 600
   :alt: Set the theme or "template base directory" for the whole site
 
-There's a :doc:`context processor <context-processors>` that adds the
+There's a :doc:`context processor </reference/context-processors>` that adds the
 current template base directory aka theme to the context. For convenience
 it also adds the theme's base template as a variable to the context to
 be able to extend it in non Wagtail templates.
@@ -118,7 +118,7 @@ How to Change the Theme for a Single Blog
 
 This setting can be found at `pages > ... > Blog`:
 
-.. image:: images/blog_template_base_dir_setting.png
+.. image:: ../images/blog_template_base_dir_setting.png
   :width: 600
   :alt: Set the theme or "template base directory" for a single blog
 

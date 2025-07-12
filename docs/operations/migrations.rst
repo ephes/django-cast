@@ -1,22 +1,44 @@
-#####
-Howto
-#####
+.. _migrations_overview:
 
-This is mainly for me to remember how to do things 😁.
+********************
+Database Migrations
+********************
 
-.. toctree::
-   :maxdepth: 1
-   :caption: Guides
-   
-   first-cast
-   integrate-cast
+Django Cast uses Django's migration system for most database changes. However, some complex changes require special handling, particularly when working with Wagtail's page tree structure.
 
-****************
-Database Changes
-****************
+Standard Migrations
+===================
+
+Creating Migrations
+-------------------
+
+For most model changes:
+
+.. code-block:: bash
+
+    # After modifying models
+    uv run manage.py makemigrations
+
+    # Review the generated migration
+    uv run manage.py showmigrations
+
+    # Apply the migration
+    uv run manage.py migrate
+
+Migration Best Practices
+------------------------
+
+1. **Review Generated Migrations**: Always check the generated SQL
+2. **Test Locally First**: Run migrations on a copy of production data
+3. **Backup Before Migrating**: Always backup production before migrations
+4. **Use Atomic Transactions**: Ensure migrations can be rolled back
+5. **Document Complex Changes**: Add comments for non-obvious migrations
+
+Complex Page Migrations
+=======================
 
 Migration with Restore from Backup
-==================================
+----------------------------------
 
 Sometimes it's not possible to do database changes via a Django migration.
 For example if you try to split up a model inheriting from Wagtails page
@@ -30,7 +52,7 @@ restore it in production. A manual migration is only needed for a database
 where there are models which should be added to the new model.
 
 Steps
------
+~~~~~
 
 #. Backup old production database
 	#. Fetch production database and restore it to the local development database
@@ -41,7 +63,7 @@ Steps
 	#. Use `uv pip install -e .` to install the `django-cast <https://github.com/ephes/django-cast>`_. package in the venv of your application
 	#. Migrate
 #. Migrate the database data manually
-	#. Use a jupyter notebook to copy the old models over to the new model [example]_
+	#. Use a jupyter notebook to copy the old models over to the new model [blog_to_podcast_example]_
 	#. Make sure to prefix uniqe page fields like `slug` with `new` first and rename it afterwards
 	#. Remove the moved attributes from the old model
 	#. Rename the attributes prefixed with `new_` in the new model
@@ -51,7 +73,7 @@ Steps
 	#. `cd deploy && ansible-playbook restore_database.yml --limit staging`
 
 
-.. [example] blog_to_podcast example
+.. [blog_to_podcast_example] blog_to_podcast example
 
     .. code-block:: python
 
@@ -107,3 +129,100 @@ Steps
         # restore slug
         podcast.slug = original_slug
         podcast.save()
+
+Common Migration Scenarios
+==========================
+
+Adding Fields
+-------------
+
+Simple field addition:
+
+.. code-block:: python
+
+    # In models.py
+    class Post(Page):
+        subtitle = models.CharField(max_length=255, blank=True)
+
+Data Migrations
+---------------
+
+Creating a data migration:
+
+.. code-block:: bash
+
+    uv run manage.py makemigrations --empty myapp
+
+Then edit the migration:
+
+.. code-block:: python
+
+    from django.db import migrations
+
+    def populate_subtitle(apps, schema_editor):
+        Post = apps.get_model('cast', 'Post')
+        for post in Post.objects.all():
+            post.subtitle = f"Subtitle for {post.title}"
+            post.save()
+
+    class Migration(migrations.Migration):
+        dependencies = [
+            ('cast', '0001_initial'),
+        ]
+
+        operations = [
+            migrations.RunPython(populate_subtitle),
+        ]
+
+Troubleshooting Migrations
+==========================
+
+Common Issues
+-------------
+
+1. **Circular Dependencies**
+   
+   - Review migration dependencies
+   - Consider squashing migrations
+   - Use `--run-syncdb` for fresh installs
+
+2. **Page Tree Corruption**
+   
+   - Run `manage.py fixtree`
+   - Check for orphaned pages
+   - Verify path and depth fields
+
+3. **Failed Migrations**
+   
+   - Check migration state: `showmigrations`
+   - Fake migrations if needed: `migrate --fake`
+   - Restore from backup if necessary
+
+4. **Performance Issues**
+   
+   - Add database indexes
+   - Use `RunSQL` for complex operations
+   - Consider batching large data migrations
+
+Migration Tools
+===============
+
+Useful Commands
+---------------
+
+.. code-block:: bash
+
+    # Show migration plan
+    uv run manage.py showmigrations
+
+    # Show SQL for a migration
+    uv run manage.py sqlmigrate cast 0001
+
+    # Check for migration issues
+    uv run manage.py makemigrations --check
+
+    # Squash migrations
+    uv run manage.py squashmigrations cast 0001 0010
+
+    # Fix Wagtail page tree
+    uv run manage.py fixtree

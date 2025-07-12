@@ -1,8 +1,24 @@
+.. _images_and_galleries:
+
+********************
+Images and Galleries
+********************
+
+Django Cast provides comprehensive image handling with automatic responsive image generation, gallery support, and optimized delivery across all devices.
+
+.. _image_overview:
+
+Images
+======
+
+Images are mostly just the normal Wagtail Images. But they are
+rendered using a `picture` tag supporting `srcset` and `sizes` attributes
+for :ref:`responsive images <response_images_overview>`.
+
 .. _response_images_overview:
 
-*****************
 Responsive Images
-*****************
+=================
 
 Responsive images adapt to different screen sizes, ensuring optimal
 display across devices. This project uses two types of responsive images:
@@ -21,7 +37,7 @@ Those three renditions are put into the `srcset` attribute of the related `sourc
 elements.
 
 Normal Images
-=============
+-------------
 
 Normal images fill a slot with a width of 1110px and a maximum height of 740px.
 But you can configure those values in the :ref:`settings <image_slot_dimensions>`.
@@ -33,9 +49,19 @@ to high pixel density devices.
 Both AVIF and JPEG formats are supported.
 
 Thumbnail Images
-================
+----------------
 
 Thumbnail images have a width of 120px and a maximum height of 80px. But you can
 also set those values in the :ref:`settings <image_slot_dimensions>`.
 
 They also support AVIF and JPEG formats.
+
+.. _gallery_overview:
+
+Galleries
+=========
+
+Galleries are a collection of images. They are used to display a
+list of thumbnails and a larger view of the selected image. See
+:ref:`responsive images <response_images_overview>` for more
+information about thumbnails.

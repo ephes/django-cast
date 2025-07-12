@@ -1,3 +1,11 @@
+.. _content_organization:
+
+********************
+Content Organization
+********************
+
+Django Cast provides flexible ways to organize and categorize your content through tags and categories. This helps readers discover related content and improves site navigation.
+
 *****************
 Categories / Tags
 *****************

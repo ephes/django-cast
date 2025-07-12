@@ -11,6 +11,6 @@ added to your tweet. At the moment you have to generate the
 metadata manually. For an example have a look at
 `this episode template <https://github.com/ephes/python-podcast/blob/main/python_podcast/templates/cast/bootstrap4/episode.html>`_.
 
-.. image:: images/twitter_card.png
+.. image:: ../images/twitter_card.png
   :width: 400
   :alt: Image of a Twitter Card
