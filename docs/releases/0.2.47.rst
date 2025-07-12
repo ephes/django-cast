@@ -25,3 +25,4 @@ Build and Infrastructure:
 - Minor code quality improvements with ruff
 - Update JavaScript dependencies (Vite 7.0.2 → 7.0.4)
 - Rebuild production JavaScript bundles
+- Update pre-commit hooks (Ruff 0.8.0 → 0.12.3)
