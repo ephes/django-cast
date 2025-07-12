@@ -96,27 +96,47 @@ Access page content with filtering::
     GET /api/wagtail/pages/
     GET /api/wagtail/pages/{id}/
 
-Query parameters:
+Standard Wagtail filters:
 
-- ``type``: Filter by page type (e.g., ``cast.Post``)
-- ``fields``: Comma-separated list of fields to include
+- ``type``: Filter by page type (e.g., ``cast.Post``, ``cast.Episode``)
+- ``child_of``: Filter to only include direct children of the page with this ID
+- ``descendant_of``: Filter to include all descendants of the page with this ID
+- ``translation_of``: Filter to only include translations of the page with this ID
+- ``fields``: Comma-separated list of fields to include in response
 - ``order``: Ordering field (prefix with ``-`` for descending)
-- ``search``: Full-text search
-- ``slug``: Filter by slug
+- ``slug``: Filter by slug (exact match)
 - ``show_in_menus``: Filter pages shown in menus
+- ``search``: Full-text search (note: when using ``use_post_filter=true``, this uses Django Cast's enhanced search)
+- ``limit``: Number of results per page
+- ``offset``: Number of results to skip
 
-Custom filters for posts:
+Django Cast custom filters (requires ``use_post_filter=true``):
 
-- ``date_facets``: Include date facets in response
-- ``category_facets``: Include category facets
-- ``date_from``: Filter posts from date (YYYY-MM-DD)
-- ``date_to``: Filter posts until date
-- ``category``: Filter by category slug
-- ``tag``: Filter by tag name
+- ``use_post_filter``: Set to ``true`` to enable Django Cast's enhanced filtering
+- ``date_facets``: Filter by year-month (format: ``YYYY-MM``)
+- ``category_facets``: Filter by category slug
+- ``tag_facets``: Filter by tag slug
+- ``date_after``: Filter posts after date (format: ``YYYY-MM-DD``)
+- ``date_before``: Filter posts before date (format: ``YYYY-MM-DD``)
+- ``o``: Ordering by visible_date (use ``-visible_date`` for descending)
 
-Example filtered request::
+Example requests:
 
-    GET /api/wagtail/pages/?type=cast.Post&category=tech&date_from=2024-01-01
+Standard Wagtail filtering::
+
+    GET /api/wagtail/pages/?type=cast.Post&child_of=4
+
+Enhanced Django Cast filtering::
+
+    GET /api/wagtail/pages/?type=cast.Post&use_post_filter=true&category_facets=tech&date_after=2024-01-01
+
+Filter posts by month::
+
+    GET /api/wagtail/pages/?type=cast.Post&use_post_filter=true&date_facets=2024-03
+
+Combined filters::
+
+    GET /api/wagtail/pages/?type=cast.Post&child_of=4&use_post_filter=true&tag_facets=python&date_facets=2024-03
 
 **Images API**
 
