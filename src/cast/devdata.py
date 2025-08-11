@@ -275,7 +275,6 @@ def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[st
     if podcast:
         for audio in audios:
             create_transcript(audio=audio, vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n\nTest transcript)")
-
     # serialize the body and create the posts
     serialized_body = json.dumps(body)
     for num in range(number_of_posts):
