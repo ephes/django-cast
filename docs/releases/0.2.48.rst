@@ -1,18 +1,6 @@
-0.2.48 (unreleased)
+0.2.48 (2025-08-11)
 -------------------
 
 New Features:
 
--
-
-Bug Fixes:
-
--
-
-Documentation:
-
--
-
-Build and Infrastructure:
-
--
+- Support for wagtail 7.1
