@@ -1,12 +1,12 @@
 [project]
 name = "django-cast"
-version = "0.2.48"
+version = "0.2.49"
 authors = [
     {name = "Jochen Wersdörfer", email = "jochen-cast@wersdoerfer.de"},
     {name = "Dominik Geldmacher", email = "oryon@cyberise.de"},
 ]
 description = "Django Cast is a blogging and podcasting package built on Django and Wagtail CMS"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 keywords = [
     "blog",
     "podcast",
@@ -29,6 +29,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
@@ -96,7 +97,7 @@ django-cast-quickstart = "cast.quickstart:main"
 
 [tool.ruff]
 line-length = 119
-target-version = "py310"
+target-version = "py311"
 exclude = ["*.ipynb", "*/migrations/*"]
 
 [tool.ruff.format]
@@ -124,7 +125,7 @@ addopts = [
 ]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 ignore_missing_imports = true
 plugins = ["mypy_django_plugin.main"]
 exclude = "[a-zA-Z]*/(migrations)|(example)/(.)*"  # ignore migrations
@@ -154,3 +155,11 @@ exclude_lines = [
 
 [mypy.plugins.django-stubs]
 django_settings_module = "cast.settings"
+
+[tool.specsync]
+workspace_subdir = "specs"
+repo_specs_dir = "specs"
+
+[tool.specsync.filter]
+require_expose = true
+match_project = true
