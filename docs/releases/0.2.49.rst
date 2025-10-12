@@ -1,0 +1,22 @@
+0.2.49 (unreleased)
+-------------------
+
+New Features:
+
+- Added support for Python 3.14 (Django 5.2+ only)
+
+Bug Fixes:
+
+-
+
+Other Changes:
+
+- Updated minimum Python version requirement from 3.9 to 3.11
+- Fixed inconsistent Python version requirements across configuration files
+- Updated CI/CD pipeline to test on Python 3.11, 3.12, 3.13, and 3.14
+- Updated mypy python_version to 3.14 for improved type checking
+- Updated all documentation to reflect Python 3.11 minimum requirement
+
+Notes:
+
+- Python 3.14 is only supported with Django 5.2+. Django 4.2 does not officially support Python 3.14. 
