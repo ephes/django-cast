@@ -46,8 +46,9 @@ output/*/index.html
 # Sphinx
 docs/_build
 
-# environmen
+# environment
 .env
+.envrc
 
 # gitignore
 .gitignore.swp
@@ -98,3 +99,5 @@ example/media
 
 # macOS stuff
 .DS_Store
+# Added by specsync
+specs
