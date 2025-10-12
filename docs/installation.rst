@@ -10,7 +10,7 @@ Prerequisites
 
 Before you begin, ensure you have:
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - `uv <https://docs.astral.sh/uv/>`_ (recommended) or pip
 - `ffmpeg <https://ffmpeg.org/download.html>`_ (optional, for video/audio processing)
 

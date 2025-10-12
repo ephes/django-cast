@@ -12,7 +12,7 @@ Prerequisites
 
 Before you begin, ensure you have the following installed:
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - Node.js 18 or higher
 - `uv <https://github.com/astral-sh/uv>`_ for Python package management
 - Git
@@ -154,7 +154,7 @@ To test a specific environment:
 
 .. code-block:: bash
 
-   $ uv run tox -e py39-django42-wagtail50
+   $ uv run tox -e py314-django52-wagtail7
 
 Code Quality
 ============
@@ -216,7 +216,7 @@ The project uses type hints throughout the codebase. When adding new code, pleas
 
 Configuration for mypy is in ``pyproject.toml``. Key settings include:
 
-- ``python_version = "3.10"``
+- ``python_version = "3.14"``
 - ``check_untyped_defs = true``
 - ``ignore_missing_imports = true``
 
