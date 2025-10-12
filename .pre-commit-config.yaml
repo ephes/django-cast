@@ -1,7 +1,7 @@
 exclude: "^.*(migrations|fluent_comments).*$"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -9,23 +9,23 @@ repos:
       - id: check-yaml
       - id: check-toml
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.20.0
+    rev: v3.21.0
     hooks:
       - id: pyupgrade
         args: [--py311-plus]
   - repo: https://github.com/adamchainz/django-upgrade
-    rev: 1.25.0
+    rev: 1.29.0
     hooks:
       - id: django-upgrade
         args: [--target-version, "4.2"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.3
+    rev: v0.14.0
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
   - repo: https://github.com/rtts/djhtml
-    rev: "3.0.8"  # replace with the latest tag on GitHub
+    rev: "3.0.10"  # replace with the latest tag on GitHub
     hooks:
       - id: djhtml
         args: [-t, "2"]
