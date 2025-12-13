@@ -3,8 +3,8 @@
 
 New Features:
 
--
+- Added ``justfile`` for streamlined development commands (``just test``, ``just lint``, ``just typecheck``, ``just docs``, etc.)
 
 Other Changes:
 
--
+- Updated developer documentation (``docs/development.rst`` and ``docs/architecture.rst``)
