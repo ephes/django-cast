@@ -15,6 +15,7 @@ Before you begin, ensure you have the following installed:
 - Python 3.11 or higher
 - Node.js 18 or higher
 - `uv <https://github.com/astral-sh/uv>`_ for Python package management
+- `just <https://github.com/casey/just>`_ command runner
 - Git
 
 Cloning the Repository
@@ -35,11 +36,12 @@ Start by forking and cloning the django-cast repository:
 Setting Up the Python Environment
 ---------------------------------
 
-Create a virtual environment and install all dependencies using uv:
+Create a virtual environment and install all dependencies:
 
 .. code-block:: bash
 
-   $ uv sync
+   $ just install
+   # or directly: uv sync
 
 This command will:
 
@@ -64,7 +66,15 @@ Create and migrate the development database:
 
 .. code-block:: bash
 
-   $ uv run manage.py migrate
+   $ cd example
+   $ uv run python manage.py migrate
+
+.. note::
+
+   This repository contains two ``manage.py`` entry points:
+
+   - ``manage.py`` (repository root) defaults to ``tests.settings`` and is mainly used for running the test suite.
+   - ``example/manage.py`` uses ``example_site.settings.dev`` and is intended for interactive development.
 
 Running the Development Server
 ------------------------------
@@ -75,7 +85,7 @@ For quick testing, you can use the example project:
 .. code-block:: bash
 
    $ cd example
-   $ uv run manage.py runserver
+   $ uv run python manage.py runserver
 
 For JavaScript development with hot reloading:
 
@@ -92,17 +102,18 @@ Running Tests
 Python Tests
 ------------
 
-Run the Python test suite using pytest:
+Run the Python test suite:
 
 .. code-block:: bash
 
-   $ uv run pytest
+   $ just test
+   # or directly: uv run pytest
 
 For specific tests:
 
 .. code-block:: bash
 
-   $ uv run pytest tests/models_test.py::TestPostModel::test_post_slug
+   $ just test-one tests/models_test.py::TestPostModel::test_post_slug
 
 Test Coverage
 ~~~~~~~~~~~~~
@@ -111,15 +122,17 @@ Generate a coverage report:
 
 .. code-block:: bash
 
-   $ uv run coverage run -m pytest
-   $ uv run coverage html
-   $ open htmlcov/index.html
+   $ just coverage
 
-Alternatively, use the commands script:
+This runs the tests with coverage and opens the HTML report in your browser.
+
+Or manually:
 
 .. code-block:: bash
 
-   $ uv run commands.py coverage
+   $ uv run coverage run -m pytest
+   $ uv run coverage html
+   $ open htmlcov/index.html
 
 Test Database Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -129,7 +142,7 @@ The test database is reused between test runs for performance. If you've added n
 .. code-block:: bash
 
    $ rm tests/test_database.sqlite3  # Remove old test database
-   $ uv run manage.py migrate         # Recreate with new migrations
+   $ uv run python manage.py migrate  # Recreate with new migrations (uses tests.settings)
 
 JavaScript Tests
 ----------------
@@ -148,7 +161,8 @@ Use tox to test against multiple Django and Wagtail versions:
 
 .. code-block:: bash
 
-   $ uv run tox
+   $ just tox
+   # or directly: uv run tox
 
 To test a specific environment:
 
@@ -172,12 +186,13 @@ Format your code:
 
 .. code-block:: bash
 
-   $ uv run ruff format .
+   $ just lint
 
 Fix linting issues:
 
 .. code-block:: bash
 
+   $ uv run ruff format .
    $ uv run ruff check --fix .
 
 Pre-commit Hooks
@@ -193,7 +208,8 @@ Run all hooks manually:
 
 .. code-block:: bash
 
-   $ pre-commit run --all-files
+   $ just pre-commit
+   # or directly: pre-commit run --all-files
 
 The pre-commit configuration includes:
 
@@ -210,15 +226,16 @@ Run mypy for static type checking:
 
 .. code-block:: bash
 
-   $ uv run mypy
+   $ just typecheck
+   # or directly: uv run mypy
 
 The project uses type hints throughout the codebase. When adding new code, please include appropriate type annotations.
 
 Configuration for mypy is in ``pyproject.toml``. Key settings include:
 
 - ``python_version = "3.14"``
-- ``check_untyped_defs = true``
 - ``ignore_missing_imports = true``
+- ``plugins = ["mypy_django_plugin.main"]``
 
 Building Documentation
 ======================
@@ -232,14 +249,14 @@ Build the documentation:
 
 .. code-block:: bash
 
-   $ uv run commands.py docs
+   $ just docs
 
 Or manually:
 
 .. code-block:: bash
 
-   $ cd docs
-   $ uv run make html
+   $ make -C docs clean
+   $ make -C docs html
 
 View the built documentation:
 
@@ -318,17 +335,16 @@ Pull Request Guidelines
 Debugging Tips
 ==============
 
-Django Debug Toolbar
---------------------
+Django Extensions
+-----------------
 
-The example project includes Django Debug Toolbar for development:
+The example project enables ``django-extensions`` in ``example/example_site/settings/dev.py`` (e.g. ``shell_plus``).
 
-.. code-block:: python
+Optional Debug Toolbar
+----------------------
 
-   # In example/settings.py
-   if DEBUG:
-       INSTALLED_APPS += ["debug_toolbar"]
-       MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+If you want to use Django Debug Toolbar, add it to your environment and enable it in
+``example/example_site/settings/local.py`` (which is imported from ``dev.py`` if present).
 
 Logging
 -------
@@ -361,7 +377,7 @@ Import Errors
 
 Since the project uses src layout (``src/cast/``), ensure:
 
-- Package is installed in editable mode: ``uv pip install -e .``
+- The project is installed into your environment (``just install`` / ``uv sync``)
 - Imports use ``cast`` (not ``src.cast``)
 - PYTHONPATH includes src directory when needed
 

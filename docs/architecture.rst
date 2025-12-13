@@ -101,7 +101,7 @@ Cast models are organized into:
 
 2. **Media Models**:
 
-   - ``Image``: User-owned images
+   - Wagtail ``Image``: Images with collection/uploader ownership semantics
    - ``Audio``: Audio files with duration and metadata
    - ``Video``: Video files with poster frames
    - ``Gallery``: Collection of images
@@ -147,9 +147,9 @@ The repository pattern minimizes database queries through:
 Caching
 ~~~~~~~
 
-- **Repository cache**: JSON-serialized query results (filesystem cache)
+- **Repository-ready data**: repositories can produce JSON-serializable dicts (useful for caching, if configured)
 - **Rendition cache**: Generated image sizes
-- **Feed cache**: Generated RSS/XML feeds
+- **Feed cache**: Feed endpoints are wrapped with Django's ``cache_page`` (see ``src/cast/urls.py``)
 
 Media Handling
 --------------
@@ -233,10 +233,10 @@ Deployment
 Typical deployment:
 
 - **Application**: Django app server
-- **Static files**: Served by Django with whitenoise
+- **Static files**: Collected and served via your preferred static pipeline (e.g. nginx/CDN; whitenoise optional)
 - **Media files**: CDN or Django direct serving
 - **Database**: PostgreSQL (recommended) or SQLite
-- **Caching**: Filesystem cache for repository results
+- **Caching**: Django cache backend (for ``cache_page`` and any optional repository caching)
 
 Security
 --------
