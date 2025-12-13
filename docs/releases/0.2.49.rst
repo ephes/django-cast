@@ -1,13 +1,9 @@
-0.2.49 (unreleased)
+0.2.49 (2025-10-12)
 -------------------
 
 New Features:
 
 - Added support for Python 3.14 (Django 5.2+ only)
-
-Bug Fixes:
-
--
 
 Other Changes:
 
@@ -19,4 +15,4 @@ Other Changes:
 
 Notes:
 
-- Python 3.14 is only supported with Django 5.2+. Django 4.2 does not officially support Python 3.14. 
+- Python 3.14 is only supported with Django 5.2+. Django 4.2 does not officially support Python 3.14.
