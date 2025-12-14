@@ -4,5 +4,8 @@
   <img src="{% static 'fluent_comments/img/ajax-wait.svg' %}" alt="" class="ajax-loader" />{% trans "Please wait . . ." %}
 </span>
 <span class="comment-added-message" id="comment-added-message-{{ target_object.pk }}" style="display: none;">{% trans "Your comment has been posted!" %}</span>
-<div class="comment-moderated-message" id="comment-moderated-message-{{ target_object.pk }}" style="display: none;">{% trans "Your comment has been posted, it will be visible for other users after approval." %}</div>
-
+{% if request.user.is_staff %}
+  <div class="comment-moderated-message" id="comment-moderated-message-{{ target_object.pk }}" style="display: none;">
+    {% trans "Your comment has been posted, it will be visible for other users after approval." %}
+  </div>
+{% endif %}

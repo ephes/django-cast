@@ -112,7 +112,6 @@ def _ajax_result(request, form, action, comment=None, object_id=None):
                 "html": comment_html,
                 "comment_id": comment.id,
                 "parent_id": getattr(comment, "parent_id", None),
-                "is_moderated": not bool(getattr(comment, "is_public", True)),
             }
         )
 
