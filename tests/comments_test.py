@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+import re
 from django.urls import reverse
 from django_comments import get_model as get_comments_model
 from django_comments import signals
@@ -43,18 +44,12 @@ class TestPostComments:
 
         r = client.get(detail_url)
         content = r.content.decode("utf-8")
-        security_hash, timestamp = None, None
-        for line in content.split("\n"):
-            if "security_hash" in line:
-                for part in line.split("input"):
-                    if "security_hash" in part:
-                        for attr in part.split(" "):
-                            if "value" in attr:
-                                security_hash = attr.split('"')[1]
-                    if "timestamp" in part:
-                        for attr in part.split():
-                            if "value" in attr:
-                                timestamp = attr.split('"')[1]
+        security_hash_match = re.search(r'name="security_hash"[^>]*value="([^"]+)"', content)
+        timestamp_match = re.search(r'name="timestamp"[^>]*value="([^"]+)"', content)
+        assert security_hash_match, "security_hash not found in rendered comment form"
+        assert timestamp_match, "timestamp not found in rendered comment form"
+        security_hash = security_hash_match.group(1)
+        timestamp = timestamp_match.group(1)
 
         data = {
             "content_type": "cast.post",
@@ -116,14 +111,14 @@ class TestCommentModeration:
 
     @pytest.mark.django_db
     def test_spamfilter_is_none(self):
-        with patch("fluent_comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=None)):
+        with patch("cast.comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=None)):
             signals.comment_will_be_posted.send(sender=self.comment_class, comment=self.comment, request=self.request)
             assert self.comment.is_public
             assert not self.comment.is_removed
 
     def test_moderated_comment_marked_is_removed(self):
         with patch(
-            "fluent_comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=self.predict_spam)
+            "cast.comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=self.predict_spam)
         ):
             signals.comment_will_be_posted.send(sender=self.comment_class, comment=self.comment, request=self.request)
             assert self.comment.is_removed
@@ -131,7 +126,7 @@ class TestCommentModeration:
 
     def test_moderated_comment_is_not_marked_is_removed(self):
         with patch(
-            "fluent_comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=self.predict_ham)
+            "cast.comments.receivers.default_moderator", new=Moderator(self.stub_class, spamfilter=self.predict_ham)
         ):
             signals.comment_will_be_posted.send(sender=self.comment_class, comment=self.comment, request=self.request)
             assert self.comment.is_public

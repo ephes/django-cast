@@ -156,8 +156,8 @@ def create_settings_file(project_name: str, target_dir: Path) -> None:
         WAGTAIL_SITE_NAME = "{project_name}"
 
         # Comments settings
-        COMMENTS_APP = "fluent_comments"
-        FLUENT_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
+        COMMENTS_APP = "cast.comments"
+        CAST_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
         CAST_COMMENTS_ENABLED = True
 
         # Crispy forms
@@ -208,7 +208,7 @@ def create_urls_file(project_name: str, target_dir: Path) -> None:
             path("cast/", include("cast.urls", namespace="cast")),
 
             # Comments
-            path("comments/", include("fluent_comments.urls")),
+            path("comments/", include("cast.comments.urls")),
 
             # Wagtail pages (this should be last)
             path("", include(wagtail_urls)),

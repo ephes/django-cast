@@ -7,13 +7,32 @@ there's a global switch you can use in the :ref:`settings <cast_comments_enabled
 Blog and post models have a comments_enabled database field. They are set
 to ``True`` by default.
 
+Configuration
+=============
+
+To enable the built-in comments integration, set:
+
+.. code-block:: python
+
+   COMMENTS_APP = "cast.comments"
+
+Optional settings:
+
+.. code-block:: python
+
+   CAST_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
+   CAST_COMMENTS_DEFAULT_MODERATOR = "cast.moderation.Moderator"
+
 Caveats
 =======
 
-The ajax-calls django-fluent-comments_ does depend on the availability of a
-full jquery version.
+The AJAX comment posting uses bundled assets under:
 
-.. _`django-fluent-comments`: https://github.com/django-fluent/django-fluent-comments
+- ``fluent_comments/js/ajaxcomments.js``
+- ``fluent_comments/css/ajaxcomments.css``
+
+If these aren’t included in your templates, the form will fall back to the default
+django-contrib-comments flow (redirecting to ``comments/posted/`` and ``comments/preview/``).
 
 Comment Spam Filter
 ===================

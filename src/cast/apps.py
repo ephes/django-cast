@@ -11,7 +11,7 @@ CAST_APPS = [
     "django_htmx",
     "rest_framework",
     # Comments system
-    "fluent_comments",  # must be before django_comments
+    "cast.comments.apps.CastCommentsConfig",  # must be before django_comments
     "threadedcomments",
     "django_comments",
     # Vite support

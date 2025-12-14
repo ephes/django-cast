@@ -5,13 +5,13 @@
 {% load wagtailcore_tags %}
 {% load wagtailimages_tags %}
 
-{% if page.comments_enabled %}
+{% if comments_are_enabled %}
   {% load comments %}
 {% endif %}
 
 {% block css %}
   {{ block.super }}
-  {% if page.comments_are_enabled %}
+  {% if comments_are_enabled %}
     <link rel="stylesheet" type="text/css" href="{% static 'fluent_comments/css/ajaxcomments.css' %}" />
   {% endif %}
 {% endblock css %}
@@ -29,7 +29,7 @@
 {% block main %}
   {% include "./post_body.html" with render_detail=True %}
 
-  {% if page.comments_are_enabled %}
+  {% if comments_are_enabled %}
     {% render_comment_list for page %}
     {% render_comment_form for page %}
   {% endif %}
@@ -37,3 +37,10 @@
   <p><a href="{{ page.get_parent.url }}">Return to blog</a></p>
 
 {% endblock %}
+
+{% block javascript %}
+  {{ block.super }}
+  {% if comments_are_enabled %}
+    <script defer type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
+  {% endif %}
+{% endblock javascript %}

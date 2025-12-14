@@ -41,13 +41,11 @@ dependencies = [
     "django-contrib-comments",  # comments framework
     "django-environ",  # needed by pluggy and pytest
     "django-filter",  # filter section on blog index
-    "django-fluent-comments",  # comments framework
     "django-htmx",  # htmx support
     "django-model-utils",  # model mixins
     "django-threadedcomments",  # comments framework
     "django-vite",  # vite support for things like gallery-modal web components
     "Pygments",  # syntax highlighting for code blocks
-    "python-akismet",  # needed to be installed for comments, but is not used
     "python-slugify",  # slugify for page slugs
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/

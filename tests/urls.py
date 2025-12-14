@@ -16,7 +16,7 @@ urlpatterns = [
     # re_path(r"^docs/", include_docs_urls(title="cast API service")),
     path("cast/", include("cast.urls", namespace="cast")),
     # comments
-    path("posts/comments/", include("fluent_comments.urls")),
+    path("posts/comments/", include("cast.comments.urls")),
     # wagtail
     path("cms/", include(wagtailadmin_urls)),
     path("documents/", include(wagtaildocs_urls)),

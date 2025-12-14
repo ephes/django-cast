@@ -183,9 +183,9 @@ Configure additional features as needed:
        "1200": "1200",
    }
 
-   # Comments (if using django-fluent-comments)
-   COMMENTS_APP = "fluent_comments"
-   FLUENT_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
+   # Comments
+   COMMENTS_APP = "cast.comments"
+   CAST_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
 
 URL Configuration
 =================

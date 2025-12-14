@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     "django_vite",
     "crispy_forms",  # Form layouts
     "crispy_bootstrap4",
-    "fluent_comments",  # must be before django_comments
+    "cast.comments.apps.CastCommentsConfig",  # must be before django_comments
     "threadedcomments",
     "django_comments",
     "modelcluster",
@@ -144,7 +144,7 @@ TEMPLATES[0]["OPTIONS"]["loaders"] = [  # type: ignore
 ]
 
 # Comments
-COMMENTS_APP = "fluent_comments"
+COMMENTS_APP = "cast.comments"
 
 # For Django >= 3.2 - auto field
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
