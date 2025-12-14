@@ -1,8 +1,8 @@
 # Django Cast
 
 [![name](https://img.shields.io/badge/python-3.11%7C3.12%7C3.13%7C3.14-brightgreen)](https://img.shields.io/badge/python-3.11%7C3.12%7C3.13%7C3.14-brightgreen)
-[![name](https://img.shields.io/badge/django-4.2%7C%7C5.0%7C5.1-brightgreen)](https://img.shields.io/badge/django-4.2%7C5.0%7C5.1-brightgreen)
-[![name](https://img.shields.io/badge/wagtail-5%7C6-brightgreen)](https://img.shields.io/badge/wagtail-4%7C5-brightgreen)
+[![name](https://img.shields.io/badge/django-4.2%7C5.2%7C6.0-brightgreen)](https://img.shields.io/badge/django-4.2%7C5.2%7C6.0-brightgreen)
+[![name](https://img.shields.io/badge/wagtail-6%7C7-brightgreen)](https://img.shields.io/badge/wagtail-6%7C7-brightgreen)
 [![name](https://badge.fury.io/py/django-cast.svg)](https://badge.fury.io/py/django-cast)
 [![name](https://codecov.io/gh/ephes/django-cast/branch/develop/graph/badge.svg)](https://codecov.io/gh/ephes/django-cast)
 [![name](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ephes/django-cast)
@@ -22,8 +22,7 @@ After switching to Wagtail, the documentation has to be updated. Stay tuned 😄
 - Podcast support: this package powers [python-podcast.de](https://python-podcast.de/show)
   since 2018 using the [Podlove Web Player](https://podlove.org/podlove-web-player/)
 - Video support - not as sophisticated as image / audio support, but it works 🤗
-- Comments via [django-fluent-comments](https://github.com/django-fluent/django-fluent-comments)
-  and a built-in moderating spam filter
+- Comments via ``django-contrib-comments`` with a built-in moderating spam filter
 - Code blocks for the Wagtail page editor
 - Use [Twitter Player Card](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/player-card)
   for links to podcast episode detail pages

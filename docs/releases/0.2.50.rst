@@ -4,7 +4,12 @@
 New Features:
 
 - Added ``justfile`` for streamlined development commands (``just test``, ``just lint``, ``just typecheck``, ``just docs``, etc.)
+- Replaced ``django-fluent-comments`` with a built-in comments app (``cast.comments``) based on ``django-contrib-comments``.
+  The new implementation keeps the existing spam moderation via ``cast.moderation.Moderator`` and maintains template/static/tag
+  compatibility for existing deployments.
 
 Other Changes:
 
 - Updated developer documentation (``docs/development.rst`` and ``docs/architecture.rst``)
+- Comment UX parity improvements (inline preview, AJAX posting, HTMX-safe event handling) and styled fallback pages for non-JS clients.
+- Reduced dependencies by removing ``django-fluent-comments`` and ``python-akismet``.
