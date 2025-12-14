@@ -152,6 +152,8 @@ Run JavaScript tests with Vitest:
 .. code-block:: bash
 
    $ just js-test
+   $ just js-test-watch
+   $ just js-coverage
    # or directly:
    $ cd javascript
    $ npx vitest run

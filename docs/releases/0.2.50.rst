@@ -15,3 +15,4 @@ Other Changes:
 - Comment UX parity improvements (inline preview, AJAX posting, HTMX-safe event handling) and styled fallback pages for non-JS clients.
 - Reduced dependencies by removing ``django-fluent-comments`` and ``python-akismet``.
 - Tox: isolated SQLite DB per environment via ``CAST_TEST_DB`` to avoid DB locking and cross-env state bleed.
+- JavaScript: fixed ``npm test`` (Vitest) and added ``just js-test`` / ``just js-coverage`` helpers.
