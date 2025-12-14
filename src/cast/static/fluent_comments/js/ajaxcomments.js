@@ -2,6 +2,15 @@
   const COMMENT_SCROLL_TOP_OFFSET = 40;
   const PREVIEW_SCROLL_TOP_OFFSET = 20;
 
+  const getObjectIdFromForm = (form) => {
+    const direct = form.getAttribute("data-object-id") || form.dataset.objectId;
+    if (direct) return direct;
+    const objectPkField = form.elements?.["object_pk"] || form.querySelector?.('input[name="object_pk"]');
+    if (objectPkField?.value) return objectPkField.value;
+    const match = /comment-form-(\d+)/.exec(form.id || "");
+    return match ? match[1] : "";
+  };
+
   const scrollToElement = (element, speedMs, offset = 0) => {
     if (!element) return;
     const top = element.getBoundingClientRect().top + window.scrollY - offset;
@@ -18,7 +27,9 @@
     scrollToElement(element, 1000, COMMENT_SCROLL_TOP_OFFSET);
   };
 
-  const getCommentsDiv = (objectId) => document.getElementById(`comments-${objectId}`);
+  const getCommentsDiv = (objectId) =>
+    document.getElementById(`comments-${objectId}`) ||
+    document.querySelector(`div.comments[data-object-id="${objectId}"]`);
 
   const removeErrors = (form) => {
     form.querySelectorAll(".js-errors").forEach((node) => node.remove());
@@ -42,8 +53,9 @@
 
   const wrapForms = () => {
     document.querySelectorAll("form.js-comments-form").forEach((form) => {
-      const objectId = form.getAttribute("data-object-id");
+      const objectId = getObjectIdFromForm(form);
       if (!objectId) return;
+      if (!form.getAttribute("data-object-id")) form.setAttribute("data-object-id", objectId);
       const existingWrapper = document.getElementById(`comments-form-orig-position-${objectId}`);
       if (existingWrapper) return;
       if (form.closest(".js-comments-form-orig-position")) return;
@@ -62,7 +74,7 @@
       for (let i = 0; i < 4 && node; i++) {
         const form = node.querySelector(".js-comments-form");
         if (form) {
-          const objectId = form.getAttribute("data-object-id");
+          const objectId = getObjectIdFromForm(form);
           if (objectId) {
             div.id = `comments-${objectId}`;
             div.setAttribute("data-object-id", objectId);
@@ -84,7 +96,7 @@
   };
 
   const resetForm = (form) => {
-    const objectId = form.getAttribute("data-object-id");
+    const objectId = getObjectIdFromForm(form);
     const commentField = form.elements["comment"];
     if (commentField) commentField.value = "";
     const parentField = form.elements["parent"];
@@ -109,11 +121,17 @@
     if (data.use_threadedcomments) {
       let commentUl = parent.querySelector(":scope > ul.comment-list-wrapper:last-of-type");
       if (!commentUl) {
-        const form = parent.querySelector(":scope > form.js-comments-form");
+        const form = parent.querySelector("form.js-comments-form");
         commentUl = document.createElement("ul");
         commentUl.className = "comment-list-wrapper";
-        if (form) parent.insertBefore(commentUl, form);
-        else parent.appendChild(commentUl);
+        if (!form) {
+          parent.appendChild(commentUl);
+        } else {
+          let insertionNode = form;
+          while (insertionNode && insertionNode.parentNode !== parent) insertionNode = insertionNode.parentNode;
+          if (insertionNode) parent.insertBefore(commentUl, insertionNode);
+          else parent.appendChild(commentUl);
+        }
       }
 
       if (forPreview) {
