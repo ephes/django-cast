@@ -1,3 +1,5 @@
+import os
+
 import environ
 
 ROOT_DIR = environ.Path(__file__) - 1
@@ -9,13 +11,15 @@ USE_TZ = True
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "mbmcf(_0(y@^nlf6w#1nq%s7&nzcfvx#ok$iwu8)i^d+^96h*="
 
+TEST_DATABASE_NAME = os.environ.get("CAST_TEST_DB", "tests/test_database.sqlite3")
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": "tests/test_database.sqlite3",
+        "NAME": TEST_DATABASE_NAME,
         # if this is not set, an in memory database is used
         # for tests by default _get_test_db_name
-        "TEST": {"NAME": "tests/test_database.sqlite3"},
+        "TEST": {"NAME": TEST_DATABASE_NAME},
     },
 }
 
