@@ -44,6 +44,8 @@
     document.querySelectorAll("form.js-comments-form").forEach((form) => {
       const objectId = form.getAttribute("data-object-id");
       if (!objectId) return;
+      const existingWrapper = document.getElementById(`comments-form-orig-position-${objectId}`);
+      if (existingWrapper) return;
       if (form.closest(".js-comments-form-orig-position")) return;
       const wrapper = document.createElement("div");
       wrapper.className = "js-comments-form-orig-position";
