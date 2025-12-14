@@ -138,6 +138,7 @@ branch = true
 source = ["src/cast"]
 omit = [
     "src/cast/migrations/*",
+    "src/cast/comments/migrations/*",
     "src/cast/runner.py",
     "src/cast/settings.py",
     "src/cast/quickstart.py",

@@ -15,7 +15,7 @@ from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
 from rest_framework.test import APIClient
 from wagtail.images.models import Image
-from wagtail.models import Site
+from wagtail.models import Collection, Page, Site
 
 from cast import appsettings
 from cast.devdata import create_transcript
@@ -168,10 +168,10 @@ def podlove_transcript():
 
 # Models
 @pytest.fixture()
-def user():
+def user(db):
     user = UserFactory()
     user._password = "password"
-    group = Group.objects.get(name="Moderators")
+    group, _created = Group.objects.get_or_create(name="Moderators")
     group.user_set.add(user)
     return user
 
@@ -183,8 +183,11 @@ def authenticated_client(client, user):
 
 
 @pytest.fixture()
-def image(image_1px):
-    image = Image(file=image_1px)
+def image(db, image_1px):
+    collection = Collection.get_first_root_node()
+    if collection is None:
+        collection = Collection.add_root(instance=Collection(name="Root"))
+    image = Image(title="test", file=image_1px, collection=collection)
     image.save()
     return image
 
@@ -243,8 +246,12 @@ def file_instance(user, m4a_audio):
 
 
 @pytest.fixture()
-def site():
-    return Site.objects.first()
+def site(db):
+    site = Site.objects.first()
+    if site is not None:
+        return site
+    root_page = Page.get_first_root_node()
+    return Site.objects.create(hostname="localhost", port=80, root_page=root_page, is_default_site=True)
 
 
 @pytest.fixture()

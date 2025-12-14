@@ -30,7 +30,7 @@ Auto: Any = _Auto()
 def create_user(*, name: str = "testuser", password: str = "password") -> User:
     user = User.objects.create_user(name, password=password)
     user._password = password  # type: ignore
-    group = Group.objects.get(name="Moderators")
+    group, _created = Group.objects.get_or_create(name="Moderators")
     group.user_set.add(user)  # type: ignore
     return user
 

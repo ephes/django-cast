@@ -3,6 +3,7 @@
 
 New Features:
 
+- Django 6.0 compatibility
 - Added ``justfile`` for streamlined development commands (``just test``, ``just lint``, ``just typecheck``, ``just docs``, etc.)
 - Replaced ``django-fluent-comments`` with a built-in comments app (``cast.comments``) based on ``django-contrib-comments``.
   The new implementation keeps the existing spam moderation via ``cast.moderation.Moderator`` and maintains template/static/tag
