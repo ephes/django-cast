@@ -1,6 +1,7 @@
 import pytest
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.template import Context, Template
+from django.template.exceptions import TemplateSyntaxError
 from django.urls import reverse
 from django_comments import get_form_target
 from django_comments import signals
@@ -208,6 +209,17 @@ def test_templatetags_render_comment_and_count(post, comment):
 def test_templatetags_ajax_comment_tags_renders(post):
     html = Template("{% load fluent_comments_tags %}{% ajax_comment_tags post %}").render(Context({"post": post}))
     assert "comment-added-message" in html
+
+
+@pytest.mark.django_db
+def test_templatetags_ajax_comment_tags_renders_for_syntax(post):
+    html = Template("{% load fluent_comments_tags %}{% ajax_comment_tags for post %}").render(Context({"post": post}))
+    assert "comment-added-message" in html
+
+
+def test_templatetags_ajax_comment_tags_invalid_syntax_raises():
+    with pytest.raises(TemplateSyntaxError):
+        Template("{% load fluent_comments_tags %}{% ajax_comment_tags for a b %}")
 
 
 @pytest.mark.django_db

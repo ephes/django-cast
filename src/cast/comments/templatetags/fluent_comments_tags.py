@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django import template
+from django.template.exceptions import TemplateSyntaxError
 from django.template.loader import render_to_string
 from django.utils.safestring import mark_safe
 
@@ -15,12 +16,41 @@ from ..utils import (
 register = template.Library()
 
 
-@register.inclusion_tag("fluent_comments/templatetags/ajax_comment_tags.html", takes_context=True)
-def ajax_comment_tags(context, for_object):
-    return {
-        "USE_THREADEDCOMMENTS": appsettings.USE_THREADEDCOMMENTS,
-        "target_object": for_object,
-    }
+class AjaxCommentTagsNode(template.Node):
+    def __init__(self, target_object_expr):
+        self.target_object_expr = target_object_expr
+
+    def render(self, context):
+        target_object = self.target_object_expr.resolve(context)
+        return render_to_string(
+            "fluent_comments/templatetags/ajax_comment_tags.html",
+            {
+                "USE_THREADEDCOMMENTS": appsettings.USE_THREADEDCOMMENTS,
+                "target_object": target_object,
+            },
+            request=context.get("request"),
+        )
+
+
+@register.tag
+def ajax_comment_tags(parser, token):
+    """
+    Backwards-compatible tag.
+
+    Supports both:
+    - {% ajax_comment_tags object %}
+    - {% ajax_comment_tags for object %}
+    """
+    bits = token.split_contents()
+    if len(bits) == 2:
+        target_object_expr = parser.compile_filter(bits[1])
+    elif len(bits) == 3 and bits[1] == "for":
+        target_object_expr = parser.compile_filter(bits[2])
+    else:
+        raise TemplateSyntaxError(
+            f"{bits[0]!r} tag requires either 1 argument or the syntax 'for <object>' (got: {' '.join(bits[1:])!r})."
+        )
+    return AjaxCommentTagsNode(target_object_expr)
 
 
 @register.simple_tag(takes_context=True)
