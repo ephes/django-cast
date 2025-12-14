@@ -273,12 +273,12 @@
     event.preventDefault();
     wrapForms();
     const commentId = a.getAttribute("data-comment-id");
-    const commentItem = a.closest(".comment-item");
-    if (!commentItem) return;
+    const commentWrapper = a.closest("li.comment-wrapper");
+    if (!commentWrapper) return;
     removeThreadedPreview();
     const form = document.querySelector("form.js-comments-form");
     if (!form) return;
-    commentItem.appendChild(form);
+    commentWrapper.appendChild(form);
     const parentField = form.querySelector("#id_parent") || form.elements["parent"];
     if (parentField) parentField.value = commentId;
   };
