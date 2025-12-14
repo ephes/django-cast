@@ -82,6 +82,7 @@ js-build-vite:
     cd javascript && npm run build
     rm -f javascript/dist/manifest.json
     sh -c 'test -f javascript/dist/.vite/manifest.json && mv javascript/dist/.vite/manifest.json javascript/dist/manifest.json || true'
+    python -c "from pathlib import Path; p=Path('javascript/dist/manifest.json'); txt=p.read_text() if p.exists() else None; (p.write_text(txt.rstrip('\\n')+'\\n') if txt is not None else None)"
     rm -rf javascript/dist/.vite
     rm -f src/cast/static/cast/vite/*
     cp javascript/dist/* src/cast/static/cast/vite/
