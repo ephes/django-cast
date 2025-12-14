@@ -1,6 +1,4 @@
 (() => {
-  let activeInputName = "";
-
   const COMMENT_SCROLL_TOP_OFFSET = 40;
   const PREVIEW_SCROLL_TOP_OFFSET = 20;
 
@@ -249,10 +247,23 @@
     }
   };
 
-  const onCommentFormSubmit = (event) => {
-    event.preventDefault();
+  const onDocumentSubmit = (event) => {
     const form = event.target;
-    const preview = activeInputName === "preview";
+    if (!(form instanceof HTMLFormElement)) return;
+    if (!form.matches("form.js-comments-form")) return;
+
+    event.preventDefault();
+
+    // When pages are navigated via HTMX (or any other DOM swap), the form may be
+    // inserted after this script initialized. Ensure wrappers/IDs exist at the
+    // point of interaction too.
+    wrapForms();
+    fixBrokenCommentsDivIds();
+
+    const submitter = event.submitter || document.activeElement;
+    const submitterName = submitter?.getAttribute?.("name") || submitter?.name || "";
+    const preview = submitterName === "preview";
+
     ajaxComment(form, { preview });
   };
 
@@ -260,6 +271,7 @@
     const a = event.target.closest(".comment-reply-link");
     if (!a) return;
     event.preventDefault();
+    wrapForms();
     const commentId = a.getAttribute("data-comment-id");
     const commentItem = a.closest(".comment-item");
     if (!commentItem) return;
@@ -275,30 +287,17 @@
     const a = event.target.closest(".comment-cancel-reply-link");
     if (!a) return;
     event.preventDefault();
+    wrapForms();
     const form = document.querySelector("form.js-comments-form");
     if (!form) return;
     resetForm(form);
     removeThreadedPreview();
   };
 
-  const detectActiveInput = () => {
-    document.querySelectorAll("form.js-comments-form :is(input,button,textarea,select)").forEach((el) => {
-      el.addEventListener("focus", () => {
-        activeInputName = el.name || "";
-      });
-      el.addEventListener("mousedown", () => {
-        activeInputName = el.name || "";
-      });
-    });
-  };
-
   const init = () => {
     wrapForms();
     fixBrokenCommentsDivIds();
-    detectActiveInput();
-    document.querySelectorAll("form.js-comments-form").forEach((form) => {
-      form.addEventListener("submit", onCommentFormSubmit);
-    });
+    document.addEventListener("submit", onDocumentSubmit, true);
     document.body.addEventListener("click", showThreadedReplyForm);
     document.body.addEventListener("click", cancelThreadedReplyForm);
 

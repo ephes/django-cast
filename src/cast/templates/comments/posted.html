@@ -1,0 +1,23 @@
+{% extends "comments/base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Comment posted" %}{% endblock %}
+
+{% block content %}
+  <h1>{% trans "Thanks — your comment has been posted." %}</h1>
+  {% if next %}
+    <p class="muted">
+      {% trans "You can close this page or return to the article." %}
+    </p>
+    <div class="actions">
+      <a class="btn btn-primary" href="{{ next }}">{% trans "Return" %}</a>
+    </div>
+    <script>
+      setTimeout(() => {
+        window.location.href = "{{ next|escapejs }}";
+      }, 800);
+    </script>
+  {% else %}
+    <p class="muted">{% trans "You can close this page now." %}</p>
+  {% endif %}
+{% endblock %}
