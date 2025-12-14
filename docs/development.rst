@@ -158,6 +158,15 @@ Run JavaScript tests with Vitest:
    $ cd javascript
    $ npx vitest run
 
+Build shipped JavaScript assets:
+
+.. code-block:: bash
+
+   $ just js-build-comments
+   # or directly:
+   $ cd javascript
+   $ npm run build:comments
+
 Testing Multiple Django/Wagtail Versions
 ----------------------------------------
 

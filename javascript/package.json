@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:comments": "vite build -c vite.comments.config.ts",
+    "build:all": "npm run build && npm run build:comments",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

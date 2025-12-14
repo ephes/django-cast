@@ -72,3 +72,7 @@ js-test-watch:
 # Run JavaScript tests with coverage
 js-coverage:
     cd javascript && npm run coverage
+
+# Build shipped comment JS at src/cast/static/fluent_comments/js/ajaxcomments.js
+js-build-comments:
+    cd javascript && npm run build:comments

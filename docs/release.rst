@@ -34,6 +34,13 @@ Build the Javascript (image-gallery component):
    $ rm ../../src/cast/static/cast/vite/*
    $ cp * ../../src/cast/static/cast/vite/
 
+Build shipped legacy JavaScript (comments):
+
+.. code-block:: shell
+
+   $ cd javascript
+   $ npm run build:comments
+
 
 Test Python Versions and Merge develop into main
 ------------------------------------------------

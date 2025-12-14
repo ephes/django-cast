@@ -16,3 +16,4 @@ Other Changes:
 - Reduced dependencies by removing ``django-fluent-comments`` and ``python-akismet``.
 - Tox: isolated SQLite DB per environment via ``CAST_TEST_DB`` to avoid DB locking and cross-env state bleed.
 - JavaScript: fixed ``npm test`` (Vitest) and added ``just js-test`` / ``just js-coverage`` helpers.
+- Comments JavaScript: moved source into ``javascript/src/comments/ajaxcomments.ts`` and ship a built artifact at ``src/cast/static/fluent_comments/js/ajaxcomments.js``.
