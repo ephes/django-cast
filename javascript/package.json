@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "vitest -r js/src/tests/",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "preview": "vite preview"
   },
@@ -13,6 +14,6 @@
     "@testing-library/jest-dom": "^6",
     "@vue/test-utils": "^2",
     "jsdom": "^27",
-    "vitest": "^3"
+    "vitest": "^4"
   }
 }

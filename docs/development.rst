@@ -151,6 +151,8 @@ Run JavaScript tests with Vitest:
 
 .. code-block:: bash
 
+   $ just js-test
+   # or directly:
    $ cd javascript
    $ npx vitest run
 

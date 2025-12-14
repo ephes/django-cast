@@ -60,3 +60,15 @@ pre-commit:
 # Run tox for multi-environment testing
 tox:
     uv run tox
+
+# Run JavaScript tests (Vitest)
+js-test:
+    cd javascript && npm test
+
+# Run JavaScript tests in watch mode
+js-test-watch:
+    cd javascript && npm run test:watch
+
+# Run JavaScript tests with coverage
+js-coverage:
+    cd javascript && npm run coverage
