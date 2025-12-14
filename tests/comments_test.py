@@ -9,6 +9,8 @@ from django_comments.forms import CommentForm
 
 from cast.moderation import Moderator
 
+from .factories import UserFactory
+
 
 class TestPostComments:
     pytestmark = pytest.mark.django_db
@@ -67,9 +69,46 @@ class TestPostComments:
 
         rdata = r.json()
         assert rdata["success"]
+        assert "is_moderated" not in rdata
 
         comment = get_comments_model().objects.get(pk=rdata["comment_id"])
         assert comment.comment == data["comment"]
+
+    def test_add_new_comment_as_staff_includes_is_moderated(self, client, post, comments_enabled):
+        staff_user = UserFactory()
+        staff_user.is_staff = True
+        staff_user.save(update_fields=["is_staff"])
+        client.force_login(staff_user)
+
+        ajax_url = reverse("comments-post-comment-ajax")
+        detail_url = post.get_url()
+
+        r = client.get(detail_url)
+        content = r.content.decode("utf-8")
+        security_hash_match = re.search(r'name="security_hash"[^>]*value="([^"]+)"', content)
+        timestamp_match = re.search(r'name="timestamp"[^>]*value="([^"]+)"', content)
+        assert security_hash_match, "security_hash not found in rendered comment form"
+        assert timestamp_match, "timestamp not found in rendered comment form"
+        security_hash = security_hash_match.group(1)
+        timestamp = timestamp_match.group(1)
+
+        data = {
+            "content_type": "cast.post",
+            "object_pk": str(post.pk),
+            "comment": "new content",
+            "name": "Name",
+            "email": "fuz@baz.com",
+            "title": "buzz",
+            "security_hash": security_hash,
+            "timestamp": timestamp,
+        }
+
+        r = client.post(ajax_url, data, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        assert r.status_code == 200
+
+        rdata = r.json()
+        assert rdata["success"]
+        assert "is_moderated" in rdata
 
 
 class TestCommentModeration:

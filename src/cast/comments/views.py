@@ -114,6 +114,8 @@ def _ajax_result(request, form, action, comment=None, object_id=None):
                 "parent_id": getattr(comment, "parent_id", None),
             }
         )
+        if request.user.is_staff:
+            json_return["is_moderated"] = not bool(getattr(comment, "is_public", True))
 
     return HttpResponse(json.dumps(json_return), content_type="application/json")
 

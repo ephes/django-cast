@@ -200,10 +200,9 @@
     setTimeout(() => scrollToElement(previewArea, 500, PREVIEW_SCROLL_TOP_OFFSET), 200);
   };
 
-  const showMessage = (objectId) => {
-    const el =
-      document.getElementById(`comment-added-message-${objectId}`) ||
-      document.getElementById(`comment-moderated-message-${objectId}`);
+  const showMessage = (objectId, isModerated) => {
+    const id = isModerated ? `comment-moderated-message-${objectId}` : `comment-added-message-${objectId}`;
+    const el = document.getElementById(id) || document.getElementById(`comment-added-message-${objectId}`);
     if (!el) return;
     el.style.display = "inline";
     setTimeout(() => {
@@ -212,7 +211,7 @@
   };
 
   const onCommentPosted = (data) => {
-    showMessage(data.object_id);
+    showMessage(data.object_id, data.is_moderated === true);
     setTimeout(() => scrollToComment(data.comment_id), 250);
   };
 
