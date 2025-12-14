@@ -26,6 +26,8 @@ Build the Javascript (image-gallery component):
 
 .. code-block:: shell
 
+   $ just js-build-vite
+   # or directly:
    $ cd javascript
    $ npx vite build
    $ cd dist/
@@ -38,8 +40,16 @@ Build shipped legacy JavaScript (comments):
 
 .. code-block:: shell
 
+   $ just js-build-comments
+   # or directly:
    $ cd javascript
    $ npm run build:comments
+
+To build everything in one go:
+
+.. code-block:: shell
+
+   $ just js-build-all
 
 
 Test Python Versions and Merge develop into main

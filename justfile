@@ -76,3 +76,17 @@ js-coverage:
 # Build shipped comment JS at src/cast/static/fluent_comments/js/ajaxcomments.js
 js-build-comments:
     cd javascript && npm run build:comments
+
+# Build Vite assets and copy to src/cast/static/cast/vite/
+js-build-vite:
+    cd javascript && npm run build
+    rm -f javascript/dist/manifest.json
+    sh -c 'test -f javascript/dist/.vite/manifest.json && mv javascript/dist/.vite/manifest.json javascript/dist/manifest.json || true'
+    rm -rf javascript/dist/.vite
+    rm -f src/cast/static/cast/vite/*
+    cp javascript/dist/* src/cast/static/cast/vite/
+
+# Build all shipped JS artifacts
+js-build-all:
+    just js-build-vite
+    just js-build-comments
