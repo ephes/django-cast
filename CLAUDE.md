@@ -56,6 +56,7 @@ uv run tox
 # Note: The development server is typically run in a separate project
 # where django-cast is installed as an editable package
 ```
+Always run `uv run mypy` (or `just typecheck`) after code changes; treat it as a required check.
 
 ### JavaScript Build Commands
 ```bash
