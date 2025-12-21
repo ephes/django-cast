@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
+from django import forms
 from django.core.exceptions import ImproperlyConfigured
 
 from . import appsettings
 from .helper import CommentFormHelper
 
 
-def _get_base_form():
+if TYPE_CHECKING:
+    from django_comments.forms import CommentForm
+
+
+def _get_base_form() -> type[CommentForm]:
     if appsettings.USE_THREADEDCOMMENTS:
         from threadedcomments.forms import ThreadedCommentForm
 
@@ -19,10 +24,14 @@ def _get_base_form():
     return CommentForm
 
 
-BaseCommentForm = _get_base_form()
+if TYPE_CHECKING:
+    BaseCommentForm: TypeAlias = CommentForm
+else:
+    BaseCommentForm = _get_base_form()
 
 
 class CastCommentForm(BaseCommentForm):
+    fields: dict[str, forms.Field]
     helper = CommentFormHelper()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -41,10 +50,10 @@ class CastCommentForm(BaseCommentForm):
         self._reorder_fields()
 
     def _reorder_fields(self) -> None:
-        base_fields_top = ("content_type", "object_pk", "timestamp", "security_hash")
-        base_fields_end = ("honeypot",)
+        base_fields_top = ["content_type", "object_pk", "timestamp", "security_hash"]
+        base_fields_end = ["honeypot"]
         if appsettings.USE_THREADEDCOMMENTS:
-            base_fields_top += ("parent",)
+            base_fields_top.append("parent")
 
         ordering = [name for name in base_fields_top if name in self.fields]
         ordering += [name for name in self.fields.keys() if name not in ordering and name not in base_fields_end]

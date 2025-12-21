@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, TypeAlias
+
 from django.utils.translation import gettext_lazy as _
 from django_comments.managers import CommentManager
+from django_comments.models import Comment as DjangoComment
 
 from . import appsettings
-
-from django_comments.models import Comment as DjangoComment
 
 try:
     from threadedcomments.models import ThreadedComment as ThreadedCommentModel
@@ -19,7 +20,10 @@ def get_base_comment_model() -> type[DjangoComment]:
     return DjangoComment
 
 
-BaseComment = get_base_comment_model()
+if TYPE_CHECKING:
+    BaseComment: TypeAlias = DjangoComment
+else:
+    BaseComment = get_base_comment_model()
 
 
 class CastCommentManager(CommentManager):
