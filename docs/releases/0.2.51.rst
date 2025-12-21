@@ -1,0 +1,12 @@
+0.2.51 (2025-12-21)
+-------------------
+
+Fixes:
+
+- Render cover images on post detail and blog index pages, including alt text and blog-level fallback.
+- Add social meta tags to the plain theme and include ``twitter:title`` for summary cards.
+
+Other Changes:
+
+- Blog index queries select related cover images to avoid N+1 lookups.
+- Developer docs now emphasize running ``just typecheck`` after code changes.
