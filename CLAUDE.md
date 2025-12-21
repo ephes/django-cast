@@ -179,6 +179,7 @@ When bumping the version number for a new release:
 3. Update version in `src/cast/__init__.py` (__version__ = "X.Y.Z")
 4. Update version reference in `README.md` (Documentation for [current version X.Y.Z])
 5. Create new release notes file `docs/releases/X.Y.Z.rst` with standard template
+6. Link the new release notes in `docs/releases/index.rst`
 
 ## Memories
 - Use `uv run tox` instead of `uvx tox`

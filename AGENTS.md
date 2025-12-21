@@ -36,6 +36,7 @@
 - Do not bump version numbers on every commit.
 - Before opening a PR, run `just test`, `just typecheck`, and `just lint`.
 - Update docs when adding features or changing behavior.
+- When preparing a release, add a new file under `docs/releases/` and link it in `docs/releases/index.rst`.
 
 ## Build System
 - Uses `uv_build` backend (NOT hatchling) with src layout (`src/cast/`).
