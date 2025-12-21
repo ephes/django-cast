@@ -2,7 +2,7 @@
 Django and Wagtail based blogging / podcasting package
 """
 
-__version__ = "0.2.50"
+__version__ = "0.2.51"
 
 # Make installation easier by exposing required apps and middleware
 from .apps import CAST_APPS, CAST_MIDDLEWARE
