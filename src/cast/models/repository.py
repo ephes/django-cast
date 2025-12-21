@@ -52,6 +52,14 @@ def cache_page_url(post_id: int, url: str) -> None:
     PageLinkHandlerWithCache.cache_url(post_id, url)
 
 
+def apply_cover_fallback(
+    cover_image_url: str, cover_alt_text: str, blog_cover_image_url: str, blog_cover_alt_text: str
+) -> tuple[str, str]:
+    if cover_image_url == "" and blog_cover_image_url:
+        return blog_cover_image_url, blog_cover_alt_text
+    return cover_image_url, cover_alt_text
+
+
 class QuerysetData:
     """
     This class is a container for the data that is needed to render a list of posts
@@ -500,6 +508,11 @@ def data_for_blog_cachable(
     Fetch all the data of a blog in a cachable (dict) format.
     """
     data: dict[str, Any] = {"blog": blog_to_dict(blog)}
+    blog_cover_image_url = ""
+    if blog.cover_image is not None:
+        blog_cover_image_url = cast(Image, blog.cover_image).file.url
+    data["blog_cover_image_url"] = blog_cover_image_url
+    data["blog_cover_alt_text"] = blog.cover_alt_text
     data = add_site_raw(data)
     data = add_root_nav_links(data)
     data["template_base_dir"] = blog.get_template_base_dir(request)
@@ -804,6 +817,8 @@ class BlogIndexRepository:
         template_base_dir = data["template_base_dir"]
 
         post_by_id = {}
+        blog_cover_image_url = data.get("blog_cover_image_url", "")
+        blog_cover_alt_text = data.get("blog_cover_alt_text", "")
         for post_pk, post_data in data["post_by_id"].items():
             if "podcast_audio" in post_data:
                 post_data["podcast_audio"] = Audio(**post_data["podcast_audio"])
@@ -832,6 +847,13 @@ class BlogIndexRepository:
             post._media_lookup = media_lookup
             post.owner = user_model(username=data["owner_username_by_id"][post.pk])
             post.page_url = data["page_url_by_id"][post.pk]
+            cover_image_url = data["cover_by_post_id"].get(post.pk, "")
+            cover_alt_text = data["cover_alt_by_post_id"].get(post.pk, "")
+            cover_image_url, cover_alt_text = apply_cover_fallback(
+                cover_image_url, cover_alt_text, blog_cover_image_url, blog_cover_alt_text
+            )
+            post.cover_image_url = cover_image_url
+            post.cover_alt_text_display = cover_alt_text
 
             if data["has_audio_by_id"][post.pk]:
                 use_audio_player = True
@@ -882,8 +904,21 @@ class BlogIndexRepository:
         filterset = blog.get_filterset(get_params)
         pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
         use_audio_player = False
+        blog_cover_context = blog.get_cover_image_context()
         for post in pagination_context["object_list"]:
             post.page_url = post.get_url(request)
+            cover_image_url = ""
+            if post.cover_image is not None:
+                cover_image_url = cast(Image, post.cover_image).file.url
+            cover_alt_text = post.cover_alt_text
+            cover_image_url, cover_alt_text = apply_cover_fallback(
+                cover_image_url,
+                cover_alt_text,
+                blog_cover_context["cover_image_url"],
+                blog_cover_context["cover_alt_text"],
+            )
+            post.cover_image_url = cover_image_url
+            post.cover_alt_text_display = cover_alt_text
             if post.has_audio:
                 use_audio_player = True
         template_base_dir = blog.get_template_base_dir(request)

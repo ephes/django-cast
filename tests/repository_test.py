@@ -418,6 +418,7 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert post.title in html
     assert repository.page_url in html
     assert repository.owner_username.capitalize() in html
+    assert 'alt="Cover alt text"' in html
     assert "audio_1" in html
     assert "<video" in html
     assert '<section class="block-image">' in html
@@ -446,6 +447,8 @@ def blog_data(post, renditions_for_post):
     data = {
         "template_base_dir": "bootstrap4",
         "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
+        "blog_cover_image_url": "",
+        "blog_cover_alt_text": "",
         "post_by_id": {1: post_to_dict(post)},
         "posts": [1],
         "pagination_context": {},

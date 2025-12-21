@@ -163,7 +163,7 @@ class Blog(Page):
     @staticmethod
     def get_published_posts(filtered_posts: models.QuerySet) -> models.QuerySet[Post]:
         queryset = filtered_posts
-        queryset = queryset.select_related("owner")
+        queryset = queryset.select_related("owner", "cover_image")
         queryset = queryset.prefetch_related(
             "audios",
             "images",

@@ -8,6 +8,11 @@
     </a>
     <span class="author">{{ page.owner.username | title}}</span>
   </header>
+  {% if cover_image_url and not render_for_feed %}
+    <figure class="cast-cover-image">
+      <img src="{{ cover_image_url }}" alt="{{ cover_alt_text }}" loading="lazy">
+    </figure>
+  {% endif %}
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
       <section class="block-{{ block.block_type }}">
