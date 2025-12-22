@@ -57,6 +57,7 @@ uv run tox
 # where django-cast is installed as an editable package
 ```
 Always run `uv run mypy` (or `just typecheck`) after code changes; treat it as a required check.
+Always run `just lint` and `just typecheck` before delivery; both must pass.
 
 ### JavaScript Build Commands
 ```bash
@@ -92,7 +93,7 @@ pre-commit run --all-files
 - Test framework: pytest with Django integration
 - Test settings: `tests/settings.py`
 - JavaScript tests: Vitest with jsdom
-- Coverage requirements: Configured in `pyproject.toml`
+- Coverage requirements: Configured in `pyproject.toml` and must remain at 100% for the Python test suite.
 - Run single test: `uv run python commands.py test path.to.test::TestClass::test_method`
 
 ## Code Style

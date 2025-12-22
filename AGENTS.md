@@ -17,7 +17,8 @@
 - Full matrix: `just tox` for multi-environment testing.
 - Docs preview: `just docs` to rebuild Sphinx and open HTML locally.
 - Pre-commit hooks: `just pre-commit` or `pre-commit run --all-files`.
- - Always run `just typecheck` (or `uv run mypy`) after code changes; treat it as a required check.
+- Always run `just typecheck` (or `uv run mypy`) after code changes; treat it as a required check.
+- Always run `just lint` and `just typecheck` before delivery; both must pass.
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ with 4-space indentation; prefer explicit typing—public functions and classes should be type-annotated.
@@ -28,6 +29,7 @@
 ## Testing Guidelines
 - New behaviors need Pytest coverage under `tests/` with `test_*.py`; mirror module paths for discoverability.
 - Tests run with coverage (`--cov-config=pyproject.toml`).
+- Maintain 100% test coverage for the Python test suite.
 - For regression proofs, add focused tests near the bug; prefer fixtures over inline setup to avoid duplication.
 - Use `pytest -k "keyword"` or `just test-one path::node` for fast iteration.
 
