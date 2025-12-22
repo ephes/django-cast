@@ -28,7 +28,9 @@ from cast.models.repository import (
     FeedRepository,
     PostDetailRepository,
     QuerysetData,
+    apply_cover_fallback,
     audio_to_dict,
+    data_for_blog_cachable,
     get_facet_choices,
     image_to_dict,
     post_to_dict,
@@ -770,6 +772,45 @@ def test_blog_index_repository_via_django_models_no_audio_player(rf, blog):
     create_post(blog=blog)
     repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
     assert repository.use_audio_player is False
+
+
+@pytest.mark.django_db
+def test_blog_index_repository_uses_post_cover_image(rf, blog, image):
+    post = create_post(blog=blog)
+    post.cover_image = image
+    post.cover_alt_text = "Cover alt text"
+    post.save()
+
+    request = rf.get("/foobar/")
+    repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
+
+    [post_from_repo] = repository.pagination_context["object_list"]
+    assert post_from_repo.cover_image_url == image.file.url
+    assert post_from_repo.cover_alt_text_display == post.cover_alt_text
+
+
+def test_apply_cover_fallback_uses_blog_cover():
+    cover_url, cover_alt = apply_cover_fallback("", "", "/media/blog.jpg", "Blog alt text")
+    assert cover_url == "/media/blog.jpg"
+    assert cover_alt == "Blog alt text"
+
+
+@pytest.mark.django_db
+def test_data_for_blog_cachable_includes_blog_cover_image(rf, blog, image):
+    blog.cover_image = image
+    blog.cover_alt_text = "Blog cover alt"
+    blog.save()
+
+    request = rf.get("/blog/")
+    data = data_for_blog_cachable(
+        request=request,
+        blog=blog,
+        is_paginated=False,
+        post_queryset=blog.unfiltered_published_posts,
+    )
+
+    assert data["blog_cover_image_url"] == image.file.url
+    assert data["blog_cover_alt_text"] == blog.cover_alt_text
 
 
 def test_page_link_handler_expand_db_attributes_single():

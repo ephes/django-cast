@@ -35,6 +35,8 @@ Cover Image
 In addition to the effect setting a cover image for a post has, setting a
 cover image for an episode will also be used as the episode's artwork in the
 podcast feed and in the Podlove Web Player.
+It is also used for social previews via the automatically generated 1200x630
+social rendition.
 
 If no cover image is set for the episode, the :ref:`blog <blog_overview>`'s cover
 image will be used.

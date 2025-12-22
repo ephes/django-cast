@@ -5,8 +5,10 @@ Fixes:
 
 - Render cover images on post detail and blog index pages, including alt text and blog-level fallback.
 - Add social meta tags to the plain theme and include ``twitter:title`` for summary cards.
+- Generate social preview renditions (1200x630) with focal-point cropping and absolute image URLs,
+  and switch post cards to ``summary_large_image`` with ``og:image`` dimensions.
 
 Other Changes:
 
 - Blog index queries select related cover images to avoid N+1 lookups.
-- Developer docs now emphasize running ``just typecheck`` after code changes.
+- Developer docs now emphasize running ``just lint`` and ``just typecheck`` after code changes.

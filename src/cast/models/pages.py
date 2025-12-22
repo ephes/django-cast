@@ -66,6 +66,7 @@ logger = logging.getLogger(__name__)
 
 comment_model = get_comment_model()
 user_model = get_user_model()
+SOCIAL_COVER_RENDITION_SPEC = "fill-1200x630|format-jpeg|quality-75"
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -384,6 +385,7 @@ class Post(Page):
         context = self.get_context_from_repository(context, repository)
         self.owner = user_model(username=context["owner_username"])
         context.update(self.get_cover_image_context(context, blog=context["blog"]))
+        context.update(self.get_social_cover_image_context(request=request, blog=context["blog"]))
         if context["render_for_feed"]:
             # use absolute urls for feed
             self.page_url = context["absolute_page_url"]
@@ -533,6 +535,27 @@ class Post(Page):
 
         # no cover image set
         return {"cover_image_url": "", "cover_alt_text": ""}
+
+    def get_social_cover_image_context(self, *, request: HttpRequest, blog: Optional["Blog"]) -> dict[str, str | int]:
+        cover_image = self.cover_image
+        if cover_image is None and blog is not None:
+            cover_image = blog.cover_image
+        if cover_image is None:
+            return {
+                "social_cover_image_url": "",
+                "social_cover_image_width": "",
+                "social_cover_image_height": "",
+            }
+        cover_image = cast(Image, cover_image)
+        rendition = cover_image.get_rendition(SOCIAL_COVER_RENDITION_SPEC)
+        cover_url = rendition.url
+        if hasattr(request, "build_absolute_uri"):
+            cover_url = request.build_absolute_uri(cover_url)
+        return {
+            "social_cover_image_url": cover_url,
+            "social_cover_image_width": rendition.width,
+            "social_cover_image_height": rendition.height,
+        }
 
     def get_description(
         self,

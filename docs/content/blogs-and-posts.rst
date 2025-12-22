@@ -73,6 +73,8 @@ The blog's cover image serves as:
 - Visual identity for your blog
 
 The `cover_alt_text` field provides accessibility text for screen readers.
+Social previews use an automatically generated 1200x630 rendition with focal point
+cropping.
 
 SEO Settings
 ============
@@ -136,6 +138,8 @@ Each post can have its own cover image used for:
 The `cover_alt_text` field ensures accessibility.
 
 If no cover image is set, the parent blog's cover image is used as a fallback.
+Social previews use an automatically generated 1200x630 rendition with focal point
+cropping.
 
 **Tip**: Generate cover images using `shot-scraper <https://github.com/simonw/shot-scraper>`_:
 
