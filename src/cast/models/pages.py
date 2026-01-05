@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 comment_model = get_comment_model()
 user_model = get_user_model()
-SOCIAL_COVER_RENDITION_SPEC = "fill-1200x630|format-jpeg|quality-75"
+SOCIAL_COVER_RENDITION_SPEC = "fill-1200x630|format-jpeg|jpegquality-75"
 
 
 class ContentBlock(blocks.StreamBlock):
