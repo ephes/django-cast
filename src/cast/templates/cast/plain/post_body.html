@@ -3,7 +3,7 @@
 <article>
   <header>
     <h2>{{ page.title }}</h2>
-    <a href="{% pageurl page %}">
+    <a href="{{ page.page_url }}">
       <time date-time="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date}}</time>,
     </a>
     <span class="author">{{ page.owner.username | title}}</span>
