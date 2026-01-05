@@ -3,7 +3,9 @@
 
 Fixes:
 
-- Render cover images on post detail and blog index pages, including alt text and blog-level fallback.
+- Keep cover images for social meta tags only, with alt text emitted in ``twitter:image:alt`` and ``og:image:alt``.
+- Use cached ``page_url`` in plain theme post lists to avoid ``/None/`` links when rendering repository posts.
+- Use ``jpegquality-75`` in social cover renditions to avoid invalid filter spec errors.
 - Add social meta tags to the plain theme and include ``twitter:title`` for summary cards.
 - Generate social preview renditions (1200x630) with focal-point cropping and absolute image URLs,
   and switch post cards to ``summary_large_image`` with ``og:image`` dimensions.
