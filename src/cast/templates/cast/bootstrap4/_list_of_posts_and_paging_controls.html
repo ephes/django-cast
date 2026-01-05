@@ -1,6 +1,6 @@
 <main>
   {% for post in posts %}
-    {% include "./post_body.html" with render_detail=False page=post cover_image_url=post.cover_image_url cover_alt_text=post.cover_alt_text_display %}
+    {% include "./post_body.html" with render_detail=False page=post %}
     <hr class="my-4">
   {% endfor %}
   <script>

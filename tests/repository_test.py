@@ -420,7 +420,8 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert post.title in html
     assert repository.page_url in html
     assert repository.owner_username.capitalize() in html
-    assert 'alt="Cover alt text"' in html
+    assert '<meta name="twitter:image:alt" content="Cover alt text">' in html
+    assert '<meta property="og:image:alt" content="Cover alt text">' in html
     assert "audio_1" in html
     assert "<video" in html
     assert '<section class="block-image">' in html
