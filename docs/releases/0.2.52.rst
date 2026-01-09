@@ -7,3 +7,4 @@ Changes:
 - Expose podcast metadata fields (``itunes_categories``, ``keywords``, ``explicit``) in the Wagtail admin.
 - Fix inline-uploaded images missing in draft preview rendering.
 - Fix gallery navigation for duplicate images in default and HTMX layouts.
+- Fix gallery rendering in the plain theme by adding plain gallery templates.

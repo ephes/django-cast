@@ -1,0 +1,44 @@
+<div class="cast-gallery">
+  <ul class="cast-gallery-list">
+    {% for image in images %}
+      <li class="cast-gallery-item">
+        <a
+          class="cast-gallery-link"
+          href="{{ image.file.url }}"
+          hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}"
+          hx-trigger="click"
+          hx-target="#imageGalleryModal-{{ block.id }}"
+          hx-swap="innerHTML"
+        >
+          <picture>
+            <source
+              srcset="{{ image.thumbnail.srcset.avif }}"
+              type="image/avif"
+              sizes="{{ image.thumbnail.sizes }}"
+            >
+            <img
+              class="cast-gallery-thumbnail"
+              alt="{{ image.default_alt_text }}"
+              src="{{ image.thumbnail.src.jpeg }}"
+              srcset="{{ image.thumbnail.srcset.jpeg }}"
+              sizes="{{ image.thumbnail.sizes }}"
+              width="{{ image.thumbnail.width }}"
+              height="{{ image.thumbnail.height }}"
+              loading="lazy"
+            />
+          </picture>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div
+  id="imageGalleryModal-{{ block.id }}"
+  class="cast-gallery-modal"
+  aria-live="polite"
+  tabindex="-1"
+  hx-on:click="this.innerHTML = ''"
+  hx-on:htmx:afterSwap="this.focus()"
+  hx-on:keyup="if (event.key === 'Escape') this.innerHTML = ''"
+></div>

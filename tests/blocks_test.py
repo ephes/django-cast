@@ -67,6 +67,12 @@ def test_gallery_block_template_from_theme(mocker):
     assert template_name == "cast/vue/gallery.html"
 
 
+def test_gallery_block_template_from_plain_theme():
+    block = GalleryBlock(ImageChooserBlock())
+    template_name = block.get_template(context={"template_base_dir": "plain"})
+    assert template_name == "cast/plain/gallery.html"
+
+
 class StubWagtailImage:
     class File:
         name = "test.jpg"
@@ -196,6 +202,18 @@ def test_gallery_block_with_layout_get_template_htmx():
     block = GalleryBlockWithLayout()
     template = block.get_template({"layout": "htmx"}, context={"template_base_dir": "bootstrap4"})
     assert template == "cast/bootstrap4/gallery_htmx.html"
+
+
+def test_gallery_block_with_layout_get_template_plain_htmx():
+    block = GalleryBlockWithLayout()
+    template = block.get_template({"layout": "htmx"}, context={"template_base_dir": "plain"})
+    assert template == "cast/plain/gallery_htmx.html"
+
+
+def test_gallery_block_with_layout_get_template_plain_default():
+    block = GalleryBlockWithLayout()
+    template = block.get_template({"layout": "default"}, context={"template_base_dir": "plain"})
+    assert template == "cast/plain/gallery.html"
 
 
 def test_gallery_block_with_layout_get_template_value_is_none():

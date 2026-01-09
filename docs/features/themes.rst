@@ -7,8 +7,7 @@ blogs / podcasts. All users can select these templates from the Wagtail
 admin interface. Individual users can make their own template selections,
 which are stored in their session.
 
-* Plain HTML (plain) - This is just a plain HTML template without any
-  CSS
+* Plain HTML (plain) - This is a plain HTML template with minimal CSS
 * Bootstrap 4 (bootstrap4) - This is a template that uses Bootstrap 4
   and is currently the default template
 * `Bootstrap 5 (bootstrap5) <https://github.com/ephes/cast-bootstrap5>`_

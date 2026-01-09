@@ -1,0 +1,64 @@
+<div
+  class="cast-gallery-modal-content"
+  role="dialog"
+  aria-live="polite"
+  hx-on:click="event.stopPropagation()"
+>
+  <button
+    class="cast-gallery-modal-close"
+    type="button"
+    aria-label="Close gallery"
+    hx-on:click="this.closest('.cast-gallery-modal').innerHTML=''"
+  >
+    &times;
+  </button>
+  <div class="cast-gallery-modal-body">
+    <a class="cast-gallery-modal-link" href="{{ current_image.file.url }}">
+      <picture class="cast-gallery-modal-picture">
+        <source
+          class="cast-gallery-modal-source"
+          srcset="{{ current_image.modal.srcset.avif }}"
+          sizes="{{ current_image.modal.sizes }}"
+          type="image/avif"
+        >
+        <img
+          class="cast-gallery-modal-image"
+          alt="{{ current_image.default_alt_text }}"
+          src="{{ current_image.modal.src.jpeg }}"
+          srcset="{{ current_image.modal.srcset.jpeg }}"
+          sizes="{{ current_image.modal.sizes }}"
+        >
+      </picture>
+    </a>
+  </div>
+  <nav class="cast-gallery-modal-controls" aria-label="Gallery navigation">
+    {% if prev_image %}
+      <a
+        class="cast-gallery-modal-prev"
+        href="{{ prev_image.file.url }}"
+        hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ prev_image.gallery_index }}&block_id={{ block_id }}"
+        hx-trigger="click, keyup[key=='ArrowLeft'] from:#imageGalleryModal-{{ block_id }}"
+        hx-target="#imageGalleryModal-{{ block_id }}"
+        hx-swap="innerHTML"
+      >
+        Prev
+      </a>
+    {% else %}
+      <span class="cast-gallery-modal-prev" aria-disabled="true">Prev</span>
+    {% endif %}
+    {% if next_image %}
+      <a
+        class="cast-gallery-modal-next"
+        href="{{ next_image.file.url }}"
+        hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ next_image.gallery_index }}&block_id={{ block_id }}"
+        hx-trigger="click, keyup[key=='ArrowRight'] from:#imageGalleryModal-{{ block_id }}"
+        hx-target="#imageGalleryModal-{{ block_id }}"
+        hx-swap="innerHTML"
+      >
+        Next
+      </a>
+    {% else %}
+      <span class="cast-gallery-modal-next" aria-disabled="true">Next</span>
+    {% endif %}
+  </nav>
+</div>
