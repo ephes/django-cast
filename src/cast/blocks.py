@@ -131,9 +131,16 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
     @staticmethod
     def get_image_and_renditions(image_id: int, context: dict) -> tuple[Image, dict[str, Rendition]]:
         repository: HasImagesAndRenditions = context["repository"]
-        image = repository.image_by_id[image_id]
-        image_renditions = repository.renditions_for_posts.get(image.pk, [])
-        fetched_renditions = {r.filter_spec: r for r in image_renditions}
+        try:
+            image = repository.image_by_id[image_id]
+            image_renditions = repository.renditions_for_posts.get(image.pk, [])
+            fetched_renditions = {r.filter_spec: r for r in image_renditions}
+        except KeyError:
+            image = Image.objects.get(pk=image_id)
+            fetched_renditions = {}
+            rendition_filters = RenditionFilters.from_wagtail_image_with_type(image=image, image_type="regular")
+            for filter_spec in rendition_filters.filter_strings:
+                fetched_renditions[filter_spec] = image.get_rendition(filter_spec)
         return image, fetched_renditions
 
     def get_context(self, image_or_pk: int | Image, parent_context: dict) -> dict:

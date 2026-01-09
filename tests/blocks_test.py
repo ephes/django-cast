@@ -4,6 +4,7 @@ import pytest
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image
 
+import cast.renditions as renditions
 from cast.blocks import (
     AudioChooserBlock,
     CastImageChooserBlock,
@@ -380,6 +381,16 @@ def test_image_chooser_block_get_context_image_or_pk(image):
     assert context["value"] == image
     context = cicb.get_context(image.pk, parent_context={"repository": repository})
     assert context["value"] == image
+
+
+@pytest.mark.django_db
+def test_image_chooser_block_get_context_fallback_to_database(image, monkeypatch):
+    monkeypatch.setattr(renditions, "DEFAULT_IMAGE_FORMATS", ("jpeg",))
+    cicb = CastImageChooserBlock()
+    repository = EmptyRepository()
+    context = cicb.get_context(image.pk, parent_context={"repository": repository})
+    assert context["value"] == image
+    assert context["value"].regular.src["jpeg"]
 
 
 class TestAddPrevNext:
