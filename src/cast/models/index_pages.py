@@ -94,6 +94,7 @@ class Blog(Page):
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
         FieldPanel("author"),
+        FieldPanel("comments_enabled"),
         FieldPanel("template_base_dir"),
         MultiFieldPanel(
             [
@@ -359,10 +360,20 @@ class Podcast(Blog):
         FieldPanel("description", classname="full"),
         FieldPanel("email"),
         FieldPanel("author"),
+        FieldPanel("comments_enabled"),
         FieldPanel(
             "itunes_artwork", help_text=_("The image that will be used in the podcast feed as the iTunes artwork.")
         ),
         FieldPanel("template_base_dir"),
+        MultiFieldPanel(
+            [
+                FieldPanel("itunes_categories"),
+                FieldPanel("keywords"),
+                FieldPanel("explicit"),
+            ],
+            heading=_("Podcast Settings"),
+            classname="collapsed",
+        ),
         MultiFieldPanel(
             [
                 FieldPanel("cover_image"),
