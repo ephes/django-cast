@@ -30,6 +30,8 @@ from cast.models.repository import (
     QuerysetData,
     apply_cover_fallback,
     audio_to_dict,
+    blog_from_data,
+    blog_to_dict,
     data_for_blog_cachable,
     get_facet_choices,
     image_to_dict,
@@ -651,7 +653,7 @@ def test_render_blog_feed_with_data_from_cache_without_hitting_the_database(rf, 
     assert post_detail_url in html
     # And the database should not be hit
     # show_queries(connection.queries)
-    assert len(connection.queries) == 1  # site is not cached
+    assert len(connection.queries) == 0
 
 
 @pytest.mark.django_db
@@ -693,12 +695,7 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
     assert post_detail_url in html
     # And the database should not be hit
     # show_queries(connection.queries)
-    # 4 Queries, because some things that are not cached:
-    # - site
-    # - podcast object needs to be fetched, because there's only repository.blog
-    # - podcast again, dunno why
-    # - one post, dunno why
-    assert len(connection.queries) == 4
+    assert len(connection.queries) == 0
 
 
 # Small tests for repository coverage
@@ -718,6 +715,37 @@ def test_get_facet_choices():
     # choices are found
     choices = get_facet_choices({"foobar": Facet()}, "foobar")
     assert choices == Facet.choices
+
+
+@pytest.mark.django_db
+def test_blog_from_data_returns_blog(blog):
+    data = blog_to_dict(blog)
+    rebuilt = blog_from_data(data)
+    assert isinstance(rebuilt, Blog)
+    assert not isinstance(rebuilt, Podcast)
+    assert rebuilt.title == blog.title
+    assert rebuilt.subtitle == blog.subtitle
+
+
+@pytest.mark.django_db
+def test_blog_to_dict_and_from_data_roundtrip_podcast(podcast_with_artwork):
+    podcast_with_artwork.itunes_categories = "Technology"
+    podcast_with_artwork.keywords = "foo,bar"
+    podcast_with_artwork.explicit = 2
+    podcast_with_artwork.subtitle = "Test subtitle"
+    podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit", "subtitle"])
+
+    data = blog_to_dict(podcast_with_artwork)
+    rebuilt = blog_from_data(data)
+
+    assert isinstance(rebuilt, Podcast)
+    assert rebuilt.title == podcast_with_artwork.title
+    assert rebuilt.subtitle == podcast_with_artwork.subtitle
+    assert rebuilt.itunes_categories == podcast_with_artwork.itunes_categories
+    assert rebuilt.keywords == podcast_with_artwork.keywords
+    assert rebuilt.explicit == podcast_with_artwork.explicit
+    assert rebuilt.itunes_artwork is not None
+    assert rebuilt.itunes_artwork.original.name == podcast_with_artwork.itunes_artwork.original.name
 
     # no choices found
     choices = get_facet_choices({}, "foobar")

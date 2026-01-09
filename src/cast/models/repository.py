@@ -321,9 +321,11 @@ def video_to_dict(video) -> dict:
 
 
 def blog_to_dict(blog):
-    return {
+    data = {
         "id": blog.pk,
         "pk": blog.pk,
+        "title": blog.title,
+        "subtitle": blog.subtitle,
         "author": blog.author,
         "slug": blog.slug,
         "uuid": blog.uuid,
@@ -333,6 +335,39 @@ def blog_to_dict(blog):
         "template_base_dir": blog.template_base_dir,
         "description": blog.description,
     }
+    from . import Podcast
+    from .itunes import ItunesArtWork
+
+    if isinstance(blog, Podcast):
+        data["itunes_categories"] = blog.itunes_categories
+        data["keywords"] = blog.keywords
+        data["explicit"] = blog.explicit
+        if blog.itunes_artwork is not None:
+            artwork = cast(ItunesArtWork, blog.itunes_artwork)
+            data["itunes_artwork"] = {
+                "id": artwork.pk,
+                "original": artwork.original.name,
+                "original_height": artwork.original_height,
+                "original_width": artwork.original_width,
+            }
+    return data
+
+
+def blog_from_data(data: dict[str, Any]) -> "Blog":
+    from . import Blog, Podcast
+    from .itunes import ItunesArtWork
+
+    blog_data = data.copy()
+    itunes_artwork_data = blog_data.pop("itunes_artwork", None)
+    is_podcast = (
+        any(field in blog_data for field in ("itunes_categories", "keywords", "explicit"))
+        or itunes_artwork_data is not None
+    )
+    blog_class = Podcast if is_podcast else Blog
+    blog = blog_class(**blog_data)
+    if itunes_artwork_data is not None:
+        blog.itunes_artwork = ItunesArtWork(**itunes_artwork_data)
+    return blog
 
 
 def post_to_dict(post):
@@ -535,6 +570,12 @@ def data_for_blog_cachable(
         request=request, site=Site(**data["site"]), queryset=post_queryset, is_podcast=blog.is_podcast
     )
     data = add_queryset_data(data, queryset_data)
+    last_build_date = None
+    for post in queryset_data.queryset:
+        last_build_date = post.visible_date
+        break
+    if last_build_date is not None:
+        data["last_build_date"] = last_build_date
 
     # page_url by id
     page_url_by_id: PageUrlByID = {}
@@ -650,10 +691,12 @@ class FeedRepository:
         """
         from wagtail.images.models import Image
 
-        from . import Audio, Blog, Episode, Post, Transcript, Video
+        from . import Audio, Episode, Post, Transcript, Video
 
         site = Site(**data["site"])
-        blog = Blog(**data["blog"])
+        blog = blog_from_data(data["blog"])
+        if (last_build_date := data.get("last_build_date")) is not None:
+            blog._last_build_date = last_build_date
         template_base_dir = data["template_base_dir"]
         post_by_id = {}
         podcast_fields = ["podcast_audio", "block", "keywords", "explicit"]
@@ -811,7 +854,7 @@ class BlogIndexRepository:
         """
         from wagtail.images.models import Image
 
-        from . import Audio, Blog, Episode, Post, Video
+        from . import Audio, Episode, Post, Video
 
         # site = Site(**data["site"])
         template_base_dir = data["template_base_dir"]
@@ -885,10 +928,14 @@ class BlogIndexRepository:
         filterset.filters["tag_facets"].set_field_choices(data["filterset"]["tag_facets_choices"])
         delattr(filterset, "_form")
 
+        blog = blog_from_data(data["blog"])
+        if (last_build_date := data.get("last_build_date")) is not None:
+            blog._last_build_date = last_build_date
+
         return cls(
             **{
                 # "site": site,
-                "blog": Blog(**data["blog"]),
+                "blog": blog,
                 "template_base_dir": template_base_dir,
                 "filterset": filterset,
                 "pagination_context": pagination_context,

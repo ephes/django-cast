@@ -195,6 +195,45 @@ def test_utils_helpers(post, comment):
 
 
 @pytest.mark.django_db
+def test_comments_are_open_avoids_db_queries_with_repository(post, comments_enabled):
+    from django.db import connection, reset_queries
+
+    from cast.comments.utils import comments_are_open
+    from cast.models import Post
+    from cast.models.repository import PostDetailRepository
+
+    def blocker(*_args, **_kwargs):
+        raise Exception("No database access allowed here.")
+
+    post_for_repo = Post.objects.get(pk=post.pk)
+    blog = post_for_repo.get_parent().specific
+    repository = PostDetailRepository(
+        post_id=post.pk,
+        template_base_dir="bootstrap4",
+        blog=blog,
+        root_nav_links=[],
+        comments_are_enabled=True,
+        has_audio=False,
+        page_url="/some-post/",
+        absolute_page_url="http://testserver/some-post/",
+        owner_username="owner",
+        blog_url="/some-blog/",
+        cover_image_url="",
+        cover_alt_text="",
+        audio_by_id={},
+        video_by_id={},
+        image_by_id={},
+        renditions_for_posts={},
+    )
+    post = Post.objects.get(pk=post.pk)
+    post._repository = repository
+
+    reset_queries()
+    with connection.execute_wrapper(blocker):
+        assert comments_are_open(post) is True
+
+
+@pytest.mark.django_db
 def test_templatetags_render_comment_and_count(post, comment):
     html = Template(
         "{% load fluent_comments_tags %}"

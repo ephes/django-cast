@@ -8,3 +8,7 @@ Changes:
 - Fix inline-uploaded images missing in draft preview rendering.
 - Fix gallery navigation for duplicate images in default and HTMX layouts.
 - Fix gallery rendering in the plain theme by adding plain gallery templates.
+- Avoid extra queries when evaluating comment settings by using repository data.
+- Fix ``last_build_date`` to avoid unnecessary Blog lookups and allow cached values.
+- Preserve Podcast fields in cached repository data to avoid extra fetches in feeds.
+- Cache site lookups during feed rendering to eliminate remaining queries.

@@ -325,6 +325,9 @@ class Post(Page):
 
     @property
     def comments_are_enabled(self) -> bool:
+        repository = getattr(self, "_repository", None)
+        if repository is not None and hasattr(repository, "comments_are_enabled"):
+            return repository.comments_are_enabled
         return self.get_comments_are_enabled(self.blog)
 
     @property

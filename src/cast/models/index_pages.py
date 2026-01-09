@@ -143,7 +143,10 @@ class Blog(Page):
 
     @property
     def last_build_date(self) -> datetime:
-        return Post.objects.live().descendant_of(self.blog).order_by("-visible_date")[0].visible_date
+        cached = getattr(self, "_last_build_date", None)
+        if cached is not None:
+            return cached
+        return Post.objects.live().descendant_of(self).order_by("-visible_date")[0].visible_date
 
     @property
     def author_name(self) -> str:

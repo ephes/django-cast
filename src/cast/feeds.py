@@ -67,9 +67,27 @@ class RepositoryMixin:
         # now that we have the repository, we can set the template base dir
         # to avoid db queries in context_processors
         self.request.cast_site_template_base_dir = repository.template_base_dir
+        self._cache_site_for_feed(request)
         feed = super().get_feed(obj, request)  # type: ignore
         feed.repository = repository  # pass repository to feed to be able to access it in PodcastIndexElements
         return feed
+
+    @staticmethod
+    def _cache_site_for_feed(request: HttpRequest) -> None:
+        from django.conf import settings
+        from django.contrib.sites import models as sites_models
+        from django.contrib.sites.models import Site as DjangoSite
+
+        site_id = getattr(settings, "SITE_ID", None)
+        if site_id is None:
+            return
+        if site_id in sites_models.SITE_CACHE:
+            return
+        if hasattr(request, "get_host"):
+            domain = request.get_host()
+        else:
+            domain = "localhost"
+        sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain=domain, name=domain)
 
 
 class LatestEntriesFeed(RepositoryMixin, Feed):
@@ -269,7 +287,13 @@ class PodcastFeed(RepositoryMixin, Feed):
         self.set_audio_format(kwargs["audio_format"])
 
         slug = kwargs["slug"]
-        self.object = get_object_or_404(Podcast, slug=slug)
+        blog = None
+        if self.repository is not None:
+            if not self.repository.used and isinstance(self.repository.blog, Podcast):
+                blog = self.repository.blog
+        if blog is None:
+            blog = get_object_or_404(Podcast, slug=slug)
+        self.object = blog
         self.request = request  # need request for item.serve(request) later on
         return self.object
 
