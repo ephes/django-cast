@@ -171,6 +171,7 @@ When modifying models:
 
 ## Commit Guidelines
 - Do not bump the version number on every commit
+- Before committing, check whether documentation or release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 
 ## Version Bumping
 
