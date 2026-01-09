@@ -1,6 +1,5 @@
 from abc import abstractmethod
 from collections.abc import Iterable
-from itertools import chain, islice, tee
 from typing import TYPE_CHECKING, Any, Protocol, Union
 
 from django.db.models import Model, QuerySet
@@ -30,21 +29,6 @@ from .renditions import (
 if TYPE_CHECKING:
     from .models import Audio, Video
     from .widgets import AdminVideoChooser
-
-
-def previous_and_next(all_items: Iterable) -> Iterable:
-    """
-    Turn an iterable into an iterable of tuples of the
-    previous and next item in the iterable.
-
-    Example:
-        >>> list(previous_and_next(range(3)))
-        [(None, 0, 1), (0, 1, 2), (1, 2, None)]
-    """
-    previous_items, items, next_items = tee(all_items, 3)
-    previous_items = chain([None], previous_items)
-    next_items = chain(islice(next_items, 1, None), [None])
-    return zip(previous_items, items, next_items)
 
 
 def get_srcset_images_for_slots(
@@ -164,17 +148,6 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
         yield self.model_class, str(value), "", ""
 
 
-def add_prev_next(images: Iterable[AbstractImage]) -> None:
-    """
-    For each image in the queryset, add the previous and next image.
-    Note: This function is kept for backward compatibility, but prev/next
-    attributes are now calculated directly in templates to handle duplicates correctly.
-    """
-    for previous_image, current_image, next_image in previous_and_next(images):
-        current_image.prev = "false" if previous_image is None else f"img-{previous_image.pk}"
-        current_image.next = "false" if next_image is None else f"img-{next_image.pk}"
-
-
 def add_image_thumbnails(images: Iterable[AbstractImage], context: dict) -> None:
     """
     For each image in the queryset, add the thumbnail and modal image data to the image.
@@ -194,11 +167,10 @@ def add_image_thumbnails(images: Iterable[AbstractImage], context: dict) -> None
 
 def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) -> dict:
     """
-    Add the previous and next image and the thumbnail and modal image data to each
-    image of the gallery and then the images to the context.
+    Add the thumbnail and modal image data to each image of the gallery and then
+    the images to the context.
     """
     images_list = list(images)  # Ensure it's a list
-    add_prev_next(images_list)
     add_image_thumbnails(images_list, context=context)
     context["image_pks"] = ",".join([str(image.pk) for image in images_list])
     context["images"] = images_list

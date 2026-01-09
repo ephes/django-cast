@@ -1,8 +1,29 @@
-import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django.urls import reverse
+import pytest
+from wagtail.images.models import Image
 
 from cast.views.gallery import GalleryModalForm, gallery_modal, get_prev_next_indices
+
+
+@pytest.fixture
+def gallery_duplicate_images(image_1px):
+    image1 = Image(file=image_1px, title="Image 1")
+    image1.save()
+
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00"
+        b"\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
+        b"\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc````"
+        b"\x00\x00\x00\x05\x00\x01\xa5\xf6E@\x00\x00"
+        b"\x00\x00IEND\xaeB`\x82"
+    )
+    image_2px = SimpleUploadedFile(name="test2.png", content=png, content_type="image/png")
+    image2 = Image(file=image_2px, title="Image 2")
+    image2.save()
+
+    return image1, image2
 
 
 def test_gallery_modal_form_happy():
@@ -140,28 +161,9 @@ class TestGalleryView:
         form = GalleryModalForm({"image_pks": "1,2,3", "current_image_index": "-1", "block_id": "test-block"})
         assert not form.is_valid()
 
-    def test_gallery_modal_with_duplicate_images(self, image_1px):
+    def test_gallery_modal_with_duplicate_images(self, gallery_duplicate_images):
         """#171 Test gallery_modal view handles duplicate images correctly."""
-        # Create test images
-        from wagtail.images.models import Image
-
-        image1 = Image(file=image_1px, title="Image 1")
-        image1.save()
-
-        # Create a second image with a different file
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
-        png = (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00"
-            b"\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00"
-            b"\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc````"
-            b"\x00\x00\x00\x05\x00\x01\xa5\xf6E@\x00\x00"
-            b"\x00\x00IEND\xaeB`\x82"
-        )
-        image_2px = SimpleUploadedFile(name="test2.png", content=png, content_type="image/png")
-        image2 = Image(file=image_2px, title="Image 2")
-        image2.save()
-
+        image1, image2 = gallery_duplicate_images
         # Simulate a gallery with duplicate images (same image used multiple times)
         # Pattern: image1, image2, image1, image2, image1
         image_pks = [image1.pk, image2.pk, image1.pk, image2.pk, image1.pk]
@@ -178,19 +180,25 @@ class TestGalleryView:
         response = gallery_modal(request, "bootstrap4")
         assert response.status_code == 200
 
-        # The response context should have the correct images based on indices
-        # Previous should be image at index 1 (image2)
-        # Current should be image at index 2 (image1)
-        # Next should be image at index 3 (image2)
+    def test_gallery_modal_duplicate_prev_next_indices(self, client, gallery_duplicate_images):
+        """#171 Ensure duplicate prev/next indices are preserved in modal context."""
+        image1, image2 = gallery_duplicate_images
+        image_pks = [image1.pk, image2.pk, image1.pk, image2.pk, image1.pk]
+        current_image_index = 2
+        block_id = "test-block"
 
-        # Test navigation to the last duplicate (index 4, which is image1)
-        request = factory.get(
-            reverse("cast:gallery-modal", kwargs={"template_base_dir": "bootstrap4"}),
-            {"image_pks": ",".join(map(str, image_pks)), "current_image_index": "4", "block_id": "test-block"},
-        )
+        base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": "bootstrap4"})
+        url = f"{base_url}?current_image_index={current_image_index}&image_pks={','.join(map(str, image_pks))}&block_id={block_id}"
+        response = client.get(url)
 
-        response = gallery_modal(request, "bootstrap4")
         assert response.status_code == 200
+        assert response.context is not None
+        prev_image = response.context["prev_image"]
+        next_image = response.context["next_image"]
+        assert prev_image.gallery_index == 1
+        assert next_image.gallery_index == 3
+        assert prev_image.pk == image2.pk
+        assert next_image.pk == image2.pk
 
     def test_gallery_modal_invalid_request(self):
         """#171 Test gallery_modal view returns 400 for invalid requests."""

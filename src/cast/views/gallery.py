@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any
 
 from django import forms
@@ -37,6 +38,15 @@ class GalleryModalForm(forms.Form):
         return cleaned_data
 
 
+@dataclass
+class GalleryImageWithIndex:
+    image: Image
+    gallery_index: int
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.image, name)
+
+
 def get_prev_next_indices(image_pks: list[int], current_index: int) -> tuple[int | None, int | None]:
     """
     Given a list of image pks and the current index, return the prev and next indices.
@@ -71,7 +81,7 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
     prev_pk = image_pks[prev_index] if prev_index is not None else None
     next_pk = image_pks[next_index] if next_index is not None else None
 
-    images_to_fetch = [pk for pk in (prev_pk, current_image_pk, next_pk) if pk is not None]
+    images_to_fetch = {pk for pk in (prev_pk, current_image_pk, next_pk) if pk is not None}
     images = list(Image.objects.filter(pk__in=images_to_fetch).prefetch_renditions())
 
     for image in images:
@@ -85,13 +95,16 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
     current_image = pk_to_image[current_image_pk]
     current_image.gallery_index = current_index
 
-    prev_image = pk_to_image[prev_pk] if prev_pk is not None else None
-    if prev_image:
-        prev_image.gallery_index = prev_index
-
-    next_image = pk_to_image[next_pk] if next_pk is not None else None
-    if next_image:
-        next_image.gallery_index = next_index
+    prev_image = (
+        GalleryImageWithIndex(image=pk_to_image[prev_pk], gallery_index=prev_index)
+        if prev_pk is not None and prev_index is not None
+        else None
+    )
+    next_image = (
+        GalleryImageWithIndex(image=pk_to_image[next_pk], gallery_index=next_index)
+        if next_pk is not None and next_index is not None
+        else None
+    )
 
     context = {
         "current_image": current_image,
