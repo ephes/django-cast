@@ -7,6 +7,7 @@ from cast import appsettings
 from cast.devdata import create_transcript
 from cast.models import Blog, Podcast
 from cast.models.pages import (
+    PODLOVE_POSTER_RENDITION_SPEC,
     SOCIAL_COVER_RENDITION_SPEC,
     CustomEpisodeForm,
     Episode,
@@ -463,6 +464,50 @@ class TestPostModel:
         assert context["social_cover_image_url"] == mock_rendition.url
         assert context["social_cover_image_width"] == mock_rendition.width
         assert context["social_cover_image_height"] == mock_rendition.height
+
+    def test_get_cover_image_poster_url_with_post_cover(self, rf, post, image, mocker):
+        request = rf.get("/")
+        post.cover_image = image
+        mock_rendition = mocker.MagicMock(url="/media/podlove.jpg")
+        mocker.patch.object(image, "get_rendition", return_value=mock_rendition)
+
+        poster_url = post.get_cover_image_poster_url(request=request, blog=None)
+
+        assert poster_url == request.build_absolute_uri(mock_rendition.url)
+        image.get_rendition.assert_called_once_with(PODLOVE_POSTER_RENDITION_SPEC)
+
+    def test_get_cover_image_poster_url_with_blog_cover(self, rf, blog, image, mocker):
+        request = rf.get("/")
+        post = Post(id=1)
+        blog.cover_image = image
+        mock_rendition = mocker.MagicMock(url="/media/podlove.jpg")
+        mocker.patch.object(image, "get_rendition", return_value=mock_rendition)
+
+        poster_url = post.get_cover_image_poster_url(request=request, blog=blog)
+
+        assert poster_url == request.build_absolute_uri(mock_rendition.url)
+        image.get_rendition.assert_called_once_with(PODLOVE_POSTER_RENDITION_SPEC)
+
+    def test_get_cover_image_poster_url_without_cover(self, rf):
+        request = rf.get("/")
+        post = Post(id=1)
+
+        poster_url = post.get_cover_image_poster_url(request=request, blog=None)
+
+        assert poster_url == ""
+
+    def test_get_cover_image_poster_url_without_absolute_url(self, image, mocker):
+        class Request:
+            pass
+
+        post = Post(id=1)
+        post.cover_image = image
+        mock_rendition = mocker.MagicMock(url="/media/podlove.jpg")
+        mocker.patch.object(image, "get_rendition", return_value=mock_rendition)
+
+        poster_url = post.get_cover_image_poster_url(request=Request(), blog=None)
+
+        assert poster_url == mock_rendition.url
 
     def test_get_cached_media_lookup(self):
         post = Post(id=1)

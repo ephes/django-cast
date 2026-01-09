@@ -153,6 +153,7 @@ There are some additional fields that can be fetched from the wagtail pages API:
 * uuid - a unique identifier for the post
 * visible_date - the date the post is visible, usually used for sorting
 * comments_enabled - whether comments are enabled for this post
+* cover_image_poster_url - a resized poster image URL for the Podlove Web Player
 * body - the body stream field of the post
 * html_overview - the rendered html of the overview section of the body (used in SPA themes)
 * html_detail - the rendered html of the overview and detail section of the body (used in SPA themes)

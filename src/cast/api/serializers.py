@@ -53,11 +53,8 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
             "summary": podcast.search_description,  # FIXME is this correct?
             "link": podcast.full_url,
         }
-        context = self.context.copy()
-        if episode.cover_image is not None:
-            context["cover_image_url"] = episode.cover_image.file.url
-        cover_image_context = episode.get_cover_image_context(context, podcast)
-        metadata["poster"] = cover_image_context["cover_image_url"]
+        request = self.context.get("request")
+        metadata["poster"] = episode.get_cover_image_poster_url(request=request, blog=podcast)
         return metadata
 
     @staticmethod

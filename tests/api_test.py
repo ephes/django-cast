@@ -174,16 +174,20 @@ class TestPodcastAudio:
         assert podlove_data["show"]["poster"] == ""
         assert podlove_data["show"]["link"] == podcast.full_url
 
-    def test_podlove_podlove_detail_endpoint_show_metadata_with_cover_image(self, image, episode):
+    def test_podlove_podlove_detail_endpoint_show_metadata_with_cover_image(self, image, episode, mocker):
+        mock_rendition = mocker.MagicMock(url="/media/podlove.jpg")
+        mocker.patch.object(image, "get_rendition", return_value=mock_rendition)
         serializer = AudioPodloveSerializer(context={"post": episode})
         episode.cover_image = image
         metadata = serializer.get_show(episode.podcast_audio)
-        assert metadata["poster"] == image.file.url
+        assert metadata["poster"] == mock_rendition.url
 
     def test_podlove_podlove_detail_endpoint_show_metadata(
-        self, api_client, image, episode_with_podcast_with_cover_image
+        self, api_client, image, episode_with_podcast_with_cover_image, mocker
     ):
         """Test whether the podlove detail endpoint includes show metadata."""
+        mock_rendition = mocker.MagicMock(url="/media/podlove.jpg")
+        mocker.patch("wagtail.images.models.Image.get_rendition", return_value=mock_rendition)
         episode = episode_with_podcast_with_cover_image
         audio = episode.podcast_audio
         podcast = episode.blog.specific
@@ -196,7 +200,7 @@ class TestPodcastAudio:
         assert "show" in podlove_data
         assert podlove_data["show"]["title"] == podcast.title
         assert podlove_data["show"]["subtitle"] == podcast.subtitle
-        assert podlove_data["show"]["poster"] == podcast.cover_image.file.url
+        assert podlove_data["show"]["poster"] == "http://testserver" + mock_rendition.url
         assert podlove_data["show"]["link"] == podcast.full_url
 
     def test_podlove_player_config(self, api_client):
@@ -403,6 +407,19 @@ def test_get_comments_via_post_detail(api_client, post, comment):
 
     comments = r.json()["comments"]
     assert comments[0]["comment"] == comment.comment
+
+
+@pytest.mark.django_db
+def test_wagtail_api_page_detail_includes_cover_image_poster_url(api_client, post, image, mocker):
+    mock_rendition = mocker.MagicMock(url="/media/podlove.jpg")
+    mocker.patch("wagtail.images.models.Image.get_rendition", return_value=mock_rendition)
+    post.cover_image = image
+    post.save()
+    url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
+    r = api_client.get(url, format="json")
+    assert r.status_code == 200
+
+    assert r.json()["cover_image_poster_url"] == "http://testserver" + mock_rendition.url
 
 
 @pytest.mark.django_db

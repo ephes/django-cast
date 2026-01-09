@@ -67,6 +67,7 @@ logger = logging.getLogger(__name__)
 comment_model = get_comment_model()
 user_model = get_user_model()
 SOCIAL_COVER_RENDITION_SPEC = "fill-1200x630|format-jpeg|jpegquality-75"
+PODLOVE_POSTER_RENDITION_SPEC = "max-1200x1200|format-jpeg|jpegquality-75"
 
 
 class ContentBlock(blocks.StreamBlock):
@@ -125,6 +126,17 @@ class HtmlField(Field):
         return post.get_description(
             request=self.context["request"], render_detail=self.render_detail, escape_html=False, remove_newlines=False
         )
+
+
+class CoverImagePosterField(Field):
+    """
+    Serializer field that returns an absolute URL for the Podlove poster rendition.
+    """
+
+    def to_representation(self, post: "Post") -> str:
+        request = self.context.get("request")
+        blog = post.blog if hasattr(post, "blog") else None
+        return post.get_cover_image_poster_url(request=request, blog=blog)
 
 
 class HasPostDetails(Protocol):
@@ -197,6 +209,7 @@ class Post(Page):
         APIField("comments_are_enabled"),
         APIField("cover_image"),
         APIField("cover_alt_text"),
+        APIField("cover_image_poster_url", serializer=CoverImagePosterField(source="*")),
         APIField("body"),
         APIField("html_overview", serializer=HtmlField(source="*", render_detail=False)),
         APIField("html_detail", serializer=HtmlField(source="*", render_detail=True)),
@@ -559,6 +572,19 @@ class Post(Page):
             "social_cover_image_width": rendition.width,
             "social_cover_image_height": rendition.height,
         }
+
+    def get_cover_image_poster_url(self, *, request: HttpRequest | None, blog: Optional["Blog"]) -> str:
+        cover_image = self.cover_image
+        if cover_image is None and blog is not None:
+            cover_image = blog.cover_image
+        if cover_image is None:
+            return ""
+        cover_image = cast(Image, cover_image)
+        rendition = cover_image.get_rendition(PODLOVE_POSTER_RENDITION_SPEC)
+        poster_url = rendition.url
+        if request is not None and hasattr(request, "build_absolute_uri"):
+            poster_url = request.build_absolute_uri(poster_url)
+        return poster_url
 
     def get_description(
         self,

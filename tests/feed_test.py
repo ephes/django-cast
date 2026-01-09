@@ -258,6 +258,80 @@ def test_podcsat_feed_link_repository_is_none(mocker):
     feed.object.get_full_url.assert_called_once()
 
 
+def test_get_repository_uses_predefined_repository(mocker):
+    repository = mocker.MagicMock()
+    repository.used = False
+    feed = LatestEntriesFeed(repository=repository)
+
+    returned = feed.get_repository(mocker.MagicMock(), mocker.MagicMock())
+
+    assert returned is repository
+
+
+def test_cache_site_for_feed_without_site_id(settings, rf):
+    settings.SITE_ID = None
+
+    LatestEntriesFeed._cache_site_for_feed(rf.get("/"))
+
+
+def test_cache_site_for_feed_uses_existing_cache(settings, rf):
+    from django.contrib.sites import models as sites_models
+    from django.contrib.sites.models import Site as DjangoSite
+
+    site_id = 998
+    settings.SITE_ID = site_id
+    cache_backup = sites_models.SITE_CACHE.copy()
+    sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain="example.com", name="example.com")
+    try:
+        LatestEntriesFeed._cache_site_for_feed(rf.get("/"))
+        assert sites_models.SITE_CACHE[site_id].domain == "example.com"
+    finally:
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(cache_backup)
+
+
+def test_cache_site_for_feed_without_get_host(settings):
+    from django.contrib.sites import models as sites_models
+
+    class DummyRequest:
+        pass
+
+    site_id = 999
+    settings.SITE_ID = site_id
+    cache_backup = sites_models.SITE_CACHE.copy()
+    try:
+        sites_models.SITE_CACHE.pop(site_id, None)
+        LatestEntriesFeed._cache_site_for_feed(DummyRequest())
+        assert sites_models.SITE_CACHE[site_id].domain == "localhost"
+    finally:
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(cache_backup)
+
+
+@pytest.mark.django_db
+def test_latest_entries_feed_get_object_uses_repository_blog(rf, blog, mocker):
+    repository = mocker.MagicMock()
+    repository.used = False
+    repository.blog = blog
+    feed = LatestEntriesFeed(repository=repository)
+
+    returned = feed.get_object(rf.get("/"), slug=blog.slug)
+
+    assert returned is blog
+
+
+@pytest.mark.django_db
+def test_podcast_feed_get_object_uses_repository_blog(rf, podcast, mocker):
+    repository = mocker.MagicMock()
+    repository.used = False
+    repository.blog = podcast
+    feed = PodcastFeed(repository=repository)
+
+    returned = feed.get_object(rf.get("/"), slug=podcast.slug, audio_format="m4a")
+
+    assert returned is podcast
+
+
 def test_podcast_index_elements_catch_no_super_add_item_elements(mocker):
     elements = PodcastIndexElements()
     elements.request = mocker.MagicMock()
