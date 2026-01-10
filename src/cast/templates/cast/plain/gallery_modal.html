@@ -2,13 +2,13 @@
   class="cast-gallery-modal-content"
   role="dialog"
   aria-live="polite"
-  hx-on:click="event.stopPropagation()"
+  data-hx-on-click="event.stopPropagation()"
 >
   <button
     class="cast-gallery-modal-close"
     type="button"
     aria-label="Close gallery"
-    hx-on:click="this.closest('.cast-gallery-modal').innerHTML=''"
+    data-hx-on-click="this.closest('.cast-gallery-modal').innerHTML=''"
   >
     &times;
   </button>
@@ -36,10 +36,10 @@
       <a
         class="cast-gallery-modal-prev"
         href="{{ prev_image.file.url }}"
-        hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ prev_image.gallery_index }}&block_id={{ block_id }}"
-        hx-trigger="click, keyup[key=='ArrowLeft'] from:#imageGalleryModal-{{ block_id }}"
-        hx-target="#imageGalleryModal-{{ block_id }}"
-        hx-swap="innerHTML"
+        data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ prev_image.gallery_index }}&block_id={{ block_id }}"
+        data-hx-trigger="click, keyup[key=='ArrowLeft'] from:#imageGalleryModal-{{ block_id }}"
+        data-hx-target="#imageGalleryModal-{{ block_id }}"
+        data-hx-swap="innerHTML"
       >
         Prev
       </a>
@@ -50,10 +50,10 @@
       <a
         class="cast-gallery-modal-next"
         href="{{ next_image.file.url }}"
-        hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ next_image.gallery_index }}&block_id={{ block_id }}"
-        hx-trigger="click, keyup[key=='ArrowRight'] from:#imageGalleryModal-{{ block_id }}"
-        hx-target="#imageGalleryModal-{{ block_id }}"
-        hx-swap="innerHTML"
+        data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ next_image.gallery_index }}&block_id={{ block_id }}"
+        data-hx-trigger="click, keyup[key=='ArrowRight'] from:#imageGalleryModal-{{ block_id }}"
+        data-hx-target="#imageGalleryModal-{{ block_id }}"
+        data-hx-swap="innerHTML"
       >
         Next
       </a>

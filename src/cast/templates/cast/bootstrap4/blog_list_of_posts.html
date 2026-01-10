@@ -18,16 +18,20 @@
   <div class="cast-post-list-header">
     <div>
       <h1 class="display-3">{{ page.title }}</h1>
-      <p class="lead">
-        <div class="intro">{{ page.description|richtext }}</div>
-      </p>
+      <div class="intro lead">{{ page.description|richtext }}</div>
     </div>
 
     {% block feeds %}
       <div>
         <div class="cast-feeds-container">
           <div class="cast-feed-item">
-            <img class="cast-feed-icon" src="{% static 'cast/img/Feed-icon.svg' %}" height=64 width=64>
+            <img
+              class="cast-feed-icon"
+              src="{% static 'cast/img/Feed-icon.svg' %}"
+              alt="RSS feed icon"
+              height="64"
+              width="64"
+            >
             <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
               Plain RSS
             </a>
@@ -55,15 +59,15 @@
     <div id="accordion">
       <div class="card">
         <div class="card-header" id="headingOne">
-          <h5 class="mb-0">
+          <h2 class="mb-0 h5">
             <button class="btn btn-link" data-toggle="collapse" data-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
               Filters / Fulltext-Search
             </button>
-          </h5>
+          </h2>
         </div>
-        <div id="collapseOne" class="collapse" aria-labelledby="headingOne" data-parent="#accordion">
+        <div id="collapseOne" class="collapse" role="region" aria-labelledby="headingOne" data-parent="#accordion">
           <div class="card-body">
-            <form action="" method="get">
+            <form action="{{ page.url }}" method="get">
               {{ filterset.form | crispy }}
               <input class="btn btn-primary btn-lg" role="button" type="submit" />
             </form>
@@ -83,7 +87,7 @@
     </main>
 
     <footer>
-      <p>{% include "./pagination.html" %}</p>
+      {% include "./pagination.html" %}
     </footer>
   </div>
 {% endblock content %}

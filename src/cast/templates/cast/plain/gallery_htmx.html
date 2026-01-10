@@ -5,10 +5,10 @@
         <a
           class="cast-gallery-link"
           href="{{ image.file.url }}"
-          hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}"
-          hx-trigger="click"
-          hx-target="#imageGalleryModal-{{ block.id }}"
-          hx-swap="innerHTML"
+          data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}"
+          data-hx-trigger="click"
+          data-hx-target="#imageGalleryModal-{{ block.id }}"
+          data-hx-swap="innerHTML"
         >
           <picture>
             <source
@@ -38,7 +38,7 @@
   class="cast-gallery-modal"
   aria-live="polite"
   tabindex="-1"
-  hx-on:click="this.innerHTML = ''"
-  hx-on:htmx:afterSwap="this.focus()"
-  hx-on:keyup="if (event.key === 'Escape') this.innerHTML = ''"
+  data-hx-on-click="this.innerHTML = ''"
+  data-hx-on-htmx-afterSwap="this.focus()"
+  data-hx-on-keyup="if (event.key === 'Escape') this.innerHTML = ''"
 ></div>

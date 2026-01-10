@@ -19,7 +19,7 @@
     {% block additionalheaders %}{% endblock additionalheaders %}
   </head>
 
-  <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <body data-hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
     {% block navigation %}
       <div class="m-b-1">
         <nav class="navbar navbar-expand-md navbar-light bg-light">

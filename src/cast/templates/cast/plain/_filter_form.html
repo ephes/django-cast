@@ -1,17 +1,17 @@
 {{ form.non_field_errors }}
-<form method="get">
+<form action="{{ page.url }}" method="get">
   <p>
     <label for="id_search">Search:</label>
     {{ form.search }}
   </p>
   <p>
     <label>Date:</label>
-    <input type="date" name="date_after" placeholder="YYYY/MM/DD" id="id_date_0">
-    -<input type="date" name="date_before" placeholder="YYYY/MM/DD" id="id_date_1">
+    <input type="date" name="date_after" id="id_date_0">
+    -<input type="date" name="date_before" id="id_date_1">
   </p>
   <p>
     {{ form.date_facets.errors }}
-    <label for="id_date_facets">Date Facets:</label>
+    <label>Date Facets:</label>
     {{ form.date_facets }}
   </p>
   <p>

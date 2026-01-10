@@ -30,9 +30,9 @@
         type="button"
         class="btn btn-primary {% if not prev_image %}disabled{% endif %}"
         {% if prev_image %}
-          hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ prev_image.gallery_index }}&block_id={{ block_id }}"
-          hx-trigger="click, keyup[key=='ArrowLeft'] from:body"
-          hx-target="#imageGalleryModal-{{ block_id }}"
+          data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ prev_image.gallery_index }}&block_id={{ block_id }}"
+          data-hx-trigger="click, keyup[key=='ArrowLeft'] from:body"
+          data-hx-target="#imageGalleryModal-{{ block_id }}"
         {% endif %}
       >
         Prev
@@ -42,9 +42,9 @@
         type="button"
         class="btn btn-primary {% if not next_image %}disabled{% endif %}"
         {% if next_image %}
-          hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ next_image.gallery_index }}&block_id={{ block_id }}"
-          hx-trigger="click, keyup[key=='ArrowRight'] from:body"
-          hx-target="#imageGalleryModal-{{ block_id }}"
+          data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ next_image.gallery_index }}&block_id={{ block_id }}"
+          data-hx-trigger="click, keyup[key=='ArrowRight'] from:body"
+          data-hx-target="#imageGalleryModal-{{ block_id }}"
         {% endif %}
       >
         Next

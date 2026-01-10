@@ -5,10 +5,10 @@
         <!-- previous page -->
         <li class="page-item">
           <a
-            hx-get="?page={{ previous_page_number }}{{ parameters }}"
-            hx-target="#paging-area"
-            hx-swap="innerHTML show:top"
-            hx-replace-url="true"
+            data-hx-get="?page={{ previous_page_number }}{{ parameters }}"
+            data-hx-target="#paging-area"
+            data-hx-swap="innerHTML show:top"
+            data-hx-replace-url="true"
             href="?page={{ previous_page_number }}{{ parameters }}"
             class="page-link"
           >
@@ -39,10 +39,10 @@
           <!-- clickable links to other page numbers -->
           <li class="page-item">
             <a
-              hx-get="?page={{ num }}{{ parameters }}"
-              hx-target="#paging-area"
-              hx-swap="innerHTML show:top"
-              hx-replace-url="true"
+              data-hx-get="?page={{ num }}{{ parameters }}"
+              data-hx-target="#paging-area"
+              data-hx-swap="innerHTML show:top"
+              data-hx-replace-url="true"
               href="?page={{ num }}{{ parameters }}"
               class="page-link"
             >{{ num }}</a>
@@ -53,10 +53,10 @@
         <!-- next page -->
         <li class="page-item">
           <a
-            hx-get="?page={{ next_page_number }}{{ parameters }}"
-            hx-target="#paging-area"
-            hx-swap="innerHTML show:top"
-            hx-replace-url="true"
+            data-hx-get="?page={{ next_page_number }}{{ parameters }}"
+            data-hx-target="#paging-area"
+            data-hx-swap="innerHTML show:top"
+            data-hx-replace-url="true"
             href="?page={{ next_page_number }}{{ parameters }}"
             class="page-link"
           >

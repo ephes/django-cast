@@ -22,11 +22,11 @@
   <header>
     <h1>{{ page.title }}</h1>
     <section>
-      <h4>Description</h4>
+      <h2>Description</h2>
       {{ page.description|richtext }}
     </section>
     <section>
-      <h4>Feed</h4>
+      <h2>Feed</h2>
       <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
         Link to RSS feed
       </a>
@@ -39,7 +39,7 @@
     <hr>
     {% include "./select_theme.html" %}
     <hr>
-    {% include "./_filter_form.html" with form=filterset.form %}
+    {% include "./_filter_form.html" with form=filterset.form page=page %}
     <hr>
   </nav>
 {% endblock navigation %}

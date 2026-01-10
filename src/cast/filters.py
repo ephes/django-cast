@@ -34,6 +34,9 @@ class CountFacetWidget(Widget):
         super().__init__(attrs)
         self.choices: list[tuple[str, str]] = []
 
+    def id_for_label(self, id_: str | None) -> str:
+        return ""
+
     def value_from_datadict(  # type: ignore[override]
         self, data: Mapping[str, Iterable[Any]], files: MultiValueDict[str, UploadedFile], name: str
     ) -> str:
@@ -319,9 +322,7 @@ class PostFilterset(django_filters.FilterSet):
     date = django_filters.DateFromToRangeFilter(
         field_name="visible_date",
         label="Date",
-        widget=django_filters.widgets.DateRangeWidget(  # type: ignore
-            attrs={"type": "date", "placeholder": "YYYY/MM/DD"}
-        ),  # type: ignore
+        widget=django_filters.widgets.DateRangeWidget(attrs={"type": "date"}),  # type: ignore
     )
     # FIXME Maybe use ModelMultipleChoiceFilter for categories? Couldn't get it to work for now, though.
     #   - one problem was that after setting choices via the choices parameter, Django randomly
