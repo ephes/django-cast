@@ -116,6 +116,30 @@ class TestGeneratedFeeds:
         assert "feed" in content
         assert episode.title in content
 
+    def test_podcast_feed_rss_uses_subtitle(self, client, episode, use_dummy_cache_backend):
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert f"<itunes:subtitle>{episode.podcast.subtitle}</itunes:subtitle>" in content
+
+    def test_podcast_feed_atom_uses_subtitle(self, client, episode, use_dummy_cache_backend):
+        feed_url = reverse(
+            "cast:podcast_feed_atom",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert f"<itunes:subtitle>{episode.podcast.subtitle}</itunes:subtitle>" in content
+
     def test_podcast_feed_contains_only_podcasts(self, client, post, episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",

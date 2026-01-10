@@ -16,5 +16,6 @@ Changes:
 - Fix ``last_build_date`` to avoid unnecessary Blog lookups and allow cached values.
 - Preserve Podcast fields in cached repository data to avoid extra fetches in feeds.
 - Cache site lookups during feed rendering to eliminate remaining queries.
+- Use blog/podcast subtitles for ``itunes:subtitle`` in podcast feeds.
 - Add a max-1200x1200 Podlove poster rendition and expose ``cover_image_poster_url`` in the pages API.
 - Index cover image and body image alt text for post search.

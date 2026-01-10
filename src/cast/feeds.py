@@ -305,6 +305,9 @@ class PodcastFeed(RepositoryMixin, Feed):
     def title(self, _blog: Blog) -> str:
         return self.object.title
 
+    def subtitle(self, blog: Blog) -> str:
+        return blog.subtitle
+
     def categories(self, blog: Blog) -> tuple[str]:
         if hasattr(blog, "categories"):
             return (blog.keywords.split(",")[0],)
@@ -364,9 +367,6 @@ class PodcastFeed(RepositoryMixin, Feed):
 
 class AtomPodcastFeed(PodcastFeed):
     feed_type = AtomITunesFeedGenerator
-
-    def subtitle(self, blog: Blog) -> str:
-        return blog.description
 
     def author_name(self, blog: Blog) -> str:
         return blog.author_name

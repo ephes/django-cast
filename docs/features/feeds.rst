@@ -51,6 +51,7 @@ Podcast-Specific Fields
 Additional metadata for podcast feeds:
 
 - **iTunes Artwork**: High-resolution podcast cover image
+- **iTunes Subtitle**: From the blog's subtitle field
 - **iTunes Categories**: Podcast directory categorization
 - **Explicit Content**: Content rating flag
 - **Episode Enclosures**: Audio files with proper MIME types

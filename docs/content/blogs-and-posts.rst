@@ -27,7 +27,7 @@ The `title` field serves multiple purposes:
 Subtitle
 --------
 
-The `subtitle` field is used to populate the `subtitle` attribute on the podlove player when the blog contains podcast episodes.
+The `subtitle` field is used for the `itunes:subtitle` element in podcast feeds and for the `subtitle` attribute on the podlove player when the blog contains podcast episodes.
 
 Description
 -----------

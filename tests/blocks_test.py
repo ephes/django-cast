@@ -11,6 +11,7 @@ from cast.blocks import (
     CodeBlock,
     GalleryBlock,
     GalleryBlockWithLayout,
+    GalleryImageChooserBlock,
     GalleryProxyRepository,
     VideoChooserBlock,
     get_srcset_images_for_slots,
@@ -409,3 +410,22 @@ def test_image_chooser_block_get_context_fallback_to_database(image, monkeypatch
     context = cicb.get_context(image.pk, parent_context={"repository": repository})
     assert context["value"] == image
     assert context["value"].regular.src["jpeg"]
+
+
+@pytest.mark.django_db
+def test_gallery_image_chooser_block_searchable_content(image):
+    block = GalleryImageChooserBlock()
+    assert block.get_searchable_content(image) == [image.default_alt_text]
+    assert block.get_searchable_content({"value": image}) == [image.default_alt_text]
+
+
+@pytest.mark.django_db
+def test_gallery_image_chooser_block_searchable_content_empty():
+    block = GalleryImageChooserBlock()
+    assert block.get_searchable_content(None) == []
+
+
+@pytest.mark.django_db
+def test_cast_image_chooser_block_searchable_content_empty():
+    block = CastImageChooserBlock()
+    assert block.get_searchable_content(None) == []
