@@ -201,6 +201,7 @@ class Post(Page):
 
     search_fields = Page.search_fields + [
         index.SearchField("body"),
+        index.SearchField("cover_alt_text"),
     ]
 
     api_fields = [

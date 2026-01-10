@@ -67,6 +67,18 @@ def get_srcset_images_for_slots(
     return images_for_slots
 
 
+def _resolve_image_for_search(value: AbstractImage | int | dict | None) -> AbstractImage | None:
+    if isinstance(value, AbstractImage):
+        return value
+    if isinstance(value, dict):
+        value = value.get("value")
+        if isinstance(value, AbstractImage):
+            return value
+    if isinstance(value, int):
+        return Image.objects.filter(pk=value).first()
+    return None
+
+
 class HasImagesAndRenditions(Protocol):
     image_by_id: ImageById
     renditions_for_posts: RenditionsForPosts
@@ -105,6 +117,15 @@ class GalleryImageChooserBlock(ImageChooserBlock):
             return value["value"]
         return super().get_prep_value(value)
 
+    def get_searchable_content(self, value: AbstractImage | int | dict | None) -> list[str]:
+        image = _resolve_image_for_search(value)
+        if not image:
+            return []
+        alt_text = image.default_alt_text
+        if alt_text:
+            return [alt_text]
+        return []
+
 
 class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
     """
@@ -139,6 +160,15 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
         images_for_slots = get_srcset_images_for_slots(image, "regular", renditions=fetched_renditions)
         [image.regular] = images_for_slots.values()
         return super().get_context(image, parent_context=parent_context)
+
+    def get_searchable_content(self, value: AbstractImage | int | dict | None) -> list[str]:
+        image = _resolve_image_for_search(value)
+        if not image:
+            return []
+        alt_text = image.default_alt_text
+        if alt_text:
+            return [alt_text]
+        return []
 
     def bulk_to_python(self, items):
         """Overwrite this method to avoid database queries."""

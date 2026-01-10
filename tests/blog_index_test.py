@@ -2,6 +2,7 @@ import pytest
 
 from cast import appsettings
 from cast.models.index_pages import Blog
+from tests.factories import PostFactory
 
 
 class TestBlogIndex:
@@ -185,6 +186,62 @@ class TestBlogIndexSearch:
         posts = r.context["posts"]
         assert len(posts) == 1
         assert posts[0].pk == post_with_search.pk
+
+    def test_fulltext_search_cover_alt_text(self, client, blog, body, post):
+        query = "coveralttext"
+        post_with_cover_alt = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="cover alt entry",
+            slug="test-entry-cover-alt",
+            body=body,
+            cover_alt_text=query,
+        )
+        blog_url = blog.get_url()
+        r = client.get(f"{blog_url}?search={query}")
+        assert r.status_code == 200
+
+        posts = r.context["posts"]
+        assert len(posts) == 1
+        assert posts[0].pk == post_with_cover_alt.pk
+
+    def test_fulltext_search_image_alt_text(self, client, blog, body_with_image, image, post):
+        query = "imagealttext"
+        image.description = query
+        image.save()
+        post_with_image = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="image alt entry",
+            slug="test-entry-image-alt",
+            body=body_with_image,
+        )
+        blog_url = blog.get_url()
+        r = client.get(f"{blog_url}?search={query}")
+        assert r.status_code == 200
+
+        posts = r.context["posts"]
+        assert len(posts) == 1
+        assert posts[0].pk == post_with_image.pk
+
+    def test_fulltext_search_gallery_alt_text(self, client, blog, body_with_gallery, image, post):
+        query = "galleryalttext"
+        image.description = query
+        image.save()
+        post_with_gallery = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="gallery alt entry",
+            slug="test-entry-gallery-alt",
+            body=body_with_gallery,
+        )
+        blog_url = blog.get_url()
+        r = client.get(f"{blog_url}?search={query}")
+        assert r.status_code == 200
+
+        posts = r.context["posts"]
+        assert len(posts) == 1
+        assert posts[0].pk == post_with_gallery.pk
 
 
 @pytest.fixture()
