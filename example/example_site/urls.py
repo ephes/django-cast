@@ -30,8 +30,8 @@ urlpatterns = [
     # path("docs/", include_docs_urls(title="My Blog API service")),  # TODO: Python 3.13 compatibility with coreapi
     # Cast
     path("cast/", include("cast.urls", namespace="cast")),
-    # Threadedcomments
-    path("show/comments/", include("fluent_comments.urls")),
+    # Comments
+    path("show/comments/", include("cast.comments.urls")),
     # Wagtail
     path(settings.WAGTAILADMIN_BASE_URL, include(wagtailadmin_urls)),
     path("documents/", include(wagtaildocs_urls)),

@@ -80,10 +80,12 @@
 
   <div id="paging-area">
     <main>
-      {% for post in posts %}
-        {% include "./post_body.html" with render_detail=False page=post %}
-        <hr class="my-4">
-      {% endfor %}
+      {% with podlove_load_mode="click" %}
+        {% for post in posts %}
+          {% include "./post_body.html" with render_detail=False page=post %}
+          <hr class="my-4">
+        {% endfor %}
+      {% endwith %}
     </main>
 
     <footer>

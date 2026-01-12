@@ -18,6 +18,12 @@ INSTALLED_APPS.extend(  # noqa
     ]
 )
 
+DJANGO_VITE = {
+    "cast": {
+        "dev_mode": True,
+    }
+}
+
 
 try:
     from .local import *  # noqa

@@ -190,8 +190,8 @@ BASE_URL = "http://example.com"
 ADMIN_URL = "admin/"
 
 # Comments
-COMMENTS_APP = "fluent_comments"
-FLUENT_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
+COMMENTS_APP = "cast.comments"
+CAST_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
 CAST_COMMENTS_ENABLED = True
 
 # REST

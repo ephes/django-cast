@@ -7,6 +7,9 @@
       data-url="{% url 'cast:api:audio_podlove_detail' pk=value.pk post_id=page.pk %}"
       data-embed="{% static 'cast/js/web-player/embed.5.js' %}"
       data-config="{% url 'cast:api:player_config' %}"
+      {% if podlove_load_mode == "click" %}
+        data-load-mode="click"
+      {% endif %}
     >
     </podlove-player>
   {% endif %}

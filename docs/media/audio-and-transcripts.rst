@@ -41,6 +41,12 @@ version 5 is used.
     * Chapter marks
     * Download button
 
+.. note::
+
+    The Bootstrap templates defer Podlove player initialization on list pages by
+    setting ``data-load-mode="click"`` on the player element. Remove the
+    attribute in your templates to keep automatic initialization behavior.
+
 .. _transcript_overview:
 
 Transcripts
