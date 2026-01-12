@@ -94,6 +94,34 @@ For JavaScript development with hot reloading:
    $ cd javascript
    $ npx vite
 
+.. note::
+
+   Podcast pages (Podlove player) rely on the Vite dev server during local
+   development. Keep ``npx vite`` running while testing podcast list/detail
+   pages to ensure the player loads.
+
+Podlove Performance Data
+------------------------
+
+To create local podcast data that exercises the Podlove player:
+
+.. code-block:: bash
+
+   $ cd example
+   $ uv run python scripts/create_podlove_perf_data.py --episodes 5 --transcripts 200
+
+This creates a podcast at ``/show/`` with multiple episodes and transcript
+payloads to profile list and detail pages. Increase ``--transcripts`` to mimic
+heavier payloads. If the slug already exists, delete the data or pick a
+different ``--slug`` value.
+
+.. note::
+
+   The Podlove subscribe button bundle is a vendored, minified asset (upstream
+   last updated in 2019). If you apply a local patch for layout stability, add a
+   short header comment with the upstream URL and patch date, and record the
+   change in release notes.
+
 .. _Running Tests:
 
 Running Tests

@@ -10,10 +10,12 @@ import '@/audio/podlove-player';
 class IntersectionObserverMock {
   callback: IntersectionObserverCallback;
   observedElements: Set<Element>;
+  options?: IntersectionObserverInit;
 
   constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     this.callback = callback;
     this.observedElements = new Set<Element>();
+    this.options = options;
   }
 
   observe(target: Element) {
@@ -46,6 +48,11 @@ describe('PodlovePlayerElement', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     global.podlovePlayer.mockReset();
+    globalThis.requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      callback({ didTimeout: false, timeRemaining: () => 50 });
+      return 1;
+    });
+    globalThis.cancelIdleCallback = vi.fn();
   });
 
   it('should define the custom element', () => {
@@ -77,6 +84,14 @@ describe('PodlovePlayerElement', () => {
 
     expect(observeSpy).toHaveBeenCalledWith(element);
     observeSpy.mockRestore();
+  });
+
+  it('should use a shared observer with a root margin', () => {
+    const element = document.createElement('podlove-player');
+    document.body.appendChild(element);
+
+    const observerInstance = element.observer as IntersectionObserverMock;
+    expect(observerInstance.options?.rootMargin).toBe('200px 0px');
   });
 
   it('should initialize the player when in view', () => {
@@ -149,14 +164,65 @@ describe('PodlovePlayerElement', () => {
     unobserveSpy.mockRestore();
   });
 
-  it('should disconnect the observer when the element is removed', () => {
-    const disconnectSpy = vi.spyOn(IntersectionObserver.prototype, 'disconnect');
+  it('should initialize the player after click-to-load', () => {
+    const observeSpy = vi.spyOn(IntersectionObserver.prototype, 'observe');
+
+    const element = document.createElement('podlove-player');
+    element.setAttribute('id', 'audio_63');
+    element.setAttribute('data-url', '/api/audios/podlove/63/post/75/');
+    element.setAttribute('data-load-mode', 'click');
+    document.body.appendChild(element);
+
+    expect(observeSpy).not.toHaveBeenCalled();
+
+    const button = element.shadowRoot.querySelector('.podlove-player-button') as HTMLButtonElement;
+    button.click();
+
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      element.shadowRoot.querySelector(`#${element.getAttribute('id')}`),
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/'
+    );
+
+    observeSpy.mockRestore();
+  });
+
+  it('should unobserve the element when it is removed', () => {
+    const unobserveSpy = vi.spyOn(IntersectionObserver.prototype, 'unobserve');
 
     const element = document.createElement('podlove-player');
     document.body.appendChild(element);
     document.body.removeChild(element);
 
-    expect(disconnectSpy).toHaveBeenCalled();
-    disconnectSpy.mockRestore();
+    expect(unobserveSpy).toHaveBeenCalledWith(element);
+    unobserveSpy.mockRestore();
+  });
+
+  it('should show an error message when the embed script fails to load', async () => {
+    const originalPodlovePlayer = global.podlovePlayer;
+    global.podlovePlayer = undefined;
+
+    const appendSpy = vi.spyOn(document.head, 'appendChild');
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/api/audios/podlove/63/post/75/');
+    document.body.appendChild(element);
+
+    const observerInstance = element.observer as IntersectionObserverMock;
+    observerInstance.trigger([
+      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+    ]);
+
+    const script = document.querySelector('script[data-podlove-embed]') as HTMLScriptElement | null;
+    expect(script).not.toBeNull();
+    script?.dispatchEvent(new Event('error'));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const errorMessage = element.shadowRoot?.querySelector('.podlove-player-error') as HTMLElement | null;
+    expect(errorMessage).not.toBeNull();
+    expect(errorMessage?.hidden).toBe(false);
+
+    appendSpy.mockRestore();
+    global.podlovePlayer = originalPodlovePlayer;
   });
 });
