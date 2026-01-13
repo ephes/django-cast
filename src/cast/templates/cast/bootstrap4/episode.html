@@ -1,6 +1,6 @@
 {% extends "./post.html" %}
 
-{% block meta %}
+{% block social_meta %}
   {% if episode.podcast_audio %}
     <!-- Twitter Player Card / Open Graph Tags-->
     <meta name="twitter:card" content="player">
@@ -33,4 +33,4 @@
   {% else %}
     {{ block.super }}
   {% endif %}
-{% endblock %}
+{% endblock social_meta %}
