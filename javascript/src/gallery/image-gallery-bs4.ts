@@ -1,8 +1,16 @@
 export default class ImageGalleryBs4 extends HTMLElement {
     currentImage: HTMLElement | null;
+    currentModal: HTMLElement | null;
+    private boundThumbnailClick: (event: Event) => void;
+    private boundFooterClick: (event: Event) => void;
+    private boundKeydown: (event: KeyboardEvent) => void;
 	constructor () {
 		super();
         this.currentImage = null;
+        this.currentModal = null;
+        this.boundThumbnailClick = this.handleThumbnailClick.bind(this);
+        this.boundFooterClick = this.handleFooterClick.bind(this);
+        this.boundKeydown = this.handleKeydown.bind(this);
 	}
     static register(tagName: string):void {
         console.log("Registering image-gallery-bs4!");
@@ -22,7 +30,69 @@ export default class ImageGalleryBs4 extends HTMLElement {
             }
         }
     }
-    setModalImage(img: HTMLElement):void {
+    private resolveModal(link?: HTMLElement): HTMLElement | null {
+        if (link) {
+            const target = link.getAttribute("data-target");
+            if (target) {
+                const modal = document.querySelector<HTMLElement>(target);
+                if (modal) {
+                    return modal;
+                }
+            }
+        }
+
+        return this.querySelector<HTMLElement>(".modal");
+    }
+
+    private bindModalEvents(modal: HTMLElement): void {
+        const modalFooter = modal.querySelector(".modal-footer");
+        if (modalFooter && !modalFooter.hasAttribute("data-gallery-footer-bound")) {
+            modalFooter.addEventListener("click", this.boundFooterClick);
+            modalFooter.setAttribute("data-gallery-footer-bound", "true");
+        }
+
+        if (!modal.hasAttribute("data-gallery-keydown-bound")) {
+            modal.addEventListener("keydown", this.boundKeydown);
+            modal.setAttribute("data-gallery-keydown-bound", "true");
+        }
+    }
+
+    private unbindModalEvents(modal: HTMLElement): void {
+        const modalFooter = modal.querySelector(".modal-footer");
+        if (modalFooter && modalFooter.hasAttribute("data-gallery-footer-bound")) {
+            modalFooter.removeEventListener("click", this.boundFooterClick);
+            modalFooter.removeAttribute("data-gallery-footer-bound");
+        }
+
+        if (modal.hasAttribute("data-gallery-keydown-bound")) {
+            modal.removeEventListener("keydown", this.boundKeydown);
+            modal.removeAttribute("data-gallery-keydown-bound");
+        }
+    }
+
+    private ensureModalInBody(modal: HTMLElement): void {
+        // Bootstrap modals need to live at the document body to avoid scroll/clip issues.
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+        if (this.id && !modal.hasAttribute("data-gallery-owner")) {
+            modal.setAttribute("data-gallery-owner", this.id);
+        }
+        this.bindModalEvents(modal);
+    }
+
+    private cleanupModal(): void {
+        const ownerId = this.id;
+        const selector = ownerId ? `.modal[data-gallery-owner="${ownerId}"]` : null;
+        const modal = selector ? document.querySelector<HTMLElement>(selector) : this.currentModal;
+        if (modal && modal.parentElement === document.body) {
+            this.unbindModalEvents(modal);
+            modal.remove();
+        }
+        this.currentModal = null;
+    }
+
+    setModalImage(img: HTMLElement, modal?: HTMLElement | null):void {
         this.currentImage = img;
         if (!img.parentNode) {
             console.error("No parent node for image: ", img);
@@ -39,14 +109,21 @@ export default class ImageGalleryBs4 extends HTMLElement {
             console.error("No thumbnail source for picture: ", thumbnailPicture);
             return;
         }
-        const modalBody = this.querySelector(`#${this.id} .modal-body`);
+        const resolvedModal = modal ?? this.currentModal ?? this.resolveModal();
+        if (!resolvedModal) {
+            console.error("No modal for image gallery: ", this);
+            return;
+        }
+        this.ensureModalInBody(resolvedModal);
+        this.currentModal = resolvedModal;
+        const modalBody = resolvedModal.querySelector(".modal-body");
         if (!modalBody) {
             console.error("No modal body for modal: ", this);
             return;
         }
         console.log("modalBody: ", modalBody)
         // console.log("modalBody parent.parent.parent: ", modalBody.parentNode.parentNode.parentNode);
-        const modalFooter = this.querySelector(`#${this.id} .modal-footer`);
+        const modalFooter = resolvedModal.querySelector(".modal-footer");
         if (!modalFooter) {
             console.error("No modal footer for modal: ", this);
             return;
@@ -121,7 +198,8 @@ export default class ImageGalleryBs4 extends HTMLElement {
         const link = event.currentTarget as HTMLElement;
         const img = link.querySelector('img');
         if (img) {
-            this.setModalImage(img);
+            const modal = this.resolveModal(link);
+            this.setModalImage(img, modal);
         } else {
             console.error("No img element found in clicked thumbnail");
         }
@@ -148,36 +226,20 @@ export default class ImageGalleryBs4 extends HTMLElement {
         let thumbnailLinks = this.querySelectorAll(".cast-gallery-container > a");
         thumbnailLinks.forEach((link) => {
             if (!link.classList.contains("event-added")) {
-                link.addEventListener("click", this.handleThumbnailClick.bind(this));
+                link.addEventListener("click", this.boundThumbnailClick);
                 link.classList.add("event-added");
             }
         });
-
-        // Add event listeners to modal buttons - click -> replace image
-        const modalFooter = this.querySelector(".modal-footer");
-        if (modalFooter) {
-            modalFooter.addEventListener("click", this.handleFooterClick.bind(this));
-        }
-
-        // Add event listeners to modal - keydown -> replace image
-        this.addEventListener("keydown", this.handleKeydown.bind(this));
     }
 
     disconnectedCallback() {
         // Remove event listeners from thumbnail links
         let thumbnailLinks = this.querySelectorAll(".cast-gallery-container > a");
         thumbnailLinks.forEach((link) => {
-            link.removeEventListener("click", this.handleThumbnailClick);
+            link.removeEventListener("click", this.boundThumbnailClick);
+            link.classList.remove("event-added");
         });
-
-        // Remove event listeners from modal footer buttons
-        const modalFooter = this.querySelector(".modal-footer");
-        if (modalFooter) {
-            modalFooter.removeEventListener("click", this.handleFooterClick);
-        }
-
-        // Remove keydown event listener from the component
-        this.removeEventListener("keydown", this.handleKeydown);
+        this.cleanupModal();
     }
 }
 
