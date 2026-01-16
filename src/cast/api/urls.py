@@ -6,18 +6,7 @@ from . import views
 
 app_name = "api"
 
-# Try to import coreapi and create schema view only if available
-try:  # pragma: no cover
-    import coreapi  # noqa: F401
-    from rest_framework.schemas import get_schema_view
-
-    schema_view = get_schema_view(title="Cast API")
-    schema_patterns = [path("schema/", schema_view)]
-except ImportError:
-    # If coreapi is not installed, skip schema generation
-    schema_patterns = []
-
-urlpatterns: list[Any] = schema_patterns + [
+urlpatterns: list[Any] = [
     path("", views.api_root, name="root"),
     # video
     path("videos/", views.VideoListView.as_view(), name="video_list"),

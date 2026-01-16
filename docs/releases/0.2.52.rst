@@ -21,3 +21,4 @@ Changes:
 - Index cover image and body image alt text for post search.
 - Show a visible error message when the Podlove embed script fails to load.
 - Document guidance for locally patching the Podlove subscribe button bundle.
+- Remove legacy CoreAPI schema settings and schema URL wiring.

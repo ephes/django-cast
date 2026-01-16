@@ -200,8 +200,6 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ),
-    # AttributeError at /api/docs/ -> 'AutoSchema' object has no attribute 'get_link'
-    "DEFAULT_SCHEMA_CLASS": "rest_framework.schemas.coreapi.AutoSchema",
 }
 
 # wagtail-srcset
