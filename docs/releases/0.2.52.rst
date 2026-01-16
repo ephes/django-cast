@@ -18,6 +18,7 @@ Changes:
 - Cache site lookups during feed rendering to eliminate remaining queries.
 - Use blog/podcast subtitles for ``itunes:subtitle`` in podcast feeds.
 - Add a max-1200x1200 Podlove poster rendition and expose ``cover_image_poster_url`` in the pages API.
+- Update bundled Podlove web player to 5.13.0.
 - Index cover image and body image alt text for post search.
 - Show a visible error message when the Podlove embed script fails to load.
 - Document guidance for locally patching the Podlove subscribe button bundle.
