@@ -7,6 +7,7 @@ Example project
 - Added a `Procfile.dev` + `just dev` shortcut to run Django and Vite dev servers together.
 - Documented the Bootstrap5 theme setup, demo data bootstrap, and dev server workflows.
 - Added a full-page theme selector for non-HTMX requests in the example app.
+- Ensure the Bootstrap5 example navbar loads the real theme selector via HTMX.
 
 Developer data helpers
 ~~~~~~~~~~~~~~~~~~~~~~

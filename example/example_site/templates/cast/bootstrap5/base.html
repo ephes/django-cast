@@ -1,0 +1,68 @@
+{% load static i18n %}
+{% load wagtailcore_tags %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>{% block title %}{% endblock title %}</title>
+    {% block meta %}
+      <meta charset="utf-8">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="description" content="{{ page.search_description }}">
+      <meta name="author" content="{{ blog.author_name | title}}">
+    {% endblock meta %}
+    {% block css %}
+      <link rel="stylesheet" href="{% static 'cast_bootstrap5/css/bootstrap5/bootstrap.min.css' %}">
+      <link href="{% static 'cast_bootstrap5/css/bootstrap5/cast.css' %}" rel="stylesheet">
+    {% endblock css %}
+    {% block headerscript %}{% endblock headerscript %}
+    {% block additionalheaders %}{% endblock additionalheaders %}
+  </head>
+
+  <body data-hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    {% block bodystart %}{% endblock bodystart %}
+    {% block navigation %}
+      <nav class="navbar navbar-expand-lg bg-light">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="{% url 'home' %}">Home</a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+              {% for link, text in root_nav_links %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{{ link }}">{{ text }}</a>
+                </li>
+              {% endfor %}
+              <li class="nav-item dropdown" hx-get="{% url 'cast:select-theme' %}" hx-trigger="load" hx-swap="outerHTML"></li>
+            </ul>
+          </div>
+        </div>
+      </nav>
+    {% endblock navigation %}
+    <div class="container">
+      {% block messages %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endblock messages %}
+
+      {% block content %}
+        <p>Use this document as a way to quick start any new project.</p>
+      {% endblock content %}
+    </div>
+    {% block modal %}{% endblock modal %}
+    <div class="additional_javascript">
+      {% block javascript %}
+        <script defer src="{% static 'cast_bootstrap5/js/bootstrap5/bootstrap.bundle.min.js' %}"></script>
+        <script defer src="{% static 'cast_bootstrap5/js/htmx.min.js' %}"></script>
+
+        <!-- place project specific Javascript in this file -->
+        {% block template_script %}{% endblock template_script %}
+      {% endblock javascript %}
+    </div>
+  </body>
+</html>
