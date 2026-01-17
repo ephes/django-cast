@@ -8,11 +8,6 @@
       <time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date}}</time>,
     </a>
     <span class="author">{{ page.owner.username | title}}</span>
-    {% if render_detail and episode_transcript_url %}
-      <p>
-        <a href="{{ episode_transcript_url }}">{% translate "View transcript" %}</a>
-      </p>
-    {% endif %}
   </header>
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
@@ -22,4 +17,11 @@
       {% block detail_link %}{% endblock %}
     {% endif %}
   {% endfor %}
+  {% if render_detail and episode_transcript_url %}
+    <footer>
+      <p>
+        <a href="{{ episode_transcript_url }}">{% translate "View transcript" %}</a>
+      </p>
+    </footer>
+  {% endif %}
 </article>

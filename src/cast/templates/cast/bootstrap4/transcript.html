@@ -24,20 +24,23 @@
           <time datetime="{{ episode.visible_date|date:"c" }}">{{ episode.visible_date|date }}</time>
           · <a href="{{ episode_url|default:episode.url }}">{% translate "Back to episode" %}</a>
         </p>
+        <p class="lead text-muted mb-0">
+          {% translate "Full episode transcript. Timestamps refer to the audio playback." %}
+        </p>
       {% endif %}
     </header>
     {% if transcript.transcripts %}
       {% for segment in transcript.transcripts %}
-        <div class="transcript-segment mb-3">
-          <div class="d-flex flex-wrap gap-2 small text-muted">
+        <div class="transcript-segment border rounded p-3 mb-3">
+          <div class="d-flex flex-wrap align-items-center small text-muted mb-2">
             {% if segment.speaker %}
-              <span class="transcript-speaker font-weight-bold">{{ segment.speaker }}</span>
+              <span class="badge badge-secondary mr-2">{{ segment.speaker }}</span>
             {% endif %}
             {% if segment.start %}
               <time datetime="{{ segment.start }}">{{ segment.start }}</time>
             {% endif %}
           </div>
-          <div class="transcript-text">{{ segment.text }}</div>
+          <p class="transcript-text mb-0">{{ segment.text }}</p>
         </div>
       {% endfor %}
     {% else %}

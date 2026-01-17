@@ -12,11 +12,6 @@
     <!-- link is on one line to avoid underlined whitespace -->
     <a href="{{ page.page_url }}"><time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date }}</time>,</a>
     <span class="author">{{ page.owner.username | title}}</span>
-    {% if render_detail and episode_transcript_url %}
-      <p class="mt-2">
-        <a href="{{ episode_transcript_url }}">{% translate "View transcript" %}</a>
-      </p>
-    {% endif %}
   </header>
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
@@ -32,4 +27,11 @@
       {% endif %}
     {% endif %}
   {% endfor %}
+  {% if render_detail and episode_transcript_url %}
+    <footer class="mt-4">
+      <a class="btn btn-outline-secondary btn-sm" href="{{ episode_transcript_url }}">
+        {% translate "View transcript" %}
+      </a>
+    </footer>
+  {% endif %}
 </article>
