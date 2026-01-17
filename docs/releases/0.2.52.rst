@@ -3,6 +3,7 @@
 
 Changes:
 
+- Validate transcript uploads for Podlove/DOTe/WebVTT formats. (#168)
 - Expose ``comments_enabled`` on Blog and Podcast pages in the Wagtail admin.
 - Expose podcast metadata fields (``itunes_categories``, ``keywords``, ``explicit``) in the Wagtail admin.
 - Fix inline-uploaded images missing in draft preview rendering.

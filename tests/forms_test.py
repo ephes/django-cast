@@ -1,8 +1,10 @@
+import json
 from unittest.mock import MagicMock
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 
-from cast.forms import AudioForm, ChapterMarkForm, get_video_form
+from cast.forms import AudioForm, ChapterMarkForm, TranscriptForm, get_video_form
 from cast.models import Audio, ChapterMark
 
 
@@ -122,3 +124,96 @@ def test_get_video_form_collection_not_added_if_in_admin_form_fields(mocker):
     mocker.patch("cast.forms.Video.admin_form_fields", ("title", "original", "poster", "tags", "collection"))
     video_form = get_video_form()
     assert "collection" in video_form._meta.fields
+
+
+class TestTranscriptForm:
+    pytestmark = pytest.mark.django_db
+
+    @staticmethod
+    def _json_upload(name: str, payload: dict) -> SimpleUploadedFile:
+        return SimpleUploadedFile(
+            name=name,
+            content=json.dumps(payload).encode("utf-8"),
+            content_type="application/json",
+        )
+
+    def test_podlove_valid(self, audio, podlove_transcript):
+        form = TranscriptForm({"audio": audio.id}, {"podlove": podlove_transcript})
+        assert form.is_valid()
+
+    def test_podlove_invalid_json(self, audio):
+        podlove = SimpleUploadedFile("podlove.json", b"not json", content_type="application/json")
+        form = TranscriptForm({"audio": audio.id}, {"podlove": podlove})
+        assert form.is_valid() is False
+        assert "podlove" in form.errors
+
+    def test_podlove_missing_transcripts_key(self, audio):
+        podlove = self._json_upload("podlove.json", {"lines": []})
+        form = TranscriptForm({"audio": audio.id}, {"podlove": podlove})
+        assert form.is_valid() is False
+        assert "podlove" in form.errors
+
+    def test_podlove_transcripts_not_list(self, audio):
+        podlove = self._json_upload("podlove.json", {"transcripts": "not a list"})
+        form = TranscriptForm({"audio": audio.id}, {"podlove": podlove})
+        assert form.is_valid() is False
+        assert "podlove" in form.errors
+
+    def test_dote_valid(self, audio):
+        dote = self._json_upload(
+            "dote.json",
+            {
+                "lines": [
+                    {
+                        "startTime": "00:00:00,000",
+                        "endTime": "00:00:01,000",
+                        "speakerDesignation": "",
+                        "text": "Hello",
+                    }
+                ]
+            },
+        )
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid()
+
+    def test_dote_missing_keys(self, audio):
+        dote = self._json_upload("dote.json", {"lines": [{"startTime": "00:00:00,000"}]})
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid() is False
+        assert "dote" in form.errors
+
+    def test_dote_lines_not_list(self, audio):
+        dote = self._json_upload("dote.json", {"lines": "not a list"})
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid() is False
+        assert "dote" in form.errors
+
+    def test_dote_line_item_not_dict(self, audio):
+        dote = self._json_upload("dote.json", {"lines": ["not a dict"]})
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid() is False
+        assert "dote" in form.errors
+
+    def test_vtt_valid(self, audio):
+        vtt = SimpleUploadedFile(
+            "test.vtt",
+            b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello",
+            content_type="text/vtt",
+        )
+        form = TranscriptForm({"audio": audio.id}, {"vtt": vtt})
+        assert form.is_valid()
+
+    def test_vtt_valid_with_bom(self, audio):
+        vtt = SimpleUploadedFile(
+            "test.vtt",
+            b"\xef\xbb\xbfWEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello",
+            content_type="text/vtt",
+        )
+        form = TranscriptForm({"audio": audio.id}, {"vtt": vtt})
+        assert form.is_valid()
+
+    def test_vtt_invalid_header(self, audio):
+        vtt = SimpleUploadedFile("test.vtt", b"NOTVTT\n", content_type="text/vtt")
+        form = TranscriptForm({"audio": audio.id}, {"vtt": vtt})
+        assert form.is_valid() is False
+        assert "vtt" in form.errors

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, time
 from typing import cast
 
@@ -177,6 +178,76 @@ class TranscriptForm(BaseCollectionMemberForm):
             "vtt": forms.ClearableFileInput,
             "dote": forms.ClearableFileInput,
         }
+
+    def clean_podlove(self):
+        podlove = self.cleaned_data.get("podlove")
+        if not podlove:
+            return podlove
+        data = self._load_json(podlove, field_label="Podlove")
+        if not isinstance(data, dict) or "transcripts" not in data:
+            raise ValidationError(_("Podlove transcript must include a top-level 'transcripts' key."))
+        if not isinstance(data["transcripts"], list):
+            raise ValidationError(_("Podlove transcript 'transcripts' must be a list."))
+        return podlove
+
+    def clean_dote(self):
+        dote = self.cleaned_data.get("dote")
+        if not dote:
+            return dote
+        data = self._load_json(dote, field_label="DOTe")
+        if not isinstance(data, dict) or "lines" not in data:
+            raise ValidationError(_("DOTe transcript must include a top-level 'lines' key."))
+        lines = data["lines"]
+        if not isinstance(lines, list):
+            raise ValidationError(_("DOTe transcript 'lines' must be a list."))
+        required_keys = {"startTime", "endTime", "speakerDesignation", "text"}
+        for line in lines:
+            if not isinstance(line, dict):
+                raise ValidationError(_("DOTe transcript lines must be objects."))
+            missing_keys = required_keys.difference(line.keys())
+            if missing_keys:
+                missing_display = ", ".join(sorted(missing_keys))
+                raise ValidationError(
+                    _("DOTe transcript lines must include keys: %(keys)s."),
+                    params={"keys": missing_display},
+                )
+        return dote
+
+    def clean_vtt(self):
+        vtt = self.cleaned_data.get("vtt")
+        if not vtt:
+            return vtt
+        header = self._read_header(vtt)
+        if not header.startswith("WEBVTT"):
+            raise ValidationError(_("WebVTT transcripts must start with the WEBVTT header."))
+        return vtt
+
+    @staticmethod
+    def _load_json(uploaded_file, *, field_label: str):
+        try:
+            uploaded_file.seek(0)
+            return json.load(uploaded_file)
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+            raise ValidationError(_("%(field)s transcript is not valid JSON."), params={"field": field_label})
+        finally:
+            try:
+                uploaded_file.seek(0)
+            except Exception:
+                pass
+
+    @staticmethod
+    def _read_header(uploaded_file, size: int = 32) -> str:
+        try:
+            uploaded_file.seek(0)
+            header = uploaded_file.read(size)
+        finally:
+            try:
+                uploaded_file.seek(0)
+            except Exception:
+                pass
+        if isinstance(header, bytes):
+            return header.decode("utf-8-sig", errors="ignore").lstrip()
+        return str(header).lstrip()
 
 
 class NonEmptySearchForm(SearchForm):
