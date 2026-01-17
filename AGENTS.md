@@ -40,6 +40,7 @@
 - Before committing, verify whether documentation and release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 - Update docs when adding features or changing behavior.
 - When preparing a release, add a new file under `docs/releases/` and link it in `docs/releases/index.rst`.
+- For ongoing changes, update `docs/releases/<current-version>.rst`, where `<current-version>` matches `pyproject.toml` and is the first entry in `docs/releases/index.rst`; do not create a new release notes file until the version is bumped.
 
 ## Build System
 - Uses `uv_build` backend (NOT hatchling) with src layout (`src/cast/`).

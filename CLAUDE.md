@@ -180,8 +180,9 @@ When bumping the version number for a new release:
 2. Update version in `docs/conf.py` (release = "X.Y.Z")
 3. Update version in `src/cast/__init__.py` (__version__ = "X.Y.Z")
 4. Update version reference in `README.md` (Documentation for [current version X.Y.Z])
-5. Create new release notes file `docs/releases/X.Y.Z.rst` with standard template
-6. Link the new release notes in `docs/releases/index.rst`
+5. Ensure `docs/releases/X.Y.Z.rst` exists; if it already exists, keep using it.
+6. Link the release notes in `docs/releases/index.rst`
+7. During ongoing work, only update `docs/releases/<current-version>.rst`, where `<current-version>` matches `pyproject.toml` and is the first entry in `docs/releases/index.rst`; do not create additional release files.
 
 ## Memories
 - Use `uv run tox` instead of `uvx tox`
