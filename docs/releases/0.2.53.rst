@@ -9,6 +9,7 @@ Example project
 - Added a full-page theme selector for non-HTMX requests in the example app.
 - Ensure the Bootstrap5 example navbar loads the real theme selector via HTMX.
 - Ensure the Bootstrap4 example navbar loads the theme selector so switching back works.
+- Ensure the Plain example theme includes the theme selector for switching.
 
 Developer data helpers
 ~~~~~~~~~~~~~~~~~~~~~~

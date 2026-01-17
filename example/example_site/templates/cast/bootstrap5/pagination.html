@@ -1,0 +1,76 @@
+{% if is_paginated %}
+  <nav aria-label="Page navigation">
+    <ul class="pagination">
+      {% if has_previous %}
+        <!-- previous page -->
+        <li class="page-item">
+          <a
+            data-hx-get="?page={{ previous_page_number }}{{ parameters }}"
+            data-hx-target="#paging-area"
+            data-hx-swap="innerHTML show:top"
+            data-hx-replace-url="true"
+            href="?page={{ previous_page_number }}{{ parameters }}"
+            class="page-link"
+          >
+            Previous
+          </a>
+        </li>
+      {% else %}
+        <!-- we are already on the first page -->
+        <li class="page-item disabled">
+          <span class="page-link">
+            Previous
+          </span>
+        </li>
+      {% endif %}
+      <!-- page numbers -->
+      {% for num in page_range %}
+        {% if num == ellipsis %}
+          <!-- ... -->
+          <li class="page-item disabled">
+            <span class="page-link">{{ num }}</span>
+          </li>
+        {% elif num == page_number %}
+          <!-- currently active page -->
+          <li class="page-item active">
+            <span class="page-link">{{ num }}</span>
+          </li>
+        {% else %}
+          <!-- clickable links to other page numbers -->
+          <li class="page-item">
+            <a
+              data-hx-get="?page={{ num }}{{ parameters }}"
+              data-hx-target="#paging-area"
+              data-hx-swap="innerHTML show:top"
+              data-hx-replace-url="true"
+              href="?page={{ num }}{{ parameters }}"
+              class="page-link"
+            >{{ num }}</a>
+          </li>
+        {% endif %}
+      {% endfor %}
+      {% if has_next %}
+        <!-- next page -->
+        <li class="page-item">
+          <a
+            data-hx-get="?page={{ next_page_number }}{{ parameters }}"
+            data-hx-target="#paging-area"
+            data-hx-swap="innerHTML show:top"
+            data-hx-replace-url="true"
+            href="?page={{ next_page_number }}{{ parameters }}"
+            class="page-link"
+          >
+            Next
+          </a>
+        </li>
+      {% else %}
+        <!-- we are already on the last page -->
+        <li class="page-item disabled">
+          <span class="page-link">
+            Next
+          </span>
+        </li>
+      {% endif %}
+    </ul>
+  </nav>
+{% endif %}

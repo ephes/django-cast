@@ -1,0 +1,105 @@
+{% extends "./base.html" %}
+{% load wagtailcore_tags %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load django_vite %}
+
+{% block body_class %}template-bloglistpage{% endblock %}
+
+{% block meta %}
+  {{ block.super }}
+  {% if blog.noindex %}
+    <meta name="robots" content="noindex">
+  {% endif %}
+  <link rel="canonical" href="{{ canonical_url }}">
+  {% if use_audio_player %}
+    <link rel="preconnect" href="https://cdn.podlove.org" />
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="cast-post-list-header">
+    <div>
+      <h1 class="display-3">{{ page.title }}</h1>
+      <div class="intro lead">{{ page.description|richtext }}</div>
+    </div>
+
+    {% block feeds %}
+      <div>
+        <div class="cast-feeds-container">
+          <div class="cast-feed-item">
+            <img
+              alt="RSS feed icon"
+              class="cast-feed-icon"
+              src="{% static 'cast/img/Feed-icon.svg' %}"
+              height="64"
+              width="64"
+            >
+            <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
+              Plain RSS
+            </a>
+          </div>
+        </div>
+        {% if blog.is_podcast %}
+          <ul>
+            <li>
+              <a href="{% url "cast:podcast_feed_rss" slug=podcast.slug audio_format='m4a' %}">
+                Podcast RSS MP4
+              </a>
+            </li>
+            <li>
+              <a href="{% url "cast:podcast_feed_atom" slug=podcast.slug audio_format='m4a' %}">
+                Podcast Atom MP4
+              </a>
+            </li>
+          </ul>
+        {% endif %}
+      </div>
+    {% endblock feeds %}
+  </div>
+
+  {% block filters %}
+    <div id="accordion">
+      <div class="card">
+        <div class="card-header" id="headingOne">
+          <h2 class="mb-0 h5">
+            <button class="btn btn-link link-dark text-decoration-none" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+              Filters / Fulltext-Search
+            </button>
+          </h2>
+        </div>
+        <div id="collapseOne" class="collapse" role="region" aria-labelledby="headingOne" data-parent="#accordion">
+          <div class="card-body">
+            <form action="{{ page.url }}" method="get">
+              {{ filterset.form | crispy }}
+              <input class="btn btn-primary btn-lg" role="button" type="submit" />
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endblock filters %}
+  <hr class="my-4">
+
+  <div id="paging-area">
+    <main>
+      {% for post in posts %}
+        {% include "./post_body.html" with render_detail=False page=post %}
+        <hr class="my-4">
+      {% endfor %}
+    </main>
+
+    <footer>
+      {% include "./pagination.html" %}
+    </footer>
+  </div>
+{% endblock content %}
+
+{% block javascript %}
+  {{ block.super }}
+  {% vite_hmr_client app="cast-bootstrap5" %}
+  {% vite_asset 'src/gallery/image-gallery-bs5.ts' app="cast-bootstrap5" %}
+  {% if use_audio_player %}
+    {% vite_asset 'src/audio/podlove-player.ts' app="cast-bootstrap5" %}
+  {% endif %}
+{% endblock javascript %}
