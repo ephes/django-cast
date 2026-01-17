@@ -59,6 +59,19 @@ Navigate to the JavaScript directory and install dependencies:
    $ cd javascript
    $ npm install
 
+Bootstrap5 Theme (Required for Example App)
+-------------------------------------------
+
+The example app uses the Bootstrap5 theme, which lives in a sibling repo.
+Install it in editable mode:
+
+.. code-block:: bash
+
+   $ uv pip install -e ../cast-bootstrap5
+
+If ``cast-bootstrap5`` is not available, the example app will fall back to the
+built-in ``bootstrap4`` theme.
+
 Database Setup
 --------------
 
@@ -68,6 +81,12 @@ Create and migrate the development database:
 
    $ cd example
    $ uv run python manage.py migrate
+
+Bootstrap demo content (recommended after a clean DB rebuild):
+
+.. code-block:: bash
+
+   $ uv run python scripts/bootstrap_example_data.py --reset-db
 
 .. note::
 
@@ -87,18 +106,44 @@ For quick testing, you can use the example project:
    $ cd example
    $ uv run python manage.py runserver
 
+Or start Django + both Vite dev servers together:
+
+.. code-block:: bash
+
+   $ just dev
+
+.. note::
+
+   ``just dev`` will skip the Bootstrap5 Vite server if ``../cast-bootstrap5`` is
+   missing, and the example app will fall back to the built-in ``bootstrap4`` theme.
+
 For JavaScript development with hot reloading:
 
 .. code-block:: bash
 
    $ cd javascript
-   $ npx vite
+   $ npm run dev
+
+For the Bootstrap5 theme assets (default theme), run its Vite dev server too:
+
+.. code-block:: bash
+
+   $ cd ../cast-bootstrap5/javascript
+   $ npm run dev
+
+If you do not want to run Vite, set these environment variables to use the
+prebuilt manifests instead:
+
+.. code-block:: bash
+
+   $ export CAST_VITE_DEV_MODE=0
+   $ export CAST_BOOTSTRAP5_VITE_DEV_MODE=0
 
 .. note::
 
    Podcast pages (Podlove player) rely on the Vite dev server during local
-   development. Keep ``npx vite`` running while testing podcast list/detail
-   pages to ensure the player loads.
+   development. Keep the relevant ``npm run dev`` process running while
+   testing podcast list/detail pages to ensure the player loads.
 
 Podlove Performance Data
 ------------------------

@@ -28,10 +28,12 @@ Auto: Any = _Auto()
 
 
 def create_user(*, name: str = "testuser", password: str = "password") -> User:
-    user = User.objects.create_user(name, password=password)
-    user._password = password  # type: ignore
-    group, _created = Group.objects.get_or_create(name="Moderators")
-    group.user_set.add(user)  # type: ignore
+    user = User.objects.filter(username=name).first()
+    if user is None:
+        user = User.objects.create_user(name, password=password)
+        user._password = password  # type: ignore
+        group, _created = Group.objects.get_or_create(name="Moderators")
+        group.user_set.add(user)  # type: ignore
     return user
 
 

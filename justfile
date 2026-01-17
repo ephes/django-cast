@@ -8,6 +8,10 @@ default:
 install:
     uv sync
 
+# Run example app and Vite dev servers (Procfile.dev)
+dev:
+    uvx honcho start -f Procfile.dev
+
 # Run the full test suite
 test:
     uv run pytest

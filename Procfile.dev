@@ -1,0 +1,3 @@
+django: cd example && PYTHONUNBUFFERED=true uv run python manage.py runserver 0.0.0.0:8000
+vite_cast: cd javascript && npm run dev
+vite_bootstrap5: /bin/sh -c 'if [ -d ../cast-bootstrap5/javascript ]; then cd ../cast-bootstrap5/javascript && npm run dev; else echo "cast-bootstrap5 not found, skipping vite_bootstrap5"; while true; do sleep 3600; done; fi'
