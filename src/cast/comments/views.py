@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import django_comments
 from django.apps import apps
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
 from django.template.loader import render_to_string
 from django.utils.html import escape
 from django.views.decorators.csrf import csrf_protect
@@ -16,10 +17,16 @@ from django_comments.views.comments import CommentPostBadRequest
 from . import appsettings
 from .utils import get_comment_context_data, get_comment_template_name
 
+if TYPE_CHECKING:
+    from django.forms.boundfield import BoundField
+
+    from .forms import CastCommentForm
+    from .models import BaseComment
+
 
 @csrf_protect
 @require_POST
-def post_comment_ajax(request, using=None):
+def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpResponse:
     is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
     if not is_ajax:
         return HttpResponseBadRequest("Expecting Ajax call")
@@ -37,7 +44,11 @@ def post_comment_ajax(request, using=None):
         return CommentPostBadRequest("Missing content_type or object_pk field.")
 
     try:
-        model = apps.get_model(*ctype.split(".", 1))
+        app_label, dot, model_name = ctype.partition(".")
+        if dot:
+            model = apps.get_model(app_label, model_name)
+        else:
+            model = apps.get_model(app_label)
         target = model._default_manager.using(using).get(pk=object_pk)
     except ValueError:
         return CommentPostBadRequest(f"Invalid object_pk value: {escape(object_pk)}")
@@ -83,7 +94,13 @@ def post_comment_ajax(request, using=None):
     return _ajax_result(request, form, "post", comment, object_id=object_pk)
 
 
-def _ajax_result(request, form, action, comment=None, object_id=None):
+def _ajax_result(
+    request: HttpRequest,
+    form: CastCommentForm,
+    action: str,
+    comment: BaseComment | None = None,
+    object_id: str | None = None,
+) -> HttpResponse:
     success = True
     json_errors: dict[str, str] = {}
 
@@ -120,7 +137,7 @@ def _ajax_result(request, form, action, comment=None, object_id=None):
     return HttpResponse(json.dumps(json_return), content_type="application/json")
 
 
-def _render_errors(field):
+def _render_errors(field: BoundField) -> str:
     template = f"{appsettings.CRISPY_TEMPLATE_PACK}/layout/field_errors.html"
     return render_to_string(
         template,
