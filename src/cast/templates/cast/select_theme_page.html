@@ -1,0 +1,24 @@
+{% extends "cast/"|add:template_base_dir|add:"/base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Select Theme" %}{% endblock title %}
+
+{% block content %}
+  <div class="cast-select-theme">
+    <h1>{% translate "Select Theme" %}</h1>
+    <ul class="list-unstyled">
+      {% for theme_slug, theme_name in template_base_dir_choices %}
+        <li class="mb-2">
+          <form action="{% url 'cast:select-theme' %}" method="post">
+            {% csrf_token %}
+            <input type="hidden" name="template_base_dir" value="{{ theme_slug }}">
+            <input type="hidden" name="next" value="{{ next_url }}">
+            <button type="submit" class="btn btn-primary">
+              {{ theme_name }}
+            </button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endblock content %}

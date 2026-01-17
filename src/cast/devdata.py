@@ -208,12 +208,25 @@ def create_mp3_file() -> SimpleUploadedFile:
     return simple_mp3
 
 
-def create_audio(*, mp3_file: SimpleUploadedFile = Auto, user: User = Auto) -> Audio:
+def create_m4a_file(*, fixture_dir: Path = Auto) -> SimpleUploadedFile:
+    if not fixture_dir:  # pragma: no cover
+        fixture_dir = get_tests_fixture_dir()
+    with (fixture_dir / "test.m4a").open("rb") as f:
+        m4a = f.read()
+    simple_m4a = SimpleUploadedFile(name="test.m4a", content=m4a, content_type="audio/mp4")
+    return simple_m4a
+
+
+def create_audio(
+    *, mp3_file: SimpleUploadedFile = Auto, m4a_file: SimpleUploadedFile = Auto, user: User = Auto
+) -> Audio:
     if not user:  # pragma: no cover
         user = create_user()
     if not mp3_file:  # pragma: no cover
         mp3_file = create_mp3_file()
-    audio = Audio(user=user, mp3=mp3_file, title="Test Audio")
+    if not m4a_file:  # pragma: no cover
+        m4a_file = create_m4a_file()
+    audio = Audio(user=user, mp3=mp3_file, m4a=m4a_file, title="Test Audio")
     audio.save(duration=False, cache_file_sizes=False)
     return audio
 

@@ -40,4 +40,9 @@ def select_theme(request: HtmxHttpRequest) -> HttpResponse:
         "template_base_dir_choices": form.fields["template_base_dir"].choices,  # type: ignore
         "next_url": next_url,
     }
-    return render(request, f"cast/{template_base_dir}/select_theme.html", context=context)
+    is_htmx = bool(getattr(request, "htmx", False))
+    if is_htmx:
+        template_name = f"cast/{template_base_dir}/select_theme.html"
+    else:
+        template_name = "cast/select_theme_page.html"
+    return render(request, template_name, context=context)

@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import TemplateView
 from wagtail import urls as wagtail_urls
+from wagtail import views as wagtail_views
 from wagtail.admin import urls as wagtailadmin_urls
 from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.documents import urls as wagtaildocs_urls
@@ -14,6 +15,7 @@ PagesAPIViewSet.schema = None
 
 urlpatterns = [
     # path("", RedirectView.as_view(url="/about"), name="home"),
+    path("", wagtail_views.serve, {"path": ""}, name="home"),
     path(
         "about/",
         TemplateView.as_view(template_name="pages/about.html"),

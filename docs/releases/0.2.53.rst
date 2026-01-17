@@ -6,7 +6,9 @@ Example project
 - Added a bootstrap script to rebuild the example DB, create demo content, and ensure a superuser exists.
 - Added a `Procfile.dev` + `just dev` shortcut to run Django and Vite dev servers together.
 - Documented the Bootstrap5 theme setup, demo data bootstrap, and dev server workflows.
+- Added a full-page theme selector for non-HTMX requests in the example app.
 
 Developer data helpers
 ~~~~~~~~~~~~~~~~~~~~~~
 - `create_user` now reuses existing users to avoid duplicate-username errors during demo setup.
+- `create_audio` now populates an m4a file by default for example content.
