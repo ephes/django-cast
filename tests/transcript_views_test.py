@@ -587,3 +587,62 @@ class TestGetTranscriptAsHtml:
         # Then we get the transcript in the expected format
         content = r.content.decode("utf-8")
         assert "hallo liebe Hörerinnen und Hörer" in content
+
+    def test_get_transcript_as_html_redirects_for_episode(self, client, episode):
+        podlove = {
+            "transcripts": [
+                {
+                    "start": "00:00:00.620",
+                    "end": "00:00:05.160",
+                    "speaker": "Host",
+                    "text": "Hallo und willkommen.",
+                }
+            ]
+        }
+        transcript = create_transcript(audio=episode.podcast_audio, podlove=podlove)
+        url = reverse("cast:html-transcript", kwargs={"transcript_pk": transcript.id, "post_pk": episode.id})
+
+        r = client.get(url)
+
+        assert r.status_code == 302
+        assert r.url == reverse(
+            "cast:episode-transcript",
+            kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug},
+        )
+
+    def test_get_transcript_as_html_canonical_success(self, client, episode):
+        podlove = {
+            "transcripts": [
+                {
+                    "start": "00:00:00.620",
+                    "end": "00:00:05.160",
+                    "speaker": "Host",
+                    "text": "Hallo und willkommen.",
+                }
+            ]
+        }
+        create_transcript(audio=episode.podcast_audio, podlove=podlove)
+        url = reverse("cast:episode-transcript", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})
+
+        r = client.get(url)
+
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert "Hallo und willkommen." in content
+        assert "Host" in content
+        assert episode.title in content
+        assert episode.get_url() in content
+
+    def test_get_transcript_as_html_canonical_without_transcript(self, client, episode):
+        url = reverse("cast:episode-transcript", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})
+
+        r = client.get(url)
+
+        assert r.status_code == 404
+
+    def test_get_transcript_as_html_canonical_mismatched_blog(self, client, episode, blog):
+        url = reverse("cast:episode-transcript", kwargs={"blog_slug": blog.slug, "episode_slug": episode.slug})
+
+        r = client.get(url)
+
+        assert r.status_code == 404

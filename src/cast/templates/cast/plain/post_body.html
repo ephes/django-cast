@@ -1,12 +1,18 @@
 {% load wagtailcore_tags %}
+{% load i18n %}
 
 <article>
   <header>
     <h2>{{ page.title }}</h2>
     <a href="{{ page.page_url }}">
-      <time date-time="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date}}</time>,
+      <time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date}}</time>,
     </a>
     <span class="author">{{ page.owner.username | title}}</span>
+    {% if render_detail and episode_transcript_url %}
+      <p>
+        <a href="{{ episode_transcript_url }}">{% translate "View transcript" %}</a>
+      </p>
+    {% endif %}
   </header>
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}

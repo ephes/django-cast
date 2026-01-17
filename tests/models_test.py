@@ -571,6 +571,40 @@ class TestEpisodeModel:
         episode = Episode(id=1)
         assert episode.get_transcript_or_none(None) is None
 
+    def test_transcript_properties(self, episode):
+        assert episode.transcript is None
+        assert episode.has_transcript is False
+        create_transcript(audio=episode.podcast_audio, podlove={"transcripts": [{"start": "00:00:00.000"}]})
+        episode.refresh_from_db()
+        assert episode.transcript is not None
+        assert episode.has_transcript is True
+
+    def test_get_transcript_url(self, episode):
+        expected = reverse(
+            "cast:episode-transcript",
+            kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug},
+        )
+        assert episode.get_transcript_url() == expected
+
+    def test_get_context_sets_transcript_url_without_absolute_uri(self, episode, mocker):
+        class Request:
+            pass
+
+        create_transcript(audio=episode.podcast_audio, podlove={"transcripts": [{"start": "00:00:00.000"}]})
+        episode.podcast_audio.refresh_from_db()
+        repository = mocker.MagicMock()
+        repository.blog.slug = episode.blog.slug
+        mocker.patch(
+            "cast.models.Post.get_context",
+            return_value={"repository": repository, "render_for_feed": False},
+        )
+        context = episode.get_context(Request())
+        expected = reverse(
+            "cast:episode-transcript",
+            kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug},
+        )
+        assert context["episode_transcript_url"] == expected
+
     def test_get_vtt_transcript_url_no_transcript(self, rf, mocker):
         episode = Episode(id=1)
         request = rf.get("/")

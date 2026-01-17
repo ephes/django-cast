@@ -24,3 +24,5 @@ Changes:
 - Show a visible error message when the Podlove embed script fails to load.
 - Document guidance for locally patching the Podlove subscribe button bundle.
 - Remove legacy CoreAPI schema settings and schema URL wiring.
+- Add a canonical transcript detail URL per episode and link transcripts from episode pages. (#168)
+- Improve transcript HTML rendering with episode metadata and speaker/timestamp formatting. (#168)

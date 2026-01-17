@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -12,9 +12,32 @@ from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm, TranscriptForm
-from ..models import Post, Transcript, get_template_base_dir
+from ..models import Blog, Episode, Post, Transcript, get_template_base_dir
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .wagtail_pagination import paginate, pagination_template
+
+
+def _render_transcript_html(
+    request: HtmxHttpRequest,
+    transcript: Transcript,
+    base_template_dir: str,
+    *,
+    episode: Episode | None = None,
+) -> HttpResponse:
+    if not transcript.podlove:
+        return HttpResponse("Transcript JSON not available", status=404)
+    try:
+        data = transcript.podlove_data
+    except json.JSONDecodeError:
+        return HttpResponse("Invalid JSON format in podlove file", status=400)
+    if episode is not None:
+        context = episode.get_context(request)
+        context["episode"] = episode
+        context["episode_url"] = context.get("page_url") or episode.get_url(request=request)
+        context["transcript"] = data
+    else:
+        context = {"transcript": data, "episode": None}
+    return render(request, f"cast/{base_template_dir}/transcript.html", context)
 
 
 @vary_on_headers("X-Requested-With")
@@ -290,19 +313,27 @@ def webvtt_transcript(_request: HttpRequest, pk: int) -> HttpResponse:
     return HttpResponse("WebVTT file not available", status=404)
 
 
+def episode_transcript(request: HtmxHttpRequest, blog_slug: str, episode_slug: str) -> HttpResponse:
+    blog = get_object_or_404(Blog, slug=blog_slug)
+    episode = get_object_or_404(Episode.objects.descendant_of(blog), slug=episode_slug)
+    transcript = episode.get_transcript_or_none()
+    if transcript is None:
+        raise Http404("Transcript not found")
+    base_template_dir = episode.get_template_base_dir(request)
+    return _render_transcript_html(request, transcript, base_template_dir, episode=episode)
+
+
 def html_transcript(request: HtmxHttpRequest, transcript_pk: int, post_pk: int | None = None) -> HttpResponse:
     """Return the transcript content as HTML."""
     transcript = get_object_or_404(Transcript, pk=transcript_pk)
+    post: Post | None = None
     if post_pk is not None:
         post = get_object_or_404(Post, pk=post_pk)
+        post = post.specific
+        if isinstance(post, Episode) and post.transcript and post.transcript.pk == transcript.pk:
+            return redirect(post.get_transcript_url())
         base_template_dir = post.get_template_base_dir(request)
     else:
         base_template_dir = get_template_base_dir(request, pre_selected=None)
-    if not transcript.podlove:
-        return HttpResponse("Transcript JSON not available", status=404)
-    # Open the file and load its contents as JSON
-    try:
-        data = transcript.podlove_data
-        return render(request, f"cast/{base_template_dir}/transcript.html", {"transcript": data})
-    except json.JSONDecodeError:
-        return HttpResponse("Invalid JSON format in podlove file", status=400)
+    episode = post if isinstance(post, Episode) else None
+    return _render_transcript_html(request, transcript, base_template_dir, episode=episode)

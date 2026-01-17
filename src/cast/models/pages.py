@@ -759,6 +759,18 @@ class Episode(Post):
             player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": blog_slug})
             player_url = request.build_absolute_uri(player_url)
             context["player_url"] = player_url
+            if not context.get("render_for_feed") and self.has_transcript:
+                transcript_url = reverse(
+                    "cast:episode-transcript",
+                    kwargs={"episode_slug": self.slug, "blog_slug": blog_slug},
+                )
+                context["episode_transcript_url"] = request.build_absolute_uri(transcript_url)
+        elif not context.get("render_for_feed") and self.has_transcript:
+            blog_slug = context["repository"].blog.slug
+            context["episode_transcript_url"] = reverse(
+                "cast:episode-transcript",
+                kwargs={"episode_slug": self.slug, "blog_slug": blog_slug},
+            )
         return context
 
     @property
@@ -784,7 +796,7 @@ class Episode(Post):
 
         return cast(Audio, self.podcast_audio).get_file_size(audio_format)
 
-    def get_transcript_or_none(self, repository: EpisodeFeedRepository | None) -> Optional["Transcript"]:
+    def get_transcript_or_none(self, repository: EpisodeFeedRepository | None = None) -> Optional["Transcript"]:
         if repository is not None:
             podcast_audio, transcript = repository.podcast_audio, repository.transcript
         else:
@@ -794,6 +806,17 @@ class Episode(Post):
             except (ObjectDoesNotExist, AttributeError):
                 transcript = None
         return transcript
+
+    @property
+    def transcript(self) -> Optional["Transcript"]:
+        return self.get_transcript_or_none()
+
+    @property
+    def has_transcript(self) -> bool:
+        return self.transcript is not None
+
+    def get_transcript_url(self) -> str:
+        return reverse("cast:episode-transcript", kwargs={"blog_slug": self.blog.slug, "episode_slug": self.slug})
 
     def get_vtt_transcript_url(self, request: HtmxHttpRequest, repository: EpisodeFeedRepository | None) -> str | None:
         if (transcript := self.get_transcript_or_none(repository)) is not None:

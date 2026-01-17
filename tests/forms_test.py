@@ -1,3 +1,4 @@
+import io
 import json
 from unittest.mock import MagicMock
 
@@ -182,6 +183,12 @@ class TestTranscriptForm:
         assert form.is_valid() is False
         assert "dote" in form.errors
 
+    def test_dote_missing_lines_key(self, audio):
+        dote = self._json_upload("dote.json", {"no_lines": []})
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid() is False
+        assert "dote" in form.errors
+
     def test_dote_lines_not_list(self, audio):
         dote = self._json_upload("dote.json", {"lines": "not a list"})
         form = TranscriptForm({"audio": audio.id}, {"dote": dote})
@@ -217,3 +224,35 @@ class TestTranscriptForm:
         form = TranscriptForm({"audio": audio.id}, {"vtt": vtt})
         assert form.is_valid() is False
         assert "vtt" in form.errors
+
+    def test_load_json_handles_seek_failure_in_finally(self):
+        class FlakySeek(io.StringIO):
+            def __init__(self, value: str):
+                super().__init__(value)
+                self._seek_calls = 0
+
+            def seek(self, *args, **kwargs):
+                self._seek_calls += 1
+                if self._seek_calls > 1:
+                    raise OSError("seek failed")
+                return super().seek(*args, **kwargs)
+
+        payload = {"transcripts": []}
+        file_obj = FlakySeek(json.dumps(payload))
+        assert TranscriptForm._load_json(file_obj, field_label="Podlove") == payload
+
+    def test_read_header_handles_str_and_seek_failure(self):
+        class FlakySeek(io.StringIO):
+            def __init__(self, value: str):
+                super().__init__(value)
+                self._seek_calls = 0
+
+            def seek(self, *args, **kwargs):
+                self._seek_calls += 1
+                if self._seek_calls > 1:
+                    raise OSError("seek failed")
+                return super().seek(*args, **kwargs)
+
+        file_obj = FlakySeek("WEBVTT\n")
+        header = TranscriptForm._read_header(file_obj)
+        assert header.startswith("WEBVTT")

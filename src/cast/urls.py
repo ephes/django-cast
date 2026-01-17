@@ -8,6 +8,7 @@ from .views import meta
 from .views.gallery import gallery_modal
 from .views.theme import select_theme
 from .views.transcript import (
+    episode_transcript,
     html_transcript,
     podcastindex_transcript_json,
     podlove_transcript_json,
@@ -26,6 +27,7 @@ urlpatterns: list[Any] = [
     # HTML transcripts
     path("transcripts/html/<int:transcript_pk>/", html_transcript, name="html-transcript-no-post"),
     path("transcripts/html/<int:transcript_pk>/<int:post_pk>/", view=html_transcript, name="html-transcript"),
+    path("<slug:blog_slug>/<slug:episode_slug>/transcript/", view=episode_transcript, name="episode-transcript"),
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",
