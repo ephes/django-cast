@@ -8,6 +8,7 @@ Example project
 - Documented the Bootstrap5 theme setup, demo data bootstrap, and dev server workflows.
 - Added a full-page theme selector for non-HTMX requests in the example app.
 - Ensure the Bootstrap5 example navbar loads the real theme selector via HTMX.
+- Ensure the Bootstrap4 example navbar loads the theme selector so switching back works.
 
 Developer data helpers
 ~~~~~~~~~~~~~~~~~~~~~~

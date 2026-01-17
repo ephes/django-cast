@@ -1,0 +1,68 @@
+{% load static i18n %}
+{% load wagtailcore_tags %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>{% block title %}{% endblock title %}</title>
+    {% block meta %}
+      <meta charset="utf-8">
+      <meta http-equiv="x-ua-compatible" content="ie=edge">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="description" content="{{ page.search_description }}">
+      <meta name="author" content="{{ blog.author_name | title}}">
+    {% endblock meta %}
+    {% block css %}
+      <link rel="stylesheet" href="{% static 'cast/css/bootstrap4/bootstrap.min.css' %}">
+      <link href="{% static 'cast/css/bootstrap4/cast.css' %}" rel="stylesheet">
+    {% endblock css %}
+    {% block headerscript %}{% endblock headerscript %}
+    {% block additionalheaders %}{% endblock additionalheaders %}
+  </head>
+
+  <body data-hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    {% block navigation %}
+      <div class="m-b-1">
+        <nav class="navbar navbar-expand-md navbar-light bg-light">
+          <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <a class="navbar-brand" href="/">Home</a>
+          <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+              {% for link, text in root_nav_links %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{{ link }}">{{ text }}</a>
+                </li>
+              {% endfor %}
+              <li class="nav-item dropdown" hx-get="{% url 'cast:select-theme' %}" hx-trigger="load" hx-swap="outerHTML"></li>
+            </ul>
+          </div>
+        </nav>
+      </div>
+    {% endblock navigation %}
+    <div class="container">
+      {% block messages %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endblock messages %}
+
+      {% block content %}
+        <p>Use this document as a way to quick start any new project.</p>
+      {% endblock content %}
+    </div>
+    {% block modal %}{% endblock modal %}
+    <div class="additional_javascript">
+      {% block javascript %}
+        <!-- bootstrap4 javascript needs jquery -->
+        <script defer src="{% static 'cast/js/jquery/jquery-3.7.1.min.js' %}"></script>
+        <script defer src="{% static 'cast/js/bootstrap4/bootstrap.min.js' %}"></script>
+        <script defer src="{% static 'cast/js/htmx.min.js' %}"></script>
+
+        {% block template_script %}{% endblock template_script %}
+      {% endblock javascript %}
+    </div>
+  </body>
+</html>
