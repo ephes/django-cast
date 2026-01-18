@@ -1,0 +1,53 @@
+{% load i18n %}
+
+<section class="cast-styleguide">
+  <header class="cast-styleguide-header">
+    <div class="cast-styleguide-heading">
+      <h1>{% translate "Styleguide" %}</h1>
+      <p>
+        {% translate "Theme" %}: {{ styleguide_active_theme_label }}
+      </p>
+    </div>
+
+    <form method="get" class="cast-styleguide-theme-switcher">
+      <label for="styleguide-theme">{% translate "Theme" %}</label>
+      <select name="theme" id="styleguide-theme">
+        {% for theme in styleguide_theme_choices %}
+          <option value="{{ theme.slug }}" {% if theme.slug == styleguide_active_theme %}selected{% endif %}>
+            {{ theme.name }}
+          </option>
+        {% endfor %}
+      </select>
+      {% for key, value in styleguide_query_params %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endfor %}
+      <button type="submit" class="btn btn-outline-secondary btn-sm">
+        {% translate "Switch" %}
+      </button>
+    </form>
+
+    {% if styleguide_warning %}
+      <p class="cast-styleguide-warning">{{ styleguide_warning }}</p>
+    {% endif %}
+  </header>
+
+  <nav class="cast-styleguide-nav">
+    <a href="#typography">{% translate "Typography" %}</a>
+    <a href="#buttons">{% translate "Buttons & links" %}</a>
+    <a href="#forms">{% translate "Forms" %}</a>
+    <a href="#post-list">{% translate "Post list" %}</a>
+    <a href="#content-blocks">{% translate "Content blocks" %}</a>
+    <a href="#episode">{% translate "Episode" %}</a>
+    <a href="#transcript">{% translate "Transcript" %}</a>
+    <a href="#comments">{% translate "Comments" %}</a>
+    <a href="#errors">{% translate "Errors" %}</a>
+  </nav>
+
+  <div class="cast-styleguide-content">
+    {% if styleguide_sections_template %}
+      {% include styleguide_sections_template %}
+    {% else %}
+      <p>{% translate "No styleguide sections available." %}</p>
+    {% endif %}
+  </div>
+</section>

@@ -3,7 +3,5 @@
 {% block title %}Forbidden (403){% endblock %}
 
 {% block content %}
-  <h1>Forbidden (403)</h1>
-
-  <p>CSRF verification failed. Request aborted.</p>
+  {% include "cast/errors/error_content.html" with title="Forbidden (403)" heading="Forbidden (403)" message="CSRF verification failed. Request aborted." %}
 {% endblock content %}

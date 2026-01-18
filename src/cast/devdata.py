@@ -202,30 +202,36 @@ def create_minimal_mp3():
     return mp3
 
 
-def create_mp3_file() -> SimpleUploadedFile:
+def create_mp3_file(*, unique_name: bool = False) -> SimpleUploadedFile:
     mp3 = create_minimal_mp3()
-    simple_mp3 = SimpleUploadedFile(name="test.mp3", content=mp3, content_type="audio/mpeg")
+    filename = f"styleguide-{uuid4().hex}.mp3" if unique_name else "test.mp3"
+    simple_mp3 = SimpleUploadedFile(name=filename, content=mp3, content_type="audio/mpeg")
     return simple_mp3
 
 
-def create_m4a_file(*, fixture_dir: Path = Auto) -> SimpleUploadedFile:
+def create_m4a_file(*, fixture_dir: Path = Auto, unique_name: bool = False) -> SimpleUploadedFile:
     if not fixture_dir:  # pragma: no cover
         fixture_dir = get_tests_fixture_dir()
     with (fixture_dir / "test.m4a").open("rb") as f:
         m4a = f.read()
-    simple_m4a = SimpleUploadedFile(name="test.m4a", content=m4a, content_type="audio/mp4")
+    filename = f"styleguide-{uuid4().hex}.m4a" if unique_name else "test.m4a"
+    simple_m4a = SimpleUploadedFile(name=filename, content=m4a, content_type="audio/mp4")
     return simple_m4a
 
 
 def create_audio(
-    *, mp3_file: SimpleUploadedFile = Auto, m4a_file: SimpleUploadedFile = Auto, user: User = Auto
+    *,
+    mp3_file: SimpleUploadedFile = Auto,
+    m4a_file: SimpleUploadedFile = Auto,
+    user: User = Auto,
+    unique_filenames: bool = False,
 ) -> Audio:
     if not user:  # pragma: no cover
         user = create_user()
     if not mp3_file:  # pragma: no cover
-        mp3_file = create_mp3_file()
+        mp3_file = create_mp3_file(unique_name=unique_filenames)
     if not m4a_file:  # pragma: no cover
-        m4a_file = create_m4a_file()
+        m4a_file = create_m4a_file(unique_name=unique_filenames)
     audio = Audio(user=user, mp3=mp3_file, m4a=m4a_file, title="Test Audio")
     audio.save(duration=False, cache_file_sizes=False)
     return audio
@@ -281,8 +287,7 @@ def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[st
         body = add_video_to_body(body=body, video=video)
 
     # audios
-    mp3_file = create_mp3_file()
-    audios = [create_audio(mp3_file=mp3_file, user=blog.owner) for _ in range(media_numbers.get("audios", 0))]
+    audios = [create_audio(user=blog.owner, unique_filenames=True) for _ in range(media_numbers.get("audios", 0))]
     for audio in audios:
         body = add_audio_to_body(body=body, audio=audio)
 

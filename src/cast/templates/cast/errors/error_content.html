@@ -1,0 +1,7 @@
+<h1>{{ heading|default:title }}</h1>
+{% if subheading %}
+  <h3>{{ subheading }}</h3>
+{% endif %}
+{% if message %}
+  <p>{{ message }}</p>
+{% endif %}

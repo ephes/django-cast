@@ -1,0 +1,100 @@
+{% load i18n %}
+{% load crispy_forms_tags %}
+{% load comments %}
+
+<section id="typography" class="mb-5">
+  <h2 class="h3">{% translate "Typography" %}</h2>
+  <p class="lead">{% translate "Lead paragraph to show rhythm and spacing." %}</p>
+  <p>
+    {% translate "Body text with" %}
+    <a href="#">{% translate "inline link" %}</a>,
+    <strong>{% translate "emphasis" %}</strong>,
+    <em>{% translate "italics" %}</em>,
+    <code>code</code>.
+  </p>
+  <ul>
+    <li>{% translate "Unordered list item" %}</li>
+    <li>{% translate "Another list item" %}</li>
+  </ul>
+  <ol>
+    <li>{% translate "Ordered list item" %}</li>
+    <li>{% translate "Second ordered item" %}</li>
+  </ol>
+  <blockquote class="blockquote">
+    <p class="mb-0">{% translate "Blockquote sample for editorial layouts." %}</p>
+    <footer class="blockquote-footer">{% translate "Attribution" %}</footer>
+  </blockquote>
+</section>
+
+<section id="buttons" class="mb-5">
+  <h2 class="h3">{% translate "Buttons & links" %}</h2>
+  <div class="d-flex flex-wrap">
+    <a class="btn btn-primary mr-2 mb-2" href="#">{% translate "Primary" %}</a>
+    <a class="btn btn-secondary mr-2 mb-2" href="#">{% translate "Secondary" %}</a>
+    <button class="btn btn-outline-secondary mb-2" type="button" disabled>{% translate "Disabled" %}</button>
+  </div>
+</section>
+
+<section id="forms" class="mb-5">
+  <h2 class="h3">{% translate "Forms" %}</h2>
+  <div class="card">
+    <div class="card-body">
+      <form action="{{ blog.url }}" method="get">
+        {{ filterset.form | crispy }}
+        <button class="btn btn-primary" type="submit">{% translate "Search" %}</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section id="post-list" class="mb-5">
+  <h2 class="h3">{% translate "Post list" %}</h2>
+  <div id="paging-area">
+    {% include "cast/"|add:template_base_dir|add:"/_list_of_posts_and_paging_controls.html" %}
+  </div>
+</section>
+
+<section id="content-blocks" class="mb-5">
+  <h2 class="h3">{% translate "Content blocks" %}</h2>
+  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_media_post render_detail=True repository=styleguide_media_repository template_base_dir=template_base_dir %}
+</section>
+
+<section id="episode" class="mb-5">
+  <h2 class="h3">{% translate "Episode" %}</h2>
+  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_episode render_detail=True repository=styleguide_episode_repository template_base_dir=template_base_dir episode_transcript_url=styleguide_episode_transcript_url %}
+</section>
+
+<section id="transcript" class="mb-5">
+  <h2 class="h3">{% translate "Transcript" %}</h2>
+  {% include "cast/"|add:template_base_dir|add:"/styleguide/_transcript.html" %}
+</section>
+
+<section id="comments" class="mb-5">
+  <h2 class="h3">{% translate "Comments" %}</h2>
+  {% if styleguide_comments_enabled %}
+    {% render_comment_list for styleguide_media_post %}
+    {% render_comment_form for styleguide_media_post %}
+  {% else %}
+    <p class="text-muted">
+      {% translate "Comments are disabled. Enable CAST_COMMENTS_ENABLED to preview the comment UI." %}
+    </p>
+  {% endif %}
+</section>
+
+<section id="errors" class="mb-5">
+  <h2 class="h3">{% translate "Error pages" %}</h2>
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      {% include "cast/errors/error_content.html" with title="Bad Request" heading="Bad request!" message="Something in your request was just not right." %}
+    </div>
+    <div class="col-md-6 mb-3">
+      {% include "cast/errors/error_content.html" with title="Permission Denied" heading="Permission Denied!" message="Authorization failed." %}
+    </div>
+    <div class="col-md-6 mb-3">
+      {% include "cast/errors/error_content.html" with title="Page not found" heading="Page not found" message="This is not the page you were looking for." %}
+    </div>
+    <div class="col-md-6 mb-3">
+      {% include "cast/errors/error_content.html" with title="Server Error" heading="Ooops!!! 500" subheading="Looks like something went wrong!" message="We track these errors automatically, but if the problem persists feel free to contact us. In the meantime, try refreshing." %}
+    </div>
+  </div>
+</section>

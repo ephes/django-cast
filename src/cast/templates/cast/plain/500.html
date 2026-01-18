@@ -3,9 +3,5 @@
 {% block title %}Server Error{% endblock %}
 
 {% block content %}
-  <h1>Ooops!!! 500</h1>
-
-  <h3>Looks like something went wrong!</h3>
-
-  <p>We track these errors automatically, but if the problem persists feel free to contact us. In the meantime, try refreshing.</p>
+  {% include "cast/errors/error_content.html" with title="Server Error" heading="Ooops!!! 500" subheading="Looks like something went wrong!" message="We track these errors automatically, but if the problem persists feel free to contact us. In the meantime, try refreshing." %}
 {% endblock content %}

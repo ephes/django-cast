@@ -6,6 +6,7 @@ from django.views.decorators.cache import cache_page
 from . import feeds
 from .views import meta
 from .views.gallery import gallery_modal
+from .views.styleguide import styleguide
 from .views.theme import select_theme
 from .views.transcript import (
     episode_transcript,
@@ -48,6 +49,8 @@ urlpatterns: list[Any] = [
     path("<slug:blog_slug>/<slug:episode_slug>/twitter-player/", view=meta.twitter_player, name="twitter-player"),
     # Store selected theme in session
     path("select-theme/", view=select_theme, name="select-theme"),
+    # Styleguide preview (guarded by CAST_ENABLE_STYLEGUIDE)
+    path("styleguide/", view=styleguide, name="styleguide"),
     # Gallery modal via htmx
     path("gallery_modal/<str:template_base_dir>/", view=gallery_modal, name="gallery-modal"),
 ]

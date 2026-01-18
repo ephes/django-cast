@@ -1,0 +1,16 @@
+{% extends "../base.html" %}
+{% load django_vite %}
+{% load i18n %}
+
+{% block title %}{% translate "Styleguide" %}{% endblock title %}
+
+{% block content %}
+  {% include "cast/styleguide/layout.html" %}
+{% endblock content %}
+
+{% block javascript %}
+  {{ block.super }}
+  {% vite_hmr_client app="cast" %}
+  {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
+  {% vite_asset 'src/audio/podlove-player.ts' app="cast" %}
+{% endblock javascript %}

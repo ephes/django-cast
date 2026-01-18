@@ -3,7 +3,5 @@
 {% block title %}Page not found{% endblock %}
 
 {% block content %}
-  <h1>Page not found</h1>
-
-  <p>This is not the page you were looking for.</p>
+  {% include "cast/errors/error_content.html" with title="Page not found" heading="Page not found" message="This is not the page you were looking for." %}
 {% endblock content %}
