@@ -58,6 +58,7 @@ uv run tox
 ```
 Always run `uv run mypy` (or `just typecheck`) after code changes; treat it as a required check.
 Always run `just lint` and `just typecheck` before delivery; both must pass.
+Do not consider a task done until `just test` has been run and all tests pass.
 
 ### JavaScript Build Commands
 ```bash

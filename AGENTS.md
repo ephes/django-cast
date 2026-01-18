@@ -19,6 +19,7 @@
 - Pre-commit hooks: `just pre-commit` or `pre-commit run --all-files`.
 - Always run `just typecheck` (or `uv run mypy`) after code changes; treat it as a required check.
 - Always run `just lint` and `just typecheck` before delivery; both must pass.
+- Do not consider a task done until `just test` has been run and all tests pass.
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ with 4-space indentation; prefer explicit typing—public functions and classes should be type-annotated.
