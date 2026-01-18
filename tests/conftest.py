@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 import pytz
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
@@ -16,6 +17,7 @@ from django_htmx.middleware import HtmxDetails
 from rest_framework.test import APIClient
 from wagtail.images.models import Image
 from wagtail.models import Collection, Page, Site
+from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACHE_VERSION
 
 from cast import appsettings
 from cast.devdata import create_transcript
@@ -52,6 +54,30 @@ def remove_stale_media_files():
     from django.conf import settings
 
     shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+
+
+@pytest.fixture(scope="session")
+def baseline_site_root_paths_cache(django_db_setup, django_db_blocker):
+    with django_db_blocker.unblock():
+        root_paths = Site.get_site_root_paths()
+    return [tuple(root_path) for root_path in root_paths]
+
+
+@pytest.fixture(autouse=True)
+def restore_site_root_paths_cache(baseline_site_root_paths_cache):
+    cache.set(
+        SITE_ROOT_PATHS_CACHE_KEY,
+        baseline_site_root_paths_cache,
+        3600,
+        version=SITE_ROOT_PATHS_CACHE_VERSION,
+    )
+    yield
+    cache.set(
+        SITE_ROOT_PATHS_CACHE_KEY,
+        baseline_site_root_paths_cache,
+        3600,
+        version=SITE_ROOT_PATHS_CACHE_VERSION,
+    )
 
 
 # Image testing stuff
@@ -209,6 +235,9 @@ def itunes_artwork(image_1px):
 @pytest.fixture()
 def audio(user, m4a_audio, settings):
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    m4a_path = os.path.join(settings.MEDIA_ROOT, "cast_audio", m4a_audio.name)
+    if os.path.exists(m4a_path):
+        os.unlink(m4a_path)
     audio = Audio(user=user, m4a=m4a_audio, title="foobar audio")
     audio.save()
     teardown_path = audio.m4a.path  # save path to unlink if audio.m4a is set to None
