@@ -355,6 +355,17 @@ def test_post_comment_ajax_invalid_content_type_returns_bad_request(client, post
 
 
 @pytest.mark.django_db
+def test_post_comment_ajax_invalid_content_type_without_model_returns_bad_request(client, post):
+    ajax_url = reverse("comments-post-comment-ajax")
+    r = client.post(
+        ajax_url,
+        {"content_type": "cast", "object_pk": str(post.pk)},
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+    assert r.status_code == 400
+
+
+@pytest.mark.django_db
 def test_post_comment_ajax_attribute_error_branch(client, mocker, post):
     ajax_url = reverse("comments-post-comment-ajax")
 
