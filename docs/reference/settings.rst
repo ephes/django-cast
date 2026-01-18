@@ -93,7 +93,15 @@ a name and a display. For instance:
 The display value is the title displayed in the theme selector within the Wagtail
 admin panel. The name corresponds to the theme's base directory inside your templates
 folder. To create a theme named my_theme, make a directory called ``cast/my_theme``
-within your templates folder and place your templates inside. asdf
+within your templates folder and place your templates inside.
+
+CAST_ENABLE_STYLEGUIDE
+======================
+
+Whether to enable the built-in styleguide route (``/styleguide/`` when cast URLs
+are included). Defaults to ``False``. The styleguide supports theme switching via
+``?theme=<slug>`` and falls back to a built-in theme if the requested styleguide
+templates are missing.
 
 ********
 Storages

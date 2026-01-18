@@ -15,3 +15,7 @@ Developer data helpers
 ~~~~~~~~~~~~~~~~~~~~~~
 - `create_user` now reuses existing users to avoid duplicate-username errors during demo setup.
 - `create_audio` now populates an m4a file by default for example content.
+
+Styleguide
+~~~~~~~~~~
+- Added a theme-aware styleguide route with demo data, theme switching, and fallback handling.

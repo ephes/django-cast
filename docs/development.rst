@@ -145,6 +145,28 @@ prebuilt manifests instead:
    development. Keep the relevant ``npm run dev`` process running while
    testing podcast list/detail pages to ensure the player loads.
 
+Styleguide
+----------
+
+The styleguide view renders the design-system components for the active theme.
+The example app enables it by default in ``example_site.settings.dev``.
+
+Open the styleguide in your browser (the path respects any URL prefix used when
+including cast URLs). In the example project this is:
+
+.. code-block:: bash
+
+   http://localhost:8000/cast/styleguide/
+
+Switch themes via query param:
+
+.. code-block:: bash
+
+   http://localhost:8000/cast/styleguide/?theme=bootstrap4
+
+If the requested theme does not provide styleguide templates, the view falls
+back to a built-in theme and shows a warning banner.
+
 Podlove Performance Data
 ------------------------
 
@@ -216,6 +238,11 @@ The test database is reused between test runs for performance. If you've added n
 
    $ rm tests/test_database.sqlite3  # Remove old test database
    $ uv run python manage.py migrate  # Recreate with new migrations (uses tests.settings)
+
+If you see widespread 404s or IntegrityErrors in tests (especially around Wagtail page URLs),
+the reused test database or Wagtail's site-root path cache may be stale. In that case,
+recreate the test database using the steps above to reset the site root path cache and
+avoid leftover pages or slug collisions.
 
 JavaScript Tests
 ----------------
