@@ -111,7 +111,7 @@ def test_get_select_theme_view(client):
     response = client.get(url)
     assert response.status_code == 200
     select_template_name = response.templates[0].name
-    assert select_template_name == "cast/bootstrap4/select_theme.html"
+    assert select_template_name == "cast/select_theme_page.html"
 
 
 @pytest.mark.django_db
