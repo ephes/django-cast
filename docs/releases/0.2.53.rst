@@ -19,3 +19,12 @@ Developer data helpers
 Styleguide
 ~~~~~~~~~~
 - Added a theme-aware styleguide route with demo data, theme switching, and fallback handling.
+- Added dedicated gallery/audio/video sections and seeded threaded comments for better visual coverage.
+- Added a styleguide-only CSS layer to clarify section spacing without touching production templates.
+- Added optional remote media settings for pulling real-world images and transcripts into the styleguide.
+- Reduced the default transcript excerpt length to a few segments for a more compact preview.
+- Allow the styleguide to reference a remote video URL without downloading the file.
+- Added a management command to prefetch styleguide demo media and renditions.
+- Added a toggle to skip styleguide rendition generation during page render.
+- Reduced the default number of transcript segments shown in the styleguide.
+- Fixed the Bootstrap4 styleguide gallery modal by filtering remote gallery blocks to theme-specific markup and tightening the gallery click handling.

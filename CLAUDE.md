@@ -95,6 +95,7 @@ pre-commit run --all-files
 - Test settings: `tests/settings.py`
 - JavaScript tests: Vitest with jsdom
 - Coverage requirements: Configured in `pyproject.toml` and must remain at 100% for the Python test suite.
+- **IMPORTANT**: Do not deliver changes if coverage drops below 100%. Add tests for new code or adjust coverage exclusions only when justified.
 - Run single test: `uv run python commands.py test path.to.test::TestClass::test_method`
 
 ## Code Style

@@ -103,6 +103,27 @@ are included). Defaults to ``False``. The styleguide supports theme switching vi
 ``?theme=<slug>`` and falls back to a built-in theme if the requested styleguide
 templates are missing.
 
+CAST_STYLEGUIDE_REMOTE_MEDIA
+============================
+
+When enabled, the styleguide can fetch real-world media (images, audio, transcripts)
+from configured source URLs. Defaults to ``False``. This is intended for local
+development only.
+
+Related settings:
+
+- ``CAST_STYLEGUIDE_IMAGE_SOURCE_URLS``: list of page URLs to scrape for gallery images.
+- ``CAST_STYLEGUIDE_VIDEO_SOURCE_URL``: page URL to scrape for a video source.
+- ``CAST_STYLEGUIDE_PODCAST_SOURCE_URL``: episode detail URL used to locate audio.
+- ``CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL``: transcript page URL for transcript segments.
+- ``CAST_STYLEGUIDE_IMAGE_LIMIT``: max number of gallery images to import (default ``6``).
+- ``CAST_STYLEGUIDE_REMOTE_TIMEOUT``: network timeout in seconds (default ``8``).
+- ``CAST_STYLEGUIDE_GENERATE_RENDITIONS``: generate missing renditions while building styleguide galleries
+  (default ``False``).
+- ``CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS``: max transcript segments to keep (default ``12``).
+- ``CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS``: max transcript segments to show in the
+  audio preview (default ``2``).
+
 ********
 Storages
 ********

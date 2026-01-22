@@ -99,5 +99,7 @@ example/media
 
 # macOS stuff
 .DS_Store
+# Playwright MCP artifacts
+.playwright-mcp/
 # Added by specsync
 specs

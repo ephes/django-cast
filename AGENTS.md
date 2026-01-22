@@ -31,6 +31,7 @@
 - New behaviors need Pytest coverage under `tests/` with `test_*.py`; mirror module paths for discoverability.
 - Tests run with coverage (`--cov-config=pyproject.toml`).
 - Maintain 100% test coverage for the Python test suite.
+- Do not deliver changes if coverage drops below 100%; add tests or adjust coverage exclusions only when justified.
 - For regression proofs, add focused tests near the bug; prefer fixtures over inline setup to avoid duplication.
 - Use `pytest -k "keyword"` or `just test-one path::node` for fast iteration.
 
