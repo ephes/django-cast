@@ -3,16 +3,6 @@
     {% include "./post_body.html" with render_detail=False page=post %}
     <hr class="my-4">
   {% endfor %}
-  <script>
-  // dunno why this is necessary but it is
-    var curImage = null
-    var modalImage = $('.modal-image')
-    var modalFooter = $('.modal-footer')
-
-    $(document).on('click', '.cast-gallery-modal', function (e) {
-      setModalImage($(e.target))
-    });
-  </script>
 </main>
 
 <footer>

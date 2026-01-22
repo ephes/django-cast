@@ -11,9 +11,8 @@ export default class ImageGalleryBs4 extends HTMLElement {
         this.boundThumbnailClick = this.handleThumbnailClick.bind(this);
         this.boundFooterClick = this.handleFooterClick.bind(this);
         this.boundKeydown = this.handleKeydown.bind(this);
-	}
+    }
     static register(tagName: string):void {
-        console.log("Registering image-gallery-bs4!");
         if ("customElements" in window) {
             customElements.define(tagName || "image-gallery-bs4", ImageGalleryBs4);
         }
@@ -42,6 +41,22 @@ export default class ImageGalleryBs4 extends HTMLElement {
         }
 
         return this.querySelector<HTMLElement>(".modal");
+    }
+
+    private showModal(modal: HTMLElement | null): void {
+        if (!modal) {
+            return;
+        }
+        const jQuery = (window as unknown as { jQuery?: any }).jQuery;
+        if (jQuery && typeof jQuery(modal).modal === "function") {
+            jQuery(modal).modal("show");
+            return;
+        }
+        modal.classList.add("show");
+        modal.style.display = "block";
+        modal.removeAttribute("aria-hidden");
+        modal.setAttribute("aria-modal", "true");
+        document.body.classList.add("modal-open");
     }
 
     private bindModalEvents(modal: HTMLElement): void {
@@ -121,8 +136,6 @@ export default class ImageGalleryBs4 extends HTMLElement {
             console.error("No modal body for modal: ", this);
             return;
         }
-        console.log("modalBody: ", modalBody)
-        // console.log("modalBody parent.parent.parent: ", modalBody.parentNode.parentNode.parentNode);
         const modalFooter = resolvedModal.querySelector(".modal-footer");
         if (!modalFooter) {
             console.error("No modal footer for modal: ", this);
@@ -192,14 +205,21 @@ export default class ImageGalleryBs4 extends HTMLElement {
     }
 
     private handleThumbnailClick(event: Event) {
+        const target = event.target as HTMLElement | null;
+        if (!target) {
+            return;
+        }
+        const link = target.closest("a.cast-gallery-modal") as HTMLElement | null;
+        if (!link || !this.contains(link)) {
+            return;
+        }
         event.preventDefault();
-        const target = event.target as HTMLElement;
-        // Find the img element within the clicked link
-        const link = event.currentTarget as HTMLElement;
+        event.stopPropagation();
         const img = link.querySelector('img');
         if (img) {
             const modal = this.resolveModal(link);
             this.setModalImage(img, modal);
+            this.showModal(modal);
         } else {
             console.error("No img element found in clicked thumbnail");
         }
@@ -222,23 +242,17 @@ export default class ImageGalleryBs4 extends HTMLElement {
     }
 
     connectedCallback() {
-        // Add event listeners to thumbnail links - click -> open modal image
-        let thumbnailLinks = this.querySelectorAll(".cast-gallery-container > a");
-        thumbnailLinks.forEach((link) => {
-            if (!link.classList.contains("event-added")) {
-                link.addEventListener("click", this.boundThumbnailClick);
-                link.classList.add("event-added");
-            }
-        });
+        if (!this.hasAttribute("data-gallery-click-bound")) {
+            this.addEventListener("click", this.boundThumbnailClick);
+            this.setAttribute("data-gallery-click-bound", "true");
+        }
     }
 
     disconnectedCallback() {
-        // Remove event listeners from thumbnail links
-        let thumbnailLinks = this.querySelectorAll(".cast-gallery-container > a");
-        thumbnailLinks.forEach((link) => {
-            link.removeEventListener("click", this.boundThumbnailClick);
-            link.classList.remove("event-added");
-        });
+        if (this.hasAttribute("data-gallery-click-bound")) {
+            this.removeEventListener("click", this.boundThumbnailClick);
+            this.removeAttribute("data-gallery-click-bound");
+        }
         this.cleanupModal();
     }
 }

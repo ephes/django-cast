@@ -1,8 +1,14 @@
 {% extends "../base.html" %}
 {% load django_vite %}
 {% load i18n %}
+{% load static %}
 
 {% block title %}{% translate "Styleguide" %}{% endblock title %}
+
+{% block css %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'cast/css/styleguide.css' %}">
+{% endblock css %}
 
 {% block navigation %}{% endblock navigation %}
 

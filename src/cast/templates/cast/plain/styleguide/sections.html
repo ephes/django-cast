@@ -51,6 +51,32 @@
   {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_media_post render_detail=True repository=styleguide_media_repository template_base_dir=template_base_dir %}
 </section>
 
+<section id="gallery">
+  <h2>{% translate "Gallery" %}</h2>
+  {% for gallery_html in styleguide_gallery_blocks %}
+    {{ gallery_html|safe }}
+  {% endfor %}
+</section>
+
+<section id="audio">
+  <h2>{% translate "Audio" %}</h2>
+  {% include "cast/audio/audio.html" with value=styleguide_audio page=styleguide_media_post render_for_feed=False %}
+  <div class="mt-3">
+    {% include "cast/"|add:template_base_dir|add:"/styleguide/_transcript.html" with styleguide_transcript=styleguide_transcript_excerpt styleguide_episode=None %}
+  </div>
+</section>
+
+<section id="video">
+  <h2>{% translate "Video" %}</h2>
+  <p>
+    {% translate "Intro text to show how a video sits inside a longer narrative post. This should wrap to multiple lines and feel balanced above the player." %}
+  </p>
+  {% include "cast/video/video.html" with value=styleguide_video %}
+  <p>
+    {% translate "Another paragraph after the video to test spacing and vertical rhythm before the next section begins." %}
+  </p>
+</section>
+
 <section id="episode">
   <h2>{% translate "Episode" %}</h2>
   {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_episode render_detail=True repository=styleguide_episode_repository template_base_dir=template_base_dir episode_transcript_url=styleguide_episode_transcript_url %}

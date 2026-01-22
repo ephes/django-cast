@@ -95,3 +95,7 @@ js-build-vite:
 js-build-all:
     just js-build-vite
     just js-build-comments
+
+# Prefetch styleguide demo data and media
+styleguide-prefetch *ARGS:
+    uv run python example/manage.py styleguide_prefetch {{ARGS}}

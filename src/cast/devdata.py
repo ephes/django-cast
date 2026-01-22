@@ -165,10 +165,10 @@ def get_tests_fixture_dir() -> Path:
     return Path(__file__).parent.parent.parent / "tests" / "fixtures"
 
 
-def create_mp4_file(*, fixture_dir: Path = Auto) -> SimpleUploadedFile:
+def create_mp4_file(*, fixture_dir: Path = Auto, fixture_name: str = "test.mp4") -> SimpleUploadedFile:
     if not fixture_dir:  # pragma: no cover
         fixture_dir = get_tests_fixture_dir()
-    with (fixture_dir / "test.mp4").open("rb") as f:
+    with (fixture_dir / fixture_name).open("rb") as f:
         mp4 = f.read()
     simple_mp4 = SimpleUploadedFile(name="test.mp4", content=mp4, content_type="video/mp4")
     return simple_mp4

@@ -1,0 +1,43 @@
+.cast-styleguide {
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.cast-styleguide-header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.cast-styleguide-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.cast-styleguide-content > section {
+  margin-top: 3.5rem;
+  padding-top: 2.5rem;
+  border-top: 1px dashed rgba(0, 0, 0, 0.12);
+}
+
+.cast-styleguide-content > section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.cast-styleguide-content h2 {
+  scroll-margin-top: 5rem;
+}
+
+.cast-styleguide-gallery-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.cast-styleguide-gallery-gap {
+  max-width: 60rem;
+}

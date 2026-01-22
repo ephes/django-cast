@@ -53,15 +53,17 @@ def get_srcset_images_for_slots(
                 if image_format == rendition_filters.original_format:
                     src[image_format] = image.file.url
                 else:
-                    rendition = renditions[f"format-{image_format}"]
-                    src[image_format] = rendition.url
+                    rendition = renditions.get(f"format-{image_format}")
+                    if rendition is not None:
+                        src[image_format] = rendition.url
             srcset = {}
             for image_format in image_formats:
                 if image_format == rendition_filters.original_format:
                     srcset[image_format] = f"{image.file.url} {image.width}w"
                 else:
-                    rendition = renditions[f"format-{image_format}"]
-                    srcset[image_format] = f"{rendition.url} {rendition.width}w"
+                    rendition = renditions.get(f"format-{image_format}")
+                    if rendition is not None:
+                        srcset[image_format] = f"{rendition.url} {rendition.width}w"
             width = rendition_filters.slot_to_fitting_width[slot]
             images_for_slots[slot] = ImageForSlot(Rectangle(width, slot.height), src, srcset)
     return images_for_slots

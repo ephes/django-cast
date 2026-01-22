@@ -33,6 +33,22 @@ def _env_flag(name: str, default: str = "1") -> bool:
 REPO_ROOT = base_settings.BASE_DIR.parent  # Assumes example/ lives inside the repo.
 CAST_VITE_DEV_MODE = _env_flag("CAST_VITE_DEV_MODE", "1")
 CAST_BOOTSTRAP5_VITE_DEV_MODE = _env_flag("CAST_BOOTSTRAP5_VITE_DEV_MODE", "1")
+CAST_STYLEGUIDE_REMOTE_MEDIA = _env_flag("CAST_STYLEGUIDE_REMOTE_MEDIA", "1")
+CAST_STYLEGUIDE_IMAGE_SOURCE_URLS = [
+    "https://wersdoerfer.de/blogs/ephes_blog/weeknotes-2025-11-03-shipping-steel-iq/",
+    "https://wersdoerfer.de/blogs/ephes_blog/weeknotes-2025-08-18/",
+]
+CAST_STYLEGUIDE_VIDEO_SOURCE_URL = "https://wersdoerfer.de/blogs/ephes_blog/weeknotes-2025-02-03/"
+CAST_STYLEGUIDE_PODCAST_SOURCE_URL = "https://python-podcast.de/show/platonismus-und-python-data-class-builders/"
+CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL = (
+    "https://python-podcast.de/show/platonismus-und-python-data-class-builders/transcript/"
+)
+CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS = 12
+CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS = 2
+CAST_STYLEGUIDE_IMAGE_LIMIT = 40
+CAST_STYLEGUIDE_REMOTE_TIMEOUT = 20
+CAST_STYLEGUIDE_GENERATE_RENDITIONS = False
+CAST_STYLEGUIDE_BODY_GALLERY_LIMIT = 2
 
 DJANGO_VITE = {
     "cast": {

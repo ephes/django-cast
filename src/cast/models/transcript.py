@@ -41,16 +41,22 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     def podlove_data(self) -> dict:
         data = {}
         if self.podlove:
-            with self.podlove.open("r") as file:
-                data = json.load(file)
+            try:
+                with self.podlove.open("r") as file:
+                    data = json.load(file)
+            except (FileNotFoundError, OSError):
+                data = {}
         return data
 
     @property
     def dote_data(self) -> dict:
         data = {}
         if self.dote:
-            with self.dote.open("r") as file:
-                data = json.load(file)
+            try:
+                with self.dote.open("r") as file:
+                    data = json.load(file)
+            except (FileNotFoundError, OSError):
+                data = {}
         return data
 
     @property
