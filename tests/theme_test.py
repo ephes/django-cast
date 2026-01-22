@@ -115,6 +115,15 @@ def test_get_select_theme_view(client):
 
 
 @pytest.mark.django_db
+def test_get_select_theme_view_htmx(client):
+    url = reverse("cast:select-theme")
+    response = client.get(url, HTTP_HX_REQUEST="true")
+    assert response.status_code == 200
+    select_template_name = response.templates[0].name
+    assert select_template_name.endswith("/select_theme.html")
+
+
+@pytest.mark.django_db
 def test_post_select_theme_view_invalid(client):
     # Given an invalid theme and a next url
     url = reverse("cast:select-theme")

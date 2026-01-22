@@ -1,4 +1,5 @@
 from typing import cast
+from types import SimpleNamespace
 
 import pytest
 from wagtail.images.blocks import ImageChooserBlock
@@ -133,6 +134,41 @@ def test_get_srcset_images_for_slots_use_original_if_image_too_small():
     # And it should have been converted to avif
     assert image_for_slot.src["avif"] == "https://example.com/test.avif"
     assert image_for_slot.srcset["avif"] == "https://example.com/test.avif 1w"
+
+
+def test_get_srcset_images_for_slots_fallback_uses_renditions(monkeypatch):
+    slot = renditions.Rectangle(Width(100), Height(100))
+
+    class StubFilters:
+        def __init__(self):
+            self.original_format = "jpeg"
+            self.image_formats = ["jpeg", "webp", "png"]
+            self.slots = [slot]
+            self.slot_to_fitting_width = {slot: Width(100)}
+
+        def set_filter_to_url_via_wagtail_renditions(self, _renditions):
+            return None
+
+        def get_image_for_slot(self, _slot):
+            raise ValueError("no fitting image")
+
+    monkeypatch.setattr(
+        renditions.RenditionFilters,
+        "from_wagtail_image_with_type",
+        classmethod(lambda _cls, *_args, **_kwargs: StubFilters()),
+    )
+
+    renditions_map = {
+        "format-webp": SimpleNamespace(url="https://example.com/test.webp", width=Width(120)),
+    }
+    images_for_slots = get_srcset_images_for_slots(
+        cast(AbstractImage, Stub1PxImage()),
+        "gallery",
+        renditions=renditions_map,
+    )
+    image_for_slot = images_for_slots[slot]
+    assert image_for_slot.src["webp"] == "https://example.com/test.webp"
+    assert image_for_slot.srcset["webp"] == "https://example.com/test.webp 120w"
 
 
 class StubBigImage:

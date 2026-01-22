@@ -23,6 +23,9 @@ def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
     response = client.get(reverse("cast:styleguide"))
     assert response.status_code == 200
     assert response.context["styleguide_active_theme"] == "plain"
+    styleguide_audio = response.context["styleguide_audio"]
+    assert styleguide_audio is not None
+    assert styleguide_audio.transcript.podlove is not None
 
     expected_posts = max(6, getattr(settings, "POST_LIST_PAGINATION", 5) + 1)
     assert Blog.objects.filter(slug="styleguide-blog").count() == 1
@@ -32,6 +35,41 @@ def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
     assert response_second.status_code == 200
     assert Blog.objects.filter(slug="styleguide-blog").count() == 1
     assert Post.objects.filter(slug__startswith="styleguide-post").count() == expected_posts
+
+
+@pytest.mark.django_db
+def test_styleguide_seeds_comments_for_media_post(settings, client, site, comments_enabled):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "plain"})
+
+    response = client.get(reverse("cast:styleguide"))
+    assert response.status_code == 200
+
+    from django.contrib.auth import get_user_model
+    from django_comments import get_model as get_comment_model
+
+    media_post = response.context["styleguide_media_post"]
+    comment_model = get_comment_model()
+    assert comment_model.objects.for_model(media_post).count() >= 2
+
+    styleguide_user = get_user_model().objects.get(username=styleguide_view.STYLEGUIDE_USER_NAME)
+    comments = (
+        comment_model.objects.for_model(media_post).filter(user=styleguide_user).order_by("submit_date", "pk").all()
+    )
+    assert len(comments) >= 2
+    comments[0].comment = "Old comment"
+    comments[0].save(update_fields=["comment"])
+    comments[1].comment = "Old reply"
+    comments[1].save(update_fields=["comment"])
+
+    response_second = client.get(reverse("cast:styleguide"))
+    assert response_second.status_code == 200
+
+    refreshed = (
+        comment_model.objects.for_model(media_post).filter(user=styleguide_user).order_by("submit_date", "pk").all()
+    )
+    assert "intentionally longer" in refreshed[0].comment
+    assert "Threaded reply to show hierarchy" in refreshed[1].comment
 
 
 @pytest.mark.django_db
@@ -202,6 +240,30 @@ def test_styleguide_missing_templates_without_warning(monkeypatch, rf):
 
     assert theme.active == "bootstrap4"
     assert theme.warning is None
+
+
+def test_styleguide_extract_cover_image_url():
+    html = '<meta property="og:image" content="/media/cover.jpg">'
+    url = styleguide_view._extract_cover_image_url(html, "https://example.com/show/episode/")
+    assert url == "https://example.com/media/cover.jpg"
+
+
+def test_styleguide_extract_transcript_data_from_section():
+    html = """
+    <section class="transcript-segment">
+      <p class="transcript-meta"><time>00:00:01.000</time></p>
+      <p class="transcript-text">Hello world</p>
+    </section>
+    """
+    data = styleguide_view._extract_transcript_data(html)
+    assert data is not None
+    assert data["transcripts"][0]["text"] == "Hello world"
+
+
+def test_styleguide_extract_podlove_player_api_url():
+    html = '<podlove-player data-url="/api/audios/podlove/82/post/140/"></podlove-player>'
+    url = styleguide_view._extract_podlove_player_api_url(html, "https://python-podcast.de/show/data-science/")
+    assert url == "https://python-podcast.de/api/audios/podlove/82/post/140/"
 
 
 @pytest.mark.django_db

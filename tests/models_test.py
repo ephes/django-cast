@@ -680,6 +680,16 @@ def test_transcript_podlove_data_no_podlove_or_dote():
     assert transcript.podcastindex_data == {}
 
 
+@pytest.mark.django_db
+def test_transcript_data_missing_files(tmp_path, settings):
+    settings.MEDIA_ROOT = tmp_path
+    transcript = Transcript()
+    transcript.podlove.name = "cast_transcript/missing.json"
+    transcript.dote.name = "cast_transcript/missing_dote.json"
+    assert transcript.podlove_data == {}
+    assert transcript.dote_data == {}
+
+
 @pytest.fixture
 def dote():
     return {
