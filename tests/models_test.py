@@ -314,6 +314,7 @@ class TestPostModel:
         overview = html_field.to_representation(Post())
         assert overview == expected_html
         assert mock.call_args[1]["render_detail"] is False
+        assert mock.call_args[1]["render_for_feed"] is True
         assert mock.call_args[1]["escape_html"] is False
         assert mock.call_args[1]["remove_newlines"] is False
 
@@ -325,8 +326,28 @@ class TestPostModel:
         detail = html_field.to_representation(Post())
         assert detail == expected_html
         assert mock.call_args[1]["render_detail"] is True
+        assert mock.call_args[1]["render_for_feed"] is True
         assert mock.call_args[1]["escape_html"] is False
         assert mock.call_args[1]["remove_newlines"] is False
+
+    def test_detail_html_respects_render_for_feed_param(self, mocker, rf):
+        expected_html = "<h1>foo</h1><p>bar</p>"
+        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        html_field = HtmlField(source="*", render_detail=True)
+        html_field._context = {"request": rf.get("/?render_for_feed=false")}
+        detail = html_field.to_representation(Post())
+        assert detail == expected_html
+        assert mock.call_args[1]["render_for_feed"] is False
+
+    def test_detail_html_without_request_uses_default_render_for_feed(self, mocker):
+        expected_html = "<h1>foo</h1><p>bar</p>"
+        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        html_field = HtmlField(source="*", render_detail=True)
+        html_field._context = {"request": None}
+        detail = html_field.to_representation(Post())
+        assert detail == expected_html
+        assert mock.call_args[1]["render_for_feed"] is True
+        assert mock.call_args[1]["request"] is None
 
     @pytest.mark.parametrize(
         "local_template_name, expected_template",

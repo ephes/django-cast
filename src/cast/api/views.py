@@ -301,10 +301,33 @@ class RemoveNullBytesMixin:
 
 
 class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
+    def _extend_known_query_parameters(self) -> None:
+        additional_query_params = PostFilterset.Meta.fields + [
+            "use_post_filter",
+            "date_before",
+            "date_after",
+            "template_base_dir",
+            "render_for_feed",
+            "theme",
+        ]
+        known_query_parameters = cast(set[str], getattr(self, "known_query_parameters", set()))
+        setattr(self, "known_query_parameters", known_query_parameters.union(additional_query_params))
+
+    def _apply_template_base_dir_override(self) -> None:
+        template_base_dir = self.request.GET.get("template_base_dir") or self.request.GET.get("theme")
+        if not template_base_dir:
+            return
+        choices = {slug for slug, _name in get_template_base_dir_choices()}
+        if template_base_dir not in choices:
+            return
+        setattr(self.request, "cast_template_base_dir", template_base_dir)
+        if hasattr(self.request, "_request"):
+            setattr(self.request._request, "cast_template_base_dir", template_base_dir)
+
     def get_filtered_queryset(self) -> QuerySet:
         # allow additional query parameters from PostFilterset + use_post_filter flag
-        additional_query_params = PostFilterset.Meta.fields + ["use_post_filter"] + ["date_before", "date_after"]
-        self.known_query_parameters: set = self.known_query_parameters.union(additional_query_params)
+        self._extend_known_query_parameters()
+        self._apply_template_base_dir_override()
         # remove search parameter from query params because it won't work with PagesAPIViewSet
         # in combination with PostFilterset. But doing full text search on PostFilterset will work.
         original_get_params = self.request.GET.copy()
@@ -317,6 +340,8 @@ class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
         return filterset.qs
 
     def get_queryset(self):
+        self._extend_known_query_parameters()
+        self._apply_template_base_dir_override()
         if self.request.GET.dict().get("use_post_filter", "false") == "true":
             return self.get_filtered_queryset()
         return super().get_queryset()

@@ -110,6 +110,8 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
 
 
 def get_template_base_dir(request: HtmxHttpRequest, pre_selected: str | None) -> str:
+    if (override := getattr(request, "cast_template_base_dir", None)) is not None:
+        return override
     if hasattr(request, "session") and (template_base_dir := request.session.get("template_base_dir")) is not None:
         return template_base_dir
     if pre_selected is not None:

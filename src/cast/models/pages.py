@@ -123,8 +123,18 @@ class HtmlField(Field):
         Pass the request from context to the post's serve method to be able to
         render the post with the correct theme.
         """
+        render_for_feed = True
+        request = self.context.get("request")
+        if request is not None:
+            raw_value = getattr(request, "GET", {}).get("render_for_feed")
+            if raw_value is not None:
+                render_for_feed = str(raw_value).lower() not in {"0", "false", "no"}
         return post.get_description(
-            request=self.context["request"], render_detail=self.render_detail, escape_html=False, remove_newlines=False
+            request=self.context["request"],
+            render_detail=self.render_detail,
+            render_for_feed=render_for_feed,
+            escape_html=False,
+            remove_newlines=False,
         )
 
 
@@ -592,6 +602,7 @@ class Post(Page):
         *,
         request: HttpRequest,
         render_detail: bool = False,
+        render_for_feed: bool = True,
         escape_html: bool = True,
         remove_newlines: bool = True,
         repository: PostDetailRepository | None = None,
@@ -605,7 +616,7 @@ class Post(Page):
             repository = self.get_repository(request, {})
         self._local_template_name = "post_body.html"
         description = self.serve(
-            request, render_detail=render_detail, repository=repository, render_for_feed=True
+            request, render_detail=render_detail, repository=repository, render_for_feed=render_for_feed
         ).rendered_content
         if remove_newlines:
             description = description.replace("\n", "")

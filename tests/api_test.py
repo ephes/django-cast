@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import pytest
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework.request import Request
 
 from cast.api.serializers import AudioPodloveSerializer
 from cast.api.views import (
@@ -309,6 +310,43 @@ def test_wagtail_pages_api_with_post_filter_and_fulltext_search(rf, blog, post):
     viewset.request = request
     queryset = viewset.get_queryset()
     assert len(queryset) == 0
+
+
+@pytest.mark.django_db
+def test_wagtail_pages_api_template_base_dir_override(rf, blog, post):
+    viewset = FilteredPagesAPIViewSet()
+    path = blog.wagtail_api_pages_url
+    request = rf.get(f"{path}?child_of={blog.pk}&type=cast.Post&template_base_dir=plain")
+    viewset.request = request
+    viewset.get_queryset()
+    assert request.cast_template_base_dir == "plain"
+
+
+@pytest.mark.django_db
+def test_wagtail_pages_api_theme_alias_override(rf, blog, post):
+    viewset = FilteredPagesAPIViewSet()
+    path = blog.wagtail_api_pages_url
+    request = rf.get(f"{path}?child_of={blog.pk}&type=cast.Post&theme=plain")
+    viewset.request = request
+    viewset.get_queryset()
+    assert request.cast_template_base_dir == "plain"
+
+
+def test_wagtail_pages_api_template_base_dir_invalid_choice(rf):
+    viewset = FilteredPagesAPIViewSet()
+    request = rf.get("/?template_base_dir=missing-theme")
+    viewset.request = request
+    viewset._apply_template_base_dir_override()
+    assert not hasattr(request, "cast_template_base_dir")
+
+
+def test_wagtail_pages_api_template_base_dir_sets_wrapped_request(rf):
+    viewset = FilteredPagesAPIViewSet()
+    request = Request(rf.get("/?template_base_dir=plain"))
+    viewset.request = request
+    viewset._apply_template_base_dir_override()
+    assert request.cast_template_base_dir == "plain"
+    assert request._request.cast_template_base_dir == "plain"
 
 
 @pytest.mark.django_db

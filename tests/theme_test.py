@@ -10,6 +10,7 @@ from cast.context_processors import DEFAULT_TEMPLATE_BASE_DIR, site_template_bas
 from cast.models.theme import (
     get_required_template_names,
     get_template_base_dir_candidates,
+    get_template_base_dir,
     get_template_base_dir_choices,
     get_template_directories,
 )
@@ -103,6 +104,11 @@ def test_context_processors_get_site_template_base_dir_from_request(rf):
     context = site_template_base_dir(request)
     assert context["cast_site_template_base_dir"] == "plain"
     assert context["cast_base_template"] == "cast/plain/base.html"
+
+
+def test_get_template_base_dir_override(simple_request):
+    simple_request.cast_template_base_dir = "plain"
+    assert get_template_base_dir(simple_request, "bootstrap4") == "plain"
 
 
 @pytest.mark.django_db
