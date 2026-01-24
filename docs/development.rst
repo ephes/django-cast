@@ -114,8 +114,9 @@ Or start Django + both Vite dev servers together:
 
 .. note::
 
-   ``just dev`` will skip the Bootstrap5 Vite server if ``../cast-bootstrap5`` is
-   missing, and the example app will fall back to the built-in ``bootstrap4`` theme.
+   ``just dev`` will skip the Bootstrap5 or cast-vue Vite servers if the sibling
+   repos (``../cast-bootstrap5`` or ``../cast-vue``) are missing, and the example
+   app will fall back to the built-in ``bootstrap4`` theme.
 
 For JavaScript development with hot reloading:
 
@@ -131,6 +132,9 @@ For the Bootstrap5 theme assets (default theme), run its Vite dev server too:
    $ cd ../cast-bootstrap5/javascript
    $ npm run dev
 
+If you have the optional ``cast-vue`` theme installed, run its Vite dev server
+as well (see the cast-vue repository for details).
+
 If you do not want to run Vite, set these environment variables to use the
 prebuilt manifests instead:
 
@@ -138,6 +142,7 @@ prebuilt manifests instead:
 
    $ export CAST_VITE_DEV_MODE=0
    $ export CAST_BOOTSTRAP5_VITE_DEV_MODE=0
+   $ export CAST_VUE_VITE_DEV_MODE=0
 
 .. note::
 

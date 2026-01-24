@@ -1,4 +1,5 @@
 import os
+import sys
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -31,8 +32,19 @@ def _env_flag(name: str, default: str = "1") -> bool:
 
 
 REPO_ROOT = base_settings.BASE_DIR.parent  # Assumes example/ lives inside the repo.
+SIBLING_ROOT = REPO_ROOT.parent
+
+
+def _add_repo_to_path(repo_path: Path) -> None:
+    if repo_path.is_dir():
+        sys.path.insert(0, str(repo_path))
+
+
+_add_repo_to_path(SIBLING_ROOT / "cast-bootstrap5")
+_add_repo_to_path(SIBLING_ROOT / "cast-vue")
 CAST_VITE_DEV_MODE = _env_flag("CAST_VITE_DEV_MODE", "1")
 CAST_BOOTSTRAP5_VITE_DEV_MODE = _env_flag("CAST_BOOTSTRAP5_VITE_DEV_MODE", "1")
+CAST_VUE_VITE_DEV_MODE = _env_flag("CAST_VUE_VITE_DEV_MODE", "1")
 CAST_STYLEGUIDE_REMOTE_MEDIA = _env_flag("CAST_STYLEGUIDE_REMOTE_MEDIA", "1")
 CAST_STYLEGUIDE_IMAGE_SOURCE_URLS = [
     "https://wersdoerfer.de/blogs/ephes_blog/weeknotes-2025-11-03-shipping-steel-iq/",
@@ -59,6 +71,8 @@ DJANGO_VITE = {
     }
 }
 
+CAST_CUSTOM_THEMES: list[tuple[str, str]] = []
+
 if find_spec("cast_bootstrap5") is not None:
     import cast_bootstrap5
 
@@ -70,7 +84,7 @@ if find_spec("cast_bootstrap5") is not None:
     )
     CRISPY_TEMPLATE_PACK = "bootstrap5"
     CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
-    CAST_CUSTOM_THEMES = [("bootstrap5", "Bootstrap 5")]
+    CAST_CUSTOM_THEMES.append(("bootstrap5", "Bootstrap 5"))
 
     bootstrap5_manifest = (
         Path(cast_bootstrap5.__file__).resolve().parent / "static" / "cast_bootstrap5" / "vite" / "manifest.json"
@@ -80,6 +94,24 @@ if find_spec("cast_bootstrap5") is not None:
         "dev_server_port": 5174,
         "static_url_prefix": "" if CAST_BOOTSTRAP5_VITE_DEV_MODE else "cast_bootstrap5/vite",
         "manifest_path": bootstrap5_manifest,
+    }
+
+if find_spec("cast_vue") is not None:
+    import cast_vue
+
+    INSTALLED_APPS.extend(  # noqa
+        [
+            "cast_vue.apps.CastVueConfig",
+        ]
+    )
+    CAST_CUSTOM_THEMES.append(("vue", "Cast Vue"))
+
+    vue_manifest = Path(cast_vue.__file__).resolve().parent / "static" / "cast_vue" / "vite" / "manifest.json"
+    DJANGO_VITE["cast_vue"] = {
+        "dev_mode": CAST_VUE_VITE_DEV_MODE,
+        "dev_server_port": 5175,
+        "static_url_prefix": "" if CAST_VUE_VITE_DEV_MODE else "cast_vue/vite",
+        "manifest_path": vue_manifest,
     }
 
 
