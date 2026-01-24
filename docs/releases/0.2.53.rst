@@ -37,3 +37,4 @@ Styleguide
 Themes
 ~~~~~~
 - Allow `?theme=` or `?template_base_dir=` to temporarily override the active theme for a request.
+- Render the theme selector in Bootstrap4 navigation and pass selector context from blog pages.

@@ -304,6 +304,8 @@ class Blog(Page):
         context["has_selectable_themes"] = True
         context["parameters"] = self.get_other_get_params(get_params)
         context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
+        context["template_base_dir_choices"] = context["theme_form"].fields["template_base_dir"].choices  # type: ignore
+        context["next_url"] = request.get_full_path()
         return context
 
     def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexRepository:

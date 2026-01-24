@@ -34,6 +34,9 @@
                   <a class="nav-link" href="{{ link }}">{{ text }}</a>
                 </li>
               {% endfor %}
+              {% if has_selectable_themes %}
+                {% include "./select_theme.html" %}
+              {% endif %}
             </ul>
           </div>
         </nav>
