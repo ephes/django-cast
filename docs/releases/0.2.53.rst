@@ -28,3 +28,8 @@ Styleguide
 - Added a toggle to skip styleguide rendition generation during page render.
 - Reduced the default number of transcript segments shown in the styleguide.
 - Fixed the Bootstrap4 styleguide gallery modal by filtering remote gallery blocks to theme-specific markup and tightening the gallery click handling.
+- Added styleguide templates and example settings to preview the cast-vue theme when installed.
+- Allowed Wagtail API pages requests to override template base dir and render-for-feed flags for the cast-vue styleguide preview.
+- Ensure styleguide-rendered galleries generate missing renditions even when remote gallery HTML is unavailable.
+- Ensure the styleguide media post renders gallery thumbnails by generating missing renditions.
+- Refresh styleguide media post renditions in the repository so Bootstrap5 gallery thumbnails render correctly.
