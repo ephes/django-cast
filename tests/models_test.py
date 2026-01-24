@@ -424,6 +424,11 @@ class TestPostModel:
         )
         assert episode.podlove_players == []
 
+    def test_episode_podlove_players_with_unsaved_audio(self, podcast):
+        audio = Audio(user=podcast.owner, title="unsaved audio")
+        episode = Episode(title="draft episode", slug="draft-episode", owner=podcast.owner, podcast_audio=audio)
+        assert episode.podlove_players == []
+
     def test_episode_podlove_players_deduplicates_body_audio(self, podcast, audio, body_with_audio):
         episode = EpisodeFactory(
             owner=podcast.owner,
