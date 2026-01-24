@@ -127,6 +127,14 @@ How to Change the Theme for an Individual User
 The theme selection for an individual user is stored in `request.session`
 and does overwrite blog and site level theme settings.
 
+You can also override the theme per request via query parameters:
+
+* `?theme=<slug>`
+* `?template_base_dir=<slug>`
+
+These overrides are validated against the available theme choices and do not
+persist to the session.
+
 JSON-Api
 --------
 

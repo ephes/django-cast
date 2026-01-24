@@ -111,6 +111,30 @@ def test_get_template_base_dir_override(simple_request):
     assert get_template_base_dir(simple_request, "bootstrap4") == "plain"
 
 
+def test_get_template_base_dir_query_param_overrides_session(rf):
+    request = rf.get("/?theme=plain")
+    request.session = {"template_base_dir": "bootstrap4"}
+    assert get_template_base_dir(request, "bootstrap4") == "plain"
+
+
+def test_get_template_base_dir_template_param_overrides_session(rf):
+    request = rf.get("/?template_base_dir=plain")
+    request.session = {"template_base_dir": "bootstrap4"}
+    assert get_template_base_dir(request, "bootstrap4") == "plain"
+
+
+def test_get_template_base_dir_override_still_wins_over_query_param(simple_request):
+    simple_request.cast_template_base_dir = "plain"
+    simple_request.GET = {"theme": "bootstrap4"}
+    assert get_template_base_dir(simple_request, "bootstrap4") == "plain"
+
+
+def test_get_template_base_dir_ignores_invalid_query_param(rf):
+    request = rf.get("/?template_base_dir=missing-theme")
+    request.session = {"template_base_dir": "plain"}
+    assert get_template_base_dir(request, "bootstrap4") == "plain"
+
+
 @pytest.mark.django_db
 def test_get_select_theme_view(client):
     url = reverse("cast:select-theme")

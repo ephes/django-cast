@@ -33,3 +33,7 @@ Styleguide
 - Ensure styleguide-rendered galleries generate missing renditions even when remote gallery HTML is unavailable.
 - Ensure the styleguide media post renders gallery thumbnails by generating missing renditions.
 - Refresh styleguide media post renditions in the repository so Bootstrap5 gallery thumbnails render correctly.
+
+Themes
+~~~~~~
+- Allow `?theme=` or `?template_base_dir=` to temporarily override the active theme for a request.
