@@ -1,0 +1,42 @@
+{% load i18n %}
+
+<article class="transcript">
+  <header>
+    <h3>
+      {% if styleguide_episode %}
+        {% blocktrans with title=styleguide_episode.title %}Transcript: {{ title }}{% endblocktrans %}
+      {% else %}
+        {% translate "Transcript" %}
+      {% endif %}
+    </h3>
+    {% if styleguide_episode %}
+      <p>
+        <time datetime="{{ styleguide_episode.visible_date|date:'c' }}">{{ styleguide_episode.visible_date|date }}</time>
+        · <a href="{{ styleguide_episode.page_url|default:styleguide_episode.url }}">{% translate "Back to episode" %}</a>
+      </p>
+      <p>
+        {% translate "Full episode transcript. Timestamps refer to the audio playback." %}
+      </p>
+    {% endif %}
+  </header>
+  {% if styleguide_transcript.transcripts %}
+    {% for segment in styleguide_transcript.transcripts %}
+      <section class="transcript-segment">
+        <p class="transcript-meta">
+          {% if segment.speaker %}
+            <strong class="transcript-speaker">{{ segment.speaker }}</strong>
+          {% endif %}
+          {% if segment.start %}
+            <time datetime="{{ segment.start }}">{{ segment.start }}</time>
+          {% endif %}
+        </p>
+        <p class="transcript-text">{{ segment.text }}</p>
+      </section>
+      {% if not forloop.last %}
+        <hr>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    <p>{% translate "No transcript segments available." %}</p>
+  {% endif %}
+</article>

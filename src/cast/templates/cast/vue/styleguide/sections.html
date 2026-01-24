@@ -1,0 +1,117 @@
+{% load i18n %}
+{% load comments %}
+
+<section id="typography">
+  <h2>{% translate "Typography" %}</h2>
+  <p><strong>{% translate "Lead" %}:</strong> {% translate "Sample paragraph text for layout preview." %}</p>
+  <p>
+    {% translate "Body text with" %}
+    <a href="#">{% translate "inline link" %}</a>,
+    <strong>{% translate "emphasis" %}</strong>,
+    <em>{% translate "italics" %}</em>,
+    <code>code</code>.
+  </p>
+  <ul>
+    <li>{% translate "Unordered list item" %}</li>
+    <li>{% translate "Another list item" %}</li>
+  </ul>
+  <ol>
+    <li>{% translate "Ordered list item" %}</li>
+    <li>{% translate "Second ordered item" %}</li>
+  </ol>
+  <blockquote>
+    <p>{% translate "Blockquote sample for editorial layouts." %}</p>
+    <cite>{% translate "Attribution" %}</cite>
+  </blockquote>
+</section>
+
+<section id="buttons">
+  <h2>{% translate "Buttons & links" %}</h2>
+  <p>
+    <a href="#">{% translate "Primary link" %}</a>
+    <button type="button">{% translate "Button" %}</button>
+    <button type="button" disabled>{% translate "Disabled" %}</button>
+  </p>
+</section>
+
+<section id="forms">
+  <h2>{% translate "Forms" %}</h2>
+  <form action="{{ blog.url }}" method="get">
+    {{ filterset.form.as_p }}
+    <button type="submit">{% translate "Search" %}</button>
+  </form>
+</section>
+
+<section id="post-list">
+  <h2>{% translate "Post list" %}</h2>
+  <div id="paging-area">
+    {% include "cast/"|add:template_base_dir|add:"/_list_of_posts_and_paging_controls.html" %}
+  </div>
+</section>
+
+<section id="content-blocks">
+  <h2>{% translate "Content blocks" %}</h2>
+  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_media_post render_detail=True repository=styleguide_media_repository template_base_dir=template_base_dir %}
+</section>
+
+<section id="gallery">
+  <h2>{% translate "Gallery" %}</h2>
+  {% for gallery_html in styleguide_gallery_blocks %}
+    {{ gallery_html|safe }}
+  {% endfor %}
+</section>
+
+<section id="audio">
+  <h2>{% translate "Audio" %}</h2>
+  {% include "cast/audio/audio.html" with value=styleguide_audio page=styleguide_media_post render_for_feed=False %}
+  <div>
+    {% include "cast/"|add:template_base_dir|add:"/styleguide/_transcript.html" with styleguide_transcript=styleguide_transcript_excerpt styleguide_episode=None %}
+  </div>
+</section>
+
+<section id="video">
+  <h2>{% translate "Video" %}</h2>
+  <p>
+    {% translate "Intro text to show how a video sits inside a longer narrative post. This should wrap to multiple lines and feel balanced above the player." %}
+  </p>
+  {% include "cast/video/video.html" with value=styleguide_video %}
+  <p>
+    {% translate "Another paragraph after the video to test spacing and vertical rhythm before the next section begins." %}
+  </p>
+</section>
+
+<section id="episode">
+  <h2>{% translate "Episode" %}</h2>
+  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_episode render_detail=True repository=styleguide_episode_repository template_base_dir=template_base_dir episode_transcript_url=styleguide_episode_transcript_url %}
+</section>
+
+<section id="transcript">
+  <h2>{% translate "Transcript" %}</h2>
+  {% include "cast/"|add:template_base_dir|add:"/styleguide/_transcript.html" %}
+</section>
+
+<section id="comments">
+  <h2>{% translate "Comments" %}</h2>
+  {% if styleguide_comments_enabled %}
+    {% render_comment_list for styleguide_media_post %}
+    {% render_comment_form for styleguide_media_post %}
+  {% else %}
+    <p>{% translate "Comments are disabled. Enable CAST_COMMENTS_ENABLED to preview the comment UI." %}</p>
+  {% endif %}
+</section>
+
+<section id="errors">
+  <h2>{% translate "Error pages" %}</h2>
+  <div>
+    {% include "cast/errors/error_content.html" with title="Bad Request" heading="Bad request!" message="Something in your request was just not right." %}
+  </div>
+  <div>
+    {% include "cast/errors/error_content.html" with title="Permission Denied" heading="Permission Denied!" message="Authorization failed." %}
+  </div>
+  <div>
+    {% include "cast/errors/error_content.html" with title="Page not found" heading="Page not found" message="This is not the page you were looking for." %}
+  </div>
+  <div>
+    {% include "cast/errors/error_content.html" with title="Server Error" heading="Ooops!!! 500" subheading="Looks like something went wrong!" message="We track these errors automatically, but if the problem persists feel free to contact us. In the meantime, try refreshing." %}
+  </div>
+</section>

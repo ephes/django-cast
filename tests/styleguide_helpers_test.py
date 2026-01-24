@@ -519,7 +519,7 @@ def test_styleguide_gallery_repository_and_blocks(monkeypatch):
     rendered = []
 
     def fake_render(**_kwargs):
-        rendered.append("block")
+        rendered.append(_kwargs.get("ensure_renditions"))
         return "<block/>"
 
     monkeypatch.setattr(styleguide_view, "_render_gallery_block", fake_render)
@@ -533,7 +533,7 @@ def test_styleguide_gallery_repository_and_blocks(monkeypatch):
         limit=None,
     )
     assert len(result) == 2
-    assert len(rendered) == 2
+    assert rendered == [True, True]
 
     result_limited = styleguide_view._ensure_styleguide_gallery_blocks(
         blocks,
@@ -544,6 +544,41 @@ def test_styleguide_gallery_repository_and_blocks(monkeypatch):
         limit=1,
     )
     assert result_limited == ["<image-gallery-bs4>ok</image-gallery-bs4>"]
+
+
+@pytest.mark.django_db
+def test_styleguide_render_gallery_block_uses_default_renditions(monkeypatch):
+    image = create_image()
+    repository = SimpleNamespace(renditions_for_posts={})
+    called = {}
+
+    def fake_generate():
+        called["generated"] = True
+        return False
+
+    def fake_gallery_repository(_repo, _images, *, ensure_renditions):
+        called["ensure_renditions"] = ensure_renditions
+        return SimpleNamespace(renditions_for_posts={})
+
+    class FakeBlock:
+        def render(self, _value, context):
+            called["context"] = context
+            return "<block/>"
+
+    import cast.blocks as blocks
+
+    monkeypatch.setattr(styleguide_view, "_styleguide_generate_renditions", fake_generate)
+    monkeypatch.setattr(styleguide_view, "_styleguide_gallery_repository", fake_gallery_repository)
+    monkeypatch.setattr(blocks, "GalleryBlockWithLayout", FakeBlock)
+
+    html = styleguide_view._render_gallery_block(
+        images=[image],
+        repository=repository,
+        template_base_dir="bootstrap4",
+    )
+    assert called["generated"] is True
+    assert called["ensure_renditions"] is False
+    assert html == "<block/>"
 
 
 @pytest.mark.django_db
@@ -580,6 +615,28 @@ def test_styleguide_gallery_blocks_handles_empty_galleries():
         limit=None,
     )
     assert result == []
+
+
+@pytest.mark.django_db
+def test_styleguide_find_media_post_prefers_media(post, audio):
+    from tests.factories import PostFactory
+
+    media_post = PostFactory(
+        owner=post.owner,
+        parent=post.blog,
+        title="media post",
+        slug="media-post",
+        body=post.body,
+    )
+    media_post.audios.add(audio)
+    selected = styleguide_view._styleguide_find_media_post([post, media_post], fallback=post)
+    assert selected.pk == media_post.pk
+
+
+@pytest.mark.django_db
+def test_styleguide_find_media_post_falls_back(post, post_in_podcast):
+    selected = styleguide_view._styleguide_find_media_post([post], fallback=post_in_podcast)
+    assert selected.pk == post_in_podcast.pk
 
 
 def test_styleguide_remote_media_flag(settings):
@@ -934,6 +991,70 @@ def test_styleguide_context_uses_pagination_object_list(settings):
 
     context = styleguide_view._styleguide_context(data, request, "plain")
     assert context["styleguide_media_post"].pk == data.posts[0].pk
+
+
+@pytest.mark.django_db
+def test_styleguide_context_generates_media_post_renditions(settings, monkeypatch):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    factory = RequestFactory()
+    request = factory.get("/cast/styleguide/")
+
+    data = styleguide_view._build_styleguide_data(request)
+    called = {}
+
+    def fake_create(posts):
+        called["posts"] = list(posts)
+
+    monkeypatch.setattr(styleguide_view, "create_missing_renditions_for_posts", fake_create)
+    context = styleguide_view._styleguide_context(data, request, "plain")
+    assert called["posts"] == [context["styleguide_media_post"]]
+
+
+@pytest.mark.django_db
+def test_styleguide_context_refreshes_media_post_renditions(settings, monkeypatch):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    factory = RequestFactory()
+    request = factory.get("/cast/styleguide/")
+
+    data = styleguide_view._build_styleguide_data(request)
+    refreshed = {123: ["sentinel"]}
+
+    monkeypatch.setattr(styleguide_view, "create_missing_renditions_for_posts", lambda _posts: None)
+    monkeypatch.setattr(
+        styleguide_view.Post,
+        "get_all_renditions_from_queryset",
+        staticmethod(lambda _posts: refreshed),
+    )
+
+    styleguide_view._styleguide_context(data, request, "plain")
+    assert data.blog_repository.renditions_for_posts[123] == ["sentinel"]
+
+
+@pytest.mark.django_db
+def test_styleguide_context_skips_empty_renditions_refresh(settings, monkeypatch):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    factory = RequestFactory()
+    request = factory.get("/cast/styleguide/")
+
+    data = styleguide_view._build_styleguide_data(request)
+    called = {}
+
+    class TrackingDict(dict):
+        def update(self, *args, **kwargs):
+            called["update"] = True
+            return super().update(*args, **kwargs)
+
+    data.blog_repository.renditions_for_posts = TrackingDict(data.blog_repository.renditions_for_posts)
+
+    monkeypatch.setattr(styleguide_view, "create_missing_renditions_for_posts", lambda _posts: None)
+    monkeypatch.setattr(
+        styleguide_view.Post,
+        "get_all_renditions_from_queryset",
+        staticmethod(lambda _posts: {}),
+    )
+
+    styleguide_view._styleguide_context(data, request, "plain")
+    assert "update" not in called
 
 
 @pytest.mark.django_db

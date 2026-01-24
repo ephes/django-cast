@@ -38,6 +38,29 @@ def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
 
 
 @pytest.mark.django_db
+def test_styleguide_vue_theme_builds_payload(settings, rf, site, monkeypatch):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    settings.CAST_CUSTOM_THEMES = [("vue", "Vue")]
+    TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "plain"})
+
+    captured = {}
+
+    def fake_render(_request, _template, context):
+        captured["context"] = context
+        return styleguide_view.HttpResponse("ok")
+
+    monkeypatch.setattr(styleguide_view, "render", fake_render)
+
+    request = rf.get(f"{reverse('cast:styleguide')}?theme=vue")
+    response = styleguide_view.styleguide(request)
+    assert response.status_code == 200
+    assert captured["context"]["styleguide_active_theme"] == "vue"
+    payload = captured["context"]["styleguide_vue_payload"]
+    assert payload["active_theme"] == "vue"
+    assert payload["media_post_slug"]
+
+
+@pytest.mark.django_db
 def test_styleguide_seeds_comments_for_media_post(settings, client, site, comments_enabled):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "plain"})

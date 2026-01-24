@@ -9,9 +9,9 @@
       </p>
     </div>
 
-    <form method="get" class="cast-styleguide-theme-switcher">
+    <form method="get" action="{% url 'cast:styleguide' %}" class="cast-styleguide-theme-switcher">
       <label for="styleguide-theme">{% translate "Theme" %}</label>
-      <select name="theme" id="styleguide-theme">
+      <select name="theme" id="styleguide-theme" onchange="this.form.submit()">
         {% for theme in styleguide_theme_choices %}
           <option value="{{ theme.slug }}" {% if theme.slug == styleguide_active_theme %}selected{% endif %}>
             {{ theme.name }}

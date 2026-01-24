@@ -1,0 +1,27 @@
+{% extends "../base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% translate "Styleguide" %}{% endblock title %}
+
+{% block vuejs-data %}
+  data-blog-url="{{ blog.url }}"
+  data-csrf-token="{{ csrf_token }}"
+  data-blog-id="{{ blog.pk }}"
+  data-pagination-page-size="{{ blog.pagination_page_size }}"
+  data-wagtail-api-pages-url="{{ request.scheme }}://{{ request.get_host }}{{ blog.wagtail_api_pages_url }}"
+  data-api-facet-counts-url="{{ request.scheme }}://{{ request.get_host }}{{ blog.facet_counts_api_url }}"
+  data-post-comment-url="{{ request.scheme }}://{{ request.get_host }}{{ blog.comment_post_url }}"
+  data-api-podlove-player-config-url="{{ request.scheme }}://{{ request.get_host }}{{ blog.podlove_player_config_url }}"
+  data-api-theme-list-url="{{ request.scheme }}://{{ request.get_host }}{{ blog.theme_list_api_url }}"
+  data-api-theme-update-url="{{ request.scheme }}://{{ request.get_host }}{{ blog.theme_update_api_url }}"
+  data-vue-route-name="Styleguide"
+  data-page-type="styleguide"
+  data-styleguide-url="{{ styleguide_vue_payload.styleguide_url }}"
+{% endblock vuejs-data %}
+
+{% block main %}
+  <link rel="stylesheet" href="{% static 'cast/css/styleguide.css' %}">
+  {{ styleguide_vue_payload|json_script:"cast-vue-styleguide-data" }}
+  <div id="app"></div>
+{% endblock main %}

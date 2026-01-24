@@ -54,6 +54,7 @@ from cast.models import (
 )
 from cast.models.image_renditions import (
     create_missing_renditions_for_images,
+    create_missing_renditions_for_posts,
     get_obsolete_and_missing_rendition_strings,
 )
 from cast.models.repository import BlogIndexRepository
@@ -173,7 +174,7 @@ def styleguide(request: HtmxHttpRequest) -> HttpResponse:
     styleguide_data = _build_styleguide_data(request)
 
     styleguide_sections_template = f"cast/{theme.active}/styleguide/sections.html"
-    context = {
+    context: dict[str, Any] = {
         "template_base_dir": theme.active,
         "styleguide_theme_choices": theme.choices,
         "styleguide_active_theme": theme.active,
@@ -185,6 +186,8 @@ def styleguide(request: HtmxHttpRequest) -> HttpResponse:
         "styleguide_query_params": _query_params_without_theme(request),
     }
     context.update(_styleguide_context(styleguide_data, request, theme.active))
+    if theme.active == "vue":
+        context["styleguide_vue_payload"] = _styleguide_vue_payload(request, theme, context)
 
     request.cast_site_template_base_dir = theme.active
     return render(request, f"cast/{theme.active}/styleguide/index.html", context)
@@ -659,13 +662,21 @@ def _ensure_podlove_transcript(audio: Audio, data: dict[str, Any]) -> Transcript
     return transcript
 
 
-def _render_gallery_block(*, images: list[Image], repository: BlogIndexRepository, template_base_dir: str) -> str:
+def _render_gallery_block(
+    *,
+    images: list[Image],
+    repository: BlogIndexRepository,
+    template_base_dir: str,
+    ensure_renditions: bool | None = None,
+) -> str:
     from cast.blocks import GalleryBlockWithLayout
 
+    if ensure_renditions is None:
+        ensure_renditions = _styleguide_generate_renditions()
     gallery_repository = _styleguide_gallery_repository(
         repository,
         images,
-        ensure_renditions=_styleguide_generate_renditions(),
+        ensure_renditions=ensure_renditions,
     )
     block = GalleryBlockWithLayout()
     value = {"layout": "default", "gallery": images}
@@ -816,6 +827,7 @@ def _ensure_styleguide_gallery_blocks(
                     images=list(gallery.images.all()),
                     repository=repository,
                     template_base_dir=template_base_dir,
+                    ensure_renditions=True,
                 )
             )
     if len(gallery_blocks) < minimum:
@@ -827,6 +839,7 @@ def _ensure_styleguide_gallery_blocks(
                     images=list(gallery.images.all()),
                     repository=repository,
                     template_base_dir=template_base_dir,
+                    ensure_renditions=True,
                 )
             )
     if limit is not None:
@@ -1330,7 +1343,11 @@ def _styleguide_context(
     pagination_context = blog_repository.pagination_context
     posts = styleguide_data.posts
     object_list = pagination_context.get("object_list") or posts
-    media_post = object_list[0]
+    media_post = _styleguide_find_media_post(posts, fallback=object_list[0])
+    create_missing_renditions_for_posts(iter([media_post]))
+    refreshed_renditions = Post.get_all_renditions_from_queryset([media_post])
+    if refreshed_renditions:
+        blog_repository.renditions_for_posts.update(refreshed_renditions)
     episode = styleguide_data.episode
 
     for page in [media_post, episode]:
@@ -1394,3 +1411,32 @@ def _styleguide_context(
     }
     context.update(pagination_context)
     return context
+
+
+def _styleguide_vue_payload(
+    request: HtmxHttpRequest, theme: StyleguideTheme, context: dict[str, Any]
+) -> dict[str, Any]:
+    media_post = context.get("styleguide_media_post")
+    episode = context.get("styleguide_episode")
+    return {
+        "styleguide_url": request.path,
+        "theme_choices": theme.choices,
+        "active_theme": theme.active,
+        "active_label": theme.active_label,
+        "warning": theme.warning,
+        "query_params": _query_params_without_theme(request),
+        "media_post_slug": getattr(media_post, "slug", ""),
+        "episode_slug": getattr(episode, "slug", ""),
+    }
+
+
+def _styleguide_find_media_post(posts: list[Post], fallback: Post) -> Post:
+    for candidate in posts:
+        if (
+            candidate.audios.exists()
+            or candidate.galleries.exists()
+            or candidate.images.exists()
+            or candidate.videos.exists()
+        ):
+            return candidate
+    return fallback
