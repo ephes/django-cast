@@ -836,6 +836,23 @@ class Episode(Post):
                 return request.build_absolute_uri(relative_url)
         return None
 
+    @property
+    def podlove_players(self) -> list[tuple[str, str]]:
+        players = super().podlove_players
+        podcast_audio = self.podcast_audio
+        if podcast_audio is None:
+            return players
+        from .audio import Audio
+
+        podcast_audio = cast(Audio, podcast_audio)
+        if podcast_audio.pk is None:
+            return players
+        if podcast_audio.pk in self.media_lookup.get("audio", {}):
+            return players
+        element_id = f"#audio_{podcast_audio.pk}"
+        players.append((element_id, podcast_audio.get_podlove_url(self.pk)))
+        return players
+
     def get_podcastindex_transcript_url(
         self, request: HtmxHttpRequest, repository: EpisodeFeedRepository
     ) -> str | None:

@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from cast import appsettings
 from cast.devdata import create_transcript
-from cast.models import Blog, Podcast
+from cast.models import Audio, Blog, Podcast
 from cast.models.pages import (
     PODLOVE_POSTER_RENDITION_SPEC,
     SOCIAL_COVER_RENDITION_SPEC,
@@ -22,6 +22,7 @@ from cast.models.transcript import (
     time_to_seconds,
 )
 from cast.models.video import Video
+from tests.factories import EpisodeFactory
 
 
 class TestVideoModel:
@@ -405,6 +406,51 @@ class TestPostModel:
         assert post.podlove_players == [
             (f"#audio_{audio.pk}", audio.get_podlove_url(post.pk)),
         ]
+
+    def test_episode_podlove_players_includes_podcast_audio(self, episode):
+        audio = episode.podcast_audio
+        assert episode.podlove_players == [
+            (f"#audio_{audio.pk}", audio.get_podlove_url(episode.pk)),
+        ]
+
+    def test_episode_podlove_players_without_podcast_audio(self, podcast, body):
+        episode = EpisodeFactory(
+            owner=podcast.owner,
+            parent=podcast,
+            title="test podcast episode",
+            slug="test-podcast-entry-no-audio",
+            podcast_audio=None,
+            body=body,
+        )
+        assert episode.podlove_players == []
+
+    def test_episode_podlove_players_deduplicates_body_audio(self, podcast, audio, body_with_audio):
+        episode = EpisodeFactory(
+            owner=podcast.owner,
+            parent=podcast,
+            title="test podcast episode",
+            slug="test-podcast-entry-with-audio",
+            podcast_audio=audio,
+            body=body_with_audio,
+        )
+        assert episode.podlove_players == [
+            (f"#audio_{audio.pk}", audio.get_podlove_url(episode.pk)),
+        ]
+
+    def test_episode_podlove_players_includes_body_and_podcast_audio(self, podcast, audio, body_with_audio):
+        other_audio = Audio(user=podcast.owner, title="other audio")
+        other_audio.save()
+        episode = EpisodeFactory(
+            owner=podcast.owner,
+            parent=podcast,
+            title="test podcast episode",
+            slug="test-podcast-entry-with-two-audios",
+            podcast_audio=other_audio,
+            body=body_with_audio,
+        )
+        assert len(episode.podlove_players) == 2
+        player_ids = {element_id for element_id, _url in episode.podlove_players}
+        assert player_ids == {f"#audio_{audio.pk}", f"#audio_{other_audio.pk}"}
 
     def test_get_context_owner_none(self, rf, post):
         """owner can be None when editing a draft."""
