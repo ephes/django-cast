@@ -63,7 +63,7 @@ describe('PodlovePlayerElement', () => {
     const element = document.createElement('podlove-player');
     document.body.appendChild(element);
 
-    const container = element.shadowRoot.querySelector('.podlove-player-container');
+    const container = element.querySelector('.podlove-player-container');
     expect(container).not.toBeNull();
   });
 
@@ -109,7 +109,7 @@ describe('PodlovePlayerElement', () => {
 
     // Check that podlovePlayer was called
     expect(global.podlovePlayer).toHaveBeenCalledWith(
-      element.shadowRoot.querySelector(`#${element.getAttribute('id')}`),
+      `#${element.getAttribute('id')}-player`,
       '/api/audios/podlove/63/post/75/',
       '/api/audios/player_config/'
     );
@@ -175,11 +175,11 @@ describe('PodlovePlayerElement', () => {
 
     expect(observeSpy).not.toHaveBeenCalled();
 
-    const button = element.shadowRoot.querySelector('.podlove-player-button') as HTMLButtonElement;
+    const button = element.querySelector('.podlove-player-button') as HTMLButtonElement;
     button.click();
 
     expect(global.podlovePlayer).toHaveBeenCalledWith(
-      element.shadowRoot.querySelector(`#${element.getAttribute('id')}`),
+      `#${element.getAttribute('id')}-player`,
       '/api/audios/podlove/63/post/75/',
       '/api/audios/player_config/'
     );
@@ -218,7 +218,7 @@ describe('PodlovePlayerElement', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const errorMessage = element.shadowRoot?.querySelector('.podlove-player-error') as HTMLElement | null;
+    const errorMessage = element.querySelector('.podlove-player-error') as HTMLElement | null;
     expect(errorMessage).not.toBeNull();
     expect(errorMessage?.hidden).toBe(false);
 

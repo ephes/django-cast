@@ -1,6 +1,6 @@
 // podlove-player.ts
 declare const podlovePlayer:
-  | ((playerDiv: HTMLElement, url: string, configUrl: string) => void)
+  | ((playerTarget: HTMLElement | string, url: string, configUrl: string) => void)
   | undefined;
 
 let embedScriptPromise: Promise<void> | null = null;
@@ -19,6 +19,7 @@ const LOAD_ERROR_TEXT = "Unable to load the audio player. Please try again.";
 const EMBED_SCRIPT_ATTR = "data-podlove-embed";
 const EMBED_SCRIPT_LOADED_ATTR = "data-podlove-embed-loaded";
 const EMBED_SCRIPT_FAILED_ATTR = "data-podlove-embed-failed";
+const PLAYER_STYLE_ID = "podlove-player-styles";
 
 function waitForPageLoad(): Promise<void> {
   if (document.readyState === "complete") {
@@ -142,7 +143,6 @@ function cancelIdle(handle: number): void {
 
 class PodlovePlayerElement extends HTMLElement {
   observer: IntersectionObserver | null;
-  shadow: ShadowRoot;
   isInitialized: boolean;
   isScheduled: boolean;
   idleHandle: number | null;
@@ -161,7 +161,6 @@ class PodlovePlayerElement extends HTMLElement {
     this.clickHandler = null;
     this.errorMessage = null;
     this.playerDiv = null;
-    this.shadow = this.attachShadow({ mode: 'open' });
   }
 
   connectedCallback() {
@@ -199,6 +198,69 @@ class PodlovePlayerElement extends HTMLElement {
   }
 
   renderPlaceholder(clickToLoad: boolean) {
+    if (this.querySelector('.podlove-player-container')) {
+      return;
+    }
+
+    if (!document.getElementById(PLAYER_STYLE_ID)) {
+      const style = document.createElement('style');
+      style.id = PLAYER_STYLE_ID;
+      style.textContent = `
+        podlove-player .podlove-player-container {
+          width: 100%;
+          max-width: 936px;
+          min-height: 300px;
+          margin: 0 auto;
+        }
+        @media (max-width: 768px) {
+          podlove-player .podlove-player-container {
+            max-width: 366px;
+            min-height: 500px;
+          }
+        }
+        podlove-player .podlove-player-click-to-load {
+          display: flex;
+          flex-direction: column;
+          gap: 0.8rem;
+          align-items: center;
+          justify-content: center;
+          background: #f6f6f6;
+          border: 1px solid #e3e3e3;
+          border-radius: 8px;
+        }
+        podlove-player .podlove-player-button {
+          appearance: none;
+          border: 1px solid #1a1a1a;
+          background: #1a1a1a;
+          color: #ffffff;
+          border-radius: 999px;
+          font-size: 0.95rem;
+          padding: 0.6rem 1.4rem;
+          cursor: pointer;
+        }
+        podlove-player .podlove-player-button:focus-visible {
+          outline: 3px solid #6aa5ff;
+          outline-offset: 3px;
+        }
+        podlove-player .podlove-player-button:disabled {
+          opacity: 0.7;
+          cursor: progress;
+        }
+        podlove-player .podlove-player-error {
+          margin: 1.2rem;
+          color: #b42318;
+          font-size: 0.95rem;
+          text-align: center;
+        }
+        podlove-player .podlove-player-container iframe {
+          width: 100%;
+          height: 100%;
+          border: none;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     // Reserve space to prevent layout shifts
     const container = document.createElement('div');
     container.classList.add('podlove-player-container');
@@ -206,64 +268,7 @@ class PodlovePlayerElement extends HTMLElement {
       container.classList.add('podlove-player-click-to-load');
     }
 
-    // Apply styles
-    const style = document.createElement('style');
-    style.textContent = `
-      .podlove-player-container {
-        width: 100%;
-        max-width: 936px;
-        min-height: 300px;
-        margin: 0 auto;
-      }
-      @media (max-width: 768px) {
-        .podlove-player-container {
-          max-width: 366px;
-          min-height: 500px;
-        }
-      }
-      .podlove-player-click-to-load {
-        display: flex;
-        flex-direction: column;
-        gap: 0.8rem;
-        align-items: center;
-        justify-content: center;
-        background: #f6f6f6;
-        border: 1px solid #e3e3e3;
-        border-radius: 8px;
-      }
-      .podlove-player-button {
-        appearance: none;
-        border: 1px solid #1a1a1a;
-        background: #1a1a1a;
-        color: #ffffff;
-        border-radius: 999px;
-        font-size: 0.95rem;
-        padding: 0.6rem 1.4rem;
-        cursor: pointer;
-      }
-      .podlove-player-button:focus-visible {
-        outline: 3px solid #6aa5ff;
-        outline-offset: 3px;
-      }
-      .podlove-player-button:disabled {
-        opacity: 0.7;
-        cursor: progress;
-      }
-      .podlove-player-error {
-        margin: 1.2rem;
-        color: #b42318;
-        font-size: 0.95rem;
-        text-align: center;
-      }
-      .podlove-player-container iframe {
-        width: 100%;
-        height: 100%;
-        border: none;
-      }
-    `;
-
-    this.shadow.appendChild(style);
-    this.shadow.appendChild(container);
+    this.appendChild(container);
 
     const errorMessage = document.createElement("p");
     errorMessage.classList.add("podlove-player-error");
@@ -324,7 +329,7 @@ class PodlovePlayerElement extends HTMLElement {
       return;
     }
 
-    const container = this.shadow.querySelector('.podlove-player-container');
+    const container = this.querySelector('.podlove-player-container');
     if (!container) {
       return;
     }
@@ -339,6 +344,7 @@ class PodlovePlayerElement extends HTMLElement {
       audioId = `podlove-player-${Date.now()}`;
       this.setAttribute('id', audioId);
     }
+    const playerId = `${audioId}-player`;
 
     this.isInitialized = true;
     this.clearError();
@@ -347,12 +353,12 @@ class PodlovePlayerElement extends HTMLElement {
     const podloveTemplate = this.getAttribute('data-template');
     let embedUrl = this.getAttribute('data-embed') || 'https://cdn.podlove.org/web-player/5.x/embed.js';
 
-    // If host ist localhost use local embed url
+    // If host is localhost use local embed url
     const { hostname, port } = window.location;
-    const playerDiv = this.getOrCreatePlayerDiv(container, audioId, podloveTemplate);
+    const playerDiv = this.getOrCreatePlayerDiv(container, playerId, podloveTemplate);
 
     if (typeof podlovePlayer === "function") {
-      podlovePlayer(playerDiv, url, configUrl);
+      podlovePlayer(`#${playerId}`, url, configUrl);
       this.finalizeLoad(container);
       return;
     }
@@ -366,7 +372,7 @@ class PodlovePlayerElement extends HTMLElement {
     loadEmbedScript(embedUrl)
       .then(() => {
         if (typeof podlovePlayer === "function") {
-          podlovePlayer(playerDiv, url, configUrl);
+          podlovePlayer(`#${playerId}`, url, configUrl);
           this.finalizeLoad(container);
           return;
         }
