@@ -204,6 +204,9 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     """
     images_list = list(images)  # Ensure it's a list
     add_image_thumbnails(images_list, context=context)
+    for index, image in enumerate(images_list):
+        image.prev = f"gallery-{images_list[index - 1].pk}" if index > 0 else ""
+        image.next = f"gallery-{images_list[index + 1].pk}" if index < len(images_list) - 1 else ""
     context["image_pks"] = ",".join([str(image.pk) for image in images_list])
     context["images"] = images_list
     return context

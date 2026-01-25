@@ -16,6 +16,7 @@ from cast.blocks import (
     GalleryProxyRepository,
     VideoChooserBlock,
     get_srcset_images_for_slots,
+    prepare_context_for_gallery,
 )
 from cast.models import Audio, Gallery, Video
 from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Width
@@ -338,6 +339,30 @@ def test_gallery_block_with_layout_get_context():
             {"gallery": [{"type": "item", "value": 1}]},
             {"template_base_dir": "bootstrap4", "page": Page(), "repository": Repository()},
         )
+
+
+def test_prepare_context_for_gallery_sets_prev_next(monkeypatch):
+    class Image:
+        def __init__(self, pk: int):
+            self.pk = pk
+
+    images = [Image(1), Image(2), Image(3)]
+    context: dict = {}
+
+    def fake_add_image_thumbnails(_images, *, context):
+        return None
+
+    monkeypatch.setattr("cast.blocks.add_image_thumbnails", fake_add_image_thumbnails)
+    result = prepare_context_for_gallery(images, context)
+
+    assert result["image_pks"] == "1,2,3"
+    assert [image.pk for image in result["images"]] == [1, 2, 3]
+    assert result["images"][0].prev == ""
+    assert result["images"][0].next == "gallery-2"
+    assert result["images"][1].prev == "gallery-1"
+    assert result["images"][1].next == "gallery-3"
+    assert result["images"][2].prev == "gallery-2"
+    assert result["images"][2].next == ""
 
 
 @pytest.mark.django_db
