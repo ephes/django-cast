@@ -6,6 +6,7 @@ declare const podlovePlayer:
 let embedScriptPromise: Promise<void> | null = null;
 let pageLoadPromise: Promise<void> | null = null;
 let sharedObserver: IntersectionObserver | null = null;
+let playerInstanceCounter = 0;
 
 const IDLE_CALLBACK_TIMEOUT_MS = 200;
 const OBSERVER_ROOT_MARGIN = "200px 0px";
@@ -344,7 +345,11 @@ class PodlovePlayerElement extends HTMLElement {
       audioId = `podlove-player-${Date.now()}`;
       this.setAttribute('id', audioId);
     }
-    const playerId = `${audioId}-player`;
+    if (!this.dataset.playerInstanceId) {
+      playerInstanceCounter += 1;
+      this.dataset.playerInstanceId = String(playerInstanceCounter);
+    }
+    const playerId = `${audioId}-player-${this.dataset.playerInstanceId}`;
 
     this.isInitialized = true;
     this.clearError();
@@ -358,7 +363,7 @@ class PodlovePlayerElement extends HTMLElement {
     const playerDiv = this.getOrCreatePlayerDiv(container, playerId, podloveTemplate);
 
     if (typeof podlovePlayer === "function") {
-      podlovePlayer(`#${playerId}`, url, configUrl);
+      podlovePlayer(playerDiv, url, configUrl);
       this.finalizeLoad(container);
       return;
     }
@@ -372,7 +377,7 @@ class PodlovePlayerElement extends HTMLElement {
     loadEmbedScript(embedUrl)
       .then(() => {
         if (typeof podlovePlayer === "function") {
-          podlovePlayer(`#${playerId}`, url, configUrl);
+          podlovePlayer(playerDiv, url, configUrl);
           this.finalizeLoad(container);
           return;
         }

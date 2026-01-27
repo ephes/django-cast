@@ -108,8 +108,10 @@ describe('PodlovePlayerElement', () => {
     observerInstance.callback(entries, observerInstance);
 
     // Check that podlovePlayer was called
+    const playerHost = element.querySelector('.podlove-player-host') as HTMLDivElement | null;
+    expect(playerHost).not.toBeNull();
     expect(global.podlovePlayer).toHaveBeenCalledWith(
-      `#${element.getAttribute('id')}-player`,
+      playerHost,
       '/api/audios/podlove/63/post/75/',
       '/api/audios/player_config/'
     );
@@ -178,8 +180,10 @@ describe('PodlovePlayerElement', () => {
     const button = element.querySelector('.podlove-player-button') as HTMLButtonElement;
     button.click();
 
+    const playerHost = element.querySelector('.podlove-player-host') as HTMLDivElement | null;
+    expect(playerHost).not.toBeNull();
     expect(global.podlovePlayer).toHaveBeenCalledWith(
-      `#${element.getAttribute('id')}-player`,
+      playerHost,
       '/api/audios/podlove/63/post/75/',
       '/api/audios/player_config/'
     );
