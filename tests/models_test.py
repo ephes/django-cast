@@ -467,6 +467,12 @@ class TestPostModel:
         context = post.get_context(request)
         assert context["owner_username"] == "unknown"
 
+    def test_has_selectable_themes(self, rf, post):
+        """Theme selector should be enabled on post detail pages."""
+        request = rf.get("/")
+        context = post.get_context(request)
+        assert context["has_selectable_themes"] is True
+
     def test_get_updated_timestamp(self):
         post = Post()
         post.last_published_at = timezone.now()

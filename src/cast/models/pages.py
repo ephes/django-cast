@@ -418,6 +418,8 @@ class Post(Page):
             self.page_url = context["absolute_page_url"]
         else:
             self.page_url = context["page_url"]
+        # Enable theme selector on post detail pages
+        context["has_selectable_themes"] = True
         return context
 
     @property
