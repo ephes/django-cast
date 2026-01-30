@@ -33,6 +33,9 @@
 
   <nav class="cast-styleguide-nav">
     <a href="#typography">{% translate "Typography" %}</a>
+    {% if styleguide_active_theme == "bootstrap5" %}
+      <a href="#palette">{% translate "Palette & tokens" %}</a>
+    {% endif %}
     <a href="#buttons">{% translate "Buttons & links" %}</a>
     <a href="#forms">{% translate "Forms" %}</a>
     <a href="#post-list">{% translate "Post list" %}</a>

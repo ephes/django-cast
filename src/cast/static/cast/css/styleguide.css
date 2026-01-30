@@ -41,3 +41,19 @@
 .cast-styleguide-gallery-gap {
   max-width: 60rem;
 }
+
+.cast-styleguide-swatch {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--cast-border);
+  border-radius: 999px;
+}
+
+.cast-styleguide-token-preview .btn-primary {
+  --bs-btn-bg: var(--cast-accent);
+  --bs-btn-border-color: var(--cast-accent);
+  --bs-btn-hover-bg: var(--cast-accent-hover);
+  --bs-btn-hover-border-color: var(--cast-accent-hover);
+}
