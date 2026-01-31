@@ -83,8 +83,11 @@ Returns audio data formatted for the Podlove Web Player, including chapters and 
 Player configuration::
 
     GET /api/audios/player_config/
+    GET /api/audios/player_config/?color_scheme=dark
 
-Returns player theme and configuration settings.
+Returns player theme and configuration settings. The ``color_scheme`` query
+parameter accepts ``light`` or ``dark`` and can be used by themes with
+client-side color mode switching.
 
 Content Access
 ~~~~~~~~~~~~~~

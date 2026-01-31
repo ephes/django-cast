@@ -212,6 +212,88 @@ class TestPodcastAudio:
         config = response.json()
         assert "activeTab" in config
 
+    def test_podlove_player_config_bootstrap5_light(self, api_client, mocker):
+        url = reverse("cast:api:player_config")
+        mocker.patch("cast.api.views.get_template_base_dir", return_value="bootstrap5")
+        response = api_client.get(url, format="json")
+        assert response.status_code == 200
+        config = response.json()
+        tokens = config["theme"]["tokens"]
+        assert tokens["brand"] == "#d97706"
+        assert tokens["alt"] == "#ffffff"
+        fonts = config["theme"]["fonts"]
+        assert fonts["regular"]["family"][0] == "Inter"
+
+    def test_podlove_player_config_bootstrap5_dark_override(self, api_client, mocker, settings):
+        url = reverse("cast:api:player_config")
+        mocker.patch("cast.api.views.get_template_base_dir", return_value="bootstrap5")
+        settings.CAST_PODLOVE_PLAYER_THEMES = {
+            "bootstrap5": {
+                "dark": {
+                    "tokens": {
+                        "brand": "#111111",
+                    }
+                }
+            }
+        }
+        response = api_client.get(f"{url}?color_scheme=dark", format="json")
+        assert response.status_code == 200
+        config = response.json()
+        tokens = config["theme"]["tokens"]
+        assert tokens["brand"] == "#111111"
+
+    def test_podlove_player_config_bootstrap5_fonts_override(self, api_client, mocker, settings):
+        url = reverse("cast:api:player_config")
+        mocker.patch("cast.api.views.get_template_base_dir", return_value="bootstrap5")
+        settings.CAST_PODLOVE_PLAYER_THEMES = {
+            "bootstrap5": {
+                "light": {
+                    "fonts": {
+                        "regular": {
+                            "family": ["CustomSans"],
+                        }
+                    }
+                }
+            }
+        }
+        response = api_client.get(url, format="json")
+        assert response.status_code == 200
+        config = response.json()
+        fonts = config["theme"]["fonts"]
+        assert fonts["regular"]["family"][0] == "CustomSans"
+
+    def test_podlove_player_config_default_override(self, api_client, mocker, settings):
+        url = reverse("cast:api:player_config")
+        mocker.patch("cast.api.views.get_template_base_dir", return_value="plain")
+        settings.CAST_PODLOVE_PLAYER_THEMES = {
+            "default": {
+                "tokens": {
+                    "brand": "#123456",
+                }
+            }
+        }
+        response = api_client.get(url, format="json")
+        assert response.status_code == 200
+        config = response.json()
+        tokens = config["theme"]["tokens"]
+        assert tokens["brand"] == "#123456"
+
+    def test_podlove_player_config_bootstrap5_non_scheme_override(self, api_client, mocker, settings):
+        url = reverse("cast:api:player_config")
+        mocker.patch("cast.api.views.get_template_base_dir", return_value="bootstrap5")
+        settings.CAST_PODLOVE_PLAYER_THEMES = {
+            "bootstrap5": {
+                "tokens": {
+                    "brand": "#abcdef",
+                }
+            }
+        }
+        response = api_client.get(f"{url}?color_scheme=dark", format="json")
+        assert response.status_code == 200
+        config = response.json()
+        tokens = config["theme"]["tokens"]
+        assert tokens["brand"] == "#abcdef"
+
     def test_audio_podlove_serializer_get_transcripts(self, mocker):
         """Test whether the audio podlove serializer returns the correct transcripts."""
         # Given an episode without transcripts

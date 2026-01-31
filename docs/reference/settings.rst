@@ -95,6 +95,36 @@ admin panel. The name corresponds to the theme's base directory inside your temp
 folder. To create a theme named my_theme, make a directory called ``cast/my_theme``
 within your templates folder and place your templates inside.
 
+CAST_PODLOVE_PLAYER_THEMES
+==========================
+
+Optional overrides for the Podlove Web Player theme config returned by
+``/api/audios/player_config/``. The setting is a mapping keyed by template base
+directory name (or ``default``). Each entry can define a shared ``tokens``/``fonts``
+override or per-scheme overrides under ``light`` and ``dark``.
+
+.. code-block:: python
+
+    CAST_PODLOVE_PLAYER_THEMES = {
+        "bootstrap5": {
+            "light": {
+                "tokens": {
+                    "brand": "#d97706",
+                },
+            },
+            "dark": {
+                "tokens": {
+                    "brand": "#fbbf24",
+                },
+            },
+        },
+        "default": {
+            "tokens": {
+                "brand": "#ff0000",
+            },
+        },
+    }
+
 CAST_ENABLE_STYLEGUIDE
 ======================
 

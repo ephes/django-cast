@@ -30,6 +30,7 @@ from ..models import (
     get_template_base_dir,
     get_template_base_dir_choices,
 )
+from ..podlove import build_podlove_player_config
 from ..views import HtmxHttpRequest
 from ..views.theme import set_template_base_dir
 from .serializers import (
@@ -140,78 +141,10 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
 
 class PlayerConfig(generics.RetrieveAPIView):
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
-        return Response(
-            {
-                "activeTab": None,
-                "subscribe-button": None,
-                "share": {
-                    "channels": ["facebook", "twitter", "whats-app", "linkedin", "pinterest", "xing", "mail", "link"],
-                    # "outlet": "https://ukw.fm/wp-content/plugins/podlove-web-player/web-player/share.html",
-                    "sharePlaytime": True,
-                },
-                "related-episodes": {"source": "disabled", "value": None},
-                "version": 5,
-                "theme": {
-                    "tokens": {
-                        "brand": "#E64415",
-                        "brandDark": "#235973",
-                        "brandDarkest": "#1A3A4A",
-                        "brandLightest": "#E9F1F5",
-                        "shadeDark": "#807E7C",
-                        "shadeBase": "#807E7C",
-                        "contrast": "#000",
-                        "alt": "#fff",
-                    },
-                    "fonts": {
-                        "ci": {
-                            "name": "ci",
-                            "family": [
-                                "-apple-system",
-                                "BlinkMacSystemFont",
-                                "Segoe UI",
-                                "Roboto",
-                                "Helvetica",
-                                "Arial",
-                                "sans-serif",
-                                "Apple Color Emoji",
-                            ],
-                            "src": [],
-                            "weight": 800,
-                        },
-                        "regular": {
-                            "name": "regular",
-                            "family": [
-                                "-apple-system",
-                                "BlinkMacSystemFont",
-                                "Segoe UI",
-                                "Roboto",
-                                "Helvetica",
-                                "Arial",
-                                "sans-serif",
-                                "Apple Color Emoji",
-                            ],
-                            "src": [],
-                            "weight": 300,
-                        },
-                        "bold": {
-                            "name": "bold",
-                            "family": [
-                                "-apple-system",
-                                "BlinkMacSystemFont",
-                                "Segoe UI",
-                                "Roboto",
-                                "Helvetica",
-                                "Arial",
-                                "sans-serif",
-                                "Apple Color Emoji",
-                            ],
-                            "src": [],
-                            "weight": 700,
-                        },
-                    },
-                },
-            }
-        )
+        template_base_dir = get_template_base_dir(request, None)
+        color_scheme = request.query_params.get("color_scheme")
+        config = build_podlove_player_config(template_base_dir=template_base_dir, color_scheme=color_scheme)
+        return Response(config)
 
 
 class FacetCountListView(generics.ListAPIView):

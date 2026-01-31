@@ -47,6 +47,12 @@ version 5 is used.
     setting ``data-load-mode="click"`` on the player element. Remove the
     attribute in your templates to keep automatic initialization behavior.
 
+.. note::
+
+    The Podlove Web Player theme is configured via
+    ``/api/audios/player_config/``. You can override the default tokens and
+    fonts per theme using the ``CAST_PODLOVE_PLAYER_THEMES`` setting.
+
 .. _transcript_overview:
 
 Transcripts

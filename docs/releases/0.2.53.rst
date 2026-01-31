@@ -40,3 +40,4 @@ Themes
 - Render the theme selector in Bootstrap4 navigation and pass selector context from blog pages.
 - Populate gallery prev/next attributes so the cast-vue theme can navigate between gallery images.
 - Ensure Podlove players initialize against per-instance hosts to avoid collisions when the same audio appears multiple times.
+- Add theme-aware Podlove player configuration tokens with optional light/dark overrides.
