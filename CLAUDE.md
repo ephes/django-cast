@@ -98,6 +98,16 @@ pre-commit run --all-files
 - **IMPORTANT**: Do not deliver changes if coverage drops below 100%. Add tests for new code or adjust coverage exclusions only when justified.
 - Run single test: `uv run python commands.py test path.to.test::TestClass::test_method`
 
+### End-to-End Testing with Playwright
+
+For browser-based e2e testing, use the `/playwright` skill which provides guidance on:
+- Setting up pytest-playwright
+- Writing e2e tests with Django's live server
+- Page Object Model patterns
+- Debugging and tracing
+
+See [.claude/skills/playwright/SKILL.md](.claude/skills/playwright/SKILL.md) for detailed usage.
+
 ## Code Style
 
 - Python: Ruff formatter with 119 char line length
