@@ -53,3 +53,6 @@
 - Main branch is `develop`.
 - Documentation at https://django-cast.readthedocs.io/
 - Source at https://github.com/ephes/django-cast
+
+## Skills
+- `playwright-smoke-tests` (in `~/.codex/skills/playwright-smoke-tests`): Run staging/local Playwright smoke checks for filters/list pages after deploys.
