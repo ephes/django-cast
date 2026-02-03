@@ -204,6 +204,19 @@ Both sections support these block types:
 
 For detailed information about content blocks, see :doc:`/content/streamfield`.
 
+Accessibility Baseline
+======================
+
+When adding optional UI blocks (author bios, related posts, share links, newsletter CTAs), follow these baseline requirements:
+
+- Use semantic headings that preserve the page hierarchy.
+- Provide meaningful link text or `aria-label` attributes (for example, "Share on LinkedIn").
+- Ensure buttons and form controls have associated labels.
+- Treat decorative images as empty `alt=""`; provide descriptive alt text for avatars and logos.
+- Keep keyboard focus visible and consistent with theme tokens.
+- Maintain WCAG 2.1 AA contrast ratios for text and UI controls.
+- Use `aria-expanded` and `aria-controls` when content is collapsible.
+
 Media in Posts
 ==============
 
