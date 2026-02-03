@@ -53,6 +53,8 @@
 - Main branch is `develop`.
 - Documentation at https://django-cast.readthedocs.io/
 - Source at https://github.com/ephes/django-cast
+- Do not commit any files under `specs/`. Do not ask about committing specs.
+- Bootstrap 5 templates/assets live in the sibling repo `../cast-bootstrap5` (not in this repo).
 
 ## Skills
 - `playwright-smoke-tests` (in `~/.codex/skills/playwright-smoke-tests`): Run staging/local Playwright smoke checks for filters/list pages after deploys.
