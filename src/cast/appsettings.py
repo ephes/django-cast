@@ -7,6 +7,7 @@ from wagtail.images.signal_handlers import post_delete_file_cleanup
 
 CAST_COMMENTS_ENABLED: bool = getattr(settings, "CAST_COMMENTS_ENABLED", False)
 CAST_CUSTOM_THEMES: list[tuple[str, str]] = []
+CAST_FOLLOW_LINKS: dict[str, str] = getattr(settings, "CAST_FOLLOW_LINKS", {})
 CHOOSER_PAGINATION: int = getattr(settings, "CHOOSER_PAGINATION", 10)
 MENU_ITEM_PAGINATION: int = getattr(settings, "MENU_ITEM_PAGINATION", 20)
 POST_LIST_PAGINATION: int = getattr(settings, "POST_LIST_PAGINATION", 5)

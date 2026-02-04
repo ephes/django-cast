@@ -19,6 +19,7 @@ from wagtail.images.models import Image
 from wagtail.models import Page, PageManager
 
 from cast import appsettings
+from cast.follow_links import get_follow_links
 from cast.filters import PostFilterset
 from cast.models.itunes import ItunesArtWork
 
@@ -306,6 +307,7 @@ class Blog(Page):
         context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
         context["template_base_dir_choices"] = context["theme_form"].fields["template_base_dir"].choices  # type: ignore
         context["next_url"] = request.get_full_path()
+        context["follow_links"] = get_follow_links(self)
         return context
 
     def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexRepository:

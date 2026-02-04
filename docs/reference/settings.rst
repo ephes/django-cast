@@ -95,6 +95,25 @@ admin panel. The name corresponds to the theme's base directory inside your temp
 folder. To create a theme named my_theme, make a directory called ``cast/my_theme``
 within your templates folder and place your templates inside.
 
+CAST_FOLLOW_LINKS
+=================
+
+Optional mapping of follow links shown in the Bootstrap5 navbar. Supported keys are
+``rss``, ``mastodon``, ``github``, ``bluesky``, ``linkedin``, and ``email``. If ``rss``
+is not provided, it defaults to the blog feed. If ``email`` is not provided, it uses
+``Blog.email`` when available.
+
+.. code-block:: python
+
+    CAST_FOLLOW_LINKS = {
+        # "rss": "https://example.com/feed.xml",  # optional, defaults to blog feed
+        "mastodon": "https://example.social/@account",
+        "github": "https://github.com/example",
+        "bluesky": "https://bsky.app/profile/example.com",
+        "linkedin": "https://www.linkedin.com/in/example/",
+        "email": "mailto:hello@example.com",
+    }
+
 CAST_PODLOVE_PLAYER_THEMES
 ==========================
 

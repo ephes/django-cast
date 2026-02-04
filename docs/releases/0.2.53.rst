@@ -41,3 +41,6 @@ Themes
 - Populate gallery prev/next attributes so the cast-vue theme can navigate between gallery images.
 - Ensure Podlove players initialize against per-instance hosts to avoid collisions when the same audio appears multiple times.
 - Add theme-aware Podlove player configuration tokens with optional light/dark overrides.
+- Always render the Bootstrap5 theme selector and consolidate color mode selection into a single dropdown.
+- Add follow-link support and Bootstrap5 navbar icons for RSS/social profiles.
+- Introduce Bootstrap5 spacing tokens for list/detail rhythm and apply them to list/detail templates.

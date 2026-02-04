@@ -35,6 +35,7 @@ from wagtail.models import Page, PageManager
 from wagtail.search import index
 
 from cast import appsettings
+from cast.follow_links import get_follow_links
 from cast.blocks import (
     AudioChooserBlock,
     CastImageChooserBlock,
@@ -420,6 +421,7 @@ class Post(Page):
             self.page_url = context["page_url"]
         # Enable theme selector on post detail pages
         context["has_selectable_themes"] = True
+        context["follow_links"] = get_follow_links(context.get("blog"))
         return context
 
     @property
