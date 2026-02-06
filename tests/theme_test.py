@@ -1,13 +1,14 @@
 import shutil
 from pathlib import Path
-
 import pytest
+from django.db.utils import OperationalError
 from django.template import engines
 from django.urls import reverse
 from wagtail.models import Site
 
 from cast.context_processors import DEFAULT_TEMPLATE_BASE_DIR, site_template_base_dir
 from cast.models.theme import (
+    _clear_template_base_dir_choices_cache,
     get_required_template_names,
     get_template_base_dir_candidates,
     get_template_base_dir,
@@ -36,6 +37,7 @@ def create_new_theme(name, invalid=False):
 
 def test_get_template_base_dir_choices():
     def get_choice_values():
+        _clear_template_base_dir_choices_cache()
         return {choice[0] for choice in get_template_base_dir_choices()}
 
     # make sure the theme we create is not already there
@@ -86,6 +88,7 @@ def test_cast_custom_theme_settings_show_up(settings):
     assert (theme_name, theme_display) in custom_choices
 
     # make sure you cannot add predefined themes twice
+    _clear_template_base_dir_choices_cache()
     settings.CAST_CUSTOM_THEMES.append((theme_name, theme_display))
     assert len(get_template_base_dir_choices()) == len(custom_choices)
 
@@ -98,6 +101,7 @@ def test_context_processors_site_template_base_dir(rf):
     assert context["cast_base_template"] == "cast/bootstrap4/base.html"
 
 
+@pytest.mark.django_db
 def test_context_processors_get_site_template_base_dir_from_request(rf):
     request = rf.get("/")
     request.cast_site_template_base_dir = "plain"
@@ -202,3 +206,96 @@ def test_non_existent_theme_returns_default(rf):
     request = rf.get("/")
     context = site_template_base_dir(request)
     assert context["cast_site_template_base_dir"] == DEFAULT_TEMPLATE_BASE_DIR
+
+
+def test_get_template_base_dir_choices_cache(mocker):
+    """Verify that get_template_base_dir_choices caches after the first call."""
+    mock_get_dirs = mocker.patch("cast.models.theme.get_template_directories", return_value=[])
+    first = get_template_base_dir_choices()
+    second = get_template_base_dir_choices()
+    assert first == second
+    assert first is not second  # returns fresh list copy each time
+    assert mock_get_dirs.call_count == 1
+
+
+def test_clear_template_base_dir_choices_cache(mocker):
+    """Verify that _clear_template_base_dir_choices_cache resets the cache."""
+    mock_get_dirs = mocker.patch("cast.models.theme.get_template_directories", return_value=[])
+    get_template_base_dir_choices()
+    _clear_template_base_dir_choices_cache()
+    get_template_base_dir_choices()
+    assert mock_get_dirs.call_count == 2
+
+
+@pytest.mark.django_db
+def test_context_processor_provides_theme_keys(rf):
+    """Context processor should provide all theme-switching keys."""
+    request = rf.get("/some-page/")
+    context = site_template_base_dir(request)
+    assert "template_base_dir" in context
+    assert "theme_form" in context
+    assert "template_base_dir_choices" in context
+    assert "next_url" in context
+    assert "has_selectable_themes" in context
+    assert context["next_url"] == "/some-page/"
+    assert context["template_base_dir"] == "bootstrap4"
+    assert isinstance(context["has_selectable_themes"], bool)
+
+
+@pytest.mark.django_db
+def test_context_processor_theme_keys_no_site(rf):
+    """When no site exists, theme keys should still be present with defaults."""
+    Site.objects.all().delete()
+    request = rf.get("/")
+    context = site_template_base_dir(request)
+    assert context["template_base_dir"] == DEFAULT_TEMPLATE_BASE_DIR
+    assert "theme_form" in context
+    assert "template_base_dir_choices" in context
+    assert "next_url" in context
+    assert "has_selectable_themes" in context
+
+
+@pytest.mark.django_db
+def test_context_processor_respects_query_param(rf):
+    """Query parameter ?theme= should override the site default."""
+    request = rf.get("/?theme=plain")
+    request.session = {}
+    context = site_template_base_dir(request)
+    assert context["template_base_dir"] == "plain"
+
+
+@pytest.mark.django_db
+def test_context_processor_respects_session(rf):
+    """Session value should override the site default."""
+    request = rf.get("/")
+    request.session = {"template_base_dir": "plain"}
+    context = site_template_base_dir(request)
+    assert context["template_base_dir"] == "plain"
+
+
+@pytest.mark.django_db
+def test_context_processor_survives_db_error(rf, mocker):
+    """Context processor must not 500 even when the DB raises OperationalError."""
+    mocker.patch(
+        "cast.context_processors.TemplateBaseDirectory.for_request",
+        side_effect=OperationalError("connection refused"),
+    )
+    request = rf.get("/")
+    context = site_template_base_dir(request)
+    assert context["cast_site_template_base_dir"] == DEFAULT_TEMPLATE_BASE_DIR
+    assert context["template_base_dir"] == DEFAULT_TEMPLATE_BASE_DIR
+
+
+def test_choices_cache_is_stale_after_settings_change(settings, mocker):
+    """Cache is process-lifetime: new themes added after first call are invisible until cleared."""
+    mocker.patch("cast.models.theme.get_template_directories", return_value=[])
+    first = get_template_base_dir_choices()
+    settings.CAST_CUSTOM_THEMES = [("new_runtime_theme", "New Runtime Theme")]
+    second = get_template_base_dir_choices()
+    # second call returns the cached result — "new_runtime_theme" is NOT visible
+    assert first == second
+    assert ("new_runtime_theme", "New Runtime Theme") not in second
+    # only after explicit cache clear does the new theme appear
+    _clear_template_base_dir_choices_cache()
+    third = get_template_base_dir_choices()
+    assert ("new_runtime_theme", "New Runtime Theme") in third

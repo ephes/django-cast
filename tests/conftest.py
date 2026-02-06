@@ -22,6 +22,7 @@ from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACH
 from cast import appsettings
 from cast.devdata import create_transcript
 from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
+from cast.models.theme import _clear_template_base_dir_choices_cache
 
 from .factories import (
     BlogFactory,
@@ -78,6 +79,14 @@ def restore_site_root_paths_cache(baseline_site_root_paths_cache):
         3600,
         version=SITE_ROOT_PATHS_CACHE_VERSION,
     )
+
+
+@pytest.fixture(autouse=True)
+def _clear_theme_cache():
+    """Clear the template base dir choices cache before and after each test."""
+    _clear_template_base_dir_choices_cache()
+    yield
+    _clear_template_base_dir_choices_cache()
 
 
 # Image testing stuff

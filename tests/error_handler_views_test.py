@@ -10,7 +10,7 @@ from cast.views import defaults
 @pytest.fixture
 def my_theme(site):
     name = "my_theme"
-    TemplateBaseDirectory.objects.create(name=name, site=site)
+    TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": name})
     return name
 
 

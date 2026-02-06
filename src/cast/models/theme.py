@@ -9,6 +9,16 @@ from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
 
 from ..views import HtmxHttpRequest
 
+# Process-lifetime cache for theme choices.  Themes are discovered from the
+# filesystem and settings at import/first-call time; changes require a worker
+# restart.  Stored as an immutable tuple to prevent accidental mutation.
+_template_base_dir_choices_cache: tuple[tuple[str, str], ...] | None = None
+
+
+def _clear_template_base_dir_choices_cache() -> None:
+    global _template_base_dir_choices_cache  # noqa: PLW0603
+    _template_base_dir_choices_cache = None
+
 
 def get_required_template_names() -> list[str]:
     """
@@ -86,6 +96,10 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
     """
     Return a list of choices for the template base directory setting.
     """
+    global _template_base_dir_choices_cache  # noqa: PLW0603
+    if _template_base_dir_choices_cache is not None:
+        return list(_template_base_dir_choices_cache)
+
     # handle predefined choices
     choices: list[tuple[str, str]] = []
     seen: set[str] = set()
@@ -106,6 +120,7 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
         if candidate not in seen:
             choices.append((candidate, candidate))
 
+    _template_base_dir_choices_cache = tuple(choices)
     return choices
 
 

@@ -44,3 +44,6 @@ Themes
 - Always render the Bootstrap5 theme selector and consolidate color mode selection into a single dropdown.
 - Add follow-link support and Bootstrap5 navbar icons for RSS/social profiles.
 - Introduce Bootstrap5 spacing tokens for list/detail rhythm and apply them to list/detail templates.
+- Store theme choices cache as an immutable tuple and return a fresh list copy to prevent accidental mutation.
+- Fix double DB hit in the theme context processor by passing the site default as a fallback.
+- Narrow context processor exception handling to DB/lookup errors instead of blanket ``Exception``.
