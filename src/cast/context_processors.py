@@ -1,7 +1,8 @@
-from typing import Any
+from typing import TypedDict
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import DatabaseError
+from django.forms import ChoiceField
 from django.http import HttpRequest
 
 from .forms import SelectThemeForm
@@ -11,7 +12,17 @@ from .models.theme import get_template_base_dir
 DEFAULT_TEMPLATE_BASE_DIR = "does_not_exist"
 
 
-def site_template_base_dir(request: HttpRequest) -> dict[str, Any]:
+class SiteTemplateBaseDirContext(TypedDict):
+    cast_site_template_base_dir: str
+    cast_base_template: str
+    template_base_dir: str
+    theme_form: SelectThemeForm
+    template_base_dir_choices: list[tuple[str, str]]
+    next_url: str
+    has_selectable_themes: bool
+
+
+def site_template_base_dir(request: HttpRequest) -> SiteTemplateBaseDirContext:
     """
     Add the name of the template base directory to the context.
     Add the complete base template path to the context for convenience.
@@ -26,15 +37,10 @@ def site_template_base_dir(request: HttpRequest) -> dict[str, Any]:
         except (ObjectDoesNotExist, DatabaseError):
             site_template_base_dir_name = DEFAULT_TEMPLATE_BASE_DIR
 
-    context: dict[str, Any] = {
-        "cast_site_template_base_dir": site_template_base_dir_name,
-        "cast_base_template": f"cast/{site_template_base_dir_name}/base.html",
-    }
-
     # Provide theme-switching context globally.
     # Use get_template_base_dir which respects session/query-param overrides.
     try:
-        template_base_dir = get_template_base_dir(request, site_template_base_dir_name)  # type: ignore[arg-type]
+        template_base_dir = get_template_base_dir(request, site_template_base_dir_name)
     except (ObjectDoesNotExist, DatabaseError):
         template_base_dir = site_template_base_dir_name
 
@@ -44,12 +50,16 @@ def site_template_base_dir(request: HttpRequest) -> dict[str, Any]:
             "next": request.get_full_path(),
         }
     )
-    choices = theme_form.fields["template_base_dir"].choices  # type: ignore[union-attr, attr-defined]
+    field = theme_form.fields["template_base_dir"]
+    assert isinstance(field, ChoiceField)
+    choices: list[tuple[str, str]] = list(field.choices)  # type: ignore[arg-type]
 
-    context["template_base_dir"] = template_base_dir
-    context["theme_form"] = theme_form
-    context["template_base_dir_choices"] = choices
-    context["next_url"] = request.get_full_path()
-    context["has_selectable_themes"] = len(choices) > 1
-
-    return context
+    return {
+        "cast_site_template_base_dir": site_template_base_dir_name,
+        "cast_base_template": f"cast/{site_template_base_dir_name}/base.html",
+        "template_base_dir": template_base_dir,
+        "theme_form": theme_form,
+        "template_base_dir_choices": choices,
+        "next_url": request.get_full_path(),
+        "has_selectable_themes": len(choices) > 1,
+    }

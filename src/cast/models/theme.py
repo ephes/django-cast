@@ -2,12 +2,11 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import models
+from django.http import HttpRequest
 from django.template import engines
 from django.template.loaders.base import Loader as BaseLoader
 from django.utils.translation import gettext_lazy as _
 from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
-
-from ..views import HtmxHttpRequest
 
 # Process-lifetime cache for theme choices.  Themes are discovered from the
 # filesystem and settings at import/first-call time; changes require a worker
@@ -124,7 +123,7 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
     return choices
 
 
-def get_template_base_dir(request: HtmxHttpRequest, pre_selected: str | None) -> str:
+def get_template_base_dir(request: HttpRequest, pre_selected: str | None) -> str:
     if (override := getattr(request, "cast_template_base_dir", None)) is not None:
         return override
     if hasattr(request, "GET"):
