@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from typing import cast
 
+import django
 from django.contrib.syndication.views import Feed
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest
@@ -13,6 +14,7 @@ from django.utils.feedgenerator import (
     rfc2822_date,
 )
 from django.utils.safestring import SafeText, mark_safe
+from django.utils.xmlutils import SimplerXMLGenerator
 from wagtail.images.models import Image
 
 from cast import appsettings
@@ -20,6 +22,13 @@ from cast import appsettings
 from .models import Audio, Blog, Podcast, Post
 from .models.repository import FeedRepository
 from .views import HtmxHttpRequest
+
+if django.VERSION >= (5, 2):
+    from django.utils.feedgenerator import Stylesheet
+
+    _feed_stylesheets: list | None = [Stylesheet("/static/cast/feed-style.xsl", "text/xsl")]
+else:
+    _feed_stylesheets = None
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +100,7 @@ class RepositoryMixin:
 
 
 class LatestEntriesFeed(RepositoryMixin, Feed):
+    stylesheets = _feed_stylesheets
     object: Blog
     request: HtmxHttpRequest
 
@@ -256,6 +266,19 @@ class AtomITunesFeedGenerator(PodcastIndexElements, ITunesElements, Atom1Feed):
         atom_attrs.update(self.namespace_attributes())
         return atom_attrs
 
+    def add_stylesheets(self, handler) -> None:
+        for stylesheet in self.feed.get("stylesheets") or []:
+            handler.processingInstruction("xml-stylesheet", str(stylesheet))
+
+    def write(self, outfile, encoding) -> None:
+        handler = SimplerXMLGenerator(outfile, encoding, short_empty_elements=True)
+        handler.startDocument()
+        self.add_stylesheets(handler)
+        handler.startElement("feed", self.root_attributes())  # type: ignore[arg-type]
+        self.add_root_elements(handler)
+        self.write_items(handler)
+        handler.endElement("feed")
+
 
 class RssITunesFeedGenerator(PodcastIndexElements, ITunesElements, Rss201rev2Feed):
     def rss_attributes(self) -> dict:
@@ -366,6 +389,7 @@ class PodcastFeed(RepositoryMixin, Feed):
 
 
 class AtomPodcastFeed(PodcastFeed):
+    stylesheets = _feed_stylesheets
     feed_type = AtomITunesFeedGenerator
 
     def author_name(self, blog: Blog) -> str:
@@ -380,6 +404,7 @@ class AtomPodcastFeed(PodcastFeed):
 
 
 class RssPodcastFeed(PodcastFeed):
+    stylesheets = _feed_stylesheets
     feed_type = RssITunesFeedGenerator
 
     def item_guid(self, _post: Post) -> None:

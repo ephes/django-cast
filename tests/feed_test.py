@@ -7,13 +7,18 @@ import pytz
 from django.http import Http404
 from django.urls import reverse
 
+import django
+
 from cast import appsettings
 from cast.feeds import (
     AtomITunesFeedGenerator,
+    AtomPodcastFeed,
     ITunesElements,
     LatestEntriesFeed,
     PodcastFeed,
     PodcastIndexElements,
+    RssPodcastFeed,
+    _feed_stylesheets,
 )
 from cast.models import Post
 
@@ -354,6 +359,61 @@ def test_podcast_feed_get_object_uses_repository_blog(rf, podcast, mocker):
     returned = feed.get_object(rf.get("/"), slug=podcast.slug, audio_format="m4a")
 
     assert returned is podcast
+
+
+class TestFeedStylesheets:
+    def test_feed_stylesheets_set_on_django_52_plus(self):
+        if django.VERSION >= (5, 2):
+            assert _feed_stylesheets is not None
+            assert len(_feed_stylesheets) == 1
+            assert _feed_stylesheets[0].url == "/static/cast/feed-style.xsl"
+        else:
+            assert _feed_stylesheets is None
+
+    def test_latest_entries_feed_has_stylesheets(self):
+        assert LatestEntriesFeed.stylesheets is _feed_stylesheets
+
+    def test_atom_podcast_feed_has_stylesheets(self):
+        assert AtomPodcastFeed.stylesheets is _feed_stylesheets
+
+    def test_rss_podcast_feed_has_stylesheets(self):
+        assert RssPodcastFeed.stylesheets is _feed_stylesheets
+
+    @pytest.mark.django_db
+    def test_rss_feed_contains_xsl_processing_instruction(self, client, post, use_dummy_cache_backend):
+        if django.VERSION < (5, 2):
+            pytest.skip("Stylesheet support requires Django 5.2+")
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+        r = client.get(feed_url)
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert 'href="/static/cast/feed-style.xsl"' in content
+
+    @pytest.mark.django_db
+    def test_podcast_rss_feed_contains_xsl_processing_instruction(self, client, episode, use_dummy_cache_backend):
+        if django.VERSION < (5, 2):
+            pytest.skip("Stylesheet support requires Django 5.2+")
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.blog.slug, "audio_format": "m4a"},
+        )
+        r = client.get(feed_url)
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert 'href="/static/cast/feed-style.xsl"' in content
+
+    @pytest.mark.django_db
+    def test_podcast_atom_feed_contains_xsl_processing_instruction(self, client, episode):
+        if django.VERSION < (5, 2):
+            pytest.skip("Stylesheet support requires Django 5.2+")
+        feed_url = reverse(
+            "cast:podcast_feed_atom",
+            kwargs={"slug": episode.blog.slug, "audio_format": "m4a"},
+        )
+        r = client.get(feed_url)
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert 'href="/static/cast/feed-style.xsl"' in content
 
 
 def test_podcast_index_elements_catch_no_super_add_item_elements(mocker):
