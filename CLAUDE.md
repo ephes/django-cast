@@ -195,5 +195,12 @@ When bumping the version number for a new release:
 6. Link the release notes in `docs/releases/index.rst`
 7. During ongoing work, only update `docs/releases/<current-version>.rst`, where `<current-version>` matches `pyproject.toml` and is the first entry in `docs/releases/index.rst`; do not create additional release files.
 
+## Related Sibling Repositories
+
+When making changes that affect templates, feeds, or public APIs, also check and fix the related sibling repos if needed:
+- `../cast-bootstrap5` — Bootstrap 5 theme templates and assets
+- `../homepage` — Production homepage site using django-cast
+- `../python-podcast` — Python podcast site using django-cast
+
 ## Memories
 - Use `uv run tox` instead of `uvx tox`

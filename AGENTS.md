@@ -54,6 +54,10 @@
 - Source at https://github.com/ephes/django-cast
 - Do not commit any files under `specs/`. Do not ask about committing specs.
 - Bootstrap 5 templates/assets live in the sibling repo `../cast-bootstrap5` (not in this repo).
+- When making changes that affect templates, feeds, or public APIs, also check and fix the related sibling repos if needed:
+  - `../cast-bootstrap5` — Bootstrap 5 theme templates and assets
+  - `../homepage` — Production homepage site using django-cast
+  - `../python-podcast` — Python podcast site using django-cast
 
 ## Skills
 - `playwright-smoke-tests` (in `~/.codex/skills/playwright-smoke-tests`): Run staging/local Playwright smoke checks for filters/list pages after deploys.
