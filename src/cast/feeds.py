@@ -267,6 +267,8 @@ class AtomITunesFeedGenerator(PodcastIndexElements, ITunesElements, Atom1Feed):
         return atom_attrs
 
     def add_stylesheets(self, handler) -> None:
+        # Atom1Feed.write() does not call add_stylesheets() like Rss201rev2Feed does,
+        # so we override write() below to inject stylesheet processing instructions.
         for stylesheet in self.feed.get("stylesheets") or []:
             handler.processingInstruction("xml-stylesheet", str(stylesheet))
 
