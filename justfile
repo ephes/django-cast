@@ -12,6 +12,12 @@ install:
 dev:
     uvx honcho start -f Procfile.dev
 
+# Run lint, typecheck, and tests
+check:
+    just lint
+    just typecheck
+    just test
+
 # Run the full test suite
 test:
     uv run pytest

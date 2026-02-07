@@ -56,9 +56,8 @@ uv run tox
 # Note: The development server is typically run in a separate project
 # where django-cast is installed as an editable package
 ```
-Always run `uv run mypy` (or `just typecheck`) after code changes; treat it as a required check.
-Always run `just lint` and `just typecheck` before delivery; both must pass.
-Do not consider a task done until `just test` has been run and all tests pass.
+Always run `just check` (runs `just lint`, `just typecheck`, and `just test` in sequence) before delivery; all three must pass.
+Do not consider a task done until `just check` passes.
 
 ### JavaScript Build Commands
 ```bash
