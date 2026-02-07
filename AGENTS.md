@@ -17,9 +17,8 @@
 - Full matrix: `just tox` for multi-environment testing.
 - Docs preview: `just docs` to rebuild Sphinx and open HTML locally.
 - Pre-commit hooks: `just pre-commit` or `pre-commit run --all-files`.
-- Always run `just typecheck` (or `uv run mypy`) after code changes; treat it as a required check.
-- Always run `just lint` and `just typecheck` before delivery; both must pass.
-- Do not consider a task done until `just test` has been run and all tests pass.
+- Run `just check` before delivery; it runs `just lint`, `just typecheck`, and `just test` in sequence and all three must pass.
+- Do not consider a task done until `just check` passes.
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ with 4-space indentation; prefer explicit typing—public functions and classes should be type-annotated.
@@ -38,7 +37,7 @@
 ## Commit & Pull Request Guidelines
 - Commit messages: short, imperative subjects; keep each commit scoped to a single logical change.
 - Do not bump version numbers on every commit.
-- Before opening a PR, run `just test`, `just typecheck`, and `just lint`.
+- Before opening a PR, run `just check` (lint, typecheck, and tests).
 - Before committing, verify whether documentation and release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 - Update docs when adding features or changing behavior.
 - When preparing a release, add a new file under `docs/releases/` and link it in `docs/releases/index.rst`.

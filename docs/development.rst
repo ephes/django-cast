@@ -291,6 +291,15 @@ To test a specific environment:
 Code Quality
 ============
 
+Run all quality checks (linting, type checking, and tests) in one command:
+
+.. code-block:: bash
+
+   $ just check
+
+This runs ``just lint``, ``just typecheck``, and ``just test`` in sequence,
+stopping on first failure.
+
 Linting and Formatting
 ----------------------
 
@@ -436,7 +445,7 @@ Making Changes
 1. Create a feature branch from ``develop``
 2. Make your changes
 3. Add tests for new functionality
-4. Run tests and linting
+4. Run ``just check`` (linting, type checking, and tests in one command)
 5. Update documentation
 6. Create a pull request to ``develop``
 
