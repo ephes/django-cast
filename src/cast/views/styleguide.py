@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 import json
 import re
@@ -39,6 +40,7 @@ from cast.devdata import (
     create_user,
     create_video,
 )
+from cast.filters import get_active_facets, has_active_filters
 from cast.models import (
     Audio,
     Blog,
@@ -269,6 +271,7 @@ def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
     )
     include_video_in_body = False
     posts = _ensure_posts(blog, user, media, galleries, include_video_in_body=include_video_in_body)
+    _ensure_styleguide_tags_and_categories(posts)
     blog_repository = BlogIndexRepository.create_from_django_models(request, blog)
 
     podcast = _ensure_podcast(site, user)
@@ -339,6 +342,13 @@ def _ensure_blog(site: Site, user) -> Blog:
     return blog
 
 
+def _styleguide_post_date(now: datetime, months_back: int) -> datetime:
+    """Return a datetime N calendar months before *now*, guaranteeing distinct months."""
+    from dateutil.relativedelta import relativedelta
+
+    return now - relativedelta(months=months_back)
+
+
 def _ensure_posts(
     blog: Blog,
     user,
@@ -349,6 +359,7 @@ def _ensure_posts(
 ) -> list[Post]:
     posts = []
     post_count = _styleguide_post_count()
+    now = timezone.now()
     for index in range(1, post_count + 1):
         slug = f"{STYLEGUIDE_POST_SLUG_PREFIX}-{index}"
         post = Post.objects.child_of(blog).filter(slug=slug).first()
@@ -360,21 +371,60 @@ def _ensure_posts(
             include_video=include_video_in_body,
         )
         serialized_body = json.dumps(body)
+        # Spread posts across different calendar months for rich date facets
+        post_date = _styleguide_post_date(now, index - 1)
         if post is None:
             post = Post(
                 title=f"Styleguide Post {index}",
                 slug=slug,
                 owner=user,
                 body=serialized_body,
-                first_published_at=timezone.now(),
+                visible_date=post_date,
+                first_published_at=post_date,
             )
             blog.add_child(instance=post)
-        elif include_media and _styleguide_should_refresh_body(post, serialized_body):
-            post.body = serialized_body
-            post.save()
+        else:
+            needs_save = False
+            if include_media and _styleguide_should_refresh_body(post, serialized_body):
+                post.body = serialized_body
+                needs_save = True
+            if post.visible_date.strftime("%Y-%m") != post_date.strftime("%Y-%m"):
+                post.visible_date = post_date
+                needs_save = True
+            if needs_save:
+                post.save()
         post = _ensure_live(post)
         posts.append(Post.objects.get(pk=post.pk).specific)
     return posts
+
+
+def _ensure_styleguide_tags_and_categories(posts: list[Post]) -> None:
+    """Assign tags and categories to styleguide posts for rich filter facets."""
+    from cast.models.snippets import PostCategory
+
+    tag_names = ["python", "django", "wagtail", "tutorial"]
+    category_data = [
+        ("Today I Learned", "til"),
+        ("WeekNotes", "weeknotes"),
+    ]
+
+    # Ensure categories exist
+    categories = []
+    for name, slug in category_data:
+        cat, _ = PostCategory.objects.get_or_create(slug=slug, defaults={"name": name})
+        categories.append(cat)
+
+    for index, post in enumerate(posts):
+        # Assign tags: first post gets 2 tags, others get 1 each (rotating)
+        if index == 0:
+            post.tags.add(tag_names[0], tag_names[1])
+        else:
+            post.tags.add(tag_names[index % len(tag_names)])
+        # Assign categories: alternate between the two categories
+        category = categories[index % len(categories)]
+        if not post.categories.filter(pk=category.pk).exists():
+            post.categories.add(category)
+        post.save()
 
 
 def _ensure_podcast(site: Site, user) -> Podcast:
@@ -1408,6 +1458,8 @@ def _styleguide_context(
         "styleguide_transcript_excerpt": transcript_excerpt,
         "styleguide_comments_enabled": media_post.get_comments_are_enabled(styleguide_data.blog),
         "styleguide_episode_transcript_url": episode.get_transcript_url(),
+        "active_facets": get_active_facets(blog_repository.filterset, request),
+        "has_active_filters": has_active_filters(blog_repository.filterset, request),
     }
     context.update(pagination_context)
     return context

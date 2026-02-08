@@ -20,7 +20,7 @@ from wagtail.models import Page, PageManager
 
 from cast import appsettings
 from cast.follow_links import get_follow_links
-from cast.filters import PostFilterset
+from cast.filters import PostFilterset, get_active_facets, has_active_filters
 from cast.models.itunes import ItunesArtWork
 
 from ..views import HtmxHttpRequest
@@ -308,6 +308,8 @@ class Blog(Page):
         context["template_base_dir_choices"] = context["theme_form"].fields["template_base_dir"].choices  # type: ignore
         context["next_url"] = request.get_full_path()
         context["follow_links"] = get_follow_links(self)
+        context["active_facets"] = get_active_facets(context["filterset"], request)
+        context["has_active_filters"] = has_active_filters(context["filterset"], request)
         return context
 
     def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexRepository:

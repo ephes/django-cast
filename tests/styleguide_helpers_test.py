@@ -1440,3 +1440,32 @@ def test_styleguide_comments_creates_parent_and_reply(site, comments_enabled):
     comment_model = get_comment_model()
     comments = comment_model.objects.for_model(post).filter(user=user).order_by("submit_date", "pk").all()
     assert len(comments) >= 1
+
+
+@pytest.mark.django_db
+def test_ensure_posts_updates_stale_visible_date(site):
+    """When an existing styleguide post has a visible_date in the wrong month, _ensure_posts updates it."""
+    from dateutil.relativedelta import relativedelta
+
+    from django.utils import timezone
+
+    user = create_user(name="date-user", password="date-user")
+    blog = create_blog(owner=user, site=site)
+
+    # First call creates posts with spread dates
+    galleries = [create_gallery(images=[create_image()])]
+    media = styleguide_view._create_styleguide_media(gallery=None, gallery_images=[], audio=None, user=user)
+    posts = styleguide_view._ensure_posts(blog, user, media, galleries, include_video_in_body=False)
+    assert len(posts) >= 2
+
+    # Set the second post's visible_date to "now" so it no longer matches the expected spread month
+    second_post = Post.objects.get(pk=posts[1].pk)
+    second_post.visible_date = timezone.now()
+    second_post.save()
+
+    # Second call should detect the stale date and update it
+    posts_again = styleguide_view._ensure_posts(blog, user, media, galleries, include_video_in_body=False)
+    refreshed = Post.objects.get(pk=posts_again[1].pk)
+    now = timezone.now()
+    expected_date = now - relativedelta(months=1)
+    assert refreshed.visible_date.strftime("%Y-%m") == expected_date.strftime("%Y-%m")

@@ -307,6 +307,46 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
         self.set_field_choices(choices)
 
 
+def get_active_facets(filterset: "PostFilterset", request: Any) -> list[dict[str, Any]]:
+    """Build list of active facet dicts with human-readable labels."""
+    active: list[dict[str, Any]] = []
+    facet_fields = [
+        ("date_facets", _("Date")),
+        ("tag_facets", _("Tag")),
+        ("category_facets", _("Category")),
+    ]
+    for param_name, label in facet_fields:
+        value = request.GET.get(param_name)
+        if value and param_name in filterset.form.fields:
+            # Look up display value from field choices
+            field = filterset.form.fields[param_name]
+            display = value  # fallback to raw value
+            if hasattr(field, "choices"):
+                for choice_val, choice_label in field.choices:
+                    if str(choice_val) == value:
+                        display = choice_label
+                        break
+            active.append(
+                {
+                    "param_name": param_name,
+                    "label": str(label),
+                    "display_value": display,
+                }
+            )
+    return active
+
+
+def has_active_filters(filterset: "PostFilterset", request: Any) -> bool:
+    """Return True only when actual filter/search/ordering params are active."""
+    if get_active_facets(filterset, request):
+        return True
+    if request.GET.get("search"):
+        return True
+    if request.GET.get("o"):
+        return True
+    return False
+
+
 class PostFilterset(django_filters.FilterSet):
     """
     A filterset for posts. It is used to filter the posts faceted navigation
