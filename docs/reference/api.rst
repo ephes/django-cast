@@ -17,18 +17,21 @@ The API is available at ``/api/`` and includes:
 Authentication
 --------------
 
-Most API endpoints require authentication:
+Authenticated endpoints use Django session authentication (for example ``/api/videos/``,
+``/api/audios/``, and ``/api/comment_training_data/``).
 
-- **Method**: Django session authentication
-- **Login**: ``/api/auth/login/``
-- **Logout**: ``/api/auth/logout/``
+Browsable-API login/logout routes are project-specific. In the example project they are:
 
-Public endpoints (no authentication required):
+- ``/api-auth/login/``
+- ``/api-auth/logout/``
+
+Public endpoints (no authentication required) include:
 
 - Podlove audio format
 - Player configuration
-- Theme listing
+- Theme listing and theme update
 - Wagtail pages and images
+- Facet counts
 
 Endpoints
 ---------
@@ -56,10 +59,10 @@ Example response::
 
     {
         "id": 1,
-        "title": "My Video",
-        "file": "/media/videos/my-video.mp4",
-        "poster": "/media/video-posters/my-video.jpg",
-        "created": "2024-01-01T10:00:00Z"
+        "url": "http://localhost:8000/api/videos/1/",
+        "original": "http://localhost:8000/media/cast_videos/demo.mp4",
+        "poster": "http://localhost:8000/media/cast_videos/poster/poster_abcd.jpg",
+        "poster_thumbnail": "http://localhost:8000/media/images/poster.width-300.jpg"
     }
 
 **Audio**
@@ -77,8 +80,22 @@ Retrieve or delete audio::
 Podlove player format (public)::
 
     GET /api/audios/podlove/{id}/
+    GET /api/audios/podlove/{id}/post/{post_id}/
 
 Returns audio data formatted for the Podlove Web Player, including chapters and transcripts.
+
+Audio list/detail responses include these serializer fields:
+
+.. code-block:: json
+
+    {
+        "id": 12,
+        "name": "Episode 12",
+        "file_formats": "m4a mp3",
+        "url": "http://localhost:8000/api/audios/12/",
+        "podlove": "http://localhost:8000/api/audios/podlove/12/",
+        "mp3": "http://localhost:8000/media/cast_audio/episode-12.mp3"
+    }
 
 Player configuration::
 
@@ -153,42 +170,117 @@ Search and Discovery
 
 **Facet Counts**
 
-List blogs with facet information::
+List blogs that expose the detail endpoint::
 
     GET /api/facet_counts/
 
-Get detailed facets for a blog::
+If cast is mounted at ``/cast/``, this becomes ``/cast/api/facet_counts/``.
+
+Example list response::
+
+    {
+        "count": 1,
+        "next": null,
+        "previous": null,
+        "results": [
+            {
+                "id": 4,
+                "url": "http://localhost:8000/cast/api/facet_counts/4/"
+            }
+        ]
+    }
+
+Detail endpoint supports two response modes:
+
+Legacy mode (default)
+^^^^^^^^^^^^^^^^^^^^^
+
+Request::
 
     GET /api/facet_counts/{blog_id}/
 
-Response includes:
+Optional filter params are passed through the same filterset as the blog list:
+``search``, ``date_after``, ``date_before``, ``date_facets``, ``category_facets``, ``tag_facets``, ``o``.
 
-- Category counts
-- Tag counts
-- Date facets (posts per month/year)
-- Total post count
+Example::
 
-Example response::
+    GET /api/facet_counts/4/?search=python&tag_facets=django
+
+Legacy response shape::
 
     {
-        "id": 1,
-        "title": "My Blog",
-        "post_count": 42,
+        "id": 4,
+        "url": "http://localhost:8000/cast/api/facet_counts/4/",
         "facet_counts": {
-            "categories": [
-                {"slug": "tech", "name": "Technology", "count": 15},
-                {"slug": "news", "name": "News", "count": 10}
+            "date_facets": [
+                {"slug": "2026-02", "name": "2026-02", "count": 2}
             ],
-            "tags": [
-                {"name": "python", "count": 8},
-                {"name": "django", "count": 12}
+            "category_facets": [
+                {"slug": "til", "name": "Today I Learned", "count": 1}
             ],
-            "dates": {
-                "2024": {"count": 20, "months": {"01": 5, "02": 3}},
-                "2023": {"count": 22}
+            "tag_facets": [
+                {"slug": "django", "name": "django", "count": 1}
+            ]
+        }
+    }
+
+Modal mode
+^^^^^^^^^^
+
+Request::
+
+    GET /api/facet_counts/{blog_id}/?mode=modal
+
+Supported modal selection params:
+``search``, ``date_facets``, ``category_facets``, ``tag_facets``, ``o``.
+
+Example::
+
+    GET /api/facet_counts/4/?mode=modal&search=python&tag_facets=django&category_facets=til
+
+Modal response shape::
+
+    {
+        "mode": "modal",
+        "result_count": 1,
+        "groups": {
+            "date_facets": {
+                "selected": "",
+                "all_count": 1,
+                "options": [
+                    {"slug": "2026-02", "name": "2026-02", "count": 1},
+                    {"slug": "2026-01", "name": "2026-01", "count": 0}
+                ]
+            },
+            "tag_facets": {
+                "selected": "django",
+                "all_count": 2,
+                "options": [
+                    {"slug": "django", "name": "django", "count": 1},
+                    {"slug": "python", "name": "python", "count": 1}
+                ]
+            },
+            "category_facets": {
+                "selected": "til",
+                "all_count": 2,
+                "options": [
+                    {"slug": "til", "name": "Today I Learned", "count": 1},
+                    {"slug": "weeknotes", "name": "WeekNotes", "count": 1}
+                ]
             }
         }
     }
+
+Notes:
+
+- Only ``mode=modal`` enables modal responses; unknown modes fall back to legacy output.
+- Group keys are limited to configured facet groups from ``CAST_FILTERSET_FACETS`` intersected with:
+  ``date_facets``, ``tag_facets``, ``category_facets``.
+- Legacy mode uses conjunctive counts (fully filtered result set).
+- Modal mode uses disjunctive per-group counts (temporarily excludes the group being counted).
+- ``options`` include zero-count values so modal UIs can keep disabled choices visible.
+- ``o`` is accepted for URL-state parity but does not change modal counts.
+- ``date_after``/``date_before`` are part of the list filterset, but are not currently applied in modal mode.
 
 Theme Management
 ~~~~~~~~~~~~~~~~
@@ -202,7 +294,7 @@ Update selected theme::
     POST /api/update_theme/
     Content-Type: application/json
 
-    {"theme": "bootstrap5"}
+    {"theme_slug": "bootstrap5"}
 
 Comment Moderation
 ~~~~~~~~~~~~~~~~~~
@@ -220,11 +312,11 @@ List endpoints support pagination:
 
 - Default page size: 40
 - Maximum page size: 10000
-- Query parameters: ``page``, ``page_size``
+- Query parameters: ``page``, ``pageSize``
 
 Example::
 
-    GET /api/videos/?page=2&page_size=20
+    GET /api/videos/?page=2&pageSize=20
 
 Response format::
 
@@ -243,14 +335,16 @@ File upload endpoints accept ``multipart/form-data``:
 .. code-block:: javascript
 
     const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    formData.append('title', 'My Video');
+    formData.append('original', fileInput.files[0]);
 
     fetch('/api/upload_video/', {
         method: 'POST',
         body: formData,
         credentials: 'include'  // Include session cookie
     });
+
+For ``POST /api/audios/``, send audio format fields such as ``m4a``, ``mp3``,
+``oga``, or ``opus`` (plus optional metadata like ``title``/``subtitle``).
 
 Error Handling
 --------------
@@ -281,9 +375,9 @@ Fetching posts with facets:
 
 .. code-block:: javascript
 
-    async function fetchPosts(category, page = 1) {
+    async function fetchPosts(categorySlug, page = 1) {
         const response = await fetch(
-            `/api/wagtail/pages/?type=cast.Post&category=${category}&page=${page}`,
+            `/api/wagtail/pages/?type=cast.Post&child_of=4&use_post_filter=true&category_facets=${categorySlug}&page=${page}`,
             { credentials: 'include' }
         );
         return await response.json();
@@ -300,21 +394,16 @@ Using the API from Python with httpx:
 
     # Create client for session persistence
     with httpx.Client() as client:
-        # Login
-        client.post('https://example.com/api/auth/login/', data={
-            'username': 'user',
-            'password': 'pass'
-        })
-
-        # Upload audio file
-        with open('podcast.mp3', 'rb') as f:
-            response = client.post(
-                'https://example.com/api/audios/',
-                files={'file': f},
-                data={'title': 'Episode 1'}
-            )
-
-        audio_data = response.json()
+        # Request modal facet counts for a specific blog
+        response = client.get(
+            "https://example.com/api/facet_counts/4/",
+            params={
+                "mode": "modal",
+                "search": "python",
+                "tag_facets": "django",
+            },
+        )
+        facet_data = response.json()
 
 Headless CMS Usage
 ------------------

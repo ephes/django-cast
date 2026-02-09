@@ -207,24 +207,51 @@ like this:
 Faceted Navigation
 ******************
 
-You can configure the facets that are available in the search UI by
-setting the ``CAST_FILTERSET_FACETS`` variable in your settings file.
-The default value is:
+CAST_FILTERSET_FACETS
+=====================
+
+Controls which ``PostFilterset`` fields are active for blog list filtering.
+Default:
 
 .. code-block:: python
 
     CAST_FILTERSET_FACETS = [
-        "search", "date", "date_facets", "category_facets", "tag_facets"
+        "search", "date", "date_facets", "category_facets", "tag_facets", "o"
     ]
 
-But if you want to remove the ``tag_facets`` facet, because you don't
-use tags, you can do it like this:
+Supported values:
+
+- ``search``: full-text search
+- ``date``: date range filter (``date_after`` / ``date_before``)
+- ``date_facets``: month facet (``YYYY-MM``)
+- ``category_facets``: category slug facet
+- ``tag_facets``: tag slug facet
+- ``o``: ordering (``visible_date`` / ``-visible_date``)
+
+Example removing tag facets:
 
 .. code-block:: python
 
     CAST_FILTERSET_FACETS = [
-        "search", "date", "date_facets", "category_facets"
+        "search", "date", "date_facets", "category_facets", "o"
     ]
+
+Modal workflow behavior
+~~~~~~~~~~~~~~~~~~~~~~~
+
+``/api/facet_counts/<blog_id>/?mode=modal`` only emits modal groups for
+facet names that are both:
+
+- configured in ``CAST_FILTERSET_FACETS``
+- one of ``date_facets``, ``tag_facets``, ``category_facets``
+
+Practical recommendations:
+
+- Keep ``search`` enabled so modal counts can track the current query text.
+- Keep ``o`` enabled if your UI exposes ordering controls.
+- ``date`` (range filter) affects the blog list page, but the
+  ``?mode=modal`` facet API does not currently apply date-range
+  constraints when computing its counts.
 
 
 **********

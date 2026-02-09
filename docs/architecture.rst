@@ -177,6 +177,38 @@ Cast provides:
 
 Note: The REST Framework serializers are not performance-optimized. Performance optimization happens at the repository and feed generation level.
 
+.. _search_facet_architecture:
+
+Search and Facet Flow
+---------------------
+
+Search/filter/facet behavior is implemented through two parallel paths:
+
+1. Blog list and legacy facet counts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Source queryset: ``Blog.unfiltered_published_posts`` (live descendants, ordered by ``-visible_date``)
+- Filter layer: ``Blog.get_filterset(...)`` creates ``PostFilterset``
+- Legacy facet API: ``FacetCountSerializer.get_facet_counts`` reads facet counts from the filterset and returns
+  ``facet_counts.date_facets/category_facets/tag_facets``
+
+2. Modal facet counts API
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Endpoint: ``FacetCountsDetailView`` with ``?mode=modal``
+- Source queryset: ``blog.unfiltered_published_posts``
+- Calculator: ``cast.modal_facet_counts.get_modal_facet_counts``
+
+Modal calculation steps:
+
+- Normalize selection (``search``, ``date_facets``, ``tag_facets``, ``category_facets``)
+- Build ``result_count`` from fully selected queryset
+- For each configured group, recalculate ``all_count`` with that group excluded
+- Return ``options`` from the full facet universe, including zero-count values
+
+This split keeps legacy clients stable while enabling richer modal UIs that need
+"what would happen if I click this facet next?" counts.
+
 Frontend Components
 -------------------
 

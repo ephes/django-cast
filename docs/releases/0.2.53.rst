@@ -11,6 +11,21 @@ Example project
 - Ensure the Bootstrap4 example navbar loads the theme selector so switching back works.
 - Ensure the Plain example theme includes the theme selector for switching.
 
+Documentation
+~~~~~~~~~~~~~
+- Rewrote search documentation to accurately describe available filter
+  parameters, validation rules, and facet behavior.
+- Updated API docs for `/api/facet_counts/` and `/api/facet_counts/{id}/` with accurate legacy and `mode=modal`
+  response shapes.
+- Clarified development visual testing workflow: use `/cast/styleguide/` for component preview and
+  `/styleguide-blog/` for end-to-end search/filter/facet checks.
+- Clarified `CAST_FILTERSET_FACETS` defaults and how it controls modal facet groups.
+- Added a concise architecture section describing the search/filter/facet data flow across blog pages and facet APIs.
+- Corrected older API reference mismatches (auth URL examples, serializer response examples, theme update payload key,
+  multipart upload field names, and `pageSize` pagination parameter naming).
+- Added explicit docs for conjunctive vs disjunctive facet counting, including practical URL examples and rationale
+  for legacy vs `mode=modal` behavior.
+
 Developer data helpers
 ~~~~~~~~~~~~~~~~~~~~~~
 - `create_user` now reuses existing users to avoid duplicate-username errors during demo setup.

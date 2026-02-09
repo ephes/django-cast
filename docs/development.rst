@@ -153,17 +153,36 @@ prebuilt manifests instead:
 Styleguide
 ----------
 
-The styleguide view renders the design-system components for the active theme.
-The example app enables it by default in ``example_site.settings.dev``.
+Use two different URLs during frontend verification. They serve different purposes.
 
-Open the styleguide in your browser (the path respects any URL prefix used when
-including cast URLs). In the example project this is:
+Component preview route:
 
 .. code-block:: bash
 
    http://localhost:8000/cast/styleguide/
 
-Switch themes via query param:
+This renders seeded preview components for the active theme (cards, media blocks,
+comments, galleries, podcast snippets). It is the fastest way to inspect visual
+regressions in isolated sections.
+
+Real list-page behavior route:
+
+.. code-block:: bash
+
+   http://localhost:8000/styleguide-blog/
+
+This is a real Wagtail blog index page. Use it for end-to-end checks of:
+
+- search query behavior (``?search=python``)
+- facet selection (``?date_facets=2026-02&tag_facets=django``)
+- filter + pagination/navigation interactions
+
+.. note::
+
+   ``/styleguide-blog/`` is created by the styleguide seeder. If it returns a
+   404, visit ``/cast/styleguide/`` once to create the demo pages, then reload.
+
+Switch styleguide theme via query param:
 
 .. code-block:: bash
 

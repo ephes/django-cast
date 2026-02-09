@@ -4,230 +4,156 @@
 Search
 ******
 
-Django Cast provides powerful search and filtering capabilities through full-text search and faceted navigation, enabling users to quickly find relevant content.
+Django Cast supports full-text search and faceted filtering on blog and podcast
+list pages. Filtering is handled by ``PostFilterset`` (in ``cast.filters``) and
+is available in two contexts:
 
-Full-Text Search
-================
+- Blog/podcast list pages (Wagtail page views)
+- Wagtail API pages listing when ``use_post_filter=true``
 
-Basic Search
-------------
+Filter Parameters
+=================
 
-Django Cast integrates with Wagtail's search backend to provide full-text search across your content:
+The filter parameter names are shared between UI routes and API routes.
 
-- Search through post titles, content, and metadata
-- Automatic indexing of new content
-- Support for multiple search backends (Elasticsearch, PostgreSQL, etc.)
-- Language-aware stemming and ranking
+- ``search``: full-text search via ``queryset.search(value).get_queryset()``
+- ``date_after`` and ``date_before``: date range filter for ``visible_date`` (from the ``date`` filter)
+- ``date_facets``: single month facet, format ``YYYY-MM``
+- ``category_facets``: category slug
+- ``tag_facets``: tag slug
+- ``o``: ordering for ``visible_date`` (``visible_date`` or ``-visible_date``)
 
-Search Implementation
----------------------
-
-The search functionality is available through:
-
-- Search box in blog templates
-- API endpoint for programmatic access
-- Faceted navigation interface
-
-Faceted Navigation
-==================
-
-Overview
---------
-
-Faceted navigation allows users to filter content by multiple dimensions simultaneously:
-
-- **Date facets**: Browse posts by month or year
-- **Category facets**: Filter by content categories
-- **Tag facets**: Filter by content tags
-- **Search filters**: Combine with full-text search
-
-Configuration
--------------
-
-Configure available facets in your settings:
+Default configuration:
 
 .. code-block:: python
 
-    # settings.py
     CAST_FILTERSET_FACETS = [
-        "search",           # Full-text search box
-        "date",             # Date range filtering
-        "date_facets",      # Year/month facets
-        "category_facets",  # Category filtering
-        "tag_facets"        # Tag filtering
+        "search",
+        "date",
+        "date_facets",
+        "category_facets",
+        "tag_facets",
+        "o",
     ]
 
-Facet API Endpoints
--------------------
+Search and Filter Examples
+==========================
 
-Access facet data programmatically:
+Blog list routes (example slug ``styleguide-blog``):
 
-- ``/api/facet_counts/`` - List all blogs with facet information
-- ``/api/facet_counts/{blog_id}/`` - Detailed facet counts for a specific blog
+.. code-block:: text
 
-Example API response:
+    /styleguide-blog/?search=python
+    /styleguide-blog/?date_after=2026-01-01&date_before=2026-12-31
+    /styleguide-blog/?date_facets=2026-02&tag_facets=django
+    /styleguide-blog/?category_facets=til&o=-visible_date
 
-.. code-block:: json
+Wagtail API pages endpoint (if cast is mounted at ``/cast/``):
 
-    {
-        "blog_id": 1,
-        "facets": {
-            "date_facets": {
-                "2024": {"count": 15},
-                "2023": {"count": 42}
-            },
-            "category_facets": {
-                "tutorials": {"count": 12},
-                "news": {"count": 8}
-            },
-            "tag_facets": {
-                "python": {"count": 10},
-                "django": {"count": 15}
-            }
-        }
-    }
+.. code-block:: text
 
-Search Backends
-===============
+    /cast/api/wagtail/pages/?type=cast.Post&child_of=4&use_post_filter=true&search=python
+    /cast/api/wagtail/pages/?type=cast.Post&child_of=4&use_post_filter=true&date_facets=2026-02
 
-Wagtail Backend Support
------------------------
+Facet Behavior
+==============
 
-Django Cast supports all Wagtail search backends:
+- In the default (legacy) mode, facet counts reflect the currently filtered
+  queryset. The ``?mode=modal`` API uses a different counting strategy; see
+  :ref:`conjunctive_vs_disjunctive` for details.
+- Tag/category facet options with count ``0`` are omitted from the standard filterset choices.
+- Date facets are month buckets generated from ``visible_date``.
+- Invalid facet values are ignored:
+  - ``date_facets`` must parse as ``YYYY-MM``.
+  - ``tag_facets`` and ``category_facets`` must pass Django slug validation.
+- Generated facet links intentionally drop ``page`` from the query string to avoid broken pagination URLs.
 
-1. **Database Search** (default)
+.. _conjunctive_vs_disjunctive:
 
-   - No additional setup required
-   - Basic full-text search
-   - Suitable for small to medium sites
+Conjunctive vs Disjunctive Faceting
+===================================
 
-2. **PostgreSQL Search**
+django-cast provides two facet API modes. The default (legacy) mode returns
+counts matching all currently active filters. The modal mode (``?mode=modal``)
+adjusts counts per facet group so a UI can show "what happens if I switch this
+facet value next?".
 
-   - Advanced full-text search features
-   - Better performance than basic database search
-   - Requires PostgreSQL database
+Both modes are documented in :ref:`Modal Facet API <modal_facet_api>`.
 
-3. **Elasticsearch**
+These correspond to two counting strategies common in faceted navigation.
 
-   - Best performance for large sites
-   - Advanced search features
-   - Requires Elasticsearch server
-
-Backend Configuration
----------------------
-
-Configure your search backend in settings:
-
-.. code-block:: python
-
-    # PostgreSQL search
-    WAGTAILSEARCH_BACKENDS = {
-        'default': {
-            'BACKEND': 'wagtail.search.backends.postgresql',
-        }
-    }
-
-    # Elasticsearch
-    WAGTAILSEARCH_BACKENDS = {
-        'default': {
-            'BACKEND': 'wagtail.search.backends.elasticsearch7',
-            'URLS': ['http://localhost:9200'],
-            'INDEX': 'django_cast',
-        }
-    }
-
-Search Features
-===============
-
-Filter Persistence
-------------------
-
-Search filters and facet selections persist across page navigation:
-
-- URL-based state management
-- Shareable search URLs
-- Browser back/forward support
-
-Search Optimization
--------------------
-
-Performance features for search:
-
-- Cached facet counts
-- Indexed search fields
-- Optimized query generation
-- Minimal database queries
-
-Advanced Search Options
------------------------
-
-Extend search functionality:
-
-.. code-block:: python
-
-    # Custom search fields
-    search_fields = [
-        index.SearchField('title', boost=2),
-        index.SearchField('body'),
-        index.FilterField('date'),
-        index.RelatedFields('categories', [
-            index.SearchField('name'),
-        ]),
-    ]
-
-Implementing Search
-===================
-
-Template Integration
+Conjunctive faceting
 --------------------
 
-Add search to your templates:
+Counts are computed from the fully filtered result set (all active filters applied).
 
-.. code-block:: html
+This is the strategy used by the default (legacy) facet API.
 
-    <!-- Search form -->
-    <form method="get" action="{% url 'cast:post_list' %}">
-        <input type="text" name="search"
-               placeholder="Search posts..."
-               value="{{ request.GET.search }}">
-        <button type="submit">Search</button>
-    </form>
+Disjunctive faceting
+--------------------
 
-    <!-- Facet filters -->
-    {% include "cast/filters/date_facets.html" %}
-    {% include "cast/filters/category_facets.html" %}
-    {% include "cast/filters/tag_facets.html" %}
+For a given facet group, counts are computed with that group temporarily excluded,
+while keeping the other active filters.
 
-View Integration
-----------------
+This is the strategy used by the modal facet API (``?mode=modal``).
 
-Search is automatically handled in post list views:
+Practical example
+-----------------
 
-.. code-block:: python
+Assume posts:
 
-    # Automatic in BlogDetailView
-    # Filters applied via QuerysetData repository
-    # Results paginated and cached
+- Post A: ``category=til``, ``tag=python``
+- Post B: ``category=til``, ``tag=django``
+- Post C: ``category=weeknotes``, ``tag=python``
 
-Troubleshooting
+Active URL state:
+
+.. code-block:: text
+
+    /styleguide-blog/?category_facets=til&tag_facets=python
+
+Conjunctive tag counts (legacy):
+
+- Current result set is only Post A.
+- Tag options from that set are effectively ``python (1)``.
+- ``django`` is not available until you first clear the tag filter.
+
+Disjunctive tag counts (modal):
+
+- Keep ``category_facets=til`` but exclude the current tag filter while counting tag options.
+- Eligible posts are Post A and Post B.
+- Tag options become ``python (1)`` and ``django (1)``.
+- Clicking ``django`` switches directly to:
+
+.. code-block:: text
+
+    /styleguide-blog/?category_facets=til&tag_facets=django
+
+Why django-cast has both
+------------------------
+
+- Legacy mode keeps backward-compatible behavior for existing clients.
+- ``mode=modal`` supports one-click switching inside a facet group (without a clear-first step).
+- The total result count still reflects all active filters combined.
+- Each facet group's option counts answer: "if I change only this group, how many results would I get?".
+- See :doc:`../reference/api` for exact response fields (``result_count``, ``all_count``, ``options``).
+
+.. _modal_facet_api:
+
+Modal Facet API
 ===============
 
-Common Issues
--------------
+For modal UIs, use ``/cast/api/facet_counts/<blog_id>/?mode=modal`` (path prefix depends on how you include ``cast.urls``).
 
-1. **No Search Results**
+Modal payloads are calculated by ``cast.modal_facet_counts.get_modal_facet_counts`` and return:
 
-   - Rebuild search index: ``./manage.py update_index``
-   - Check search backend configuration
-   - Verify content is published
+- ``result_count`` for the fully selected state
+- Per-group ``all_count`` with that group temporarily excluded
+- ``options`` including zero-count values so the modal can keep the full facet universe visible
 
-2. **Slow Search Performance**
+See :doc:`../reference/api` for exact response shapes.
 
-   - Enable search result caching
-   - Optimize indexed fields
+Architecture Notes
+==================
 
-3. **Incorrect Facet Counts**
-
-   - Clear cache: ``./manage.py clear_cache``
-   - Check facet configuration
-   - Verify queryset filters
+For the end-to-end request/data flow (blog queryset, ``PostFilterset``, legacy serializer path, and modal API path), see :ref:`search_facet_architecture`.
