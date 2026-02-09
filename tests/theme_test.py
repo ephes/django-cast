@@ -286,6 +286,19 @@ def test_context_processor_survives_db_error(rf, mocker):
     assert context["template_base_dir"] == DEFAULT_TEMPLATE_BASE_DIR
 
 
+@pytest.mark.django_db
+def test_context_processor_survives_get_template_base_dir_error(rf, mocker):
+    """When get_template_base_dir raises, fall back to site_template_base_dir_name."""
+    mocker.patch(
+        "cast.context_processors.get_template_base_dir",
+        side_effect=OperationalError("connection refused"),
+    )
+    request = rf.get("/")
+    request.cast_site_template_base_dir = "bootstrap4"
+    context = site_template_base_dir(request)
+    assert context["template_base_dir"] == "bootstrap4"
+
+
 def test_choices_cache_is_stale_after_settings_change(settings, mocker):
     """Cache is process-lifetime: new themes added after first call are invisible until cleared."""
     mocker.patch("cast.models.theme.get_template_directories", return_value=[])

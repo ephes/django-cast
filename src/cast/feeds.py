@@ -27,7 +27,7 @@ if django.VERSION >= (5, 2):
     from django.utils.feedgenerator import Stylesheet
 
     _feed_stylesheets: list | None = [Stylesheet("/static/cast/feed-style.xsl", "text/xsl")]
-else:
+else:  # pragma: no cover
     _feed_stylesheets = None
 
 logger = logging.getLogger(__name__)

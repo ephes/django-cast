@@ -1,6 +1,7 @@
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal, TypedDict, cast
 
 from django.core import validators
@@ -196,6 +197,10 @@ def _fetch_date_counts(queryset: models.QuerySet, resolver: AggregationQueryReso
         .annotate(num_posts=models.Count("pk", distinct=True))
         .values_list("month", "num_posts")
     )
+    return _date_rows_to_counts(rows)
+
+
+def _date_rows_to_counts(rows: Iterable[tuple[datetime | None, int]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for month, count in rows:
         if month is None:

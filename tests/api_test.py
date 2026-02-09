@@ -703,6 +703,122 @@ def test_facet_counts_detail_mode_modal_aggregation_probe_runs_once(api_client, 
 
 
 @pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_with_date_facets(api_client, blog, body):
+    """Selecting a date_facets param filters posts to the matching month."""
+    _create_modal_facet_posts(blog, body)
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+
+    r = api_client.get(f"{url}?mode=modal&date_facets=2026-01", format="json")
+    assert r.status_code == 200
+    result = r.json()
+    assert result["result_count"] == 1
+    assert result["groups"]["date_facets"]["selected"] == "2026-01"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("date_value", ["not-a-date", "2026-13", "abc"])
+def test_facet_counts_detail_mode_modal_with_invalid_date_facets(api_client, blog, body, date_value):
+    """Invalid date_facets param should be normalized to empty and not filter results."""
+    _create_modal_facet_posts(blog, body)
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+
+    r = api_client.get(f"{url}?mode=modal&date_facets={date_value}", format="json")
+    assert r.status_code == 200
+    result = r.json()
+    assert result["groups"]["date_facets"]["selected"] == ""
+    # Invalid facet should not filter — result_count equals all posts
+    assert result["result_count"] == 3
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_with_invalid_slug_facets(api_client, blog, body):
+    """Invalid slug values should be normalized to empty and not filter results."""
+    _create_modal_facet_posts(blog, body)
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+
+    r = api_client.get(f"{url}?mode=modal&tag_facets=not+valid!", format="json")
+    assert r.status_code == 200
+    result = r.json()
+    assert result["groups"]["tag_facets"]["selected"] == ""
+    # Invalid facet should not filter — result_count equals all posts
+    assert result["result_count"] == 3
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("2026-01", "2026-01"),
+        ("not-a-date", ""),
+        ("2026-13", ""),
+        ("", ""),
+    ],
+)
+def test_normalize_date_facet(value, expected):
+    from cast.modal_facet_counts import _normalize_date_facet
+
+    assert _normalize_date_facet(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("valid-slug", "valid-slug"),
+        ("invalid slug!", ""),
+        ("has spaces", ""),
+        ("", ""),
+    ],
+)
+def test_normalize_slug_facet(value, expected):
+    from cast.modal_facet_counts import _normalize_slug_facet
+
+    assert _normalize_slug_facet(value) == expected
+
+
+@pytest.mark.django_db
+def test_supports_aggregation_on_queryset_exception(mocker):
+    """When the aggregation probe raises, _supports_aggregation_on_queryset returns False."""
+    from cast.modal_facet_counts import _supports_aggregation_on_queryset
+    from cast.models import Post
+
+    qs = Post.objects.none()
+    original_order_by = qs.order_by
+
+    def failing_order_by(*args, **kwargs):
+        result = original_order_by(*args, **kwargs)
+        mock_values = mocker.MagicMock()
+        mock_values.annotate.return_value.__getitem__ = mocker.MagicMock(
+            side_effect=Exception("simulated aggregation failure")
+        )
+        result.values = mocker.MagicMock(return_value=mock_values)
+        return result
+
+    mocker.patch.object(qs, "order_by", side_effect=failing_order_by)
+    assert _supports_aggregation_on_queryset(qs) is False
+
+
+@pytest.mark.django_db
+def test_queryset_from_pk_fallback_empty():
+    """When the input queryset is empty, _queryset_from_pk_fallback returns an empty queryset."""
+    from cast.modal_facet_counts import _queryset_from_pk_fallback
+    from cast.models import Post
+
+    qs = Post.objects.none()
+    result = _queryset_from_pk_fallback(qs)
+    assert result.count() == 0
+
+
+def test_date_rows_to_counts_skips_none_month():
+    """When a row has month=None it should be silently skipped."""
+    from cast.modal_facet_counts import _date_rows_to_counts
+
+    rows = [
+        (None, 3),
+        (datetime(2026, 1, 1), 5),
+    ]
+    assert _date_rows_to_counts(rows) == {"2026-01": 5}
+
+
+@pytest.mark.django_db
 def test_get_comments_via_post_detail(api_client, post, comment):
     url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
     r = api_client.get(url, format="json")
