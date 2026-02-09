@@ -1,0 +1,52 @@
+{% load static i18n %}
+{% if follow_links %}
+  {% with links=follow_links %}
+    {% if links.rss %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ links.rss }}" aria-label="{% trans "RSS feed" %}">
+          <img
+            src="{% static 'cast/img/Feed-icon.svg' %}"
+            alt="{% trans 'RSS feed' %}"
+            height="16"
+            width="16"
+          >
+        </a>
+      </li>
+    {% endif %}
+    {% if links.mastodon %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ links.mastodon }}" aria-label="{% trans "Mastodon" %}" rel="me noopener">
+          Mastodon
+        </a>
+      </li>
+    {% endif %}
+    {% if links.github %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ links.github }}" aria-label="{% trans "GitHub" %}" rel="noopener">
+          GitHub
+        </a>
+      </li>
+    {% endif %}
+    {% if links.bluesky %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ links.bluesky }}" aria-label="{% trans "Bluesky" %}" rel="noopener">
+          Bluesky
+        </a>
+      </li>
+    {% endif %}
+    {% if links.linkedin %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ links.linkedin }}" aria-label="{% trans "LinkedIn" %}" rel="noopener">
+          LinkedIn
+        </a>
+      </li>
+    {% endif %}
+    {% if links.email %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ links.email }}" aria-label="{% trans "Email" %}">
+          Email
+        </a>
+      </li>
+    {% endif %}
+  {% endwith %}
+{% endif %}

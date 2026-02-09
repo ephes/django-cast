@@ -1,0 +1,37 @@
+{% load i18n %}
+{% if follow_links %}
+  {% with links=follow_links %}
+    <ul>
+      {% if links.rss %}
+        <li>
+          <a href="{{ links.rss }}" aria-label="{% trans "RSS feed" %}">RSS</a>
+        </li>
+      {% endif %}
+      {% if links.mastodon %}
+        <li>
+          <a href="{{ links.mastodon }}" aria-label="{% trans "Mastodon" %}" rel="me noopener">Mastodon</a>
+        </li>
+      {% endif %}
+      {% if links.github %}
+        <li>
+          <a href="{{ links.github }}" aria-label="{% trans "GitHub" %}" rel="noopener">GitHub</a>
+        </li>
+      {% endif %}
+      {% if links.bluesky %}
+        <li>
+          <a href="{{ links.bluesky }}" aria-label="{% trans "Bluesky" %}" rel="noopener">Bluesky</a>
+        </li>
+      {% endif %}
+      {% if links.linkedin %}
+        <li>
+          <a href="{{ links.linkedin }}" aria-label="{% trans "LinkedIn" %}" rel="noopener">LinkedIn</a>
+        </li>
+      {% endif %}
+      {% if links.email %}
+        <li>
+          <a href="{{ links.email }}" aria-label="{% trans "Email" %}">Email</a>
+        </li>
+      {% endif %}
+    </ul>
+  {% endwith %}
+{% endif %}

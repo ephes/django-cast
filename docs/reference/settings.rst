@@ -98,15 +98,21 @@ within your templates folder and place your templates inside.
 CAST_FOLLOW_LINKS
 =================
 
-Optional mapping of follow links shown in the Bootstrap5 navbar. Supported keys are
-``rss``, ``mastodon``, ``github``, ``bluesky``, ``linkedin``, and ``email``. If ``rss``
-is not provided, it defaults to the blog feed. If ``email`` is not provided, it uses
-``Blog.email`` when available.
+Optional mapping of follow links shown in the navbar. Supported keys are
+``rss``, ``mastodon``, ``github``, ``bluesky``, ``linkedin``, and ``email``.
+
+When a blog context is available, the ``rss`` value is always set to the
+blog-specific feed URL, overriding any value from settings. The settings
+``rss`` value is only used as a fallback on pages without a blog context.
+
+If ``email`` is not provided, it falls back to ``Blog.email`` when available.
+Unlike ``rss``, a settings-level ``email`` value takes precedence over
+``Blog.email``.
 
 .. code-block:: python
 
     CAST_FOLLOW_LINKS = {
-        # "rss": "https://example.com/feed.xml",  # optional, defaults to blog feed
+        # "rss" is always overridden by the blog feed when a blog is present
         "mastodon": "https://example.social/@account",
         "github": "https://github.com/example",
         "bluesky": "https://bsky.app/profile/example.com",

@@ -25,18 +25,13 @@
       <h2>Description</h2>
       {{ page.description|richtext }}
     </section>
-    <section>
-      <h2>Feed</h2>
-      <a href="{% url "cast:latest_entries_feed" slug=blog.slug %}">
-        Link to RSS feed
-      </a>
-    </section>
   </header>
 {% endblock header %}
 
 {% block navigation %}
   <nav>
     <hr>
+    {% include "./follow_links.html" %}
     {% include "./select_theme.html" %}
     <hr>
     {% include "./_filter_form.html" with form=filterset.form page=page %}
