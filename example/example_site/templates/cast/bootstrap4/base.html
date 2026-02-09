@@ -34,7 +34,7 @@
                   <a class="nav-link" href="{{ link }}">{{ text }}</a>
                 </li>
               {% endfor %}
-              <li class="nav-item dropdown" hx-get="{% url 'cast:select-theme' %}" hx-trigger="load" hx-swap="outerHTML"></li>
+              <li class="nav-item dropdown" hx-get="{% url 'cast:select-theme' %}?template_base_dir=bootstrap4" hx-trigger="load" hx-swap="outerHTML"></li>
             </ul>
           </div>
         </nav>

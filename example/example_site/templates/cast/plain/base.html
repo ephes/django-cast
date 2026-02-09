@@ -27,7 +27,7 @@
     {% endblock header %}
     {% block navigation %}
       <nav>
-        <div hx-get="{% url 'cast:select-theme' %}" hx-trigger="load" hx-swap="outerHTML"></div>
+        <div hx-get="{% url 'cast:select-theme' %}?template_base_dir=plain" hx-trigger="load" hx-swap="outerHTML"></div>
       </nav>
     {% endblock navigation %}
     <div id="paging-area">
