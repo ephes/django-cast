@@ -18,9 +18,10 @@ check:
     just typecheck
     just test
 
-# Run the full test suite
+# Run the full test suite with coverage enforcement (fail if <100%)
 test:
-    uv run pytest
+    uv run coverage run -m pytest
+    uv run coverage report
 
 # Run a specific test (pass path or node id)
 test-one TARGET:

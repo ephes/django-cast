@@ -38,17 +38,17 @@ HomePage
 
 ### Python/Django Commands
 ```bash
-# Run tests
-uv run pytest
+# Run tests with 100% coverage enforcement (used by `just check`)
+just test  # runs: uv run coverage run -m pytest && uv run coverage report
 
-# Run tests with coverage
-python commands.py coverage
+# Run tests with coverage and open HTML report
+just coverage
 
 # Type checking
 uv run mypy
 
 # Build documentation
-uv run commands.py docs
+just docs
 
 # Test against multiple Django/Wagtail versions
 uv run tox
@@ -57,6 +57,7 @@ uv run tox
 # where django-cast is installed as an editable package
 ```
 Always run `just check` (runs `just lint`, `just typecheck`, and `just test` in sequence) before delivery; all three must pass.
+`just test` enforces 100% code coverage — it will fail if any line is uncovered.
 Do not consider a task done until `just check` passes.
 
 ### JavaScript Build Commands
@@ -95,7 +96,7 @@ pre-commit run --all-files
 - JavaScript tests: Vitest with jsdom
 - Coverage requirements: Configured in `pyproject.toml` and must remain at 100% for the Python test suite.
 - **IMPORTANT**: Do not deliver changes if coverage drops below 100%. Add tests for new code or adjust coverage exclusions only when justified.
-- Run single test: `uv run python commands.py test path.to.test::TestClass::test_method`
+- Run single test: `just test-one tests/test_file.py::TestClass::test_case`
 
 ### End-to-End Testing with Playwright
 
@@ -175,7 +176,7 @@ When modifying models:
 2. Run `uv run manage.py makemigrations`
 3. Review generated migration
 4. Run `uv run manage.py migrate`
-5. Test with `uv run pytest`
+5. Test with `just test`
 
 ## CLI Commands
 
@@ -198,10 +199,33 @@ When bumping the version number for a new release:
 
 ## Related Sibling Repositories
 
-When making changes that affect templates, feeds, or public APIs, also check and fix the related sibling repos if needed:
-- `../cast-bootstrap5` — Bootstrap 5 theme templates and assets
-- `../homepage` — Production homepage site using django-cast
-- `../python-podcast` — Python podcast site using django-cast
+### Theme Repos (provide templates that extend django-cast)
+- `../cast-bootstrap5` — Bootstrap 5 theme: templates in `cast_bootstrap5/templates/cast/bootstrap5/`
+- `../cast-vue` — Vue.js theme: templates in `cast_vue/templates/cast/vue/`
+
+### Consumer Sites (use django-cast as a dependency)
+- `../homepage` — Production homepage site
+- `../python-podcast` — Python podcast site
+
+### When to Check Sibling Repos
+
+**Always check theme repos** when changing:
+- Template context variables (context processors, `get_context()` methods)
+- Template block names or structure in base/core templates
+- Feed URLs, view URLs, or URL naming
+- CSS class names or HTML structure used in templates
+- StreamField block rendering
+
+**Always check consumer sites** when changing:
+- Settings or configuration (new required settings, changed defaults)
+- Model fields, migrations, or database schema
+- Package dependencies or version requirements
+- Management commands or CLI interfaces
+
+### How to Check
+1. Read the relevant templates/code in sibling repos to understand current usage
+2. Make corresponding changes in sibling repos if needed
+3. Note any sibling repo changes needed in the commit message or PR description
 
 ## Memories
 - Use `uv run tox` instead of `uvx tox`

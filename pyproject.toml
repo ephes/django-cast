@@ -146,6 +146,7 @@ command_line = "runtests.py tests"
 
 [tool.coverage.report]
 show_missing = true
+fail_under = 100
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
