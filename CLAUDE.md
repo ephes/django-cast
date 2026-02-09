@@ -139,6 +139,7 @@ Since the project uses src layout (`src/cast/`), the following applies:
 - Feed generation: `src/cast/feeds.py`
 - JavaScript source: `javascript/src/`
 - Tests: `tests/`
+- Specs: `specs/` — **local-only, listed in `.gitignore`; NEVER commit or `git add -f` spec files**
 - Example project: `example/`
 
 ## Working with Media
