@@ -30,6 +30,7 @@ from ..models import (
     get_template_base_dir,
     get_template_base_dir_choices,
 )
+from ..modal_facet_counts import get_modal_facet_counts
 from ..podlove import build_podlove_player_config
 from ..views import HtmxHttpRequest
 from ..views.theme import set_template_base_dir
@@ -156,6 +157,13 @@ class FacetCountListView(generics.ListAPIView):
 class FacetCountsDetailView(generics.RetrieveAPIView):
     queryset = Blog.objects.all()
     serializer_class = FacetCountSerializer
+
+    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+        if request.query_params.get("mode") == "modal":
+            blog = self.get_object()
+            payload = get_modal_facet_counts(blog, request.query_params)
+            return Response(payload)
+        return super().retrieve(request, *args, **kwargs)
 
 
 class CommentTrainingDataView(APIView):

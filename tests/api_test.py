@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.request import Request
 
+from cast import modal_facet_counts
 from cast.api.serializers import AudioPodloveSerializer
 from cast.api.views import (
     AudioPodloveDetailView,
@@ -16,7 +17,7 @@ from cast.api.views import (
 from cast.devdata import generate_blog_with_media
 from cast.models import PostCategory
 
-from .factories import UserFactory
+from .factories import PostFactory, UserFactory
 
 
 def test_api_root(api_client):
@@ -517,6 +518,188 @@ def test_facet_counts_detail(api_client, blog, post):
     result = r.json()
     date_facets = result["facet_counts"]["date_facets"]
     assert len(date_facets) == 0
+
+
+def _create_modal_facet_posts(blog, body):
+    til = PostCategory.objects.create(name="Today I Learned", slug="til")
+    weeknotes = PostCategory.objects.create(name="WeekNotes", slug="weeknotes")
+
+    jan_python = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="Python January",
+        slug="python-january",
+        body=body,
+        visible_date=timezone.make_aware(datetime(2026, 1, 10)),
+    )
+    jan_python.tags.add("python")
+    jan_python.categories.add(til)
+    jan_python.save()
+
+    feb_django = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="Django February",
+        slug="django-february",
+        body=body,
+        visible_date=timezone.make_aware(datetime(2026, 2, 12)),
+    )
+    feb_django.tags.add("django")
+    feb_django.categories.add(til)
+    feb_django.save()
+
+    feb_python = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="Python Weeknotes",
+        slug="python-weeknotes",
+        body=body,
+        visible_date=timezone.make_aware(datetime(2026, 2, 20)),
+    )
+    feb_python.tags.add("python")
+    feb_python.categories.add(weeknotes)
+    feb_python.save()
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_schema(api_client, blog, post):
+    category = PostCategory.objects.create(name="category", slug="category")
+    post.categories.add(category)
+    post.tags.add("tag")
+    post.save()
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(f"{url}?mode=modal", format="json")
+    assert r.status_code == 200
+
+    result = r.json()
+    assert result["mode"] == "modal"
+    assert isinstance(result["result_count"], int)
+    assert set(result["groups"].keys()) == {"date_facets", "category_facets", "tag_facets"}
+
+    for group in result["groups"].values():
+        assert set(group.keys()) == {"selected", "all_count", "options"}
+        assert isinstance(group["selected"], str)
+        assert isinstance(group["all_count"], int)
+        assert isinstance(group["options"], list)
+        for option in group["options"]:
+            assert set(option.keys()) == {"slug", "name", "count"}
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_unknown_mode_returns_legacy_response(api_client, blog, post):
+    post.tags.add("tag")
+    post.save()
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+
+    legacy = api_client.get(url, format="json")
+    unknown_mode = api_client.get(f"{url}?mode=unknown", format="json")
+
+    assert legacy.status_code == 200
+    assert unknown_mode.status_code == 200
+    assert unknown_mode.json() == legacy.json()
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_universe_merge_includes_zero_count_options(api_client, blog, body):
+    _create_modal_facet_posts(blog, body)
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+
+    r = api_client.get(f"{url}?mode=modal&tag_facets=django&category_facets=weeknotes", format="json")
+    assert r.status_code == 200
+    result = r.json()
+
+    assert result["result_count"] == 0
+    date_counts = {option["slug"]: option["count"] for option in result["groups"]["date_facets"]["options"]}
+    assert date_counts["2026-01"] == 0
+    assert date_counts["2026-02"] == 0
+
+    tag_counts = {option["slug"]: option["count"] for option in result["groups"]["tag_facets"]["options"]}
+    assert tag_counts["django"] == 0
+    assert tag_counts["python"] == 1
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_uses_own_group_exclusion(api_client, blog, body):
+    _create_modal_facet_posts(blog, body)
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+
+    r = api_client.get(f"{url}?mode=modal&tag_facets=python&category_facets=til", format="json")
+    assert r.status_code == 200
+    result = r.json()
+
+    assert result["result_count"] == 1
+    assert result["groups"]["tag_facets"]["all_count"] == 2
+    tag_counts = {option["slug"]: option["count"] for option in result["groups"]["tag_facets"]["options"]}
+    assert tag_counts["python"] == 1
+    assert tag_counts["django"] == 1
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_omits_groups_not_configured(api_client, blog, post, mocker):
+    post.tags.add("tag")
+    post.save()
+    mocker.patch("cast.modal_facet_counts.appsettings.CAST_FILTERSET_FACETS", ["search", "tag_facets", "o"])
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(f"{url}?mode=modal", format="json")
+    assert r.status_code == 200
+    assert set(r.json()["groups"].keys()) == {"tag_facets"}
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_empty_blog(api_client, blog):
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(f"{url}?mode=modal", format="json")
+    assert r.status_code == 200
+
+    result = r.json()
+    assert result["result_count"] == 0
+    assert set(result["groups"].keys()) == {"date_facets", "category_facets", "tag_facets"}
+    for group in result["groups"].values():
+        assert group["all_count"] == 0
+        assert group["selected"] == ""
+        assert group["options"] == []
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_search_aggregation_path(api_client, blog, post, mocker):
+    post.tags.add("python")
+    post.save()
+    mocker.patch("cast.modal_facet_counts._supports_aggregation_on_queryset", return_value=True)
+    fallback_spy = mocker.spy(modal_facet_counts, "_queryset_from_pk_fallback")
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(f"{url}?mode=modal&search={post.title}", format="json")
+    assert r.status_code == 200
+    assert fallback_spy.call_count == 0
+    assert r.json()["mode"] == "modal"
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_search_aggregation_fallback_path(api_client, blog, post, mocker):
+    post.tags.add("python")
+    post.save()
+    mocker.patch("cast.modal_facet_counts._supports_aggregation_on_queryset", return_value=False)
+    fallback_spy = mocker.spy(modal_facet_counts, "_queryset_from_pk_fallback")
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(f"{url}?mode=modal&search={post.title}", format="json")
+    assert r.status_code == 200
+    assert fallback_spy.call_count > 0
+    assert r.json()["mode"] == "modal"
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_aggregation_probe_runs_once(api_client, blog, post, mocker):
+    post.tags.add("python")
+    post.save()
+    probe_spy = mocker.spy(modal_facet_counts, "_supports_aggregation_on_queryset")
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(f"{url}?mode=modal", format="json")
+    assert r.status_code == 200
+    assert probe_spy.call_count == 1
 
 
 @pytest.mark.django_db
