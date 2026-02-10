@@ -5,22 +5,11 @@
   view-transition-name: paging-area;
 }
 
-::view-transition-old(paging-area) {
-  animation: 250ms ease-out both fade-out;
-}
-
-::view-transition-new(paging-area) {
-  animation: 250ms ease-in both fade-in;
-}
-
-@keyframes fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(paging-area),
+  ::view-transition-new(paging-area) {
+    animation-duration: 0s !important;
+  }
 }
 
 .alert-debug {
