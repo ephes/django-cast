@@ -22,13 +22,7 @@
       <div class="intro lead">{{ page.description|richtext }}</div>
     </div>
 
-    {% block feeds %}
-      {% if podcast %}
-        <a class="btn btn-primary" href="{% url 'cast:feed_detail' slug=page.slug %}">
-          {% trans "Subscribe" %}
-        </a>
-      {% endif %}
-    {% endblock feeds %}
+    {% block feeds %}{% endblock feeds %}
   </div>
 
   {% block filters %}
