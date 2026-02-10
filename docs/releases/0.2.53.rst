@@ -76,8 +76,11 @@ Pagination
 ~~~~~~~~~~
 - Fix scroll position landing mid-content after htmx pagination swap by changing
   ``show:top`` to ``show:window:top``.
-- Add View Transitions API support (``transition:true``) for a smooth 250ms
-  cross-fade when paginating. Gracefully degrades in unsupported browsers.
+- Add View Transitions API support (``transition:true``) for a smooth cross-fade
+  when paginating. Gracefully degrades in unsupported browsers. Animation is
+  disabled for users who prefer reduced motion.
+- Add ``hx-sync="#paging-area:replace"`` to pagination links so rapid clicks
+  cancel in-flight requests instead of racing.
 - Update bundled htmx from 2.0.0-beta4 to 2.0.8.
 
 Images
