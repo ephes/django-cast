@@ -2,7 +2,7 @@
   <ul class="cast-gallery-list">
     {% for image in images %}
       <li class="cast-gallery-item">
-        <a class="cast-gallery-link" href="{{ image.file.url }}">
+        <a class="cast-gallery-link" href="{{ image.modal.src.jpeg }}">
           <picture>
             <source
               srcset="{{ image.thumbnail.srcset.avif }}"

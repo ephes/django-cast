@@ -71,3 +71,8 @@ Themes
 - Store theme choices cache as an immutable tuple and return a fresh list copy to prevent accidental mutation.
 - Fix double DB hit in the theme context processor by passing the site default as a fallback.
 - Narrow context processor exception handling to DB/lookup errors instead of blanket ``Exception``.
+
+Images
+~~~~~~
+- Gallery and image templates now link to optimized Wagtail renditions instead of
+  original uploads, avoiding multi-megabyte downloads when users click through.
