@@ -10,7 +10,7 @@ Feed Detail Page
 ================
 
 Each blog and podcast has a dedicated feed detail page at ``<slug>/feed/``
-that lists all available feeds in one place:
+(URL name ``cast:feed_detail``) that lists all available feeds in one place:
 
 - **Blog RSS feed** link (for all blogs)
 - **Podcast feeds** table with all four audio formats (MP3, M4A, OGA, OPUS) in
@@ -22,16 +22,26 @@ The navbar RSS icon links to this page instead of the raw XML feed. Custom
 themes without a ``feed_detail.html`` template automatically fall back to the
 plain theme.
 
+The template receives the following context variables:
+
+- ``blog`` — the Blog or Podcast instance
+- ``is_podcast`` — boolean, ``True`` for podcasts
+- ``blog_feed_url`` — URL to the blog RSS XML feed
+- ``template_base_dir`` — the active theme name
+- ``podcast_feeds`` — list of dicts with ``format``, ``format_label``,
+  ``rss_url``, ``atom_url`` (podcasts only)
+- ``apple_podcasts_url`` — Apple Podcasts URL from settings, or ``None``
+  (podcasts only)
+
 Feed Types
 ==========
 
 Blog Feeds
 ----------
 
-Blog feeds are available in both RSS and Atom formats, automatically generated from your blog content:
+Blog feeds are available in RSS format, automatically generated from your blog content:
 
-- RSS 2.0 feed with standard blog metadata
-- Atom feed with enhanced metadata support
+- RSS 2.0 feed at ``<slug>/feed/rss.xml``
 - Feed fields populated from Blog model: title, description, author
 - Automatic inclusion of post content (overview and detail sections)
 
@@ -43,7 +53,8 @@ Podcast feeds extend blog feeds with additional podcast-specific features:
 - iTunes podcast metadata (artwork, categories, explicit content marking)
 - Audio file enclosures for episode distribution
 - Multiple audio format support with separate feeds per format
-- Available at: ``feed/podcast/<audio_format>/rss.xml``
+- RSS at ``<slug>/feed/podcast/<audio_format>/rss.xml``
+- Atom at ``<slug>/feed/podcast/<audio_format>/atom.xml``
 - Chapter marks support for enhanced navigation
 - Transcript URLs included in feeds (WebVTT and DOTE formats)
 
