@@ -14,6 +14,7 @@ from cast.feeds import (
     AtomITunesFeedGenerator,
     AtomPodcastFeed,
     ITunesElements,
+    LatestEntriesAtomFeed,
     LatestEntriesFeed,
     PodcastFeed,
     PodcastIndexElements,
@@ -82,6 +83,28 @@ class TestGeneratedFeeds:
         self, client, post, use_dummy_cache_backend, use_django_repository
     ):
         feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert "xml" in content
+        assert post.title in content
+
+    def test_get_latest_entries_atom_feed(self, client, post, use_dummy_cache_backend):
+        feed_url = reverse("cast:latest_entries_atom_feed", kwargs={"slug": post.blog.slug})
+
+        r = client.get(feed_url)
+        assert r.status_code == 200
+
+        content = r.content.decode("utf-8")
+        assert "xml" in content
+        assert post.title in content
+
+    def test_get_latest_entries_atom_feed_from_django_models(
+        self, client, post, use_dummy_cache_backend, use_django_repository
+    ):
+        feed_url = reverse("cast:latest_entries_atom_feed", kwargs={"slug": post.blog.slug})
 
         r = client.get(feed_url)
         assert r.status_code == 200
@@ -373,6 +396,9 @@ class TestFeedStylesheets:
     def test_latest_entries_feed_has_stylesheets(self):
         assert LatestEntriesFeed.stylesheets is _feed_stylesheets
 
+    def test_latest_entries_atom_feed_has_stylesheets(self):
+        assert LatestEntriesAtomFeed.stylesheets is _feed_stylesheets
+
     def test_atom_podcast_feed_has_stylesheets(self):
         assert AtomPodcastFeed.stylesheets is _feed_stylesheets
 
@@ -384,6 +410,16 @@ class TestFeedStylesheets:
         if django.VERSION < (5, 2):
             pytest.skip("Stylesheet support requires Django 5.2+")
         feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+        r = client.get(feed_url)
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert 'href="/static/cast/feed-style.xsl"' in content
+
+    @pytest.mark.django_db
+    def test_atom_blog_feed_contains_xsl_processing_instruction(self, client, post, use_dummy_cache_backend):
+        if django.VERSION < (5, 2):
+            pytest.skip("Stylesheet support requires Django 5.2+")
+        feed_url = reverse("cast:latest_entries_atom_feed", kwargs={"slug": post.blog.slug})
         r = client.get(feed_url)
         assert r.status_code == 200
         content = r.content.decode("utf-8")

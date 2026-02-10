@@ -99,6 +99,23 @@ class RepositoryMixin:
         sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain=domain, name=domain)
 
 
+class AtomFeedWithStylesheets(Atom1Feed):
+    """Atom feed generator that supports XSL stylesheets."""
+
+    def add_stylesheets(self, handler):
+        for stylesheet in self.feed.get("stylesheets") or []:
+            handler.processingInstruction("xml-stylesheet", str(stylesheet))
+
+    def write(self, outfile, encoding):
+        handler = SimplerXMLGenerator(outfile, encoding, short_empty_elements=True)
+        handler.startDocument()
+        self.add_stylesheets(handler)
+        handler.startElement("feed", self.root_attributes())
+        self.add_root_elements(handler)
+        self.write_items(handler)
+        handler.endElement("feed")
+
+
 class LatestEntriesFeed(RepositoryMixin, Feed):
     stylesheets = _feed_stylesheets
     object: Blog
@@ -149,6 +166,14 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
     def get_context_data(self, **kwargs) -> dict:
         context = super().get_context_data(**kwargs)
         return context
+
+
+class LatestEntriesAtomFeed(LatestEntriesFeed):
+    stylesheets = _feed_stylesheets
+    feed_type = AtomFeedWithStylesheets
+
+    def subtitle(self):
+        return self.object.description
 
 
 class ITunesElements:

@@ -12,11 +12,11 @@ Feed Detail Page
 Each blog and podcast has a dedicated feed detail page at ``<slug>/feed/``
 (URL name ``cast:feed_detail``) that lists all available feeds in one place:
 
-- **Blog RSS feed** link (for all blogs)
+- **Blog RSS and Atom feed** links (for all blogs)
+- **Platform links** — Apple Podcasts, Spotify, YouTube (for podcasts, when the
+  corresponding key is set in ``CAST_FOLLOW_LINKS``)
 - **Podcast feeds** table with all four audio formats (MP3, M4A, OGA, OPUS) in
   both RSS and Atom (for podcasts only)
-- **Apple Podcasts** subscribe link (when ``apple_podcasts`` is set in
-  ``CAST_FOLLOW_LINKS``)
 
 The navbar RSS icon links to this page instead of the raw XML feed. Custom
 themes without a ``feed_detail.html`` template automatically fall back to the
@@ -27,11 +27,14 @@ The template receives the following context variables:
 - ``blog`` — the Blog or Podcast instance
 - ``is_podcast`` — boolean, ``True`` for podcasts
 - ``blog_feed_url`` — URL to the blog RSS XML feed
+- ``blog_atom_feed_url`` — URL to the blog Atom XML feed
 - ``template_base_dir`` — the active theme name
 - ``podcast_feeds`` — list of dicts with ``format``, ``format_label``,
   ``rss_url``, ``atom_url`` (podcasts only)
 - ``apple_podcasts_url`` — Apple Podcasts URL from settings, or ``None``
   (podcasts only)
+- ``spotify_url`` — Spotify URL from settings, or ``None`` (podcasts only)
+- ``youtube_url`` — YouTube URL from settings, or ``None`` (podcasts only)
 
 Feed Types
 ==========
@@ -39,9 +42,10 @@ Feed Types
 Blog Feeds
 ----------
 
-Blog feeds are available in RSS format, automatically generated from your blog content:
+Blog feeds are available in RSS and Atom formats, automatically generated from your blog content:
 
 - RSS 2.0 feed at ``<slug>/feed/rss.xml``
+- Atom 1.0 feed at ``<slug>/feed/atom.xml``
 - Feed fields populated from Blog model: title, description, author
 - Automatic inclusion of post content (overview and detail sections)
 
@@ -130,6 +134,19 @@ Control the number of items in feeds:
 
     # In settings.py
     CAST_FEED_ITEM_LIMIT = 50  # Default: 50 items
+
+Follow Links
+------------
+
+Configure platform links shown on the feed detail page for podcasts:
+
+.. code-block:: python
+
+    CAST_FOLLOW_LINKS = {
+        "apple_podcasts": "https://podcasts.apple.com/...",
+        "spotify": "https://open.spotify.com/show/...",
+        "youtube": "https://www.youtube.com/@...",
+    }
 
 Cache Duration
 --------------

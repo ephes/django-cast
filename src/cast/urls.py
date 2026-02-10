@@ -39,6 +39,11 @@ urlpatterns: list[Any] = [
         name="latest_entries_feed",
     ),
     path(
+        "<slug:slug>/feed/atom.xml",
+        view=cache_page(5 * 60)(feeds.LatestEntriesAtomFeed()),
+        name="latest_entries_atom_feed",
+    ),
+    path(
         "<slug:slug>/feed/podcast/<audio_format>/rss.xml",
         view=cache_page(5 * 60)(feeds.RssPodcastFeed()),
         name="podcast_feed_rss",

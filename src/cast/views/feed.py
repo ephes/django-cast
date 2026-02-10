@@ -44,6 +44,7 @@ def feed_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "blog": blog,
         "is_podcast": getattr(blog, "is_podcast", False),
         "blog_feed_url": reverse("cast:latest_entries_feed", kwargs={"slug": slug}),
+        "blog_atom_feed_url": reverse("cast:latest_entries_atom_feed", kwargs={"slug": slug}),
         "template_base_dir": template_base_dir,
     }
 
@@ -51,6 +52,8 @@ def feed_detail(request: HttpRequest, slug: str) -> HttpResponse:
         context["podcast_feeds"] = get_podcast_feed_urls(blog)
         follow_links: dict[str, str] = dict(appsettings.CAST_FOLLOW_LINKS)
         context["apple_podcasts_url"] = follow_links.get("apple_podcasts")
+        context["spotify_url"] = follow_links.get("spotify")
+        context["youtube_url"] = follow_links.get("youtube")
 
     template_name = _resolve_feed_detail_template(template_base_dir)
     return render(request, template_name, context)

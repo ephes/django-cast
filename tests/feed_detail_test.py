@@ -18,6 +18,13 @@ class TestFeedDetailForBlog:
         rss_url = reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug})
         assert rss_url in content
 
+    def test_feed_detail_contains_blog_atom_url(self, client, blog):
+        url = reverse("cast:feed_detail", kwargs={"slug": blog.slug})
+        response = client.get(url)
+        content = response.content.decode()
+        atom_url = reverse("cast:latest_entries_atom_feed", kwargs={"slug": blog.slug})
+        assert atom_url in content
+
     def test_feed_detail_blog_has_no_podcast_content(self, client, blog):
         url = reverse("cast:feed_detail", kwargs={"slug": blog.slug})
         response = client.get(url)
@@ -59,6 +66,44 @@ class TestFeedDetailForPodcast:
         response = client.get(url)
         content = response.content.decode()
         assert "Apple Podcasts" not in content
+
+    def test_feed_detail_with_spotify(self, client, podcast, monkeypatch):
+        spotify_url = "https://open.spotify.com/show/test"
+        monkeypatch.setattr(
+            appsettings,
+            "CAST_FOLLOW_LINKS",
+            {"spotify": spotify_url},
+        )
+        url = reverse("cast:feed_detail", kwargs={"slug": podcast.slug})
+        response = client.get(url)
+        content = response.content.decode()
+        assert spotify_url in content
+
+    def test_feed_detail_without_spotify(self, client, podcast, monkeypatch):
+        monkeypatch.setattr(appsettings, "CAST_FOLLOW_LINKS", {})
+        url = reverse("cast:feed_detail", kwargs={"slug": podcast.slug})
+        response = client.get(url)
+        content = response.content.decode()
+        assert "Spotify" not in content
+
+    def test_feed_detail_with_youtube(self, client, podcast, monkeypatch):
+        youtube_url = "https://www.youtube.com/@test"
+        monkeypatch.setattr(
+            appsettings,
+            "CAST_FOLLOW_LINKS",
+            {"youtube": youtube_url},
+        )
+        url = reverse("cast:feed_detail", kwargs={"slug": podcast.slug})
+        response = client.get(url)
+        content = response.content.decode()
+        assert youtube_url in content
+
+    def test_feed_detail_without_youtube(self, client, podcast, monkeypatch):
+        monkeypatch.setattr(appsettings, "CAST_FOLLOW_LINKS", {})
+        url = reverse("cast:feed_detail", kwargs={"slug": podcast.slug})
+        response = client.get(url)
+        content = response.content.decode()
+        assert "YouTube" not in content
 
 
 class TestFeedDetail404:

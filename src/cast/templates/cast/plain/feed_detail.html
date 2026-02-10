@@ -2,30 +2,41 @@
 {% load i18n %}
 
 {% block title %}
-  <title>{% trans "Feeds" %} – {{ blog.title }}</title>
+  <title>{% if is_podcast %}{% trans "Subscribe" %}{% else %}{% trans "Feeds" %}{% endif %} – {{ blog.title }}</title>
 {% endblock %}
 
 {% block main %}
   <main>
-    <h1>{% trans "Feeds" %} – {{ blog.title }}</h1>
+    <h1>{% if is_podcast %}{% trans "Subscribe" %}{% else %}{% trans "Feeds" %}{% endif %} – {{ blog.title }}</h1>
+
+    {% if is_podcast %}
+      {% if apple_podcasts_url or spotify_url or youtube_url %}
+        <section>
+          <h2>{% trans "Where to listen" %}</h2>
+          <ul>
+            {% if apple_podcasts_url %}
+              <li><a href="{{ apple_podcasts_url }}" rel="noopener">Apple Podcasts</a></li>
+            {% endif %}
+            {% if spotify_url %}
+              <li><a href="{{ spotify_url }}" rel="noopener">Spotify</a></li>
+            {% endif %}
+            {% if youtube_url %}
+              <li><a href="{{ youtube_url }}" rel="noopener">YouTube</a></li>
+            {% endif %}
+          </ul>
+        </section>
+      {% endif %}
+    {% endif %}
 
     <section>
-      <h2>{% trans "Blog Feed" %}</h2>
+      <h2>{% trans "Feeds" %}</h2>
       <ul>
         <li><a href="{{ blog_feed_url }}">RSS ({{ blog.title }})</a></li>
+        <li><a href="{{ blog_atom_feed_url }}">Atom ({{ blog.title }})</a></li>
       </ul>
     </section>
 
     {% if is_podcast %}
-      {% if apple_podcasts_url %}
-        <section>
-          <h2>{% trans "Subscribe" %}</h2>
-          <ul>
-            <li><a href="{{ apple_podcasts_url }}" rel="noopener">Apple Podcasts</a></li>
-          </ul>
-        </section>
-      {% endif %}
-
       <section>
         <h2>{% trans "Podcast Feeds" %}</h2>
         <table>

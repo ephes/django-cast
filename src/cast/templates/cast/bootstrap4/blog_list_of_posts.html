@@ -3,6 +3,7 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load django_vite %}
+{% load i18n %}
 
 {% block body_class %}template-bloglistpage{% endblock %}
 
@@ -21,7 +22,13 @@
       <div class="intro lead">{{ page.description|richtext }}</div>
     </div>
 
-    {% block feeds %}{% endblock feeds %}
+    {% block feeds %}
+      {% if podcast %}
+        <a class="btn btn-primary" href="{% url 'cast:feed_detail' slug=page.slug %}">
+          {% trans "Subscribe" %}
+        </a>
+      {% endif %}
+    {% endblock feeds %}
   </div>
 
   {% block filters %}
