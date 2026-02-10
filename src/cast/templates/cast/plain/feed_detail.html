@@ -15,13 +15,13 @@
           <h2>{% trans "Where to listen" %}</h2>
           <ul>
             {% if apple_podcasts_url %}
-              <li><a href="{{ apple_podcasts_url }}" rel="noopener">Apple Podcasts</a></li>
+              <li><a href="{{ apple_podcasts_url }}" target="_blank" rel="noopener">Apple Podcasts</a></li>
             {% endif %}
             {% if spotify_url %}
-              <li><a href="{{ spotify_url }}" rel="noopener">Spotify</a></li>
+              <li><a href="{{ spotify_url }}" target="_blank" rel="noopener">Spotify</a></li>
             {% endif %}
             {% if youtube_url %}
-              <li><a href="{{ youtube_url }}" rel="noopener">YouTube</a></li>
+              <li><a href="{{ youtube_url }}" target="_blank" rel="noopener">YouTube</a></li>
             {% endif %}
           </ul>
         </section>
