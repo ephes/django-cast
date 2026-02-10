@@ -9,7 +9,7 @@
             data-hx-target="#paging-area"
             data-hx-swap="innerHTML show:window:top transition:true"
             data-hx-sync="#paging-area:replace"
-            data-hx-replace-url="true"
+            data-hx-push-url="true"
             href="?page={{ previous_page_number }}{{ parameters }}"
             class="page-link"
           >
@@ -44,7 +44,7 @@
               data-hx-target="#paging-area"
               data-hx-swap="innerHTML show:window:top transition:true"
               data-hx-sync="#paging-area:replace"
-              data-hx-replace-url="true"
+              data-hx-push-url="true"
               href="?page={{ num }}{{ parameters }}"
               class="page-link"
             >{{ num }}</a>
@@ -59,7 +59,7 @@
             data-hx-target="#paging-area"
             data-hx-swap="innerHTML show:window:top transition:true"
             data-hx-sync="#paging-area:replace"
-            data-hx-replace-url="true"
+            data-hx-push-url="true"
             href="?page={{ next_page_number }}{{ parameters }}"
             class="page-link"
           >

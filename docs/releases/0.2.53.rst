@@ -82,6 +82,8 @@ Pagination
   for users who prefer reduced motion.
 - Add ``hx-sync="#paging-area:replace"`` to pagination links so rapid clicks
   cancel in-flight requests instead of racing.
+- Switch pagination history updates from ``hx-replace-url`` to ``hx-push-url``
+  so browser back/forward steps through paginated pages.
 - Update bundled htmx from 2.0.0-beta4 to 2.0.8.
 
 Images

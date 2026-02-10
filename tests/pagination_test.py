@@ -46,6 +46,26 @@ def test_pagination_template_is_paginated_long(simple_request):
     )  # ellipsis in the middle which is not a link
 
 
+@pytest.mark.parametrize("template_name", ["cast/plain/pagination.html", "cast/bootstrap4/pagination.html"])
+def test_pagination_template_uses_push_url_for_history(simple_request, template_name):
+    context = {
+        "is_paginated": True,
+        "has_previous": True,
+        "previous_page_number": 1,
+        "has_next": True,
+        "next_page_number": 3,
+        "page_range": [1, 2, 3],
+        "page_number": 2,
+        "ellipsis": "…",
+        "parameters": "&foo=bar",
+    }
+    response = render(simple_request, template_name, context)
+    html = response.content.decode("utf-8")
+
+    assert html.count('data-hx-push-url="true"') == 4
+    assert "data-hx-replace-url" not in html
+
+
 @pytest.mark.parametrize(
     "query_string, expected_other_get_params",
     [
