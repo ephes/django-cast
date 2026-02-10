@@ -1,7 +1,18 @@
 {% load static i18n %}
 {% if follow_links %}
   {% with links=follow_links %}
-    {% if links.rss %}
+    {% if links.feed_detail %}
+      <li class="nav-item">
+        <a class="nav-link" href="{{ links.feed_detail }}" aria-label="{% trans "Feeds" %}">
+          <img
+            src="{% static 'cast/img/Feed-icon.svg' %}"
+            alt="{% trans 'Feeds' %}"
+            height="16"
+            width="16"
+          >
+        </a>
+      </li>
+    {% elif links.rss %}
       <li class="nav-item">
         <a class="nav-link" href="{{ links.rss }}" aria-label="{% trans "RSS feed" %}">
           <img

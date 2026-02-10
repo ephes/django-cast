@@ -11,6 +11,7 @@ def test_get_follow_links_defaults(blog):
     links = get_follow_links(blog)
 
     assert links["rss"] == reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug})
+    assert links["feed_detail"] == reverse("cast:feed_detail", kwargs={"slug": blog.slug})
     assert links["email"] == "mailto:hello@example.com"
 
 
@@ -56,6 +57,7 @@ def test_get_follow_links_blog_without_slug_uses_settings_rss(blog, monkeypatch)
     links = get_follow_links(blog)
 
     assert links["rss"] == "https://example.com/feed.xml"
+    assert "feed_detail" not in links
 
 
 def test_get_follow_links_settings_email_takes_precedence(blog, monkeypatch):

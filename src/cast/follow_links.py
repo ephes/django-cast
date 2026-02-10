@@ -16,6 +16,7 @@ def get_follow_links(blog: Blog | None) -> dict[str, str]:
         return links
     if blog.slug:
         links["rss"] = reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug})
+        links["feed_detail"] = reverse("cast:feed_detail", kwargs={"slug": blog.slug})
     if blog.email and "email" not in links:
         links["email"] = f"mailto:{blog.email}"
     return links

@@ -2,7 +2,11 @@
 {% if follow_links %}
   {% with links=follow_links %}
     <ul>
-      {% if links.rss %}
+      {% if links.feed_detail %}
+        <li>
+          <a href="{{ links.feed_detail }}" aria-label="{% trans "Feeds" %}">RSS</a>
+        </li>
+      {% elif links.rss %}
         <li>
           <a href="{{ links.rss }}" aria-label="{% trans "RSS feed" %}">RSS</a>
         </li>

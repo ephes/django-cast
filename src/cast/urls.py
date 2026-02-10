@@ -5,6 +5,7 @@ from django.views.decorators.cache import cache_page
 
 from . import feeds
 from .views import meta
+from .views.feed import feed_detail
 from .views.gallery import gallery_modal
 from .views.styleguide import styleguide
 from .views.theme import select_theme
@@ -29,6 +30,8 @@ urlpatterns: list[Any] = [
     path("transcripts/html/<int:transcript_pk>/", html_transcript, name="html-transcript-no-post"),
     path("transcripts/html/<int:transcript_pk>/<int:post_pk>/", view=html_transcript, name="html-transcript"),
     path("<slug:blog_slug>/<slug:episode_slug>/transcript/", view=episode_transcript, name="episode-transcript"),
+    # Feed detail page
+    path("<slug:slug>/feed/", view=feed_detail, name="feed_detail"),
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",

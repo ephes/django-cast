@@ -1,0 +1,50 @@
+{% extends "./base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Feeds" %} – {{ blog.title }}{% endblock %}
+
+{% block content %}
+  <div class="container mt-4">
+    <h1>{% trans "Feeds" %} – {{ blog.title }}</h1>
+
+    <section class="mt-4">
+      <h2>{% trans "Blog Feed" %}</h2>
+      <ul>
+        <li><a href="{{ blog_feed_url }}">RSS ({{ blog.title }})</a></li>
+      </ul>
+    </section>
+
+    {% if is_podcast %}
+      {% if apple_podcasts_url %}
+        <section class="mt-4">
+          <h2>{% trans "Subscribe" %}</h2>
+          <ul>
+            <li><a href="{{ apple_podcasts_url }}" rel="noopener">Apple Podcasts</a></li>
+          </ul>
+        </section>
+      {% endif %}
+
+      <section class="mt-4">
+        <h2>{% trans "Podcast Feeds" %}</h2>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>{% trans "Format" %}</th>
+              <th>RSS</th>
+              <th>Atom</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for feed in podcast_feeds %}
+              <tr>
+                <td>{{ feed.format_label }}</td>
+                <td><a href="{{ feed.rss_url }}">RSS</a></td>
+                <td><a href="{{ feed.atom_url }}">Atom</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endif %}
+  </div>
+{% endblock content %}
