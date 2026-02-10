@@ -72,6 +72,14 @@ Themes
 - Fix double DB hit in the theme context processor by passing the site default as a fallback.
 - Narrow context processor exception handling to DB/lookup errors instead of blanket ``Exception``.
 
+Pagination
+~~~~~~~~~~
+- Fix scroll position landing mid-content after htmx pagination swap by changing
+  ``show:top`` to ``show:window:top``.
+- Add View Transitions API support (``transition:true``) for a smooth 250ms
+  cross-fade when paginating. Gracefully degrades in unsupported browsers.
+- Update bundled htmx from 2.0.0-beta4 to 2.0.8.
+
 Images
 ~~~~~~
 - Gallery and image templates now link to optimized Wagtail renditions instead of
