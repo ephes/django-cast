@@ -49,6 +49,15 @@ Styleguide
 - Ensure the styleguide media post renders gallery thumbnails by generating missing renditions.
 - Refresh styleguide media post renditions in the repository so Bootstrap5 gallery thumbnails render correctly.
 
+Feeds
+~~~~~
+- Add a feed detail page at ``<slug>/feed/`` that lists blog RSS, podcast feeds
+  (4 audio formats in RSS + Atom), and an Apple Podcasts subscribe link.
+- Navbar RSS icon now links to the feed detail page via a new ``feed_detail``
+  follow-links key; ``rss`` key is preserved pointing to the raw XML feed.
+- Custom themes without ``feed_detail.html`` fall back to the plain theme.
+- Add ``apple_podcasts`` as a supported key in ``CAST_FOLLOW_LINKS`` settings.
+
 Themes
 ~~~~~~
 - Allow `?theme=` or `?template_base_dir=` to temporarily override the active theme for a request.

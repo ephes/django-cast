@@ -6,6 +6,22 @@ Feeds
 
 Django Cast provides comprehensive feed support for both blogs and podcasts, with RSS and Atom formats, iTunes metadata, and performance optimizations.
 
+Feed Detail Page
+================
+
+Each blog and podcast has a dedicated feed detail page at ``<slug>/feed/``
+that lists all available feeds in one place:
+
+- **Blog RSS feed** link (for all blogs)
+- **Podcast feeds** table with all four audio formats (MP3, M4A, OGA, OPUS) in
+  both RSS and Atom (for podcasts only)
+- **Apple Podcasts** subscribe link (when ``apple_podcasts`` is set in
+  ``CAST_FOLLOW_LINKS``)
+
+The navbar RSS icon links to this page instead of the raw XML feed. Custom
+themes without a ``feed_detail.html`` template automatically fall back to the
+plain theme.
+
 Feed Types
 ==========
 

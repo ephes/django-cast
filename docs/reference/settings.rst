@@ -99,20 +99,28 @@ CAST_FOLLOW_LINKS
 =================
 
 Optional mapping of follow links shown in the navbar. Supported keys are
-``rss``, ``mastodon``, ``github``, ``bluesky``, ``linkedin``, and ``email``.
+``rss``, ``mastodon``, ``github``, ``bluesky``, ``linkedin``, ``email``,
+and ``apple_podcasts``.
 
 When a blog context is available, the ``rss`` value is always set to the
-blog-specific feed URL, overriding any value from settings. The settings
+blog-specific XML feed URL, overriding any value from settings. A
+``feed_detail`` key is also auto-generated, pointing to the human-readable
+feed detail page at ``<slug>/feed/``. The navbar RSS icon links to
+``feed_detail`` when available, falling back to ``rss``. The settings
 ``rss`` value is only used as a fallback on pages without a blog context.
 
 If ``email`` is not provided, it falls back to ``Blog.email`` when available.
 Unlike ``rss``, a settings-level ``email`` value takes precedence over
 ``Blog.email``.
 
+The ``apple_podcasts`` key is used on the feed detail page to show a
+subscribe link to Apple Podcasts.
+
 .. code-block:: python
 
     CAST_FOLLOW_LINKS = {
-        # "rss" is always overridden by the blog feed when a blog is present
+        # "rss" and "feed_detail" are auto-generated when a blog is present
+        "apple_podcasts": "https://podcasts.apple.com/podcast/your-podcast/id123",
         "mastodon": "https://example.social/@account",
         "github": "https://github.com/example",
         "bluesky": "https://bsky.app/profile/example.com",
