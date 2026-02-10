@@ -509,13 +509,6 @@ def test_styleguide_gallery_repository_and_blocks(monkeypatch):
 
     styleguide_view._styleguide_gallery_repository(repository, [image], ensure_renditions=False)
 
-    blocks = ["<image-gallery-bs4>ok</image-gallery-bs4>", "<image-gallery-bs5>no</image-gallery-bs5>"]
-    filtered = styleguide_view._filter_styleguide_gallery_blocks(blocks, "bootstrap4")
-    assert filtered == ["<image-gallery-bs4>ok</image-gallery-bs4>"]
-
-    assert styleguide_view._filter_styleguide_gallery_blocks(blocks, "plain") == []
-    assert styleguide_view._filter_styleguide_gallery_blocks(None, "bootstrap4") == []
-
     rendered = []
 
     def fake_render(**_kwargs):
@@ -525,25 +518,23 @@ def test_styleguide_gallery_repository_and_blocks(monkeypatch):
     monkeypatch.setattr(styleguide_view, "_render_gallery_block", fake_render)
     gallery = create_gallery(images=[image])
     result = styleguide_view._ensure_styleguide_gallery_blocks(
-        None,
         [gallery, gallery],
         repository,
         "bootstrap4",
-        minimum=2,
         limit=None,
     )
     assert len(result) == 2
     assert rendered == [True, True]
 
+    rendered.clear()
     result_limited = styleguide_view._ensure_styleguide_gallery_blocks(
-        blocks,
         [gallery],
         repository,
         "bootstrap4",
-        minimum=1,
         limit=1,
     )
-    assert result_limited == ["<image-gallery-bs4>ok</image-gallery-bs4>"]
+    assert result_limited == ["<block/>"]
+    assert rendered == [True]
 
 
 @pytest.mark.django_db
@@ -582,7 +573,7 @@ def test_styleguide_render_gallery_block_uses_default_renditions(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_styleguide_gallery_blocks_fill_minimum(monkeypatch):
+def test_styleguide_gallery_blocks_renders_all_galleries(monkeypatch):
     image = create_image()
     gallery = create_gallery(images=[image])
     second_gallery = create_gallery(images=[create_image()])
@@ -592,13 +583,10 @@ def test_styleguide_gallery_blocks_fill_minimum(monkeypatch):
         return "<block/>"
 
     monkeypatch.setattr(styleguide_view, "_render_gallery_block", fake_render)
-    blocks = ["<image-gallery-bs4>seed</image-gallery-bs4>"]
     result = styleguide_view._ensure_styleguide_gallery_blocks(
-        blocks,
         [gallery, second_gallery],
         repository,
         "bootstrap4",
-        minimum=2,
         limit=None,
     )
     assert len(result) == 2
@@ -608,10 +596,8 @@ def test_styleguide_gallery_blocks_handles_empty_galleries():
     repository = SimpleNamespace(renditions_for_posts={})
     result = styleguide_view._ensure_styleguide_gallery_blocks(
         [],
-        [],
         repository,
         "bootstrap4",
-        minimum=1,
         limit=None,
     )
     assert result == []

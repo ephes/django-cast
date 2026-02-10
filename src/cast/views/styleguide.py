@@ -862,52 +862,26 @@ def _styleguide_gallery_repository(
 
 
 def _ensure_styleguide_gallery_blocks(
-    blocks: list[str] | None,
     galleries: list[Gallery],
     repository: BlogIndexRepository,
     template_base_dir: str,
-    minimum: int = 1,
     limit: int | None = None,
 ) -> list[str]:
-    gallery_blocks = _filter_styleguide_gallery_blocks(blocks, template_base_dir)
-    if not gallery_blocks:
-        for gallery in galleries:
-            gallery_blocks.append(
-                _render_gallery_block(
-                    images=list(gallery.images.all()),
-                    repository=repository,
-                    template_base_dir=template_base_dir,
-                    ensure_renditions=True,
-                )
+    # Always render gallery blocks locally using our own templates so that
+    # links point to optimised renditions instead of original uploads.
+    gallery_blocks: list[str] = []
+    for gallery in galleries:
+        gallery_blocks.append(
+            _render_gallery_block(
+                images=list(gallery.images.all()),
+                repository=repository,
+                template_base_dir=template_base_dir,
+                ensure_renditions=True,
             )
-    if len(gallery_blocks) < minimum:
-        for gallery in galleries:
-            if len(gallery_blocks) >= minimum:
-                break
-            gallery_blocks.append(
-                _render_gallery_block(
-                    images=list(gallery.images.all()),
-                    repository=repository,
-                    template_base_dir=template_base_dir,
-                    ensure_renditions=True,
-                )
-            )
+        )
     if limit is not None:
         return gallery_blocks[:limit]
     return gallery_blocks
-
-
-def _filter_styleguide_gallery_blocks(blocks: list[str] | None, template_base_dir: str) -> list[str]:
-    if not blocks:
-        return []
-    expected_tag = {
-        "bootstrap4": "image-gallery-bs4",
-        "bootstrap5": "image-gallery-bs5",
-    }.get(template_base_dir)
-    if not expected_tag:
-        return []
-    tag_pattern = re.compile(rf"<{expected_tag}[^>]*>", flags=re.I)
-    return [block for block in blocks if tag_pattern.search(block)]
 
 
 class _StyleguideImageParser(HTMLParser):
@@ -1404,11 +1378,9 @@ def _styleguide_context(
         page.page_url = page.get_url(request=request) or page.url or "#"
 
     gallery_blocks = _ensure_styleguide_gallery_blocks(
-        styleguide_data.gallery_blocks,
         styleguide_data.galleries,
         blog_repository,
         template_base_dir,
-        minimum=1,
         limit=1,
     )
     if styleguide_data.video_url:
