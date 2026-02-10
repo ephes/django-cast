@@ -5,6 +5,24 @@
   view-transition-name: paging-area;
 }
 
+::view-transition-old(paging-area) {
+  animation: 350ms ease-out both cast-fade-out;
+}
+
+::view-transition-new(paging-area) {
+  animation: 350ms ease-in both cast-fade-in;
+}
+
+@keyframes cast-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes cast-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(paging-area),
   ::view-transition-new(paging-area) {
