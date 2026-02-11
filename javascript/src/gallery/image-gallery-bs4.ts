@@ -4,6 +4,9 @@ export default class ImageGalleryBs4 extends HTMLElement {
     private boundThumbnailClick: (event: Event) => void;
     private boundFooterClick: (event: Event) => void;
     private boundKeydown: (event: KeyboardEvent) => void;
+    private pendingModalImage: HTMLImageElement | null;
+    private pendingFinalize: (() => void) | null;
+    private loadingSequence: number;
 	constructor () {
 		super();
         this.currentImage = null;
@@ -11,6 +14,9 @@ export default class ImageGalleryBs4 extends HTMLElement {
         this.boundThumbnailClick = this.handleThumbnailClick.bind(this);
         this.boundFooterClick = this.handleFooterClick.bind(this);
         this.boundKeydown = this.handleKeydown.bind(this);
+        this.pendingModalImage = null;
+        this.pendingFinalize = null;
+        this.loadingSequence = 0;
     }
     static register(tagName: string):void {
         if ("customElements" in window) {
@@ -59,6 +65,128 @@ export default class ImageGalleryBs4 extends HTMLElement {
         document.body.classList.add("modal-open");
     }
 
+    private getModalBody(modal: HTMLElement | null): HTMLElement | null {
+        if (!modal) {
+            return null;
+        }
+        return modal.querySelector<HTMLElement>(".modal-body");
+    }
+
+    private getModalImage(modal: HTMLElement | null): HTMLImageElement | null {
+        if (!modal) {
+            return null;
+        }
+        return modal.querySelector<HTMLImageElement>(".modal-body img");
+    }
+
+    private isModalImageReady(modalImage: HTMLImageElement): boolean {
+        return modalImage.complete && modalImage.naturalWidth > 0;
+    }
+
+    private ensureLoadingIndicator(modalBody: HTMLElement): HTMLElement {
+        let indicator = modalBody.querySelector<HTMLElement>(".cast-gallery-loading-indicator");
+        if (!indicator) {
+            indicator = document.createElement("div");
+            indicator.className = "cast-gallery-loading-indicator";
+            indicator.style.position = "absolute";
+            indicator.style.inset = "0";
+            indicator.style.display = "none";
+            indicator.style.alignItems = "center";
+            indicator.style.justifyContent = "center";
+            indicator.style.zIndex = "1";
+            indicator.style.pointerEvents = "none";
+
+            const spinner = document.createElement("div");
+            spinner.className = "spinner-border text-secondary";
+            spinner.setAttribute("role", "status");
+            spinner.setAttribute("aria-label", "Loading image");
+            indicator.appendChild(spinner);
+
+            modalBody.appendChild(indicator);
+        }
+        return indicator;
+    }
+
+    private setLoadingState(modal: HTMLElement, loading: boolean): void {
+        const modalBody = this.getModalBody(modal);
+        if (!modalBody) {
+            return;
+        }
+        modalBody.style.position = "relative";
+        const indicator = this.ensureLoadingIndicator(modalBody);
+        indicator.style.display = loading ? "flex" : "none";
+        modalBody.setAttribute("aria-busy", loading ? "true" : "false");
+
+        const modalImage = this.getModalImage(modal);
+        if (!modalImage) {
+            return;
+        }
+        modalImage.style.transition = "opacity 120ms ease";
+        modalImage.style.opacity = loading ? "0" : "1";
+    }
+
+    private applyAspectRatioFromThumbnail(img: HTMLElement, modalImage: HTMLImageElement): void {
+        const width = Number(img.getAttribute("data-modal-width") ?? "");
+        const height = Number(img.getAttribute("data-modal-height") ?? "");
+        if (width > 0 && height > 0) {
+            modalImage.style.aspectRatio = `${width} / ${height}`;
+            return;
+        }
+        modalImage.style.removeProperty("aspect-ratio");
+    }
+
+    private ensureModalMediaSizing(modalImage: HTMLImageElement): void {
+        const modalPicture = modalImage.parentElement as HTMLElement | null;
+        if (modalPicture) {
+            modalPicture.style.display = "block";
+            modalPicture.style.width = "100%";
+        }
+        const modalLink = modalPicture?.parentElement as HTMLElement | null;
+        if (modalLink && modalLink.tagName.toLowerCase() === "a") {
+            modalLink.style.display = "block";
+            modalLink.style.width = "100%";
+        }
+    }
+
+    private syncImageLoadingState(modal: HTMLElement, modalImage: HTMLImageElement): void {
+        this.clearPendingImageListeners();
+        this.setLoadingState(modal, true);
+        if (this.isModalImageReady(modalImage)) {
+            this.setLoadingState(modal, false);
+            return;
+        }
+
+        const sequence = ++this.loadingSequence;
+        const finalize = () => {
+            if (this.currentModal === modal && this.loadingSequence === sequence) {
+                this.setLoadingState(modal, false);
+            }
+            if (this.pendingFinalize === finalize) {
+                this.clearPendingImageListeners();
+            }
+        };
+        this.pendingModalImage = modalImage;
+        this.pendingFinalize = finalize;
+        modalImage.addEventListener("load", finalize, { once: true });
+        modalImage.addEventListener("error", finalize, { once: true });
+    }
+
+    private clearPendingImageListeners(): void {
+        if (this.pendingModalImage && this.pendingFinalize) {
+            this.pendingModalImage.removeEventListener("load", this.pendingFinalize);
+            this.pendingModalImage.removeEventListener("error", this.pendingFinalize);
+        }
+        this.pendingModalImage = null;
+        this.pendingFinalize = null;
+    }
+
+    private showModalImmediately(modal: HTMLElement | null): void {
+        if (!modal) {
+            return;
+        }
+        this.showModal(modal);
+    }
+
     private bindModalEvents(modal: HTMLElement): void {
         const modalFooter = modal.querySelector(".modal-footer");
         if (modalFooter && !modalFooter.hasAttribute("data-gallery-footer-bound")) {
@@ -97,6 +225,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
     }
 
     private cleanupModal(): void {
+        this.clearPendingImageListeners();
         const ownerId = this.id;
         const selector = ownerId ? `.modal[data-gallery-owner="${ownerId}"]` : null;
         const modal = selector ? document.querySelector<HTMLElement>(selector) : this.currentModal;
@@ -184,6 +313,15 @@ export default class ImageGalleryBs4 extends HTMLElement {
                 modalImage.setAttribute(prop, value);
             }
         }
+        if (!img.hasAttribute("data-modal-width")) {
+            modalImage.removeAttribute("width");
+        }
+        if (!img.hasAttribute("data-modal-height")) {
+            modalImage.removeAttribute("height");
+        }
+        this.ensureModalMediaSizing(modalImage);
+        this.applyAspectRatioFromThumbnail(img, modalImage);
+        this.syncImageLoadingState(resolvedModal, modalImage);
 
         let buttons = "";
         // prev button
@@ -219,7 +357,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
         if (img) {
             const modal = this.resolveModal(link);
             this.setModalImage(img, modal);
-            this.showModal(modal);
+            this.showModalImmediately(modal);
         } else {
             console.error("No img element found in clicked thumbnail");
         }

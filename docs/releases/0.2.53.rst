@@ -90,3 +90,5 @@ Images
 ~~~~~~
 - Gallery and image templates now link to optimized Wagtail renditions instead of
   original uploads, avoiding multi-megabyte downloads when users click through.
+- Keep the Bootstrap gallery modal responsive on click while reserving image
+  space and showing a loading indicator to prevent placeholder wobble.

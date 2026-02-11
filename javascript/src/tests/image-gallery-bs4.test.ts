@@ -1,4 +1,4 @@
-import { expect, test, describe, beforeEach, afterEach } from "vitest";
+import { expect, test, describe, beforeEach, afterEach, vi } from "vitest";
 import ImageGalleryBs4 from "@/gallery/image-gallery-bs4";
 import { JSDOM } from "jsdom";
 
@@ -26,7 +26,6 @@ describe("image gallery test", () => {
 
     test("gallery test current image is null", () => {
         const gallery = new ImageGalleryBs4()
-        console.log("gallery: ", gallery)
         expect(gallery.currentImage).toBe(null)
     })
 
@@ -151,5 +150,240 @@ describe("image gallery test", () => {
         gallery.setModalImage(lastImg);
         gallery.replaceImage("data-next");
         expect(gallery.currentImage).toBe(lastImg); // Should not change
+    });
+
+    test("gallery opens modal immediately even while image is loading", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-src="modal.avif" data-modal-srcset="modal.avif 1000w" data-modal-sizes="100vw" type="image/avif" />
+                        <img
+                          id="img-0"
+                          data-fullsrc="modal.jpg"
+                          data-modal-srcset="modal.jpg 1000w"
+                          data-modal-sizes="100vw"
+                          data-modal-width="1000"
+                          data-modal-height="500"
+                          data-prev="false"
+                          data-next="false"
+                          alt="First"
+                        />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const showModalSpy = vi.spyOn(gallery as any, "showModal");
+        const thumbnailImage = gallery.querySelector("#img-0") as HTMLElement;
+        const modalImage = gallery.querySelector("#gallery-modal .modal-body img") as HTMLImageElement;
+        const modalBody = gallery.querySelector("#gallery-modal .modal-body") as HTMLElement;
+
+        Object.defineProperty(modalImage, "complete", { configurable: true, get: () => false });
+        Object.defineProperty(modalImage, "naturalWidth", { configurable: true, get: () => 0 });
+
+        thumbnailImage.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(showModalSpy).toHaveBeenCalledTimes(1);
+        expect(modalBody.getAttribute("aria-busy")).toBe("true");
+        expect(modalImage.style.opacity).toBe("0");
+    });
+
+    test("gallery removes loading state when image load finishes", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-src="modal.avif" data-modal-srcset="modal.avif 1000w" data-modal-sizes="100vw" type="image/avif" />
+                        <img
+                          id="img-0"
+                          data-fullsrc="modal.jpg"
+                          data-modal-srcset="modal.jpg 1000w"
+                          data-modal-sizes="100vw"
+                          data-modal-width="1000"
+                          data-modal-height="500"
+                          data-prev="false"
+                          data-next="false"
+                          alt="First"
+                        />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const thumbnailImage = gallery.querySelector("#img-0") as HTMLElement;
+        const modalImage = gallery.querySelector("#gallery-modal .modal-body img") as HTMLImageElement;
+        const modalBody = gallery.querySelector("#gallery-modal .modal-body") as HTMLElement;
+
+        Object.defineProperty(modalImage, "complete", { configurable: true, get: () => false });
+        Object.defineProperty(modalImage, "naturalWidth", { configurable: true, get: () => 0 });
+
+        thumbnailImage.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(modalBody.getAttribute("aria-busy")).toBe("true");
+        expect(modalImage.style.opacity).toBe("0");
+
+        modalImage.dispatchEvent(new dom.window.Event("load"));
+        expect(modalBody.getAttribute("aria-busy")).toBe("false");
+        expect(modalImage.style.opacity).toBe("1");
+    });
+
+    test("gallery removes loading state when image load fails", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-src="modal.avif" data-modal-srcset="modal.avif 1000w" data-modal-sizes="100vw" type="image/avif" />
+                        <img
+                          id="img-0"
+                          data-fullsrc="modal.jpg"
+                          data-modal-srcset="modal.jpg 1000w"
+                          data-modal-sizes="100vw"
+                          data-modal-width="1000"
+                          data-modal-height="500"
+                          data-prev="false"
+                          data-next="false"
+                          alt="First"
+                        />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const thumbnailImage = gallery.querySelector("#img-0") as HTMLElement;
+        const modalImage = gallery.querySelector("#gallery-modal .modal-body img") as HTMLImageElement;
+        const modalBody = gallery.querySelector("#gallery-modal .modal-body") as HTMLElement;
+
+        Object.defineProperty(modalImage, "complete", { configurable: true, get: () => false });
+        Object.defineProperty(modalImage, "naturalWidth", { configurable: true, get: () => 0 });
+
+        thumbnailImage.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(modalBody.getAttribute("aria-busy")).toBe("true");
+        expect(modalImage.style.opacity).toBe("0");
+
+        modalImage.dispatchEvent(new dom.window.Event("error"));
+        expect(modalBody.getAttribute("aria-busy")).toBe("false");
+        expect(modalImage.style.opacity).toBe("1");
+    });
+
+    test("gallery clears old loading listeners on rapid navigation", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="image-0.jpg">
+                    <picture>
+                        <source data-modal-src="modal-0.avif" data-modal-srcset="modal-0.avif 1000w" data-modal-sizes="100vw" type="image/avif" />
+                        <img id="img-0" data-fullsrc="modal-0.jpg" data-modal-srcset="modal-0.jpg 1000w" data-modal-sizes="100vw" data-modal-width="1000" data-modal-height="500" data-prev="false" data-next="img-1" alt="First" />
+                    </picture>
+                </a>
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="image-1.jpg">
+                    <picture>
+                        <source data-modal-src="modal-1.avif" data-modal-srcset="modal-1.avif 1000w" data-modal-sizes="100vw" type="image/avif" />
+                        <img id="img-1" data-fullsrc="modal-1.jpg" data-modal-srcset="modal-1.jpg 1000w" data-modal-sizes="100vw" data-modal-width="1000" data-modal-height="500" data-prev="img-0" data-next="false" alt="Second" />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const setLoadingStateSpy = vi.spyOn(gallery as any, "setLoadingState");
+        const img0 = gallery.querySelector("#img-0") as HTMLElement;
+        const img1 = gallery.querySelector("#img-1") as HTMLElement;
+        const modalImage = gallery.querySelector("#gallery-modal .modal-body img") as HTMLImageElement;
+
+        Object.defineProperty(modalImage, "complete", { configurable: true, get: () => false });
+        Object.defineProperty(modalImage, "naturalWidth", { configurable: true, get: () => 0 });
+
+        img0.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        img1.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+        const falseCallsBefore = setLoadingStateSpy.mock.calls.filter(([, loading]) => loading === false).length;
+        modalImage.dispatchEvent(new dom.window.Event("error"));
+        const falseCallsAfter = setLoadingStateSpy.mock.calls.filter(([, loading]) => loading === false).length;
+
+        expect(falseCallsAfter - falseCallsBefore).toBe(1);
+    });
+
+    test("gallery applies image aspect ratio to keep modal body stable", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-src="modal.avif" data-modal-srcset="modal.avif 1000w" data-modal-sizes="100vw" type="image/avif" />
+                        <img
+                          id="img-0"
+                          data-fullsrc="modal.jpg"
+                          data-modal-srcset="modal.jpg 1000w"
+                          data-modal-sizes="100vw"
+                          data-modal-width="1000"
+                          data-modal-height="500"
+                          data-prev="false"
+                          data-next="false"
+                          alt="First"
+                        />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const thumbnailImage = gallery.querySelector("#img-0") as HTMLElement;
+        const modalImage = gallery.querySelector("#gallery-modal .modal-body img") as HTMLImageElement;
+
+        Object.defineProperty(modalImage, "complete", { configurable: true, get: () => false });
+        Object.defineProperty(modalImage, "naturalWidth", { configurable: true, get: () => 0 });
+
+        thumbnailImage.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(modalImage.style.aspectRatio).toBe("1000 / 500");
     });
 })
