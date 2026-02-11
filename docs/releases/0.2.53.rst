@@ -76,15 +76,25 @@ Pagination
 ~~~~~~~~~~
 - Fix scroll position landing mid-content after htmx pagination swap by changing
   ``show:top`` to ``show:window:top``.
-- Add View Transitions API support (``transition:true``) for a smooth 350ms
-  cross-fade when paginating, using explicit ``cast-fade-out``/``cast-fade-in``
-  keyframes. Gracefully degrades in unsupported browsers. Animation is disabled
-  for users who prefer reduced motion.
+- Add View Transitions API support (``transition:true``) for paginating,
+  using explicit ``#paging-area`` keyframes with graceful fallback in
+  unsupported browsers. Animation is disabled for users who prefer reduced
+  motion.
 - Add ``hx-sync="#paging-area:replace"`` to pagination links so rapid clicks
   cancel in-flight requests instead of racing.
 - Switch pagination history updates from ``hx-replace-url`` to ``hx-push-url``
   so browser back/forward steps through paginated pages.
 - Update bundled htmx from 2.0.0-beta4 to 2.0.8.
+- Scroll to top before HTMX view-transition snapshots for ``#paging-area`` swaps
+  so paginated content does not overlap behind sticky navigation during the fade.
+- Disable root view-transition animation so only ``#paging-area`` cross-fades,
+  preventing full-page overlap artifacts around sticky navigation.
+- Switch pagination transition from old/new cross-fade to new-only fade-in by
+  hiding the old ``#paging-area`` snapshot, removing mid-transition double
+  exposure artifacts.
+- Skip View Transition animation for deep-scroll pagination clicks and fall back
+  to instant HTMX swap + top scroll, avoiding the last visible jump under the
+  sticky navbar on long pages.
 
 Images
 ~~~~~~
