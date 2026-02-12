@@ -117,6 +117,26 @@ describe('PodlovePlayerElement', () => {
     );
   });
 
+  it('should release reserved min-height after successful load', () => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('id', 'audio_63');
+    element.setAttribute('data-url', '/api/audios/podlove/63/post/75/');
+    document.body.appendChild(element);
+
+    const container = element.querySelector('.podlove-player-container') as HTMLDivElement | null;
+    expect(container).not.toBeNull();
+    expect(container?.style.minHeight).toBe('');
+    expect(element.style.minHeight).toBe('');
+
+    const observerInstance = element.observer as IntersectionObserverMock;
+    observerInstance.trigger([
+      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+    ]);
+
+    expect(container?.style.minHeight).toBe('auto');
+    expect(element.style.minHeight).toBe('auto');
+  });
+
   it('should not initialize the player when not in view', () => {
     const element = document.createElement('podlove-player');
     element.setAttribute('id', 'audio_63');
@@ -225,6 +245,9 @@ describe('PodlovePlayerElement', () => {
     const errorMessage = element.querySelector('.podlove-player-error') as HTMLElement | null;
     expect(errorMessage).not.toBeNull();
     expect(errorMessage?.hidden).toBe(false);
+    const container = element.querySelector('.podlove-player-container') as HTMLDivElement | null;
+    expect(container?.style.minHeight).toBe('');
+    expect(element.style.minHeight).toBe('');
 
     appendSpy.mockRestore();
     global.podlovePlayer = originalPodlovePlayer;

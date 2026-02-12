@@ -410,6 +410,12 @@ class PodlovePlayerElement extends HTMLElement {
   }
 
   finalizeLoad(container: Element) {
+    if (container instanceof HTMLElement) {
+      // Keep reserved space while loading, then release it once the player is ready.
+      container.style.minHeight = "auto";
+    }
+    // Some consumers reserve space on the custom element itself.
+    this.style.minHeight = "auto";
     if (this.loadButton) {
       this.loadButton.remove();
       this.loadButton = null;
