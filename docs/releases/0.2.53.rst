@@ -71,6 +71,7 @@ Themes
 - Store theme choices cache as an immutable tuple and return a fresh list copy to prevent accidental mutation.
 - Fix double DB hit in the theme context processor by passing the site default as a fallback.
 - Narrow context processor exception handling to DB/lookup errors instead of blanket ``Exception``.
+- Fix Podlove player dark-mode loading flashes by forcing dark player config in dark mode and applying dark iframe/container fallback colors while the iframe bootstraps.
 
 Pagination
 ~~~~~~~~~~

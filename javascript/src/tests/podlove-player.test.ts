@@ -47,13 +47,44 @@ global.podlovePlayer = vi.fn();
 describe('PodlovePlayerElement', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    document.documentElement.removeAttribute('data-bs-theme');
+    document.documentElement.removeAttribute('data-theme');
+    document.body.removeAttribute('data-bs-theme');
+    document.body.removeAttribute('data-theme');
     global.podlovePlayer.mockReset();
+    globalThis.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: false,
+      media: '',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
     globalThis.requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
       callback({ didTimeout: false, timeRemaining: () => 50 });
       return 1;
     });
     globalThis.cancelIdleCallback = vi.fn();
   });
+
+  const setupAndTrigger = (configUrl?: string) => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('id', 'audio_63');
+    element.setAttribute('data-url', '/api/audios/podlove/63/post/75/');
+    if (configUrl) {
+      element.setAttribute('data-config', configUrl);
+    }
+    document.body.appendChild(element);
+
+    const observerInstance = element.observer as IntersectionObserverMock;
+    observerInstance.trigger([
+      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+    ]);
+
+    return element.querySelector('.podlove-player-host') as HTMLDivElement | null;
+  };
 
   it('should define the custom element', () => {
     expect(customElements.get('podlove-player')).toBeDefined();
@@ -135,6 +166,165 @@ describe('PodlovePlayerElement', () => {
 
     expect(container?.style.minHeight).toBe('auto');
     expect(element.style.minHeight).toBe('auto');
+  });
+
+  it('should inject dark loading styles to avoid iframe white flashes', () => {
+    const element = document.createElement('podlove-player');
+    document.body.appendChild(element);
+
+    const style = document.getElementById('podlove-player-styles');
+    expect(style).not.toBeNull();
+    expect(style?.textContent).toContain('color-scheme: dark');
+    expect(style?.textContent).toContain('background-color: #1e293b');
+  });
+
+  it('should append dark color_scheme when document theme is dark', () => {
+    document.documentElement.setAttribute('data-bs-theme', 'dark');
+    const playerHost = setupAndTrigger();
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/?color_scheme=dark'
+    );
+  });
+
+  it('should append dark color_scheme with query params and hash fragments', () => {
+    document.documentElement.setAttribute('data-bs-theme', 'dark');
+    const playerHost = setupAndTrigger('/api/audios/player_config/?foo=bar#fragment');
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/?foo=bar&color_scheme=dark#fragment'
+    );
+  });
+
+  it('should append dark color_scheme for hash-only config urls', () => {
+    document.documentElement.setAttribute('data-bs-theme', 'dark');
+    const playerHost = setupAndTrigger('/api/audios/player_config/#fragment');
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/?color_scheme=dark#fragment'
+    );
+  });
+
+  it('should not overwrite an explicit color_scheme query parameter', () => {
+    document.documentElement.setAttribute('data-bs-theme', 'dark');
+    const playerHost = setupAndTrigger('/api/audios/player_config/?color_scheme=light');
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/?color_scheme=light'
+    );
+  });
+
+  it('should infer dark color scheme from prefers-color-scheme when no theme is set', () => {
+    globalThis.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: '(prefers-color-scheme: dark)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const playerHost = setupAndTrigger();
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/?color_scheme=dark'
+    );
+  });
+
+  it('should infer dark color scheme from body data-bs-theme when html has no theme', () => {
+    document.body.setAttribute('data-bs-theme', 'dark');
+    const playerHost = setupAndTrigger();
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/?color_scheme=dark'
+    );
+  });
+
+  it('should infer dark color scheme from html data-theme fallback', () => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    const playerHost = setupAndTrigger();
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/?color_scheme=dark'
+    );
+  });
+
+  it('should prefer html data-bs-theme over body theme attributes', () => {
+    document.documentElement.setAttribute('data-bs-theme', 'light');
+    document.body.setAttribute('data-bs-theme', 'dark');
+    globalThis.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: '(prefers-color-scheme: dark)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    const playerHost = setupAndTrigger();
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/'
+    );
+  });
+
+  it('should keep explicit light theme even if prefers-color-scheme is dark', () => {
+    document.documentElement.setAttribute('data-bs-theme', 'light');
+    globalThis.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: '(prefers-color-scheme: dark)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const playerHost = setupAndTrigger();
+
+    expect(playerHost).not.toBeNull();
+    expect(global.podlovePlayer).toHaveBeenCalledWith(
+      playerHost,
+      '/api/audios/podlove/63/post/75/',
+      '/api/audios/player_config/'
+    );
+  });
+
+  it('should include explicit-light background reset styles to override dark media query', () => {
+    const element = document.createElement('podlove-player');
+    document.body.appendChild(element);
+
+    const style = document.getElementById('podlove-player-styles');
+    expect(style).not.toBeNull();
+    expect(style?.textContent).toContain('html[data-bs-theme="light"] podlove-player .podlove-player-container');
+    expect(style?.textContent).toContain('background-color: #ffffff');
   });
 
   it('should not initialize the player when not in view', () => {

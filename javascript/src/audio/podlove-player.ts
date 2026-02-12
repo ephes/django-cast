@@ -21,6 +21,9 @@ const EMBED_SCRIPT_ATTR = "data-podlove-embed";
 const EMBED_SCRIPT_LOADED_ATTR = "data-podlove-embed-loaded";
 const EMBED_SCRIPT_FAILED_ATTR = "data-podlove-embed-failed";
 const PLAYER_STYLE_ID = "podlove-player-styles";
+const COLOR_SCHEME_PARAM = "color_scheme";
+const DARK_LOADING_BG = "#1e293b";
+const LIGHT_LOADING_BG = "#ffffff";
 
 function waitForPageLoad(): Promise<void> {
   if (document.readyState === "complete") {
@@ -142,6 +145,49 @@ function cancelIdle(handle: number): void {
   window.clearTimeout(handle);
 }
 
+function getConfiguredTheme(): string | null {
+  const configuredTheme =
+    document.documentElement.getAttribute("data-bs-theme") ||
+    document.documentElement.getAttribute("data-theme") ||
+    document.body?.getAttribute("data-bs-theme") ||
+    document.body?.getAttribute("data-theme");
+  if (configuredTheme === "light" || configuredTheme === "dark") {
+    return configuredTheme;
+  }
+  return null;
+}
+
+function isDarkModeActive(): boolean {
+  const configuredTheme = getConfiguredTheme();
+  if (configuredTheme) {
+    return configuredTheme === "dark";
+  }
+  if (typeof window.matchMedia !== "function") {
+    return false;
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function appendDarkColorScheme(configUrl: string): string {
+  if (!isDarkModeActive()) {
+    return configUrl;
+  }
+
+  const hashIndex = configUrl.indexOf("#");
+  const base = hashIndex === -1 ? configUrl : configUrl.slice(0, hashIndex);
+  const hash = hashIndex === -1 ? "" : configUrl.slice(hashIndex);
+  const queryIndex = base.indexOf("?");
+  const path = queryIndex === -1 ? base : base.slice(0, queryIndex);
+  const query = queryIndex === -1 ? "" : base.slice(queryIndex + 1);
+  const params = new URLSearchParams(query);
+  if (params.has(COLOR_SCHEME_PARAM)) {
+    return configUrl;
+  }
+  params.set(COLOR_SCHEME_PARAM, "dark");
+  const nextQuery = params.toString();
+  return nextQuery ? `${path}?${nextQuery}${hash}` : `${path}${hash}`;
+}
+
 class PodlovePlayerElement extends HTMLElement {
   observer: IntersectionObserver | null;
   isInitialized: boolean;
@@ -212,6 +258,7 @@ class PodlovePlayerElement extends HTMLElement {
           max-width: 936px;
           min-height: 300px;
           margin: 0 auto;
+          background-color: ${LIGHT_LOADING_BG};
         }
         @media (max-width: 768px) {
           podlove-player .podlove-player-container {
@@ -257,6 +304,42 @@ class PodlovePlayerElement extends HTMLElement {
           width: 100%;
           height: 100%;
           border: none;
+          background-color: ${LIGHT_LOADING_BG};
+        }
+        @media (prefers-color-scheme: dark) {
+          podlove-player .podlove-player-container {
+            background-color: ${DARK_LOADING_BG};
+          }
+          podlove-player .podlove-player-container iframe {
+            background-color: ${DARK_LOADING_BG};
+            color-scheme: dark;
+          }
+        }
+        html[data-bs-theme="dark"] podlove-player .podlove-player-container,
+        html[data-theme="dark"] podlove-player .podlove-player-container,
+        body[data-bs-theme="dark"] podlove-player .podlove-player-container,
+        body[data-theme="dark"] podlove-player .podlove-player-container {
+          background-color: ${DARK_LOADING_BG};
+        }
+        html[data-bs-theme="dark"] podlove-player .podlove-player-container iframe,
+        html[data-theme="dark"] podlove-player .podlove-player-container iframe,
+        body[data-bs-theme="dark"] podlove-player .podlove-player-container iframe,
+        body[data-theme="dark"] podlove-player .podlove-player-container iframe {
+          background-color: ${DARK_LOADING_BG};
+          color-scheme: dark;
+        }
+        html[data-bs-theme="light"] podlove-player .podlove-player-container iframe,
+        html[data-theme="light"] podlove-player .podlove-player-container iframe,
+        body[data-bs-theme="light"] podlove-player .podlove-player-container iframe,
+        body[data-theme="light"] podlove-player .podlove-player-container iframe {
+          background-color: ${LIGHT_LOADING_BG};
+          color-scheme: light;
+        }
+        html[data-bs-theme="light"] podlove-player .podlove-player-container,
+        html[data-theme="light"] podlove-player .podlove-player-container,
+        body[data-bs-theme="light"] podlove-player .podlove-player-container,
+        body[data-theme="light"] podlove-player .podlove-player-container {
+          background-color: ${LIGHT_LOADING_BG};
         }
       `;
       document.head.appendChild(style);
@@ -354,7 +437,7 @@ class PodlovePlayerElement extends HTMLElement {
     this.isInitialized = true;
     this.clearError();
 
-    const configUrl = this.getAttribute('data-config') || '/api/audios/player_config/';
+    const configUrl = appendDarkColorScheme(this.getAttribute('data-config') || '/api/audios/player_config/');
     const podloveTemplate = this.getAttribute('data-template');
     let embedUrl = this.getAttribute('data-embed') || 'https://cdn.podlove.org/web-player/5.x/embed.js';
 
