@@ -344,6 +344,117 @@ describe("image gallery test", () => {
         expect(falseCallsAfter - falseCallsBefore).toBe(1);
     });
 
+    test("gallery uses window.bootstrap.Modal when available", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-srcset="test.jpg" type="image/avif" />
+                        <img id="img-0" data-fullsrc="modal.jpg" data-prev="false" data-next="false" alt="First" />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const mockShow = vi.fn();
+        const mockDispose = vi.fn();
+        const MockModal = vi.fn().mockImplementation(function (this: any) {
+            this.show = mockShow;
+            this.dispose = mockDispose;
+        });
+
+        (window as any).bootstrap = { Modal: MockModal };
+
+        const thumbnailImage = gallery.querySelector("#img-0") as HTMLElement;
+        thumbnailImage.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+        expect(MockModal).toHaveBeenCalledTimes(1);
+        expect(mockShow).toHaveBeenCalledTimes(1);
+
+        // Second click should reuse the same instance
+        thumbnailImage.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(MockModal).toHaveBeenCalledTimes(1);
+        expect(mockShow).toHaveBeenCalledTimes(2);
+
+        // Cleanup should dispose the instance
+        gallery.disconnectedCallback();
+        expect(mockDispose).toHaveBeenCalledTimes(1);
+
+        delete (window as any).bootstrap;
+    });
+
+    test("gallery disposes stale bootstrap.Modal when modal element changes", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#modal-a" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-srcset="test.jpg" type="image/avif" />
+                        <img id="img-0" data-fullsrc="modal.jpg" data-prev="false" data-next="false" alt="First" />
+                    </picture>
+                </a>
+                <a class="cast-gallery-modal" data-target="#modal-b" data-full="full-image2.jpg">
+                    <picture>
+                        <source data-modal-srcset="test2.jpg" type="image/avif" />
+                        <img id="img-1" data-fullsrc="modal2.jpg" data-prev="false" data-next="false" alt="Second" />
+                    </picture>
+                </a>
+            </div>
+            <div id="modal-a" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+            <div id="modal-b" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const instances: { show: ReturnType<typeof vi.fn>; dispose: ReturnType<typeof vi.fn> }[] = [];
+        const MockModal = vi.fn().mockImplementation(function (this: any) {
+            this.show = vi.fn();
+            this.dispose = vi.fn();
+            instances.push(this);
+        });
+
+        (window as any).bootstrap = { Modal: MockModal };
+
+        // Click first thumbnail (targets modal-a)
+        const img0 = gallery.querySelector("#img-0") as HTMLElement;
+        img0.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(MockModal).toHaveBeenCalledTimes(1);
+        expect(instances[0].show).toHaveBeenCalledTimes(1);
+
+        // Click second thumbnail (targets modal-b) - should dispose first instance
+        const img1 = gallery.querySelector("#img-1") as HTMLElement;
+        img1.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(instances[0].dispose).toHaveBeenCalledTimes(1);
+        expect(MockModal).toHaveBeenCalledTimes(2);
+        expect(instances[1].show).toHaveBeenCalledTimes(1);
+
+        gallery.disconnectedCallback();
+        delete (window as any).bootstrap;
+    });
+
     test("gallery applies image aspect ratio to keep modal body stable", () => {
         const gallery = new ImageGalleryBs4();
         gallery.id = "gallery-test";

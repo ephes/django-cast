@@ -1,3 +1,12 @@
+interface BsModalInstance {
+    show(): void;
+    dispose(): void;
+}
+
+interface BsModalConstructor {
+    new (element: HTMLElement): BsModalInstance;
+}
+
 export default class ImageGalleryBs4 extends HTMLElement {
     currentImage: HTMLElement | null;
     currentModal: HTMLElement | null;
@@ -7,6 +16,8 @@ export default class ImageGalleryBs4 extends HTMLElement {
     private pendingModalImage: HTMLImageElement | null;
     private pendingFinalize: (() => void) | null;
     private loadingSequence: number;
+    private bsModalInstance: BsModalInstance | null;
+    private bsModalElement: HTMLElement | null;
 	constructor () {
 		super();
         this.currentImage = null;
@@ -17,6 +28,8 @@ export default class ImageGalleryBs4 extends HTMLElement {
         this.pendingModalImage = null;
         this.pendingFinalize = null;
         this.loadingSequence = 0;
+        this.bsModalInstance = null;
+        this.bsModalElement = null;
     }
     static register(tagName: string):void {
         if ("customElements" in window) {
@@ -49,15 +62,39 @@ export default class ImageGalleryBs4 extends HTMLElement {
         return this.querySelector<HTMLElement>(".modal");
     }
 
+    private disposeBsModal(): void {
+        if (this.bsModalInstance) {
+            try { this.bsModalInstance.dispose(); } catch { /* already gone */ }
+            this.bsModalInstance = null;
+            this.bsModalElement = null;
+        }
+    }
+
     private showModal(modal: HTMLElement | null): void {
         if (!modal) {
             return;
         }
-        const jQuery = (window as unknown as { jQuery?: any }).jQuery;
-        if (jQuery && typeof jQuery(modal).modal === "function") {
-            jQuery(modal).modal("show");
+        // Try jQuery plugin (legacy BS4 jQuery-plugin build)
+        const jQuery = (window as unknown as { jQuery?: unknown }).jQuery;
+        if (jQuery && typeof (jQuery as (el: HTMLElement) => { modal?: unknown })(modal).modal === "function") {
+            (jQuery as (el: HTMLElement) => { modal: (cmd: string) => void })(modal).modal("show");
             return;
         }
+        // Try bootstrap global (BS4.6.2 UMD exports build)
+        const bootstrap = (window as unknown as { bootstrap?: { Modal?: BsModalConstructor } }).bootstrap;
+        const ModalApi = bootstrap?.Modal;
+        if (ModalApi) {
+            if (this.bsModalElement !== modal) {
+                this.disposeBsModal();
+            }
+            if (!this.bsModalInstance) {
+                this.bsModalInstance = new ModalApi(modal);
+                this.bsModalElement = modal;
+            }
+            this.bsModalInstance.show();
+            return;
+        }
+        // Manual fallback (no Bootstrap JS at all)
         modal.classList.add("show");
         modal.style.display = "block";
         modal.removeAttribute("aria-hidden");
@@ -226,6 +263,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
 
     private cleanupModal(): void {
         this.clearPendingImageListeners();
+        this.disposeBsModal();
         const ownerId = this.id;
         const selector = ownerId ? `.modal[data-gallery-owner="${ownerId}"]` : null;
         const modal = selector ? document.querySelector<HTMLElement>(selector) : this.currentModal;
