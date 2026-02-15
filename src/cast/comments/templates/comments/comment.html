@@ -20,7 +20,7 @@
 <div{% if preview %} id="comment-preview"{% else %} id="c{{ comment.id }}"{% endif %} class="comment-item">
   {% block comment_item %}
     {% if preview %}<h3>{% trans "Preview of your comment" %}</h3>{% endif %}
-    <h4>
+    <h3>
       {% block comment_title %}
         {% if comment.url %}<a href="{{ comment.url }}" rel="nofollow">{% endif %}
         {% if comment.name %}{{ comment.name }}{% else %}{% trans "Anonymous" %}{% endif %}{% comment %}
@@ -31,7 +31,7 @@
         {% endif %}
         {% if USE_THREADEDCOMMENTS and not preview %}<a href="#c{{ comment.id }}" data-comment-id="{{ comment.id }}" class="comment-reply-link">{% trans "reply" %}</a>{% endif %}
       {% endblock %}
-    </h4>
+    </h3>
 
     <div class="comment-text">{{ comment.comment|linebreaks }}</div>
   {% endblock %}
