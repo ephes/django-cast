@@ -1,6 +1,8 @@
 interface BsModalInstance {
     show(): void;
+    hide(): void;
     dispose(): void;
+    _isTransitioning?: boolean;
 }
 
 interface BsModalConstructor {
@@ -13,6 +15,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
     private boundThumbnailClick: (event: Event) => void;
     private boundFooterClick: (event: Event) => void;
     private boundKeydown: (event: KeyboardEvent) => void;
+    private boundCloseClick: (event: Event) => void;
     private pendingModalImage: HTMLImageElement | null;
     private pendingFinalize: (() => void) | null;
     private loadingSequence: number;
@@ -25,6 +28,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
         this.boundThumbnailClick = this.handleThumbnailClick.bind(this);
         this.boundFooterClick = this.handleFooterClick.bind(this);
         this.boundKeydown = this.handleKeydown.bind(this);
+        this.boundCloseClick = this.handleCloseClick.bind(this);
         this.pendingModalImage = null;
         this.pendingFinalize = null;
         this.loadingSequence = 0;
@@ -70,6 +74,19 @@ export default class ImageGalleryBs4 extends HTMLElement {
         }
     }
 
+    private focusModalAfterTransition(modal: HTMLElement): void {
+        const dialog = modal.querySelector<HTMLElement>(".modal-dialog");
+        if (dialog) {
+            dialog.addEventListener("transitionend", () => modal.focus(), { once: true });
+        }
+        // Safety fallback in case CSS transition doesn't fire
+        setTimeout(() => {
+            if (modal.classList.contains("show")) {
+                modal.focus();
+            }
+        }, 350);
+    }
+
     private showModal(modal: HTMLElement | null): void {
         if (!modal) {
             return;
@@ -92,6 +109,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
                 this.bsModalElement = modal;
             }
             this.bsModalInstance.show();
+            this.focusModalAfterTransition(modal);
             return;
         }
         // Manual fallback (no Bootstrap JS at all)
@@ -100,6 +118,31 @@ export default class ImageGalleryBs4 extends HTMLElement {
         modal.removeAttribute("aria-hidden");
         modal.setAttribute("aria-modal", "true");
         document.body.classList.add("modal-open");
+    }
+
+    private hideModal(modal: HTMLElement): void {
+        // Try jQuery plugin
+        const jQuery = (window as unknown as { jQuery?: unknown }).jQuery;
+        if (jQuery && typeof (jQuery as (el: HTMLElement) => { modal?: unknown })(modal).modal === "function") {
+            (jQuery as (el: HTMLElement) => { modal: (cmd: string) => void })(modal).modal("hide");
+            return;
+        }
+        // Try bootstrap.Modal instance
+        if (this.bsModalInstance) {
+            // BS4's hide() may be blocked if _isTransitioning is stuck; force-clear it
+            if (this.bsModalInstance._isTransitioning) {
+                this.bsModalInstance._isTransitioning = false;
+            }
+            this.bsModalInstance.hide();
+            return;
+        }
+        // Manual fallback
+        modal.classList.remove("show");
+        modal.style.display = "none";
+        modal.setAttribute("aria-hidden", "true");
+        modal.removeAttribute("aria-modal");
+        document.body.classList.remove("modal-open");
+        document.querySelector(".modal-backdrop")?.remove();
     }
 
     private getModalBody(modal: HTMLElement | null): HTMLElement | null {
@@ -235,6 +278,12 @@ export default class ImageGalleryBs4 extends HTMLElement {
             modal.addEventListener("keydown", this.boundKeydown);
             modal.setAttribute("data-gallery-keydown-bound", "true");
         }
+
+        const closeBtn = modal.querySelector<HTMLElement>('[data-dismiss="modal"]');
+        if (closeBtn && !closeBtn.hasAttribute("data-gallery-close-bound")) {
+            closeBtn.addEventListener("click", this.boundCloseClick);
+            closeBtn.setAttribute("data-gallery-close-bound", "true");
+        }
     }
 
     private unbindModalEvents(modal: HTMLElement): void {
@@ -247,6 +296,12 @@ export default class ImageGalleryBs4 extends HTMLElement {
         if (modal.hasAttribute("data-gallery-keydown-bound")) {
             modal.removeEventListener("keydown", this.boundKeydown);
             modal.removeAttribute("data-gallery-keydown-bound");
+        }
+
+        const closeBtn = modal.querySelector<HTMLElement>('[data-dismiss="modal"]');
+        if (closeBtn && closeBtn.hasAttribute("data-gallery-close-bound")) {
+            closeBtn.removeEventListener("click", this.boundCloseClick);
+            closeBtn.removeAttribute("data-gallery-close-bound");
         }
     }
 
@@ -408,12 +463,22 @@ export default class ImageGalleryBs4 extends HTMLElement {
         }
     }
 
+    private handleCloseClick(event: Event) {
+        event.preventDefault();
+        if (this.currentModal) {
+            this.hideModal(this.currentModal);
+        }
+    }
+
     private handleKeydown(event: KeyboardEvent) {
         if (event.key === "ArrowLeft") {
             this.replaceImage("data-prev");
         }
         if (event.key === "ArrowRight") {
             this.replaceImage("data-next");
+        }
+        if (event.key === "Escape" && this.currentModal) {
+            this.hideModal(this.currentModal);
         }
     }
 
