@@ -455,6 +455,157 @@ describe("image gallery test", () => {
         delete (window as any).bootstrap;
     });
 
+    test("gallery Escape key closes modal via hideModal", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-srcset="test.jpg" type="image/avif" />
+                        <img id="img-0" data-fullsrc="modal.jpg" data-prev="false" data-next="false" alt="First" />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const mockHide = vi.fn();
+        const MockModal = vi.fn().mockImplementation(function (this: any) {
+            this.show = vi.fn();
+            this.hide = mockHide;
+            this.dispose = vi.fn();
+        });
+
+        (window as any).bootstrap = { Modal: MockModal };
+
+        // Open modal
+        const img0 = gallery.querySelector("#img-0") as HTMLElement;
+        img0.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(MockModal).toHaveBeenCalledTimes(1);
+
+        // Press Escape on the modal
+        const modal = document.querySelector("#gallery-modal") as HTMLElement;
+        modal.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(mockHide).toHaveBeenCalledTimes(1);
+
+        gallery.disconnectedCallback();
+        delete (window as any).bootstrap;
+    });
+
+    test("gallery hideModal force-clears stuck _isTransitioning", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-srcset="test.jpg" type="image/avif" />
+                        <img id="img-0" data-fullsrc="modal.jpg" data-prev="false" data-next="false" alt="First" />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const mockHide = vi.fn();
+        const MockModal = vi.fn().mockImplementation(function (this: any) {
+            this.show = vi.fn();
+            this.hide = mockHide;
+            this.dispose = vi.fn();
+            this._isTransitioning = true; // Simulate stuck state
+        });
+
+        (window as any).bootstrap = { Modal: MockModal };
+
+        // Open modal
+        const img0 = gallery.querySelector("#img-0") as HTMLElement;
+        img0.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+        // Modal should have "show" class added by BS4's show()
+        // Simulate BS4 adding the class (since our mock doesn't)
+        const modal = document.querySelector("#gallery-modal") as HTMLElement;
+        modal.classList.add("show");
+
+        // Press Escape — should clear _isTransitioning then call hide()
+        modal.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(mockHide).toHaveBeenCalledTimes(1);
+
+        // Verify _isTransitioning was cleared before hide()
+        const inst = MockModal.mock.instances[0];
+        expect(inst._isTransitioning).toBe(false);
+
+        gallery.disconnectedCallback();
+        delete (window as any).bootstrap;
+    });
+
+    test("gallery dismiss click closes modal via event delegation", () => {
+        const gallery = new ImageGalleryBs4();
+        gallery.id = "gallery-test";
+        gallery.innerHTML = `
+            <div class="cast-gallery-container">
+                <a class="cast-gallery-modal" data-target="#gallery-modal" data-full="full-image.jpg">
+                    <picture>
+                        <source data-modal-srcset="test.jpg" type="image/avif" />
+                        <img id="img-0" data-fullsrc="modal.jpg" data-prev="false" data-next="false" alt="First" />
+                    </picture>
+                </a>
+            </div>
+            <div id="gallery-modal" class="modal">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <a><picture><source /><img /></picture></a>
+                </div>
+                <div class="modal-footer"></div>
+            </div>
+        `;
+
+        document.body.appendChild(gallery);
+        gallery.connectedCallback();
+
+        const mockHide = vi.fn();
+        const MockModal = vi.fn().mockImplementation(function (this: any) {
+            this.show = vi.fn();
+            this.hide = mockHide;
+            this.dispose = vi.fn();
+        });
+
+        (window as any).bootstrap = { Modal: MockModal };
+
+        // Open modal
+        const img0 = gallery.querySelector("#img-0") as HTMLElement;
+        img0.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+        // Click the × span inside the close button (tests delegation)
+        const modal = document.querySelector("#gallery-modal") as HTMLElement;
+        const closeSpan = modal.querySelector('[data-dismiss="modal"] span') as HTMLElement;
+        closeSpan.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+        expect(mockHide).toHaveBeenCalledTimes(1);
+
+        gallery.disconnectedCallback();
+        delete (window as any).bootstrap;
+    });
+
     test("gallery applies image aspect ratio to keep modal body stable", () => {
         const gallery = new ImageGalleryBs4();
         gallery.id = "gallery-test";

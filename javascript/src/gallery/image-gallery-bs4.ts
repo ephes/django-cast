@@ -2,7 +2,6 @@ interface BsModalInstance {
     show(): void;
     hide(): void;
     dispose(): void;
-    _isTransitioning?: boolean;
 }
 
 interface BsModalConstructor {
@@ -15,7 +14,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
     private boundThumbnailClick: (event: Event) => void;
     private boundFooterClick: (event: Event) => void;
     private boundKeydown: (event: KeyboardEvent) => void;
-    private boundCloseClick: (event: Event) => void;
+    private boundDismissClick: (event: Event) => void;
     private pendingModalImage: HTMLImageElement | null;
     private pendingFinalize: (() => void) | null;
     private loadingSequence: number;
@@ -28,7 +27,7 @@ export default class ImageGalleryBs4 extends HTMLElement {
         this.boundThumbnailClick = this.handleThumbnailClick.bind(this);
         this.boundFooterClick = this.handleFooterClick.bind(this);
         this.boundKeydown = this.handleKeydown.bind(this);
-        this.boundCloseClick = this.handleCloseClick.bind(this);
+        this.boundDismissClick = this.handleDismissClick.bind(this);
         this.pendingModalImage = null;
         this.pendingFinalize = null;
         this.loadingSequence = 0;
@@ -75,16 +74,17 @@ export default class ImageGalleryBs4 extends HTMLElement {
     }
 
     private focusModalAfterTransition(modal: HTMLElement): void {
-        const dialog = modal.querySelector<HTMLElement>(".modal-dialog");
-        if (dialog) {
-            dialog.addEventListener("transitionend", () => modal.focus(), { once: true });
-        }
-        // Safety fallback in case CSS transition doesn't fire
-        setTimeout(() => {
+        const focusIfShown = () => {
             if (modal.classList.contains("show")) {
                 modal.focus();
             }
-        }, 350);
+        };
+        const dialog = modal.querySelector<HTMLElement>(".modal-dialog");
+        if (dialog) {
+            dialog.addEventListener("transitionend", focusIfShown, { once: true });
+        }
+        // Safety fallback in case CSS transition doesn't fire
+        setTimeout(focusIfShown, 350);
     }
 
     private showModal(modal: HTMLElement | null): void {
@@ -129,9 +129,12 @@ export default class ImageGalleryBs4 extends HTMLElement {
         }
         // Try bootstrap.Modal instance
         if (this.bsModalInstance) {
-            // BS4's hide() may be blocked if _isTransitioning is stuck; force-clear it
-            if (this.bsModalInstance._isTransitioning) {
-                this.bsModalInstance._isTransitioning = false;
+            // BS4's hide() is blocked when _isTransitioning is stuck true.
+            // Only force-clear when the modal is fully shown (stuck state),
+            // not during a genuine in-progress transition.
+            const inst = this.bsModalInstance as BsModalInstance & { _isTransitioning?: boolean };
+            if (inst._isTransitioning && modal.classList.contains("show")) {
+                inst._isTransitioning = false;
             }
             this.bsModalInstance.hide();
             return;
@@ -142,7 +145,9 @@ export default class ImageGalleryBs4 extends HTMLElement {
         modal.setAttribute("aria-hidden", "true");
         modal.removeAttribute("aria-modal");
         document.body.classList.remove("modal-open");
-        document.querySelector(".modal-backdrop")?.remove();
+        modal.nextElementSibling?.classList.contains("modal-backdrop")
+            ? modal.nextElementSibling.remove()
+            : document.querySelector(".modal-backdrop")?.remove();
     }
 
     private getModalBody(modal: HTMLElement | null): HTMLElement | null {
@@ -279,10 +284,9 @@ export default class ImageGalleryBs4 extends HTMLElement {
             modal.setAttribute("data-gallery-keydown-bound", "true");
         }
 
-        const closeBtn = modal.querySelector<HTMLElement>('[data-dismiss="modal"]');
-        if (closeBtn && !closeBtn.hasAttribute("data-gallery-close-bound")) {
-            closeBtn.addEventListener("click", this.boundCloseClick);
-            closeBtn.setAttribute("data-gallery-close-bound", "true");
+        if (!modal.hasAttribute("data-gallery-dismiss-bound")) {
+            modal.addEventListener("click", this.boundDismissClick);
+            modal.setAttribute("data-gallery-dismiss-bound", "true");
         }
     }
 
@@ -298,10 +302,9 @@ export default class ImageGalleryBs4 extends HTMLElement {
             modal.removeAttribute("data-gallery-keydown-bound");
         }
 
-        const closeBtn = modal.querySelector<HTMLElement>('[data-dismiss="modal"]');
-        if (closeBtn && closeBtn.hasAttribute("data-gallery-close-bound")) {
-            closeBtn.removeEventListener("click", this.boundCloseClick);
-            closeBtn.removeAttribute("data-gallery-close-bound");
+        if (modal.hasAttribute("data-gallery-dismiss-bound")) {
+            modal.removeEventListener("click", this.boundDismissClick);
+            modal.removeAttribute("data-gallery-dismiss-bound");
         }
     }
 
@@ -463,7 +466,11 @@ export default class ImageGalleryBs4 extends HTMLElement {
         }
     }
 
-    private handleCloseClick(event: Event) {
+    private handleDismissClick(event: Event) {
+        const target = event.target as HTMLElement | null;
+        if (!target?.closest('[data-dismiss="modal"]')) {
+            return;
+        }
         event.preventDefault();
         if (this.currentModal) {
             this.hideModal(this.currentModal);
