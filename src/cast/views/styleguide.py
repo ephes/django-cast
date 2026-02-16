@@ -67,7 +67,7 @@ STYLEGUIDE_PODCAST_SLUG = "styleguide-podcast"
 STYLEGUIDE_POST_SLUG_PREFIX = "styleguide-post"
 STYLEGUIDE_EPISODE_SLUG = "styleguide-episode-1"
 STYLEGUIDE_USER_NAME = "styleguide"
-STYLEGUIDE_FALLBACK_THEMES = ("bootstrap4", "plain")
+STYLEGUIDE_FALLBACK_THEMES = ("bootstrap5", "bootstrap4", "plain")
 STYLEGUIDE_USER_AGENT = "django-cast-styleguide/1.0"
 
 

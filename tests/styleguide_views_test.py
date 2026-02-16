@@ -212,6 +212,14 @@ def test_styleguide_current_site_theme_without_session_uses_site_setting(rf, sit
     assert theme == "plain"
 
 
+def test_styleguide_find_fallback_theme_prefers_bootstrap5(monkeypatch):
+    def fake_exists(theme_slug):
+        return theme_slug in {"bootstrap5", "bootstrap4"}
+
+    monkeypatch.setattr(styleguide_view, "_styleguide_template_exists", fake_exists)
+    assert styleguide_view._find_fallback_theme({"bootstrap5", "bootstrap4", "plain"}) == "bootstrap5"
+
+
 def test_styleguide_find_fallback_theme_prefers_defaults(monkeypatch):
     def fake_exists(theme_slug):
         return theme_slug == "bootstrap4"
