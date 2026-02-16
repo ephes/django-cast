@@ -243,6 +243,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
 
     @property
     def duration_str(self) -> str:
+        if self.duration is None:
+            return ""
         dur = str(self.duration)
         return dur.split(".")[0]
 

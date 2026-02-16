@@ -66,6 +66,11 @@ class TestAudioModel:
         audio.create_duration()
         assert get_audio_duration.call_count == 0
 
+    def test_audio_duration_str_none(self, audio):
+        """duration_str returns empty string when duration is NULL."""
+        audio.duration = None
+        assert audio.duration_str == ""
+
     def test_audio_audio_without_file_fields(self, audio, mocker):
         class Field:  # not a FileField
             foo = "bar"

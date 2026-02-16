@@ -1,4 +1,5 @@
 {% load static %}
+{% load wagtailimages_tags %}
 {% if page.pk %}
   {% if not render_for_feed %}
     <podlove-player
@@ -7,10 +8,34 @@
       data-url="{% url 'cast:api:audio_podlove_detail' pk=value.pk post_id=page.pk %}"
       data-embed="{% static 'cast/js/web-player/embed.5.js' %}"
       data-config="{% url 'cast:api:player_config' %}"
-      {% if podlove_load_mode == "click" %}
+      {% if podlove_load_mode == "facade" %}
+        data-load-mode="facade"
+      {% elif podlove_load_mode == "click" %}
         data-load-mode="click"
       {% endif %}
     >
+      {% if podlove_load_mode == "facade" %}
+        <div class="podlove-player-container podlove-facade">
+          <div class="podlove-facade-content">
+            {% if page.cover_image %}
+              {% image page.cover_image fill-120x120 class="podlove-facade-cover" %}
+            {% elif page.cover_image_url %}
+              <img src="{{ page.cover_image_url }}" alt="{{ page.cover_alt_text_display|default:'' }}" width="120" height="120" class="podlove-facade-cover" loading="lazy">
+            {% endif %}
+            <div class="podlove-facade-info">
+              <div class="podlove-facade-title">{{ value.name }}</div>
+              {% if value.duration_str %}
+                <div class="podlove-facade-duration">{{ value.duration_str }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <button type="button" class="podlove-facade-play" aria-label="Play {{ value.name }}">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>
+        </div>
+      {% endif %}
     </podlove-player>
   {% endif %}
 {% endif %}
