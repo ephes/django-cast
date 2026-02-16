@@ -227,6 +227,32 @@
     margin-left: 10px;
 }
 
+/* Accessible link color — Bootstrap 4 default #007bff has ~4:1 contrast on
+   white which fails WCAG AA.  #0056b3 (BS4's own hover shade) scores ~7:1. */
+a {
+    color: #0056b3;
+}
+
+a:hover {
+    color: #003d80;
+}
+
+.page-link {
+    color: #0056b3;
+}
+
+.page-link:hover {
+    color: #003d80;
+}
+
+.btn-link {
+    color: #0056b3;
+}
+
+.btn-link:hover {
+    color: #003d80;
+}
+
 .invalid-feedback {
     /* Workaround for django-fluentcomments error messages not showing up
     See https://github.com/ephes/django-cast/issues/107

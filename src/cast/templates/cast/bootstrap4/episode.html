@@ -5,7 +5,7 @@
     <!-- Twitter Player Card / Open Graph Tags-->
     <meta name="twitter:card" content="player">
     <meta name="twitter:title" content="{{ page.seo_title }}">
-    <meta name="twitter:description" content="{{ page.search_description }}">
+    <meta name="twitter:description" content="{{ page.search_description|default:page.title }}">
     <meta name="twitter:image" content="{{ social_cover_image_url }}">
     <meta name="twitter:image:alt" content="{{ cover_alt_text }}">
     <meta name="twitter:player" content="{{ player_url }}">
@@ -23,7 +23,7 @@
       <meta property="og:image:height" content="{{ social_cover_image_height }}">
     {% endif %}
     <meta property="og:type" content="article">
-    <meta property="og:description" content="{{ page.search_description }}">
+    <meta property="og:description" content="{{ page.search_description|default:page.title }}">
     <meta property="og:updated_time" content="{{ updated_timestamp }}">
     <meta property="og:audio" content="{{ episode.podcast_audio.m4a.url }}">
     <!--

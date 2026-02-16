@@ -29,7 +29,7 @@
     <meta name="twitter:title" content="{{ page.seo_title }}">
     <meta name="twitter:image" content="{{ social_cover_image_url }}">
     <meta name="twitter:image:alt" content="{{ cover_alt_text }}">
-    <meta name="twitter:description" content="{{ page.search_description }}">
+    <meta name="twitter:description" content="{{ page.search_description|default:page.title }}">
 
     <meta property="og:url" content="{{ absolute_page_url }}">
     <meta property="og:title" content="{{ page.seo_title }}">
@@ -40,7 +40,7 @@
       <meta property="og:image:height" content="{{ social_cover_image_height }}">
     {% endif %}
     <meta property="og:type" content="article">
-    <meta property="og:description" content="{{ page.search_description }}">
+    <meta property="og:description" content="{{ page.search_description|default:page.title }}">
     <meta property="og:updated_time" content="{{ updated_timestamp }}">
   {% endblock social_meta %}
 {% endblock %}

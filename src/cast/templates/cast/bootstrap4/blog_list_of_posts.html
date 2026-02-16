@@ -44,7 +44,7 @@
           <div class="card-body">
             <form action="{{ page.url }}" method="get">
               {{ filterset.form | crispy }}
-              <input class="btn btn-primary btn-lg" role="button" type="submit" />
+              <input class="btn btn-primary btn-lg" role="button" type="submit" value="{% translate 'Search' %}" />
             </form>
           </div>
         </div>
