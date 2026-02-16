@@ -3,6 +3,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from django.core.files.base import ContentFile
 from django.test import RequestFactory
 
 from cast.devdata import create_audio, create_blog, create_gallery, create_image, create_podcast, create_user
@@ -702,6 +703,117 @@ def test_styleguide_get_or_create_remote_audio_existing_and_error(monkeypatch):
 
     monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen_error)
     assert styleguide_view._get_or_create_remote_audio("https://example.com/missing.m4a", user) is None
+
+
+@pytest.mark.django_db
+def test_styleguide_get_or_create_remote_audio_legacy_title_migration(monkeypatch):
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
+    user = create_user(name="remote-audio-legacy", password="remote-audio-legacy")
+    url = "https://example.com/audio.m4a"
+    legacy_title = f"Styleguide source: {url}"
+    audio = Audio(user=user, title=legacy_title)
+    audio.m4a.save("audio.m4a", ContentFile(b"audio-bytes"), save=True)
+    audio.save()
+
+    result = styleguide_view._get_or_create_remote_audio(url, user)
+    assert result is not None
+    assert result.pk == audio.pk
+    assert result.title == "Podcast Episode (audio)"
+    assert result.data["styleguide_source_url"] == url
+
+
+@pytest.mark.django_db
+def test_styleguide_backfill_skips_non_url_titles(monkeypatch):
+    """Backfill only migrates titles where the suffix is a URL, not arbitrary text."""
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
+    user = create_user(name="remote-audio-nonurl", password="remote-audio-nonurl")
+    audio = Audio(user=user, title="Styleguide source: not a url")
+    audio.m4a.save("safe.m4a", ContentFile(b"audio-bytes"), save=True)
+    audio.save()
+
+    styleguide_view._backfill_legacy_styleguide_audio_titles(user)
+    audio.refresh_from_db()
+    assert audio.title == "Styleguide source: not a url"  # unchanged
+    assert "styleguide_source_url" not in audio.data
+
+
+@pytest.mark.django_db
+def test_styleguide_get_or_create_remote_audio_updates_stale_title(monkeypatch):
+    """When an existing audio is found by URL but has an outdated title, it gets updated."""
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
+    user = create_user(name="remote-audio-stale", password="remote-audio-stale")
+    url = "https://example.com/audio.m4a"
+    audio = Audio(user=user, title="Old Title", data={"styleguide_source_url": url})
+    audio.m4a.save("audio.m4a", ContentFile(b"audio-bytes"), save=True)
+    audio.save()
+
+    result = styleguide_view._get_or_create_remote_audio(url, user)
+    assert result is not None
+    assert result.pk == audio.pk
+    assert result.title == "Podcast Episode (audio)"
+
+
+@pytest.mark.django_db
+def test_styleguide_get_or_create_remote_audio_adopts_transitional_row(monkeypatch):
+    """A row with clean title but no URL in data (from prior patch) is adopted, not duplicated."""
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
+    user = create_user(name="remote-audio-trans", password="remote-audio-trans")
+    url = "https://example.com/audio.m4a"
+    # Simulate transitional state: clean title, no styleguide_source_url in data
+    audio = Audio(user=user, title="Podcast Episode (audio)", data={})
+    audio.m4a.save("audio.m4a", ContentFile(b"audio-bytes"), save=True)
+    audio.save()
+
+    result = styleguide_view._get_or_create_remote_audio(url, user)
+    assert result is not None
+    assert result.pk == audio.pk  # same row, not a duplicate
+    assert result.data["styleguide_source_url"] == url
+
+
+@pytest.mark.django_db
+def test_styleguide_get_or_create_remote_audio_does_not_adopt_other_users_row(monkeypatch):
+    """Must not reuse or mutate another user's audio row."""
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
+    other_user = create_user(name="other-user", password="other-user")
+    styleguide_user = create_user(name="sg-user", password="sg-user")
+    url = "https://example.com/audio.m4a"
+    # other_user owns an audio with the same clean title but no marker
+    other_audio = Audio(user=other_user, title="Podcast Episode (audio)", data={})
+    other_audio.m4a.save("audio.m4a", ContentFile(b"audio-bytes"), save=True)
+    other_audio.save()
+
+    def fake_urlopen(_request, timeout=0):
+        return DummyResponse(b"new-audio-bytes")
+
+    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    result = styleguide_view._get_or_create_remote_audio(url, styleguide_user)
+    assert result is not None
+    assert result.pk != other_audio.pk  # must be a new row
+    assert result.user == styleguide_user
+    # other_user's row must be untouched
+    other_audio.refresh_from_db()
+    assert "styleguide_source_url" not in other_audio.data
+
+
+@pytest.mark.django_db
+def test_styleguide_get_or_create_remote_audio_same_filename_different_urls(monkeypatch):
+    """Two different URLs with the same filename must create different Audio records."""
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
+    user = create_user(name="remote-audio-same-fn", password="remote-audio-same-fn")
+
+    def fake_urlopen(_request, timeout=0):
+        return DummyResponse(b"audio-bytes")
+
+    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    url_a = "https://example.com/path-one/audio.m4a"
+    url_b = "https://another.example.org/path-two/audio.m4a"
+    audio_a = styleguide_view._get_or_create_remote_audio(url_a, user)
+    audio_b = styleguide_view._get_or_create_remote_audio(url_b, user)
+    assert audio_a is not None
+    assert audio_b is not None
+    assert audio_a.pk != audio_b.pk
+    assert audio_a.data["styleguide_source_url"] == url_a
+    assert audio_b.data["styleguide_source_url"] == url_b
 
 
 @pytest.mark.django_db

@@ -16,24 +16,60 @@
     >
       {% if podlove_load_mode == "facade" %}
         <div class="podlove-player-container podlove-facade">
-          <div class="podlove-facade-content">
-            {% if page.cover_image %}
-              {% image page.cover_image fill-120x120 class="podlove-facade-cover" %}
-            {% elif page.cover_image_url %}
-              <img src="{{ page.cover_image_url }}" alt="{{ page.cover_alt_text_display|default:'' }}" width="120" height="120" class="podlove-facade-cover" loading="lazy">
-            {% endif %}
-            <div class="podlove-facade-info">
-              <div class="podlove-facade-title">{{ value.name }}</div>
-              {% if value.duration_str %}
-                <div class="podlove-facade-duration">{{ value.duration_str }}</div>
+          <div class="podlove-facade-inner">
+            <div class="podlove-facade-header">
+              {% if page.cover_image %}
+                {% image page.cover_image fill-120x120 class="podlove-facade-cover" %}
+              {% elif page.cover_image_url %}
+                <img src="{{ page.cover_image_url }}" alt="{{ page.cover_alt_text_display|default:'' }}" width="120" height="120" class="podlove-facade-cover" loading="lazy">
+              {% else %}
+                <svg class="podlove-facade-cover podlove-facade-waveform" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <rect width="120" height="120" rx="6" fill="currentColor" opacity="0.08"/>
+                  <g fill="currentColor" opacity="0.25">
+                    <rect x="12" y="48" width="5" height="24" rx="2.5"/>
+                    <rect x="22" y="36" width="5" height="48" rx="2.5"/>
+                    <rect x="32" y="28" width="5" height="64" rx="2.5"/>
+                    <rect x="42" y="40" width="5" height="40" rx="2.5"/>
+                    <rect x="52" y="24" width="5" height="72" rx="2.5"/>
+                    <rect x="62" y="32" width="5" height="56" rx="2.5"/>
+                    <rect x="72" y="44" width="5" height="32" rx="2.5"/>
+                    <rect x="82" y="28" width="5" height="64" rx="2.5"/>
+                    <rect x="92" y="38" width="5" height="44" rx="2.5"/>
+                    <rect x="102" y="46" width="5" height="28" rx="2.5"/>
+                  </g>
+                </svg>
               {% endif %}
+              <div class="podlove-facade-info">
+                <div class="podlove-facade-title">{{ value.name }}</div>
+                {% if value.subtitle %}
+                  <div class="podlove-facade-subtitle">{{ value.subtitle }}</div>
+                {% endif %}
+              </div>
+            </div>
+            <div class="podlove-facade-divider" aria-hidden="true"></div>
+            <button type="button" class="podlove-facade-play" aria-label="Play {{ value.name }}">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              <span>Play Episode</span>
+            </button>
+            <div class="podlove-facade-progress-area" aria-hidden="true">
+              <div class="podlove-facade-progress">
+                <span class="podlove-facade-progress-dot"></span>
+                <span class="podlove-facade-progress-track"></span>
+              </div>
+              <div class="podlove-facade-time">
+                <span>00:00</span>
+                <span>{% if value.duration_str %}-{{ value.duration_str }}{% endif %}</span>
+              </div>
+            </div>
+            <div class="podlove-facade-divider" aria-hidden="true"></div>
+            <div class="podlove-facade-actions" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
             </div>
           </div>
-          <button type="button" class="podlove-facade-play" aria-label="Play {{ value.name }}">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          </button>
         </div>
       {% endif %}
     </podlove-player>

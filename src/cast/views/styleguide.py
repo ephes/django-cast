@@ -1242,18 +1242,47 @@ def _get_or_create_remote_image(url: str, user) -> Image | None:
     return image
 
 
+def _backfill_legacy_styleguide_audio_titles(user) -> None:
+    """Migrate legacy 'Styleguide source: <url>' titles to clean display titles."""
+    prefix = "Styleguide source: "
+    for audio in Audio.objects.filter(user=user, title__startswith=prefix):
+        source_url = audio.title.removeprefix(prefix)
+        # Only migrate titles where the suffix looks like a URL
+        if not source_url.startswith(("http://", "https://")):
+            continue
+        fn = urlparse(source_url).path.rsplit("/", 1)[-1] or "audio"
+        stem = fn.rsplit(".", 1)[0] if "." in fn else fn
+        audio.title = f"Podcast Episode ({stem})"
+        audio.data["styleguide_source_url"] = source_url
+        audio.save()
+
+
 def _get_or_create_remote_audio(url: str, user) -> Audio | None:
-    title = f"Styleguide source: {url}"
-    existing = Audio.objects.filter(title=title).first()
+    _backfill_legacy_styleguide_audio_titles(user)
+    filename = urlparse(url).path.rsplit("/", 1)[-1] or "styleguide-audio.m4a"
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+    clean_title = f"Podcast Episode ({stem})"
+    # Primary dedup: by URL stored in data, scoped to user
+    existing = Audio.objects.filter(user=user, data__styleguide_source_url=url).first()
     if existing is not None:
+        if existing.title != clean_title:
+            existing.title = clean_title
+            existing.save()
         return existing
+    # Fallback: transitional row with clean title but no URL in data (from prior patch)
+    transitional = (
+        Audio.objects.filter(user=user, title=clean_title).exclude(data__has_key="styleguide_source_url").first()
+    )
+    if transitional is not None:
+        transitional.data["styleguide_source_url"] = url
+        transitional.save()
+        return transitional
     try:
         with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
             content = response.read()
     except Exception:
         return None
-    filename = urlparse(url).path.rsplit("/", 1)[-1] or "styleguide-audio.m4a"
-    audio = Audio(user=user, title=title)
+    audio = Audio(user=user, title=clean_title, data={"styleguide_source_url": url})
     audio.m4a.save(filename, ContentFile(content), save=True)
     audio.save()
     return audio

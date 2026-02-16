@@ -21,7 +21,7 @@ def test_facade_mode_renders_facade_html(post_with_audio, audio):
     assert 'data-load-mode="facade"' in html
     assert "podlove-player-container" in html
     assert "podlove-facade" in html
-    assert "podlove-facade-content" in html
+    assert "podlove-facade-inner" in html
     assert "podlove-facade-title" in html
     assert audio.name in html
     assert "podlove-facade-play" in html
@@ -45,7 +45,7 @@ def test_facade_mode_contextual_aria_label(post_with_audio, audio):
 
 @pytest.mark.django_db
 def test_facade_mode_renders_duration(post_with_audio, audio):
-    """Facade mode renders the duration string when present."""
+    """Facade mode renders the duration string in the time display."""
     post = post_with_audio
     html = render_to_string(
         TEMPLATE_NAME,
@@ -56,13 +56,13 @@ def test_facade_mode_renders_duration(post_with_audio, audio):
             "render_for_feed": False,
         },
     )
-    assert "podlove-facade-duration" in html
+    assert "podlove-facade-time" in html
     assert audio.duration_str in html
 
 
 @pytest.mark.django_db
 def test_facade_mode_hides_duration_when_none(post_with_audio, audio):
-    """Facade mode suppresses the duration div when audio.duration is NULL."""
+    """Facade mode suppresses the duration in time display when audio.duration is NULL."""
     post = post_with_audio
     audio.duration = None
     audio.save(duration=False)
@@ -75,7 +75,13 @@ def test_facade_mode_hides_duration_when_none(post_with_audio, audio):
             "render_for_feed": False,
         },
     )
-    assert "podlove-facade-duration" not in html
+    # Time display still exists but the second span (duration) must be empty
+    assert "podlove-facade-time" in html
+    import re
+
+    time_match = re.search(r'class="podlove-facade-time">\s*<span>00:00</span>\s*<span>(.*?)</span>', html, re.DOTALL)
+    assert time_match is not None
+    assert time_match.group(1).strip() == ""
 
 
 @pytest.mark.django_db
@@ -122,7 +128,7 @@ def test_facade_mode_with_cover_image_url_fallback(post_with_audio, audio):
 
 @pytest.mark.django_db
 def test_facade_mode_without_cover_image(post_with_audio, audio):
-    """Facade mode renders without <img> when page has no cover image or URL."""
+    """Facade mode renders SVG waveform placeholder when page has no cover image."""
     post = post_with_audio
     assert post.cover_image is None
     html = render_to_string(
@@ -134,7 +140,8 @@ def test_facade_mode_without_cover_image(post_with_audio, audio):
             "render_for_feed": False,
         },
     )
-    assert "podlove-facade-cover" not in html
+    assert "podlove-facade-waveform" in html
+    assert "<img" not in html  # no <img> tag, only SVG placeholder
     assert "podlove-facade-title" in html
     assert "podlove-facade-play" in html
 
@@ -154,7 +161,7 @@ def test_click_mode_renders_click_attribute(post_with_audio, audio):
     )
     assert 'data-load-mode="click"' in html
     assert "podlove-facade" not in html
-    assert "podlove-facade-content" not in html
+    assert "podlove-facade-inner" not in html
 
 
 @pytest.mark.django_db
