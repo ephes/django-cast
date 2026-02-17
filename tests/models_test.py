@@ -587,6 +587,13 @@ class TestPostModel:
 
         assert poster_url == mock_rendition.url
 
+    def test_podlove_poster_rendition_spec_is_valid_webp(self):
+        from wagtail.images.models import Filter
+
+        f = Filter(spec=PODLOVE_POSTER_RENDITION_SPEC)
+        assert len(f.operations) == 2
+        assert "format-webp" in PODLOVE_POSTER_RENDITION_SPEC
+
     def test_get_cached_media_lookup(self):
         post = Post(id=1)
         post._media_lookup = "foobar"
