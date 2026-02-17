@@ -107,6 +107,28 @@ def test_facade_mode_with_cover_image(post_with_audio, audio, image):
 
 
 @pytest.mark.django_db
+def test_facade_mode_with_blog_cover_fallback(post_with_audio, blog, audio, image):
+    """Facade mode falls back to blog cover image when post has no cover image."""
+    post = post_with_audio
+    assert post.cover_image is None
+    blog.cover_image = image
+    blog.save()
+    html = render_to_string(
+        TEMPLATE_NAME,
+        {
+            "page": post,
+            "value": audio,
+            "blog": blog,
+            "podlove_load_mode": "facade",
+            "render_for_feed": False,
+        },
+    )
+    assert "podlove-facade-cover" in html
+    assert "podlove-facade-has-cover" in html
+    assert "fill-400x400" in html
+
+
+@pytest.mark.django_db
 def test_facade_mode_with_cover_image_url_fallback(post_with_audio, audio):
     """Facade mode falls back to cover_image_url when FK is not available (cached path)."""
     post = post_with_audio
