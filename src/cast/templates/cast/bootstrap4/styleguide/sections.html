@@ -56,7 +56,7 @@
 
 <section id="content-blocks" class="mb-5">
   <h2 class="h3">{% translate "Content blocks" %}</h2>
-  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_media_post render_detail=True repository=styleguide_media_repository template_base_dir=template_base_dir %}
+  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_media_post render_detail=True repository=styleguide_media_repository template_base_dir=template_base_dir podlove_load_mode="facade" %}
 </section>
 
 <section id="gallery" class="mb-5">
@@ -87,7 +87,7 @@
 
 <section id="episode" class="mb-5">
   <h2 class="h3">{% translate "Episode" %}</h2>
-  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_episode render_detail=True repository=styleguide_episode_repository template_base_dir=template_base_dir episode_transcript_url=styleguide_episode_transcript_url %}
+  {% include "cast/"|add:template_base_dir|add:"/post_body.html" with page=styleguide_episode render_detail=True repository=styleguide_episode_repository template_base_dir=template_base_dir episode_transcript_url=styleguide_episode_transcript_url podlove_load_mode="facade" %}
 </section>
 
 <section id="transcript" class="mb-5">

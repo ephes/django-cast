@@ -51,7 +51,7 @@
 {% block title %}{{ page.title }}{% endblock title %}
 
 {% block main %}
-  {% include "./post_body.html" with render_detail=True %}
+  {% include "./post_body.html" with render_detail=True podlove_load_mode="facade" %}
 
   {% if comments_are_enabled %}
     {% render_comment_list for page %}
