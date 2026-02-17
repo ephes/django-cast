@@ -15,11 +15,11 @@
       {% endif %}
     >
       {% if podlove_load_mode == "facade" %}
-        <div class="podlove-player-container podlove-facade">
+        <div class="podlove-player-container podlove-facade{% if page.cover_image %} podlove-facade-has-cover{% endif %}">
           <div class="podlove-facade-inner">
             <div class="podlove-facade-header">
               {% if page.cover_image %}
-                {% image page.cover_image fill-120x120 class="podlove-facade-cover" %}
+                {% image page.cover_image fill-400x400 class="podlove-facade-cover" %}
               {% elif page.cover_image_url %}
                 <img src="{{ page.cover_image_url }}" alt="{{ page.cover_alt_text_display|default:'' }}" width="120" height="120" class="podlove-facade-cover" loading="lazy">
               {% else %}

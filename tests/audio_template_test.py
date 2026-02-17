@@ -101,6 +101,9 @@ def test_facade_mode_with_cover_image(post_with_audio, audio, image):
     )
     assert "podlove-facade-cover" in html
     assert "<img" in html
+    # Stacked mobile layout modifier and retina-ready rendition
+    assert "podlove-facade-has-cover" in html
+    assert "fill-400x400" in html
 
 
 @pytest.mark.django_db
@@ -124,6 +127,8 @@ def test_facade_mode_with_cover_image_url_fallback(post_with_audio, audio):
     assert "/media/images/cover.jpg" in html
     assert 'alt="Episode artwork"' in html
     assert 'loading="lazy"' in html
+    # No stacked mobile layout without a Wagtail cover image
+    assert "podlove-facade-has-cover" not in html
 
 
 @pytest.mark.django_db
@@ -144,6 +149,8 @@ def test_facade_mode_without_cover_image(post_with_audio, audio):
     assert "<img" not in html  # no <img> tag, only SVG placeholder
     assert "podlove-facade-title" in html
     assert "podlove-facade-play" in html
+    # No stacked mobile layout without a cover image
+    assert "podlove-facade-has-cover" not in html
 
 
 @pytest.mark.django_db
