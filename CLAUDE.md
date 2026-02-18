@@ -60,6 +60,39 @@ Always run `just check` (runs `just lint`, `just typecheck`, and `just test` in 
 `just test` enforces 100% code coverage — it will fail if any line is uncovered.
 Do not consider a task done until `just check` passes.
 
+### Dev Server Commands
+```bash
+# Start dev server (Django + Vite dev servers)
+just dev
+
+# Start in tmux session named "cast-dev" (recommended for agents)
+just dev-tmux
+
+# Check server status
+just dev-status
+
+# Tail Django logs
+just dev-logs django
+
+# Show log directory path
+just dev-logs-dir
+
+# Open in browser
+just dev-open
+
+# Take screenshots (requires running dev server)
+just screenshot /styleguide-blog/ --theme bootstrap5
+just screenshot-all /styleguide-blog/
+just compare-page /styleguide-blog/
+just check-page /styleguide-blog/ --theme bootstrap5
+
+# Create/update reference site
+just ensure-reference-site
+```
+
+The dev server tmux session name is `cast-dev`. Logs are written to
+`/tmp/cast-dev-<hash>/` where `<hash>` is derived from the repo path.
+
 ### JavaScript Build Commands
 ```bash
 cd javascript
@@ -183,6 +216,7 @@ When modifying models:
 - Run tests in multiple environments: `uv run tox`
 
 ## Commit Guidelines
+- **IMPORTANT**: Do not commit unless explicitly asked to. Never auto-commit after completing a task.
 - Do not bump the version number on every commit
 - Before committing, check whether documentation or release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 
