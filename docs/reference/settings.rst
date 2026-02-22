@@ -158,13 +158,36 @@ override or per-scheme overrides under ``light`` and ``dark``.
         },
     }
 
+CAST_ENABLE_DEV_TOOLS
+=====================
+
+Whether to enable dev-only cast views. Defaults to ``False``.
+
+When enabled, these routes are accessible:
+
+- ``/cast/styleguide/``
+- ``/cast/components/``
+- ``/cast/theme-compare/``
+- ``/cast/dev-health/``
+
+When disabled, these routes return ``404``.
+
 CAST_ENABLE_STYLEGUIDE
 ======================
 
-Whether to enable the built-in styleguide route (``/styleguide/`` when cast URLs
-are included). Defaults to ``False``. The styleguide supports theme switching via
-``?theme=<slug>`` and falls back to a built-in theme if the requested styleguide
-templates are missing.
+Deprecated alias for ``CAST_ENABLE_DEV_TOOLS``.
+
+Precedence:
+
+- If only ``CAST_ENABLE_STYLEGUIDE`` is set: use its value and emit ``DeprecationWarning``.
+- If only ``CAST_ENABLE_DEV_TOOLS`` is set: use its value.
+- If both are set: ``CAST_ENABLE_DEV_TOOLS`` wins and a ``DeprecationWarning`` is emitted.
+- If neither is set: default ``False``.
+
+.. note::
+
+   To fully silence the deprecation warning, remove
+   ``CAST_ENABLE_STYLEGUIDE`` from settings instead of setting it to ``False``.
 
 CAST_STYLEGUIDE_REMOTE_MEDIA
 ============================

@@ -11,6 +11,23 @@ Example project
 - Ensure the Bootstrap4 example navbar loads the theme selector so switching back works.
 - Ensure the Plain example theme includes the theme selector for switching.
 
+Developer tooling
+~~~~~~~~~~~~~~~~~
+- Added ``CAST_ENABLE_DEV_TOOLS`` as the primary gate for dev-only views
+  (styleguide, components, theme-compare, dev-health), with
+  ``CAST_ENABLE_STYLEGUIDE`` kept as a deprecated compatibility alias.
+- Added dev-only routes at ``/cast/components/``, ``/cast/theme-compare/``,
+  and ``/cast/dev-health/`` (with ``X-Robots-Tag: noindex``).
+- Added ``ensure_reference_site`` management command to create/update demo
+  blog and podcast content used for theme verification.
+- Added Playwright utility script plus just wrappers:
+  ``just screenshot``, ``just screenshot-all``, ``just check-page``,
+  ``just compare-page``.
+- Standardized agent/dev workflow around ``just dev-tmux``, ``just dev-logs``,
+  ``just dev-logs-dir``, ``just dev-status``, and ``just dev-open``.
+- Added ``cast.W001`` Django system check and ``just verify-assets`` CLI
+  check for stale built frontend assets.
+
 Documentation
 ~~~~~~~~~~~~~
 - Rewrote search documentation to accurately describe available filter
@@ -61,6 +78,8 @@ Feeds
 Themes
 ~~~~~~
 - Allow `?theme=` or `?template_base_dir=` to temporarily override the active theme for a request.
+- Add staged theme template enforcement: discovery now distinguishes strictly required templates
+  from soft-required templates that emit ``DeprecationWarning`` when missing.
 - Render the theme selector in Bootstrap4 navigation and pass selector context from blog pages.
 - Populate gallery prev/next attributes so the cast-vue theme can navigate between gallery images.
 - Ensure Podlove players initialize against per-instance hosts to avoid collisions when the same audio appears multiple times.
@@ -71,6 +90,8 @@ Themes
 - Store theme choices cache as an immutable tuple and return a fresh list copy to prevent accidental mutation.
 - Fix double DB hit in the theme context processor by passing the site default as a fallback.
 - Narrow context processor exception handling to DB/lookup errors instead of blanket ``Exception``.
+- Error handlers now gracefully fall back to Django's default 400/403/404/500 pages when a
+  theme-specific error template is missing.
 - Fix Podlove player dark-mode loading flashes by forcing dark player config in dark mode and applying dark iframe/container fallback colors while the iframe bootstraps.
 
 Pagination

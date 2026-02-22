@@ -118,6 +118,16 @@ Or start Django + both Vite dev servers together:
    repos (``../cast-bootstrap5`` or ``../cast-vue``) are missing, and the example
    app will fall back to the built-in ``bootstrap4`` theme.
 
+For agent-friendly local workflow, you can also use:
+
+.. code-block:: bash
+
+   $ just dev-tmux          # create detached tmux session "cast-dev" (run again to attach)
+   $ just dev-status        # quick health/status output
+   $ just dev-logs django   # tail one service log
+   $ just dev-logs-dir      # print current log directory
+   $ just dev-open          # open http://localhost:8000
+
 For JavaScript development with hot reloading:
 
 .. code-block:: bash
@@ -155,6 +165,13 @@ Styleguide
 
 Use two different URLs during frontend verification. They serve different purposes.
 
+.. note::
+
+   These dev-only routes are gated by ``CAST_ENABLE_DEV_TOOLS`` (or deprecated
+   ``CAST_ENABLE_STYLEGUIDE`` alias). If disabled, they return ``404``.
+   The styleguide route is still available, but the long-term direction is the
+   reference-site workflow (``ensure_reference_site`` + real page checks).
+
 Component preview route:
 
 .. code-block:: bash
@@ -180,7 +197,11 @@ This is a real Wagtail blog index page. Use it for end-to-end checks of:
 .. note::
 
    ``/styleguide-blog/`` is created by the styleguide seeder. If it returns a
-   404, visit ``/cast/styleguide/`` once to create the demo pages, then reload.
+   404, create/update reference content first:
+
+   .. code-block:: bash
+
+      $ just ensure-reference-site
 
 Switch styleguide theme via query param:
 
@@ -190,6 +211,42 @@ Switch styleguide theme via query param:
 
 If the requested theme does not provide styleguide templates, the view falls
 back to a built-in theme and shows a warning banner.
+
+Theme comparison and screenshots
+--------------------------------
+
+Compare themes side-by-side in the browser:
+
+.. code-block:: bash
+
+   http://localhost:8000/cast/theme-compare/?path=/styleguide-blog/
+
+Use Playwright helpers for screenshots and console-error checks:
+
+.. code-block:: bash
+
+   $ just screenshot /styleguide-blog/ --theme bootstrap5
+   $ just screenshot-all /styleguide-blog/
+   $ just check-page /styleguide-blog/ --theme bootstrap5
+   $ just compare-page /styleguide-blog/
+
+If this is your first Playwright run on a machine, install browser binaries:
+
+.. code-block:: bash
+
+   $ uv run playwright install chromium
+
+Asset freshness checks
+----------------------
+
+Detect stale built assets compared to source files:
+
+.. code-block:: bash
+
+   $ just verify-assets
+
+In ``DEBUG`` mode, django-cast also emits system check warning ``cast.W001``
+when local Vite source files are newer than the built manifest.
 
 Podlove Performance Data
 ------------------------
