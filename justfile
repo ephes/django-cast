@@ -10,6 +10,8 @@ install:
 
 # Log directory for dev server output (namespaced by repo path hash)
 export CAST_LOG_DIR := "/tmp/cast-dev-" + `printf '%s' "$PWD" | md5 -q 2>/dev/null || printf '%s' "$PWD" | md5sum | head -c8`
+# Dev server port (used by runserver, dev-status, dev-open)
+export CAST_DEV_PORT := "8000"
 
 # Run example app and Vite dev servers (Procfile.dev)
 dev:
@@ -30,17 +32,17 @@ dev-logs-dir:
 # Check if dev server processes are running
 dev-status:
     @echo "Log directory: $CAST_LOG_DIR"
-    @if curl -sf http://localhost:8000/cast/dev-health/ 2>/dev/null | grep -q '"status"'; then echo "Django: running (dev-health ok)"; elif curl -sf -o /dev/null -H 'Accept: text/html' http://localhost:8000/admin/login/ 2>/dev/null; then echo "Django: running (dev-health unavailable)"; else echo "Django: not running"; fi
+    @if curl -sf http://localhost:{{CAST_DEV_PORT}}/cast/dev-health/ 2>/dev/null | grep -q '"status"'; then echo "Django: running (dev-health ok)"; elif curl -sf -o /dev/null -H 'Accept: text/html' http://localhost:{{CAST_DEV_PORT}}/admin/login/ 2>/dev/null; then echo "Django: running (dev-health unavailable)"; else echo "Django: not running"; fi
     @if tmux has-session -t cast-dev 2>/dev/null; then echo "tmux session: active"; else echo "tmux session: not found"; fi
 
 # Open the dev server in the default browser
 [macos]
 dev-open:
-    open http://localhost:8000
+    open http://localhost:{{CAST_DEV_PORT}}
 
 [linux]
 dev-open:
-    xdg-open http://localhost:8000 2>/dev/null || echo "Open http://localhost:8000 in your browser"
+    xdg-open http://localhost:{{CAST_DEV_PORT}} 2>/dev/null || echo "Open http://localhost:{{CAST_DEV_PORT}} in your browser"
 
 # Run lint, typecheck, and tests
 check:

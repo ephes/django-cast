@@ -544,7 +544,7 @@ def _ensure_live(page: Page) -> Page:
 
 def _styleguide_post_count() -> int:
     pagination_size = int(getattr(settings, "POST_LIST_PAGINATION", 5))
-    return max(6, pagination_size + 1)
+    return max(12, pagination_size + 1)
 
 
 def _styleguide_default_theme() -> str:

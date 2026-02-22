@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -30,7 +31,10 @@ except ImportError:
     print("playwright is not installed. Install it with: uv add --dev playwright && playwright install chromium")
     sys.exit(1)
 
-DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_BASE_URL = os.environ.get(
+    "CAST_DEV_BASE_URL",
+    f"http://localhost:{os.environ.get('CAST_DEV_PORT', '8000')}",
+)
 DEFAULT_OUTPUT_DIR = "/tmp/cast-screenshots"
 
 VIEWPORTS = {
@@ -78,6 +82,19 @@ def discover_themes(base_url: str) -> list[str]:
             return [t["slug"] for t in data.get("themes", [])]
     except Exception:
         return FALLBACK_THEMES
+
+
+def _ensure_chromium(p) -> None:
+    try:
+        chromium_path = Path(p.chromium.executable_path)
+        if not chromium_path.exists():
+            print("Chromium browser not found. Install it with:")
+            print("  uv run playwright install chromium")
+            sys.exit(1)
+    except Exception as exc:
+        print(f"Cannot verify Chromium installation: {exc}")
+        print("Try: uv run playwright install chromium")
+        sys.exit(1)
 
 
 def take_screenshot(
@@ -143,6 +160,7 @@ def cmd_screenshot(args: argparse.Namespace) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
+        _ensure_chromium(p)
         browser = p.chromium.launch()
         result = take_screenshot(browser, url, args.theme, args.viewport, output_dir)
         browser.close()
@@ -172,6 +190,7 @@ def cmd_screenshot_all(args: argparse.Namespace) -> None:
     print(f"Screenshotting {len(themes)} themes × {len(viewports)} viewports...")
 
     with sync_playwright() as p:
+        _ensure_chromium(p)
         browser = p.chromium.launch()
         results: list[PageResult] = []
         for theme in themes:
@@ -211,6 +230,7 @@ def cmd_check_page(args: argparse.Namespace) -> None:
     full_url = f"{url}{separator}theme={args.theme}"
 
     with sync_playwright() as p:
+        _ensure_chromium(p)
         browser = p.chromium.launch()
         vp = VIEWPORTS.get(args.viewport, VIEWPORTS["desktop"])
         context = browser.new_context(viewport=vp)  # type: ignore[arg-type]
@@ -251,6 +271,7 @@ def cmd_compare_page(args: argparse.Namespace) -> None:
     print(f"Generating comparison: {len(themes)} themes × {len(viewports)} viewports...")
 
     with sync_playwright() as p:
+        _ensure_chromium(p)
         browser = p.chromium.launch()
         results: list[PageResult] = []
         for theme in themes:

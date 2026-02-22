@@ -92,6 +92,9 @@ just ensure-reference-site
 
 The dev server tmux session name is `cast-dev`. Logs are written to
 `/tmp/cast-dev-<hash>/` where `<hash>` is derived from the repo path.
+The dev server port defaults to 8000 and can be overridden via `CAST_DEV_PORT`.
+For a fully custom base URL (e.g., HTTPS or a different host), set
+`CAST_DEV_BASE_URL` for Playwright tooling.
 
 ### JavaScript Build Commands
 ```bash

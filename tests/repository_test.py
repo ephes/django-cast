@@ -148,7 +148,8 @@ def test_internal_page_link_is_not_cached():
     Make sure the right page is returned from the page link handler, especially
     if it's not in the cache.
     """
-    tag = PageLinkHandlerWithCache.expand_db_attributes({"id": 23})  # get page with non-existing id
+    # Use a high ID to avoid collisions with styleguide pages created in tests.
+    tag = PageLinkHandlerWithCache.expand_db_attributes({"id": 99999})  # get page with non-existing id
     assert tag == "<a>"
 
 

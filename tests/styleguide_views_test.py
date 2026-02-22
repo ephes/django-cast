@@ -27,7 +27,7 @@ def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
     assert styleguide_audio is not None
     assert styleguide_audio.transcript.podlove is not None
 
-    expected_posts = max(6, getattr(settings, "POST_LIST_PAGINATION", 5) + 1)
+    expected_posts = max(12, getattr(settings, "POST_LIST_PAGINATION", 5) + 1)
     assert Blog.objects.filter(slug="styleguide-blog").count() == 1
     assert Post.objects.filter(slug__startswith="styleguide-post").count() == expected_posts
 
