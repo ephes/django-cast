@@ -5,6 +5,7 @@ from django.db.utils import DatabaseError
 
 from cast.models import TemplateBaseDirectory
 from cast.views import defaults
+from cast.views.defaults import csrf_failure as cast_csrf_failure
 
 
 @pytest.fixture
@@ -55,3 +56,28 @@ def test_error_handler_views(view, error_text, expected_response, simple_request
     # make sure the response contains the right error text from the template
     content = response.content.decode("utf-8")
     assert error_text in content
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "view, expected_response",
+    [
+        (defaults.page_not_found, http.HttpResponseNotFound),
+        (defaults.server_error, http.HttpResponseServerError),
+        (defaults.bad_request, http.HttpResponseBadRequest),
+        (defaults.permission_denied, http.HttpResponseForbidden),
+        (cast_csrf_failure, http.HttpResponseForbidden),
+    ],
+)
+def test_error_handler_views_fallback_on_missing_template(view, expected_response, simple_request, mocker):
+    """When the themed template doesn't exist, fall back to Django's default."""
+    mocker.patch(
+        "cast.views.defaults.get_template_name",
+        return_value="cast/nonexistent_theme/404.html",
+    )
+    if view in (defaults.server_error,):
+        response = view(simple_request)
+    else:
+        response = view(simple_request, Exception())
+
+    assert isinstance(response, expected_response)

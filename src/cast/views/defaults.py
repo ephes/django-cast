@@ -1,3 +1,4 @@
+from django.template import TemplateDoesNotExist
 from django.views import csrf, defaults
 
 from cast.models import TemplateBaseDirectory
@@ -21,24 +22,39 @@ def get_template_name(request, base_template_name):
 
 def page_not_found(request, exception):
     """Just call the default page_not_found view, but with a custom template"""
-    return defaults.page_not_found(request, exception, template_name=get_template_name(request, "404.html"))
+    try:
+        return defaults.page_not_found(request, exception, template_name=get_template_name(request, "404.html"))
+    except TemplateDoesNotExist:
+        return defaults.page_not_found(request, exception)
 
 
 def server_error(request):
     """Just call the default server_error view, but with a custom template"""
-    return defaults.server_error(request, template_name=get_template_name(request, "500.html"))
+    try:
+        return defaults.server_error(request, template_name=get_template_name(request, "500.html"))
+    except TemplateDoesNotExist:
+        return defaults.server_error(request)
 
 
 def bad_request(request, exception):
     """Just call the default bad_request view, but with a custom template"""
-    return defaults.bad_request(request, exception, template_name=get_template_name(request, "400.html"))
+    try:
+        return defaults.bad_request(request, exception, template_name=get_template_name(request, "400.html"))
+    except TemplateDoesNotExist:
+        return defaults.bad_request(request, exception)
 
 
 def permission_denied(request, exception):
     """Just call the default permission_denied view, but with a custom template"""
-    return defaults.permission_denied(request, exception, template_name=get_template_name(request, "403.html"))
+    try:
+        return defaults.permission_denied(request, exception, template_name=get_template_name(request, "403.html"))
+    except TemplateDoesNotExist:
+        return defaults.permission_denied(request, exception)
 
 
 def csrf_failure(request, reason=""):
     """Just call the default csrf_failure view, but with a custom template"""
-    return csrf.csrf_failure(request, reason, template_name=get_template_name(request, "403_csrf.html"))
+    try:
+        return csrf.csrf_failure(request, reason, template_name=get_template_name(request, "403_csrf.html"))
+    except TemplateDoesNotExist:
+        return csrf.csrf_failure(request, reason)

@@ -1,4 +1,5 @@
 import shutil
+import warnings
 from pathlib import Path
 import pytest
 from django.db.utils import OperationalError
@@ -9,7 +10,10 @@ from wagtail.models import Site
 from cast.context_processors import DEFAULT_TEMPLATE_BASE_DIR, site_template_base_dir
 from cast.models.theme import (
     _clear_template_base_dir_choices_cache,
+    check_theme_soft_requirements,
     get_required_template_names,
+    get_soft_required_template_names,
+    get_strictly_required_template_names,
     get_template_base_dir_candidates,
     get_template_base_dir,
     get_template_base_dir_choices,
@@ -17,20 +21,25 @@ from cast.models.theme import (
 )
 
 
-def create_new_theme(name, invalid=False):
+def create_new_theme(name, invalid=False, include_soft_required=True):
     default_engine = list(engines.all())[0]
     first_template_dir = Path(list(list(default_engine.engine.template_loaders)[0].get_dirs())[0])
 
     new_base_dir = first_template_dir / "cast" / name
     new_base_dir.mkdir(parents=True, exist_ok=True)
 
-    required_names = get_required_template_names()
+    required_names = get_strictly_required_template_names()
     if invalid:
         required_names = required_names[:-2]  # remove a required name to make it invalid
 
     for template_name in required_names:
         path = new_base_dir / template_name
         path.touch()
+
+    if include_soft_required and not invalid:
+        for template_name in get_soft_required_template_names():
+            path = new_base_dir / template_name
+            path.touch()
 
     return new_base_dir
 
@@ -312,3 +321,70 @@ def test_choices_cache_is_stale_after_settings_change(settings, mocker):
     _clear_template_base_dir_choices_cache()
     third = get_template_base_dir_choices()
     assert ("new_runtime_theme", "New Runtime Theme") in third
+
+
+def test_strictly_required_is_subset_of_required():
+    """Strictly required templates must be a subset of all required templates."""
+    strictly = set(get_strictly_required_template_names())
+    full = set(get_required_template_names())
+    assert strictly.issubset(full)
+    assert strictly != full  # soft-required adds more
+
+
+def test_soft_required_does_not_overlap_strictly_required():
+    """Soft-required and strictly-required sets must be disjoint."""
+    strictly = set(get_strictly_required_template_names())
+    soft = set(get_soft_required_template_names())
+    assert strictly.isdisjoint(soft)
+
+
+def test_required_is_union_of_strictly_and_soft():
+    """get_required_template_names() == strictly + soft."""
+    full = get_required_template_names()
+    combined = get_strictly_required_template_names() + get_soft_required_template_names()
+    assert full == combined
+
+
+def test_check_theme_soft_requirements_all_present(tmp_path):
+    """No warnings when all soft-required templates exist."""
+    theme_dir = tmp_path / "my_theme"
+    theme_dir.mkdir()
+    for name in get_soft_required_template_names():
+        (theme_dir / name).touch()
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        missing = check_theme_soft_requirements(theme_dir)
+    assert missing == []
+    assert len(w) == 0
+
+
+def test_check_theme_soft_requirements_some_missing(tmp_path):
+    """DeprecationWarning emitted for each missing soft-required template."""
+    theme_dir = tmp_path / "incomplete_theme"
+    theme_dir.mkdir()
+    # Only create base.html — the rest are missing
+    (theme_dir / "base.html").touch()
+    expected_missing = [n for n in get_soft_required_template_names() if n != "base.html"]
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        missing = check_theme_soft_requirements(theme_dir)
+    assert missing == expected_missing
+    assert len(w) == len(expected_missing)
+    assert all(issubclass(warning.category, DeprecationWarning) for warning in w)
+
+
+def test_theme_discovery_still_finds_theme_missing_soft_required():
+    """Themes missing soft-required templates are still discovered (with warnings)."""
+    created_base_dir = create_new_theme("soft_missing", include_soft_required=False)
+    try:
+        _clear_template_base_dir_choices_cache()
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            choices = {choice[0] for choice in get_template_base_dir_choices()}
+        assert "soft_missing" in choices
+        # At least one DeprecationWarning should have been emitted
+        deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+        assert len(deprecation_warnings) > 0
+    finally:
+        shutil.rmtree(created_base_dir)
+        _clear_template_base_dir_choices_cache()

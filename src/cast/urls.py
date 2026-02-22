@@ -7,6 +7,7 @@ from . import feeds
 from .views import meta
 from .views.feed import feed_detail
 from .views.gallery import gallery_modal
+from .views.dev import components_view, dev_health_view, theme_compare_view
 from .views.styleguide import styleguide
 from .views.theme import select_theme
 from .views.transcript import (
@@ -57,8 +58,12 @@ urlpatterns: list[Any] = [
     path("<slug:blog_slug>/<slug:episode_slug>/twitter-player/", view=meta.twitter_player, name="twitter-player"),
     # Store selected theme in session
     path("select-theme/", view=select_theme, name="select-theme"),
-    # Styleguide preview (guarded by CAST_ENABLE_STYLEGUIDE)
+    # Styleguide preview (guarded by CAST_ENABLE_DEV_TOOLS / CAST_ENABLE_STYLEGUIDE)
     path("styleguide/", view=styleguide, name="styleguide"),
+    # Dev-only views (guarded by CAST_ENABLE_DEV_TOOLS)
+    path("components/", view=components_view, name="components"),
+    path("theme-compare/", view=theme_compare_view, name="theme-compare"),
+    path("dev-health/", view=dev_health_view, name="dev-health"),
     # Gallery modal via htmx
     path("gallery_modal/<str:template_base_dir>/", view=gallery_modal, name="gallery-modal"),
 ]

@@ -1,4 +1,4 @@
-django: cd example && PYTHONUNBUFFERED=true uv run python manage.py runserver 0.0.0.0:8000
-vite_cast: cd javascript && npm run dev
-vite_bootstrap5: /bin/sh -c 'if [ -d ../cast-bootstrap5/javascript ]; then cd ../cast-bootstrap5/javascript && npm run dev; else echo "cast-bootstrap5 not found, skipping vite_bootstrap5"; while true; do sleep 3600; done; fi'
-vite_vue: /bin/sh -c 'if [ -f ../cast-vue/package.json ]; then cd ../cast-vue && npm run dev; elif [ -d ../cast-vue/javascript ]; then cd ../cast-vue/javascript && npm run dev; else echo "cast-vue not found, skipping vite_vue"; while true; do sleep 3600; done; fi'
+django: /bin/sh -c 'mkdir -p "${CAST_LOG_DIR:-/tmp/cast-dev}" && cd example && PYTHONUNBUFFERED=true uv run python manage.py runserver 0.0.0.0:8000 2>&1 | tee "${CAST_LOG_DIR:-/tmp/cast-dev}/django.log"'
+vite_cast: /bin/sh -c 'mkdir -p "${CAST_LOG_DIR:-/tmp/cast-dev}" && cd javascript && npm run dev 2>&1 | tee "${CAST_LOG_DIR:-/tmp/cast-dev}/vite-cast.log"'
+vite_bootstrap5: /bin/sh -c 'mkdir -p "${CAST_LOG_DIR:-/tmp/cast-dev}" && if [ -d ../cast-bootstrap5/javascript ]; then cd ../cast-bootstrap5/javascript && npm run dev 2>&1 | tee "${CAST_LOG_DIR:-/tmp/cast-dev}/vite-bs5.log"; else echo "cast-bootstrap5 not found, skipping vite_bootstrap5"; while true; do sleep 3600; done; fi'
+vite_vue: /bin/sh -c 'mkdir -p "${CAST_LOG_DIR:-/tmp/cast-dev}" && if [ -f ../cast-vue/package.json ]; then cd ../cast-vue && npm run dev 2>&1 | tee "${CAST_LOG_DIR:-/tmp/cast-dev}/vite-vue.log"; elif [ -d ../cast-vue/javascript ]; then cd ../cast-vue/javascript && npm run dev 2>&1 | tee "${CAST_LOG_DIR:-/tmp/cast-dev}/vite-vue.log"; else echo "cast-vue not found, skipping vite_vue"; while true; do sleep 3600; done; fi'

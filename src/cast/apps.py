@@ -48,6 +48,7 @@ class CastConfig(AppConfig):
     name: str = "cast"
 
     def ready(self) -> None:
+        from . import checks  # noqa: F401 — registers @register("cast") decorators
         from .appsettings import init_cast_settings
 
         init_cast_settings()

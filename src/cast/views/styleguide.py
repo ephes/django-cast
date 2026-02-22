@@ -196,7 +196,9 @@ def styleguide(request: HtmxHttpRequest) -> HttpResponse:
 
 
 def _styleguide_is_enabled() -> bool:
-    return bool(getattr(settings, "CAST_ENABLE_STYLEGUIDE", False))
+    from cast.dev_settings import dev_tools_enabled
+
+    return dev_tools_enabled()
 
 
 def _resolve_styleguide_theme(request: HtmxHttpRequest) -> StyleguideTheme:

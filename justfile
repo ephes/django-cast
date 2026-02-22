@@ -8,9 +8,39 @@ default:
 install:
     uv sync
 
+# Log directory for dev server output (namespaced by repo path hash)
+export CAST_LOG_DIR := "/tmp/cast-dev-" + `printf '%s' "$PWD" | md5 -q 2>/dev/null || printf '%s' "$PWD" | md5sum | head -c8`
+
 # Run example app and Vite dev servers (Procfile.dev)
 dev:
     uvx honcho start -f Procfile.dev
+
+# Start dev server in a tmux session named cast-dev
+dev-tmux:
+    tmux new-session -d -s cast-dev 'just dev' 2>/dev/null || tmux attach -t cast-dev
+
+# Tail a specific dev server log (django, vite-cast, vite-bs5, vite-vue)
+dev-logs SERVICE="django":
+    tail -f "$CAST_LOG_DIR/{{SERVICE}}.log"
+
+# Show the dev log directory path
+dev-logs-dir:
+    @echo "$CAST_LOG_DIR"
+
+# Check if dev server processes are running
+dev-status:
+    @echo "Log directory: $CAST_LOG_DIR"
+    @if curl -sf http://localhost:8000/ > /dev/null 2>&1; then echo "Django: running"; else echo "Django: not running"; fi
+    @if tmux has-session -t cast-dev 2>/dev/null; then echo "tmux session: active"; else echo "tmux session: not found"; fi
+
+# Open the dev server in the default browser
+[macos]
+dev-open:
+    open http://localhost:8000
+
+[linux]
+dev-open:
+    xdg-open http://localhost:8000 2>/dev/null || echo "Open http://localhost:8000 in your browser"
 
 # Run lint, typecheck, and tests
 check:
@@ -103,6 +133,30 @@ js-build-all:
     just js-build-vite
     just js-build-comments
 
+# Check if built JS/CSS assets are up-to-date with source
+verify-assets:
+    uv run python scripts/check_asset_freshness.py
+
 # Prefetch styleguide demo data and media
 styleguide-prefetch *ARGS:
     uv run python example/manage.py styleguide_prefetch {{ARGS}}
+
+# Create/update reference site with demo content
+ensure-reference-site *ARGS:
+    uv run python example/manage.py ensure_reference_site {{ARGS}}
+
+# Take a screenshot of a page (requires running dev server)
+screenshot PATH *ARGS:
+    uv run python scripts/playwright_utils.py screenshot {{PATH}} {{ARGS}}
+
+# Screenshot all themes for a page
+screenshot-all PATH *ARGS:
+    uv run python scripts/playwright_utils.py screenshot-all {{PATH}} {{ARGS}}
+
+# Check a page for console errors
+check-page PATH *ARGS:
+    uv run python scripts/playwright_utils.py check-page {{PATH}} {{ARGS}}
+
+# Generate HTML comparison report across all themes
+compare-page PATH *ARGS:
+    uv run python scripts/playwright_utils.py compare-page {{PATH}} {{ARGS}}

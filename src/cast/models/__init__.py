@@ -10,6 +10,9 @@ from .theme import (
     TemplateBaseDirectory,
     get_template_base_dir,
     get_template_base_dir_choices,
+    get_required_template_names,
+    get_soft_required_template_names,
+    get_strictly_required_template_names,
 )
 from .transcript import Transcript
 from .video import Video, get_video_dimensions
@@ -22,6 +25,9 @@ __all__ = [
     "File",
     "Gallery",
     "get_or_create_gallery",
+    "get_required_template_names",
+    "get_soft_required_template_names",
+    "get_strictly_required_template_names",
     "get_template_base_dir",
     "get_template_base_dir_choices",
     "HomePage",

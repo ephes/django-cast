@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>Cast Components</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+      h2 { margin-top: 2rem; color: #555; }
+      .component-section { border: 1px solid #ddd; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+      .theme-label { display: inline-block; background: #eee; padding: 0.25rem 0.5rem; border-radius: 3px; font-size: 0.875rem; }
+      .themes-list { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0; }
+      p { line-height: 1.6; }
+      code { background: #f4f4f4; padding: 0.125rem 0.375rem; border-radius: 3px; }
+    </style>
+  </head>
+  <body>
+    <h1>Critical Components</h1>
+    <p>
+      Isolated testing page for high-complexity components that have broken repeatedly.
+      Use <code>?theme=NAME</code> to preview components in a specific theme.
+    </p>
+
+    <h2>Installed Themes</h2>
+    <div class="themes-list">
+      {% for slug, name in themes %}
+        <span class="theme-label">{{ slug }} ({{ name }})</span>
+      {% endfor %}
+    </div>
+
+    <h2>Audio Player</h2>
+    <div class="component-section">
+      <p>Audio player component — loading, playing, and error states.
+        Exercises the Podlove facade pattern and dark mode reinit.</p>
+      <p><em>Status: placeholder — full component rendering will be added when
+        the styleguide migration is complete.</em></p>
+    </div>
+
+    <h2>Gallery Modal</h2>
+    <div class="component-section">
+      <p>Gallery modal with keyboard navigation (ArrowLeft/Right, Escape).
+        Exercises thumbnail click, image loading states, and focus management.</p>
+      <p><em>Status: placeholder — full component rendering will be added when
+        the styleguide migration is complete.</em></p>
+    </div>
+
+    <h2>Filter Forms</h2>
+    <div class="component-section">
+      <p>Filter form in open, closed, and active-filter states.
+        Exercises facet counts and tag/category/date filtering.</p>
+      <p><em>Status: placeholder — full component rendering will be added when
+        the styleguide migration is complete.</em></p>
+    </div>
+  </body>
+</html>
