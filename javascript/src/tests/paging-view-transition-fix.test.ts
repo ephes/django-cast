@@ -38,7 +38,7 @@ describe("paging-view-transition-fix", () => {
     expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
   });
 
-  it("skips transition instead of scrolling when already far down the page", () => {
+  it("scrolls to top even when already far down the page", () => {
     const pagingArea = document.querySelector("#paging-area") as HTMLElement;
     Object.defineProperty(window, "scrollY", { configurable: true, value: 500 });
     const event = new CustomEvent("htmx:beforeTransition", {
@@ -48,7 +48,7 @@ describe("paging-view-transition-fix", () => {
 
     document.dispatchEvent(event);
 
-    expect(event.defaultPrevented).toBe(true);
-    expect(window.scrollTo).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+    expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
   });
 });
