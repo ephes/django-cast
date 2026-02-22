@@ -1,6 +1,7 @@
 import json
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeAlias, cast
+from urllib.parse import urlparse
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -180,6 +181,26 @@ class QuerysetData:
         )
 
 
+def _blog_url_from_referer(request: HttpRequest, base_blog_url: str) -> str:
+    """Return blog URL with pagination state preserved from the HTTP referer.
+
+    If the referer points to the same blog on the same host and includes query
+    parameters (e.g. ``?page=2``), the full path with query string is returned.
+    Otherwise falls back to the plain blog URL.
+    """
+    referer = request.headers.get("referer", "")
+    if not referer:
+        return base_blog_url
+    parsed = urlparse(referer)
+    # Only use referer from the same host (prevent open redirect)
+    if parsed.netloc and parsed.netloc != request.get_host():
+        return base_blog_url
+    # Normalize trailing slashes for comparison (e.g. /blog vs /blog/)
+    if parsed.path.rstrip("/") == base_blog_url.rstrip("/") and parsed.query:
+        return f"{base_blog_url}?{parsed.query}"
+    return base_blog_url
+
+
 class PostDetailRepository:
     """
     This class is a container for the data that is needed to render a post detail page.
@@ -246,7 +267,7 @@ class PostDetailRepository:
             page_url=post.get_url(request=request),
             absolute_page_url=post.get_full_url(request=request),
             owner_username=owner_username,
-            blog_url=blog.get_url(request=request),
+            blog_url=_blog_url_from_referer(request, blog.get_url(request=request)),
             cover_image_url=cover_image_url,
             cover_alt_text=post.cover_alt_text,
             audio_by_id=post.media_lookup.get("audio", {}),

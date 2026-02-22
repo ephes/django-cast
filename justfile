@@ -30,7 +30,7 @@ dev-logs-dir:
 # Check if dev server processes are running
 dev-status:
     @echo "Log directory: $CAST_LOG_DIR"
-    @if curl -sf http://localhost:8000/ > /dev/null 2>&1; then echo "Django: running"; else echo "Django: not running"; fi
+    @if curl -sf http://localhost:8000/cast/dev-health/ 2>/dev/null | grep -q '"status"'; then echo "Django: running (dev-health ok)"; elif curl -sf -o /dev/null -H 'Accept: text/html' http://localhost:8000/admin/login/ 2>/dev/null; then echo "Django: running (dev-health unavailable)"; else echo "Django: not running"; fi
     @if tmux has-session -t cast-dev 2>/dev/null; then echo "tmux session: active"; else echo "tmux session: not found"; fi
 
 # Open the dev server in the default browser

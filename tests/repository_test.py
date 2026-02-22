@@ -28,6 +28,7 @@ from cast.models.repository import (
     FeedRepository,
     PostDetailRepository,
     QuerysetData,
+    _blog_url_from_referer,
     apply_cover_fallback,
     audio_to_dict,
     blog_from_data,
@@ -256,6 +257,29 @@ def post_in_blog(settings):
     for path in teardown_paths:
         if path.exists():
             path.unlink()
+
+
+@pytest.mark.django_db
+def test_post_detail_blog_url_preserves_pagination_from_referer(rf, post_in_blog):
+    """When navigating from a paginated blog index, the 'Return to blog' link should
+    preserve the page parameter so the user returns to the same page."""
+    post = post_in_blog
+    blog = post.blog
+    blog_url = blog.get_url()
+    referer = f"http://testserver{blog_url}?page=3"
+    request = rf.get(post.get_url(), HTTP_REFERER=referer)
+    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    assert repository.blog_url == f"{blog_url}?page=3"
+
+
+@pytest.mark.django_db
+def test_post_detail_blog_url_without_referer(rf, post_in_blog):
+    """Without a referer, blog_url should be the plain blog URL."""
+    post = post_in_blog
+    blog = post.blog
+    request = rf.get(post.get_url())
+    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    assert repository.blog_url == blog.get_url()
 
 
 @pytest.mark.django_db
@@ -916,3 +940,59 @@ def test_transcript_to_dict_no_collection():
 
     result = transcript_to_dict(Transcript())
     assert result["collection"] is None
+
+
+class TestBlogUrlFromReferer:
+    """Test that _blog_url_from_referer preserves pagination state from the HTTP referer."""
+
+    def test_no_referer_returns_base_url(self, rf):
+        request = rf.get("/some-post/")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/"
+
+    def test_referer_with_page_param(self, rf):
+        request = rf.get("/some-post/", HTTP_REFERER="http://testserver/blog/?page=3")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/?page=3"
+
+    def test_referer_without_query_returns_base_url(self, rf):
+        request = rf.get("/some-post/", HTTP_REFERER="http://testserver/blog/")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/"
+
+    def test_referer_from_different_host_returns_base_url(self, rf):
+        request = rf.get("/some-post/", HTTP_REFERER="http://evil.com/blog/?page=3")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/"
+
+    def test_referer_path_does_not_match_blog(self, rf):
+        request = rf.get("/some-post/", HTTP_REFERER="http://testserver/other/?page=2")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/"
+
+    def test_referer_with_multiple_query_params(self, rf):
+        request = rf.get("/some-post/", HTTP_REFERER="http://testserver/blog/?page=2&tag=python")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/?page=2&tag=python"
+
+    def test_empty_referer_returns_base_url(self, rf):
+        request = rf.get("/some-post/", HTTP_REFERER="")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/"
+
+    def test_trailing_slash_mismatch_referer_without(self, rf):
+        """Referer /blog without trailing slash should still match base /blog/."""
+        request = rf.get("/some-post/", HTTP_REFERER="http://testserver/blog?page=2")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/?page=2"
+
+    def test_trailing_slash_mismatch_base_without(self, rf):
+        """Base /blog without trailing slash should still match referer /blog/."""
+        request = rf.get("/some-post/", HTTP_REFERER="http://testserver/blog/?page=2")
+        assert _blog_url_from_referer(request, "/blog") == "/blog?page=2"
+
+    def test_referer_with_theme_and_page(self, rf):
+        request = rf.get("/some-post/", HTTP_REFERER="http://testserver/blog/?page=2&theme=bootstrap5")
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/?page=2&theme=bootstrap5"
+
+    def test_same_host_with_explicit_port(self, rf, settings):
+        settings.ALLOWED_HOSTS = ["localhost"]
+        request = rf.get(
+            "/some-post/",
+            HTTP_REFERER="http://localhost:8000/blog/?page=3",
+            SERVER_NAME="localhost",
+            SERVER_PORT="8000",
+        )
+        assert _blog_url_from_referer(request, "/blog/") == "/blog/?page=3"
