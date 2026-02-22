@@ -1,5 +1,6 @@
 """Tests for cast.checks — asset freshness system check."""
 
+import os
 import time
 from pathlib import Path
 
@@ -50,6 +51,18 @@ class TestNewestSourceMtime:
         result = _newest_source_mtime(tmp_path)
         assert result is not None
         assert result >= new.stat().st_mtime
+
+    def test_skips_older_file(self, tmp_path):
+        """Ensure a file older than the current newest does not update the result."""
+        new = tmp_path / "new.ts"
+        new.write_text("new")
+        older = tmp_path / "older.tsx"
+        older.write_text("older")
+        # Set explicit mtimes so the test is fully deterministic
+        os.utime(new, (2, 2))
+        os.utime(older, (1, 1))
+        result = _newest_source_mtime(tmp_path)
+        assert result == 2.0
 
 
 class TestFindStaleAssets:
