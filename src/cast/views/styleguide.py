@@ -341,6 +341,7 @@ def _ensure_blog(site: Site, user) -> Blog:
             blog.template_base_dir = default_theme
             blog.save()
         blog = _ensure_live(blog)
+
     return blog
 
 
