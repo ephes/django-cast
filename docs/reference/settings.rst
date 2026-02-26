@@ -58,18 +58,27 @@ For which image formats to generate thumbnails / srcset / source renditions. Def
 
 .. _image_slot_dimensions:
 
-CAST_IMAGE_SLOT_DIMENSIONS
-==========================
+CAST_REGULAR_IMAGE_SLOT_DIMENSIONS
+===================================
 
-The dimensions of the image slots in blog posts and the modal shown
-when clicking on thumbnail gallery images. Defaults to
-``(1110, 740)``.
+The dimensions of the image slots used for regular (non-gallery) images
+in blog posts. Each entry is a ``(width, height)`` tuple. Defaults to
+``[(1110, 740)]``.
 
-CAST_THUMBNAIL_SLOT_DIMENSIONS
-===============================
+.. code-block:: python
 
-The dimension of image slots for thumbnails in blog posts. Defaults
-to ``(120, 80)``.
+    CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [(1110, 740)]
+
+CAST_GALLERY_IMAGE_SLOT_DIMENSIONS
+====================================
+
+The dimensions of image slots used for gallery images. The first entry
+is the modal (full-size) slot, and the second is the thumbnail slot.
+Defaults to ``[(1110, 740), (120, 80)]``.
+
+.. code-block:: python
+
+    CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(1110, 740), (120, 80)]
 
 *********
 Templates
@@ -303,6 +312,8 @@ to ``"django"``.
 .. code-block:: python
 
     CAST_REPOSITORY = "django"
+
+.. _cdn_configuration:
 
 *********************************
 Using a CDN (AWS S3 + Cloudfront)
