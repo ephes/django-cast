@@ -48,12 +48,13 @@ def fixture_dir():
 
 @pytest.fixture(scope="session", autouse=True)
 def remove_stale_media_files():
-    # runs before test starts
-    yield
-    # runs after test ends
     # cannot use function scoped settings fixture, so import settings
     from django.conf import settings
 
+    # clean up before tests start (handles leftovers from interrupted runs)
+    shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+    yield
+    # clean up after tests end
     shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
 
 
