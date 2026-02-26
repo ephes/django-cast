@@ -223,6 +223,10 @@ When modifying models:
 - Do not bump the version number on every commit
 - Before committing, check whether documentation or release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 
+## Releasing
+
+See [docs/release.rst](docs/release.rst) for the full release process (checks, JS build, tox, merge, GitHub release, PyPI publish).
+
 ## Version Bumping
 
 When bumping the version number for a new release:

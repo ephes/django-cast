@@ -5,83 +5,117 @@ Release Process
 Bump Version Number
 -------------------
 
-Change the version number in following files:
+Change the version number in the following files:
 
-- cast/__init__.py
-- docs/conf.py
-- pyproject.toml
-- README.md
+- ``src/cast/__init__.py``
+- ``docs/conf.py``
+- ``pyproject.toml``
+- ``README.md``
 
-Javascript
+Update the release notes date in ``docs/releases/<version>.rst`` from
+"(unreleased)" to the actual release date. Verify the file is listed in
+``docs/releases/index.rst``.
+
+Commit and push all release-prep changes on develop before proceeding.
+
+Run Checks
 ----------
-Update dependencies:
+
+Make sure lint, type checking, and tests pass:
+
+.. code-block:: bash
+
+   $ just check
+
+JavaScript
+----------
+
+Update dependencies and rebuild all shipped assets:
 
 .. code-block:: shell
 
    $ cd javascript
    $ npm outdated
    $ npm update
-
-Build the Javascript (image-gallery component):
-
-.. code-block:: shell
-
-   $ just js-build-vite
-   # or directly:
-   $ cd javascript
-   $ npx vite build
-   $ cd dist/
-   $ mv .vite/manifest.json manifest.json
-   $ rm -r .vite
-   $ rm ../../src/cast/static/cast/vite/*
-   $ cp * ../../src/cast/static/cast/vite/
-
-Build shipped legacy JavaScript (comments):
-
-.. code-block:: shell
-
-   $ just js-build-comments
-   # or directly:
-   $ cd javascript
-   $ npm run build:comments
-
-To build everything in one go:
-
-.. code-block:: shell
-
+   $ cd ..
    $ just js-build-all
 
+Test Python Versions
+--------------------
 
-Test Python Versions and Merge develop into main
-------------------------------------------------
-
-Make sure all tests are passing on supported Python versions:
+Make sure all tests pass on supported Python versions:
 
 .. code-block:: bash
 
-   $ tox
+   $ uv run tox
 
-Merge the develop branch into the main branch:
+Merge develop into main
+-----------------------
 
 .. code-block:: bash
 
    $ git checkout main
-   $ git pull && git merge develop
+   $ git pull && git merge origin/develop
    $ git push
 
 Create the Release on GitHub
 ----------------------------
 
-1. Create a new tag on GitHub
-2. Copy the release notes from the previous version and change them accordingly
-3. Mark as pre-release
+Use ``gh`` to create a tagged pre-release. Use previous releases as a
+template for the notes (Highlights / Improvements / Fixes / Docs sections):
 
-Build the Release Wheels and Publish to PyPI
---------------------------------------------
+.. code-block:: bash
 
-Create the package:
+   $ gh release create <version> --target main \
+       --title "<version> (YYYY-MM-DD)" \
+       --prerelease \
+       --notes "$(cat <<'EOF'
+   ## <version> (YYYY-MM-DD)
+
+   ### Highlights
+   - ...
+
+   ### Improvements
+   - ...
+
+   ### Fixes
+   - ...
+
+   ### Docs / Maintenance
+   - ...
+   EOF
+   )"
+
+Build and Publish to PyPI
+-------------------------
 
 .. code-block:: bash
 
    $ uv build
    $ uv publish --token your-token
+
+Prepare Next Development Version
+---------------------------------
+
+Switch back to develop and bump the version to the next unreleased version:
+
+.. code-block:: bash
+
+   $ git checkout develop
+
+Update the version number in:
+
+- ``pyproject.toml``
+- ``docs/conf.py``
+- ``src/cast/__init__.py``
+- ``README.md``
+
+Create a new release notes file ``docs/releases/<next-version>.rst`` with
+"(unreleased)" as the date, and add it to ``docs/releases/index.rst``.
+
+Commit the version bump to develop.
+
+.. important::
+
+   All new development work must happen on the **develop** branch.
+   Never commit directly to main.
