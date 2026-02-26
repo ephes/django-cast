@@ -13,8 +13,9 @@ Change the version number in the following files:
 - ``README.md``
 
 Update the release notes date in ``docs/releases/<version>.rst`` from
-"(unreleased)" to the actual release date. Verify the file is listed in
-``docs/releases/index.rst``.
+"(unreleased)" to today's date (e.g. ``0.2.53 (2026-02-26)``).
+This must happen **before** tagging the release. Verify the file is listed
+in ``docs/releases/index.rst``.
 
 Commit and push all release-prep changes on develop before proceeding.
 
