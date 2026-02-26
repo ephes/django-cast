@@ -264,5 +264,10 @@ When bumping the version number for a new release:
 2. Make corresponding changes in sibling repos if needed
 3. Note any sibling repo changes needed in the commit message or PR description
 
+**Note:** django-cast is an OSS package. Do not add dev orchestration scripts
+or runtime tooling for consumer sites (homepage, python-podcast) inside this
+repo. Cross-repo local dev orchestration belongs in user-level tooling
+(e.g., global Codex skills, dotfiles), not in the library itself.
+
 ## Memories
 - Use `uv run tox` instead of `uvx tox`
