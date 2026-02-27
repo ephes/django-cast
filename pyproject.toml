@@ -136,7 +136,6 @@ files = ["src"]
 django_settings_module = "cast.settings"
 
 [tool.coverage.run]
-core = "ctrace"
 branch = true
 source = ["src/cast"]
 omit = [

@@ -13,15 +13,8 @@ SOURCE_EXTENSIONS = frozenset({".ts", ".tsx", ".js", ".jsx", ".vue", ".css", ".s
 
 def _newest_source_mtime(source_dir: Path) -> float | None:
     """Return the mtime of the most recently modified source file, or None."""
-    newest = 0.0
-    found = False
-    for path in source_dir.rglob("*"):
-        if path.is_file() and path.suffix in SOURCE_EXTENSIONS:
-            mtime = path.stat().st_mtime
-            if mtime > newest:
-                newest = mtime
-            found = True
-    return newest if found else None
+    mtimes = [p.stat().st_mtime for p in source_dir.rglob("*") if p.is_file() and p.suffix in SOURCE_EXTENSIONS]
+    return max(mtimes) if mtimes else None
 
 
 def _find_stale_assets(base_dir: Path) -> list[str]:

@@ -52,8 +52,8 @@ class TestNewestSourceMtime:
         assert result is not None
         assert result >= new.stat().st_mtime
 
-    def test_skips_older_file(self, tmp_path):
-        """Ensure a file older than the current newest does not update the result."""
+    def test_returns_newest_among_multiple(self, tmp_path):
+        """Ensure the newest mtime is returned regardless of iteration order."""
         new = tmp_path / "new.ts"
         new.write_text("new")
         older = tmp_path / "older.tsx"
