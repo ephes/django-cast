@@ -4,6 +4,11 @@ from model_utils.models import TimeStampedModel
 
 
 class File(TimeStampedModel):
+    """A generic uploaded file associated with a user.
+
+    Used for documents and other file types that are not images, audio, or video.
+    """
+
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     original = models.FileField(upload_to="cast_files/")
 

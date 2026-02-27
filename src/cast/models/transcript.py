@@ -9,6 +9,12 @@ from . import Audio
 
 
 class Transcript(CollectionMember, index.Indexed, models.Model):
+    """A transcript associated with an Audio instance.
+
+    Supports three formats: Podlove (JSON for the web player), WebVTT
+    (for feeds and podcast clients), and DOTe (JSON for feeds).
+    """
+
     audio = models.OneToOneField(Audio, on_delete=models.CASCADE, related_name="transcript")
     podlove = models.FileField(
         upload_to="cast_transcript/",

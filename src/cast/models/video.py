@@ -56,6 +56,12 @@ def get_video_dimensions(lines: list[str]) -> tuple[int | None, int | None]:
 
 
 class Video(CollectionMember, index.Indexed, TimeStampedModel):
+    """Represents an uploaded video file with automatic poster frame extraction.
+
+    Uses FFmpeg/FFprobe for poster generation and dimension detection.
+    Videos belong to Wagtail collections and are user-owned.
+    """
+
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     title = models.CharField(default="", max_length=255)
     original = models.FileField(upload_to="cast_videos/")

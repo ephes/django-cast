@@ -36,6 +36,12 @@ class FileField(Protocol):
 
 
 class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[django-manager-missing]
+    """Represents an audio file with support for multiple formats (MP3, M4A, OGA, OPUS).
+
+    Provides automatic duration detection via FFprobe, chapter mark associations,
+    transcript linking, and Podlove Web Player integration for podcast episodes.
+    """
+
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     duration = models.DurationField(null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)
@@ -315,6 +321,12 @@ class ChapterMarkManager(models.Manager):
 
 
 class ChapterMark(models.Model):
+    """A navigable chapter marker within an audio file.
+
+    Each mark has a start time, title, and optional link and image URL.
+    Unique together on (audio, start). Queries typically order by start time.
+    """
+
     audio = models.ForeignKey(Audio, on_delete=models.CASCADE, related_name="chaptermarks")
     start = models.TimeField(_("Start time of chaptermark"))
     title = models.CharField(max_length=255)

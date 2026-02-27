@@ -11,6 +11,12 @@ from cast.models.image_renditions import (
 
 
 class Gallery(TimeStampedModel):
+    """A collection of images displayed as thumbnails with a modal full-size view.
+
+    Galleries are created automatically via ``get_or_create_gallery()`` and
+    are deduplicated so the same set of images always maps to one gallery.
+    """
+
     images: models.ManyToManyField = models.ManyToManyField(Image)  # FIXME mypy are you ok?
     post_context_key = "gallery"
 
