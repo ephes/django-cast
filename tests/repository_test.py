@@ -101,7 +101,7 @@ def post_detail_repository(**kwargs):
         renditions_for_posts={},
     )
     defaults.update(kwargs)
-    return PostDetailRepository(**defaults)
+    return PostDetailContext(**defaults)
 
 
 def queryset_data(**kwargs):
@@ -125,7 +125,7 @@ def queryset_data(**kwargs):
         absolute_page_url_by_id={},
     )
     defaults.update(kwargs)
-    return QuerysetData(**defaults)
+    return PostQuerySnapshot(**defaults)
 
 
 def blog_index_repository(**kwargs):
@@ -139,7 +139,7 @@ def blog_index_repository(**kwargs):
         use_audio_player=False,
     )
     defaults.update(kwargs)
-    return BlogIndexRepository(**defaults)
+    return BlogIndexContext(**defaults)
 
 
 def feed_repository(**kwargs):
@@ -152,7 +152,7 @@ def feed_repository(**kwargs):
         root_nav_links=[],
     )
     defaults.update(kwargs)
-    return FeedRepository(**defaults)
+    return FeedContext(**defaults)
 
 
 # Test page link handler with cache
