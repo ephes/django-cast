@@ -1,3 +1,25 @@
+"""Repository pattern for efficient data fetching and rendering.
+
+This module implements the repository pattern to batch-load and pre-compute
+all data needed to render blog index pages, post detail pages, and RSS feeds.
+Instead of each template or view issuing its own queries, repository classes
+aggregate media, renditions, URLs, and metadata into a single container that
+can be passed through the rendering pipeline.
+
+Key classes:
+
+- ``QuerysetData``: holds pre-fetched data derived from a post queryset
+  (images, audios, videos, renditions, URLs, etc.).
+- ``PostDetailRepository``: data for rendering a single post detail page.
+- ``BlogIndexRepository``: data for rendering a paginated blog index.
+- ``FeedRepository``: data for rendering an RSS/Atom feed.
+- ``EpisodeFeedRepository``: per-episode data for podcast feeds.
+
+The module also provides serialization helpers (``*_to_dict``,
+``serialize_renditions``, etc.) that convert Django model instances into
+plain dicts suitable for caching or JSON transport.
+"""
+
 import json
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeAlias, cast
@@ -48,6 +70,7 @@ if TYPE_CHECKING:
 
 
 def cache_page_url(post_id: int, url: str) -> None:
+    """Store a page URL in the rich-text link cache to avoid DB lookups during rendering."""
     from ..wagtail_hooks import PageLinkHandlerWithCache
 
     PageLinkHandlerWithCache.cache_url(post_id, url)
@@ -56,15 +79,22 @@ def cache_page_url(post_id: int, url: str) -> None:
 def apply_cover_fallback(
     cover_image_url: str, cover_alt_text: str, blog_cover_image_url: str, blog_cover_alt_text: str
 ) -> tuple[str, str]:
+    """Fall back to the blog's cover image when the post has none."""
     if cover_image_url == "" and blog_cover_image_url:
         return blog_cover_image_url, blog_cover_alt_text
     return cover_image_url, cover_alt_text
 
 
 class QuerysetData:
-    """
-    This class is a container for the data that is needed to render a list of posts
-    and that only depends on the queryset of those posts.
+    """Container for pre-fetched data derived from a post queryset.
+
+    Aggregates all media objects, renditions, page URLs, owner usernames,
+    and cover images for a set of posts so that downstream renderers
+    (templates, feeds, serializers) can look up data by post/media ID
+    without issuing additional queries.
+
+    Use ``create_from_post_queryset`` to build an instance from a live
+    Django queryset with all necessary prefetches applied.
     """
 
     def __init__(
@@ -110,6 +140,13 @@ class QuerysetData:
     def create_from_post_queryset(
         cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"], is_podcast: bool = False
     ) -> "QuerysetData":
+        """Build a ``QuerysetData`` instance from a post queryset.
+
+        Apply ``select_related`` and ``prefetch_related`` to minimize
+        database round-trips, then iterate the queryset to populate the
+        primary post and media lookup dicts. Renditions are collected
+        separately via ``Post.get_all_renditions_from_queryset``.
+        """
         if False:
             queryset = queryset.select_related("owner", "cover_image", "podcast_audio__transcript")
         else:
@@ -202,8 +239,12 @@ def _blog_url_from_referer(request: HttpRequest, base_blog_url: str) -> str:
 
 
 class PostDetailRepository:
-    """
-    This class is a container for the data that is needed to render a post detail page.
+    """Container for data needed to render a single post detail page.
+
+    Holds template directory, navigation links, comment settings, media
+    lookups, renditions, and cover image data. Created either from live
+    Django models (``create_from_django_models``) or derived from a
+    ``FeedRepository`` via ``get_post_detail_repository``.
     """
 
     def __init__(
@@ -247,6 +288,7 @@ class PostDetailRepository:
 
     @classmethod
     def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailRepository":
+        """Build a ``PostDetailRepository`` from a live post and the current request."""
         blog = post.blog
         owner_username = "unknown"
         if post.owner is not None:
@@ -278,8 +320,10 @@ class PostDetailRepository:
 
 
 class EpisodeFeedRepository:
-    """
-    This class is a container for the data that is needed to render an episode in the feed.
+    """Container for per-episode data in a podcast RSS feed.
+
+    Holds the podcast audio file and its optional transcript, used when
+    rendering ``<enclosure>`` and ``<podcast:transcript>`` elements.
     """
 
     def __init__(
@@ -293,6 +337,7 @@ class EpisodeFeedRepository:
 
 
 def audio_to_dict(audio) -> dict:
+    """Serialize an Audio model instance to a plain dict for caching."""
     data = {
         "id": audio.pk,
         "duration": audio.duration,
@@ -312,6 +357,7 @@ def audio_to_dict(audio) -> dict:
 
 
 def transcript_to_dict(transcript) -> dict:
+    """Serialize a Transcript model instance to a plain dict for caching."""
     data = {
         "id": transcript.pk,
         "audio_id": transcript.audio_id,
@@ -327,6 +373,7 @@ def transcript_to_dict(transcript) -> dict:
 
 
 def video_to_dict(video) -> dict:
+    """Serialize a Video model instance to a plain dict for caching."""
     data = {
         "id": video.pk,
         "title": video.title,
@@ -342,6 +389,7 @@ def video_to_dict(video) -> dict:
 
 
 def blog_to_dict(blog):
+    """Serialize a Blog (or Podcast) model instance to a plain dict for caching."""
     data = {
         "id": blog.pk,
         "pk": blog.pk,
@@ -375,6 +423,7 @@ def blog_to_dict(blog):
 
 
 def blog_from_data(data: dict[str, Any]) -> "Blog":
+    """Reconstruct a Blog or Podcast instance from a serialized dict."""
     from . import Blog, Podcast
     from .itunes import ItunesArtWork
 
@@ -392,6 +441,7 @@ def blog_from_data(data: dict[str, Any]) -> "Blog":
 
 
 def post_to_dict(post):
+    """Serialize a Post instance to a plain dict for caching."""
     return {
         "id": post.pk,
         "pk": post.pk,
@@ -405,6 +455,7 @@ def post_to_dict(post):
 
 
 def episode_to_dict(post):
+    """Serialize an Episode instance (post with podcast audio) to a plain dict."""
     return {
         "id": post.pk,
         "pk": post.pk,
@@ -422,6 +473,7 @@ def episode_to_dict(post):
 
 
 def image_to_dict(image):
+    """Serialize a Wagtail Image instance to a plain dict for caching."""
     data = {
         "pk": image.pk,
         "title": image.title,
@@ -437,6 +489,7 @@ def image_to_dict(image):
 
 
 def rendition_to_dict(rendition):
+    """Serialize a Wagtail Rendition instance to a plain dict."""
     return {
         "pk": rendition.pk,
         "filter_spec": rendition.filter_spec,
@@ -447,6 +500,7 @@ def rendition_to_dict(rendition):
 
 
 def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedRenditions:
+    """Convert rendition model instances to dicts keyed by post PK."""
     renditions = {}
     for post_pk, renditions_for_post in renditions_for_posts.items():
         renditions[post_pk] = [rendition_to_dict(rendition) for rendition in renditions_for_post]
@@ -454,6 +508,7 @@ def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedR
 
 
 def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPost:
+    """Reconstruct Rendition model instances from serialized dicts."""
     return {
         post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
     }
@@ -467,12 +522,14 @@ class HasChoices(Protocol):
 
 
 def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
+    """Return non-empty filter choices for a facet field, or an empty list."""
     if field_name in fields:
         return [(k, v) for k, v in fields[field_name].choices if k != ""]
     return []
 
 
 def add_site_raw(data: dict[str, Any]) -> dict:
+    """Add the first Wagtail site as a raw dict via a direct SQL query."""
     site_statement = """
         select
             id,
@@ -493,6 +550,7 @@ def add_site_raw(data: dict[str, Any]) -> dict:
 
 
 def add_root_nav_links(data: dict[str, Any]) -> dict:
+    """Add top-level navigation links (root page children) to the data dict."""
     site = Site(**data["site"])
     root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
     data["root_nav_links"] = root_nav_links
@@ -500,6 +558,7 @@ def add_root_nav_links(data: dict[str, Any]) -> dict:
 
 
 def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict:
+    """Serialize a ``QuerysetData`` instance into the cachable data dict."""
     # posts
     from .pages import Episode
 
@@ -610,6 +669,17 @@ def data_for_blog_cachable(
 
 
 class FeedRepository:
+    """Container for data needed to render an RSS or Atom feed.
+
+    Holds the blog, site, queryset data, and navigation links. Provides
+    helpers to derive a ``PostDetailRepository`` or
+    ``EpisodeFeedRepository`` for individual items in the feed.
+
+    Can be constructed from live Django models
+    (``create_from_django_models``) or from a previously serialized
+    cachable dict (``create_from_cachable_data``).
+    """
+
     def __init__(
         self,
         *,  # no positional arguments
@@ -653,6 +723,7 @@ class FeedRepository:
         template_base_dir: str = "bootstrap4",
         post_queryset: QuerySet["Post"],
     ) -> "FeedRepository":
+        """Build a ``FeedRepository`` from live Django models and a post queryset."""
         site = Site.find_for_request(request)
         queryset_data = QuerysetData.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
         root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
@@ -789,6 +860,7 @@ class FeedRepository:
         )
 
     def get_post_detail_repository(self, post: "Post") -> PostDetailRepository:
+        """Derive a ``PostDetailRepository`` for a single post from this feed's data."""
         post_id = post.id
         blog = self.blog
         return PostDetailRepository(
@@ -811,6 +883,7 @@ class FeedRepository:
         )
 
     def get_episode_feed_detail_repository(self, episode: "Episode") -> EpisodeFeedRepository:
+        """Derive an ``EpisodeFeedRepository`` for a single episode from this feed's data."""
         episode_id = episode.id
         podcast_audio = self.queryset_data.podcast_audio_by_episode_id[episode_id]
         transcript = self.queryset_data.transcript_by_audio_id.get(podcast_audio.id, None)
@@ -821,6 +894,14 @@ class FeedRepository:
 
 
 class BlogIndexRepository:
+    """Container for data needed to render a paginated blog index page.
+
+    Holds the blog, filterset (date/category/tag facets), pagination
+    context, queryset data, and navigation links. Constructed either
+    from live Django models (``create_from_django_models``) or from
+    a cachable dict (``create_from_cachable_data``).
+    """
+
     def __init__(
         self,
         *,
@@ -968,6 +1049,7 @@ class BlogIndexRepository:
 
     @classmethod
     def create_from_django_models(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexRepository":
+        """Build a ``BlogIndexRepository`` from a blog and the current request."""
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
         pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)

@@ -1,3 +1,11 @@
+"""Wagtail hooks for django-cast admin integration.
+
+Registers custom admin URLs, menu items, and rich-text link handling
+for Audio, Video, and Transcript media types. Also registers a Tags
+snippet viewset for CRUD operations on ``taggit.Tag`` from the Wagtail
+admin sidebar.
+"""
+
 from django.http import HttpRequest
 from django.urls import include, path, reverse
 from django.utils.html import format_html
@@ -17,6 +25,7 @@ from .models import Audio, Transcript, Video
 
 @hooks.register("register_admin_urls")
 def register_admin_urls() -> list:
+    """Register admin URL namespaces for Audio, Video, and Transcript choosers and CRUD views."""
     return [
         path("audio/", include((audio, "castaudio"), namespace="castaudio")),
         path("media/", include((video, "castvideo"), namespace="castvideo")),
@@ -25,6 +34,8 @@ def register_admin_urls() -> list:
 
 
 class VideoMenuItem(MenuItem):
+    """Admin sidebar menu item for Video management, visible to users with video permissions."""
+
     def is_shown(self, request: HttpRequest) -> bool:
         permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
         return permission_policy.user_has_any_permission(request.user, ["add", "change", "delete"])
@@ -32,6 +43,7 @@ class VideoMenuItem(MenuItem):
 
 @hooks.register("register_admin_menu_item")
 def register_video_menu_item() -> VideoMenuItem:
+    """Register the Video menu item in the Wagtail admin sidebar."""
     return VideoMenuItem(
         _("Video"),
         reverse("castvideo:index"),
@@ -42,6 +54,8 @@ def register_video_menu_item() -> VideoMenuItem:
 
 
 class AudioMenuItem(MenuItem):
+    """Admin sidebar menu item for Audio management, visible to users with audio permissions."""
+
     def is_shown(self, request: HttpRequest) -> bool:
         permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
         return permission_policy.user_has_any_permission(request.user, ["add", "change", "delete"])
@@ -49,6 +63,7 @@ class AudioMenuItem(MenuItem):
 
 @hooks.register("register_admin_menu_item")
 def register_audio_menu_item() -> AudioMenuItem:
+    """Register the Audio menu item in the Wagtail admin sidebar."""
     return AudioMenuItem(
         _("Audio"),
         reverse("castaudio:index"),
@@ -59,6 +74,8 @@ def register_audio_menu_item() -> AudioMenuItem:
 
 
 class TranscriptMenuItem(MenuItem):
+    """Admin sidebar menu item for Transcript management, visible to users with transcript permissions."""
+
     def is_shown(self, request: HttpRequest) -> bool:
         permission_policy = CollectionOwnershipPermissionPolicy(
             Transcript, auth_model=Transcript, owner_field_name="user"
@@ -68,6 +85,7 @@ class TranscriptMenuItem(MenuItem):
 
 @hooks.register("register_admin_menu_item")
 def register_transcript_menu_item() -> TranscriptMenuItem:
+    """Register the Transcript menu item in the Wagtail admin sidebar."""
     return TranscriptMenuItem(
         _("Transcript"),
         reverse("cast-transcript:index"),
@@ -161,4 +179,5 @@ class PageLinkHandlerWithCache(PageLinkHandler):
 
 @hooks.register("register_rich_text_features")
 def register_page_link(features):
+    """Replace Wagtail's default page link handler with the cache-aware variant."""
     features.register_link_type(PageLinkHandlerWithCache)

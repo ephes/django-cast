@@ -1,3 +1,12 @@
+"""Wagtail chooser widgets and telepath adapters for Audio and Video.
+
+Provides ``AdminVideoChooser`` and ``AdminAudioChooser`` widgets used in
+Wagtail's StreamField editor to let editors select media items via a
+modal dialog. Each widget has a corresponding ``BaseChooserAdapter``
+subclass that registers it with Wagtail's telepath framework for
+client-side rendering.
+"""
+
 import json
 from typing import Union
 
@@ -22,6 +31,8 @@ def add_display_none_to_chooser_button(html: str) -> str:
 
 
 class CastChooser(BaseChooser):
+    """Base chooser widget for cast media types (Audio, Video)."""
+
     chooser_namespace = "castvideo"
     template_name = "cast/video/chooser.html"
 
@@ -50,6 +61,8 @@ class CastChooser(BaseChooser):
 
 
 class AdminVideoChooser(CastChooser):
+    """Chooser widget for selecting a Video in the Wagtail admin editor."""
+
     choose_one_text = _("Choose a video item")
     choose_another_text = _("Choose another video item")
     link_to_chosen_text = _("Edit this video item")
@@ -93,6 +106,8 @@ class AdminVideoChooser(CastChooser):
 
 
 class VideoChooserAdapter(BaseChooserAdapter):
+    """Telepath adapter that registers ``AdminVideoChooser`` for client-side rendering."""
+
     js_constructor = "cast.wagtail.VideoChooser"
 
     def js_args(self, widget: AdminVideoChooser) -> list:
@@ -114,6 +129,8 @@ register(VideoChooserAdapter(), AdminVideoChooser)
 
 
 class AdminAudioChooser(CastChooser):
+    """Chooser widget for selecting an Audio in the Wagtail admin editor."""
+
     choose_one_text = _("Choose an audio item")
     choose_another_text = _("Choose another audio item")
     link_to_chosen_text = _("Edit this audio item")
@@ -143,6 +160,8 @@ class AdminAudioChooser(CastChooser):
 
 
 class AudioChooserAdapter(BaseChooserAdapter):
+    """Telepath adapter that registers ``AdminAudioChooser`` for client-side rendering."""
+
     js_constructor = "cast.wagtail.AudioChooser"
 
     def js_args(self, widget: AdminAudioChooser) -> list:

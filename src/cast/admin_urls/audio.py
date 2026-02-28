@@ -1,3 +1,8 @@
+"""URL configuration for the Audio chooser and CRUD views in the Wagtail admin.
+
+Registered under the ``castaudio`` namespace via ``wagtail_hooks.register_admin_urls``.
+"""
+
 from typing import Any
 
 from django.urls import path

@@ -1,3 +1,8 @@
+"""URL configuration for the Transcript chooser and CRUD views in the Wagtail admin.
+
+Registered under the ``cast-transcript`` namespace via ``wagtail_hooks.register_admin_urls``.
+"""
+
 from typing import Any
 
 from django.urls import path

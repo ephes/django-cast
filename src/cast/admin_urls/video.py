@@ -1,3 +1,8 @@
+"""URL configuration for the Video chooser and CRUD views in the Wagtail admin.
+
+Registered under the ``castvideo`` namespace via ``wagtail_hooks.register_admin_urls``.
+"""
+
 from typing import Any
 
 from django.urls import path

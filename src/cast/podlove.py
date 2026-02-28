@@ -1,3 +1,17 @@
+"""Build configuration dicts for the Podlove Web Player.
+
+The Podlove Web Player is used to render podcast episode audio players.
+This module assembles a theme-aware configuration dict that includes
+color tokens, font families, and player feature toggles. The output
+is passed as JSON to the player's JavaScript initialization.
+
+Theme resolution order:
+1. ``CAST_PODLOVE_PLAYER_THEMES`` setting overrides (per theme/color scheme)
+2. Built-in Bootstrap 5 tokens (light/dark) when ``template_base_dir`` is
+   ``"bootstrap5"``
+3. ``DEFAULT_PODLOVE_THEME`` fallback
+"""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -152,6 +166,12 @@ BASE_PLAYER_CONFIG: dict[str, Any] = {
 
 
 def build_podlove_player_config(*, template_base_dir: str | None, color_scheme: str | None) -> dict[str, Any]:
+    """Return a Podlove Web Player configuration dict for the given theme and color scheme.
+
+    The returned dict contains ``theme`` (color tokens and fonts), share
+    channels, and player version metadata. It is serialized to JSON and
+    passed to the ``<podlove-web-player>`` element in templates.
+    """
     scheme = _normalize_color_scheme(color_scheme)
     theme = _resolve_theme_config(template_base_dir=template_base_dir, color_scheme=scheme)
     config = deepcopy(BASE_PLAYER_CONFIG)

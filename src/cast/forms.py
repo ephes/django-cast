@@ -1,3 +1,10 @@
+"""Forms for managing cast media, chapter marks, transcripts, and themes.
+
+Provides model forms for Audio, Video, and Transcript CRUD in the Wagtail
+admin, chapter mark parsing and validation, a theme selection form, and
+a search form that rejects empty queries.
+"""
+
 import json
 from datetime import datetime, time
 from typing import cast
@@ -16,18 +23,29 @@ from .models import Audio, ChapterMark, Transcript, Video, get_template_base_dir
 
 
 class VideoForm(forms.ModelForm):
+    """Simple model form for Video with only the ``original`` file field."""
+
     class Meta:
         model = Video
         fields = ["original"]
 
 
 class FakePermissionPolicy:
+    """Permissive stub that grants access to all collections.
+
+    Used as the ``permission_policy`` on media forms so that all
+    collections appear in the collection chooser regardless of
+    per-collection permissions.
+    """
+
     @staticmethod
     def collections_user_has_permission_for(_user, _action) -> QuerySet[Collection]:
         return Collection.objects.all()
 
 
 class BaseVideoForm(BaseCollectionMemberForm):
+    """Base form for Video admin views with tag and file widgets, plus collection support."""
+
     class Meta:
         widgets = {
             "tags": widgets.AdminTagWidget,
@@ -39,6 +57,7 @@ class BaseVideoForm(BaseCollectionMemberForm):
 
 
 def get_video_form() -> type[forms.ModelForm]:
+    """Return a model form class for Video, ensuring the collection field is included."""
     fields = Video.admin_form_fields
     if "collection" not in fields:
         # force addition of the 'collection' field, because leaving it out can
@@ -55,12 +74,16 @@ def get_video_form() -> type[forms.ModelForm]:
 
 
 class ChapterMarkForm(forms.ModelForm):
+    """Model form for manually creating or editing a single chapter mark."""
+
     class Meta:
         model = ChapterMark
         fields = ("start", "title", "link", "image")
 
 
 class FFProbeStartField(forms.TimeField):
+    """Time field that converts an ffprobe-style seconds-since-epoch float to a ``time`` object."""
+
     def to_python(self, value) -> time:
         try:
             # utcfromtimestamp, super important!
@@ -74,6 +97,8 @@ class FFProbeStartField(forms.TimeField):
 
 
 class FFProbeChapterMarkForm(forms.ModelForm):
+    """Model form for chapter marks extracted from audio files via ffprobe."""
+
     start = FFProbeStartField()
 
     class Meta:
@@ -82,6 +107,8 @@ class FFProbeChapterMarkForm(forms.ModelForm):
 
 
 def parse_chaptermark_line(line: str) -> ChapterMark:
+    """Parse a single ``HH:MM:SS Title text`` line into an unsaved ChapterMark."""
+
     def raise_line_validation_error():
         raise ValidationError(
             _(f"Invalid chaptermark line: {line}"),
@@ -102,6 +129,8 @@ def parse_chaptermark_line(line: str) -> ChapterMark:
 
 
 class ChapterMarksField(forms.CharField):
+    """Multi-line text field that parses each line into a ChapterMark instance."""
+
     def to_python(self, value: str | None) -> list[ChapterMark]:  # type: ignore[override]
         if value is None:
             return []
@@ -115,6 +144,14 @@ class ChapterMarksField(forms.CharField):
 
 
 class AudioForm(BaseCollectionMemberForm):
+    """Form for creating and editing Audio objects in the Wagtail admin.
+
+    Includes a ``chaptermarks`` text area where editors can paste chapter
+    marks line by line. On save, chapter marks are synced: manually entered
+    marks take priority, otherwise marks are extracted from uploaded audio
+    files via ffprobe.
+    """
+
     chaptermarks = ChapterMarksField(widget=forms.Textarea, required=False)
     permission_policy = FakePermissionPolicy()
 
@@ -168,6 +205,13 @@ class AudioForm(BaseCollectionMemberForm):
 
 
 class TranscriptForm(BaseCollectionMemberForm):
+    """Form for creating and editing Transcript objects in the Wagtail admin.
+
+    Validates uploaded transcript files: Podlove JSON must contain a
+    ``transcripts`` key, DOTe JSON must contain ``lines`` with required
+    fields, and WebVTT files must start with the ``WEBVTT`` header.
+    """
+
     permission_policy = FakePermissionPolicy()
 
     class Meta:
@@ -270,6 +314,8 @@ class NonEmptySearchForm(SearchForm):
 
 
 class SelectThemeForm(forms.Form):
+    """Form for selecting the active template theme via the theme switcher view."""
+
     template_base_dir = forms.ChoiceField(
         choices=[],
         label=_("Theme"),
