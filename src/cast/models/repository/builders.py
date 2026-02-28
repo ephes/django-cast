@@ -9,14 +9,14 @@ from wagtail.models import Site
 
 from ...views import HtmxHttpRequest
 from .serialization import (
-    audio_to_dict,
-    blog_to_dict,
-    episode_to_dict,
-    image_to_dict,
-    post_to_dict,
+    serialize_audio,
+    serialize_blog,
+    serialize_episode,
+    serialize_image,
+    serialize_post,
     serialize_renditions,
-    transcript_to_dict,
-    video_to_dict,
+    serialize_transcript,
+    serialize_video,
 )
 from .snapshot import PostQuerySnapshot
 from .types import Choice, HasChoices, PageUrlByID
@@ -115,32 +115,32 @@ def add_queryset_data(data: dict[str, Any], queryset_data: PostQuerySnapshot) ->
     post_by_id = {}
     for pk, post in queryset_data.post_by_id.items():
         if isinstance(post, Episode):
-            post_by_id[pk] = episode_to_dict(post)
+            post_by_id[pk] = serialize_episode(post)
         else:
-            post_by_id[pk] = post_to_dict(post)
+            post_by_id[pk] = serialize_post(post)
     data["post_by_id"] = post_by_id
 
     # audios
     audios = {}
     for pk, audio in queryset_data.audios.items():
-        audios[pk] = audio_to_dict(audio)
+        audios[pk] = serialize_audio(audio)
     data["audios"] = audios
 
     # transcripts
     transcripts = {}
     for audio_pk, transcript in queryset_data.transcript_by_audio_id.items():
-        transcripts[audio_pk] = transcript_to_dict(transcript)
+        transcripts[audio_pk] = serialize_transcript(transcript)
 
     # videos
     videos = {}
     for pk, video in queryset_data.videos.items():
-        videos[pk] = video_to_dict(video)
+        videos[pk] = serialize_video(video)
     data["videos"] = videos
 
     # images
     images = {}
     for pk, image in queryset_data.images.items():
-        images[pk] = image_to_dict(image)
+        images[pk] = serialize_image(image)
     data["images"] = images
 
     # renditions
@@ -151,7 +151,7 @@ def add_queryset_data(data: dict[str, Any], queryset_data: PostQuerySnapshot) ->
     data["videos_by_post_id"] = queryset_data.videos_by_post_id
     data["audios_by_post_id"] = queryset_data.audios_by_post_id
     data["podcast_audio_by_episode_id"] = {
-        episode_id: audio_to_dict(audio) for episode_id, audio in queryset_data.podcast_audio_by_episode_id.items()
+        episode_id: serialize_audio(audio) for episode_id, audio in queryset_data.podcast_audio_by_episode_id.items()
     }
     data["transcripts"] = transcripts
     data["cover_by_post_id"] = queryset_data.cover_by_post_id
@@ -171,7 +171,7 @@ def data_for_blog_cachable(
     """
     Fetch all the data of a blog in a cachable (dict) format.
     """
-    data: dict[str, Any] = {"blog": blog_to_dict(blog)}
+    data: dict[str, Any] = {"blog": serialize_blog(blog)}
     blog_cover_image_url = ""
     if blog.cover_image is not None:
         blog_cover_image_url = cast(Image, blog.cover_image).file.url

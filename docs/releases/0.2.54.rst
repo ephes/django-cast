@@ -7,3 +7,15 @@
 - Kept backward compatibility aliases for existing names:
   ``QuerysetData``, ``PostDetailRepository``, ``BlogIndexRepository``,
   ``FeedRepository``, and ``EpisodeFeedRepository``.
+- Added canonical repository serialization APIs:
+  ``serialize_audio``/``deserialize_audio``,
+  ``serialize_video``/``deserialize_video``,
+  ``serialize_image``/``deserialize_image``,
+  ``serialize_blog``/``deserialize_blog``,
+  ``serialize_post``/``deserialize_post``,
+  ``serialize_episode``/``deserialize_episode``,
+  and ``serialize_transcript``/``deserialize_transcript``.
+- Kept backward-compatible serialization aliases:
+  ``audio_to_dict``, ``video_to_dict``, ``image_to_dict``,
+  ``blog_to_dict``/``blog_from_data``, ``post_to_dict``,
+  ``episode_to_dict``, and ``transcript_to_dict``.

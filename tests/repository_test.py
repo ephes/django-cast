@@ -22,7 +22,7 @@ from wagtail.models import Site as WagtailSite
 from cast.devdata import create_post, create_python_body, create_transcript, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed, RssPodcastFeed
 from cast.filters import PostFilterset
-from cast.models import Audio, Blog, Podcast, Post, Video
+from cast.models import Audio, Blog, Episode, Podcast, Post, Transcript, Video
 from cast.models.image_renditions import create_missing_renditions_for_posts
 from cast.models.repository import (
     BlogIndexContext,
@@ -39,13 +39,28 @@ from cast.models.repository import (
     add_site_raw,
     apply_cover_fallback,
     audio_to_dict,
+    deserialize_audio,
+    deserialize_blog,
+    deserialize_episode,
+    deserialize_image,
+    deserialize_post,
+    deserialize_transcript,
+    deserialize_video,
     blog_from_data,
     blog_to_dict,
     data_for_blog_cachable,
+    episode_to_dict,
     get_facet_choices,
     image_to_dict,
     post_to_dict,
+    serialize_audio,
+    serialize_blog,
+    serialize_episode,
+    serialize_image,
+    serialize_post,
     serialize_renditions,
+    serialize_transcript,
+    serialize_video,
     transcript_to_dict,
     video_to_dict,
 )
@@ -749,6 +764,51 @@ def test_serialize_renditions():
     assert rendition.file == "foo.jpg"
 
 
+def test_canonical_serialize_aliases_for_media_are_equivalent():
+    audio = Audio(
+        id=1,
+        collection=None,
+        duration=None,
+        title="Some audio",
+        subtitle="Some subtitle",
+        data={},
+        m4a=StubFile("audio.m4a"),
+        mp3=StubFile("audio.mp3"),
+        oga=StubFile("audio.oga"),
+        opus=StubFile("audio.opus"),
+    )
+    video = Video(
+        id=1,
+        collection=None,
+        title="Some video",
+        original=StubFile("video.mp4"),
+        poster=StubFile("poster.jpg"),
+        poster_seconds=1,
+    )
+    image = Image(id=1, title="Some image", collection=None, file=StubFile("image.jpg"), width=100, height=200)
+
+    class Podlove:
+        name = "podlove.json"
+
+    class TranscriptFile:
+        name = "transcript.vtt"
+
+    class TranscriptStub:
+        pk = 1
+        audio_id = 1
+        podlove = Podlove()
+        vtt = TranscriptFile()
+        dote = TranscriptFile()
+        collection_id = None
+
+    transcript = TranscriptStub()
+
+    assert serialize_audio(audio) == audio_to_dict(audio)
+    assert serialize_video(video) == video_to_dict(video)
+    assert serialize_image(image) == image_to_dict(image)
+    assert serialize_transcript(transcript) == transcript_to_dict(transcript)
+
+
 def test_get_facet_choices():
     class Facet:
         choices = [("foo", "Foo"), ("bar", "Bar")]
@@ -791,6 +851,191 @@ def test_blog_to_dict_and_from_data_roundtrip_podcast(podcast_with_artwork):
     # no choices found
     choices = get_facet_choices({}, "foobar")
     assert choices == []
+
+
+@pytest.mark.django_db
+def test_canonical_serialize_aliases_for_blog_and_post_are_equivalent(blog, post, episode):
+    assert serialize_blog(blog) == blog_to_dict(blog)
+    assert serialize_post(post) == post_to_dict(post)
+    assert serialize_episode(episode) == episode_to_dict(episode)
+
+
+@pytest.mark.django_db
+def test_deserialize_canonical_and_legacy_alias_for_blog_are_equivalent(blog):
+    data = serialize_blog(blog)
+    rebuilt_from_canonical = deserialize_blog(data)
+    rebuilt_from_legacy = blog_from_data(data)
+    assert isinstance(rebuilt_from_canonical, Blog)
+    assert isinstance(rebuilt_from_legacy, Blog)
+    assert rebuilt_from_canonical.title == rebuilt_from_legacy.title
+    assert rebuilt_from_canonical.slug == rebuilt_from_legacy.slug
+
+
+def test_deserialize_canonical_media_types():
+    audio = deserialize_audio(
+        {
+            "id": 1,
+            "duration": None,
+            "title": "Some audio",
+            "subtitle": "Some subtitle",
+            "data": {},
+            "m4a": "audio.m4a",
+            "mp3": "audio.mp3",
+            "oga": "audio.oga",
+            "opus": "audio.opus",
+            "collection": None,
+        }
+    )
+    transcript = deserialize_transcript(
+        {
+            "id": 1,
+            "audio_id": 1,
+            "podlove": "podlove.json",
+            "vtt": "transcript.vtt",
+            "dote": "transcript.dote",
+            "collection": None,
+        }
+    )
+    video = deserialize_video(
+        {
+            "id": 1,
+            "title": "Some video",
+            "original": "video.mp4",
+            "poster": "poster.jpg",
+            "poster_seconds": 1,
+            "collection": None,
+        }
+    )
+    image = deserialize_image(
+        {
+            "pk": 1,
+            "title": "Some image",
+            "file": "image.jpg",
+            "width": 100,
+            "height": 200,
+            "collection": None,
+        }
+    )
+    post = deserialize_post(
+        {
+            "id": 1,
+            "pk": 1,
+            "uuid": "d9f1825b-6f86-4d24-8455-7c3eef4da36f",
+            "slug": "post-slug",
+            "title": "Post title",
+            "visible_date": None,
+            "comments_enabled": True,
+            "body": "[]",
+        }
+    )
+    episode = deserialize_episode(
+        {
+            "id": 2,
+            "pk": 2,
+            "uuid": "b9a1947f-2581-4f8d-b2be-26247ea2f30f",
+            "slug": "episode-slug",
+            "title": "Episode title",
+            "visible_date": None,
+            "comments_enabled": True,
+            "body": "[]",
+            "podcast_audio": {
+                "id": 1,
+                "duration": None,
+                "title": "Some audio",
+                "subtitle": "Some subtitle",
+                "data": {},
+                "m4a": "audio.m4a",
+                "mp3": "audio.mp3",
+                "oga": "audio.oga",
+                "opus": "audio.opus",
+                "collection": None,
+            },
+            "keywords": "",
+            "explicit": 0,
+            "block": False,
+        }
+    )
+    episode_without_podcast_audio = deserialize_episode(
+        {
+            "id": 3,
+            "pk": 3,
+            "uuid": "f05b2e72-9330-472e-9930-84475e912aaf",
+            "slug": "episode-without-audio-slug",
+            "title": "Episode without audio",
+            "visible_date": None,
+            "comments_enabled": True,
+            "body": "[]",
+            "keywords": "",
+            "explicit": 0,
+            "block": False,
+        }
+    )
+
+    assert isinstance(audio, Audio)
+    assert isinstance(transcript, Transcript)
+    assert isinstance(video, Video)
+    assert isinstance(image, Image)
+    assert isinstance(post, Post)
+    assert isinstance(episode, Episode)
+    assert isinstance(episode_without_podcast_audio, Episode)
+
+
+def test_serialize_deserialize_roundtrip_for_media_types():
+    audio = Audio(
+        id=1,
+        collection=None,
+        duration=None,
+        title="Some audio",
+        subtitle="Some subtitle",
+        data={},
+        m4a=StubFile("audio.m4a"),
+        mp3=StubFile("audio.mp3"),
+        oga=StubFile("audio.oga"),
+        opus=StubFile("audio.opus"),
+    )
+    audio_data = serialize_audio(audio)
+    assert serialize_audio(deserialize_audio(audio_data)) == audio_data
+
+    class Podlove:
+        name = "podlove.json"
+
+    class TranscriptFile:
+        name = "transcript.vtt"
+
+    class TranscriptStub:
+        pk = 1
+        audio_id = 1
+        podlove = Podlove()
+        vtt = TranscriptFile()
+        dote = TranscriptFile()
+        collection_id = None
+
+    transcript_data = serialize_transcript(TranscriptStub())
+    assert serialize_transcript(deserialize_transcript(transcript_data)) == transcript_data
+
+    video = Video(
+        id=1,
+        collection=None,
+        title="Some video",
+        original=StubFile("video.mp4"),
+        poster=StubFile("poster.jpg"),
+        poster_seconds=1,
+    )
+    video_data = serialize_video(video)
+    assert serialize_video(deserialize_video(video_data)) == video_data
+
+    image = Image(id=1, title="Some image", collection=None, file=StubFile("image.jpg"), width=100, height=200)
+    image_data = serialize_image(image)
+    assert serialize_image(deserialize_image(image_data)) == image_data
+
+
+@pytest.mark.django_db
+def test_serialize_deserialize_roundtrip_for_post_types(post, episode):
+    post_data = serialize_post(post)
+    assert serialize_post(deserialize_post(post_data)) == post_data
+
+    episode_data = serialize_episode(episode)
+    assert serialize_episode(deserialize_episode(episode_data)) == episode_data
 
 
 @pytest.mark.django_db

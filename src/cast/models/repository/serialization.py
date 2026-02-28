@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from cast.models import Blog
 
 
-def audio_to_dict(audio) -> dict:
+def serialize_audio(audio) -> dict:
     """Serialize an Audio model instance to a plain dict for caching."""
     data = {
         "id": audio.pk,
@@ -29,7 +29,14 @@ def audio_to_dict(audio) -> dict:
     return data
 
 
-def transcript_to_dict(transcript) -> dict:
+def deserialize_audio(data: dict[str, Any]):
+    """Reconstruct an Audio model instance from a serialized dict."""
+    from .. import Audio
+
+    return Audio(**data)
+
+
+def serialize_transcript(transcript) -> dict:
     """Serialize a Transcript model instance to a plain dict for caching."""
     data = {
         "id": transcript.pk,
@@ -45,7 +52,14 @@ def transcript_to_dict(transcript) -> dict:
     return data
 
 
-def video_to_dict(video) -> dict:
+def deserialize_transcript(data: dict[str, Any]):
+    """Reconstruct a Transcript model instance from a serialized dict."""
+    from .. import Transcript
+
+    return Transcript(**data)
+
+
+def serialize_video(video) -> dict:
     """Serialize a Video model instance to a plain dict for caching."""
     data = {
         "id": video.pk,
@@ -61,7 +75,14 @@ def video_to_dict(video) -> dict:
     return data
 
 
-def blog_to_dict(blog):
+def deserialize_video(data: dict[str, Any]):
+    """Reconstruct a Video model instance from a serialized dict."""
+    from .. import Video
+
+    return Video(**data)
+
+
+def serialize_blog(blog):
     """Serialize a Blog (or Podcast) model instance to a plain dict for caching."""
     data = {
         "id": blog.pk,
@@ -95,7 +116,7 @@ def blog_to_dict(blog):
     return data
 
 
-def blog_from_data(data: dict[str, Any]) -> "Blog":
+def deserialize_blog(data: dict[str, Any]) -> "Blog":
     """Reconstruct a Blog or Podcast instance from a serialized dict."""
     from .. import Blog, Podcast
     from ..itunes import ItunesArtWork
@@ -113,7 +134,7 @@ def blog_from_data(data: dict[str, Any]) -> "Blog":
     return blog
 
 
-def post_to_dict(post):
+def serialize_post(post):
     """Serialize a Post instance to a plain dict for caching."""
     return {
         "id": post.pk,
@@ -127,7 +148,14 @@ def post_to_dict(post):
     }
 
 
-def episode_to_dict(post):
+def deserialize_post(data: dict[str, Any]):
+    """Reconstruct a Post instance from a serialized dict."""
+    from .. import Post
+
+    return Post(**data)
+
+
+def serialize_episode(post):
     """Serialize an Episode instance (post with podcast audio) to a plain dict."""
     return {
         "id": post.pk,
@@ -138,14 +166,24 @@ def episode_to_dict(post):
         "visible_date": post.visible_date,
         "comments_enabled": post.comments_enabled,
         "body": json.dumps(list(post.body.raw_data)),
-        "podcast_audio": audio_to_dict(post.podcast_audio),
+        "podcast_audio": serialize_audio(post.podcast_audio),
         "keywords": post.keywords,
         "explicit": post.explicit,
         "block": post.block,
     }
 
 
-def image_to_dict(image):
+def deserialize_episode(data: dict[str, Any]):
+    """Reconstruct an Episode instance from a serialized dict."""
+    from .. import Episode
+
+    episode_data = data.copy()
+    if "podcast_audio" in episode_data:
+        episode_data["podcast_audio"] = deserialize_audio(episode_data["podcast_audio"])
+    return Episode(**episode_data)
+
+
+def serialize_image(image):
     """Serialize a Wagtail Image instance to a plain dict for caching."""
     data = {
         "pk": image.pk,
@@ -159,6 +197,13 @@ def image_to_dict(image):
     else:
         data["collection"] = None
     return data
+
+
+def deserialize_image(data: dict[str, Any]):
+    """Reconstruct an Image instance from a serialized dict."""
+    from wagtail.images.models import Image
+
+    return Image(**data)
 
 
 def rendition_to_dict(rendition):
@@ -185,3 +230,43 @@ def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPos
     return {
         post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
     }
+
+
+def audio_to_dict(audio) -> dict:
+    """Backward-compatible alias for ``serialize_audio``."""
+    return serialize_audio(audio)
+
+
+def transcript_to_dict(transcript) -> dict:
+    """Backward-compatible alias for ``serialize_transcript``."""
+    return serialize_transcript(transcript)
+
+
+def video_to_dict(video) -> dict:
+    """Backward-compatible alias for ``serialize_video``."""
+    return serialize_video(video)
+
+
+def blog_to_dict(blog):
+    """Backward-compatible alias for ``serialize_blog``."""
+    return serialize_blog(blog)
+
+
+def blog_from_data(data: dict[str, Any]) -> "Blog":
+    """Backward-compatible alias for ``deserialize_blog``."""
+    return deserialize_blog(data)
+
+
+def post_to_dict(post):
+    """Backward-compatible alias for ``serialize_post``."""
+    return serialize_post(post)
+
+
+def episode_to_dict(post):
+    """Backward-compatible alias for ``serialize_episode``."""
+    return serialize_episode(post)
+
+
+def image_to_dict(image):
+    """Backward-compatible alias for ``serialize_image``."""
+    return serialize_image(image)

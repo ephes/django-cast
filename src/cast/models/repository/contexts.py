@@ -9,7 +9,16 @@ from wagtail.models import Site
 from ...filters import PostFilterset
 from ...views import HtmxHttpRequest
 from .builders import _blog_url_from_referer, apply_cover_fallback, data_for_blog_cachable
-from .serialization import blog_from_data, deserialize_renditions
+from .serialization import (
+    deserialize_audio,
+    deserialize_blog,
+    deserialize_episode,
+    deserialize_image,
+    deserialize_post,
+    deserialize_renditions,
+    deserialize_transcript,
+    deserialize_video,
+)
 from .snapshot import PostQuerySnapshot, cache_page_url
 from .types import AudioById, ImageById, LinkTuples, RenditionsForPost, VideoById
 
@@ -230,10 +239,10 @@ class FeedContext:
         """
         from wagtail.images.models import Image
 
-        from .. import Audio, Episode, Post, Transcript, Video
+        from .. import Audio, Video
 
         site = Site(**data["site"])
-        blog = blog_from_data(data["blog"])
+        blog = deserialize_blog(data["blog"])
         if (last_build_date := data.get("last_build_date")) is not None:
             blog._last_build_date = last_build_date
         template_base_dir = data["template_base_dir"]
@@ -241,22 +250,20 @@ class FeedContext:
         podcast_fields = ["podcast_audio", "block", "keywords", "explicit"]
         for post_pk, post_data in data["post_by_id"].items():
             is_podcast = any(field in post_data for field in podcast_fields)
-            if "podcast_audio" in post_data:
-                post_data["podcast_audio"] = Audio(**post_data["podcast_audio"])
             if is_podcast:
-                post_by_id[post_pk] = Episode(**post_data)
+                post_by_id[post_pk] = deserialize_episode(post_data)
             else:
-                post_by_id[post_pk] = Post(**post_data)
+                post_by_id[post_pk] = deserialize_post(post_data)
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
-        audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
-        images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
-        videos = {video_pk: Video(**video_data) for video_pk, video_data in data["videos"].items()}
+        audios = {audio_pk: deserialize_audio(audio_data) for audio_pk, audio_data in data["audios"].items()}
+        images = {image_pk: deserialize_image(image_data) for image_pk, image_data in data["images"].items()}
+        videos = {video_pk: deserialize_video(video_data) for video_pk, video_data in data["videos"].items()}
         podcast_audios = {
-            episode_pk: Audio(**audio_data)
+            episode_pk: deserialize_audio(audio_data)
             for episode_pk, audio_data in data.get("podcast_audio_by_episode_id", {}).items()
         }
         transcripts = {
-            audio_pk: Transcript(**transcript_data)
+            audio_pk: deserialize_transcript(transcript_data)
             for audio_pk, transcript_data in data.get("transcripts", {}).items()
         }
 
@@ -403,7 +410,7 @@ class BlogIndexContext:
         """
         from wagtail.images.models import Image
 
-        from .. import Audio, Episode, Post, Video
+        from .. import Audio, Video
 
         # site = Site(**data["site"])
         template_base_dir = data["template_base_dir"]
@@ -413,16 +420,15 @@ class BlogIndexContext:
         blog_cover_alt_text = data.get("blog_cover_alt_text", "")
         for post_pk, post_data in data["post_by_id"].items():
             if "podcast_audio" in post_data:
-                post_data["podcast_audio"] = Audio(**post_data["podcast_audio"])
-                post_by_id[post_pk] = Episode(**post_data)
+                post_by_id[post_pk] = deserialize_episode(post_data)
             else:
-                post_by_id[post_pk] = Post(**post_data)
+                post_by_id[post_pk] = deserialize_post(post_data)
         post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
         pagination_context = data["pagination_context"]
         pagination_context["object_list"] = post_queryset
-        audios = {audio_pk: Audio(**audio_data) for audio_pk, audio_data in data["audios"].items()}
-        images = {image_pk: Image(**image_data) for image_pk, image_data in data["images"].items()}
-        videos = {video_pk: Video(**video_data) for video_pk, video_data in data["videos"].items()}
+        audios = {audio_pk: deserialize_audio(audio_data) for audio_pk, audio_data in data["audios"].items()}
+        images = {image_pk: deserialize_image(image_data) for image_pk, image_data in data["images"].items()}
+        videos = {video_pk: deserialize_video(video_data) for video_pk, video_data in data["videos"].items()}
 
         renditions_for_posts = deserialize_renditions(data["renditions_for_posts"])
 
@@ -477,7 +483,7 @@ class BlogIndexContext:
         filterset.filters["tag_facets"].set_field_choices(data["filterset"]["tag_facets_choices"])
         delattr(filterset, "_form")
 
-        blog = blog_from_data(data["blog"])
+        blog = deserialize_blog(data["blog"])
         if (last_build_date := data.get("last_build_date")) is not None:
             blog._last_build_date = last_build_date
 
