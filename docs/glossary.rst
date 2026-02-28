@@ -46,6 +46,6 @@ Glossary
       batch-load all data needed to render a page in minimal queries.
       Repository classes such as ``QuerysetData``, ``PostDetailRepository``,
       ``BlogIndexRepository``, and ``FeedRepository`` (in
-      ``src/cast/models/repository.py``) pre-fetch images, renditions, audio,
+      ``src/cast/models/repository/``) pre-fetch images, renditions, audio,
       video, and metadata, then expose them as dictionaries that the template
       layer and StreamField blocks can look up by primary key.
