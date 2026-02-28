@@ -25,7 +25,7 @@ from cast.models.itunes import ItunesArtWork
 
 from ..views import HtmxHttpRequest
 from .pages import Post
-from .repository import BlogIndexRepository
+from .repository import BlogIndexContext
 from .theme import get_template_base_dir, get_template_base_dir_choices
 
 logger = logging.getLogger(__name__)
@@ -283,7 +283,7 @@ class Blog(Page):
         return context
 
     @staticmethod
-    def get_context_from_repository(context: ContextDict, repository: BlogIndexRepository) -> ContextDict:
+    def get_context_from_repository(context: ContextDict, repository: BlogIndexContext) -> ContextDict:
         context |= repository.pagination_context  # includes object_list
         context["filterset"] = repository.filterset
         context["template_base_dir"] = repository.template_base_dir
@@ -312,15 +312,15 @@ class Blog(Page):
         context["has_active_filters"] = has_active_filters(context["filterset"], request)
         return context
 
-    def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexRepository:
+    def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexContext:
         if "repository" in kwargs:
             return kwargs["repository"]
         if appsettings.CAST_REPOSITORY == "default":
-            data = BlogIndexRepository.data_for_blog_index_cachable(request=request, blog=self)
-            return BlogIndexRepository.create_from_cachable_data(data=data)
+            data = BlogIndexContext.data_for_blog_index_cachable(request=request, blog=self)
+            return BlogIndexContext.create_from_cachable_data(data=data)
         else:
             # fetch data using Django models as a fall back
-            return BlogIndexRepository.create_from_django_models(request=request, blog=self)
+            return BlogIndexContext.create_from_django_models(request=request, blog=self)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs) -> TemplateResponse:
         kwargs["repository"] = repository = self.get_repository(request, kwargs)

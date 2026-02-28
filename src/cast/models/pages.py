@@ -50,10 +50,10 @@ from ..views import HtmxHttpRequest
 from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
 from .repository import (
     AudioById,
-    EpisodeFeedRepository,
+    EpisodeFeedContext,
     ImageById,
     LinkTuples,
-    PostDetailRepository,
+    PostDetailContext,
     VideoById,
 )
 from .theme import TemplateBaseDirectory
@@ -609,7 +609,7 @@ class Post(Page):
         render_for_feed: bool = True,
         escape_html: bool = True,
         remove_newlines: bool = True,
-        repository: PostDetailRepository | None = None,
+        repository: PostDetailContext | None = None,
     ) -> SafeText:
         """
         Get a description for the feed or twitter player card. Needs to be
@@ -637,11 +637,11 @@ class Post(Page):
             return self._repository.site
         return super().get_site()
 
-    def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> PostDetailRepository:
+    def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> PostDetailContext:
         repository = kwargs.get("repository")
         if repository is not None:
             return repository
-        return PostDetailRepository.create_from_django_models(request=request, post=self)
+        return PostDetailContext.create_from_django_models(request=request, post=self)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs):
         kwargs["repository"] = repository = self.get_repository(request, kwargs)
@@ -811,7 +811,7 @@ class Episode(Post):
 
         return cast(Audio, self.podcast_audio).get_file_size(audio_format)
 
-    def get_transcript_or_none(self, repository: EpisodeFeedRepository | None = None) -> Optional["Transcript"]:
+    def get_transcript_or_none(self, repository: EpisodeFeedContext | None = None) -> Optional["Transcript"]:
         if repository is not None:
             podcast_audio, transcript = repository.podcast_audio, repository.transcript
         else:
@@ -833,7 +833,7 @@ class Episode(Post):
     def get_transcript_url(self) -> str:
         return reverse("cast:episode-transcript", kwargs={"blog_slug": self.blog.slug, "episode_slug": self.slug})
 
-    def get_vtt_transcript_url(self, request: HtmxHttpRequest, repository: EpisodeFeedRepository | None) -> str | None:
+    def get_vtt_transcript_url(self, request: HtmxHttpRequest, repository: EpisodeFeedContext | None) -> str | None:
         if (transcript := self.get_transcript_or_none(repository)) is not None:
             if transcript.vtt is not None:
                 relative_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
@@ -857,9 +857,7 @@ class Episode(Post):
         players.append((element_id, podcast_audio.get_podlove_url(self.pk)))
         return players
 
-    def get_podcastindex_transcript_url(
-        self, request: HtmxHttpRequest, repository: EpisodeFeedRepository
-    ) -> str | None:
+    def get_podcastindex_transcript_url(self, request: HtmxHttpRequest, repository: EpisodeFeedContext) -> str | None:
         if (transcript := self.get_transcript_or_none(repository)) is not None:
             if transcript.dote is not None:
                 relative_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.pk})

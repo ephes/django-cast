@@ -25,9 +25,15 @@ from cast.filters import PostFilterset
 from cast.models import Audio, Blog, Podcast, Post, Video
 from cast.models.image_renditions import create_missing_renditions_for_posts
 from cast.models.repository import (
+    BlogIndexContext,
     BlogIndexRepository,
+    EpisodeFeedContext,
+    EpisodeFeedRepository,
+    FeedContext,
     FeedRepository,
+    PostDetailContext,
     PostDetailRepository,
+    PostQuerySnapshot,
     QuerysetData,
     _blog_url_from_referer,
     add_site_raw,
@@ -59,6 +65,14 @@ def show_queries(queries):
 def blocker(*_args):
     """Get a traceback when a query is executed."""
     raise Exception("No database access allowed here.")
+
+
+def test_repository_aliases_are_backwards_compatible():
+    assert QuerysetData is PostQuerySnapshot
+    assert PostDetailRepository is PostDetailContext
+    assert BlogIndexRepository is BlogIndexContext
+    assert FeedRepository is FeedContext
+    assert EpisodeFeedRepository is EpisodeFeedContext
 
 
 @pytest.fixture(autouse=True)

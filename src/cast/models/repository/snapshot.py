@@ -33,7 +33,7 @@ def cache_page_url(post_id: int, url: str) -> None:
     PageLinkHandlerWithCache.cache_url(post_id, url)
 
 
-class QuerysetData:
+class PostQuerySnapshot:
     """Container for pre-fetched data derived from a post queryset.
 
     Aggregates all media objects, renditions, page URLs, owner usernames,
@@ -87,8 +87,8 @@ class QuerysetData:
     @classmethod
     def create_from_post_queryset(
         cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"], is_podcast: bool = False
-    ) -> "QuerysetData":
-        """Build a ``QuerysetData`` instance from a post queryset.
+    ) -> "PostQuerySnapshot":
+        """Build a ``PostQuerySnapshot`` instance from a post queryset.
 
         Apply ``select_related`` and ``prefetch_related`` to minimize
         database round-trips, then iterate the queryset to populate the
@@ -171,3 +171,7 @@ class QuerysetData:
             cover_by_post_id=cover_by_post_id,
             cover_alt_by_post_id=cover_alt_by_post_id,
         )
+
+
+# Backward compatibility alias for the pre-Phase-2 public name.
+QuerysetData = PostQuerySnapshot

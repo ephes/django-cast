@@ -1,2 +1,9 @@
 0.2.54 (unreleased)
 -------------------
+
+- Added canonical repository class names:
+  ``PostQuerySnapshot``, ``PostDetailContext``, ``BlogIndexContext``,
+  ``FeedContext``, and ``EpisodeFeedContext``.
+- Kept backward compatibility aliases for existing names:
+  ``QuerysetData``, ``PostDetailRepository``, ``BlogIndexRepository``,
+  ``FeedRepository``, and ``EpisodeFeedRepository``.

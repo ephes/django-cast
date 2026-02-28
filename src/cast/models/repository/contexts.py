@@ -10,20 +10,20 @@ from ...filters import PostFilterset
 from ...views import HtmxHttpRequest
 from .builders import _blog_url_from_referer, apply_cover_fallback, data_for_blog_cachable
 from .serialization import blog_from_data, deserialize_renditions
-from .snapshot import QuerysetData, cache_page_url
+from .snapshot import PostQuerySnapshot, cache_page_url
 from .types import AudioById, ImageById, LinkTuples, RenditionsForPost, VideoById
 
 if TYPE_CHECKING:
     from cast.models import Audio, Blog, Episode, Post, Transcript, Video
 
 
-class PostDetailRepository:
+class PostDetailContext:
     """Container for data needed to render a single post detail page.
 
     Holds template directory, navigation links, comment settings, media
     lookups, renditions, and cover image data. Created either from live
     Django models (``create_from_django_models``) or derived from a
-    ``FeedRepository`` via ``get_post_detail_repository``.
+    ``FeedContext`` via ``get_post_detail_repository``.
     """
 
     def __init__(
@@ -66,8 +66,8 @@ class PostDetailRepository:
         cache_page_url(post_id, page_url)
 
     @classmethod
-    def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailRepository":
-        """Build a ``PostDetailRepository`` from a live post and the current request."""
+    def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailContext":
+        """Build a ``PostDetailContext`` from a live post and the current request."""
         blog = post.blog
         owner_username = "unknown"
         if post.owner is not None:
@@ -98,7 +98,7 @@ class PostDetailRepository:
         )
 
 
-class EpisodeFeedRepository:
+class EpisodeFeedContext:
     """Container for per-episode data in a podcast RSS feed.
 
     Holds the podcast audio file and its optional transcript, used when
@@ -115,12 +115,12 @@ class EpisodeFeedRepository:
         self.transcript = transcript
 
 
-class FeedRepository:
+class FeedContext:
     """Container for data needed to render an RSS or Atom feed.
 
     Holds the blog, site, queryset data, and navigation links. Provides
-    helpers to derive a ``PostDetailRepository`` or
-    ``EpisodeFeedRepository`` for individual items in the feed.
+    helpers to derive a ``PostDetailContext`` or
+    ``EpisodeFeedContext`` for individual items in the feed.
 
     Can be constructed from live Django models
     (``create_from_django_models``) or from a previously serialized
@@ -134,7 +134,7 @@ class FeedRepository:
         site: Site,
         blog: "Blog",
         blog_url: str,
-        queryset_data: QuerysetData,
+        queryset_data: PostQuerySnapshot,
         root_nav_links: LinkTuples,
         used: bool = False,
     ):
@@ -169,10 +169,10 @@ class FeedRepository:
         blog: "Blog",
         template_base_dir: str = "bootstrap4",
         post_queryset: QuerySet["Post"],
-    ) -> "FeedRepository":
-        """Build a ``FeedRepository`` from live Django models and a post queryset."""
+    ) -> "FeedContext":
+        """Build a ``FeedContext`` from live Django models and a post queryset."""
         site = Site.find_for_request(request)
-        queryset_data = QuerysetData.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
+        queryset_data = PostQuerySnapshot.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
         root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
         for post in queryset_data.queryset:
             media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
@@ -224,7 +224,7 @@ class FeedRepository:
         cls,
         *,
         data: dict[str, Any],
-    ) -> "FeedRepository":
+    ) -> "FeedContext":
         """
         This method recreates usable models from the cachable data.
         """
@@ -275,7 +275,7 @@ class FeedRepository:
             post.owner = user_model(username=data["owner_username_by_id"][post.pk])
             post.page_url = data["page_url_by_id"][post.pk]
 
-        queryset_data = QuerysetData(
+        queryset_data = PostQuerySnapshot(
             post_queryset=post_queryset,
             post_by_id=post_by_id,
             audios=audios,
@@ -306,11 +306,11 @@ class FeedRepository:
             }
         )
 
-    def get_post_detail_repository(self, post: "Post") -> PostDetailRepository:
-        """Derive a ``PostDetailRepository`` for a single post from this feed's data."""
+    def get_post_detail_repository(self, post: "Post") -> PostDetailContext:
+        """Derive a ``PostDetailContext`` for a single post from this feed's data."""
         post_id = post.id
         blog = self.blog
-        return PostDetailRepository(
+        return PostDetailContext(
             post_id=post_id,
             template_base_dir=self.template_base_dir,
             blog=blog,
@@ -329,18 +329,18 @@ class FeedRepository:
             cover_alt_text=self.queryset_data.cover_alt_by_post_id.get(post_id, ""),
         )
 
-    def get_episode_feed_detail_repository(self, episode: "Episode") -> EpisodeFeedRepository:
-        """Derive an ``EpisodeFeedRepository`` for a single episode from this feed's data."""
+    def get_episode_feed_detail_repository(self, episode: "Episode") -> EpisodeFeedContext:
+        """Derive an ``EpisodeFeedContext`` for a single episode from this feed's data."""
         episode_id = episode.id
         podcast_audio = self.queryset_data.podcast_audio_by_episode_id[episode_id]
         transcript = self.queryset_data.transcript_by_audio_id.get(podcast_audio.id, None)
-        return EpisodeFeedRepository(
+        return EpisodeFeedContext(
             podcast_audio=podcast_audio,
             transcript=transcript,
         )
 
 
-class BlogIndexRepository:
+class BlogIndexContext:
     """Container for data needed to render a paginated blog index page.
 
     Holds the blog, filterset (date/category/tag facets), pagination
@@ -355,7 +355,7 @@ class BlogIndexRepository:
         template_base_dir: str,
         blog: "Blog",
         filterset: Any,
-        queryset_data: QuerysetData,
+        queryset_data: PostQuerySnapshot,
         pagination_context: dict[str, Any],
         root_nav_links: LinkTuples,
         use_audio_player: bool = False,
@@ -397,7 +397,7 @@ class BlogIndexRepository:
         cls,
         *,
         data: dict[str, Any],
-    ) -> "BlogIndexRepository":
+    ) -> "BlogIndexContext":
         """
         This method recreates usable models from the cachable data.
         """
@@ -450,7 +450,7 @@ class BlogIndexRepository:
             if data["has_audio_by_id"][post.pk]:
                 use_audio_player = True
 
-        queryset_data = QuerysetData(
+        queryset_data = PostQuerySnapshot(
             post_queryset=post_queryset,
             post_by_id=post_by_id,
             audios=audios,
@@ -495,8 +495,8 @@ class BlogIndexRepository:
         )
 
     @classmethod
-    def create_from_django_models(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexRepository":
-        """Build a ``BlogIndexRepository`` from a blog and the current request."""
+    def create_from_django_models(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexContext":
+        """Build a ``BlogIndexContext`` from a blog and the current request."""
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
         pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
@@ -524,7 +524,7 @@ class BlogIndexRepository:
         if site is not None:
             for page in site.root_page.get_children().live():
                 root_nav_links.append((page.get_url(request), page.title))
-        queryset_data = QuerysetData.create_from_post_queryset(
+        queryset_data = PostQuerySnapshot.create_from_post_queryset(
             request=request, site=site, queryset=pagination_context["object_list"]
         )
         return cls(
@@ -536,3 +536,10 @@ class BlogIndexRepository:
             root_nav_links=root_nav_links,
             queryset_data=queryset_data,
         )
+
+
+# Backward compatibility aliases for pre-Phase-2 public names.
+PostDetailRepository = PostDetailContext
+BlogIndexRepository = BlogIndexContext
+FeedRepository = FeedContext
+EpisodeFeedRepository = EpisodeFeedContext

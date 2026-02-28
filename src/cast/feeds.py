@@ -20,7 +20,7 @@ from wagtail.images.models import Image
 from cast import appsettings
 
 from .models import Audio, Blog, Podcast, Post
-from .models.repository import FeedRepository
+from .models.repository import FeedContext
 from .views import HtmxHttpRequest
 
 if django.VERSION >= (5, 2):
@@ -37,11 +37,11 @@ class RepositoryMixin:
     is_podcast: bool = False
     request: HtmxHttpRequest
 
-    def __init__(self, repository: FeedRepository | None = None) -> None:
+    def __init__(self, repository: FeedContext | None = None) -> None:
         super().__init__()
         self.repository = repository
 
-    def get_repository(self, request: HtmxHttpRequest, blog: Blog) -> FeedRepository:
+    def get_repository(self, request: HtmxHttpRequest, blog: Blog) -> FeedContext:
         if self.repository is not None:
             if not self.repository.used:
                 # don't use the same repository twice
@@ -49,10 +49,8 @@ class RepositoryMixin:
         # create new repository
         if appsettings.CAST_REPOSITORY == "default":
             # default repository from cachable data
-            cachable_data = FeedRepository.data_for_feed_cachable(
-                request=request, blog=blog, is_podcast=self.is_podcast
-            )
-            return FeedRepository.create_from_cachable_data(data=cachable_data)
+            cachable_data = FeedContext.data_for_feed_cachable(request=request, blog=blog, is_podcast=self.is_podcast)
+            return FeedContext.create_from_cachable_data(data=cachable_data)
         else:
             # create repository from django models
             blog.refresh_from_db()  # FIXME this is stale sometimes
@@ -68,7 +66,7 @@ class RepositoryMixin:
                 )
             else:
                 post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
-            return FeedRepository.create_from_django_models(
+            return FeedContext.create_from_django_models(
                 request=request,
                 blog=blog,
                 post_queryset=post_queryset,
@@ -269,7 +267,7 @@ class ITunesElements:
 class PodcastIndexElements:
     feed: dict
     request: HttpRequest
-    repository: FeedRepository
+    repository: FeedContext
 
     def add_item_elements(self, handler, item) -> None:
         """Add additional elements to the post object"""

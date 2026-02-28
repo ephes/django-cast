@@ -59,7 +59,7 @@ from cast.models.image_renditions import (
     create_missing_renditions_for_posts,
     get_obsolete_and_missing_rendition_strings,
 )
-from cast.models.repository import BlogIndexRepository
+from cast.models.repository import BlogIndexContext
 from .htmx_helpers import HtmxHttpRequest
 
 STYLEGUIDE_BLOG_SLUG = "styleguide-blog"
@@ -142,14 +142,14 @@ class StyleguideData:
         self,
         *,
         blog: Blog,
-        blog_repository: BlogIndexRepository,
+        blog_repository: BlogIndexContext,
         media: StyleguideMedia,
         galleries: list[Gallery],
         gallery_blocks: list[str] | None,
         posts: list[Post],
         podcast: Podcast,
         episode: Episode,
-        podcast_repository: BlogIndexRepository,
+        podcast_repository: BlogIndexContext,
         transcript: dict[str, Any],
         video_url: str | None = None,
         video_poster_url: str | None = None,
@@ -274,7 +274,7 @@ def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
     include_video_in_body = False
     posts = _ensure_posts(blog, user, media, galleries, include_video_in_body=include_video_in_body)
     _ensure_styleguide_tags_and_categories(posts)
-    blog_repository = BlogIndexRepository.create_from_django_models(request, blog)
+    blog_repository = BlogIndexContext.create_from_django_models(request, blog)
 
     podcast = _ensure_podcast(site, user)
     episode, transcript = _ensure_episode(
@@ -286,7 +286,7 @@ def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
         include_video_in_body=include_video_in_body,
     )
     _ensure_podlove_transcript(media.audio, transcript)
-    podcast_repository = BlogIndexRepository.create_from_django_models(request, podcast)
+    podcast_repository = BlogIndexContext.create_from_django_models(request, podcast)
     if posts:
         for post in posts:
             _ensure_styleguide_comments(post, site=site, user=user)
@@ -718,7 +718,7 @@ def _ensure_podlove_transcript(audio: Audio, data: dict[str, Any]) -> Transcript
 def _render_gallery_block(
     *,
     images: list[Image],
-    repository: BlogIndexRepository,
+    repository: BlogIndexContext,
     template_base_dir: str,
     ensure_renditions: bool | None = None,
 ) -> str:
@@ -849,7 +849,7 @@ def _ensure_styleguide_comments(post: Post, *, site: Site, user: User) -> None:
 
 
 def _styleguide_gallery_repository(
-    repository: BlogIndexRepository, images: list[Image], *, ensure_renditions: bool
+    repository: BlogIndexContext, images: list[Image], *, ensure_renditions: bool
 ) -> SimpleNamespace:
     if ensure_renditions:
         images_with_type = cast(Any, iter([("gallery", image) for image in images]))
@@ -866,7 +866,7 @@ def _styleguide_gallery_repository(
 
 def _ensure_styleguide_gallery_blocks(
     galleries: list[Gallery],
-    repository: BlogIndexRepository,
+    repository: BlogIndexContext,
     template_base_dir: str,
     limit: int | None = None,
 ) -> list[str]:

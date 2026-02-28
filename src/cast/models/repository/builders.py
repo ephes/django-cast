@@ -18,7 +18,7 @@ from .serialization import (
     transcript_to_dict,
     video_to_dict,
 )
-from .snapshot import QuerysetData
+from .snapshot import PostQuerySnapshot
 from .types import Choice, HasChoices, PageUrlByID
 
 if TYPE_CHECKING:
@@ -107,8 +107,8 @@ def add_root_nav_links(data: dict[str, Any]) -> dict:
     return data
 
 
-def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict:
-    """Serialize a ``QuerysetData`` instance into the cachable data dict."""
+def add_queryset_data(data: dict[str, Any], queryset_data: PostQuerySnapshot) -> dict:
+    """Serialize a ``PostQuerySnapshot`` instance into the cachable data dict."""
     # posts
     from ..pages import Episode
 
@@ -195,7 +195,7 @@ def data_for_blog_cachable(
     if post_queryset is None:
         post_queryset = data["pagination_context"]["object_list"]
         del data["pagination_context"]["object_list"]  # not cachable
-    queryset_data = QuerysetData.create_from_post_queryset(
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
         request=request, site=Site(**data["site"]), queryset=post_queryset, is_podcast=blog.is_podcast
     )
     data = add_queryset_data(data, queryset_data)
