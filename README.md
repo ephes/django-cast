@@ -11,9 +11,7 @@
 A blogging/podcasting package based on [Django](https://www.djangoproject.com/)
 and [Wagtail](https://wagtail.org).
 
-After switching to Wagtail, the documentation has to be updated. Stay tuned 😄.
-
-**Documentation for [current version 0.2.54](https://django-cast.readthedocs.io/en/develop/)**
+**Documentation: [django-cast.readthedocs.io](https://django-cast.readthedocs.io/en/develop/)**
 
 ## Key Features
 - [Responsive images](https://django-cast.readthedocs.io/en/develop/features.html#responsive-images)
@@ -36,12 +34,8 @@ See [the deployment documentation](https://django-cast.readthedocs.io/en/develop
 
 ## Roadmap
 
-Although switching to Wagtail was a big step, there is still a lot to do. Things that are on the roadmap:
-
-- Improve the documentation
 - Design improvements for the default theme
 - Collaborators for podcast episodes
-- Transcripts for podcast episodes
 
 ## Contributing
 

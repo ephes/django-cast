@@ -75,5 +75,6 @@ package for `Django <https://www.djangoproject.com/>`_ based on `Wagtail <https:
    :maxdepth: 1
    :caption: About
 
+   glossary
    authors
    releases/index
