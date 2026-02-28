@@ -17,8 +17,9 @@ from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
 from django.urls import reverse
 from wagtail.images.models import Image, Rendition
+from wagtail.models import Site as WagtailSite
 
-from cast.devdata import create_post, create_python_body, generate_blog_with_media
+from cast.devdata import create_post, create_python_body, create_transcript, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed, RssPodcastFeed
 from cast.filters import PostFilterset
 from cast.models import Audio, Blog, Podcast, Post, Video
@@ -29,6 +30,7 @@ from cast.models.repository import (
     PostDetailRepository,
     QuerysetData,
     _blog_url_from_referer,
+    add_site_raw,
     apply_cover_fallback,
     audio_to_dict,
     blog_from_data,
@@ -867,6 +869,39 @@ def test_data_for_blog_cachable_includes_blog_cover_image(rf, blog, image):
     assert data["blog_cover_alt_text"] == blog.cover_alt_text
 
 
+@pytest.mark.django_db
+def test_data_for_blog_cachable_uses_request_site(rf, blog):
+    other_site = WagtailSite.objects.create(
+        hostname="example.com",
+        port=80,
+        root_page=blog.get_site().root_page,
+        is_default_site=False,
+    )
+    request = rf.get("/blog/", HTTP_HOST="example.com")
+    request.htmx = False
+    data = data_for_blog_cachable(
+        request=request,
+        blog=blog,
+        is_paginated=False,
+        post_queryset=blog.unfiltered_published_posts,
+    )
+    assert data["site"]["id"] == other_site.id
+
+
+def test_add_site_raw_uses_blog_site_if_request_has_no_site(rf, blog, mocker):
+    request = rf.get("/blog/", HTTP_HOST="no-such-host.local")
+    mocker.patch("cast.models.repository.Site.find_for_request", return_value=None)
+    data = add_site_raw({}, request=request, blog=blog)
+    assert data["site"]["id"] == blog.get_site().id
+
+
+@pytest.mark.django_db
+def test_add_site_raw_falls_back_to_sql_when_no_context():
+    data = add_site_raw({})
+    assert "site" in data
+    assert "id" in data["site"]
+
+
 def test_page_link_handler_expand_db_attributes_single():
     PageLinkHandlerWithCache.cache_url(1, "/foo-bar/")
     tag = PageLinkHandlerWithCache.expand_db_attributes({"id": 1})
@@ -922,6 +957,32 @@ def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_no
     repository = PostDetailRepository.create_from_django_models(request=request, post=post)
     assert repository.cover_image_url == ""
     assert repository.cover_alt_text == ""
+
+
+@pytest.mark.django_db
+def test_queryset_data_create_from_post_queryset_includes_transcripts(rf, episode):
+    transcript = create_transcript(audio=episode.podcast_audio)
+    request = rf.get("/foobar/")
+    queryset_data = QuerysetData.create_from_post_queryset(
+        request=request,
+        site=episode.podcast.get_site(),
+        queryset=Post.objects.live().descendant_of(episode.podcast),
+    )
+    podcast_audio = queryset_data.podcast_audio_by_episode_id[episode.id]
+    assert queryset_data.transcript_by_audio_id[podcast_audio.id].id == transcript.id
+
+
+@pytest.mark.django_db
+def test_queryset_data_create_from_post_queryset_handles_episode_without_podcast_audio(rf, episode):
+    episode.podcast_audio = None
+    episode.save()
+    request = rf.get("/foobar/")
+    queryset_data = QuerysetData.create_from_post_queryset(
+        request=request,
+        site=episode.podcast.get_site(),
+        queryset=Post.objects.live().descendant_of(episode.podcast),
+    )
+    assert episode.id not in queryset_data.podcast_audio_by_episode_id
 
 
 def test_transcript_to_dict_no_collection():

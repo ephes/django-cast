@@ -56,10 +56,22 @@ class RepositoryMixin:
         else:
             # create repository from django models
             blog.refresh_from_db()  # FIXME this is stale sometimes
+            if self.is_podcast:
+                from .models import Episode
+
+                post_queryset = (
+                    Episode.objects.live()
+                    .descendant_of(blog)
+                    .select_related("podcast_audio__transcript")
+                    .filter(podcast_audio__isnull=False)
+                    .order_by("-visible_date")
+                )
+            else:
+                post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
             return FeedRepository.create_from_django_models(
                 request=request,
                 blog=blog,
-                post_queryset=Post.objects.live().descendant_of(blog).order_by("-visible_date"),
+                post_queryset=post_queryset,
             )
 
     def items(self) -> QuerySet[Post]:

@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeAlias, cast
 from urllib.parse import urlparse
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import connection
 from django.db.models import QuerySet
 from django.http import HttpRequest
@@ -172,7 +173,8 @@ class QuerysetData:
         page_url_by_id: PageUrlByID = {}
         absolute_page_url_by_id: PageUrlByID = {}
         for post in queryset:
-            post_by_id[post.pk] = post.specific
+            specific_post = post.specific
+            post_by_id[post.pk] = specific_post
             owner_username_by_id[post.pk] = post.owner.username
             has_audio_by_id[post.pk] = post.has_audio
             page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
@@ -192,8 +194,14 @@ class QuerysetData:
             for audio in post.audios.all():
                 audios[audio.pk] = audio
                 audios_by_post_id.setdefault(post.pk, set()).add(audio.pk)
-            if hasattr(post, "podcast_audio"):
-                podcast_audio_by_episode_id[post.pk] = post.podcast_audio
+            if hasattr(specific_post, "podcast_audio"):
+                podcast_audio = specific_post.podcast_audio
+                if podcast_audio is not None:
+                    podcast_audio_by_episode_id[post.pk] = podcast_audio
+                    try:
+                        transcript_by_audio_id[podcast_audio.pk] = podcast_audio.transcript
+                    except (ObjectDoesNotExist, AttributeError):
+                        pass
 
         from .pages import Post
 
@@ -528,8 +536,25 @@ def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]
     return []
 
 
-def add_site_raw(data: dict[str, Any]) -> dict:
-    """Add the first Wagtail site as a raw dict via a direct SQL query."""
+def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, blog: "Blog" | None = None) -> dict:
+    """Add the relevant Wagtail site as a raw dict, preferably request-scoped."""
+    site = None
+    if request is not None:
+        site = Site.find_for_request(request)
+    if site is None and blog is not None:
+        site = blog.get_site()
+    if site is not None:
+        data["site"] = {
+            "id": site.id,
+            "hostname": site.hostname,
+            "port": site.port,
+            "site_name": site.site_name,
+            "root_page_id": site.root_page_id,
+            "is_default_site": site.is_default_site,
+        }
+        return data
+
+    # Fallback for contexts where request/blog site resolution is not available.
     site_statement = """
         select
             id,
@@ -578,9 +603,8 @@ def add_queryset_data(data: dict[str, Any], queryset_data: QuerysetData) -> dict
 
     # transcripts
     transcripts = {}
-    for episode_id, audio in queryset_data.podcast_audio_by_episode_id.items():
-        if hasattr(audio, "transcript"):
-            transcripts[audio.pk] = transcript_to_dict(audio.transcript)
+    for audio_pk, transcript in queryset_data.transcript_by_audio_id.items():
+        transcripts[audio_pk] = transcript_to_dict(transcript)
 
     # videos
     videos = {}
@@ -628,7 +652,7 @@ def data_for_blog_cachable(
         blog_cover_image_url = cast(Image, blog.cover_image).file.url
     data["blog_cover_image_url"] = blog_cover_image_url
     data["blog_cover_alt_text"] = blog.cover_alt_text
-    data = add_site_raw(data)
+    data = add_site_raw(data, request=request, blog=blog)
     data = add_root_nav_links(data)
     data["template_base_dir"] = blog.get_template_base_dir(request)
 

@@ -10,6 +10,7 @@ from django.urls import reverse
 import django
 
 from cast import appsettings
+from cast.devdata import create_transcript
 from cast.feeds import (
     AtomITunesFeedGenerator,
     AtomPodcastFeed,
@@ -210,6 +211,19 @@ class TestGeneratedFeeds:
         content = d.entries[0]["content"][0]["value"]
         assert "in_all" in content
         assert "only_in_detail" in content
+
+    def test_podcast_feed_from_django_models_includes_transcript(
+        self, client, episode, use_dummy_cache_backend, use_django_repository
+    ):
+        create_transcript(audio=episode.podcast_audio)
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+        r = client.get(feed_url)
+        assert r.status_code == 200
+        content = r.content.decode("utf-8")
+        assert "podcast:transcript" in content
 
 
 def test_itunes_elements_add_root_elements_index_error(mocker):
