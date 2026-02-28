@@ -61,7 +61,7 @@ def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]
     return []
 
 
-def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, blog: "Blog" | None = None) -> dict:
+def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, blog: "Blog | None" = None) -> dict:
     """Add the relevant Wagtail site as a raw dict, preferably request-scoped."""
     site = None
     if request is not None:
