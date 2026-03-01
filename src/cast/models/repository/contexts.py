@@ -6,8 +6,6 @@ from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
 
-from ...filters import PostFilterset
-from ...views import HtmxHttpRequest
 from .builders import _blog_url_from_referer, apply_cover_fallback, data_for_blog_cachable
 from .serialization import (
     deserialize_audio,
@@ -20,10 +18,11 @@ from .serialization import (
     deserialize_video,
 )
 from .snapshot import PostQuerySnapshot, cache_page_url
-from .types import AudioById, ImageById, LinkTuples, RenditionsForPost, VideoById
+from .types import AudioById, ImageById, LinkTuples, RenditionsForPosts, VideoById
 
 if TYPE_CHECKING:
     from cast.models import Audio, Blog, Episode, Post, Transcript, Video
+    from cast.views import HtmxHttpRequest
 
 
 class PostDetailContext:
@@ -53,7 +52,7 @@ class PostDetailContext:
         audio_by_id: AudioById,
         video_by_id: VideoById,
         image_by_id: ImageById,
-        renditions_for_posts: RenditionsForPost,
+        renditions_for_posts: RenditionsForPosts,
     ):
         self.post_id = post_id
         self.template_base_dir = template_base_dir
@@ -140,7 +139,7 @@ class FeedContext:
         self,
         *,  # no positional arguments
         template_base_dir: str = "bootstrap4",
-        site: Site,
+        site: Site | None,
         blog: "Blog",
         blog_url: str,
         queryset_data: PostQuerySnapshot,
@@ -156,7 +155,6 @@ class FeedContext:
         self.page_url_by_id = queryset_data.page_url_by_id
         self.absolute_page_url_by_id = queryset_data.absolute_page_url_by_id
         self.renditions_for_posts = queryset_data.renditions_for_posts
-        self.images = queryset_data.images
         self.image_by_id = queryset_data.images
         self.post_by_id = queryset_data.post_by_id
         self.owner_username_by_id = queryset_data.owner_username_by_id
@@ -182,7 +180,9 @@ class FeedContext:
         """Build a ``FeedContext`` from live Django models and a post queryset."""
         site = Site.find_for_request(request)
         queryset_data = PostQuerySnapshot.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
-        root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
+        root_nav_links: LinkTuples = []
+        if site is not None:
+            root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
         for post in queryset_data.queryset:
             media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
             for image_pk in queryset_data.images_by_post_id.get(post.pk, []):
@@ -205,7 +205,7 @@ class FeedContext:
     @staticmethod
     def data_for_feed_cachable(
         *,
-        request: HtmxHttpRequest,
+        request: HttpRequest,
         blog: "Blog",
         is_podcast: bool = False,
     ) -> dict:
@@ -303,19 +303,17 @@ class FeedContext:
         )
         root_nav_links = data["root_nav_links"]
         return cls(
-            **{
-                "site": site,
-                "blog": blog,
-                "blog_url": data["blog_url"],
-                "template_base_dir": template_base_dir,
-                "queryset_data": queryset_data,
-                "root_nav_links": root_nav_links,
-            }
+            site=site,
+            blog=blog,
+            blog_url=data["blog_url"],
+            template_base_dir=template_base_dir,
+            queryset_data=queryset_data,
+            root_nav_links=root_nav_links,
         )
 
     def get_post_detail_repository(self, post: "Post") -> PostDetailContext:
         """Derive a ``PostDetailContext`` for a single post from this feed's data."""
-        post_id = post.id
+        post_id = post.pk if post.pk is not None else post.id
         blog = self.blog
         return PostDetailContext(
             post_id=post_id,
@@ -330,7 +328,7 @@ class FeedContext:
             blog_url=self.blog_url,
             audio_by_id=self.audios,
             video_by_id=self.videos,
-            image_by_id=self.images,
+            image_by_id=self.image_by_id,
             renditions_for_posts=self.renditions_for_posts,
             cover_image_url=self.queryset_data.cover_by_post_id.get(post_id, ""),
             cover_alt_text=self.queryset_data.cover_alt_by_post_id.get(post_id, ""),
@@ -338,7 +336,7 @@ class FeedContext:
 
     def get_episode_feed_detail_repository(self, episode: "Episode") -> EpisodeFeedContext:
         """Derive an ``EpisodeFeedContext`` for a single episode from this feed's data."""
-        episode_id = episode.id
+        episode_id = episode.pk if episode.pk is not None else episode.id
         podcast_audio = self.queryset_data.podcast_audio_by_episode_id[episode_id]
         transcript = self.queryset_data.transcript_by_audio_id.get(podcast_audio.id, None)
         return EpisodeFeedContext(
@@ -376,7 +374,6 @@ class BlogIndexContext:
         # queryset data
         self.queryset_data = queryset_data
         self.renditions_for_posts = queryset_data.renditions_for_posts
-        self.images = queryset_data.images
         self.image_by_id = queryset_data.images
         self.post_by_id = queryset_data.post_by_id
         self.owner_username_by_id = queryset_data.owner_username_by_id
@@ -394,7 +391,7 @@ class BlogIndexContext:
     @staticmethod
     def data_for_blog_index_cachable(
         *,
-        request: HtmxHttpRequest,
+        request: HttpRequest,
         blog: "Blog",
     ) -> dict:
         return data_for_blog_cachable(request=request, blog=blog, is_paginated=True, post_queryset=None)
@@ -412,7 +409,6 @@ class BlogIndexContext:
 
         from .. import Audio, Video
 
-        # site = Site(**data["site"])
         template_base_dir = data["template_base_dir"]
 
         post_by_id = {}
@@ -477,6 +473,8 @@ class BlogIndexContext:
         )
         root_nav_links = data["root_nav_links"]
 
+        from ...filters import PostFilterset
+
         filterset = PostFilterset(data["filterset"]["get_params"])
         filterset.filters["date_facets"].set_field_choices(data["filterset"]["date_facets_choices"])
         filterset.filters["category_facets"].set_field_choices(data["filterset"]["category_facets_choices"])
@@ -488,20 +486,17 @@ class BlogIndexContext:
             blog._last_build_date = last_build_date
 
         return cls(
-            **{
-                # "site": site,
-                "blog": blog,
-                "template_base_dir": template_base_dir,
-                "filterset": filterset,
-                "pagination_context": pagination_context,
-                "queryset_data": queryset_data,
-                "root_nav_links": root_nav_links,
-                "use_audio_player": use_audio_player,
-            }
+            blog=blog,
+            template_base_dir=template_base_dir,
+            filterset=filterset,
+            pagination_context=pagination_context,
+            queryset_data=queryset_data,
+            root_nav_links=root_nav_links,
+            use_audio_player=use_audio_player,
         )
 
     @classmethod
-    def create_from_django_models(cls, request: HtmxHttpRequest, blog: "Blog") -> "BlogIndexContext":
+    def create_from_django_models(cls, request: HttpRequest, blog: "Blog") -> "BlogIndexContext":
         """Build a ``BlogIndexContext`` from a blog and the current request."""
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
@@ -524,7 +519,7 @@ class BlogIndexContext:
             post.cover_alt_text_display = cover_alt_text
             if post.has_audio:
                 use_audio_player = True
-        template_base_dir = blog.get_template_base_dir(request)
+        template_base_dir = blog.get_template_base_dir(cast("HtmxHttpRequest", request))
         root_nav_links = []
         site = blog.get_site()
         if site is not None:

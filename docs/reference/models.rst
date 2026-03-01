@@ -473,6 +473,16 @@ Specialized repository for RSS/podcast feed generation.
 - Efficient query patterns
 - Supports both blog and podcast feeds
 
+EpisodeFeedContext
+==================
+
+Per-episode context used while rendering podcast feed items.
+
+**Contains:**
+
+- Episode podcast audio object
+- Optional transcript object for ``podcast:transcript`` output
+
 *******************
 Model Relationships
 *******************

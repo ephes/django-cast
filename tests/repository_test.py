@@ -25,12 +25,13 @@ from cast.feeds import LatestEntriesFeed, RssPodcastFeed
 from cast.filters import PostFilterset
 from cast.models import Audio, Blog, Episode, Podcast, Post, Transcript, Video
 from cast.models.image_renditions import create_missing_renditions_for_posts
+from cast.models.repository.builders import _blog_url_from_referer
 from cast.models.repository import (
     BlogIndexContext,
     FeedContext,
     PostDetailContext,
     PostQuerySnapshot,
-    _blog_url_from_referer,
+    add_queryset_data,
     add_site_raw,
     apply_cover_fallback,
     deserialize_audio,
@@ -84,6 +85,7 @@ def test_repository_removed_legacy_exports_are_absent():
         "post_to_dict",
         "episode_to_dict",
         "transcript_to_dict",
+        "Site",
     ]
     for name in removed_names:
         assert not hasattr(repository_module, name)
@@ -395,6 +397,24 @@ def test_render_feed_with_django_models_repository(rf, post_in_blog):
     assert post.title in html
     # And the database should be hit
     assert len(connection.queries) == 0
+
+
+@pytest.mark.django_db
+def test_feed_context_create_from_django_models_handles_missing_request_site(rf, blog, mocker):
+    request = rf.get("/feed/", HTTP_HOST="no-such-host.local")
+    post_queryset = blog.unfiltered_published_posts.none()
+    mocker.patch("cast.models.repository.contexts.Site.find_for_request", return_value=None)
+    mocker.patch(
+        "cast.models.repository.contexts.PostQuerySnapshot.create_from_post_queryset",
+        return_value=queryset_data(post_queryset=[]),
+    )
+
+    repository = FeedContext.create_from_django_models(
+        request=request, blog=blog, post_queryset=post_queryset, template_base_dir="bootstrap4"
+    )
+
+    assert repository.site is None
+    assert repository.root_nav_links == []
 
 
 # Test render post detail, blog index and blog feed with cachable data
@@ -1137,9 +1157,21 @@ def test_data_for_blog_cachable_uses_request_site(rf, blog):
     assert data["site"]["id"] == other_site.id
 
 
+def test_add_queryset_data_includes_page_url_maps():
+    data = add_queryset_data(
+        {},
+        queryset_data(
+            page_url_by_id={1: "/post/"},
+            absolute_page_url_by_id={1: "https://example.com/post/"},
+        ),
+    )
+    assert data["page_url_by_id"] == {1: "/post/"}
+    assert data["absolute_page_url_by_id"] == {1: "https://example.com/post/"}
+
+
 def test_add_site_raw_uses_blog_site_if_request_has_no_site(rf, blog, mocker):
     request = rf.get("/blog/", HTTP_HOST="no-such-host.local")
-    mocker.patch("cast.models.repository.Site.find_for_request", return_value=None)
+    mocker.patch("cast.models.repository.builders.Site.find_for_request", return_value=None)
     data = add_site_raw({}, request=request, blog=blog)
     assert data["site"]["id"] == blog.get_site().id
 
@@ -1149,6 +1181,35 @@ def test_add_site_raw_falls_back_to_sql_when_no_context():
     data = add_site_raw({})
     assert "site" in data
     assert "id" in data["site"]
+
+
+def test_add_site_raw_handles_empty_site_table(mocker):
+    class EmptySiteCursor:
+        description = [
+            ("id",),
+            ("hostname",),
+            ("port",),
+            ("site_name",),
+            ("root_page_id",),
+            ("is_default_site",),
+        ]
+
+        def execute(self, *_args, **_kwargs):
+            return None
+
+        def fetchone(self):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    mocker.patch("cast.models.repository.builders.Site.find_for_request", return_value=None)
+    mocker.patch("cast.models.repository.builders.connection.cursor", return_value=EmptySiteCursor())
+    data = add_site_raw({})
+    assert "site" not in data
 
 
 def test_page_link_handler_expand_db_attributes_single():
@@ -1232,6 +1293,54 @@ def test_queryset_data_create_from_post_queryset_handles_episode_without_podcast
         queryset=Post.objects.live().descendant_of(episode.podcast),
     )
     assert episode.id not in queryset_data.podcast_audio_by_episode_id
+
+
+def test_queryset_data_create_from_post_queryset_raises_attribute_error_for_broken_transcript(rf, mocker):
+    class BrokenTranscriptAudio:
+        pk = 42
+
+        @property
+        def transcript(self):
+            raise AttributeError("broken transcript property")
+
+    class SpecificPost:
+        podcast_audio = BrokenTranscriptAudio()
+
+    class FakeManager:
+        @staticmethod
+        def all():
+            return []
+
+    class FakePost:
+        pk = 1
+        owner = type("Owner", (), {"username": "owner"})()
+        has_audio = True
+        full_url = "http://testserver/fake-post/"
+        cover_image = None
+        cover_alt_text = ""
+        specific = SpecificPost()
+        videos = FakeManager()
+        audios = FakeManager()
+
+        @staticmethod
+        def get_url(**_kwargs):
+            return "/fake-post/"
+
+        @staticmethod
+        def get_all_images():
+            return []
+
+    class FakeQuerySet(list):
+        def select_related(self, *_args):
+            return self
+
+        def prefetch_related(self, *_args):
+            return self
+
+    mocker.patch("cast.models.pages.Post.get_all_renditions_from_queryset", return_value={})
+    fake_queryset = FakeQuerySet([FakePost()])
+    with pytest.raises(AttributeError, match="broken transcript property"):
+        PostQuerySnapshot.create_from_post_queryset(request=rf.get("/"), site=None, queryset=fake_queryset)
 
 
 def test_serialize_transcript_no_collection():

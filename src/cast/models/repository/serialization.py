@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from wagtail.images.models import Rendition
 
-from .types import RenditionsForPost, SerializedRenditions
+from .types import RenditionsForPosts, SerializedRenditions
 
 if TYPE_CHECKING:
     from cast.models import Blog
@@ -217,7 +217,7 @@ def rendition_to_dict(rendition):
     }
 
 
-def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedRenditions:
+def serialize_renditions(renditions_for_posts: RenditionsForPosts) -> SerializedRenditions:
     """Convert rendition model instances to dicts keyed by post PK."""
     renditions = {}
     for post_pk, renditions_for_post in renditions_for_posts.items():
@@ -225,7 +225,7 @@ def serialize_renditions(renditions_for_posts: RenditionsForPost) -> SerializedR
     return renditions
 
 
-def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPost:
+def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPosts:
     """Reconstruct Rendition model instances from serialized dicts."""
     return {
         post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()

@@ -16,7 +16,7 @@ from .types import (
     ImagesByPostID,
     PageUrlByID,
     PostByID,
-    RenditionsForPost,
+    RenditionsForPosts,
     TranscriptByAudioId,
     VideoById,
     VideosByPostID,
@@ -60,7 +60,7 @@ class PostQuerySnapshot:
         images_by_post_id: ImagesByPostID,
         owner_username_by_id: dict[int, str],
         has_audio_by_id: HasAudioByID,
-        renditions_for_posts: RenditionsForPost,
+        renditions_for_posts: RenditionsForPosts,
         page_url_by_id: PageUrlByID,
         absolute_page_url_by_id: PageUrlByID,
         cover_by_post_id: CoverURLByPostID,
@@ -86,7 +86,7 @@ class PostQuerySnapshot:
 
     @classmethod
     def create_from_post_queryset(
-        cls, *, request: HttpRequest, site: Site, queryset: QuerySet["Post"], is_podcast: bool = False
+        cls, *, request: HttpRequest, site: Site | None, queryset: QuerySet["Post"]
     ) -> "PostQuerySnapshot":
         """Build a ``PostQuerySnapshot`` instance from a post queryset.
 
@@ -95,10 +95,7 @@ class PostQuerySnapshot:
         primary post and media lookup dicts. Renditions are collected
         separately via ``Post.get_all_renditions_from_queryset``.
         """
-        if False:
-            queryset = queryset.select_related("owner", "cover_image", "podcast_audio__transcript")
-        else:
-            queryset = queryset.select_related("owner", "cover_image")
+        queryset = queryset.select_related("owner", "cover_image")
         queryset = queryset.prefetch_related(
             "audios",
             "images",
@@ -132,7 +129,7 @@ class PostQuerySnapshot:
             cover_by_post_id[post.pk] = cover_image_url
             cover_alt_by_post_id[post.pk] = post.cover_alt_text
 
-            for image_type, image in post.get_all_images():
+            for _, image in post.get_all_images():
                 images[image.pk] = image
                 images_by_post_id.setdefault(post.pk, set()).add(image.pk)
             for video in post.videos.all():
@@ -147,7 +144,7 @@ class PostQuerySnapshot:
                     podcast_audio_by_episode_id[post.pk] = podcast_audio
                     try:
                         transcript_by_audio_id[podcast_audio.pk] = podcast_audio.transcript
-                    except (ObjectDoesNotExist, AttributeError):
+                    except ObjectDoesNotExist:
                         pass
 
         from ..pages import Post

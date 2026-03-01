@@ -21,6 +21,16 @@
   ``episode_to_dict``, and ``transcript_to_dict``.
 - Canonical names are now the only supported API surface for repository
   classes and serialization helpers.
+- Repository hardening pass:
+  - removed dead `PostQuerySnapshot.create_from_post_queryset(..., is_podcast=...)` API surface and dead branch
+  - fixed repository-layer import coupling (`HtmxHttpRequest`/`PostFilterset`) by moving to type-only/local imports
+  - guarded `add_site_raw` SQL fallback for empty-site rows (`fetchone() is None`)
+  - corrected media ID aliases to use `set[int]`
+  - removed dead `CastBlock` type alias and `Site` package re-export
+  - narrowed transcript exception handling to avoid masking `AttributeError`
+  - added `EpisodeFeedContext` to model reference docs
+  - removed duplicate URL computation in `data_for_blog_cachable` by serializing URL maps in `add_queryset_data`
+  - fixed `FeedContext.create_from_django_models` to handle `Site.find_for_request(request) is None`
 
 Migration mapping (old -> new):
 

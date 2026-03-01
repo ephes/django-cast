@@ -7,7 +7,6 @@ from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
 
-from ...views import HtmxHttpRequest
 from .serialization import (
     serialize_audio,
     serialize_blog,
@@ -19,10 +18,11 @@ from .serialization import (
     serialize_video,
 )
 from .snapshot import PostQuerySnapshot
-from .types import Choice, HasChoices, PageUrlByID
+from .types import Choice, HasChoices
 
 if TYPE_CHECKING:
     from cast.models import Blog, Post
+    from cast.views import HtmxHttpRequest
 
 
 def _blog_url_from_referer(request: HttpRequest, base_blog_url: str) -> str:
@@ -95,7 +95,8 @@ def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, bl
         cursor.execute(site_statement)
         columns = [col[0] for col in cursor.description]
         row_tuple = cursor.fetchone()
-        data["site"] = dict(zip(columns, row_tuple))
+        if row_tuple is not None:
+            data["site"] = dict(zip(columns, row_tuple))
     return data
 
 
@@ -158,12 +159,14 @@ def add_queryset_data(data: dict[str, Any], queryset_data: PostQuerySnapshot) ->
     data["cover_alt_by_post_id"] = queryset_data.cover_alt_by_post_id
     data["has_audio_by_id"] = queryset_data.has_audio_by_id
     data["owner_username_by_id"] = queryset_data.owner_username_by_id
+    data["page_url_by_id"] = queryset_data.page_url_by_id
+    data["absolute_page_url_by_id"] = queryset_data.absolute_page_url_by_id
     return data
 
 
 def data_for_blog_cachable(
     *,
-    request: HtmxHttpRequest,
+    request: HttpRequest,
     blog: "Blog",
     is_paginated: bool = True,  # feed is not paginated
     post_queryset: QuerySet["Post"] | None = None,  # queryset is build from filterset / get_params if None
@@ -179,7 +182,7 @@ def data_for_blog_cachable(
     data["blog_cover_alt_text"] = blog.cover_alt_text
     data = add_site_raw(data, request=request, blog=blog)
     data = add_root_nav_links(data)
-    data["template_base_dir"] = blog.get_template_base_dir(request)
+    data["template_base_dir"] = blog.get_template_base_dir(cast("HtmxHttpRequest", request))
 
     # filters and pagination
     if is_paginated:
@@ -196,7 +199,7 @@ def data_for_blog_cachable(
         post_queryset = data["pagination_context"]["object_list"]
         del data["pagination_context"]["object_list"]  # not cachable
     queryset_data = PostQuerySnapshot.create_from_post_queryset(
-        request=request, site=Site(**data["site"]), queryset=post_queryset, is_podcast=blog.is_podcast
+        request=request, site=Site(**data["site"]), queryset=post_queryset
     )
     data = add_queryset_data(data, queryset_data)
     last_build_date = None
@@ -206,12 +209,4 @@ def data_for_blog_cachable(
     if last_build_date is not None:
         data["last_build_date"] = last_build_date
 
-    # page_url by id
-    page_url_by_id: PageUrlByID = {}
-    absolute_page_url_by_id: PageUrlByID = {}
-    for post in queryset_data.queryset:
-        page_url_by_id[post.pk] = post.get_url(request=request, current_site=Site(**data["site"]))
-        absolute_page_url_by_id[post.pk] = post.full_url
-    data["page_url_by_id"] = page_url_by_id
-    data["absolute_page_url_by_id"] = absolute_page_url_by_id
     return data
