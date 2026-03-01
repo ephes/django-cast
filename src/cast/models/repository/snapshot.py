@@ -171,7 +171,3 @@ class PostQuerySnapshot:
             cover_by_post_id=cover_by_post_id,
             cover_alt_by_post_id=cover_alt_by_post_id,
         )
-
-
-# Backward compatibility alias for the pre-Phase-2 public name.
-QuerysetData = PostQuerySnapshot

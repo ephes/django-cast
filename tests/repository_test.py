@@ -26,33 +26,21 @@ from cast.models import Audio, Blog, Episode, Podcast, Post, Transcript, Video
 from cast.models.image_renditions import create_missing_renditions_for_posts
 from cast.models.repository import (
     BlogIndexContext,
-    BlogIndexRepository,
-    EpisodeFeedContext,
-    EpisodeFeedRepository,
     FeedContext,
-    FeedRepository,
     PostDetailContext,
-    PostDetailRepository,
     PostQuerySnapshot,
-    QuerysetData,
     _blog_url_from_referer,
     add_site_raw,
     apply_cover_fallback,
-    audio_to_dict,
     deserialize_audio,
-    deserialize_blog,
     deserialize_episode,
     deserialize_image,
     deserialize_post,
     deserialize_transcript,
     deserialize_video,
-    blog_from_data,
-    blog_to_dict,
+    deserialize_blog,
     data_for_blog_cachable,
-    episode_to_dict,
     get_facet_choices,
-    image_to_dict,
-    post_to_dict,
     serialize_audio,
     serialize_blog,
     serialize_episode,
@@ -61,8 +49,6 @@ from cast.models.repository import (
     serialize_renditions,
     serialize_transcript,
     serialize_video,
-    transcript_to_dict,
-    video_to_dict,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
 
@@ -80,14 +66,6 @@ def show_queries(queries):
 def blocker(*_args):
     """Get a traceback when a query is executed."""
     raise Exception("No database access allowed here.")
-
-
-def test_repository_aliases_are_backwards_compatible():
-    assert QuerysetData is PostQuerySnapshot
-    assert PostDetailRepository is PostDetailContext
-    assert BlogIndexRepository is BlogIndexContext
-    assert FeedRepository is FeedContext
-    assert EpisodeFeedRepository is EpisodeFeedContext
 
 
 @pytest.fixture(autouse=True)
@@ -300,7 +278,7 @@ def test_post_detail_blog_url_preserves_pagination_from_referer(rf, post_in_blog
     blog_url = blog.get_url()
     referer = f"http://testserver{blog_url}?page=3"
     request = rf.get(post.get_url(), HTTP_REFERER=referer)
-    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    repository = PostDetailContext.create_from_django_models(request=request, post=post)
     assert repository.blog_url == f"{blog_url}?page=3"
 
 
@@ -310,7 +288,7 @@ def test_post_detail_blog_url_without_referer(rf, post_in_blog):
     post = post_in_blog
     blog = post.blog
     request = rf.get(post.get_url())
-    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    repository = PostDetailContext.create_from_django_models(request=request, post=post)
     assert repository.blog_url == blog.get_url()
 
 
@@ -323,7 +301,7 @@ def test_render_post_detail_with_django_models_repository(rf, post_in_blog):
     post = post_in_blog
     post_url = post.get_url()
     request = rf.get(post_url)
-    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    repository = PostDetailContext.create_from_django_models(request=request, post=post)
     reset_queries()
     # When we render the post detail page
     # with connection.execute_wrapper(blocker):
@@ -352,12 +330,12 @@ def test_render_blog_index_with_django_models_repository(rf, post_in_blog):
     request = rf.get(blog.get_url())
     request.htmx = False
     # The blog index repository is created from django models
-    repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
+    repository = BlogIndexContext.create_from_django_models(request=request, blog=blog)
     # When we render the blog index
     reset_queries()
     response = blog.serve(request, repository=repository).render()
     # Then post data should be generated on the fly and the media should be rendered
-    assert isinstance(response.context_data["repository"], BlogIndexRepository)
+    assert isinstance(response.context_data["repository"], BlogIndexContext)
     html = response.content.decode("utf-8")
     assert author_name in html
     assert post_detail_url in html
@@ -379,7 +357,7 @@ def test_render_feed_with_django_models_repository(rf, post_in_blog):
     post = post_in_blog
     blog = post.blog
     post_queryset = blog.unfiltered_published_posts
-    repository = FeedRepository.create_from_django_models(
+    repository = FeedContext.create_from_django_models(
         request=rf.get("/"), blog=blog, post_queryset=post_queryset, template_base_dir="bootstrap4"
     )
     feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug})
@@ -447,7 +425,7 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     the database should not be hit.
     """
 
-    repository = PostDetailRepository(
+    repository = PostDetailContext(
         post_id=1,
         template_base_dir="bootstrap4",
         blog=Blog(id=1, title="Some blog"),
@@ -510,12 +488,12 @@ def blog_data(post, renditions_for_post):
         "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
         "blog_cover_image_url": "",
         "blog_cover_alt_text": "",
-        "post_by_id": {1: post_to_dict(post)},
+        "post_by_id": {1: serialize_post(post)},
         "posts": [1],
         "pagination_context": {},
-        "audios": {1: audio_to_dict(audio)},
-        "images": {1: image_to_dict(image)},
-        "videos": {1: video_to_dict(video)},
+        "audios": {1: serialize_audio(audio)},
+        "images": {1: serialize_image(image)},
+        "videos": {1: serialize_video(video)},
         "images_by_post_id": {1: [1]},
         "videos_by_post_id": {1: [1]},
         "audios_by_post_id": {1: [1]},
@@ -548,7 +526,7 @@ def test_render_blog_index_without_hitting_the_database(rf, blog_data):
     data = blog_data
     reset_queries()
     # with connection.execute_wrapper(blocker):
-    repository = BlogIndexRepository.create_from_cachable_data(data=data)
+    repository = BlogIndexContext.create_from_cachable_data(data=data)
     blog = repository.blog
     request = rf.get("/some-blog/")
     request.htmx = False
@@ -580,7 +558,7 @@ def test_render_podcast_index_without_hitting_the_database(rf, blog_data):
     data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
     reset_queries()
     # with connection.execute_wrapper(blocker):
-    repository = BlogIndexRepository.create_from_cachable_data(data=data)
+    repository = BlogIndexContext.create_from_cachable_data(data=data)
     podcast = Podcast(id=1, title="Some podcast", slug="some-podcast")
     request = rf.get("/some-podcast/")
     request.htmx = False
@@ -616,7 +594,7 @@ def test_render_feed_without_hitting_the_database(rf, blog_data):
         }
     )
     reset_queries()
-    repository = FeedRepository.create_from_cachable_data(data=data)
+    repository = FeedContext.create_from_cachable_data(data=data)
     feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": "some-blog"})
     request = rf.get(feed_url)
     view = LatestEntriesFeed(repository=repository)
@@ -649,10 +627,10 @@ def test_render_blog_index_with_data_from_cache_without_hitting_the_database(rf,
     create_missing_renditions_for_posts([post])  # force renditions to be created
 
     # Set up the cache
-    cachable_data = BlogIndexRepository.data_for_blog_index_cachable(request=request, blog=blog)
+    cachable_data = BlogIndexContext.data_for_blog_index_cachable(request=request, blog=blog)
     pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
     cachable_data = pickle.loads(pickled)
-    repository = BlogIndexRepository.create_from_cachable_data(data=cachable_data)
+    repository = BlogIndexContext.create_from_cachable_data(data=cachable_data)
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
@@ -689,10 +667,10 @@ def test_render_blog_feed_with_data_from_cache_without_hitting_the_database(rf, 
     create_missing_renditions_for_posts([post])  # force renditions to be created
 
     # Set up the cache
-    cachable_data = FeedRepository.data_for_feed_cachable(request=request, blog=blog)
+    cachable_data = FeedContext.data_for_feed_cachable(request=request, blog=blog)
     pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
     cachable_data = pickle.loads(pickled)
-    repository = FeedRepository.create_from_cachable_data(data=cachable_data)
+    repository = FeedContext.create_from_cachable_data(data=cachable_data)
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
@@ -729,10 +707,10 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
     create_missing_renditions_for_posts([post])  # force renditions to be created
 
     # Set up the cache
-    cachable_data = FeedRepository.data_for_feed_cachable(request=request, blog=blog, is_podcast=True)
+    cachable_data = FeedContext.data_for_feed_cachable(request=request, blog=blog, is_podcast=True)
     pickled = pickle.dumps(cachable_data)  # make sure it's really cachable by pickling it
     cachable_data = pickle.loads(pickled)
-    repository = FeedRepository.create_from_cachable_data(data=cachable_data)
+    repository = FeedContext.create_from_cachable_data(data=cachable_data)
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
@@ -764,7 +742,7 @@ def test_serialize_renditions():
     assert rendition.file == "foo.jpg"
 
 
-def test_canonical_serialize_aliases_for_media_are_equivalent():
+def test_serialize_media_helpers():
     audio = Audio(
         id=1,
         collection=None,
@@ -803,10 +781,10 @@ def test_canonical_serialize_aliases_for_media_are_equivalent():
 
     transcript = TranscriptStub()
 
-    assert serialize_audio(audio) == audio_to_dict(audio)
-    assert serialize_video(video) == video_to_dict(video)
-    assert serialize_image(image) == image_to_dict(image)
-    assert serialize_transcript(transcript) == transcript_to_dict(transcript)
+    assert serialize_audio(audio)["m4a"] == "audio.m4a"
+    assert serialize_video(video)["original"] == "video.mp4"
+    assert serialize_image(image)["file"] == "image.jpg"
+    assert serialize_transcript(transcript)["podlove"] == "podlove.json"
 
 
 def test_get_facet_choices():
@@ -819,9 +797,9 @@ def test_get_facet_choices():
 
 
 @pytest.mark.django_db
-def test_blog_from_data_returns_blog(blog):
-    data = blog_to_dict(blog)
-    rebuilt = blog_from_data(data)
+def test_deserialize_blog_returns_blog(blog):
+    data = serialize_blog(blog)
+    rebuilt = deserialize_blog(data)
     assert isinstance(rebuilt, Blog)
     assert not isinstance(rebuilt, Podcast)
     assert rebuilt.title == blog.title
@@ -829,15 +807,15 @@ def test_blog_from_data_returns_blog(blog):
 
 
 @pytest.mark.django_db
-def test_blog_to_dict_and_from_data_roundtrip_podcast(podcast_with_artwork):
+def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     podcast_with_artwork.itunes_categories = "Technology"
     podcast_with_artwork.keywords = "foo,bar"
     podcast_with_artwork.explicit = 2
     podcast_with_artwork.subtitle = "Test subtitle"
     podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit", "subtitle"])
 
-    data = blog_to_dict(podcast_with_artwork)
-    rebuilt = blog_from_data(data)
+    data = serialize_blog(podcast_with_artwork)
+    rebuilt = deserialize_blog(data)
 
     assert isinstance(rebuilt, Podcast)
     assert rebuilt.title == podcast_with_artwork.title
@@ -854,21 +832,12 @@ def test_blog_to_dict_and_from_data_roundtrip_podcast(podcast_with_artwork):
 
 
 @pytest.mark.django_db
-def test_canonical_serialize_aliases_for_blog_and_post_are_equivalent(blog, post, episode):
-    assert serialize_blog(blog) == blog_to_dict(blog)
-    assert serialize_post(post) == post_to_dict(post)
-    assert serialize_episode(episode) == episode_to_dict(episode)
-
-
-@pytest.mark.django_db
-def test_deserialize_canonical_and_legacy_alias_for_blog_are_equivalent(blog):
+def test_deserialize_blog_roundtrip(blog):
     data = serialize_blog(blog)
-    rebuilt_from_canonical = deserialize_blog(data)
-    rebuilt_from_legacy = blog_from_data(data)
-    assert isinstance(rebuilt_from_canonical, Blog)
-    assert isinstance(rebuilt_from_legacy, Blog)
-    assert rebuilt_from_canonical.title == rebuilt_from_legacy.title
-    assert rebuilt_from_canonical.slug == rebuilt_from_legacy.slug
+    rebuilt = deserialize_blog(data)
+    assert isinstance(rebuilt, Blog)
+    assert rebuilt.title == blog.title
+    assert rebuilt.slug == blog.slug
 
 
 def test_deserialize_canonical_media_types():
@@ -1067,7 +1036,7 @@ def test_create_from_cachable_data_use_audio_player_false():
             "tag_facets_choices": [],
         },
     }
-    repository = BlogIndexRepository.create_from_cachable_data(data=data)
+    repository = BlogIndexContext.create_from_cachable_data(data=data)
     assert repository.use_audio_player is False
 
 
@@ -1076,7 +1045,7 @@ def test_blog_index_repository_via_django_models_site_is_none(rf):
     """Make sure the repository can be created from django models when site is None."""
     blog = Blog(id=1, title="Some blog", template_base_dir="plain")
     request = rf.get("/foobar/")
-    repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
+    repository = BlogIndexContext.create_from_django_models(request=request, blog=blog)
     assert repository.root_nav_links == []
 
 
@@ -1085,7 +1054,7 @@ def test_blog_index_repository_via_django_models_no_audio_player(rf, blog):
     """Make sure has_audio is False if there's no post with audio."""
     request = rf.get("/foobar/")
     create_post(blog=blog)
-    repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
+    repository = BlogIndexContext.create_from_django_models(request=request, blog=blog)
     assert repository.use_audio_player is False
 
 
@@ -1097,7 +1066,7 @@ def test_blog_index_repository_uses_post_cover_image(rf, blog, image):
     post.save()
 
     request = rf.get("/foobar/")
-    repository = BlogIndexRepository.create_from_django_models(request=request, blog=blog)
+    repository = BlogIndexContext.create_from_django_models(request=request, blog=blog)
 
     [post_from_repo] = repository.pagination_context["object_list"]
     assert post_from_repo.cover_image_url == image.file.url
@@ -1191,14 +1160,14 @@ def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_no
     request = rf.get("/foobar/")
 
     # make sure the cover is not None for queryset data
-    queryset_data = QuerysetData.create_from_post_queryset(
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
         request=request, site=None, queryset=blog.unfiltered_published_posts
     )
     assert queryset_data.cover_by_post_id[post.id] == image.file.url
     assert queryset_data.cover_alt_by_post_id[post.id] == post.cover_alt_text
 
     # make sure the cover is not None for post detail repository
-    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    repository = PostDetailContext.create_from_django_models(request=request, post=post)
     assert repository.cover_image_url == image.file.url
     assert repository.cover_alt_text == "foo alt text"
 
@@ -1207,13 +1176,13 @@ def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_no
     post.cover_alt_text = ""  # cannot be null
     post.save()
 
-    queryset_data = QuerysetData.create_from_post_queryset(
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
         request=request, site=None, queryset=blog.unfiltered_published_posts
     )
     assert queryset_data.cover_by_post_id[post.id] == ""
     assert queryset_data.cover_alt_by_post_id[post.id] == ""
 
-    repository = PostDetailRepository.create_from_django_models(request=request, post=post)
+    repository = PostDetailContext.create_from_django_models(request=request, post=post)
     assert repository.cover_image_url == ""
     assert repository.cover_alt_text == ""
 
@@ -1222,7 +1191,7 @@ def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_no
 def test_queryset_data_create_from_post_queryset_includes_transcripts(rf, episode):
     transcript = create_transcript(audio=episode.podcast_audio)
     request = rf.get("/foobar/")
-    queryset_data = QuerysetData.create_from_post_queryset(
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
         request=request,
         site=episode.podcast.get_site(),
         queryset=Post.objects.live().descendant_of(episode.podcast),
@@ -1236,7 +1205,7 @@ def test_queryset_data_create_from_post_queryset_handles_episode_without_podcast
     episode.podcast_audio = None
     episode.save()
     request = rf.get("/foobar/")
-    queryset_data = QuerysetData.create_from_post_queryset(
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
         request=request,
         site=episode.podcast.get_site(),
         queryset=Post.objects.live().descendant_of(episode.podcast),
@@ -1244,7 +1213,7 @@ def test_queryset_data_create_from_post_queryset_handles_episode_without_podcast
     assert episode.id not in queryset_data.podcast_audio_by_episode_id
 
 
-def test_transcript_to_dict_no_collection():
+def test_serialize_transcript_no_collection():
     class Podlove:
         name = "foo"
 
@@ -1259,7 +1228,7 @@ def test_transcript_to_dict_no_collection():
         dote = TranscriptFile()
         collection_id = None
 
-    result = transcript_to_dict(Transcript())
+    result = serialize_transcript(Transcript())
     assert result["collection"] is None
 
 

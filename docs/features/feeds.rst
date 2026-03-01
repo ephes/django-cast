@@ -96,12 +96,12 @@ Feed Generation
 Repository Pattern
 ------------------
 
-Feeds use the FeedRepository pattern for optimized generation:
+Feeds use the FeedContext pattern for optimized generation:
 
 .. code-block:: python
 
     # Efficient feed generation with minimal queries
-    repository = FeedRepository(blog)
+    repository = FeedContext(blog)
     # All posts and related data prefetched
 
 Performance Features

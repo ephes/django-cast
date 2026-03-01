@@ -542,10 +542,3 @@ class BlogIndexContext:
             root_nav_links=root_nav_links,
             queryset_data=queryset_data,
         )
-
-
-# Backward compatibility aliases for pre-Phase-2 public names.
-PostDetailRepository = PostDetailContext
-BlogIndexRepository = BlogIndexContext
-FeedRepository = FeedContext
-EpisodeFeedRepository = EpisodeFeedContext

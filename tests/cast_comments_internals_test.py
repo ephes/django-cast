@@ -200,14 +200,14 @@ def test_comments_are_open_avoids_db_queries_with_repository(post, comments_enab
 
     from cast.comments.utils import comments_are_open
     from cast.models import Post
-    from cast.models.repository import PostDetailRepository
+    from cast.models.repository import PostDetailContext
 
     def blocker(*_args, **_kwargs):
         raise Exception("No database access allowed here.")
 
     post_for_repo = Post.objects.get(pk=post.pk)
     blog = post_for_repo.get_parent().specific
-    repository = PostDetailRepository(
+    repository = PostDetailContext(
         post_id=post.pk,
         template_base_dir="bootstrap4",
         blog=blog,

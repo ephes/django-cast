@@ -27,11 +27,11 @@ This architecture enables:
 Key Components
 --------------
 
-1. **QuerysetData Base Class**: Foundation for all repositories
-2. **PostDetailRepository**: Optimized single post queries
-3. **PostsRepository**: Efficient post list queries
-4. **FeedRepository**: Specialized for RSS/Atom generation
-5. **RenditionsRepository**: Image rendition management
+1. **PostQuerySnapshot Base Class**: Foundation for all repositories
+2. **PostDetailContext**: Optimized single post queries
+3. **BlogIndexContext**: Efficient post list queries with filtering/pagination
+4. **FeedContext**: Specialized for RSS/Atom generation
+5. **RenditionsForPost lookups**: Image rendition management
 
 Query Optimization
 ==================
@@ -48,9 +48,13 @@ Repositories use aggressive prefetching to minimize queries:
         print(post.author.name)  # Query per post
         print(post.images.all())  # Query per post
 
-    # Good: 2 queries total via repository
-    repository = PostsRepository(posts)
-    # All authors and images prefetched
+    # Good: prefetch once and reuse lookups
+    snapshot = PostQuerySnapshot.create_from_post_queryset(
+        request=request,
+        site=site,
+        queryset=posts,
+    )
+    # Snapshot contains prefetched media and renditions by post ID
 
 Optimization Techniques
 -----------------------
@@ -65,15 +69,11 @@ Example implementation:
 
 .. code-block:: python
 
-    class PostsRepository(QuerysetData):
-        def get_queryset(self):
-            return super().get_queryset().select_related(
-                'author', 'blog'
-            ).prefetch_related(
-                'images', 'videos', 'galleries',
-                Prefetch('comments',
-                    queryset=Comment.objects.filter(is_spam=False))
-            )
+    snapshot = PostQuerySnapshot.create_from_post_queryset(
+        request=request,
+        site=site,
+        queryset=blog.get_published_posts().select_related("owner", "cover_image"),
+    )
 
 Caching Strategies
 ==================
@@ -276,7 +276,7 @@ Common Performance Issues
 
    - Enable feed caching
    - Reduce feed item limit
-   - Use FeedRepository
+   - Use FeedContext
 
 4. **Search Performance**
 

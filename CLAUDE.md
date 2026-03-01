@@ -30,7 +30,7 @@ HomePage
 - **ChapterMark/Transcript**: Audio enhancements for accessibility
 
 ### Design Patterns
-- **Repository Pattern**: QuerysetData, PostDetailRepository, etc. for optimized data fetching
+- **Repository Pattern**: PostQuerySnapshot, PostDetailContext, etc. for optimized data fetching
 - **Mixin Architecture**: Reusable functionality across models and views
 - **Performance Focus**: Aggressive prefetching, rendition caching, bulk operations
 

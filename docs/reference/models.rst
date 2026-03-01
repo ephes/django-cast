@@ -428,7 +428,7 @@ Repository Models
 
 The repository pattern provides optimized data access with minimal queries.
 
-QuerysetData
+PostQuerySnapshot
 ============
 
 Base repository for post querysets with prefetched relations.
@@ -440,7 +440,7 @@ Base repository for post querysets with prefetched relations.
 - User data
 - URL information
 
-PostDetailRepository
+PostDetailContext
 ====================
 
 Optimized repository for single post pages.
@@ -451,7 +451,7 @@ Optimized repository for single post pages.
 - Includes parent blog data
 - Media with renditions
 
-BlogIndexRepository
+BlogIndexContext
 ===================
 
 Repository for blog index pages with filtering.
@@ -462,7 +462,7 @@ Repository for blog index pages with filtering.
 - Facet counts for categories, tags, dates
 - Optimized for list views
 
-FeedRepository
+FeedContext
 ==============
 
 Specialized repository for RSS/podcast feed generation.

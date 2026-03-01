@@ -29,7 +29,7 @@ Django Cast follows a layered architecture:
                              │
     ┌─────────────────────────────────────────────────────┐
     │                  Repository Layer                   │
-    │     (QuerysetData, PostDetailRepository, etc.)      │
+    │     (PostQuerySnapshot, PostDetailContext, etc.)      │
     └─────────────────────────────────────────────────────┘
                              │
     ┌─────────────────────────────────────────────────────┐
@@ -67,16 +67,16 @@ Flow::
 Key Repository Classes
 ~~~~~~~~~~~~~~~~~~~~~~
 
-**QuerysetData**
+**PostQuerySnapshot**
   Base class that converts querysets to dictionaries with prefetch optimization.
 
-**PostDetailRepository**
+**PostDetailContext**
   Fetches single post data with all relations in minimal queries.
 
-**FeedRepository**
+**FeedContext**
   Optimized for RSS/podcast feed generation.
 
-**BlogIndexRepository**
+**BlogIndexContext**
   Handles blog index pages with pagination.
 
 The repositories:

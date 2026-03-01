@@ -312,7 +312,7 @@ Media blocks use repositories to avoid N+1 queries:
             image = Image.objects.get(pk=block.value)
 
     # Good: Single query via repository
-    repository = PostDetailRepository(post)
+    repository = PostDetailContext(post)
     # All images prefetched
 
 Rendition Prefetching

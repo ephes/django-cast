@@ -15,7 +15,7 @@ from cast.models.pages import (
     HtmlField,
     Post,
 )
-from cast.models.repository import BlogIndexRepository
+from cast.models.repository import BlogIndexContext
 from cast.models.transcript import (
     Transcript,
     convert_dote_to_podcastindex_transcript,
@@ -150,7 +150,7 @@ class TestBlogModel:
 
     def test_get_django_repository(self, blog, simple_request, use_django_blog_index_repo):
         repository = blog.get_repository(simple_request, {})
-        assert isinstance(repository, BlogIndexRepository)
+        assert isinstance(repository, BlogIndexContext)
 
     def test_get_cover_image_url_for_blog(self, mocker):
         # just empty cover image
