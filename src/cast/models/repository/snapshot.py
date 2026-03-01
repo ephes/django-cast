@@ -33,6 +33,13 @@ def cache_page_url(post_id: int, url: str) -> None:
     PageLinkHandlerWithCache.cache_url(post_id, url)
 
 
+def clear_cached_page_urls() -> None:
+    """Clear rich-text link cache before building request-scoped repositories."""
+    from ...wagtail_hooks import PageLinkHandlerWithCache
+
+    PageLinkHandlerWithCache.cache.clear()
+
+
 class PostQuerySnapshot:
     """Container for pre-fetched data derived from a post queryset.
 

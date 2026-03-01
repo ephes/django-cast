@@ -8,7 +8,7 @@ import pytest
 from django.core.checks import Warning
 from django.core.checks.registry import registry
 
-from cast.checks import _find_stale_assets, _newest_source_mtime, check_asset_freshness
+from cast.checks import _find_stale_assets, _newest_source_mtime, check_asset_freshness, check_cast_setting_types
 
 
 @pytest.fixture()
@@ -143,6 +143,30 @@ class TestCheckAssetFreshness:
         assert warnings == []
 
 
+class TestCheckCastSettingTypes:
+    def test_valid_cast_settings(self, settings):
+        settings.CAST_COMMENTS_ENABLED = True
+        settings.CAST_CUSTOM_THEMES = [("plain", "Plain")]
+        settings.CAST_FOLLOW_LINKS = {"apple_podcasts": "https://example.com"}
+        settings.CAST_FILTERSET_FACETS = ["search"]
+        settings.CAST_IMAGE_FORMATS = ["jpeg", "avif"]
+        settings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [(1110, 740)]
+        settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(1110, 740), (120, 80)]
+        settings.CAST_REPOSITORY = "default"
+        settings.CAST_PODLOVE_PLAYER_THEMES = {"default": {"main": "#333"}}
+
+        assert check_cast_setting_types(None) == []
+
+    def test_invalid_cast_setting_type_returns_error(self, settings):
+        settings.CAST_IMAGE_FORMATS = "jpeg"
+
+        errors = check_cast_setting_types(None)
+
+        assert len(errors) == 1
+        assert errors[0].id == "cast.E001"
+        assert "CAST_IMAGE_FORMATS must be of type list." == errors[0].msg
+
+
 def test_system_check_is_registered():
     """Verify CastConfig.ready() registers check_asset_freshness.
 
@@ -156,8 +180,11 @@ def test_system_check_is_registered():
 
     import cast as cast_pkg
 
-    # Remove the check and force module re-execution on next import
-    registry.registered_checks.discard(check_asset_freshness)
+    # Save all originally registered cast.checks functions
+    original_cast_checks = {c for c in registry.registered_checks if getattr(c, "__module__", "") == "cast.checks"}
+
+    # Remove all cast.checks registrations and force module re-execution on next import
+    registry.registered_checks -= original_cast_checks
     saved_module = sys.modules.pop("cast.checks")
     saved_attr = getattr(cast_pkg, "checks", None)
     if hasattr(cast_pkg, "checks"):
@@ -175,16 +202,11 @@ def test_system_check_is_registered():
         }
         assert "cast.checks.check_asset_freshness" in check_names
     finally:
-        # Remove the newly registered function before restoring the original
-        new_checks = {
-            c
-            for c in registry.registered_checks
-            if getattr(c, "__module__", "") == "cast.checks"
-            and getattr(c, "__qualname__", "") == "check_asset_freshness"
-        }
+        # Remove the newly registered functions before restoring originals
+        new_checks = {c for c in registry.registered_checks if getattr(c, "__module__", "") == "cast.checks"}
         registry.registered_checks -= new_checks
         # Restore original state so other tests are unaffected
         sys.modules["cast.checks"] = saved_module
         if saved_attr is not None:
             cast_pkg.checks = saved_attr
-        registry.registered_checks.add(check_asset_freshness)
+        registry.registered_checks |= original_cast_checks

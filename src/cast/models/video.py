@@ -3,7 +3,6 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from subprocess import check_output
 from typing import Optional
 
 from django.contrib.auth import get_user_model
@@ -96,8 +95,14 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     @staticmethod
     def _get_video_dimensions(video_url: str) -> tuple[int | None, int | None]:
-        ffprobe_cmd = f'ffprobe -i "{video_url}"'
-        result = subprocess.check_output(ffprobe_cmd, shell=True, stderr=subprocess.STDOUT)
+        ffprobe_cmd = ["ffprobe", "-i", str(video_url)]
+        result = subprocess.run(
+            ffprobe_cmd,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+        ).stdout
         lines = result.decode("utf8").split("\n")
         return get_video_dimensions(lines)
 
@@ -109,17 +114,23 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         if not video_url.startswith("http"):
             video_url = self.original.path
         width, height = self._get_video_dimensions(video_url)
-        poster_cmd = (
-            'ffmpeg -ss {seconds} -i "{video_path}" -vframes 1 -y -f image2 -s {width}x{height} {poster_path}'
-        ).format(
-            video_path=video_url,
-            seconds=self.poster_seconds,
-            poster_path=tmp_path,
-            width=width,
-            height=height,
-        )
+        poster_cmd = [
+            "ffmpeg",
+            "-ss",
+            str(self.poster_seconds),
+            "-i",
+            str(video_url),
+            "-vframes",
+            "1",
+            "-y",
+            "-f",
+            "image2",
+            "-s",
+            f"{width}x{height}",
+            tmp_path,
+        ]
         logger.info(poster_cmd)
-        check_output(poster_cmd, shell=True)
+        subprocess.run(poster_cmd, check=True, timeout=30)
         name = os.path.basename(tmp_path)
         content = DjangoFile(open(tmp_path, "rb"))
         self.poster.save(name, content, save=False)

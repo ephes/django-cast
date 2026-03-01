@@ -1233,6 +1233,85 @@ def test_page_link_handler_expand_db_attributes_many(mocker):
 
 
 @pytest.mark.django_db
+def test_feed_context_create_from_django_models_clears_page_link_cache(rf, blog, mocker):
+    clear_cached_page_urls = mocker.patch("cast.models.repository.contexts.clear_cached_page_urls")
+    request = rf.get("/blog/")
+    FeedContext.create_from_django_models(
+        request=request,
+        blog=blog,
+        post_queryset=blog.unfiltered_published_posts,
+    )
+    clear_cached_page_urls.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_post_detail_context_create_from_django_models_clears_page_link_cache(rf, blog, mocker):
+    clear_cached_page_urls = mocker.patch("cast.models.repository.contexts.clear_cached_page_urls")
+    request = rf.get("/post/")
+    post = create_post(blog=blog)
+    PostDetailContext.create_from_django_models(request=request, post=post)
+    clear_cached_page_urls.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_blog_index_context_create_from_django_models_clears_page_link_cache(rf, blog, mocker):
+    clear_cached_page_urls = mocker.patch("cast.models.repository.contexts.clear_cached_page_urls")
+    request = rf.get("/blog/")
+    BlogIndexContext.create_from_django_models(request=request, blog=blog)
+    clear_cached_page_urls.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_blog_index_context_create_from_cachable_data_clears_page_link_cache(mocker):
+    clear_cached_page_urls = mocker.patch("cast.models.repository.contexts.clear_cached_page_urls")
+    data = {
+        "template_base_dir": "bootstrap4",
+        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
+        "post_by_id": {1: {"pk": 1}},
+        "posts": [1],
+        "page_url_by_id": {1: "/foo-bar-baz/"},
+        "absolute_page_url_by_id": {1: "http://testserver/foo-bar-baz/"},
+        "pagination_context": {},
+        "audios": {},
+        "images": {},
+        "videos": {},
+        "renditions_for_posts": {},
+        "audios_by_post_id": {},
+        "videos_by_post_id": {},
+        "images_by_post_id": {},
+        "cover_by_post_id": {},
+        "cover_alt_by_post_id": {},
+        "owner_username_by_id": {1: "owner"},
+        "has_audio_by_id": {1: False},
+        "root_nav_links": [],
+        "filterset": {
+            "get_params": {},
+            "date_facets_choices": [],
+            "category_facets_choices": [],
+            "tag_facets_choices": [],
+        },
+    }
+    BlogIndexContext.create_from_cachable_data(data=data)
+    clear_cached_page_urls.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_blog_index_context_clears_stale_cache_entries(rf, blog):
+    """Verify stale page-link cache entries are removed and current entries populated."""
+    from cast.wagtail_hooks import PageLinkHandlerWithCache
+
+    # Seed a stale entry
+    PageLinkHandlerWithCache.cache[9999] = "/stale-url/"
+    try:
+        request = rf.get("/blog/")
+        BlogIndexContext.create_from_django_models(request=request, blog=blog)
+        # Stale entry must be gone
+        assert 9999 not in PageLinkHandlerWithCache.cache
+    finally:
+        PageLinkHandlerWithCache.cache.pop(9999, None)
+
+
+@pytest.mark.django_db
 def test_queryset_data_create_from_post_queryset_and_post_detail_cover_is_not_none(rf, blog, image):
     post = create_post(blog=blog)
     post.cover_image = image

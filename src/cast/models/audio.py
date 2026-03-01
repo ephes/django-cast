@@ -119,15 +119,29 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     @staticmethod
     def _get_audio_duration(audio_url) -> timedelta:
         # Taken from: http://trac.ffmpeg.org/wiki/FFprobeTips
-        cmd = f"""
-        ffprobe  \
-            -v 0  \
-            -print_format json  \
-            -show_entries format=duration  \
-            -of default=noprint_wrappers=1:nokey=1  \
-            '{audio_url}'
-        """
-        result = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode().strip()
+        cmd = [
+            "ffprobe",
+            "-v",
+            "0",
+            "-print_format",
+            "json",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(audio_url),
+        ]
+        result = (
+            subprocess.run(
+                cmd,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+            )
+            .stdout.decode()
+            .strip()
+        )
         m = re.match(r"^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
         if m is None:
             raise ValueError(f"Could not parse duration: {result}")

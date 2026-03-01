@@ -1,6 +1,24 @@
 name: Workflow for Codecov
 on: [push]
 jobs:
+  javascript:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@main
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+    - name: Install JavaScript dependencies
+      working-directory: javascript
+      run: npm ci
+    - name: Run JavaScript tests
+      working-directory: javascript
+      run: npm test
+    - name: Build JavaScript assets
+      working-directory: javascript
+      run: npm run build
+
   run:
     runs-on: ${{ matrix.os }}
     strategy:

@@ -13,7 +13,7 @@ from django.utils.feedgenerator import (
     SyndicationFeed,
     rfc2822_date,
 )
-from django.utils.safestring import SafeText, mark_safe
+from django.utils.safestring import SafeText
 from django.utils.xmlutils import SimplerXMLGenerator
 from wagtail.images.models import Image
 
@@ -157,9 +157,9 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
             return self.repository.blog_url
         return self.object.get_full_url()
 
-    def item_title(self, post: Model) -> SafeText:
+    def item_title(self, post: Model) -> str:
         assert isinstance(post, Post)
-        return mark_safe(post.title)
+        return post.title
 
     def item_description(self, post: Model) -> SafeText:
         assert isinstance(post, Post)

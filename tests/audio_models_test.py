@@ -35,9 +35,15 @@ class TestAudioModel:
         assert duration in (timedelta(microseconds=746667), timedelta(microseconds=700000))
 
     def test_audio_duration_no_match(self, mocker):
-        mocker.patch("cast.models.audio.subprocess.check_output", return_value=b"foobar")
+        mock_run = mocker.patch("cast.models.audio.subprocess.run", return_value=mocker.Mock(stdout=b"foobar"))
         with pytest.raises(ValueError):
             Audio._get_audio_duration("https://example.com/test.m4a")
+        call_kwargs = mock_run.call_args
+        assert call_kwargs.kwargs["check"] is True
+        assert call_kwargs.kwargs["timeout"] == 30
+        argv = call_kwargs.args[0]
+        assert argv[0] == "ffprobe"
+        assert "https://example.com/test.m4a" in argv
 
     def test_audio_create_duration(self, audio):
         duration = "00:01:01.00"

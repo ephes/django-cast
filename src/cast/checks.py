@@ -3,12 +3,25 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from django.conf import settings
-from django.core.checks import Warning, register
+from django.core.checks import Error, Warning, register
 
 # Source extensions to consider
 SOURCE_EXTENSIONS = frozenset({".ts", ".tsx", ".js", ".jsx", ".vue", ".css", ".scss", ".sass"})
+
+CAST_SETTING_TYPES: tuple[tuple[str, type], ...] = (
+    ("CAST_COMMENTS_ENABLED", bool),
+    ("CAST_CUSTOM_THEMES", list),
+    ("CAST_FOLLOW_LINKS", dict),
+    ("CAST_FILTERSET_FACETS", list),
+    ("CAST_IMAGE_FORMATS", list),
+    ("CAST_REGULAR_IMAGE_SLOT_DIMENSIONS", list),
+    ("CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", list),
+    ("CAST_REPOSITORY", str),
+    ("CAST_PODLOVE_PLAYER_THEMES", dict),
+)
 
 
 def _newest_source_mtime(source_dir: Path) -> float | None:
@@ -34,6 +47,26 @@ def _find_stale_assets(base_dir: Path) -> list[str]:
             stale.append(f"{source_dir} is newer than {manifest.name} — run 'just js-build-vite'")
 
     return stale
+
+
+@register("cast")
+def check_cast_setting_types(app_configs, **kwargs):  # type: ignore[no-untyped-def]
+    """Validate basic types for core CAST_* settings."""
+    errors: list[Error] = []
+
+    for setting_name, expected_type in CAST_SETTING_TYPES:
+        value: Any = getattr(settings, setting_name, None)
+        if value is None:
+            continue
+        if not isinstance(value, expected_type):
+            errors.append(
+                Error(
+                    f"{setting_name} must be of type {expected_type.__name__}.",
+                    id="cast.E001",
+                )
+            )
+
+    return errors
 
 
 @register("cast")

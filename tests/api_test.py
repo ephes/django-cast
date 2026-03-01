@@ -12,6 +12,7 @@ from cast.api.views import (
     AudioPodloveDetailView,
     CastImagesAPIViewSet,
     FilteredPagesAPIViewSet,
+    StandardResultsSetPagination,
     ThemeListView,
 )
 from cast.devdata import generate_blog_with_media
@@ -25,6 +26,10 @@ def test_api_root(api_client):
     url = reverse("cast:api:root")
     r = api_client.get(url)
     assert r.status_code == 200
+
+
+def test_standard_results_set_pagination_max_page_size():
+    assert StandardResultsSetPagination.max_page_size == 200
 
 
 class TestBlogVideo:

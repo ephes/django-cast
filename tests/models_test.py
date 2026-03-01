@@ -744,7 +744,7 @@ def test_homepage_serve(episode, mocker):
 def test_video_create_poster_video_url_without_http(mocker):
     mocker.patch("cast.models.video.tempfile.mkstemp", return_value=(1, "foo"))
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
-    check_output = mocker.patch("cast.models.video.check_output", side_effect=ValueError())
+    run = mocker.patch("cast.models.video.subprocess.run", side_effect=ValueError())
 
     class Original:
         url = "https://example.com/video.mp4"
@@ -753,8 +753,12 @@ def test_video_create_poster_video_url_without_http(mocker):
     mocker.patch.object(video, "original", Original())
     with pytest.raises(ValueError):
         video._create_poster()
-    command = check_output.call_args_list[0][0][0]
-    assert "example" in command
+    call_kwargs = run.call_args_list[0]
+    command = call_kwargs.args[0]
+    assert command[0] == "ffmpeg"
+    assert "https://example.com/video.mp4" in command
+    assert call_kwargs.kwargs.get("check") is True
+    assert call_kwargs.kwargs.get("timeout") == 30
 
 
 @pytest.mark.django_db

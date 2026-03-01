@@ -1,5 +1,6 @@
 from datetime import datetime
 from time import mktime
+from xml.etree import ElementTree
 
 import feedparser
 import pytest
@@ -91,6 +92,19 @@ class TestGeneratedFeeds:
         content = r.content.decode("utf-8")
         assert "xml" in content
         assert post.title in content
+
+    def test_get_latest_entries_feed_escapes_special_chars_in_title(self, client, post, use_dummy_cache_backend):
+        post.title = "A & B < C"
+        post.save()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        xml_content = response.content.decode("utf-8")
+        ElementTree.fromstring(xml_content)
+        assert "A &amp; B &lt; C" in xml_content
+        assert "A & B < C" not in xml_content
 
     def test_get_latest_entries_atom_feed(self, client, post, use_dummy_cache_backend):
         feed_url = reverse("cast:latest_entries_atom_feed", kwargs={"slug": post.blog.slug})

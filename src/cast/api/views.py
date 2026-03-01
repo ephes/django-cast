@@ -75,7 +75,7 @@ class VideoCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadRespons
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 40
     page_size_query_param = "pageSize"
-    max_page_size = 10000
+    max_page_size = 200
 
 
 class VideoListView(generics.ListCreateAPIView):

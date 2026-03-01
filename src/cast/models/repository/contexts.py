@@ -17,7 +17,7 @@ from .serialization import (
     deserialize_transcript,
     deserialize_video,
 )
-from .snapshot import PostQuerySnapshot, cache_page_url
+from .snapshot import PostQuerySnapshot, cache_page_url, clear_cached_page_urls
 from .types import AudioById, ImageById, LinkTuples, RenditionsForPosts, VideoById
 
 if TYPE_CHECKING:
@@ -76,6 +76,8 @@ class PostDetailContext:
     @classmethod
     def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailContext":
         """Build a ``PostDetailContext`` from a live post and the current request."""
+        # The page-link cache is request-scoped and repopulated by repository construction.
+        clear_cached_page_urls()
         blog = post.blog
         owner_username = "unknown"
         if post.owner is not None:
@@ -178,6 +180,8 @@ class FeedContext:
         post_queryset: QuerySet["Post"],
     ) -> "FeedContext":
         """Build a ``FeedContext`` from live Django models and a post queryset."""
+        # The page-link cache is request-scoped and repopulated by this repository.
+        clear_cached_page_urls()
         site = Site.find_for_request(request)
         queryset_data = PostQuerySnapshot.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
         root_nav_links: LinkTuples = []
@@ -237,6 +241,8 @@ class FeedContext:
         """
         This method recreates usable models from the cachable data.
         """
+        # The page-link cache is request-scoped and repopulated by this repository.
+        clear_cached_page_urls()
         from wagtail.images.models import Image
 
         from .. import Audio, Video
@@ -405,6 +411,8 @@ class BlogIndexContext:
         """
         This method recreates usable models from the cachable data.
         """
+        # The page-link cache is request-scoped and repopulated by this repository.
+        clear_cached_page_urls()
         from wagtail.images.models import Image
 
         from .. import Audio, Video
@@ -498,6 +506,8 @@ class BlogIndexContext:
     @classmethod
     def create_from_django_models(cls, request: HttpRequest, blog: "Blog") -> "BlogIndexContext":
         """Build a ``BlogIndexContext`` from a blog and the current request."""
+        # The page-link cache is request-scoped and repopulated by this repository.
+        clear_cached_page_urls()
         get_params = request.GET.copy()
         filterset = blog.get_filterset(get_params)
         pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
