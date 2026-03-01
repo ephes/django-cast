@@ -32,6 +32,24 @@ and [Wagtail](https://wagtail.org).
 
 See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/installation.html).
 
+## Upgrade note (0.2.54)
+
+Repository alias names were removed in a breaking cleanup. Use canonical names only.
+
+- `QuerysetData` -> `PostQuerySnapshot`
+- `PostDetailRepository` -> `PostDetailContext`
+- `BlogIndexRepository` -> `BlogIndexContext`
+- `FeedRepository` -> `FeedContext`
+- `EpisodeFeedRepository` -> `EpisodeFeedContext`
+- `audio_to_dict` -> `serialize_audio`
+- `video_to_dict` -> `serialize_video`
+- `image_to_dict` -> `serialize_image`
+- `blog_to_dict` -> `serialize_blog`
+- `blog_from_data` -> `deserialize_blog`
+- `post_to_dict` -> `serialize_post`
+- `episode_to_dict` -> `serialize_episode`
+- `transcript_to_dict` -> `serialize_transcript`
+
 ## Roadmap
 
 - Design improvements for the default theme

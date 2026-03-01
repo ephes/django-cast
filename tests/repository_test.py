@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import sqlparse
+import cast.models.repository as repository_module
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
@@ -66,6 +67,26 @@ def show_queries(queries):
 def blocker(*_args):
     """Get a traceback when a query is executed."""
     raise Exception("No database access allowed here.")
+
+
+def test_repository_removed_legacy_exports_are_absent():
+    removed_names = [
+        "QuerysetData",
+        "PostDetailRepository",
+        "BlogIndexRepository",
+        "FeedRepository",
+        "EpisodeFeedRepository",
+        "audio_to_dict",
+        "video_to_dict",
+        "image_to_dict",
+        "blog_to_dict",
+        "blog_from_data",
+        "post_to_dict",
+        "episode_to_dict",
+        "transcript_to_dict",
+    ]
+    for name in removed_names:
+        assert not hasattr(repository_module, name)
 
 
 @pytest.fixture(autouse=True)
