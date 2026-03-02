@@ -95,6 +95,7 @@ def ensure_wagtail_roots(django_db_setup, django_db_blocker):
                 row = cursor.fetchone()
                 if row is None:
                     table_is_broken = False
+                    # Table is absent (fresh or incomplete reused DB), so just create it.
                     needs_bootstrap = True
                 else:
                     table_sql = row[0] or ""
@@ -294,7 +295,7 @@ def authenticated_client(client, user):
 
 @pytest.fixture()
 def admin_user(db):
-    user = UserFactory(is_staff=True, is_superuser=True)
+    user = UserFactory(is_staff=True, is_superuser=False)
     user._password = "password"
     group, _created = Group.objects.get_or_create(name="Moderators")
     group.permissions.set(Permission.objects.all())

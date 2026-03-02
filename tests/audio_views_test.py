@@ -68,6 +68,12 @@ class TestAllAudioEndpoints:
             login_url = reverse("wagtailadmin_login")
             assert login_url in r.url
 
+    def test_get_index_authenticated_without_permissions(self, authenticated_client, audio_urls):
+        r = authenticated_client.get(audio_urls.index)
+        assert r.status_code in {302, 403}
+        if r.status_code == 302:
+            assert reverse("wagtailadmin_login") in r.url
+
     def test_get_all_authenticated(self, admin_client, audio_urls):
         for view_name, url in audio_urls.urls.items():
             r = admin_client.get(url)

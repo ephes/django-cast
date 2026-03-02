@@ -11,8 +11,6 @@ from cast.models import Audio, Post
 from cast.views import styleguide as styleguide_view
 from cast.views.styleguide import StyleguideRemoteFile, StyleguideRemoteVideo
 
-pytestmark = pytest.mark.slow
-
 
 class DummyResponse:
     def __init__(self, data: bytes) -> None:
