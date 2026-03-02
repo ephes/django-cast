@@ -55,6 +55,10 @@ test:
     uv run coverage run -m pytest
     uv run coverage report
 
+# Run only fast tests (exclude tests marked as slow)
+test-fast:
+    uv run pytest -m "not slow"
+
 # Run a specific test (pass path or node id)
 test-one TARGET:
     uv run pytest {{TARGET}} -v
