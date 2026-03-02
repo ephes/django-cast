@@ -8,15 +8,17 @@ from uuid import uuid4
 
 import pytest
 import pytz
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
+from django.conf import settings as django_settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
 from rest_framework.test import APIClient
 from wagtail.images.models import Image
-from wagtail.models import Collection, Page, Site
+from wagtail.models import Collection, GroupPagePermission, Locale, Page, Site
 from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACHE_VERSION
 
 from cast import appsettings
@@ -56,6 +58,80 @@ def remove_stale_media_files():
     yield
     # clean up after tests end
     shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_wagtail_roots(django_db_setup, django_db_blocker):
+    """Bootstrap Wagtail essentials when the test DB starts empty."""
+    with django_db_blocker.unblock():
+        language_code = getattr(django_settings, "LANGUAGE_CODE", "en")
+        locale, _created = Locale.objects.get_or_create(language_code=language_code)
+        base_language_code = language_code.split("-")[0]
+        if base_language_code != language_code:
+            Locale.objects.get_or_create(language_code=base_language_code)
+
+        root_page = Page.get_first_root_node()
+        if root_page is None:
+            root_page = Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
+
+        if Collection.get_first_root_node() is None:
+            Collection.add_root(instance=Collection(name="Root"))
+
+        default_site = Site.objects.filter(is_default_site=True).first()
+        if default_site is None:
+            Site.objects.create(hostname="localhost", port=80, root_page=root_page, is_default_site=True)
+        elif default_site.root_page_id is None:
+            default_site.root_page = root_page
+            default_site.save(update_fields=["root_page"])
+
+        if connection.vendor == "sqlite":
+            with connection.cursor() as cursor:
+                # With --reuse-db + --no-migrations we sometimes inherit a non-FTS table
+                # at `wagtailsearch_indexentry_fts`. That breaks search indexing setup.
+                # Only rebuild when the existing schema is wrong; otherwise keep it intact.
+                cursor.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='wagtailsearch_indexentry_fts'"
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    table_is_broken = False
+                    needs_bootstrap = True
+                else:
+                    table_sql = row[0] or ""
+                    table_is_broken = "VIRTUAL TABLE" not in table_sql.upper()
+                    needs_bootstrap = table_is_broken
+
+                if table_is_broken:
+                    cursor.execute("DROP TRIGGER IF EXISTS insert_wagtailsearch_indexentry_fts")
+                    cursor.execute("DROP TRIGGER IF EXISTS update_wagtailsearch_indexentry_fts")
+                    cursor.execute("DROP TRIGGER IF EXISTS delete_wagtailsearch_indexentry_fts")
+                    cursor.execute("DROP TABLE IF EXISTS wagtailsearch_indexentry_fts")
+
+                if needs_bootstrap:
+                    cursor.execute(
+                        "CREATE VIRTUAL TABLE wagtailsearch_indexentry_fts USING fts5(autocomplete, body, title)"
+                    )
+                    cursor.execute(
+                        "CREATE TRIGGER IF NOT EXISTS insert_wagtailsearch_indexentry_fts "
+                        "AFTER INSERT ON wagtailsearch_indexentry "
+                        "BEGIN INSERT INTO wagtailsearch_indexentry_fts(title, body, autocomplete, rowid) "
+                        "VALUES (NEW.title, NEW.body, NEW.autocomplete, NEW.id); END"
+                    )
+                    cursor.execute(
+                        "CREATE TRIGGER IF NOT EXISTS update_wagtailsearch_indexentry_fts "
+                        "AFTER UPDATE ON wagtailsearch_indexentry "
+                        "BEGIN UPDATE wagtailsearch_indexentry_fts SET title=NEW.title, body=NEW.body, "
+                        "autocomplete=NEW.autocomplete WHERE rowid=NEW.id; END"
+                    )
+                    cursor.execute(
+                        "CREATE TRIGGER IF NOT EXISTS delete_wagtailsearch_indexentry_fts "
+                        "AFTER DELETE ON wagtailsearch_indexentry "
+                        "BEGIN DELETE FROM wagtailsearch_indexentry_fts WHERE rowid=OLD.id; END"
+                    )
+                    cursor.execute(
+                        "INSERT INTO wagtailsearch_indexentry_fts(rowid, title, body, autocomplete) "
+                        "SELECT id, title, body, autocomplete FROM wagtailsearch_indexentry"
+                    )
 
 
 @pytest.fixture(scope="session")
@@ -207,14 +283,33 @@ def podlove_transcript():
 def user(db):
     user = UserFactory()
     user._password = "password"
-    group, _created = Group.objects.get_or_create(name="Moderators")
-    group.user_set.add(user)
     return user
 
 
 @pytest.fixture()
 def authenticated_client(client, user):
-    client.login(username=user.username, password=user._password)
+    assert client.login(username=user.username, password=user._password)
+    return client
+
+
+@pytest.fixture()
+def admin_user(db):
+    user = UserFactory(is_staff=True, is_superuser=True)
+    user._password = "password"
+    group, _created = Group.objects.get_or_create(name="Moderators")
+    group.permissions.set(Permission.objects.all())
+    root_page = Page.get_first_root_node()
+    if root_page is not None:
+        for codename in ("add_page", "change_page", "publish_page", "lock_page", "unlock_page"):
+            permission = Permission.objects.get(codename=codename, content_type__app_label="wagtailcore")
+            GroupPagePermission.objects.get_or_create(group=group, page=root_page, permission=permission)
+    group.user_set.add(user)
+    return user
+
+
+@pytest.fixture()
+def admin_client(client, admin_user):
+    assert client.login(username=admin_user.username, password=admin_user._password)
     return client
 
 
@@ -285,11 +380,20 @@ def file_instance(user, m4a_audio):
 
 
 @pytest.fixture()
-def site(db):
-    site = Site.objects.first()
+def site(db, ensure_wagtail_roots):
+    # `ensure_wagtail_roots` is the source of truth for root page + default site bootstrap.
+    # This fixture only returns/repairs the current default site if tests removed it.
+    site = Site.objects.filter(is_default_site=True, root_page__isnull=False).first()
     if site is not None:
         return site
     root_page = Page.get_first_root_node()
+    assert root_page is not None
+    orphan_site = Site.objects.filter(root_page__isnull=True).first()
+    if orphan_site is not None:
+        orphan_site.root_page = root_page
+        orphan_site.is_default_site = True
+        orphan_site.save(update_fields=["root_page", "is_default_site"])
+        return orphan_site
     return Site.objects.create(hostname="localhost", port=80, root_page=root_page, is_default_site=True)
 
 
