@@ -112,22 +112,26 @@ def test_media_backup_existing_file_in_backup(stub_storages):
     assert backup.was_not_added_by_backup("foobar.jpg")  # type: ignore
 
 
+@pytest.mark.slow
 def test_styleguide_prefetch_command(settings, db):
     settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
     call_command("styleguide_prefetch", theme="plain")
 
 
+@pytest.mark.slow
 def test_styleguide_prefetch_command_default_theme(settings, db):
     settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
     call_command("styleguide_prefetch")
 
 
+@pytest.mark.slow
 def test_styleguide_prefetch_command_invalid_theme(settings, db):
     settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
     with pytest.raises(CommandError):
         call_command("styleguide_prefetch", theme="not-a-theme")
 
 
+@pytest.mark.slow
 def test_styleguide_prefetch_command_with_renditions(settings, db):
     settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
     settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = False

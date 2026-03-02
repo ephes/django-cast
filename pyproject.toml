@@ -114,12 +114,16 @@ split-on-trailing-comma = true
 DJANGO_SETTINGS_MODULE = "tests.settings"
 minversion = "6.0"
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests that are intentionally slower and can be skipped for a faster local feedback loop",
+]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
 ]
 addopts = [
     "-ra",
+    "--strict-markers",
     "--reuse-db",
     "--no-migrations",
     "--randomly-seed=1234",

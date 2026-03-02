@@ -16,6 +16,7 @@ def test_styleguide_disabled_returns_404(settings, client):
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "plain"})
@@ -38,6 +39,7 @@ def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_vue_theme_builds_payload(settings, rf, site, monkeypatch):
     settings.CAST_ENABLE_STYLEGUIDE = True
     settings.CAST_CUSTOM_THEMES = [("vue", "Vue")]
@@ -61,6 +63,7 @@ def test_styleguide_vue_theme_builds_payload(settings, rf, site, monkeypatch):
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_seeds_comments_for_media_post(settings, client, site, comments_enabled):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "plain"})
@@ -96,6 +99,7 @@ def test_styleguide_seeds_comments_for_media_post(settings, client, site, commen
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_theme_switch_does_not_persist_session(settings, client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
@@ -107,6 +111,7 @@ def test_styleguide_theme_switch_does_not_persist_session(settings, client, site
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_uses_session_theme(settings, client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
@@ -121,6 +126,7 @@ def test_styleguide_uses_session_theme(settings, client, site):
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_invalid_theme_uses_current(settings, client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
@@ -131,6 +137,7 @@ def test_styleguide_invalid_theme_uses_current(settings, client, site):
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_missing_templates_fallback_warning(settings, client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     settings.CAST_CUSTOM_THEMES = [("custom_theme", "Custom Theme")]
@@ -145,6 +152,7 @@ def test_styleguide_missing_templates_fallback_warning(settings, client, site):
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_creates_site_when_missing(settings, client):
     settings.CAST_ENABLE_STYLEGUIDE = True
     from wagtail.models import Site
@@ -157,6 +165,7 @@ def test_styleguide_creates_site_when_missing(settings, client):
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_repairs_episode_audio(settings, client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
@@ -298,9 +307,13 @@ def test_styleguide_extract_podlove_player_api_url():
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_resets_invalid_blog_theme_and_repulishes(settings, client, site, user):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
+    existing_blog = Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).first()
+    if existing_blog is not None:
+        existing_blog.delete()
 
     blog = Blog(
         title="Styleguide Blog",
@@ -322,9 +335,13 @@ def test_styleguide_resets_invalid_blog_theme_and_repulishes(settings, client, s
 
 
 @pytest.mark.django_db
+@pytest.mark.slow
 def test_styleguide_resets_invalid_podcast_theme(settings, client, site, user):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
+    existing_podcast = Podcast.objects.filter(slug=STYLEGUIDE_PODCAST_SLUG).first()
+    if existing_podcast is not None:
+        existing_podcast.delete()
 
     podcast = Podcast(
         title="Styleguide Podcast",

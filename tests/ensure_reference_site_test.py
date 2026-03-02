@@ -11,7 +11,9 @@ from cast.views.styleguide import (
 )
 
 
-@pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.slow]
+
+
 def test_ensure_reference_site_creates_content(site):
     """Command creates blog, podcast, posts, and episode."""
     call_command("ensure_reference_site")
@@ -21,7 +23,6 @@ def test_ensure_reference_site_creates_content(site):
     assert Episode.objects.filter(slug=STYLEGUIDE_EPISODE_SLUG).exists()
 
 
-@pytest.mark.django_db
 def test_ensure_reference_site_is_idempotent(site):
     """Running twice does not duplicate content."""
     call_command("ensure_reference_site")
@@ -33,7 +34,6 @@ def test_ensure_reference_site_is_idempotent(site):
     assert Post.objects.filter(slug__startswith=STYLEGUIDE_POST_SLUG_PREFIX).count() == first_post_count
 
 
-@pytest.mark.django_db
 def test_ensure_reference_site_reset(site):
     """--reset deletes and recreates the reference site."""
     call_command("ensure_reference_site")
@@ -44,28 +44,24 @@ def test_ensure_reference_site_reset(site):
     assert Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).exists()
 
 
-@pytest.mark.django_db
 def test_ensure_reference_site_invalid_theme(site):
     """Invalid theme slug raises CommandError."""
     with pytest.raises(CommandError, match="not available"):
         call_command("ensure_reference_site", theme="nonexistent-theme")
 
 
-@pytest.mark.django_db
 def test_ensure_reference_site_with_theme(site):
     """--theme selects a specific theme."""
     call_command("ensure_reference_site", theme="plain")
     assert Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).exists()
 
 
-@pytest.mark.django_db
 def test_ensure_reference_site_with_renditions(site):
     """--with-renditions flag does not crash."""
     call_command("ensure_reference_site", with_renditions=True)
     assert Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).exists()
 
 
-@pytest.mark.django_db
 def test_ensure_reference_site_remote_media_flag(site, settings):
     """--remote-media enables the remote media setting."""
     # Remote media won't actually fetch (no URLs configured) but the flag should be set
