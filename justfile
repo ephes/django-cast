@@ -162,3 +162,10 @@ check-page PATH *ARGS:
 # Generate HTML comparison report across all themes
 compare-page PATH *ARGS:
     uv run python scripts/playwright_utils.py compare-page {{PATH}} {{ARGS}}
+
+# Count lines of code in the repository (by language + by top-level folder)
+loc:
+    cloc --vcs=git .
+    @echo ""
+    @echo "--- Python SLOC by folder ---"
+    @sloccount --details . 2>/dev/null | awk '/^[0-9]/ && $2=="python" {sums[$3]+=$1} END{for(d in sums) printf "%8d  %s\n", sums[d], d}' | sort -rn
