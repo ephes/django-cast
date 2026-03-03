@@ -65,6 +65,48 @@ class TestBlogVideo:
         assert r.status_code == 200
         assert "results" in r.json()
 
+    def test_video_detail_endpoint_for_other_user_returns_404(self, api_client, video):
+        requester = UserFactory()
+        api_client.login(username=requester.username, password="password")
+
+        detail_url = reverse("cast:api:video_detail", kwargs={"pk": video.pk})
+        r = api_client.get(detail_url, format="json")
+
+        assert r.status_code == 404
+
+    def test_video_delete_endpoint_for_other_user_returns_404_and_keeps_video(self, api_client, video):
+        requester = UserFactory()
+        api_client.login(username=requester.username, password="password")
+
+        detail_url = reverse("cast:api:video_detail", kwargs={"pk": video.pk})
+        r = api_client.delete(detail_url, format="json")
+
+        assert r.status_code == 404
+        assert type(video).objects.filter(pk=video.pk).exists()
+
+    def test_video_delete_endpoint_for_owner_deletes_video(self, api_client, user, video):
+        api_client.login(username=user.username, password="password")
+
+        detail_url = reverse("cast:api:video_detail", kwargs={"pk": video.pk})
+        r = api_client.delete(detail_url, format="json")
+
+        assert r.status_code == 204
+        assert not type(video).objects.filter(pk=video.pk).exists()
+
+    def test_video_detail_endpoint_for_owner_returns_200(self, api_client, user, video):
+        api_client.login(username=user.username, password="password")
+
+        detail_url = reverse("cast:api:video_detail", kwargs={"pk": video.pk})
+        r = api_client.get(detail_url, format="json")
+
+        assert r.status_code == 200
+        assert r.json()["id"] == video.pk
+
+    def test_video_delete_endpoint_without_authentication_returns_403(self, api_client, video):
+        detail_url = reverse("cast:api:video_detail", kwargs={"pk": video.pk})
+        r = api_client.delete(detail_url, format="json")
+        assert r.status_code == 403
+
 
 class TestBlogAudio:
     pytestmark = pytest.mark.django_db
@@ -98,6 +140,48 @@ class TestBlogAudio:
         # dont redirect to login page
         assert r.status_code == 200
         assert "results" in r.json()
+
+    def test_audio_detail_endpoint_for_other_user_returns_404(self, api_client, audio):
+        requester = UserFactory()
+        api_client.login(username=requester.username, password="password")
+
+        detail_url = reverse("cast:api:audio_detail", kwargs={"pk": audio.pk})
+        r = api_client.get(detail_url, format="json")
+
+        assert r.status_code == 404
+
+    def test_audio_delete_endpoint_for_other_user_returns_404_and_keeps_audio(self, api_client, audio):
+        requester = UserFactory()
+        api_client.login(username=requester.username, password="password")
+
+        detail_url = reverse("cast:api:audio_detail", kwargs={"pk": audio.pk})
+        r = api_client.delete(detail_url, format="json")
+
+        assert r.status_code == 404
+        assert type(audio).objects.filter(pk=audio.pk).exists()
+
+    def test_audio_delete_endpoint_for_owner_deletes_audio(self, api_client, user, audio):
+        api_client.login(username=user.username, password="password")
+
+        detail_url = reverse("cast:api:audio_detail", kwargs={"pk": audio.pk})
+        r = api_client.delete(detail_url, format="json")
+
+        assert r.status_code == 204
+        assert not type(audio).objects.filter(pk=audio.pk).exists()
+
+    def test_audio_detail_endpoint_for_owner_returns_200(self, api_client, user, audio):
+        api_client.login(username=user.username, password="password")
+
+        detail_url = reverse("cast:api:audio_detail", kwargs={"pk": audio.pk})
+        r = api_client.get(detail_url, format="json")
+
+        assert r.status_code == 200
+        assert r.json()["id"] == audio.pk
+
+    def test_audio_delete_endpoint_without_authentication_returns_403(self, api_client, audio):
+        detail_url = reverse("cast:api:audio_detail", kwargs={"pk": audio.pk})
+        r = api_client.delete(detail_url, format="json")
+        assert r.status_code == 403
 
 
 class TestPodcastAudio:

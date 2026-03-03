@@ -31,6 +31,9 @@
   - added `EpisodeFeedContext` to model reference docs
   - removed duplicate URL computation in `data_for_blog_cachable` by serializing URL maps in `add_queryset_data`
   - fixed `FeedContext.create_from_django_models` to handle `Site.find_for_request(request) is None`
+- Secured media detail API authorization:
+  - `VideoDetailView` and `AudioDetailView` now scope object lookup to `request.user`, preventing cross-user retrieve/delete.
+  - Added regression tests for owner and non-owner GET/DELETE behavior, including unauthenticated DELETE responses.
 
 Migration mapping (old -> new):
 

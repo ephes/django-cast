@@ -90,9 +90,12 @@ class VideoListView(generics.ListCreateAPIView):
 
 
 class VideoDetailView(generics.RetrieveDestroyAPIView):
-    queryset = Video.objects.all()
     serializer_class = VideoSerializer
     permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self) -> QuerySet[Video]:
+        user = self.request.user
+        return Video.objects.filter(user=user)
 
 
 class AudioListView(generics.ListCreateAPIView):
@@ -107,9 +110,12 @@ class AudioListView(generics.ListCreateAPIView):
 
 
 class AudioDetailView(generics.RetrieveDestroyAPIView):
-    queryset = Audio.objects.all()
     serializer_class = AudioSerializer
     permission_classes = (IsAuthenticated,)
+
+    def get_queryset(self) -> QuerySet[Audio]:
+        user = self.request.user
+        return Audio.objects.filter(user=user)
 
 
 class AudioPodloveDetailView(generics.RetrieveAPIView):
