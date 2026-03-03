@@ -87,7 +87,7 @@ def index(request: HttpRequest) -> HttpResponse:
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     if request.POST:
         transcript = Transcript()
-        form = TranscriptForm(request.POST, request.FILES, instance=transcript)
+        form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
         if form.is_valid():
             form.save()
 
@@ -105,7 +105,7 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
             messages.error(request, _("The transcript file could not be saved due to errors."))
     else:
         transcript = Transcript()
-        form = TranscriptForm(instance=transcript)
+        form = TranscriptForm(instance=transcript, user=request.user)
 
     return render(
         request,
@@ -118,7 +118,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     transcript = get_object_or_404(Transcript, id=transcript_id)
 
     if request.method == "POST":
-        form = TranscriptForm(request.POST, request.FILES, instance=transcript)
+        form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
         if form.is_valid():
             transcript = form.save()
 
@@ -135,7 +135,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         else:
             messages.error(request, _("The transcript could not be saved due to errors."))
     else:
-        form = TranscriptForm(instance=transcript)
+        form = TranscriptForm(instance=transcript, user=request.user)
 
     return render(
         request,
@@ -162,7 +162,7 @@ def delete(request: HttpRequest, transcript_id: int) -> HttpResponse:
 def chooser(request: HttpRequest) -> HttpResponse:
     transcripts = Transcript.objects.all()
 
-    upload_form = TranscriptForm(prefix="media-chooser-upload")
+    upload_form = TranscriptForm(prefix="media-chooser-upload", user=request.user)
 
     if "q" in request.GET or "p" in request.GET:
         search_form = NonEmptySearchForm(request.GET)
@@ -236,7 +236,9 @@ def chosen(request, transcript_id: int) -> HttpResponse:
 def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     if request.method == "POST":
         transcript = Transcript()
-        form = TranscriptForm(request.POST, request.FILES, instance=transcript, prefix="media-chooser-upload")
+        form = TranscriptForm(
+            request.POST, request.FILES, instance=transcript, user=request.user, prefix="media-chooser-upload"
+        )
 
         if form.is_valid():
             form.save()
@@ -265,7 +267,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
         "transcripts": transcript_items,
         "searchform": search_form,
         # "collections": collections,
-        "uploadform": TranscriptForm(),
+        "uploadform": TranscriptForm(user=request.user),
         "is_searching": False,
         "pagination_template": "wagtailadmin/shared/pagination_nav.html",
     }

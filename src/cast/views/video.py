@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -66,10 +66,10 @@ def index(request: HttpRequest) -> HttpResponse:
 
 
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
-    video_form = get_video_form()
+    video_form = cast(Any, get_video_form())
     if request.POST:
         video = Video(user=request.user)
-        form = video_form(request.POST, request.FILES, instance=video)
+        form = video_form(request.POST, request.FILES, instance=video, user=request.user)
         if form.is_valid():
             form.save()
 
@@ -87,7 +87,7 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
             messages.error(request, _("The video file could not be saved due to errors."))
     else:
         video = Video(user=request.user)
-        form = video_form(instance=video)
+        form = video_form(instance=video, user=request.user)
 
     return render(
         request,
@@ -97,12 +97,12 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
 
 
 def edit(request: HttpRequest, video_id: int) -> HttpResponse:
-    video_form = get_video_form()
+    video_form = cast(Any, get_video_form())
     video = get_object_or_404(Video, id=video_id)
 
     if request.POST:
         original_file = video.original
-        form = video_form(request.POST, request.FILES, instance=video)
+        form = video_form(request.POST, request.FILES, instance=video, user=request.user)
         if form.is_valid():
             if "original" in form.changed_data:
                 # if providing a new video file, delete the old one.
@@ -124,7 +124,7 @@ def edit(request: HttpRequest, video_id: int) -> HttpResponse:
         else:
             messages.error(request, _("The media could not be saved due to errors."))
     else:
-        form = video_form(instance=video)
+        form = video_form(instance=video, user=request.user)
 
     filesize = None
 
@@ -170,7 +170,7 @@ def chooser(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
     videos = Video.objects.all().order_by(ordering)
 
-    upload_form = get_video_form()(prefix="media-chooser-upload")
+    upload_form = cast(Any, get_video_form())(prefix="media-chooser-upload", user=request.user)
 
     if "q" in request.GET or "p" in request.GET:
         search_form = NonEmptySearchForm(request.GET)
@@ -243,11 +243,11 @@ def chosen(request: HttpRequest, video_id: int) -> HttpResponse:
 
 
 def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
-    VideoForm = get_video_form()
+    VideoForm = cast(Any, get_video_form())
 
     if request.method == "POST":
         video = Video(user=request.user)
-        form = VideoForm(request.POST, request.FILES, instance=video, prefix="media-chooser-upload")
+        form = VideoForm(request.POST, request.FILES, instance=video, user=request.user, prefix="media-chooser-upload")
 
         if form.is_valid():
             form.save()
@@ -277,7 +277,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
         "videos": video_items,
         "searchform": search_form,
         # "collections": collections,
-        "uploadform": VideoForm(),
+        "uploadform": VideoForm(user=request.user),
         "is_searching": False,
         "pagination_template": pagination_template,
     }

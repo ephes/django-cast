@@ -1,7 +1,10 @@
 from unittest.mock import patch
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
+from wagtail.models import Collection, GroupCollectionPermission
 
 from cast.models import Audio
 from cast.views.audio import delete_old_audio_files
@@ -164,6 +167,32 @@ class TestAudioIndex:
 
 class TestAudioAdd:
     pytestmark = pytest.mark.django_db
+
+    def test_get_add_audio_scopes_collections_for_restricted_user(self, client):
+        user = get_user_model().objects.create_user(
+            username="limited-audio-admin",
+            password="password",
+            is_staff=True,
+        )
+        group = Group.objects.create(name="Limited audio admins")
+        group.permissions.add(Permission.objects.get(codename="access_admin", content_type__app_label="wagtailadmin"))
+
+        root = Collection.get_first_root_node()
+        assert root is not None
+        permitted = root.add_child(instance=Collection(name="Permitted Audio"))
+        root.add_child(instance=Collection(name="Forbidden Audio"))
+        add_audio_permission = Permission.objects.get(codename="add_audio", content_type__app_label="cast")
+        GroupCollectionPermission.objects.create(group=group, collection=permitted, permission=add_audio_permission)
+
+        group.user_set.add(user)
+        assert client.login(username="limited-audio-admin", password="password")
+
+        response = client.get(reverse("castaudio:add"))
+
+        assert response.status_code == 200
+        form = response.context["form"]
+        assert "collection" not in form.fields
+        assert list(form.collections.values_list("id", flat=True)) == [permitted.id]
 
     def test_get_add_audio(self, admin_client, audio_urls):
         r = admin_client.get(audio_urls.add)

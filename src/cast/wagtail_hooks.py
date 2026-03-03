@@ -14,7 +14,7 @@ from taggit.models import Tag
 from wagtail import hooks
 from wagtail.admin.menu import MenuItem
 from wagtail.admin.panels import FieldPanel
-from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
+from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 from wagtail.rich_text.pages import PageLinkHandler
 from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
@@ -77,9 +77,7 @@ class TranscriptMenuItem(MenuItem):
     """Admin sidebar menu item for Transcript management, visible to users with transcript permissions."""
 
     def is_shown(self, request: HttpRequest) -> bool:
-        permission_policy = CollectionOwnershipPermissionPolicy(
-            Transcript, auth_model=Transcript, owner_field_name="user"
-        )
+        permission_policy = CollectionPermissionPolicy(Transcript)
         return permission_policy.user_has_any_permission(request.user, ["add", "change", "delete"])
 
 

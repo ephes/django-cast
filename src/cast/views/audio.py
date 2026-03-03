@@ -177,7 +177,7 @@ def chooser(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
     audios = Audio.objects.all().order_by(ordering)
 
-    upload_form = AudioForm(prefix="media-chooser-upload")
+    upload_form = AudioForm(prefix="media-chooser-upload", user=request.user)
 
     if "q" in request.GET or "p" in request.GET:
         search_form = NonEmptySearchForm(request.GET)
@@ -282,7 +282,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
         "audios": audio_items,
         "searchform": search_form,
         # "collections": collections,
-        "uploadform": AudioForm(),
+        "uploadform": AudioForm(user=request.user),
         "is_searching": False,
         "pagination_template": "wagtailadmin/shared/pagination_nav.html",
     }

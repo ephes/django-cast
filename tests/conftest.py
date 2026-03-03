@@ -18,7 +18,7 @@ from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
 from rest_framework.test import APIClient
 from wagtail.images.models import Image
-from wagtail.models import Collection, GroupPagePermission, Locale, Page, Site
+from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Locale, Page, Site
 from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACHE_VERSION
 
 from cast import appsettings
@@ -299,6 +299,21 @@ def admin_user(db):
     user._password = "password"
     group, _created = Group.objects.get_or_create(name="Moderators")
     group.permissions.set(Permission.objects.all())
+    root_collection = Collection.get_first_root_node()
+    assert root_collection is not None
+    for codename in (
+        "add_audio",
+        "change_audio",
+        "delete_audio",
+        "add_video",
+        "change_video",
+        "delete_video",
+        "add_transcript",
+        "change_transcript",
+        "delete_transcript",
+    ):
+        permission = Permission.objects.get(codename=codename, content_type__app_label="cast")
+        GroupCollectionPermission.objects.get_or_create(group=group, collection=root_collection, permission=permission)
     root_page = Page.get_first_root_node()
     if root_page is not None:
         for codename in ("add_page", "change_page", "publish_page", "lock_page", "unlock_page"):

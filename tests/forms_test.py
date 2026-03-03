@@ -3,10 +3,73 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
+from wagtail.models import Collection, GroupCollectionPermission
 
 from cast.forms import AudioForm, ChapterMarkForm, TranscriptForm, get_video_form
-from cast.models import Audio, ChapterMark
+from cast.models import Audio, ChapterMark, Transcript, Video
+from tests.factories import UserFactory
+
+
+def _add_collection_permissions(user, model, collections):
+    group = Group.objects.create(name=f"{model.__name__}-group-{user.pk}")
+    content_type = ContentType.objects.get_for_model(model)
+    permission = Permission.objects.get(content_type=content_type, codename=f"add_{model._meta.model_name}")
+    for collection in collections:
+        GroupCollectionPermission.objects.create(group=group, collection=collection, permission=permission)
+    user.groups.add(group)
+
+
+def _create_test_collections():
+    root = Collection.get_first_root_node()
+    assert root is not None
+    permitted_one = root.add_child(instance=Collection(name="Permitted One"))
+    permitted_two = root.add_child(instance=Collection(name="Permitted Two"))
+    forbidden = root.add_child(instance=Collection(name="Forbidden"))
+    return permitted_one, permitted_two, forbidden
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("model", "form_factory"),
+    [
+        (Audio, lambda user: AudioForm(user=user)),
+        (Transcript, lambda user: TranscriptForm(user=user)),
+        (Video, lambda user: get_video_form()(user=user)),
+    ],
+)
+def test_collection_choices_are_limited_to_user_permissions(model, form_factory, user):
+    permitted_one, permitted_two, forbidden = _create_test_collections()
+    _add_collection_permissions(user, model, [permitted_one, permitted_two])
+
+    form = form_factory(user)
+
+    assert "collection" in form.fields
+    collection_ids = set(form.fields["collection"].queryset.values_list("id", flat=True))
+    assert collection_ids == {permitted_one.id, permitted_two.id}
+    assert forbidden.id not in collection_ids
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("model", "form_factory"),
+    [
+        (Audio, lambda user: AudioForm(user=user)),
+        (Transcript, lambda user: TranscriptForm(user=user)),
+        (Video, lambda user: get_video_form()(user=user)),
+    ],
+)
+def test_superuser_has_access_to_all_collections(model, form_factory):
+    permitted_one, permitted_two, forbidden = _create_test_collections()
+    user = UserFactory(is_superuser=True, is_staff=True)
+
+    form = form_factory(user)
+
+    assert "collection" in form.fields
+    collection_ids = set(form.fields["collection"].queryset.values_list("id", flat=True))
+    assert {permitted_one.id, permitted_two.id, forbidden.id}.issubset(collection_ids)
 
 
 class TestChapterMarkForm:
@@ -120,6 +183,22 @@ class TestAudioForm:
         assert saved_chaptermark.title == expected_title
         assert str(saved_chaptermark.start) == "00:02:35.343000"  # == "155.343000"
 
+    def test_chaptermarks_validation_unchanged_with_collection_permissions(self, user):
+        permitted_one, _permitted_two, _forbidden = _create_test_collections()
+        _add_collection_permissions(user, Audio, [permitted_one])
+        invalid_start = "invalid Dokumentation"
+        chaptermarks = "\n".join(
+            [
+                "00:00:28.433 News aus der Szene",
+                invalid_start,
+            ]
+        )
+
+        form = AudioForm({"chaptermarks": chaptermarks}, user=user)
+
+        assert form.is_valid() is False
+        assert invalid_start in form.errors["chaptermarks"][0]
+
 
 def test_get_video_form_collection_not_added_if_in_admin_form_fields(mocker):
     mocker.patch("cast.forms.Video.admin_form_fields", ("title", "original", "poster", "tags", "collection"))
@@ -222,6 +301,16 @@ class TestTranscriptForm:
     def test_vtt_invalid_header(self, audio):
         vtt = SimpleUploadedFile("test.vtt", b"NOTVTT\n", content_type="text/vtt")
         form = TranscriptForm({"audio": audio.id}, {"vtt": vtt})
+        assert form.is_valid() is False
+        assert "vtt" in form.errors
+
+    def test_vtt_validation_unchanged_with_collection_permissions(self, audio, user):
+        permitted_one, _permitted_two, _forbidden = _create_test_collections()
+        _add_collection_permissions(user, Transcript, [permitted_one])
+        vtt = SimpleUploadedFile("test.vtt", b"NOTVTT\n", content_type="text/vtt")
+
+        form = TranscriptForm({"audio": audio.id}, {"vtt": vtt}, user=user)
+
         assert form.is_valid() is False
         assert "vtt" in form.errors
 

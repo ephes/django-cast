@@ -11,13 +11,12 @@ from typing import cast
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.db.models import QuerySet
 from django.forms.models import modelform_factory
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin import widgets
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
-from wagtail.models import Collection
+from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
 from .models import Audio, ChapterMark, Transcript, Video, get_template_base_dir_choices
 
@@ -30,19 +29,6 @@ class VideoForm(forms.ModelForm):
         fields = ["original"]
 
 
-class FakePermissionPolicy:
-    """Permissive stub that grants access to all collections.
-
-    Used as the ``permission_policy`` on media forms so that all
-    collections appear in the collection chooser regardless of
-    per-collection permissions.
-    """
-
-    @staticmethod
-    def collections_user_has_permission_for(_user, _action) -> QuerySet[Collection]:
-        return Collection.objects.all()
-
-
 class BaseVideoForm(BaseCollectionMemberForm):
     """Base form for Video admin views with tag and file widgets, plus collection support."""
 
@@ -53,7 +39,7 @@ class BaseVideoForm(BaseCollectionMemberForm):
             "poster": forms.ClearableFileInput,
         }
 
-    permission_policy = FakePermissionPolicy()
+    permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
 
 
 def get_video_form() -> type[forms.ModelForm]:
@@ -153,7 +139,7 @@ class AudioForm(BaseCollectionMemberForm):
     """
 
     chaptermarks = ChapterMarksField(widget=forms.Textarea, required=False)
-    permission_policy = FakePermissionPolicy()
+    permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
 
     class Meta:
         model = Audio
@@ -212,7 +198,7 @@ class TranscriptForm(BaseCollectionMemberForm):
     fields, and WebVTT files must start with the ``WEBVTT`` header.
     """
 
-    permission_policy = FakePermissionPolicy()
+    permission_policy = CollectionPermissionPolicy(Transcript)
 
     class Meta:
         model = Transcript
