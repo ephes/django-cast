@@ -1,4 +1,5 @@
 import pytest
+from django.contrib.auth.models import Group
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import Http404
 from django.urls import reverse
@@ -79,6 +80,9 @@ def test_styleguide_seeds_comments_for_media_post(settings, client, site, commen
     assert comment_model.objects.for_model(media_post).count() >= 2
 
     styleguide_user = get_user_model().objects.get(username=styleguide_view.STYLEGUIDE_USER_NAME)
+    assert not styleguide_user.has_usable_password()
+    assert not styleguide_user.is_active
+    assert not styleguide_user.groups.filter(name="Moderators").exists()
     comments = (
         comment_model.objects.for_model(media_post).filter(user=styleguide_user).order_by("submit_date", "pk").all()
     )
@@ -96,6 +100,47 @@ def test_styleguide_seeds_comments_for_media_post(settings, client, site, commen
     )
     assert "intentionally longer" in refreshed[0].comment
     assert "Threaded reply to show hierarchy" in refreshed[1].comment
+
+
+@pytest.mark.django_db
+def test_harden_styleguide_user_disables_login_and_removes_moderators():
+    user = styleguide_view.User.objects.create_user("styleguide-hardening", password="styleguide-hardening")
+    moderators, _ = Group.objects.get_or_create(name="Moderators")
+    user.groups.add(moderators)
+
+    hardened_user = styleguide_view._harden_styleguide_user(user)
+
+    assert hardened_user.pk == user.pk
+    assert not hardened_user.has_usable_password()
+    assert not hardened_user.is_active
+    assert not hardened_user.groups.filter(name="Moderators").exists()
+
+
+@pytest.mark.django_db
+def test_harden_styleguide_user_without_moderators_group():
+    Group.objects.filter(name="Moderators").delete()
+    user = styleguide_view.User.objects.create_user("styleguide-no-group", password="styleguide-no-group")
+
+    hardened_user = styleguide_view._harden_styleguide_user(user)
+
+    assert hardened_user.pk == user.pk
+    assert not hardened_user.has_usable_password()
+    assert not hardened_user.is_active
+
+
+@pytest.mark.django_db
+def test_harden_styleguide_user_is_idempotent():
+    moderators, _ = Group.objects.get_or_create(name="Moderators")
+    user = styleguide_view.User.objects.create_user("styleguide-idempotent", password="styleguide-idempotent")
+    user.groups.add(moderators)
+
+    first = styleguide_view._harden_styleguide_user(user)
+    second = styleguide_view._harden_styleguide_user(user)
+
+    assert first.pk == second.pk == user.pk
+    assert not second.has_usable_password()
+    assert not second.is_active
+    assert not second.groups.filter(name="Moderators").exists()
 
 
 @pytest.mark.django_db

@@ -34,6 +34,9 @@
 - Secured media detail API authorization:
   - `VideoDetailView` and `AudioDetailView` now scope object lookup to `request.user`, preventing cross-user retrieve/delete.
   - Added regression tests for owner and non-owner GET/DELETE behavior, including unauthenticated DELETE responses.
+- Hardened styleguide helper account setup:
+  - the styleguide user is now forced to `set_unusable_password()`, `is_active=False`, and removed from the `Moderators` group.
+  - added regression tests to guarantee the styleguide account remains non-login and de-privileged.
 
 Migration mapping (old -> new):
 

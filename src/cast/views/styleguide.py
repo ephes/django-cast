@@ -12,10 +12,11 @@ from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.template import TemplateDoesNotExist
@@ -260,7 +261,9 @@ def _query_params_without_theme(request: HtmxHttpRequest) -> list[tuple[str, str
 
 def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
     site = _ensure_site()
-    user = create_user(name=STYLEGUIDE_USER_NAME, password=STYLEGUIDE_USER_NAME)
+    with transaction.atomic():
+        user = create_user(name=STYLEGUIDE_USER_NAME, password=STYLEGUIDE_USER_NAME)
+        user = _harden_styleguide_user(user)
 
     blog = _ensure_blog(site, user)
     remote_media = _fetch_styleguide_remote_media(user)
@@ -313,6 +316,23 @@ def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
         video_url=remote_media.video_url,
         video_poster_url=remote_media.video_poster_url,
     )
+
+
+def _harden_styleguide_user(user: User) -> User:
+    update_fields = []
+    if user.has_usable_password():
+        user.set_unusable_password()
+        update_fields.append("password")
+    if user.is_active:
+        user.is_active = False
+        update_fields.append("is_active")
+    if update_fields:
+        user.save(update_fields=update_fields)
+
+    moderators = Group.objects.filter(name="Moderators")
+    if moderators.exists():
+        user.groups.remove(*moderators)
+    return user
 
 
 def _ensure_site() -> Site:
