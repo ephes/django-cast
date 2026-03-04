@@ -2,13 +2,14 @@ import json
 import logging
 import re
 import subprocess
+from copy import deepcopy
 from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 from django.contrib.auth import get_user_model
-from django.db import models
+from django.db import models, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
@@ -294,15 +295,31 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     def save(self, *args, **kwargs) -> None:
         generate_duration = kwargs.pop("duration", True)
         cache_file_sizes = kwargs.pop("cache_file_sizes", True)
-        # FIXME why is this necessary? Cannot move super save to end of method...
-        super().save(*args, **kwargs)
-        if generate_duration and self.duration is None:
-            logger.info("save audio duration")
-            self.create_duration()
+        using = kwargs.get("using")
+        # Keep metadata enrichment and persistence all-or-nothing to avoid
+        # partially updated rows when duration/filesize caching fails.
+        with transaction.atomic(using=using):
+            # Save first to ensure files exist on storage before enrichment runs.
             super().save(*args, **kwargs)
-        if cache_file_sizes:
-            self.size_to_metadata()
-            super().save(*args, **kwargs)
+
+            update_fields = []
+            if generate_duration and self.duration is None:
+                logger.info("save audio duration")
+                self.create_duration()
+                if self.duration is not None:
+                    update_fields.append("duration")
+
+            if cache_file_sizes:
+                old_data = deepcopy(self.data)
+                self.size_to_metadata()
+                if old_data != self.data:
+                    update_fields.append("data")
+
+            if update_fields:
+                save_kwargs: dict[str, object] = {"update_fields": update_fields}
+                if using is not None:
+                    save_kwargs["using"] = using
+                super().save(**save_kwargs)
 
 
 def sync_chapter_marks(

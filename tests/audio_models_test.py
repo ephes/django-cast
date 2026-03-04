@@ -1,4 +1,5 @@
 from datetime import timedelta
+from uuid import uuid4
 
 import pytest
 
@@ -210,8 +211,74 @@ class TestAudioModel:
     def test_save_without_cache_file_sizes(self, audio, mocker):
         mocker.patch("cast.models.audio.TimeStampedModel.save")
         audio.data = expected_data = {}
-        audio.save(generate_duration=False, cache_file_sizes=False)
+        audio.save(duration=False, cache_file_sizes=False)
         assert audio.data == expected_data
+
+    def test_save_is_atomic_when_enrichment_fails(self, user, m4a_audio, mocker):
+        title = f"atomic-rollback-{uuid4()}"
+        audio = Audio(user=user, m4a=m4a_audio, title=title, duration=timedelta(seconds=1))
+        mocker.patch.object(audio, "size_to_metadata", side_effect=RuntimeError("boom"))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            audio.save()
+
+        assert Audio.objects.filter(title=title).count() == 0
+
+    def test_save_uses_two_base_saves_when_duration_and_sizes_are_generated(self, audio, mocker):
+        base_save = mocker.patch("cast.models.audio.TimeStampedModel.save")
+        mocker.patch.object(
+            audio, "create_duration", side_effect=lambda: setattr(audio, "duration", timedelta(seconds=1))
+        )
+        mocker.patch.object(audio, "size_to_metadata")
+        audio.duration = None
+
+        audio.save()
+
+        assert base_save.call_count == 2
+
+    def test_save_populates_duration_and_file_size_metadata(self, user, m4a_audio, mocker):
+        expected_duration = timedelta(seconds=2, microseconds=500000)
+        mocker.patch("cast.models.audio.Audio._get_audio_duration", return_value=expected_duration)
+
+        audio = Audio(user=user, m4a=m4a_audio, title="duration-and-size")
+        audio.save()
+        audio.refresh_from_db()
+
+        assert audio.duration == expected_duration
+        assert audio.data["size"]["m4a"] == m4a_audio.size
+
+    def test_save_passes_using_to_follow_up_update_save(self, audio, mocker):
+        base_save = mocker.patch("cast.models.audio.TimeStampedModel.save")
+        mocker.patch.object(
+            audio, "create_duration", side_effect=lambda: setattr(audio, "duration", timedelta(seconds=1))
+        )
+        mocker.patch.object(audio, "size_to_metadata")
+        audio.duration = None
+
+        audio.save(using="default")
+
+        assert base_save.call_count == 2
+        assert base_save.call_args.kwargs["using"] == "default"
+
+    def test_save_skips_enrichment_save_when_nothing_changes(self, audio, mocker):
+        base_save = mocker.patch("cast.models.audio.TimeStampedModel.save")
+        audio.duration = timedelta(seconds=1)
+        audio.data = {"size": {"m4a": audio.m4a.size}}
+
+        audio.save()
+
+        assert base_save.call_count == 1
+
+    def test_save_does_not_update_duration_when_create_duration_returns_none(self, audio, mocker):
+        base_save = mocker.patch("cast.models.audio.TimeStampedModel.save")
+        mocker.patch.object(audio, "create_duration", return_value=None)
+        mocker.patch.object(audio, "size_to_metadata", side_effect=lambda: audio.data.update({"size": {"m4a": 1}}))
+        audio.duration = None
+
+        audio.save()
+
+        assert base_save.call_count == 2
+        assert "duration" not in base_save.call_args.kwargs["update_fields"]
 
 
 class TestChapterMarkModel:

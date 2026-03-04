@@ -44,6 +44,10 @@
   process-global ``PageLinkHandlerWithCache.cache`` dict with context-local
   storage, preventing cross-request/thread cache leakage during concurrent
   rendering while preserving existing link-resolution behavior.
+- Hardened ``Audio.save()`` persistence flow by wrapping enrichment in a
+  database transaction and collapsing up to three writes into one initial save
+  plus at most one targeted follow-up update, reducing partial-update risk
+  while preserving duration and file-size metadata behavior.
 
 Migration mapping (old -> new):
 
