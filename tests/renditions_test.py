@@ -1,6 +1,9 @@
 import pytest
+from django.test import override_settings
 
 from cast.renditions import (
+    DEFAULT_IMAGE_FORMATS,
+    IMAGE_TYPE_TO_SLOTS,
     Height,
     ImageFormat,
     Rectangle,
@@ -146,6 +149,44 @@ def test_rendition_filters_get_filter_by_slot_format_and_fitting_width():
     with pytest.raises(ValueError):
         # Then we get a ValueError
         rendition_filters.get_filter_by_slot_format_and_fitting_width(slot, "jpeg", w53)
+
+
+class StubWagtailImage:
+    class File:
+        name = "test.jpg"
+
+    width = 6000
+    height = 4000
+    file = File()
+
+
+def test_rendition_filters_from_wagtail_image_with_type_respects_override_settings():
+    with override_settings(
+        CAST_REGULAR_IMAGE_SLOT_DIMENSIONS=[(200, 100)],
+        CAST_IMAGE_FORMATS=["webp"],
+    ):
+        filters = RenditionFilters.from_wagtail_image_with_type(StubWagtailImage(), "regular")
+
+    assert filters.slots == [Rectangle(Width(200), Height(100))]
+    assert list(filters.image_formats) == ["webp"]
+
+
+def test_image_type_to_slots_is_runtime_mapping():
+    with override_settings(
+        CAST_REGULAR_IMAGE_SLOT_DIMENSIONS=[(200, 100)],
+        CAST_GALLERY_IMAGE_SLOT_DIMENSIONS=[(300, 200), (120, 80)],
+    ):
+        assert len(IMAGE_TYPE_TO_SLOTS) == 2
+        assert list(IMAGE_TYPE_TO_SLOTS) == ["regular", "gallery"]
+        assert IMAGE_TYPE_TO_SLOTS["regular"] == [Rectangle(Width(200), Height(100))]
+
+
+def test_default_image_formats_is_runtime_sequence():
+    with override_settings(CAST_IMAGE_FORMATS=["webp", "jpeg"]):
+        assert len(DEFAULT_IMAGE_FORMATS) == 2
+        assert list(DEFAULT_IMAGE_FORMATS) == ["webp", "jpeg"]
+        assert DEFAULT_IMAGE_FORMATS[0] == "webp"
+        assert list(DEFAULT_IMAGE_FORMATS[:1]) == ["webp"]
 
 
 class RenditionStub:

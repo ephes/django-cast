@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, NewType, cast, get_args
@@ -56,11 +56,43 @@ ImageType = Literal["regular", "gallery"]
 ImageFormat = Literal["jpeg", "avif", "webp", "png", "svg"]
 SUPPORTED_IMAGE_FORMATS = set(get_args(ImageFormat))
 ImageFormats = Iterable[ImageFormat]
-IMAGE_TYPE_TO_SLOTS: dict[ImageType, list[Rectangle]] = {
-    "regular": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS],
-    "gallery": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS],
-}
-DEFAULT_IMAGE_FORMATS = cast(ImageFormats, appsettings.CAST_IMAGE_FORMATS)
+
+
+def _build_image_type_to_slots() -> dict[ImageType, list[Rectangle]]:
+    return {
+        "regular": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS],
+        "gallery": [Rectangle(Width(w), Height(h)) for w, h in appsettings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS],
+    }
+
+
+class _ImageTypeToSlots(Mapping[ImageType, list[Rectangle]]):
+    def __getitem__(self, key: ImageType) -> list[Rectangle]:
+        return _build_image_type_to_slots()[key]
+
+    def __iter__(self):
+        return iter(_build_image_type_to_slots())
+
+    def __len__(self) -> int:
+        return len(_build_image_type_to_slots())
+
+
+class _DefaultImageFormats:
+    @staticmethod
+    def _get() -> list[ImageFormat]:
+        return cast(list[ImageFormat], appsettings.CAST_IMAGE_FORMATS)
+
+    def __getitem__(self, index: int | slice) -> ImageFormat | list[ImageFormat]:
+        return self._get()[index]
+
+    def __len__(self) -> int:
+        return len(self._get())
+
+    def __iter__(self):
+        return iter(self._get())
+
+
+IMAGE_TYPE_TO_SLOTS: Mapping[ImageType, list[Rectangle]] = _ImageTypeToSlots()
+DEFAULT_IMAGE_FORMATS: ImageFormats = _DefaultImageFormats()
 
 
 @dataclass
@@ -181,7 +213,7 @@ class RenditionFilters:
     @classmethod
     def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: ImageType):
         return cls.from_wagtail_image(
-            image, slots=IMAGE_TYPE_TO_SLOTS[image_type], image_formats=DEFAULT_IMAGE_FORMATS
+            image, slots=IMAGE_TYPE_TO_SLOTS[image_type], image_formats=list(DEFAULT_IMAGE_FORMATS)
         )
 
     def set_filter_to_url_via_wagtail_renditions(self, renditions: dict[str, AbstractRendition]) -> None:

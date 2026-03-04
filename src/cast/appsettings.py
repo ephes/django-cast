@@ -1,28 +1,49 @@
-from typing import Union
+from typing import TYPE_CHECKING, Any, Union
 
 from django.conf import settings
 from django.db.models.signals import post_delete
 from wagtail.images import get_image_model
 from wagtail.images.signal_handlers import post_delete_file_cleanup
 
-CAST_COMMENTS_ENABLED: bool = getattr(settings, "CAST_COMMENTS_ENABLED", False)
-CAST_CUSTOM_THEMES: list[tuple[str, str]] = []
-CAST_FOLLOW_LINKS: dict[str, str] = getattr(settings, "CAST_FOLLOW_LINKS", {})
-CHOOSER_PAGINATION: int = getattr(settings, "CHOOSER_PAGINATION", 10)
-MENU_ITEM_PAGINATION: int = getattr(settings, "MENU_ITEM_PAGINATION", 20)
-POST_LIST_PAGINATION: int = getattr(settings, "POST_LIST_PAGINATION", 5)
-DELETE_WAGTAIL_IMAGES: bool = getattr(settings, "DELETE_WAGTAIL_IMAGES", True)
-CAST_FILTERSET_FACETS: list[str] = getattr(
-    settings, "CAST_FILTERSET_FACETS", ["search", "date", "date_facets", "category_facets", "tag_facets", "o"]
-)
-CAST_IMAGE_FORMATS: list[str] = getattr(settings, "CAST_IMAGE_FORMATS", ["jpeg", "avif"])
-CAST_REGULAR_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]] = getattr(
-    settings, "CAST_REGULAR_IMAGE_SLOT_DIMENSIONS", [(1110, 740)]
-)
-CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]] = getattr(
-    settings, "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", [(1110, 740), (120, 80)]
-)
-CAST_REPOSITORY: str = getattr(settings, "CAST_REPOSITORY", "default")
+_DYNAMIC_SETTING_DEFAULTS: dict[str, Any] = {
+    "CAST_COMMENTS_ENABLED": False,
+    "CAST_CUSTOM_THEMES": [],
+    "CAST_FOLLOW_LINKS": {},
+    "CHOOSER_PAGINATION": 10,
+    "MENU_ITEM_PAGINATION": 20,
+    "POST_LIST_PAGINATION": 5,
+    "DELETE_WAGTAIL_IMAGES": True,
+    "CAST_FILTERSET_FACETS": ["search", "date", "date_facets", "category_facets", "tag_facets", "o"],
+    "CAST_IMAGE_FORMATS": ["jpeg", "avif"],
+    "CAST_REGULAR_IMAGE_SLOT_DIMENSIONS": [(1110, 740)],
+    "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS": [(1110, 740), (120, 80)],
+    "CAST_REPOSITORY": "default",
+}
+
+
+if TYPE_CHECKING:
+    CAST_COMMENTS_ENABLED: bool
+    CAST_CUSTOM_THEMES: list[tuple[str, str]]
+    CAST_FOLLOW_LINKS: dict[str, str]
+    CHOOSER_PAGINATION: int
+    MENU_ITEM_PAGINATION: int
+    POST_LIST_PAGINATION: int
+    DELETE_WAGTAIL_IMAGES: bool
+    CAST_FILTERSET_FACETS: list[str]
+    CAST_IMAGE_FORMATS: list[str]
+    CAST_REGULAR_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
+    CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
+    CAST_REPOSITORY: str
+
+
+def __getattr__(name: str) -> Any:
+    if name in _DYNAMIC_SETTING_DEFAULTS:
+        value = getattr(settings, name, _DYNAMIC_SETTING_DEFAULTS[name])
+        if isinstance(value, list | dict):
+            return value.copy()
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 SettingValue = Union[str, bool, int]
 
@@ -41,7 +62,7 @@ DEFAULT_VALUES: list[tuple[str, SettingValue]] = [
 
 
 def init_cast_settings() -> None:
-    if not DELETE_WAGTAIL_IMAGES:
+    if not getattr(settings, "DELETE_WAGTAIL_IMAGES", _DYNAMIC_SETTING_DEFAULTS["DELETE_WAGTAIL_IMAGES"]):
         # Have a way to deactivate wagtails post_delete_file_cleanup
         # which deletes the file physically when developing against S3
         # cast has to be after wagtail in INSTALLED_APPS for this to work

@@ -52,6 +52,9 @@
   ``mkstemp`` descriptor, context-managing poster file reads, and always
   cleaning up the temporary poster file; added regression tests for success,
   save-failure, and missing-temp-file cleanup paths.
+- Fixed stale settings reads in ``cast.appsettings`` and ``cast.renditions``
+  by resolving settings at runtime so ``@override_settings`` changes are
+  respected after module import.
 
 Migration mapping (old -> new):
 
