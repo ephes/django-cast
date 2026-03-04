@@ -6,6 +6,10 @@ snippet viewset for CRUD operations on ``taggit.Tag`` from the Wagtail
 admin sidebar.
 """
 
+from collections.abc import Iterator, MutableMapping
+from contextvars import ContextVar
+from typing import TypeVar, overload
+
 from django.http import HttpRequest
 from django.urls import include, path, reverse
 from django.utils.html import format_html
@@ -21,6 +25,8 @@ from wagtail.snippets.views.snippets import SnippetViewSet
 
 from .admin_urls import audio, transcript, video
 from .models import Audio, Transcript, Video
+
+_T = TypeVar("_T")
 
 
 @hooks.register("register_admin_urls")
@@ -147,7 +153,55 @@ class PageLinkHandlerWithCache(PageLinkHandler):
     while rendering links.
     """
 
-    cache: dict[int, str] = {}
+    class _ContextLocalCache(MutableMapping[int, str]):
+        """Context-local cache storage to avoid leaking URLs between requests."""
+
+        _missing = object()
+        _storage: ContextVar[dict[int, str] | None] = ContextVar("page_link_handler_cache", default=None)
+
+        def _get_cache(self) -> dict[int, str]:
+            cache = self._storage.get()
+            if cache is None:
+                cache = {}
+                self._storage.set(cache)
+            return cache
+
+        def __getitem__(self, key: int) -> str:
+            return self._get_cache()[key]
+
+        def __setitem__(self, key: int, value: str) -> None:
+            self._get_cache()[key] = value
+
+        def __delitem__(self, key: int) -> None:
+            del self._get_cache()[key]
+
+        def __iter__(self) -> Iterator[int]:
+            return iter(self._get_cache())
+
+        def __len__(self) -> int:
+            return len(self._get_cache())
+
+        def __contains__(self, key: object) -> bool:
+            return key in self._get_cache()
+
+        def clear(self) -> None:
+            self._storage.set({})
+
+        @overload
+        def pop(self, key: int) -> str: ...  # pragma: no cover
+
+        @overload
+        def pop(self, key: int, default: str) -> str: ...  # pragma: no cover
+
+        @overload
+        def pop(self, key: int, default: _T) -> str | _T: ...  # pragma: no cover
+
+        def pop(self, key: int, default: object = _missing) -> object:
+            if default is self._missing:
+                return self._get_cache().pop(key)
+            return self._get_cache().pop(key, default)
+
+    cache: MutableMapping[int, str] = _ContextLocalCache()
 
     @classmethod
     def cache_url(cls, page_id: int, url: str):

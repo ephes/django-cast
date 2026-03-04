@@ -6,6 +6,7 @@ queries when rendering posts.
 
 import json
 import pickle
+from contextvars import Context, copy_context
 from copy import deepcopy
 from pathlib import Path
 
@@ -1230,6 +1231,69 @@ def test_page_link_handler_expand_db_attributes_many(mocker):
     mocker.patch("wagtail.rich_text.pages.PageLinkHandler.expand_db_attributes_many", create=True)
     tags = PageLinkHandlerWithCache.expand_db_attributes_many([{"id": 1}, {"id": 3}])
     assert tags.is_called_once()
+
+
+def test_page_link_handler_cache_isolation_across_contexts():
+    page_id = 887766
+    context_1 = copy_context()
+    context_2 = copy_context()
+
+    context_1.run(lambda: PageLinkHandlerWithCache.cache.clear())
+    context_2.run(lambda: PageLinkHandlerWithCache.cache.clear())
+
+    context_1.run(lambda: PageLinkHandlerWithCache.cache_url(page_id, "/from-context-1/"))
+    context_2.run(lambda: PageLinkHandlerWithCache.cache_url(page_id, "/from-context-2/"))
+
+    assert context_1.run(lambda: PageLinkHandlerWithCache.expand_db_attributes({"id": page_id})) == (
+        '<a href="/from-context-1/">'
+    )
+    assert context_2.run(lambda: PageLinkHandlerWithCache.expand_db_attributes({"id": page_id})) == (
+        '<a href="/from-context-2/">'
+    )
+
+
+def test_page_link_handler_clear_cache_isolated_per_context():
+    page_id = 556677
+    context_1 = copy_context()
+    context_2 = copy_context()
+
+    context_1.run(lambda: PageLinkHandlerWithCache.cache.clear())
+    context_2.run(lambda: PageLinkHandlerWithCache.cache.clear())
+
+    context_1.run(lambda: PageLinkHandlerWithCache.cache_url(page_id, "/context-1-url/"))
+    context_2.run(lambda: PageLinkHandlerWithCache.cache_url(page_id, "/context-2-url/"))
+
+    context_1.run(lambda: PageLinkHandlerWithCache.cache.clear())
+
+    assert context_1.run(lambda: PageLinkHandlerWithCache.cache.get(page_id)) is None
+    assert context_2.run(lambda: PageLinkHandlerWithCache.cache.get(page_id)) == "/context-2-url/"
+
+
+def test_page_link_handler_cache_mapping_behaves_like_dict():
+    page_id = 223344
+    context = copy_context()
+
+    # Fresh context lazily initializes an empty cache.
+    assert context.run(lambda: PageLinkHandlerWithCache.cache.get(page_id)) is None
+
+    context.run(lambda: PageLinkHandlerWithCache.cache.clear())
+    assert context.run(lambda: len(PageLinkHandlerWithCache.cache)) == 0
+
+    context.run(lambda: PageLinkHandlerWithCache.cache_url(page_id, "/cache-url/"))
+    assert context.run(lambda: list(PageLinkHandlerWithCache.cache)) == [page_id]
+    assert context.run(lambda: PageLinkHandlerWithCache.cache[page_id]) == "/cache-url/"
+
+    context.run(lambda: PageLinkHandlerWithCache.cache.__delitem__(page_id))
+    assert context.run(lambda: len(PageLinkHandlerWithCache.cache)) == 0
+
+    context.run(lambda: PageLinkHandlerWithCache.cache_url(page_id, "/cache-url/"))
+    assert context.run(lambda: PageLinkHandlerWithCache.cache.pop(page_id)) == "/cache-url/"
+
+
+def test_page_link_handler_cache_lazy_init_in_empty_context():
+    page_id = 778899
+    empty_context = Context()
+    assert empty_context.run(lambda: PageLinkHandlerWithCache.cache.get(page_id)) is None
 
 
 @pytest.mark.django_db

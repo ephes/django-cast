@@ -40,6 +40,10 @@
 - Fixed request-state leakage in ``Post.get_context()`` by avoiding mutation
   of the page instance (``owner``/``page_url``); request-specific values are
   now applied to a context-local page object instead.
+- Fixed rich-text internal page-link cache isolation by replacing the
+  process-global ``PageLinkHandlerWithCache.cache`` dict with context-local
+  storage, preventing cross-request/thread cache leakage during concurrent
+  rendering while preserving existing link-resolution behavior.
 
 Migration mapping (old -> new):
 
