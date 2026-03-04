@@ -2,6 +2,7 @@ import pytest
 from django import forms
 from django.urls import reverse
 from django.utils import timezone
+from types import SimpleNamespace
 
 from cast import appsettings
 from cast.devdata import create_transcript
@@ -291,6 +292,11 @@ class TestPostModel:
 
         assert post.get_site() == "foobar"
 
+    def test_get_full_url_prefers_page_url_attribute(self):
+        post = Post()
+        post.page_url = "/from-context/"
+        assert post.get_full_url() == "/from-context/"
+
     def test_get_description_escape(self, mocker, simple_request, post):
         class Rendered:
             rendered_content = "<h1>foo</h1>"
@@ -466,6 +472,47 @@ class TestPostModel:
         post.owner = None
         context = post.get_context(request)
         assert context["owner_username"] == "unknown"
+
+    @pytest.mark.parametrize(
+        ("render_for_feed", "expected_page_url"),
+        [
+            (False, "/post-detail/"),
+            (True, "http://testserver/post-detail/"),
+        ],
+    )
+    def test_get_context_does_not_mutate_instance_and_keeps_context_compatibility(
+        self, rf, post, render_for_feed, expected_page_url
+    ):
+        request = rf.get("/post-detail/")
+        original_owner = post.owner
+        assert not hasattr(post, "page_url")
+        repository = SimpleNamespace(
+            post_id=post.pk,
+            template_base_dir="plain",
+            blog=post.blog,
+            comments_are_enabled=True,
+            root_nav_links=[],
+            has_audio=False,
+            page_url="/post-detail/",
+            absolute_page_url="http://testserver/post-detail/",
+            owner_username="owner-from-repository",
+            blog_url=f"/{post.blog.slug}/",
+            cover_image_url="",
+            cover_alt_text="",
+            audio_by_id={},
+        )
+
+        context = post.get_context(request, repository=repository, render_for_feed=render_for_feed)
+
+        assert post.owner == original_owner
+        assert post.owner_id == original_owner.pk
+        assert not hasattr(post, "page_url")
+        assert context["owner_username"] == "owner-from-repository"
+        assert context["page_url"] == "/post-detail/"
+        assert context["page"] is not post
+        assert context["self"] is context["page"]
+        assert context["page"].owner.username == "owner-from-repository"
+        assert context["page"].page_url == expected_page_url
 
     def test_has_selectable_themes(self, rf, post):
         """Theme selector should be enabled on post detail pages."""

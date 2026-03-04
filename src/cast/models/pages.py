@@ -1,6 +1,7 @@
 import logging
 import uuid
 from collections.abc import Iterable, Iterator
+from copy import copy
 from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 
 from django import forms
@@ -411,14 +412,17 @@ class Post(Page):
         context["render_for_feed"] = kwargs.get("render_for_feed", False)
         context["updated_timestamp"] = self.get_updated_timestamp()
         context = self.get_context_from_repository(context, repository)
-        self.owner = user_model(username=context["owner_username"])
-        context.update(self.get_cover_image_context(context, blog=context["blog"]))
-        context.update(self.get_social_cover_image_context(request=request, blog=context["blog"]))
+        context_page = copy(self)
+        context_page.owner = user_model(username=context["owner_username"])
         if context["render_for_feed"]:
             # use absolute urls for feed
-            self.page_url = context["absolute_page_url"]
+            context_page.page_url = context["absolute_page_url"]
         else:
-            self.page_url = context["page_url"]
+            context_page.page_url = context["page_url"]
+        context["page"] = context_page
+        context["self"] = context_page
+        context.update(self.get_cover_image_context(context, blog=context["blog"]))
+        context.update(self.get_social_cover_image_context(request=request, blog=context["blog"]))
         # Enable theme selector on post detail pages
         context["has_selectable_themes"] = True
         context["follow_links"] = get_follow_links(context.get("blog"))

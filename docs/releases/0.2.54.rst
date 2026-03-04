@@ -37,6 +37,9 @@
 - Hardened styleguide helper account setup:
   - the styleguide user is now forced to `set_unusable_password()`, `is_active=False`, and removed from the `Moderators` group.
   - added regression tests to guarantee the styleguide account remains non-login and de-privileged.
+- Fixed request-state leakage in ``Post.get_context()`` by avoiding mutation
+  of the page instance (``owner``/``page_url``); request-specific values are
+  now applied to a context-local page object instead.
 
 Migration mapping (old -> new):
 

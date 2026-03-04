@@ -171,6 +171,9 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
         return post.description
 
     def item_link(self, item) -> SafeText:
+        if self.repository is not None:
+            repository = self.repository.get_post_detail_repository(item)
+            return cast(SafeText, repository.absolute_page_url)
         return item.get_full_url()
 
     def get_context_data(self, **kwargs) -> dict:
@@ -390,6 +393,9 @@ class PodcastFeed(RepositoryMixin, Feed):
         return item.description
 
     def item_link(self, item) -> str:
+        if self.repository is not None:
+            repository = self.repository.get_post_detail_repository(item)
+            return repository.absolute_page_url
         return item.get_full_url()
 
     def item_pubdate(self, item) -> datetime:

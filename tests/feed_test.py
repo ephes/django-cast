@@ -338,6 +338,24 @@ def test_podcsat_feed_link_repository_is_none(mocker):
     feed.object.get_full_url.assert_called_once()
 
 
+def test_latest_entries_feed_item_link_repository_is_none(mocker):
+    item = mocker.MagicMock()
+    item.get_full_url.return_value = "http://testserver/post/"
+    feed = LatestEntriesFeed(repository=None)
+
+    assert feed.item_link(item) == "http://testserver/post/"
+    item.get_full_url.assert_called_once()
+
+
+def test_podcast_feed_item_link_repository_is_none(mocker):
+    item = mocker.MagicMock()
+    item.get_full_url.return_value = "http://testserver/episode/"
+    feed = PodcastFeed(repository=None)
+
+    assert feed.item_link(item) == "http://testserver/episode/"
+    item.get_full_url.assert_called_once()
+
+
 def test_get_repository_uses_predefined_repository(mocker):
     repository = mocker.MagicMock()
     repository.used = False
