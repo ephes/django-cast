@@ -109,32 +109,38 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     def _create_poster(self) -> None:
         """Moved into own method to make it mockable in tests."""
         fp, tmp_path = tempfile.mkstemp(prefix="poster_", suffix=".jpg")
-        logger.info(f"original url: {self.original.url}")
-        video_url = self.original.url
-        if not video_url.startswith("http"):
-            video_url = self.original.path
-        width, height = self._get_video_dimensions(video_url)
-        poster_cmd = [
-            "ffmpeg",
-            "-ss",
-            str(self.poster_seconds),
-            "-i",
-            str(video_url),
-            "-vframes",
-            "1",
-            "-y",
-            "-f",
-            "image2",
-            "-s",
-            f"{width}x{height}",
-            tmp_path,
-        ]
-        logger.info(poster_cmd)
-        subprocess.run(poster_cmd, check=True, timeout=30)
-        name = os.path.basename(tmp_path)
-        content = DjangoFile(open(tmp_path, "rb"))
-        self.poster.save(name, content, save=False)
-        os.unlink(tmp_path)
+        try:
+            os.close(fp)
+            logger.info(f"original url: {self.original.url}")
+            video_url = self.original.url
+            if not video_url.startswith("http"):
+                video_url = self.original.path
+            width, height = self._get_video_dimensions(video_url)
+            poster_cmd = [
+                "ffmpeg",
+                "-ss",
+                str(self.poster_seconds),
+                "-i",
+                str(video_url),
+                "-vframes",
+                "1",
+                "-y",
+                "-f",
+                "image2",
+                "-s",
+                f"{width}x{height}",
+                tmp_path,
+            ]
+            logger.info(poster_cmd)
+            subprocess.run(poster_cmd, check=True, timeout=30)
+            name = os.path.basename(tmp_path)
+            with open(tmp_path, "rb") as tmp_file:
+                self.poster.save(name, DjangoFile(tmp_file), save=False)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
         logger.info(self.pk)
         logger.info(self.poster)
 

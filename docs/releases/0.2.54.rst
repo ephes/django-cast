@@ -48,6 +48,10 @@
   database transaction and collapsing up to three writes into one initial save
   plus at most one targeted follow-up update, reducing partial-update risk
   while preserving duration and file-size metadata behavior.
+- Fixed ``Video._create_poster()`` file-handle lifecycle by closing the
+  ``mkstemp`` descriptor, context-managing poster file reads, and always
+  cleaning up the temporary poster file; added regression tests for success,
+  save-failure, and missing-temp-file cleanup paths.
 
 Migration mapping (old -> new):
 

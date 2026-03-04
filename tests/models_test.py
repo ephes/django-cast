@@ -1,4 +1,5 @@
 import pytest
+import os
 from django import forms
 from django.urls import reverse
 from django.utils import timezone
@@ -788,8 +789,15 @@ def test_homepage_serve(episode, mocker):
 
 
 @pytest.mark.django_db
-def test_video_create_poster_video_url_without_http(mocker):
-    mocker.patch("cast.models.video.tempfile.mkstemp", return_value=(1, "foo"))
+def test_video_create_poster_video_url_without_http(mocker, tmp_path):
+    tmp_poster = tmp_path / "poster.jpg"
+
+    def fake_mkstemp(prefix, suffix):
+        assert prefix == "poster_"
+        assert suffix == ".jpg"
+        return os.open(tmp_poster, os.O_CREAT | os.O_RDWR), str(tmp_poster)
+
+    mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
     run = mocker.patch("cast.models.video.subprocess.run", side_effect=ValueError())
 
@@ -806,6 +814,117 @@ def test_video_create_poster_video_url_without_http(mocker):
     assert "https://example.com/video.mp4" in command
     assert call_kwargs.kwargs.get("check") is True
     assert call_kwargs.kwargs.get("timeout") == 30
+
+
+@pytest.mark.django_db
+def test_video_create_poster_closes_mkstemp_fd_and_removes_temp_file(mocker, tmp_path):
+    tmp_poster = tmp_path / "poster.jpg"
+    created_fd: int | None = None
+
+    def fake_mkstemp(prefix, suffix):
+        nonlocal created_fd
+        assert prefix == "poster_"
+        assert suffix == ".jpg"
+        created_fd = os.open(tmp_poster, os.O_CREAT | os.O_RDWR)
+        return created_fd, str(tmp_poster)
+
+    def fake_run(command, **kwargs):
+        if command[0] == "ffmpeg":
+            tmp_poster.write_bytes(b"poster-bytes")
+        return None
+
+    mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
+    mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
+    mocker.patch("cast.models.video.subprocess.run", side_effect=fake_run)
+    poster_save = mocker.patch("cast.models.video.Video.poster.field.attr_class.save")
+
+    class Original:
+        url = "https://example.com/video.mp4"
+
+    video = Video()
+    mocker.patch.object(video, "original", Original())
+    video._create_poster()
+
+    assert created_fd is not None
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(created_fd)
+    assert not tmp_poster.exists()
+    assert poster_save.called
+
+
+@pytest.mark.django_db
+def test_video_create_poster_removes_temp_file_when_poster_save_fails(mocker, tmp_path):
+    tmp_poster = tmp_path / "poster.jpg"
+    created_fd, real_path = None, str(tmp_poster)
+
+    def fake_mkstemp(prefix, suffix):
+        nonlocal created_fd
+        assert prefix == "poster_"
+        assert suffix == ".jpg"
+        created_fd = os.open(real_path, os.O_CREAT | os.O_RDWR)
+        return created_fd, real_path
+
+    def fake_run(command, **kwargs):
+        if command[0] == "ffmpeg":
+            tmp_poster.write_bytes(b"poster-bytes")
+        return None
+
+    mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
+    mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
+    mocker.patch("cast.models.video.subprocess.run", side_effect=fake_run)
+    mocker.patch("cast.models.video.Video.poster.field.attr_class.save", side_effect=RuntimeError("save failed"))
+
+    class Original:
+        url = "https://example.com/video.mp4"
+
+    video = Video()
+    mocker.patch.object(video, "original", Original())
+    with pytest.raises(RuntimeError, match="save failed"):
+        video._create_poster()
+
+    assert created_fd is not None
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(created_fd)
+    assert not tmp_poster.exists()
+
+
+@pytest.mark.django_db
+def test_video_create_poster_handles_missing_temp_file_on_success(mocker, tmp_path):
+    tmp_poster = tmp_path / "poster.jpg"
+    created_fd: int | None = None
+
+    def fake_mkstemp(prefix, suffix):
+        nonlocal created_fd
+        assert prefix == "poster_"
+        assert suffix == ".jpg"
+        created_fd = os.open(tmp_poster, os.O_CREAT | os.O_RDWR)
+        return created_fd, str(tmp_poster)
+
+    def fake_run(command, **kwargs):
+        if command[0] == "ffmpeg" and tmp_poster.exists():
+            tmp_poster.write_bytes(b"poster-bytes")
+        return None
+
+    def fake_save(_name, content, save=False):
+        del save
+        os.unlink(content.file.name)
+
+    mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
+    mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
+    mocker.patch("cast.models.video.subprocess.run", side_effect=fake_run)
+    mocker.patch("cast.models.video.Video.poster.field.attr_class.save", side_effect=fake_save)
+
+    class Original:
+        url = "https://example.com/video.mp4"
+
+    video = Video()
+    mocker.patch.object(video, "original", Original())
+    video._create_poster()
+
+    assert created_fd is not None
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(created_fd)
+    assert not tmp_poster.exists()
 
 
 @pytest.mark.django_db
