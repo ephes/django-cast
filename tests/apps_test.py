@@ -3,6 +3,7 @@ from django.test import override_settings
 import pytest
 
 import cast.appsettings as appsettings
+from cast.apps import CAST_APPS
 from cast.appsettings import init_cast_settings
 
 
@@ -56,3 +57,26 @@ def test_appsettings_mutable_defaults_are_not_shared(settings):
 def test_appsettings_custom_themes_can_come_from_settings(settings):
     settings.CAST_CUSTOM_THEMES = [("plain", "Plain"), ("bootstrap4", "Bootstrap 4")]
     assert appsettings.CAST_CUSTOM_THEMES == [("plain", "Plain"), ("bootstrap4", "Bootstrap 4")]
+
+
+def test_test_settings_include_all_cast_apps():
+    from tests import settings as test_settings
+
+    missing_apps = [app for app in CAST_APPS if app not in test_settings.INSTALLED_APPS]
+    assert missing_apps == []
+
+
+def test_test_settings_include_required_api_and_htmx_apps():
+    from tests import settings as test_settings
+
+    required_apps = ["rest_framework", "django_htmx", "wagtail.api.v2"]
+    missing_required_apps = [app for app in required_apps if app not in test_settings.INSTALLED_APPS]
+    assert missing_required_apps == []
+
+
+def test_test_settings_keep_comments_app_ordering():
+    from tests import settings as test_settings
+
+    cast_comments_index = test_settings.INSTALLED_APPS.index("cast.comments.apps.CastCommentsConfig")
+    django_comments_index = test_settings.INSTALLED_APPS.index("django_comments")
+    assert cast_comments_index < django_comments_index

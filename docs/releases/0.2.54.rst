@@ -55,6 +55,10 @@
 - Fixed stale settings reads in ``cast.appsettings`` and ``cast.renditions``
   by resolving settings at runtime so ``@override_settings`` changes are
   respected after module import.
+- Aligned test ``INSTALLED_APPS`` with shipped ``CAST_APPS`` by reusing
+  ``cast.apps.CAST_APPS``, ensuring ``rest_framework``, ``django_htmx``, and
+  ``wagtail.api.v2`` are present in tests and adding regression checks to
+  prevent future app-list drift.
 - Hardened ``media_replace`` with safe defaults: it now requires explicit
   ``--yes`` confirmation for destructive writes, supports non-destructive
   previews via ``--dry-run``, and reports per-file operations plus summary

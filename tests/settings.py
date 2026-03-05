@@ -1,6 +1,7 @@
 import os
 
 import environ
+from cast.apps import CAST_APPS
 
 ROOT_DIR = environ.Path(__file__) - 1
 APPS_DIR = ROOT_DIR.path("cast")
@@ -33,29 +34,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.admin",
     "django.contrib.messages",
-    "django_filters",
-    "django_vite",
-    "crispy_forms",  # Form layouts
-    "crispy_bootstrap4",
-    "cast.comments.apps.CastCommentsConfig",  # must be before django_comments
-    "threadedcomments",
-    "django_comments",
-    "modelcluster",
-    "taggit",
-    "wagtail.contrib.forms",
-    "wagtail.contrib.settings",
-    "wagtail.contrib.redirects",
-    "wagtail.embeds",
-    "wagtail.sites",
-    "wagtail.users",
-    "wagtail.snippets",
-    "wagtail.documents",
-    "wagtail.images",
-    "wagtail.search",
-    "wagtail.admin",
-    "wagtail",
-    "cast.apps.CastConfig",
-]
+] + list(CAST_APPS)
 
 SITE_ID = 1
 
