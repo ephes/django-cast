@@ -63,6 +63,11 @@
   ``--yes`` confirmation for destructive writes, supports non-destructive
   previews via ``--dry-run``, and reports per-file operations plus summary
   counts for planned/replaced/skipped/errors.
+- Added new Django system checks for configuration safety:
+  ``cast.E002`` validates ``cast.comments.apps.CastCommentsConfig`` is listed
+  before ``django_comments`` in ``INSTALLED_APPS``, and ``cast.E003`` validates
+  all middleware listed in ``cast.apps.CAST_MIDDLEWARE`` are present in
+  ``settings.MIDDLEWARE``.
 
 Migration mapping (old -> new):
 

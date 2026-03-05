@@ -8,6 +8,8 @@ from typing import Any
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
+from cast.apps import CAST_MIDDLEWARE
+
 # Source extensions to consider
 SOURCE_EXTENSIONS = frozenset({".ts", ".tsx", ".js", ".jsx", ".vue", ".css", ".scss", ".sass"})
 
@@ -93,3 +95,51 @@ def check_asset_freshness(app_configs, **kwargs):  # type: ignore[no-untyped-def
         )
 
     return warnings
+
+
+@register("cast")
+def check_cast_comments_ordering(app_configs, **kwargs):  # type: ignore[no-untyped-def]
+    """Ensure cast comments app is loaded before django_comments."""
+    installed_apps = list(getattr(settings, "INSTALLED_APPS", []))
+    cast_comments_app = "cast.comments.apps.CastCommentsConfig"
+
+    django_comments_index = next(
+        (
+            index
+            for index, app_name in enumerate(installed_apps)
+            if app_name == "django_comments" or app_name.startswith("django_comments.")
+        ),
+        None,
+    )
+    cast_comments_index = next(
+        (index for index, app_name in enumerate(installed_apps) if app_name in {"cast.comments", cast_comments_app}),
+        None,
+    )
+    if django_comments_index is None or cast_comments_index is None or cast_comments_index < django_comments_index:
+        return []
+
+    return [
+        Error(
+            f"'{cast_comments_app}' must appear before 'django_comments' in INSTALLED_APPS.",
+            hint=f"Move '{cast_comments_app}' before 'django_comments' in settings.INSTALLED_APPS.",
+            id="cast.E002",
+        )
+    ]
+
+
+@register("cast")
+def check_cast_required_middleware(app_configs, **kwargs):  # type: ignore[no-untyped-def]
+    """Ensure middleware required by django-cast is present."""
+    configured_middleware = set(getattr(settings, "MIDDLEWARE", []))
+    missing_middleware = [middleware for middleware in CAST_MIDDLEWARE if middleware not in configured_middleware]
+    if not missing_middleware:
+        return []
+
+    missing_middleware_str = ", ".join(missing_middleware)
+    return [
+        Error(
+            f"settings.MIDDLEWARE is missing required django-cast middleware: {missing_middleware_str}.",
+            hint="Add all entries from cast.apps.CAST_MIDDLEWARE to settings.MIDDLEWARE.",
+            id="cast.E003",
+        )
+    ]

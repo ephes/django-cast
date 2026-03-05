@@ -8,7 +8,9 @@ import pytest
 from django.core.checks import Warning
 from django.core.checks.registry import registry
 
+from cast.apps import CAST_MIDDLEWARE
 from cast.checks import _find_stale_assets, _newest_source_mtime, check_asset_freshness, check_cast_setting_types
+from cast.checks import check_cast_comments_ordering, check_cast_required_middleware
 
 
 @pytest.fixture()
@@ -165,6 +167,79 @@ class TestCheckCastSettingTypes:
         assert len(errors) == 1
         assert errors[0].id == "cast.E001"
         assert "CAST_IMAGE_FORMATS must be of type list." == errors[0].msg
+
+
+class TestCheckCastConfiguration:
+    def test_cast_comments_must_be_before_django_comments(self, settings, mocker):
+        apps = list(settings.INSTALLED_APPS)
+        apps.remove("cast.comments.apps.CastCommentsConfig")
+        django_comments_index = apps.index("django_comments")
+        apps.insert(django_comments_index + 1, "cast.comments.apps.CastCommentsConfig")
+        mocker.patch("cast.checks.settings.INSTALLED_APPS", apps)
+
+        errors = check_cast_comments_ordering(None)
+
+        assert len(errors) == 1
+        assert errors[0].id == "cast.E002"
+        assert "before 'django_comments'" in errors[0].msg
+
+    def test_required_cast_middleware_missing(self, settings, mocker):
+        middleware = [mw for mw in settings.MIDDLEWARE if mw != "django_htmx.middleware.HtmxMiddleware"]
+        mocker.patch("cast.checks.settings.MIDDLEWARE", middleware)
+
+        errors = check_cast_required_middleware(None)
+
+        assert len(errors) == 1
+        assert errors[0].id == "cast.E003"
+        assert "django_htmx.middleware.HtmxMiddleware" in errors[0].msg
+
+    def test_cast_comments_ordering_with_django_comments_config_path(self, settings, mocker):
+        apps = list(settings.INSTALLED_APPS)
+        django_comments_index = apps.index("django_comments")
+        apps[django_comments_index] = "django_comments.apps.CommentsConfig"
+        apps.remove("cast.comments.apps.CastCommentsConfig")
+        apps.insert(django_comments_index + 1, "cast.comments.apps.CastCommentsConfig")
+        mocker.patch("cast.checks.settings.INSTALLED_APPS", apps)
+
+        errors = check_cast_comments_ordering(None)
+
+        assert len(errors) == 1
+        assert errors[0].id == "cast.E002"
+        assert "INSTALLED_APPS" in errors[0].msg
+
+    def test_cast_comments_ordering_skips_when_cast_comments_absent(self, settings, mocker):
+        apps = [
+            app
+            for app in settings.INSTALLED_APPS
+            if app not in {"cast.comments", "cast.comments.apps.CastCommentsConfig"}
+        ]
+        mocker.patch("cast.checks.settings.INSTALLED_APPS", apps)
+
+        assert check_cast_comments_ordering(None) == []
+
+    def test_cast_comments_ordering_skips_when_django_comments_absent(self, settings, mocker):
+        apps = [app for app in settings.INSTALLED_APPS if app != "django_comments"]
+        mocker.patch("cast.checks.settings.INSTALLED_APPS", apps)
+
+        assert check_cast_comments_ordering(None) == []
+
+    def test_cast_configuration_checks_pass_when_valid(self, settings, mocker):
+        middleware = list(CAST_MIDDLEWARE) + [mw for mw in settings.MIDDLEWARE if mw not in CAST_MIDDLEWARE]
+        mocker.patch("cast.checks.settings.MIDDLEWARE", middleware)
+
+        assert check_cast_comments_ordering(None) == []
+        assert check_cast_required_middleware(None) == []
+
+    def test_required_cast_middleware_all_missing(self, settings, mocker):
+        middleware = [mw for mw in settings.MIDDLEWARE if mw not in set(CAST_MIDDLEWARE)]
+        mocker.patch("cast.checks.settings.MIDDLEWARE", middleware)
+
+        errors = check_cast_required_middleware(None)
+
+        assert len(errors) == 1
+        assert errors[0].id == "cast.E003"
+        for middleware_entry in CAST_MIDDLEWARE:
+            assert middleware_entry in errors[0].msg
 
 
 def test_system_check_is_registered():
