@@ -206,6 +206,56 @@ def test_post_select_theme_view_happy(client):
 
 
 @pytest.mark.django_db
+def test_post_select_theme_view_rejects_external_next(client):
+    url = reverse("cast:select-theme")
+    response = client.post(
+        url,
+        {
+            "template_base_dir": "plain",
+            "next": "https://example.com/phishing",
+        },
+    )
+    assert response.status_code == 302
+    assert response.url == url
+    assert client.session["template_base_dir"] == "plain"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "bad_next",
+    [
+        "//evil.com",
+        "//evil.com/path",
+        "javascript:alert(1)",
+        "\\\\evil.com",
+        "///evil.com",
+    ],
+)
+def test_post_select_theme_view_rejects_bypass_attempts(client, bad_next):
+    url = reverse("cast:select-theme")
+    response = client.post(
+        url,
+        {
+            "template_base_dir": "plain",
+            "next": bad_next,
+        },
+    )
+    assert response.status_code == 302
+    assert response.url == url
+    assert client.session["template_base_dir"] == "plain"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("payload", [{"template_base_dir": "plain", "next": ""}, {"template_base_dir": "plain"}])
+def test_post_select_theme_view_uses_fallback_for_empty_or_missing_next(client, payload):
+    url = reverse("cast:select-theme")
+    response = client.post(url, payload)
+    assert response.status_code == 302
+    assert response.url == url
+    assert client.session["template_base_dir"] == "plain"
+
+
+@pytest.mark.django_db
 def test_non_existent_theme_returns_default(rf):
     """
     Make sure that if there are no sites and the template base dir does not exist,

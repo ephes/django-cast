@@ -1,5 +1,6 @@
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from ..forms import SelectThemeForm
 from ..models import get_template_base_dir
@@ -26,6 +27,12 @@ def select_theme(request: HtmxHttpRequest) -> HttpResponse:
         if form.is_valid():
             set_template_base_dir(request, form.cleaned_data["template_base_dir"])
             success_url = form.cleaned_data["next"]
+            if not url_has_allowed_host_and_scheme(
+                url=success_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                success_url = request.path
             return HttpResponseRedirect(success_url)
     else:
         form = SelectThemeForm(

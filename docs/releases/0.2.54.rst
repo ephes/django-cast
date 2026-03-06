@@ -68,6 +68,9 @@
   before ``django_comments`` in ``INSTALLED_APPS``, and ``cast.E003`` validates
   all middleware listed in ``cast.apps.CAST_MIDDLEWARE`` are present in
   ``settings.MIDDLEWARE``.
+- Hardened ``select_theme`` POST redirects by validating ``next`` with
+  ``url_has_allowed_host_and_scheme`` against the current host/scheme and
+  falling back to the local select-theme URL when ``next`` is empty or unsafe.
 
 Migration mapping (old -> new):
 
