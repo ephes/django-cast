@@ -1,6 +1,8 @@
 import pytest
 import os
 from django import forms
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from types import SimpleNamespace
@@ -193,6 +195,33 @@ class TestPostModel:
 
     def test_post_slug(self, post):
         assert post.get_slug() == "test-entry"
+
+    def test_post_blog_returns_parent_blog(self, post):
+        post = Post.objects.get(pk=post.pk)
+        assert post.blog.pk == post.get_parent().blog.pk
+
+    def test_post_blog_is_cached_after_first_access(self, post):
+        post = Post.objects.get(pk=post.pk)
+
+        with CaptureQueriesContext(connection) as first_access_queries:
+            first_blog = post.blog
+        with CaptureQueriesContext(connection) as second_access_queries:
+            second_blog = post.blog
+
+        assert len(first_access_queries.captured_queries) >= 1
+        assert len(second_access_queries.captured_queries) == 0
+        assert first_blog.pk == second_blog.pk
+
+    def test_get_template_base_dir_uses_cached_blog_without_parent_lookup(self, mocker, post, simple_request):
+        post = Post.objects.get(pk=post.pk)
+        # Prime the blog cache
+        _blog = post.blog
+
+        get_parent_mock = mocker.patch.object(Post, "get_parent", autospec=True)
+        template_base_dir = post.get_template_base_dir(simple_request)
+
+        assert template_base_dir == post.blog.get_template_base_dir(simple_request)
+        get_parent_mock.assert_not_called()
 
     def test_post_has_audio(self, post):
         assert post.has_audio is False

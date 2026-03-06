@@ -200,6 +200,7 @@ class Post(Page):
     tags = ClusterTaggableManager(through=PostTag, blank=True, verbose_name=_("tags"))
 
     _local_template_name: str | None = None
+    _blog: "Blog" | None = None
     _media_lookup: dict[str, dict[int, Any]] | None = None
 
     # wagtail
@@ -272,14 +273,18 @@ class Post(Page):
         it has a .blog attribute containing the model which has all the
         attributes like blog.comments_enabled etc.
         """
-        return self.get_parent().blog
+        if self._blog is None:
+            self._blog = self.get_parent().blog
+        return self._blog
 
     def get_template_base_dir(self, request: HttpRequest) -> str:
+        if self._blog is not None:
+            return self._blog.get_template_base_dir(cast(HtmxHttpRequest, request))
         parent = self.get_parent()
-        if parent is not None:
-            return parent.blog.get_template_base_dir(request)
-        else:
+        if parent is None:
             return TemplateBaseDirectory.for_request(request).name
+        self._blog = parent.blog
+        return self._blog.get_template_base_dir(cast(HtmxHttpRequest, request))
 
     def get_template(self, request: HttpRequest, *args, local_template_name: str = "post.html", **kwargs) -> str:
         if self._local_template_name is not None:
