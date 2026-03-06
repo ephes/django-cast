@@ -609,6 +609,26 @@ def test_facet_counts_detail(api_client, blog, post):
     assert len(date_facets) == 0
 
 
+@pytest.mark.django_db
+def test_facet_counts_detail_unpublished_blog_returns_404(api_client, blog):
+    blog.unpublish()
+    blog.refresh_from_db()
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(url, format="json")
+
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_live_blog_still_returns_200(api_client, blog):
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    r = api_client.get(url, format="json")
+
+    assert r.status_code == 200
+    assert r.json()["id"] == blog.pk
+
+
 def _create_modal_facet_posts(blog, body):
     til = PostCategory.objects.create(name="Today I Learned", slug="til")
     weeknotes = PostCategory.objects.create(name="WeekNotes", slug="weeknotes")

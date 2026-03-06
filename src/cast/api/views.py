@@ -161,7 +161,7 @@ class FacetCountListView(generics.ListAPIView):
 
 
 class FacetCountsDetailView(generics.RetrieveAPIView):
-    queryset = Blog.objects.all()
+    queryset = Blog.objects.all().live()
     serializer_class = FacetCountSerializer
 
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
