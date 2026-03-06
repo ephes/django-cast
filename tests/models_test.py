@@ -957,6 +957,68 @@ def test_video_create_poster_handles_missing_temp_file_on_success(mocker, tmp_pa
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("dimensions", [(None, None), (640, None), (None, 480)])
+def test_video_create_poster_skips_ffmpeg_when_dimensions_missing(mocker, tmp_path, dimensions):
+    tmp_poster = tmp_path / "poster.jpg"
+    created_fd: int | None = None
+
+    def fake_mkstemp(prefix, suffix):
+        nonlocal created_fd
+        assert prefix == "poster_"
+        assert suffix == ".jpg"
+        created_fd = os.open(tmp_poster, os.O_CREAT | os.O_RDWR)
+        return created_fd, str(tmp_poster)
+
+    mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
+    mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=dimensions)
+    run = mocker.patch("cast.models.video.subprocess.run")
+    poster_save = mocker.patch("cast.models.video.Video.poster.field.attr_class.save")
+
+    class Original:
+        url = "https://example.com/video.mp4"
+
+    video = Video()
+    mocker.patch.object(video, "original", Original())
+
+    video._create_poster()
+
+    assert created_fd is not None
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        os.fstat(created_fd)
+    run.assert_not_called()
+    poster_save.assert_not_called()
+    assert not tmp_poster.exists()
+
+
+@pytest.mark.django_db
+def test_video_create_poster_handles_missing_dimensions_gracefully(mocker, tmp_path):
+    tmp_poster = tmp_path / "poster.jpg"
+
+    def fake_mkstemp(prefix, suffix):
+        assert prefix == "poster_"
+        assert suffix == ".jpg"
+        return os.open(tmp_poster, os.O_CREAT | os.O_RDWR), str(tmp_poster)
+
+    mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
+    mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(None, None))
+    run = mocker.patch("cast.models.video.subprocess.run")
+    poster_save = mocker.patch("cast.models.video.Video.poster.field.attr_class.save")
+
+    class Original:
+        url = "https://example.com/video.mp4"
+
+    video = Video()
+    mocker.patch.object(video, "original", Original())
+
+    video.create_poster()
+
+    run.assert_not_called()
+    poster_save.assert_not_called()
+    assert not tmp_poster.exists()
+    assert not video.poster
+
+
+@pytest.mark.django_db
 def test_transcript_podlove_data_no_podlove_or_dote():
     transcript = Transcript()
     assert transcript.podlove_data == {}

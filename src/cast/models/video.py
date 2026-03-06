@@ -116,6 +116,9 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             if not video_url.startswith("http"):
                 video_url = self.original.path
             width, height = self._get_video_dimensions(video_url)
+            if width is None or height is None:
+                logger.info("skip creating poster: video dimensions unavailable")
+                return
             poster_cmd = [
                 "ffmpeg",
                 "-ss",
