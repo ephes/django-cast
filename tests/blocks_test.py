@@ -2,6 +2,7 @@ from typing import cast
 from types import SimpleNamespace
 
 import pytest
+from django.template.loader import get_template
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image
 
@@ -74,6 +75,34 @@ def test_gallery_block_template_from_plain_theme():
     block = GalleryBlock(ImageChooserBlock())
     template_name = block.get_template(context={"template_base_dir": "plain"})
     assert template_name == "cast/plain/gallery.html"
+
+
+def test_fallback_gallery_template_uses_bootstrap4_web_component():
+    image = SimpleNamespace(
+        default_alt_text="alt text",
+        modal=SimpleNamespace(
+            src=SimpleNamespace(avif="https://example.com/modal.avif", jpeg="https://example.com/modal.jpeg"),
+            srcset=SimpleNamespace(
+                avif="https://example.com/modal.avif 100w", jpeg="https://example.com/modal.jpeg 100w"
+            ),
+            sizes="100vw",
+            width=100,
+            height=100,
+        ),
+        thumbnail=SimpleNamespace(
+            src=SimpleNamespace(jpeg="https://example.com/thumb.jpeg"),
+            srcset=SimpleNamespace(
+                avif="https://example.com/thumb.avif 50w", jpeg="https://example.com/thumb.jpeg 50w"
+            ),
+            sizes="50vw",
+            width=50,
+            height=50,
+        ),
+    )
+    html = get_template("cast/gallery.html").render({"block": SimpleNamespace(id="fallback"), "images": [image]})
+
+    assert "<image-gallery-bs4" in html
+    assert "</image-gallery-bs4>" in html
 
 
 class StubWagtailImage:

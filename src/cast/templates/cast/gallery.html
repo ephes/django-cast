@@ -1,69 +1,71 @@
-<div class="cast-gallery-container">
-  {% for image in images %}
-    <a
-      class="cast-gallery-modal"
-      data-toggle="modal"
-      data-target="#galleryModal-{{ block.id }}"
-      data-full="{{ image.modal.src.jpeg }}"
-    >
-      <picture>
-        <source
-          srcset="{{ image.thumbnail.srcset.avif }}"
-          type="image/avif"
-          sizes="{{ image.thumbnail.sizes }}"
-          data-modal-src="{{ image.modal.src.avif }}"
-          data-modal-srcset="{{ image.modal.srcset.avif }}"
-          data-modal-sizes="{{ image.modal.sizes }}"
-        >
-        <img
-          id="img-{{ block.id }}-{{ forloop.counter0 }}"
-          class="cast-gallery-thumbnail"
-          alt="{{ image.default_alt_text }}"
-          src="{{ image.thumbnail.src.jpeg }}"
-          srcset="{{ image.thumbnail.srcset.jpeg }}"
-          sizes="{{ image.thumbnail.sizes }}"
-          width="{{ image.thumbnail.width }}"
-          height="{{ image.thumbnail.height }}"
-          data-modal-src="{{ image.modal.src.jpeg }}"
-          data-modal-srcset="{{ image.modal.srcset.jpeg }}"
-          data-modal-sizes="{{ image.modal.sizes }}"
-          data-modal-width="{{ image.modal.width }}"
-          data-modal-height="{{ image.modal.height }}"
-          data-prev="{% if forloop.first %}false{% else %}img-{{ block.id }}-{{ forloop.counter0|add:"-1" }}{% endif %}"
-          data-next="{% if forloop.last %}false{% else %}img-{{ block.id }}-{{ forloop.counter0|add:"1" }}{% endif %}"
-          loading="lazy"
-        />
-      </picture>
-    </a>
-  {% endfor %}
-  <!-- Modal -->
-  <div class="modal fade" id="galleryModal-{{ block.id }}" tabindex="-1" role="dialog"
-       aria-labelledby="galleryModalLabel-{{ block.id }}" aria-hidden="true">
-    <div class="modal-dialog modal-lg cast-gallery-lg" role="document">
-      <div class="modal-content cast-gallery-content">
-        <div class="modal-header cast-gallery-header">
-          <h2 id="galleryModalLabel-{{ block.id }}" class="sr-only">Image gallery</h2>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body cast-gallery-body">
-          {% with placeholder_src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" %}
-            <picture class="modal-picture">
-              <source class="modal-source" srcset="{{ placeholder_src }} 1w" sizes="1px" type="image/avif">
-              <img
-                class="modal-image cast-image"
-                alt="modal image placeholder"
-                src="{{ placeholder_src }}"
-                srcset="{{ placeholder_src }} 1w"
-                sizes="1px"
-              >
-            </picture>
-          {% endwith %}
-        </div>
-        <div class="modal-footer cast-gallery-footer">
+<image-gallery-bs4 id="gallery-{{ block.id }}">
+  <div class="cast-gallery-container">
+    {% for image in images %}
+      <a
+        class="cast-gallery-modal"
+        data-toggle="modal"
+        data-target="#galleryModal-{{ block.id }}"
+        data-full="{{ image.modal.src.jpeg }}"
+      >
+        <picture>
+          <source
+            srcset="{{ image.thumbnail.srcset.avif }}"
+            type="image/avif"
+            sizes="{{ image.thumbnail.sizes }}"
+            data-modal-src="{{ image.modal.src.avif }}"
+            data-modal-srcset="{{ image.modal.srcset.avif }}"
+            data-modal-sizes="{{ image.modal.sizes }}"
+          >
+          <img
+            id="img-{{ block.id }}-{{ forloop.counter0 }}"
+            class="cast-gallery-thumbnail"
+            alt="{{ image.default_alt_text }}"
+            src="{{ image.thumbnail.src.jpeg }}"
+            srcset="{{ image.thumbnail.srcset.jpeg }}"
+            sizes="{{ image.thumbnail.sizes }}"
+            width="{{ image.thumbnail.width }}"
+            height="{{ image.thumbnail.height }}"
+            data-modal-src="{{ image.modal.src.jpeg }}"
+            data-modal-srcset="{{ image.modal.srcset.jpeg }}"
+            data-modal-sizes="{{ image.modal.sizes }}"
+            data-modal-width="{{ image.modal.width }}"
+            data-modal-height="{{ image.modal.height }}"
+            data-prev="{% if forloop.first %}false{% else %}img-{{ block.id }}-{{ forloop.counter0|add:"-1" }}{% endif %}"
+            data-next="{% if forloop.last %}false{% else %}img-{{ block.id }}-{{ forloop.counter0|add:"1" }}{% endif %}"
+            loading="lazy"
+          />
+        </picture>
+      </a>
+    {% endfor %}
+    <!-- Modal -->
+    <div class="modal fade" id="galleryModal-{{ block.id }}" tabindex="-1" role="dialog"
+         aria-labelledby="galleryModalLabel-{{ block.id }}" aria-hidden="true">
+      <div class="modal-dialog modal-lg cast-gallery-lg" role="document">
+        <div class="modal-content cast-gallery-content">
+          <div class="modal-header cast-gallery-header">
+            <h2 id="galleryModalLabel-{{ block.id }}" class="sr-only">Image gallery</h2>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body cast-gallery-body">
+            {% with placeholder_src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" %}
+              <picture class="modal-picture">
+                <source class="modal-source" srcset="{{ placeholder_src }} 1w" sizes="1px" type="image/avif">
+                <img
+                  class="modal-image cast-image"
+                  alt="modal image placeholder"
+                  src="{{ placeholder_src }}"
+                  srcset="{{ placeholder_src }} 1w"
+                  sizes="1px"
+                >
+              </picture>
+            {% endwith %}
+          </div>
+          <div class="modal-footer cast-gallery-footer">
+          </div>
         </div>
       </div>
     </div>
   </div>
-</div>
+</image-gallery-bs4>
