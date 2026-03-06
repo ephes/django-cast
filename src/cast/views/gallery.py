@@ -2,13 +2,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from django import forms
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from wagtail.images.models import Image
 
 from ..blocks import get_srcset_images_for_slots
+from ..models.theme import get_template_base_dir_choices
 from .htmx_helpers import HtmxHttpRequest
 
 
@@ -68,6 +69,10 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
 
     If the form is not valid, it returns a 400 -> htmx will not swap the content.
     """
+    available = {slug for slug, _name in get_template_base_dir_choices()}
+    if template_base_dir not in available:
+        raise Http404("Unknown template base dir")
+
     form = GalleryModalForm(request.GET)
     if not form.is_valid():
         return HttpResponse(status=400)

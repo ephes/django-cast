@@ -1,4 +1,5 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.http import Http404
 from django.test import RequestFactory
 from django.urls import reverse
 import pytest
@@ -99,6 +100,15 @@ def test_htmx_gallery_modal_happy(client, gallery):
     url = f"{base_url}?current_image_index={current_image_index}&image_pks={image_pks}&block_id={block_id}"
     response = client.get(url)
     assert response.status_code == 200
+
+
+def test_gallery_modal_invalid_template_base_dir_returns_404():
+    request = RequestFactory().get(
+        reverse("cast:gallery-modal", kwargs={"template_base_dir": "missing-theme"}),
+        {"current_image_index": "0", "image_pks": "1", "block_id": "block_id"},
+    )
+    with pytest.raises(Http404):
+        gallery_modal(request, "missing-theme")
 
 
 def test_htmx_gallery_modal_without_current_image_index_invalid(client):
