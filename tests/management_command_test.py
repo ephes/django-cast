@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
 from io import StringIO
+from unittest.mock import Mock
 
 import django
 import pytest
@@ -356,6 +357,40 @@ def test_media_replace_warns_when_storage_returns_different_saved_name(mocker):
     call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert "warning: foo.jpg saved as foo_1.jpg" in error_output.getvalue()
+
+
+def test_recalc_video_posters_continues_after_error_and_reports_summary(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    first = Mock(pk=1)
+    first.create_poster.side_effect = RuntimeError("boom")
+    second = Mock(pk=2)
+    videos = [first, second]
+    manager = mocker.Mock()
+    manager.all.return_value.order_by.return_value = videos
+    mocker.patch("cast.management.commands.recalc_video_posters.Video.objects", manager)
+    mocker.patch("cast.management.commands.recalc_video_posters.track", side_effect=lambda iterable, **_: iterable)
+
+    call_command("recalc_video_posters", stdout=output, stderr=error_output)
+
+    first.create_poster.assert_called_once_with()
+    first.save.assert_not_called()
+    second.create_poster.assert_called_once_with()
+    second.save.assert_called_once_with(poster=False)
+    assert "error recalculating poster for video 1: boom" in error_output.getvalue()
+    assert "processed=2 errors=1" in output.getvalue()
+
+
+def test_recalc_video_posters_reports_zero_processed(mocker):
+    output = StringIO()
+    manager = mocker.Mock()
+    manager.all.return_value.order_by.return_value = []
+    mocker.patch("cast.management.commands.recalc_video_posters.Video.objects", manager)
+    mocker.patch("cast.management.commands.recalc_video_posters.track", side_effect=lambda iterable, **_: iterable)
+
+    call_command("recalc_video_posters", stdout=output)
+
+    assert "processed=0 errors=0" in output.getvalue()
 
 
 @pytest.mark.slow
