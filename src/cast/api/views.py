@@ -11,7 +11,7 @@ from django.views.generic import CreateView
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -173,7 +173,7 @@ class FacetCountsDetailView(generics.RetrieveAPIView):
 
 
 class CommentTrainingDataView(APIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAdminUser,)
 
     @staticmethod
     def get(request, _format: Any = None) -> JsonResponse:

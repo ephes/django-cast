@@ -443,9 +443,19 @@ class TestCommentTrainingData:
         r = api_client.get(self.url, format="json")
         assert r.status_code == 403
 
-    def test_get_comment_training_data_with_authentication(self, api_client):
-        """Check for list result when accessing the training data endpoint being logged in."""
+    def test_get_comment_training_data_with_non_staff_authentication(self, api_client):
+        """Authenticated non-staff users must not access comment training data."""
         user = UserFactory()
+        api_client.login(username=user.username, password="password")
+        r = api_client.get(self.url, format="json")
+        assert r.status_code == 403
+
+    def test_get_comment_training_data_with_staff_authentication(self, api_client):
+        """Staff users may access comment training data."""
+        from django_comments import get_model as get_comments_model
+
+        get_comments_model().objects.all().delete()
+        user = UserFactory(is_staff=True)
         api_client.login(username=user.username, password="password")
         r = api_client.get(self.url, format="json")
         assert r.status_code == 200
