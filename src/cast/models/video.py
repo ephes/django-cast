@@ -181,7 +181,13 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             logger.info("generate video poster")
             # generate poster thumbnail by default, but make it optional
             # for recalc management command
+            poster_name_before = self.poster.name or ""
             self.create_poster()
-            # save again after adding poster
-            result = super().save(*args, **kwargs)
+            poster_name_after = self.poster.name or ""
+            if poster_name_after and poster_name_after != poster_name_before:
+                save_kwargs = {"update_fields": ["poster"]}
+                using = kwargs.get("using")
+                if using is not None:
+                    save_kwargs["using"] = using
+                result = super().save(**save_kwargs)
         return result

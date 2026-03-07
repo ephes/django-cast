@@ -111,6 +111,16 @@ def test_gallery_modal_invalid_template_base_dir_returns_404():
         gallery_modal(request, "missing-theme")
 
 
+@pytest.mark.django_db
+def test_gallery_modal_missing_current_image_returns_404():
+    request = RequestFactory().get(
+        reverse("cast:gallery-modal", kwargs={"template_base_dir": "plain"}),
+        {"current_image_index": "0", "image_pks": "999999", "block_id": "block_id"},
+    )
+    with pytest.raises(Http404):
+        gallery_modal(request, "plain")
+
+
 def test_htmx_gallery_modal_without_current_image_index_invalid(client):
     """#171 Test HTMX request without current_image_index returns 400."""
     image_pks = "1,2,3"

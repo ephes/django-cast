@@ -97,17 +97,19 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
     pk_to_image = {image.pk: image for image in images}
 
     # Add index information to images for template
-    current_image = pk_to_image[current_image_pk]
+    current_image = pk_to_image.get(current_image_pk)
+    if current_image is None:
+        raise Http404("Current image not found")
     current_image.gallery_index = current_index
 
     prev_image = (
         GalleryImageWithIndex(image=pk_to_image[prev_pk], gallery_index=prev_index)
-        if prev_pk is not None and prev_index is not None
+        if prev_pk is not None and prev_index is not None and prev_pk in pk_to_image
         else None
     )
     next_image = (
         GalleryImageWithIndex(image=pk_to_image[next_pk], gallery_index=next_index)
-        if next_pk is not None and next_index is not None
+        if next_pk is not None and next_index is not None and next_pk in pk_to_image
         else None
     )
 
