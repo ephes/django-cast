@@ -1,8 +1,8 @@
 .. _cast_management_commands:
 
-*********************
-Django-Admin Commands
-*********************
+*******************
+Management Commands
+*******************
 
 Django Cast provides several management commands, primarily for managing
 media files, image renditions, and reference content.
@@ -44,7 +44,8 @@ recalc_video_posters
 --------------------
 
 Regenerate poster images for all videos from the video files. Requires
-``ffmpeg`` to be installed.
+``ffmpeg`` to be installed. The command keeps going if one video fails and
+prints a final ``processed=<n> errors=<n>`` summary.
 
 .. code-block:: bash
 
@@ -89,23 +90,48 @@ but want to keep the same filename. Requires Django >= 4.2 and configured
 
 .. code-block:: bash
 
-    python manage.py media_replace path/to/video1.mp4 path/to/video2.mp4
+    # Preview without writing anything
+    python manage.py media_replace path/to/video1.mp4 --dry-run
+
+    # Replace after explicit confirmation
+    python manage.py media_replace path/to/video1.mp4 path/to/video2.mp4 --yes
 
 Arguments:
 
 ``paths``
     One or more file paths to replace on production storage.
 
+Options:
+
+``--dry-run``
+    Preview replacements without writing to production storage.
+
+``--yes``
+    Confirm destructive writes. Without this flag, the command prints the
+    planned replacements and exits with ``CommandError`` if any real changes
+    would have been made.
+
+The command prints summary counters in the form
+``planned=<n> replaced=<n> skipped=<n> errors=<n>``. Missing local files are
+reported as skipped. If a production delete succeeds but a later save fails,
+the command also prints a warning about the data-loss risk for that path.
+
 media_sizes
 -----------
 
 Print the sizes of all media files on the production storage backend,
-categorized by type (video, image, other) with totals in MB. Requires
+categorized by type (video, image, misc) with totals in MB. Requires
 Django >= 4.2 and configured ``production`` and ``backup`` storage backends.
 
 .. code-block:: bash
 
     python manage.py media_sizes
+
+The built-in categories are extension-based:
+
+- video: ``.mov``, ``.mp4``
+- image: ``.jpg``, ``.jpeg``, ``.png``
+- misc: everything else
 
 media_stale
 -----------
@@ -128,6 +154,8 @@ Options:
 
 ``--delete``
     Delete the stale files instead of only listing them.
+
+The command prints matching stale paths and a final total stale size in MB.
 
 Reference Site
 ==============
@@ -171,6 +199,9 @@ Options:
 ``--with-renditions``
     Generate missing image renditions while creating content.
 
+On success, the command prints the resolved blog and podcast URLs plus a post
+count summary for the created reference content.
+
 styleguide_prefetch
 -------------------
 
@@ -189,3 +220,6 @@ Options:
 
 ``--with-renditions``
     Generate missing renditions while prefetching.
+
+On success, the command prints ``Styleguide prefetch complete for theme
+'<theme>'``.
