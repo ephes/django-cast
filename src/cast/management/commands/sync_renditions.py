@@ -1,6 +1,6 @@
 from argparse import RawTextHelpFormatter
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from rich.progress import track
 from wagtail.images.models import Image, Rendition
 
@@ -39,7 +39,14 @@ By default all posts are synced.
         if post_slug is not None:
             posts_queryset = Post.objects.filter(slug=post_slug)
         elif blog_slug is not None:
-            blog = Blog.objects.get(slug=blog_slug)
+            matching_blogs = Blog.objects.filter(slug=blog_slug).order_by("pk")
+            if not matching_blogs.exists():
+                raise CommandError(f"No blog found for slug '{blog_slug}'.")
+            if matching_blogs.count() > 1:
+                raise CommandError(
+                    f"Multiple blogs found for slug '{blog_slug}'. Use a unique slug or target posts more explicitly."
+                )
+            blog = matching_blogs.get()
             posts_queryset = Post.objects.descendant_of(blog)
         else:
             posts_queryset = Post.objects.all()

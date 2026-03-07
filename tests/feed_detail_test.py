@@ -1,8 +1,12 @@
+from django.test import override_settings
 from django.urls import reverse
 
 from cast import appsettings
 from cast.models import Audio
 from cast.views.feed import _resolve_feed_detail_template, get_podcast_feed_urls
+
+from .factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory
+from .multisite_helpers import create_site_root
 
 
 class TestFeedDetailForBlog:
@@ -127,6 +131,71 @@ class TestFeedDetailRoutingNonConflict:
         response = client.get(url)
         assert response.status_code == 200
         assert "text/html" in response["Content-Type"]
+
+    def test_feed_detail_uses_current_site_for_duplicate_blog_slug(self, client, user):
+        site1, site1_root = create_site_root(
+            owner=user, hostname="feed-site1.local", slug="feed-site1-root", title="Feed Site 1"
+        )
+        _site2, site2_root = create_site_root(
+            owner=user, hostname="feed-site2.local", slug="feed-site2-root", title="Feed Site 2"
+        )
+        blog1 = BlogFactory(owner=user, title="Site 1 Blog", slug="shared-feed", parent=site1_root)
+        BlogFactory(owner=user, title="Site 2 Blog", slug="shared-feed", parent=site2_root)
+
+        url = reverse("cast:feed_detail", kwargs={"slug": blog1.slug})
+        with override_settings(ALLOWED_HOSTS=["testserver", site1.hostname, "feed-site2.local"]):
+            response = client.get(url, HTTP_HOST=site1.hostname)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Site 1 Blog" in content
+        assert "Site 2 Blog" not in content
+
+    def test_feed_xml_uses_current_site_for_duplicate_blog_slug(self, client, user, body):
+        site1, site1_root = create_site_root(
+            owner=user, hostname="feed-xml1.local", slug="feed-xml1-root", title="Feed XML 1"
+        )
+        _site2, site2_root = create_site_root(
+            owner=user, hostname="feed-xml2.local", slug="feed-xml2-root", title="Feed XML 2"
+        )
+        blog1 = BlogFactory(owner=user, title="Site 1 Blog", slug="shared-feed-xml", parent=site1_root)
+        blog2 = BlogFactory(owner=user, title="Site 2 Blog", slug="shared-feed-xml", parent=site2_root)
+        PostFactory(owner=user, title="Site 1 Post", slug="site-1-post", body=body, parent=blog1)
+        PostFactory(owner=user, title="Site 2 Post", slug="site-2-post", body=body, parent=blog2)
+
+        url = reverse("cast:latest_entries_feed", kwargs={"slug": blog1.slug})
+        with override_settings(ALLOWED_HOSTS=["testserver", site1.hostname, "feed-xml2.local"]):
+            response = client.get(url, HTTP_HOST=site1.hostname)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Site 1 Post" in content
+        assert "Site 2 Post" not in content
+
+    def test_podcast_feed_uses_current_site_for_duplicate_podcast_slug(self, client, user, audio, body):
+        site1, site1_root = create_site_root(
+            owner=user, hostname="podcast-feed1.local", slug="podcast-feed1-root", title="Podcast Feed 1"
+        )
+        _site2, site2_root = create_site_root(
+            owner=user, hostname="podcast-feed2.local", slug="podcast-feed2-root", title="Podcast Feed 2"
+        )
+        podcast1 = PodcastFactory(owner=user, title="Podcast 1", slug="shared-podcast-feed", parent=site1_root)
+        podcast2 = PodcastFactory(owner=user, title="Podcast 2", slug="shared-podcast-feed", parent=site2_root)
+        EpisodeFactory(
+            owner=user, title="Episode 1", slug="episode-1", body=body, parent=podcast1, podcast_audio=audio
+        )
+        EpisodeFactory(
+            owner=user, title="Episode 2", slug="episode-2", body=body, parent=podcast2, podcast_audio=audio
+        )
+
+        url = reverse("cast:podcast_feed_rss", kwargs={"slug": podcast1.slug, "audio_format": "m4a"})
+        with override_settings(ALLOWED_HOSTS=["testserver", site1.hostname, "podcast-feed2.local"]):
+            response = client.get(url, HTTP_HOST=site1.hostname)
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Episode 1" in content
+        assert "Episode 2" not in content
 
 
 class TestFeedDetailTemplateSelection:

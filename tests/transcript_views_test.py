@@ -2,10 +2,14 @@ from unittest.mock import patch
 
 import pytest
 from django.core.files.base import ContentFile
+from django.test import override_settings
 from django.urls import reverse
 
 from cast.devdata import create_transcript
 from cast.models import Transcript
+
+from .factories import BlogFactory, EpisodeFactory
+from .multisite_helpers import create_site_root
 
 
 def get_endpoint_urls_without_args():
@@ -646,3 +650,44 @@ class TestGetTranscriptAsHtml:
         r = client.get(url)
 
         assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_episode_transcript_uses_current_site_for_duplicate_blog_slug(client, user, audio):
+    site1, site1_root = create_site_root(
+        owner=user, hostname="transcript-site1.local", slug="transcript-site1-root", title="Transcript Site 1"
+    )
+    _site2, site2_root = create_site_root(
+        owner=user, hostname="transcript-site2.local", slug="transcript-site2-root", title="Transcript Site 2"
+    )
+    blog1 = BlogFactory(owner=user, title="Blog 1", slug="shared-transcript-blog", parent=site1_root)
+    blog2 = BlogFactory(owner=user, title="Blog 2", slug="shared-transcript-blog", parent=site2_root)
+    episode1 = EpisodeFactory(
+        owner=user, title="Episode 1", slug="shared-transcript-episode", parent=blog1, podcast_audio=audio
+    )
+    EpisodeFactory(owner=user, title="Episode 2", slug="shared-transcript-episode", parent=blog2, podcast_audio=audio)
+    create_transcript(
+        audio=audio,
+        podlove={
+            "transcripts": [
+                {
+                    "start": "00:00:00.620",
+                    "end": "00:00:05.160",
+                    "speaker": "Host",
+                    "text": "Hello multisite transcript.",
+                }
+            ]
+        },
+    )
+
+    url = reverse(
+        "cast:episode-transcript",
+        kwargs={"blog_slug": blog1.slug, "episode_slug": episode1.slug},
+    )
+    with override_settings(ALLOWED_HOSTS=["testserver", site1.hostname, "transcript-site2.local"]):
+        response = client.get(url, HTTP_HOST=site1.hostname)
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Episode 1" in content
+    assert "Episode 2" not in content

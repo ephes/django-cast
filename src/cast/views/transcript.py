@@ -13,6 +13,7 @@ from wagtail.search.backends import get_search_backends
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm, TranscriptForm
 from ..models import Blog, Episode, Post, Transcript, get_template_base_dir
+from ..site_lookup import get_site_specific_page_or_404
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
@@ -316,7 +317,7 @@ def webvtt_transcript(_request: HttpRequest, pk: int) -> HttpResponse:
 
 
 def episode_transcript(request: HtmxHttpRequest, blog_slug: str, episode_slug: str) -> HttpResponse:
-    blog = get_object_or_404(Blog, slug=blog_slug)
+    blog = get_site_specific_page_or_404(Blog, request, slug=blog_slug)
     episode = get_object_or_404(Episode.objects.descendant_of(blog), slug=episode_slug)
     transcript = episode.get_transcript_or_none()
     if transcript is None:

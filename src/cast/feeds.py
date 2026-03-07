@@ -6,7 +6,6 @@ import django
 from django.contrib.syndication.views import Feed
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest
-from django.shortcuts import get_object_or_404
 from django.utils.feedgenerator import (
     Atom1Feed,
     Rss201rev2Feed,
@@ -18,6 +17,7 @@ from django.utils.xmlutils import SimplerXMLGenerator
 from wagtail.images.models import Image
 
 from cast import appsettings
+from cast.site_lookup import get_site_specific_page_or_404
 
 from .models import Audio, Blog, Podcast, Post
 from .models.repository import FeedContext
@@ -142,7 +142,7 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
             if not self.repository.used:
                 blog = self.repository.blog
         if blog is None:
-            blog = get_object_or_404(Blog, slug=slug)
+            blog = get_site_specific_page_or_404(Blog, request, slug=slug)
         self.object = blog
         return self.object
 
@@ -355,7 +355,7 @@ class PodcastFeed(RepositoryMixin, Feed):
             if not self.repository.used and isinstance(self.repository.blog, Podcast):
                 blog = self.repository.blog
         if blog is None:
-            blog = get_object_or_404(Podcast, slug=slug)
+            blog = get_site_specific_page_or_404(Podcast, request, slug=slug)
         self.object = blog
         self.request = request  # need request for item.serve(request) later on
         return self.object

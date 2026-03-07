@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.template import TemplateDoesNotExist
 from django.template.loader import get_template
@@ -11,6 +11,7 @@ from django.urls import reverse
 from cast import appsettings
 from cast.models import Audio, Blog
 from cast.models.theme import get_template_base_dir
+from cast.site_lookup import get_site_specific_page_or_404
 
 
 def get_podcast_feed_urls(blog: Blog) -> list[dict[str, str]]:
@@ -32,11 +33,7 @@ def get_podcast_feed_urls(blog: Blog) -> list[dict[str, str]]:
 
 def feed_detail(request: HttpRequest, slug: str) -> HttpResponse:
     """Render a feed detail page showing subscribe/feed options for a blog or podcast."""
-    try:
-        blog = Blog.objects.get(slug=slug)
-    except Blog.DoesNotExist:
-        raise Http404
-    blog = blog.specific
+    blog = get_site_specific_page_or_404(Blog, request, slug=slug).specific
 
     template_base_dir = get_template_base_dir(request, getattr(blog, "template_base_dir", None))
 

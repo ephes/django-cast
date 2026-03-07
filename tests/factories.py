@@ -2,7 +2,7 @@ import factory
 from django.contrib.auth import get_user_model
 from wagtail.models import Site
 
-from cast.models import Blog, Episode, Gallery, Podcast, Post, Video
+from cast.models import Blog, Episode, Gallery, HomePage, Podcast, Post, Video
 
 
 class SiteFactory(factory.django.DjangoModelFactory):
@@ -77,4 +77,10 @@ class PostFactory(PageFactory):
 class EpisodeFactory(PageFactory):
     class Meta:
         model = Episode
+        django_get_or_create = ("slug",)
+
+
+class HomePageFactory(PageFactory):
+    class Meta:
+        model = HomePage
         django_get_or_create = ("slug",)
