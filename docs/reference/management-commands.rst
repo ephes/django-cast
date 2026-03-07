@@ -33,7 +33,9 @@ Options:
     Only sync renditions for the post with this slug.
 
 ``--blog-slug SLUG``
-    Only sync renditions for posts belonging to this blog.
+    Only sync renditions for posts belonging to this blog. The slug must
+    resolve to exactly one blog; missing or ambiguous slugs raise
+    ``CommandError`` instead of selecting an arbitrary match.
 
 Video Management
 ================
@@ -109,8 +111,10 @@ media_stale
 -----------
 
 Find media files in production storage that are not referenced by any
-database record (Image, Video, or File model). Requires Django >= 4.2
-and configured ``production`` and ``backup`` storage backends.
+database record. The command checks paths referenced by image, video,
+audio, transcript, and file records before classifying anything as stale.
+Requires Django >= 4.2 and configured ``production`` and ``backup``
+storage backends.
 
 .. code-block:: bash
 

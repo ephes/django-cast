@@ -85,6 +85,20 @@
   per-instance mappings.
 - Reduced settings drift by making ``tests.settings`` import shared defaults
   from ``cast.settings`` and keep only explicit test-specific overrides.
+- Hardened ``media_stale`` so cleanup now preserves live ``Audio`` and
+  ``Transcript`` assets instead of misclassifying them as stale.
+- Restricted ``GET /api/comment_training_data/`` to staff users so comment
+  training exports are no longer exposed to arbitrary authenticated users.
+- Made slug-based feed, transcript, and meta endpoints site-scoped so
+  multisite installs resolve pages within the current site tree instead of
+  failing on duplicate slugs. These lookups now intentionally stay limited
+  to live pages.
+- Hardened ``sync_renditions --blog-slug`` to raise ``CommandError`` when a
+  slug is missing or ambiguous instead of silently targeting the wrong blog.
+- Fixed ``Video.save()`` follow-up poster persistence so ``force_insert``
+  and ``objects.create()`` paths no longer trigger a duplicate insert.
+- Hardened the gallery modal view to return a controlled 404 when the
+  requested image was deleted after the page HTML was rendered.
 
 Migration mapping (old -> new):
 

@@ -305,6 +305,9 @@ Export training data for spam filter::
 
 Returns comment data for training the Naive Bayes spam classifier.
 
+This endpoint is restricted to staff users. Anonymous and authenticated
+non-staff users receive ``403 Forbidden``.
+
 Pagination
 ----------
 
