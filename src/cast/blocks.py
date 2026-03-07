@@ -91,8 +91,9 @@ class EmptyImageRepository:
     A repository that can be used if no repository was set.
     """
 
-    image_by_id: ImageById = {}
-    renditions_for_posts: RenditionsForPosts = {}
+    def __init__(self) -> None:
+        self.image_by_id: ImageById = {}
+        self.renditions_for_posts: RenditionsForPosts = {}
 
 
 class ChooserGetPrepValueMixin:
@@ -242,7 +243,8 @@ class GalleryProxyRepository:
     A repository that can be used if no repository was set.
     """
 
-    renditions_for_posts: RenditionsForPosts = {}
+    def __init__(self) -> None:
+        self.renditions_for_posts: RenditionsForPosts = {}
 
 
 class GalleryBlock(ListBlock):

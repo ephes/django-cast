@@ -11,6 +11,7 @@ from cast.blocks import (
     AudioChooserBlock,
     CastImageChooserBlock,
     CodeBlock,
+    EmptyImageRepository,
     GalleryBlock,
     GalleryBlockWithLayout,
     GalleryImageChooserBlock,
@@ -75,6 +76,20 @@ def test_gallery_block_template_from_plain_theme():
     block = GalleryBlock(ImageChooserBlock())
     template_name = block.get_template(context={"template_base_dir": "plain"})
     assert template_name == "cast/plain/gallery.html"
+
+
+def test_fallback_repositories_use_isolated_mapping_instances():
+    empty_first = EmptyImageRepository()
+    empty_second = EmptyImageRepository()
+    empty_first.image_by_id[1] = object()
+    empty_first.renditions_for_posts[1] = []
+    assert empty_second.image_by_id == {}
+    assert empty_second.renditions_for_posts == {}
+
+    gallery_first = GalleryProxyRepository()
+    gallery_second = GalleryProxyRepository()
+    gallery_first.renditions_for_posts[1] = []
+    assert gallery_second.renditions_for_posts == {}
 
 
 def test_fallback_gallery_template_uses_bootstrap4_web_component():
