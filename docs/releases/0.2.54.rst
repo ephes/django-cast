@@ -71,6 +71,20 @@
 - Hardened ``select_theme`` POST redirects by validating ``next`` with
   ``url_has_allowed_host_and_scheme`` against the current host/scheme and
   falling back to the local select-theme URL when ``next`` is empty or unsafe.
+- Fixed runtime comment setting lookups so ``cast.comments`` form/helper CSS and
+  exclude-field settings are resolved lazily instead of freezing at import time.
+- Fixed the comments fallback ``CRISPY_TEMPLATE_PACK`` default to ``bootstrap4``
+  so AJAX validation errors still render when projects rely on django-cast's
+  built-in crispy setup without redefining that setting.
+- Pinned the CI ``uv`` installation step to ``0.10.2`` for more predictable
+  workflow behavior.
+- Hardened ``recalc_video_posters`` with progress output, per-video error
+  handling, and completion summaries so one broken video no longer aborts the
+  entire command.
+- Replaced mutable class-level fallback repository dicts in ``blocks.py`` with
+  per-instance mappings.
+- Reduced settings drift by making ``tests.settings`` import shared defaults
+  from ``cast.settings`` and keep only explicit test-specific overrides.
 
 Migration mapping (old -> new):
 
