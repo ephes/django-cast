@@ -38,26 +38,20 @@ Django Cast extends Wagtail's image handling with responsive image generation.
     # Image formats to generate (default)
     CAST_IMAGE_FORMATS = ["jpeg", "avif"]
 
-    # Regular image dimensions
-    CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = {
-        "150": "150",    # 150px wide
-        "300": "300",
-        "450": "450",
-        "600": "600",
-        "750": "750",
-        "900": "900",
-        "1050": "1050",
-        "1200": "1200",
-        "1350": "1350",
-        "1500": "1500",
-    }
+    # Regular image slots
+    CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [
+        (1110, 740),
+    ]
 
-    # Gallery image dimensions
-    CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = {
-        "150": "150x150",    # 150x150 square crop
-        "300": "300x300",
-        "600": "600x600",
-    }
+    # Gallery image slots
+    CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [
+        (1110, 740),  # Modal image
+        (120, 80),    # Thumbnail
+    ]
+
+Each tuple defines a target slot in the layout. django-cast then generates the
+responsive rendition widths needed for multiple pixel densities, so one slot
+still produces multiple image files in ``srcset``.
 
 Audio
 ~~~~~

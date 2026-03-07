@@ -121,13 +121,17 @@ Cache Configuration
     # Feed cache timeout
     CAST_FEED_CACHE_TIMEOUT = 3600  # 1 hour
 
-    # Image rendition settings
-    CAST_IMAGE_SLOT_DIMENSIONS = {
-        "150": "150",
-        "300": "300",
-        "600": "600",
-        # ... up to 1500px
-    }
+    # Image slot settings
+    CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [
+        (1110, 740),
+    ]
+    CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [
+        (1110, 740),
+        (120, 80),
+    ]
+
+These settings define layout slots. django-cast derives multiple rendition
+widths per slot for responsive ``srcset`` output.
 
 Media Optimization
 ==================

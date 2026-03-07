@@ -119,23 +119,18 @@ Responsive images with automatic optimization.
 
 **Generated Renditions**:
 
-The system automatically creates renditions based on ``CAST_IMAGE_SLOT_DIMENSIONS`` setting:
+The system automatically creates renditions based on
+``CAST_REGULAR_IMAGE_SLOT_DIMENSIONS``.
+Each tuple defines a target layout slot, not a single output file. For every
+slot, django-cast generates the appropriate rendition widths for multiple pixel
+densities and exposes them via ``srcset``:
 
 .. code-block:: python
 
     # Default dimensions
-    {
-        "150": "150",
-        "300": "300",
-        "450": "450",
-        "600": "600",
-        "750": "750",
-        "900": "900",
-        "1050": "1050",
-        "1200": "1200",
-        "1350": "1350",
-        "1500": "1500",
-    }
+    [
+        (1110, 740),
+    ]
 
 **HTML Output Example**:
 
@@ -178,16 +173,17 @@ Multiple images with lightbox functionality.
 
 **Gallery Renditions**:
 
-Configured via ``CAST_GALLERY_IMAGE_SLOT_DIMENSIONS``:
+Configured via ``CAST_GALLERY_IMAGE_SLOT_DIMENSIONS``. As with regular images,
+these are slot dimensions. django-cast then derives multiple responsive
+renditions per slot for use in ``srcset``:
 
 .. code-block:: python
 
     # Default gallery dimensions
-    {
-        "150": "150x150",  # Thumbnails
-        "300": "300x300",
-        "600": "600x600",
-    }
+    [
+        (1110, 740),  # Modal image
+        (120, 80),    # Thumbnail
+    ]
 
 Embed Block
 ~~~~~~~~~~~

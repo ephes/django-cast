@@ -176,16 +176,18 @@ Configure additional features as needed:
    # Image renditions
    CAST_IMAGE_FORMATS = ["jpeg", "avif"]  # Modern image formats
 
-   # Responsive image sizes
-   CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = {
-       "300": "300",
-       "600": "600",
-       "1200": "1200",
-   }
+   # Responsive image slots
+   CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [
+       (1110, 740),
+   ]
 
    # Comments
    COMMENTS_APP = "cast.comments"
    CAST_COMMENTS_EXCLUDE_FIELDS = ("email", "url", "title")
+
+Each tuple defines a layout slot. django-cast generates multiple responsive
+renditions per slot for different pixel densities and serves them through
+``srcset``.
 
 URL Configuration
 =================

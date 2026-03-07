@@ -5,7 +5,7 @@
 [![name](https://img.shields.io/badge/wagtail-6%7C7-brightgreen)](https://img.shields.io/badge/wagtail-6%7C7-brightgreen)
 [![name](https://badge.fury.io/py/django-cast.svg)](https://badge.fury.io/py/django-cast)
 [![name](https://codecov.io/gh/ephes/django-cast/branch/develop/graph/badge.svg)](https://codecov.io/gh/ephes/django-cast)
-[![name](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ephes/django-cast)
+[![name](https://img.shields.io/badge/linting-ruff-D7A023.svg)](https://github.com/astral-sh/ruff)
 [![Published on Django Packages](https://img.shields.io/badge/Published%20on-Django%20Packages-0c3c26)](https://djangopackages.org/packages/p/django-cast/)
 
 A blogging/podcasting package based on [Django](https://www.djangoproject.com/)
@@ -14,7 +14,7 @@ and [Wagtail](https://wagtail.org).
 **Documentation: [django-cast.readthedocs.io](https://django-cast.readthedocs.io/en/develop/)**
 
 ## Key Features
-- [Responsive images](https://django-cast.readthedocs.io/en/develop/features.html#responsive-images)
+- [Responsive images](https://django-cast.readthedocs.io/en/develop/media/images-and-galleries.html)
 - Wagtail as CMS makes it possible for non-technical people to manage the content
   (blog posts, podcast episodes, ...)
 - Podcast support: this package powers [python-podcast.de](https://python-podcast.de/show)
@@ -25,12 +25,12 @@ and [Wagtail](https://wagtail.org).
 - Use [Twitter Player Card](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/player-card)
   for links to podcast episode detail pages
 - Tags and categories for posts which are then included in the faceted navigation UI (beta feature)
-- [Frontend themes](https://django-cast.readthedocs.io/en/develop/features.html#templates-themes) to
+- [Frontend themes](https://django-cast.readthedocs.io/en/develop/features/themes.html) to
   customize the look and feel of your site
 
 ## Deployment
 
-See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/installation.html).
+See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/operations/deployment.html).
 
 ## Upgrade note (0.2.54)
 
