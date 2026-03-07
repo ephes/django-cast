@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from wagtail.images.models import Image
 
-from ...models import File, Video
+from ...models import Audio, File, Transcript, Video
 from ...utils import storage_walk_paths
 from .storage_backend import get_production_and_backup_storage
 
@@ -43,6 +43,12 @@ class Command(BaseCommand):
 
     def get_models_paths(self):
         paths = self.get_image_paths()
+        for audio in Audio.objects.all():
+            for path in audio.get_all_paths():
+                paths.add(path)
+        for transcript in Transcript.objects.all():
+            for path in transcript.get_all_paths():
+                paths.add(path)
         for video in Video.objects.all():
             for path in video.get_all_paths():
                 paths.add(path)

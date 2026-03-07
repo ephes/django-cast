@@ -17,6 +17,11 @@ try:
     from cast.management.commands.media_backup import Command as MediaBackupCommand
 except ImportError:
     pass
+from cast.devdata import create_transcript
+from cast.management.commands.media_stale import Command as MediaStaleCommand
+
+from .factories import BlogFactory
+from .multisite_helpers import create_site_root
 
 
 def get_comparable_django_version():
@@ -112,6 +117,21 @@ class StubLocalStorage:
     @contextmanager
     def open(self, name: str, _mode: str) -> Iterator[BytesIO]:
         yield BytesIO(self._files[name])
+
+
+class StubWalkStorage:
+    def __init__(self, files: dict[str, bytes]) -> None:
+        self._files = files
+        self.deleted: list[str] = []
+
+    def listdir(self, _path: str) -> tuple[list[str], list[str]]:
+        return [], list(self._files.keys())
+
+    def size(self, path: str) -> int:
+        return len(self._files[path])
+
+    def delete(self, path: str) -> None:
+        self.deleted.append(path)
 
 
 @pytest.fixture
@@ -257,6 +277,146 @@ def test_media_replace_without_yes_and_only_missing_paths_does_not_error(mocker)
     text = output.getvalue()
     assert "Use --yes" not in text
     assert "planned=0 replaced=0 skipped=1 errors=0" in text
+
+
+@pytest.mark.django_db
+def test_media_stale_get_models_paths_includes_all_managed_media(audio, video, file_instance):
+    transcript = create_transcript(
+        audio=audio,
+        podlove={"transcripts": []},
+        vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello\n",
+        dote={"lines": []},
+    )
+    paths = MediaStaleCommand().get_models_paths()
+
+    assert audio.m4a.name in paths
+    assert transcript.podlove.name in paths
+    assert transcript.vtt.name in paths
+    assert transcript.dote.name in paths
+    assert video.original.name in paths
+    assert file_instance.original.name in paths
+
+
+@pytest.mark.django_db
+def test_media_stale_get_image_paths_includes_renditions(image):
+    rendition = image.get_rendition("fill-1x1")
+
+    paths = MediaStaleCommand.get_image_paths()
+
+    assert image.file.name in paths
+    assert rendition.file.name in paths
+
+
+def test_media_stale_handle_reports_and_deletes_stale_files(mocker, capsys):
+    production = StubWalkStorage({"keep.jpg": b"keep", "stale.jpg": b"stale"})
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value={"keep.jpg"})
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == ["stale.jpg"]
+    text = capsys.readouterr().out
+    assert "stale production" in text
+    assert "stale.jpg" in text
+
+
+def test_media_stale_handle_without_delete_keeps_stale_files(mocker):
+    production = StubWalkStorage({"stale.jpg": b"stale"})
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+
+    call_command("media_stale")
+
+    assert production.deleted == []
+
+
+def test_media_stale_parser_registers_delete_flag():
+    parser = MediaStaleCommand().create_parser("manage.py", "media_stale")
+    option_strings = {option for action in parser._actions for option in action.option_strings}
+    assert "--delete" in option_strings
+
+
+@pytest.mark.django_db
+def test_sync_renditions_rejects_ambiguous_blog_slug(user):
+    _site1, site1_root = create_site_root(
+        owner=user, hostname="sync-site1.local", slug="sync-site1-root", title="Sync Site 1"
+    )
+    _site2, site2_root = create_site_root(
+        owner=user, hostname="sync-site2.local", slug="sync-site2-root", title="Sync Site 2"
+    )
+    BlogFactory(owner=user, title="Blog 1", slug="shared-sync-blog", parent=site1_root)
+    BlogFactory(owner=user, title="Blog 2", slug="shared-sync-blog", parent=site2_root)
+
+    with pytest.raises(CommandError, match="Multiple blogs found"):
+        call_command("sync_renditions", blog_slug="shared-sync-blog")
+
+
+@pytest.mark.django_db
+def test_sync_renditions_rejects_missing_blog_slug():
+    with pytest.raises(CommandError, match="No blog found"):
+        call_command("sync_renditions", blog_slug="missing-blog")
+
+
+@pytest.mark.django_db
+def test_sync_renditions_with_post_slug_deletes_obsolete_and_builds_missing(mocker, post, image):
+    filter_qs = mocker.patch("cast.management.commands.sync_renditions.Rendition.objects.filter")
+    filter_qs.return_value.delete.return_value = None
+    get_missing = mocker.patch(
+        "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
+        return_value=([123], {image.id: ["fill-1x1"]}),
+    )
+    mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
+    image_get = mocker.patch("cast.management.commands.sync_renditions.Image.objects.get", return_value=image)
+    get_renditions = mocker.patch.object(image, "get_renditions")
+
+    call_command("sync_renditions", post_slug=post.slug)
+
+    get_missing.assert_called_once()
+    filter_qs.assert_called_once_with(id__in=[123])
+    image_get.assert_called_once_with(id=image.id)
+    get_renditions.assert_called_once_with("fill-1x1")
+
+
+@pytest.mark.django_db
+def test_sync_renditions_with_unique_blog_slug_syncs_descendants(mocker, blog, post, image):
+    filter_qs = mocker.patch("cast.management.commands.sync_renditions.Rendition.objects.filter")
+    filter_qs.return_value.delete.return_value = None
+    mocker.patch(
+        "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
+        return_value=([321], {image.id: ["fill-2x2"]}),
+    )
+    mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
+    mocker.patch("cast.management.commands.sync_renditions.Image.objects.get", return_value=image)
+    get_renditions = mocker.patch.object(image, "get_renditions")
+
+    call_command("sync_renditions", blog_slug=blog.slug)
+
+    filter_qs.assert_called_once_with(id__in=[321])
+    get_renditions.assert_called_once_with("fill-2x2")
+
+
+@pytest.mark.django_db
+def test_sync_renditions_without_filters_uses_all_posts(mocker):
+    mocked_queryset = mocker.Mock()
+    mocked_queryset.prefetch_related.return_value = mocked_queryset
+    all_posts = mocker.patch("cast.management.commands.sync_renditions.Post.objects.all", return_value=mocked_queryset)
+    mocker.patch("cast.management.commands.sync_renditions.Post.get_all_images_from_queryset", return_value=iter(()))
+    mocker.patch(
+        "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
+        return_value=([], {}),
+    )
+    mocker.patch("cast.management.commands.sync_renditions.Rendition.objects.filter")
+    mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
+
+    call_command("sync_renditions")
+
+    all_posts.assert_called_once_with()
 
 
 def test_media_replace_dry_run_with_yes_warns_and_does_not_write(mocker):

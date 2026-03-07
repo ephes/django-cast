@@ -43,6 +43,14 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     class Meta:
         ordering = ("-id",)
 
+    def get_all_paths(self) -> set[str]:
+        paths = set()
+        for field_name in ("podlove", "vtt", "dote"):
+            field = getattr(self, field_name)
+            if field:
+                paths.add(field.name)
+        return paths
+
     @property
     def podlove_data(self) -> dict:
         data = {}

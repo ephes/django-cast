@@ -1019,11 +1019,55 @@ def test_video_create_poster_handles_missing_dimensions_gracefully(mocker, tmp_p
 
 
 @pytest.mark.django_db
+def test_video_save_with_force_insert_does_not_attempt_second_insert(mocker, user, minimal_mp4):
+    def fake_create_poster():
+        video.poster.name = "cast_videos/poster/test.jpg"
+
+    video = Video(user=user, title="force-insert video", original=minimal_mp4)
+    create_poster = mocker.patch.object(video, "create_poster", side_effect=fake_create_poster)
+    video.save(force_insert=True)
+
+    assert video.pk is not None
+    create_poster.assert_called_once()
+    video.refresh_from_db()
+    assert video.poster.name == "cast_videos/poster/test.jpg"
+
+
+@pytest.mark.django_db
+def test_video_save_propagates_using_on_poster_update(mocker, user):
+    save_calls = []
+
+    def fake_save(_self, *args, **kwargs):
+        save_calls.append(kwargs.copy())
+        return None
+
+    mocker.patch("model_utils.models.TimeStampedModel.save", autospec=True, side_effect=fake_save)
+    video = Video(user=user, title="poster update")
+
+    def fake_create_poster():
+        video.poster.name = "poster.jpg"
+
+    mocker.patch.object(video, "create_poster", side_effect=fake_create_poster)
+
+    video.save(using="default")
+
+    assert save_calls[0]["using"] == "default"
+    assert save_calls[1]["using"] == "default"
+    assert save_calls[1]["update_fields"] == ["poster"]
+
+
+@pytest.mark.django_db
 def test_transcript_podlove_data_no_podlove_or_dote():
     transcript = Transcript()
     assert transcript.podlove_data == {}
     assert transcript.dote_data == {}
     assert transcript.podcastindex_data == {}
+
+
+@pytest.mark.django_db
+def test_transcript_get_all_paths_skips_empty_fields():
+    transcript = Transcript()
+    assert transcript.get_all_paths() == set()
 
 
 @pytest.mark.django_db
