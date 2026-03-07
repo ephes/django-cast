@@ -32,7 +32,6 @@ else:
 
 class CastCommentForm(BaseCommentForm):
     fields: dict[str, forms.Field]
-    helper = CommentFormHelper()
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.is_preview = bool(kwargs.pop("is_preview", False))
@@ -48,6 +47,7 @@ class CastCommentForm(BaseCommentForm):
                 ) from exc
 
         self._reorder_fields()
+        self.helper = CommentFormHelper(form=self)
 
     def _reorder_fields(self) -> None:
         base_fields_top = ["content_type", "object_pk", "timestamp", "security_hash"]

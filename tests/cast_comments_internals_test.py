@@ -1,5 +1,8 @@
 import pytest
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.test import override_settings
+from django.template.loader import get_template
 from django.template import Context, Template
 from django.template.exceptions import TemplateSyntaxError
 from django.urls import reverse
@@ -26,6 +29,37 @@ def test_comment_form_helper_sets_action_and_attrs(post):
     assert helper.attrs == {"data-object-id": post.pk}
 
 
+def test_comment_form_helper_respects_runtime_comment_css_settings():
+    from cast.comments.helper import CommentFormHelper
+
+    with override_settings(
+        CAST_COMMENTS_FORM_CSS_CLASS="comments-form compact",
+        CAST_COMMENTS_LABEL_CSS_CLASS="col-sm-3",
+        CAST_COMMENTS_FIELD_CSS_CLASS="col-sm-9",
+    ):
+        helper = CommentFormHelper()
+
+    assert helper.form_class == "js-comments-form comments-form compact"
+    assert helper.label_class == "col-sm-3"
+    assert helper.field_class == "col-sm-9"
+
+
+def test_comment_appsettings_unknown_attribute_raises():
+    from cast.comments import appsettings
+
+    with pytest.raises(AttributeError):
+        getattr(appsettings, "NONEXISTENT_SETTING")
+
+
+def test_comment_appsettings_falls_back_to_bootstrap4_crispy_templates(monkeypatch):
+    from cast.comments import appsettings
+
+    monkeypatch.delattr(settings, "CRISPY_TEMPLATE_PACK", raising=False)
+
+    assert appsettings.CRISPY_TEMPLATE_PACK == "bootstrap4"
+    get_template(f"{appsettings.CRISPY_TEMPLATE_PACK}/layout/field_errors.html")
+
+
 @pytest.mark.django_db
 def test_get_base_form_supports_non_threaded(monkeypatch):
     from cast.comments import appsettings
@@ -43,6 +77,16 @@ def test_cast_comment_form_invalid_exclude_field_raises(monkeypatch, post):
     monkeypatch.setattr(appsettings, "EXCLUDE_FIELDS", ("does_not_exist",))
     with pytest.raises(ImproperlyConfigured):
         CastCommentForm(post)
+
+
+@pytest.mark.django_db
+def test_cast_comment_form_builds_helper_with_runtime_comment_css_settings(post):
+    from django_comments import get_form
+
+    with override_settings(CAST_COMMENTS_FORM_CSS_CLASS="comments-form compact"):
+        form = get_form()(post)
+
+    assert form.helper.form_class == "js-comments-form comments-form compact"
 
 
 @pytest.mark.django_db

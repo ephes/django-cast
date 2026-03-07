@@ -68,7 +68,7 @@ Settings
 ``CRISPY_TEMPLATE_PACK``
     The crispy-forms template pack used for rendering form fields and AJAX
     error messages. Not specific to django-cast but affects how comment form
-    errors are rendered in AJAX responses. Defaults to ``"bootstrap"``.
+    errors are rendered in AJAX responses. Defaults to ``"bootstrap4"``.
 
 Example configuration:
 
