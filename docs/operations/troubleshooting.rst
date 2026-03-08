@@ -83,6 +83,11 @@ set in your development settings:
 This prevents Wagtail from deleting the original image file on S3 when
 an image model is removed locally.
 
+Also be careful with storage-management commands such as
+``python manage.py media_stale --delete``. They operate on the configured
+``production`` storage backend and can remove real files if your local or
+staging environment points at shared production storage.
+
 Finding unreferenced media files
 --------------------------------
 
@@ -113,9 +118,12 @@ Theme resolution follows this precedence (highest wins):
 4. Blog-level ``template_base_dir`` field
 5. Site-level ``TemplateBaseDirectory`` Wagtail setting
 
-If a theme is not applying, check that the template directory exists at
-``cast/<theme_name>/`` within one of your installed apps' template directories.
-Also verify that a session or query-parameter override is not taking precedence.
+If a theme is not applying:
+
+1. Check whether a query parameter or session value is overriding the blog/site default.
+2. Verify that the theme was actually discovered by django-cast.
+3. Ensure the template directory exists at ``cast/<theme_name>/`` within one of your installed apps' template directories.
+4. Confirm that the theme contains the required templates described in :doc:`/features/themes`.
 
 Spam Filter
 ===========

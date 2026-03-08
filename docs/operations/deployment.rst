@@ -26,11 +26,15 @@ Your production settings should include:
 
     # Wagtail
     WAGTAILADMIN_BASE_URL = "https://your-domain.com"
-    # Optionally use a non-obvious admin path in your project:
-    # DJANGO_ADMIN_URL = "cms/"
 
 See :doc:`../installation` for the full ``INSTALLED_APPS``, ``MIDDLEWARE``,
 and URL configuration.
+
+Keep dev-only routes disabled in production unless you explicitly need them:
+
+.. code-block:: python
+
+    CAST_ENABLE_DEV_TOOLS = False
 
 Application Server
 ==================
@@ -71,6 +75,12 @@ configuration details.
     Set ``DELETE_WAGTAIL_IMAGES = False`` when using S3. This prevents
     your development environment from accidentally deleting production images.
 
+If you use automatic media processing features in production, make sure the
+required FFmpeg tools are installed on your application hosts:
+
+- ``ffprobe`` for audio duration extraction, chapter-mark import, and video dimension detection
+- ``ffmpeg`` for video poster generation
+
 For backup and restore of media files, see :doc:`backup` and the
 :ref:`media management commands <cast_management_commands>`.
 
@@ -83,9 +93,10 @@ Run migrations before starting the application:
 
     python manage.py migrate
 
-Both PostgreSQL and SQLite are supported. SQLite can be a good choice for
-single-server deployments when properly configured (WAL mode, appropriate
-busy timeout). PostgreSQL is the more common choice for multi-server setups.
+Both PostgreSQL and SQLite are supported. PostgreSQL is the more typical
+production choice, especially for multi-server deployments. SQLite can work
+for simpler single-server setups, but operational characteristics such as
+locking, backups, and write concurrency remain your responsibility.
 
 Image Renditions
 ================
@@ -108,7 +119,7 @@ A production deployment typically involves:
 1. Sync source code to the server (rsync or git clone)
 2. Create/update a virtualenv and install dependencies (``uv sync --frozen``)
 3. Set environment variables (``SECRET_KEY``, ``DATABASE_URL``, AWS
-   credentials, etc.) via an ``.env`` file
+   credentials, etc.) via your deployment environment or an ``.env`` file
 4. Run ``python manage.py migrate``
 5. Run ``python manage.py collectstatic --noinput``
 6. Run ``python manage.py update_index`` (Wagtail search index)
@@ -124,10 +135,12 @@ Checklist
 - [ ] ``SECRET_KEY`` set from environment variable
 - [ ] ``ALLOWED_HOSTS`` configured
 - [ ] ``WAGTAILADMIN_BASE_URL`` set to production domain
+- [ ] ``CAST_ENABLE_DEV_TOOLS = False`` unless explicitly required
 - [ ] Database configured and migrations applied
 - [ ] ``collectstatic`` run
 - [ ] Media storage configured (local filesystem or S3)
 - [ ] ``DELETE_WAGTAIL_IMAGES = False`` if using S3
+- [ ] ``ffprobe`` / ``ffmpeg`` installed if using audio/video processing features
 - [ ] Image renditions generated with ``sync_renditions``
 - [ ] Reverse proxy with TLS configured
 - [ ] Application server (Gunicorn) managed by systemd
