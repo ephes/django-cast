@@ -1,58 +1,149 @@
-name: Workflow for Codecov
-on: [push]
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   javascript:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: "20"
-    - name: Install JavaScript dependencies
-      working-directory: javascript
-      run: npm ci
-    - name: Run JavaScript tests
-      working-directory: javascript
-      run: npm test
-    - name: Build JavaScript assets
-      working-directory: javascript
-      run: npm run build
+      - uses: actions/checkout@v4
 
-  run:
-    runs-on: ${{ matrix.os }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: javascript/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install JavaScript dependencies
+        working-directory: javascript
+        run: npm ci
+
+      - name: Run JavaScript tests
+        working-directory: javascript
+        run: npm test
+
+      - name: Build shipped JavaScript artifacts
+        run: |
+          cd javascript
+          npm run build:all
+          rm -f dist/manifest.json
+          if [ -f dist/.vite/manifest.json ]; then
+            mv dist/.vite/manifest.json dist/manifest.json
+          fi
+          python -c "from pathlib import Path; p=Path('dist/manifest.json'); txt=p.read_text() if p.exists() else None; (p.write_text(txt.rstrip('\n') + '\n') if txt is not None else None)"
+          rm -rf dist/.vite
+          rm -f ../src/cast/static/cast/vite/*
+          cp dist/* ../src/cast/static/cast/vite/
+
+      - name: Verify committed assets are up to date
+        run: git diff --exit-code -- src/cast/static/cast/vite src/cast/static/fluent_comments/js/ajaxcomments.js
+
+  python-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.2"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install ffmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v2
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Run Ruff gate (check-only)
+        run: |
+          uv run ruff format --check .
+          uv run ruff check .
+
+      - name: Run mypy
+        run: uv run mypy
+
+      - name: Run test suite with coverage enforcement
+        run: |
+          uv run coverage run -m pytest
+          uv run coverage report
+          uv run coverage xml
+
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'push'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: true
+          flags: unittests
+          name: python-quality
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.2"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Build documentation
+        run: |
+          rm -f docs/cast.api.rst docs/cast.migrations.rst docs/cast.rst docs/cast.templatetags.rst docs/modules.rst
+          uv run make -C docs clean
+          uv run make -C docs html
+
+  python-compatibility:
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        python-version: ['3.11', '3.12', '3.13', '3.14']
-    env:
-      OS: ${{ matrix.os }}
-      PYTHON: ${{ matrix.python-version }}
+        # Python 3.14 already runs the full just-check equivalent in python-quality.
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
-    - uses: actions/checkout@v4
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-      with:
-        version: "0.10.2"
+      - uses: actions/checkout@v4
 
-    - name: Setup Python
-      run: uv python install ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.2"
 
-    - name: Install ffmpeg
-      uses: FedericoCarboni/setup-ffmpeg@v2
-      id: setup-ffmpeg
-    - name: Generate coverage report
-      run: |
-        uv venv
-        uv pip install -e .[dev]
-        uv run python manage.py migrate
-        uv run python -m pytest --cov=src/cast --cov-report=xml
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        env_vars: OS,PYTHON
-        fail_ci_if_error: true
-        flags: unittests
-        name: codecov-umbrella
-        token: ${{ secrets.CODECOV_TOKEN }}  # configure in actions section of secrets
-        verbose: true
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install ffmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v2
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Run pytest on additional supported Python versions
+        run: uv run pytest
