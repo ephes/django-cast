@@ -160,6 +160,12 @@ The command prints matching stale paths and a final total stale size in MB.
 Reference Site
 ==============
 
+These commands operate on whatever Django project settings module is active.
+The examples below use a generic project ``manage.py``. When working in the
+django-cast repository itself, use ``uv run python example/manage.py ...`` or
+the ``just ensure-reference-site`` / ``just styleguide-prefetch`` wrappers,
+because the repository root ``manage.py`` defaults to ``tests.settings``.
+
 ensure_reference_site
 ---------------------
 
