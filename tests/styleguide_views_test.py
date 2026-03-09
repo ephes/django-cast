@@ -353,12 +353,15 @@ def test_styleguide_extract_podlove_player_api_url():
 
 @pytest.mark.django_db
 @pytest.mark.slow
-def test_styleguide_resets_invalid_blog_theme_and_repulishes(settings, client, site, user):
+def test_styleguide_resets_invalid_blog_and_podcast_themes(settings, client, site, user):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
     existing_blog = Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).first()
     if existing_blog is not None:
         existing_blog.delete()
+    existing_podcast = Podcast.objects.filter(slug=STYLEGUIDE_PODCAST_SLUG).first()
+    if existing_podcast is not None:
+        existing_podcast.delete()
 
     blog = Blog(
         title="Styleguide Blog",
@@ -370,23 +373,6 @@ def test_styleguide_resets_invalid_blog_theme_and_repulishes(settings, client, s
     Blog.objects.filter(pk=blog.pk).update(template_base_dir="invalid")
     blog.refresh_from_db()
     blog.unpublish()
-
-    response = client.get(reverse("cast:styleguide"))
-    assert response.status_code == 200
-
-    blog.refresh_from_db()
-    assert blog.template_base_dir == styleguide_view._styleguide_default_theme()
-    assert blog.live is True
-
-
-@pytest.mark.django_db
-@pytest.mark.slow
-def test_styleguide_resets_invalid_podcast_theme(settings, client, site, user):
-    settings.CAST_ENABLE_STYLEGUIDE = True
-    TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
-    existing_podcast = Podcast.objects.filter(slug=STYLEGUIDE_PODCAST_SLUG).first()
-    if existing_podcast is not None:
-        existing_podcast.delete()
 
     podcast = Podcast(
         title="Styleguide Podcast",
@@ -400,5 +386,8 @@ def test_styleguide_resets_invalid_podcast_theme(settings, client, site, user):
     response = client.get(reverse("cast:styleguide"))
     assert response.status_code == 200
 
+    blog.refresh_from_db()
     podcast.refresh_from_db()
+    assert blog.template_base_dir == styleguide_view._styleguide_default_theme()
+    assert blog.live is True
     assert podcast.template_base_dir == styleguide_view._styleguide_default_theme()
