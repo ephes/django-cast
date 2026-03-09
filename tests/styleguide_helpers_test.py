@@ -647,6 +647,138 @@ def test_styleguide_fetch_podlove_data(monkeypatch):
     assert styleguide_view._fetch_podlove_data("https://example.com/api") is None
 
 
+def test_styleguide_remote_html_pages_skips_empty_and_missing(monkeypatch):
+    html_by_url = {
+        "https://example.com/one/": "<html>one</html>",
+        "https://example.com/two/": None,
+    }
+
+    monkeypatch.setattr(styleguide_view, "_fetch_remote_html", lambda url: html_by_url.get(url))
+
+    assert styleguide_view._styleguide_remote_html_pages(
+        ["", "https://example.com/one/", "https://example.com/two/"]
+    ) == [("https://example.com/one/", "<html>one</html>")]
+
+
+def test_styleguide_fetch_remote_gallery_media_extracts_blocks_and_honors_limit(monkeypatch, settings):
+    settings.CAST_STYLEGUIDE_IMAGE_SOURCE_URLS = ["https://example.com/gallery/", ""]
+    settings.CAST_STYLEGUIDE_IMAGE_LIMIT = 1
+    first_image = object()
+
+    monkeypatch.setattr(
+        styleguide_view,
+        "_fetch_remote_html",
+        lambda url: "<image-gallery-bs4>gallery</image-gallery-bs4>" if url else None,
+    )
+    monkeypatch.setattr(
+        styleguide_view,
+        "_extract_image_urls",
+        lambda _html, _page_url: ["https://example.com/one.jpg", "https://example.com/two.jpg"],
+    )
+    monkeypatch.setattr(
+        styleguide_view,
+        "_get_or_create_remote_image",
+        lambda url, _user: first_image if url.endswith("one.jpg") else None,
+    )
+
+    gallery_images, gallery_blocks = styleguide_view._fetch_styleguide_remote_gallery_media(user=object())
+    assert gallery_images == [first_image]
+    assert gallery_blocks == ["<image-gallery-bs4>gallery</image-gallery-bs4>"]
+
+
+def test_styleguide_fetch_remote_video_media_uses_first_video_source(monkeypatch, settings):
+    settings.CAST_STYLEGUIDE_VIDEO_SOURCE_URL = None
+    settings.CAST_STYLEGUIDE_IMAGE_SOURCE_URLS = ["", "https://example.com/gallery/", "https://example.com/second/"]
+
+    html_by_url = {
+        "https://example.com/gallery/": '<video poster="poster.jpg"><source src="/video.mp4"></video>',
+        "https://example.com/second/": '<video poster="other.jpg"><source src="/other.mp4"></video>',
+    }
+
+    monkeypatch.setattr(styleguide_view, "_fetch_remote_html", lambda url: html_by_url.get(url))
+
+    video_url, poster_url = styleguide_view._fetch_styleguide_remote_video_media()
+    assert video_url == "https://example.com/video.mp4"
+    assert poster_url == "https://example.com/gallery/poster.jpg"
+
+
+def test_styleguide_fetch_remote_podcast_media_derives_transcript_url_and_prefers_podlove_cover(
+    monkeypatch,
+    settings,
+):
+    settings.CAST_STYLEGUIDE_PODCAST_SOURCE_URL = "https://example.com/podcast"
+    settings.CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL = None
+    audio = object()
+    cover_image = object()
+
+    monkeypatch.setattr(
+        styleguide_view,
+        "_fetch_remote_html",
+        lambda url: (
+            (
+                '<meta name="twitter:player:stream" content="https://example.com/audio.m4a">'
+                '<podlove-player data-url="/api/audios/podlove/1"></podlove-player>'
+                '<meta property="og:image" content="https://example.com/meta-cover.jpg">'
+            )
+            if url == "https://example.com/podcast"
+            else None
+        ),
+    )
+    monkeypatch.setattr(styleguide_view, "_get_or_create_remote_audio", lambda _url, _user: audio)
+    monkeypatch.setattr(
+        styleguide_view,
+        "_fetch_podlove_data",
+        lambda _url: {
+            "version": 2,
+            "show": {"poster": "https://example.com/podlove-cover.jpg"},
+            "transcripts": [{"start": "00:00:00.000"}],
+        },
+    )
+    monkeypatch.setattr(
+        styleguide_view,
+        "_get_or_create_remote_image",
+        lambda url, _user: cover_image if url.endswith("podlove-cover.jpg") else object(),
+    )
+
+    result_audio, transcript_data, result_cover, transcript_url = (
+        styleguide_view._fetch_styleguide_remote_podcast_media(
+            object(),
+            None,
+        )
+    )
+    assert result_audio is audio
+    assert transcript_data == {"version": 2, "transcripts": [{"start": "00:00:00.000"}]}
+    assert result_cover is cover_image
+    assert transcript_url == "https://example.com/podcast/transcript/"
+
+
+def test_styleguide_fetch_remote_transcript_media_updates_transcript_and_cover(monkeypatch):
+    cover_image = object()
+    transcript_html = (
+        '<meta property="og:image" content="https://example.com/transcript-cover.jpg">'
+        '<section class="transcript-segment"><time>00:01</time><p class="transcript-text">Hi</p></section>'
+    )
+
+    monkeypatch.setattr(styleguide_view, "_fetch_remote_html", lambda _url: transcript_html)
+    monkeypatch.setattr(
+        styleguide_view,
+        "_get_or_create_remote_image",
+        lambda _url, _user: cover_image,
+    )
+
+    transcript_data, result_cover = styleguide_view._fetch_styleguide_remote_transcript_media(
+        object(),
+        transcript_url="https://example.com/transcript/",
+        transcript_data={"version": 1, "transcripts": []},
+        cover_image=None,
+    )
+    assert transcript_data == {
+        "version": 1,
+        "transcripts": [{"end": "", "speaker": "", "start": "00:01", "text": "Hi", "voice": ""}],
+    }
+    assert result_cover is cover_image
+
+
 @pytest.mark.django_db
 def test_styleguide_get_or_create_remote_image_and_audio(monkeypatch):
     user = create_user(name="remote-user", password="remote-user")

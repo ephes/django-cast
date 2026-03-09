@@ -1311,26 +1311,35 @@ def _get_or_create_remote_audio(url: str, user) -> Audio | None:
     return audio
 
 
-def _fetch_styleguide_remote_media(user) -> StyleguideRemoteMedia:
-    if not _styleguide_remote_media_enabled():
-        return StyleguideRemoteMedia(
-            gallery_images=None,
-            gallery_blocks=None,
-            cover_image=None,
-            audio=None,
-            transcript_data=None,
-            video_url=None,
-            video_poster_url=None,
-        )
+def _empty_styleguide_remote_media() -> StyleguideRemoteMedia:
+    return StyleguideRemoteMedia(
+        gallery_images=None,
+        gallery_blocks=None,
+        cover_image=None,
+        audio=None,
+        transcript_data=None,
+        video_url=None,
+        video_poster_url=None,
+    )
 
-    gallery_images: list[Image] = []
-    image_urls: list[str] = []
-    gallery_blocks: list[str] = []
-    cover_image: Image | None = None
-    for page_url in _styleguide_image_source_urls():
+
+def _styleguide_remote_html_pages(urls: list[str]) -> list[tuple[str, str]]:
+    pages: list[tuple[str, str]] = []
+    for page_url in urls:
+        if not page_url:
+            continue
         html = _fetch_remote_html(page_url)
         if html is None:
             continue
+        pages.append((page_url, html))
+    return pages
+
+
+def _fetch_styleguide_remote_gallery_media(user) -> tuple[list[Image] | None, list[str] | None]:
+    gallery_images: list[Image] = []
+    image_urls: list[str] = []
+    gallery_blocks: list[str] = []
+    for page_url, html in _styleguide_remote_html_pages(_styleguide_image_source_urls()):
         image_urls.extend(_extract_image_urls(html, page_url))
         gallery_blocks.extend(_extract_gallery_blocks(html))
 
@@ -1341,64 +1350,99 @@ def _fetch_styleguide_remote_media(user) -> StyleguideRemoteMedia:
         if image is not None:
             gallery_images.append(image)
 
-    video_url: str | None = None
-    video_poster_url: str | None = None
+    return gallery_images or None, gallery_blocks or None
+
+
+def _fetch_styleguide_remote_video_media() -> tuple[str | None, str | None]:
     video_source_url = _styleguide_video_source_url()
     video_sources = [video_source_url] if video_source_url else _styleguide_image_source_urls()
-    for page_url in video_sources:
-        if not page_url:
-            continue
-        html = _fetch_remote_html(page_url)
-        if html is None:
-            continue
+    for page_url, html in _styleguide_remote_html_pages(video_sources):
         candidate_url, candidate_poster = _extract_video_data(html, page_url)
         if candidate_url:
-            video_url = candidate_url
-            video_poster_url = candidate_poster
-            break
+            return candidate_url, candidate_poster
+    return None, None
 
+
+def _fetch_styleguide_remote_podcast_media(
+    user,
+    transcript_url: str | None,
+) -> tuple[Audio | None, dict[str, Any] | None, Image | None, str | None]:
     podcast_url = _styleguide_podcast_source_url()
-    transcript_url = _styleguide_transcript_source_url()
+    if not podcast_url:
+        return None, None, None, transcript_url
+
     audio: Audio | None = None
     transcript_data: dict[str, Any] | None = None
+    cover_image: Image | None = None
+    html = _fetch_remote_html(podcast_url)
+    if html is not None:
+        audio_url = _extract_audio_url(html)
+        if audio_url:
+            audio = _get_or_create_remote_audio(audio_url, user)
+        podlove_api_url = _extract_podlove_player_api_url(html, podcast_url)
+        if podlove_api_url:
+            podlove_data = _fetch_podlove_data(podlove_api_url)
+            if podlove_data:
+                poster_url = podlove_data.get("show", {}).get("poster")
+                if poster_url:
+                    cover_image = _get_or_create_remote_image(poster_url, user)
+                if transcript_data is None and podlove_data.get("transcripts"):
+                    transcripts = list(podlove_data["transcripts"])[: _styleguide_transcript_max_segments()]
+                    transcript_data = {
+                        "version": podlove_data.get("version", 1),
+                        "transcripts": transcripts,
+                    }
+        cover_url = _extract_cover_image_url(html, podcast_url)
+        if cover_url and cover_image is None:
+            cover_image = _get_or_create_remote_image(cover_url, user)
 
-    if podcast_url:
-        html = _fetch_remote_html(podcast_url)
-        if html is not None:
-            audio_url = _extract_audio_url(html)
-            if audio_url:
-                audio = _get_or_create_remote_audio(audio_url, user)
-            podlove_api_url = _extract_podlove_player_api_url(html, podcast_url)
-            if podlove_api_url:
-                podlove_data = _fetch_podlove_data(podlove_api_url)
-                if podlove_data:
-                    poster_url = podlove_data.get("show", {}).get("poster")
-                    if poster_url:
-                        cover_image = _get_or_create_remote_image(poster_url, user)
-                    if transcript_data is None and podlove_data.get("transcripts"):
-                        transcripts = list(podlove_data["transcripts"])[: _styleguide_transcript_max_segments()]
-                        transcript_data = {
-                            "version": podlove_data.get("version", 1),
-                            "transcripts": transcripts,
-                        }
-            cover_url = _extract_cover_image_url(html, podcast_url)
-            if cover_url and cover_image is None:
-                cover_image = _get_or_create_remote_image(cover_url, user)
-        if transcript_url is None:
-            transcript_url = podcast_url.rstrip("/") + "/transcript/"
+    if transcript_url is None:
+        transcript_url = podcast_url.rstrip("/") + "/transcript/"
+    return audio, transcript_data, cover_image, transcript_url
 
-    if transcript_url:
-        transcript_html = _fetch_remote_html(transcript_url)
-        if transcript_html is not None:
-            transcript_data = _extract_transcript_data(transcript_html)
-            if cover_image is None:
-                cover_url = _extract_cover_image_url(transcript_html, transcript_url)
-                if cover_url:
-                    cover_image = _get_or_create_remote_image(cover_url, user)
+
+def _fetch_styleguide_remote_transcript_media(
+    user,
+    *,
+    transcript_url: str | None,
+    transcript_data: dict[str, Any] | None,
+    cover_image: Image | None,
+) -> tuple[dict[str, Any] | None, Image | None]:
+    if not transcript_url:
+        return transcript_data, cover_image
+
+    transcript_html = _fetch_remote_html(transcript_url)
+    if transcript_html is None:
+        return transcript_data, cover_image
+
+    transcript_data = _extract_transcript_data(transcript_html)
+    if cover_image is None:
+        cover_url = _extract_cover_image_url(transcript_html, transcript_url)
+        if cover_url:
+            cover_image = _get_or_create_remote_image(cover_url, user)
+    return transcript_data, cover_image
+
+
+def _fetch_styleguide_remote_media(user) -> StyleguideRemoteMedia:
+    if not _styleguide_remote_media_enabled():
+        return _empty_styleguide_remote_media()
+
+    gallery_images, gallery_blocks = _fetch_styleguide_remote_gallery_media(user)
+    video_url, video_poster_url = _fetch_styleguide_remote_video_media()
+    audio, transcript_data, cover_image, transcript_url = _fetch_styleguide_remote_podcast_media(
+        user,
+        _styleguide_transcript_source_url(),
+    )
+    transcript_data, cover_image = _fetch_styleguide_remote_transcript_media(
+        user,
+        transcript_url=transcript_url,
+        transcript_data=transcript_data,
+        cover_image=cover_image,
+    )
 
     return StyleguideRemoteMedia(
-        gallery_images=gallery_images or None,
-        gallery_blocks=gallery_blocks or None,
+        gallery_images=gallery_images,
+        gallery_blocks=gallery_blocks,
         cover_image=cover_image,
         audio=audio,
         transcript_data=transcript_data,
