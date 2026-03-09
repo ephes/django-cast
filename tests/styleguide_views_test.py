@@ -9,6 +9,29 @@ from cast.views import styleguide as styleguide_view
 from cast.views.styleguide import STYLEGUIDE_BLOG_SLUG, STYLEGUIDE_PODCAST_SLUG
 
 
+def _call_styleguide_with_stubbed_content(monkeypatch, rf, path: str, *, session_theme: str | None = None):
+    captured = {}
+
+    monkeypatch.setattr(styleguide_view, "_build_styleguide_data", lambda _request: object())
+    monkeypatch.setattr(styleguide_view, "_styleguide_context", lambda *_args, **_kwargs: {})
+
+    def fake_render(_request, _template, context):
+        captured["context"] = context
+        return styleguide_view.HttpResponse("ok")
+
+    monkeypatch.setattr(styleguide_view, "render", fake_render)
+
+    request = rf.get(path)
+    middleware = SessionMiddleware(lambda req: None)
+    middleware.process_request(request)
+    if session_theme is not None:
+        request.session["template_base_dir"] = session_theme
+    request.session.save()
+
+    response = styleguide_view.styleguide(request)
+    return response, request, captured["context"]
+
+
 @pytest.mark.django_db
 def test_styleguide_disabled_returns_404(settings, client):
     settings.CAST_ENABLE_STYLEGUIDE = False
@@ -144,54 +167,63 @@ def test_harden_styleguide_user_is_idempotent():
 
 
 @pytest.mark.django_db
-@pytest.mark.slow
-def test_styleguide_theme_switch_does_not_persist_session(settings, client, site):
+def test_styleguide_theme_switch_does_not_persist_session(settings, rf, site, monkeypatch):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
 
-    response = client.get(f"{reverse('cast:styleguide')}?theme=plain")
+    response, request, context = _call_styleguide_with_stubbed_content(
+        monkeypatch,
+        rf,
+        f"{reverse('cast:styleguide')}?theme=plain",
+    )
     assert response.status_code == 200
-    assert response.context["styleguide_active_theme"] == "plain"
-    assert "template_base_dir" not in client.session
+    assert context["styleguide_active_theme"] == "plain"
+    assert "template_base_dir" not in request.session
 
 
 @pytest.mark.django_db
-@pytest.mark.slow
-def test_styleguide_uses_session_theme(settings, client, site):
+def test_styleguide_uses_session_theme(settings, rf, site, monkeypatch):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
 
-    session = client.session
-    session["template_base_dir"] = "plain"
-    session.save()
-
-    response = client.get(reverse("cast:styleguide"))
+    response, _request, context = _call_styleguide_with_stubbed_content(
+        monkeypatch,
+        rf,
+        reverse("cast:styleguide"),
+        session_theme="plain",
+    )
     assert response.status_code == 200
-    assert response.context["styleguide_active_theme"] == "plain"
+    assert context["styleguide_active_theme"] == "plain"
 
 
 @pytest.mark.django_db
-@pytest.mark.slow
-def test_styleguide_invalid_theme_uses_current(settings, client, site):
+def test_styleguide_invalid_theme_uses_current(settings, rf, site, monkeypatch):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
 
-    response = client.get(f"{reverse('cast:styleguide')}?theme=not-a-theme")
+    response, _request, context = _call_styleguide_with_stubbed_content(
+        monkeypatch,
+        rf,
+        f"{reverse('cast:styleguide')}?theme=not-a-theme",
+    )
     assert response.status_code == 200
-    assert response.context["styleguide_active_theme"] == "bootstrap4"
+    assert context["styleguide_active_theme"] == "bootstrap4"
 
 
 @pytest.mark.django_db
-@pytest.mark.slow
-def test_styleguide_missing_templates_fallback_warning(settings, client, site):
+def test_styleguide_missing_templates_fallback_warning(settings, rf, site, monkeypatch):
     settings.CAST_ENABLE_STYLEGUIDE = True
     settings.CAST_CUSTOM_THEMES = [("custom_theme", "Custom Theme")]
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
 
-    response = client.get(f"{reverse('cast:styleguide')}?theme=custom_theme")
+    response, _request, context = _call_styleguide_with_stubbed_content(
+        monkeypatch,
+        rf,
+        f"{reverse('cast:styleguide')}?theme=custom_theme",
+    )
     assert response.status_code == 200
-    assert response.context["styleguide_active_theme"] == "bootstrap4"
-    warning = response.context["styleguide_warning"]
+    assert context["styleguide_active_theme"] == "bootstrap4"
+    warning = context["styleguide_warning"]
     assert warning is not None
     assert "custom_theme" in warning
 
