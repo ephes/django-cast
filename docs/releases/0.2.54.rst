@@ -1,4 +1,4 @@
-0.2.54 (unreleased)
+0.2.54 (2026-03-09)
 -------------------
 
 - Added canonical repository class names:
@@ -78,6 +78,12 @@
   built-in crispy setup without redefining that setting.
 - Pinned the CI ``uv`` installation step to ``0.10.2`` for more predictable
   workflow behavior.
+- Fixed Python 3.11-3.13 compatibility for ``Post`` model imports by replacing
+  a runtime-evaluated ``"Blog" | None`` annotation with ``Optional["Blog"]``.
+- Typed Django system check callables in ``cast.checks`` so ``uv run mypy``
+  no longer emits ``annotation-unchecked`` notes during the release gate.
+- Fixed migration ``0063_gallery_signature`` for current Django versions by
+  providing an explicit ``chunk_size`` when iterating a prefetched queryset.
 - Hardened ``recalc_video_posters`` with progress output, per-video error
   handling, and completion summaries so one broken video no longer aborts the
   entire command.

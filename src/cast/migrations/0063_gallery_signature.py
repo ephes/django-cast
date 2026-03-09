@@ -16,7 +16,7 @@ def build_gallery_signature(image_ids):
 def populate_gallery_signatures(apps, schema_editor):
     Gallery = apps.get_model("cast", "Gallery")
     galleries = Gallery.objects.prefetch_related("images").all()
-    for gallery in galleries.iterator():
+    for gallery in galleries.iterator(chunk_size=1000):
         signature = build_gallery_signature(image.pk for image in gallery.images.all())
         Gallery.objects.filter(pk=gallery.pk).update(signature=signature)
 
