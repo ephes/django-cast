@@ -3,10 +3,12 @@ from unittest.mock import patch
 import pytest
 from django.core.files.base import ContentFile
 from django.test import override_settings
+from django.template import TemplateDoesNotExist
 from django.urls import reverse
 
 from cast.devdata import create_transcript
 from cast.models import Transcript
+from cast.views.transcript import _resolve_transcript_template
 
 from .factories import BlogFactory, EpisodeFactory
 from .multisite_helpers import create_site_root
@@ -541,6 +543,11 @@ def transcript_with_podlove():
 class TestGetTranscriptAsHtml:
     pytestmark = pytest.mark.django_db
 
+    def test_resolve_transcript_template_falls_back_for_missing_theme(self, mocker):
+        mocker.patch("cast.views.transcript.get_template", side_effect=TemplateDoesNotExist("missing"))
+
+        assert _resolve_transcript_template("theme-without-transcript") == "cast/plain/transcript.html"
+
     def test_get_transcript_as_html_not_found(self, client):
         url = reverse("cast:html-transcript-no-post", kwargs={"transcript_pk": 1})
         r = client.get(url)
@@ -578,6 +585,27 @@ class TestGetTranscriptAsHtml:
         # Then we get the transcript in the expected format
         content = r.content.decode("utf-8")
         assert "hallo liebe Hörerinnen und Hörer" in content
+
+    def test_get_transcript_as_html_falls_back_to_plain_template_for_missing_optional_theme_template(
+        self, client, transcript_with_podlove, mocker
+    ):
+        transcript = transcript_with_podlove
+        template_base_dir = "theme-without-transcript"
+
+        mocker.patch("cast.views.transcript.get_template_base_dir", return_value=template_base_dir)
+
+        def fake_get_template(name: str):
+            if name == f"cast/{template_base_dir}/transcript.html":
+                raise TemplateDoesNotExist(name)
+            return object()
+
+        mocker.patch("cast.views.transcript.get_template", side_effect=fake_get_template)
+
+        url = reverse("cast:html-transcript-no-post", kwargs={"transcript_pk": transcript.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert "cast/plain/transcript.html" in [template.name for template in response.templates]
 
     def test_get_transcript_as_html_success_from_post(self, client, transcript_with_podlove, post):
         # Given a transcript in podlove format

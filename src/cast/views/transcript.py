@@ -3,6 +3,8 @@ from typing import Any
 
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template import TemplateDoesNotExist
+from django.template.loader import get_template
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
@@ -16,6 +18,19 @@ from ..models import Blog, Episode, Post, Transcript, get_template_base_dir
 from ..site_lookup import get_site_specific_page_or_404
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .wagtail_pagination import paginate, pagination_template
+
+
+TRANSCRIPT_FALLBACK_THEME = "plain"
+
+
+def _resolve_transcript_template(base_template_dir: str) -> str:
+    """Return the transcript template path, falling back to plain if needed."""
+    candidate = f"cast/{base_template_dir}/transcript.html"
+    try:
+        get_template(candidate)
+        return candidate
+    except TemplateDoesNotExist:
+        return f"cast/{TRANSCRIPT_FALLBACK_THEME}/transcript.html"
 
 
 def _render_transcript_html(
@@ -38,7 +53,8 @@ def _render_transcript_html(
         context["transcript"] = data
     else:
         context = {"transcript": data, "episode": None}
-    return render(request, f"cast/{base_template_dir}/transcript.html", context)
+    template_name = _resolve_transcript_template(base_template_dir)
+    return render(request, template_name, context)
 
 
 @vary_on_headers("X-Requested-With")

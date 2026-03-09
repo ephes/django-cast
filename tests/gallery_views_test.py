@@ -1,11 +1,17 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import Http404
 from django.test import RequestFactory
+from django.template import TemplateDoesNotExist
 from django.urls import reverse
 import pytest
 from wagtail.images.models import Image
 
-from cast.views.gallery import GalleryModalForm, gallery_modal, get_prev_next_indices
+from cast.views.gallery import (
+    GalleryModalForm,
+    _resolve_gallery_modal_template,
+    gallery_modal,
+    get_prev_next_indices,
+)
 
 
 @pytest.fixture
@@ -100,6 +106,40 @@ def test_htmx_gallery_modal_happy(client, gallery):
     url = f"{base_url}?current_image_index={current_image_index}&image_pks={image_pks}&block_id={block_id}"
     response = client.get(url)
     assert response.status_code == 200
+
+
+def test_resolve_gallery_modal_template_falls_back_for_missing_theme(mocker):
+    mocker.patch("cast.views.gallery.get_template", side_effect=TemplateDoesNotExist("missing"))
+
+    assert _resolve_gallery_modal_template("theme-without-modal") == "cast/plain/gallery_modal.html"
+
+
+@pytest.mark.django_db
+def test_gallery_modal_falls_back_to_plain_template_for_missing_optional_theme_template(client, gallery, mocker):
+    gallery.create_renditions()
+    image_pks = ",".join(str(image.pk) for image in gallery.images.all())
+    current_image_index = 0
+    block_id = "block_id"
+    template_base_dir = "theme-without-modal"
+    base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": template_base_dir})
+    url = f"{base_url}?current_image_index={current_image_index}&image_pks={image_pks}&block_id={block_id}"
+
+    mocker.patch(
+        "cast.views.gallery.get_template_base_dir_choices",
+        return_value=[("plain", "Plain"), (template_base_dir, "Theme without modal")],
+    )
+
+    def fake_get_template(name: str):
+        if name == f"cast/{template_base_dir}/gallery_modal.html":
+            raise TemplateDoesNotExist(name)
+        return object()
+
+    mocker.patch("cast.views.gallery.get_template", side_effect=fake_get_template)
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert "cast/plain/gallery_modal.html" in [template.name for template in response.templates]
 
 
 def test_gallery_modal_invalid_template_base_dir_returns_404():

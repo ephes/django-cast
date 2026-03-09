@@ -4,6 +4,8 @@ from typing import Any
 from django import forms
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
+from django.template import TemplateDoesNotExist
+from django.template.loader import get_template
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET
 from wagtail.images.models import Image
@@ -58,6 +60,19 @@ def get_prev_next_indices(image_pks: list[int], current_index: int) -> tuple[int
     prev_index = current_index - 1 if current_index > 0 else None
     next_index = current_index + 1 if current_index < len(image_pks) - 1 else None
     return prev_index, next_index
+
+
+GALLERY_MODAL_FALLBACK_THEME = "plain"
+
+
+def _resolve_gallery_modal_template(template_base_dir: str) -> str:
+    """Return the gallery modal template path, falling back to plain if needed."""
+    candidate = f"cast/{template_base_dir}/gallery_modal.html"
+    try:
+        get_template(candidate)
+        return candidate
+    except TemplateDoesNotExist:
+        return f"cast/{GALLERY_MODAL_FALLBACK_THEME}/gallery_modal.html"
 
 
 @require_GET
@@ -121,4 +136,5 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
         "template_base_dir": template_base_dir,
         "block_id": block_id,
     }
-    return render(request, f"cast/{template_base_dir}/gallery_modal.html", context=context)
+    template_name = _resolve_gallery_modal_template(template_base_dir)
+    return render(request, template_name, context=context)

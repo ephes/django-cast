@@ -195,13 +195,16 @@ functionality:
     ``gallery_htmx.html``.
 
 ``gallery_modal.html``
-    Server-rendered modal content for the HTMX gallery.
+    Server-rendered modal content for the HTMX gallery. If missing,
+    django-cast falls back to ``cast/plain/gallery_modal.html``.
 
 ``transcript.html``
-    Episode transcript display page.
+    Episode transcript display page. If missing, django-cast falls back to
+    ``cast/plain/transcript.html``.
 
 ``feed_detail.html``
-    RSS/Atom feed information page with subscribe links.
+    RSS/Atom feed information page with subscribe links. If missing,
+    django-cast falls back to ``cast/plain/feed_detail.html``.
 
 ``select_theme.html``
     Theme selector UI (typically a dropdown in the navigation bar). Not

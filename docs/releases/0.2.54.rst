@@ -87,6 +87,9 @@
   from ``cast.settings`` and keep only explicit test-specific overrides.
 - Hardened ``media_stale`` so cleanup now preserves live ``Audio`` and
   ``Transcript`` assets instead of misclassifying them as stale.
+- Made the optional theme-template contract more forgiving by falling back
+  to ``cast/plain`` when a discovered theme omits ``transcript.html`` or
+  ``gallery_modal.html``.
 - Restricted ``GET /api/comment_training_data/`` to staff users so comment
   training exports are no longer exposed to arbitrary authenticated users.
 - Made slug-based feed, transcript, and meta endpoints site-scoped so
