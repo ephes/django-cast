@@ -200,7 +200,7 @@ class Post(Page):
     tags = ClusterTaggableManager(through=PostTag, blank=True, verbose_name=_("tags"))
 
     _local_template_name: str | None = None
-    _blog: "Blog" | None = None
+    _blog: Optional["Blog"] = None
     _media_lookup: dict[str, dict[int, Any]] | None = None
 
     # wagtail
