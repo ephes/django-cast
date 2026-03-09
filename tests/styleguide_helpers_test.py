@@ -1198,7 +1198,7 @@ def test_styleguide_fetch_remote_media_transcript_without_cover(monkeypatch, set
 
 
 @pytest.mark.django_db
-def test_styleguide_context_uses_remote_video(settings):
+def test_styleguide_context_uses_remote_video_and_pagination_object_list(settings):
     settings.CAST_ENABLE_STYLEGUIDE = True
     factory = RequestFactory()
     request = factory.get("/cast/styleguide/")
@@ -1206,58 +1206,35 @@ def test_styleguide_context_uses_remote_video(settings):
     data = styleguide_view._build_styleguide_data(request)
     data.video_url = "https://example.com/video.mp4"
     data.video_poster_url = "https://example.com/poster.jpg"
-
-    context = styleguide_view._styleguide_context(data, request, "plain")
-    assert isinstance(context["styleguide_video"], StyleguideRemoteVideo)
-
-
-@pytest.mark.django_db
-def test_styleguide_context_uses_pagination_object_list(settings):
-    settings.CAST_ENABLE_STYLEGUIDE = True
-    factory = RequestFactory()
-    request = factory.get("/cast/styleguide/")
-
-    data = styleguide_view._build_styleguide_data(request)
     data.blog_repository.pagination_context = {"object_list": data.posts[:1]}
 
     context = styleguide_view._styleguide_context(data, request, "plain")
+    assert isinstance(context["styleguide_video"], StyleguideRemoteVideo)
     assert context["styleguide_media_post"].pk == data.posts[0].pk
 
 
 @pytest.mark.django_db
-def test_styleguide_context_generates_media_post_renditions(settings, monkeypatch):
+def test_styleguide_context_generates_and_refreshes_media_post_renditions(settings, monkeypatch):
     settings.CAST_ENABLE_STYLEGUIDE = True
     factory = RequestFactory()
     request = factory.get("/cast/styleguide/")
 
     data = styleguide_view._build_styleguide_data(request)
     called = {}
+    refreshed = {123: ["sentinel"]}
 
     def fake_create(posts):
         called["posts"] = list(posts)
 
     monkeypatch.setattr(styleguide_view, "create_missing_renditions_for_posts", fake_create)
-    context = styleguide_view._styleguide_context(data, request, "plain")
-    assert called["posts"] == [context["styleguide_media_post"]]
-
-
-@pytest.mark.django_db
-def test_styleguide_context_refreshes_media_post_renditions(settings, monkeypatch):
-    settings.CAST_ENABLE_STYLEGUIDE = True
-    factory = RequestFactory()
-    request = factory.get("/cast/styleguide/")
-
-    data = styleguide_view._build_styleguide_data(request)
-    refreshed = {123: ["sentinel"]}
-
-    monkeypatch.setattr(styleguide_view, "create_missing_renditions_for_posts", lambda _posts: None)
     monkeypatch.setattr(
         styleguide_view.Post,
         "get_all_renditions_from_queryset",
         staticmethod(lambda _posts: refreshed),
     )
 
-    styleguide_view._styleguide_context(data, request, "plain")
+    context = styleguide_view._styleguide_context(data, request, "plain")
+    assert called["posts"] == [context["styleguide_media_post"]]
     assert data.blog_repository.renditions_for_posts[123] == ["sentinel"]
 
 
