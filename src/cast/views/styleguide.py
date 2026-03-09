@@ -169,6 +169,20 @@ class StyleguideData:
         self.video_poster_url = video_poster_url
 
 
+@dataclass(frozen=True)
+class StyleguideSeedData:
+    blog: Blog
+    media: StyleguideMedia
+    galleries: list[Gallery]
+    gallery_blocks: list[str] | None
+    posts: list[Post]
+    podcast: Podcast
+    episode: Episode
+    transcript: dict[str, Any]
+    video_url: str | None = None
+    video_poster_url: str | None = None
+
+
 def styleguide(request: HtmxHttpRequest) -> HttpResponse:
     if not _styleguide_is_enabled():
         raise Http404("Styleguide disabled")
@@ -259,7 +273,7 @@ def _query_params_without_theme(request: HtmxHttpRequest) -> list[tuple[str, str
     return [(key, str(value)) for key, value in request.GET.items() if key != "theme"]
 
 
-def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
+def _ensure_styleguide_seed_data() -> StyleguideSeedData:
     site = _ensure_site()
     with transaction.atomic():
         user = create_user(name=STYLEGUIDE_USER_NAME, password=STYLEGUIDE_USER_NAME)
@@ -277,7 +291,6 @@ def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
     include_video_in_body = False
     posts = _ensure_posts(blog, user, media, galleries, include_video_in_body=include_video_in_body)
     _ensure_styleguide_tags_and_categories(posts)
-    blog_repository = BlogIndexContext.create_from_django_models(request, blog)
 
     podcast = _ensure_podcast(site, user)
     episode, transcript = _ensure_episode(
@@ -289,7 +302,6 @@ def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
         include_video_in_body=include_video_in_body,
     )
     _ensure_podlove_transcript(media.audio, transcript)
-    podcast_repository = BlogIndexContext.create_from_django_models(request, podcast)
     if posts:
         for post in posts:
             _ensure_styleguide_comments(post, site=site, user=user)
@@ -302,19 +314,35 @@ def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
         image=cover_image,
     )
 
-    return StyleguideData(
+    return StyleguideSeedData(
         blog=blog,
-        blog_repository=blog_repository,
         media=media,
         galleries=galleries,
         gallery_blocks=remote_media.gallery_blocks,
         posts=posts,
         podcast=podcast,
         episode=episode,
-        podcast_repository=podcast_repository,
         transcript=transcript,
         video_url=remote_media.video_url,
         video_poster_url=remote_media.video_poster_url,
+    )
+
+
+def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
+    seed_data = _ensure_styleguide_seed_data()
+    return StyleguideData(
+        blog=seed_data.blog,
+        blog_repository=BlogIndexContext.create_from_django_models(request, seed_data.blog),
+        media=seed_data.media,
+        galleries=seed_data.galleries,
+        gallery_blocks=seed_data.gallery_blocks,
+        posts=seed_data.posts,
+        podcast=seed_data.podcast,
+        episode=seed_data.episode,
+        podcast_repository=BlogIndexContext.create_from_django_models(request, seed_data.podcast),
+        transcript=seed_data.transcript,
+        video_url=seed_data.video_url,
+        video_poster_url=seed_data.video_poster_url,
     )
 
 

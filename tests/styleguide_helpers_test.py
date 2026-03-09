@@ -1,4 +1,5 @@
 import json
+from contextlib import nullcontext
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -1285,6 +1286,152 @@ def test_styleguide_context_skips_empty_renditions_refresh(settings, monkeypatch
 
     styleguide_view._styleguide_context(data, request, "plain")
     assert "update" not in called
+
+
+def test_styleguide_ensure_seed_data_orchestrates_seed_flow(monkeypatch):
+    site = object()
+    raw_user = object()
+    user = object()
+    blog = object()
+    podcast = object()
+    episode = object()
+    post = object()
+    cover_image = object()
+    media_image = object()
+    audio = object()
+    galleries = [object()]
+    transcript = {"version": 1, "transcripts": ["segment"]}
+    remote_media = SimpleNamespace(
+        gallery_images=["remote-image"],
+        gallery_blocks=["<gallery/>"],
+        cover_image=cover_image,
+        audio=audio,
+        transcript_data={"version": 1},
+        video_url="https://example.com/video.mp4",
+        video_poster_url="https://example.com/poster.jpg",
+    )
+    media = SimpleNamespace(audio=audio, image=media_image)
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(styleguide_view, "_ensure_site", lambda: site)
+    monkeypatch.setattr(styleguide_view.transaction, "atomic", nullcontext)
+    monkeypatch.setattr(styleguide_view, "create_user", lambda **_kwargs: raw_user)
+    monkeypatch.setattr(styleguide_view, "_harden_styleguide_user", lambda _user: user)
+    monkeypatch.setattr(styleguide_view, "_ensure_blog", lambda _site, _user: blog)
+    monkeypatch.setattr(styleguide_view, "_fetch_styleguide_remote_media", lambda _user: remote_media)
+    monkeypatch.setattr(
+        styleguide_view, "_create_styleguide_galleries", lambda images, _user: galleries if images else []
+    )
+
+    def fake_create_media(**kwargs):
+        calls["create_media"] = kwargs
+        return media
+
+    monkeypatch.setattr(styleguide_view, "_create_styleguide_media", fake_create_media)
+    monkeypatch.setattr(styleguide_view, "_ensure_posts", lambda *_args, **_kwargs: [post])
+    monkeypatch.setattr(
+        styleguide_view, "_ensure_styleguide_tags_and_categories", lambda posts: calls.setdefault("tags", posts)
+    )
+    monkeypatch.setattr(styleguide_view, "_ensure_podcast", lambda _site, _user: podcast)
+    monkeypatch.setattr(
+        styleguide_view,
+        "_ensure_episode",
+        lambda *_args, **_kwargs: (episode, transcript),
+    )
+    monkeypatch.setattr(
+        styleguide_view,
+        "_ensure_podlove_transcript",
+        lambda _audio, _transcript: calls.setdefault("podlove", (_audio, _transcript)),
+    )
+    monkeypatch.setattr(
+        styleguide_view,
+        "_ensure_styleguide_comments",
+        lambda current_post, *, site, user: calls.setdefault("comments", []).append((current_post, site, user)),
+    )
+    monkeypatch.setattr(
+        styleguide_view,
+        "_apply_styleguide_cover_images",
+        lambda **kwargs: calls.setdefault("cover_images", kwargs),
+    )
+
+    seed = styleguide_view._ensure_styleguide_seed_data()
+    assert seed == styleguide_view.StyleguideSeedData(
+        blog=blog,
+        media=media,
+        galleries=galleries,
+        gallery_blocks=["<gallery/>"],
+        posts=[post],
+        podcast=podcast,
+        episode=episode,
+        transcript=transcript,
+        video_url="https://example.com/video.mp4",
+        video_poster_url="https://example.com/poster.jpg",
+    )
+    assert calls["create_media"] == {
+        "audio": audio,
+        "gallery": galleries[0],
+        "gallery_images": ["remote-image"],
+        "user": user,
+    }
+    assert calls["tags"] == [post]
+    assert calls["podlove"] == (audio, transcript)
+    assert calls["comments"] == [(post, site, user)]
+    assert calls["cover_images"] == {
+        "blog": blog,
+        "podcast": podcast,
+        "posts": [post],
+        "episode": episode,
+        "image": cover_image,
+    }
+
+
+def test_styleguide_build_data_uses_seed_data_for_repositories(monkeypatch):
+    factory = RequestFactory()
+    request = factory.get("/cast/styleguide/")
+    seed = styleguide_view.StyleguideSeedData(
+        blog=object(),
+        media=object(),
+        galleries=[object()],
+        gallery_blocks=["<gallery/>"],
+        posts=[object()],
+        podcast=object(),
+        episode=object(),
+        transcript={"version": 1},
+        video_url="https://example.com/video.mp4",
+        video_poster_url="https://example.com/poster.jpg",
+    )
+    blog_repository = object()
+    podcast_repository = object()
+    calls: list[tuple[object, object]] = []
+
+    monkeypatch.setattr(styleguide_view, "_ensure_styleguide_seed_data", lambda: seed)
+
+    def fake_create(current_request, current_page):
+        calls.append((current_request, current_page))
+        if current_page is seed.blog:
+            return blog_repository
+        return podcast_repository
+
+    monkeypatch.setattr(
+        styleguide_view.BlogIndexContext,
+        "create_from_django_models",
+        staticmethod(fake_create),
+    )
+
+    data = styleguide_view._build_styleguide_data(request)
+    assert data.blog is seed.blog
+    assert data.blog_repository is blog_repository
+    assert data.media is seed.media
+    assert data.galleries == seed.galleries
+    assert data.gallery_blocks == seed.gallery_blocks
+    assert data.posts == seed.posts
+    assert data.podcast is seed.podcast
+    assert data.episode is seed.episode
+    assert data.podcast_repository is podcast_repository
+    assert data.transcript == seed.transcript
+    assert data.video_url == seed.video_url
+    assert data.video_poster_url == seed.video_poster_url
+    assert calls == [(request, seed.blog), (request, seed.podcast)]
 
 
 @pytest.mark.django_db
