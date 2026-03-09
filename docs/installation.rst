@@ -129,11 +129,12 @@ Add the required apps and middleware to your Django settings:
    ] + CAST_MIDDLEWARE  # Adds Wagtail and other required middleware
 
 .. note::
-   ``CAST_APPS`` includes: cast, wagtail and its dependencies, django-allauth,
-   django-crispy-forms, and other required packages.
+   ``CAST_APPS`` includes django-cast itself plus its required runtime apps:
+   Wagtail, Django REST Framework, django-filter, django-htmx, comments
+   support, django-vite, and their dependencies.
 
-   ``CAST_MIDDLEWARE`` includes: Wagtail middleware, django-allauth middleware,
-   and django-threadlocals.
+   ``CAST_MIDDLEWARE`` includes the django-cast-required request middleware:
+   HTMX support and Wagtail's redirect middleware.
 
 Required Settings
 -----------------
@@ -148,16 +149,6 @@ Add these essential settings:
 
    # Site ID for django.contrib.sites
    SITE_ID = 1
-
-   # Authentication (using django-allauth)
-   AUTHENTICATION_BACKENDS = [
-       "django.contrib.auth.backends.ModelBackend",
-       "allauth.account.auth_backends.AuthenticationBackend",
-   ]
-
-   # Login URLs
-   LOGIN_URL = "/login/"
-   LOGIN_REDIRECT_URL = "/"
 
    # Media files (user uploads)
    MEDIA_ROOT = BASE_DIR / "media"
@@ -188,6 +179,11 @@ Configure additional features as needed:
 Each tuple defines a layout slot. django-cast generates multiple responsive
 renditions per slot for different pixel densities and serves them through
 ``srcset``.
+
+django-cast does not require a custom authentication backend by default.
+If your project already uses django-allauth or other authentication packages,
+keep your existing auth settings; django-cast integrates with Django's normal
+user model and Wagtail admin permissions.
 
 URL Configuration
 =================

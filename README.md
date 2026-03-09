@@ -15,8 +15,9 @@ and [Wagtail](https://wagtail.org).
 
 ## Getting Started
 
-- New project: use the [quickstart installation guide](https://django-cast.readthedocs.io/en/develop/installation.html#new-project-setup)
-  and `django-cast-quickstart`
+- New project: install `django-cast`, then use the
+  [quickstart installation guide](https://django-cast.readthedocs.io/en/develop/installation.html#new-project-setup)
+  and run `uv run django-cast-quickstart mysite`
 - Existing Django project: follow the
   [integration installation guide](https://django-cast.readthedocs.io/en/develop/installation.html#integrating-into-existing-projects)
 - Local development on django-cast itself: see the
