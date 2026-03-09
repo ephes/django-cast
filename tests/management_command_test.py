@@ -53,6 +53,27 @@ def test_media_backup_with_wrong_django_version(mocker):
     assert str(err.value) == "Django version >= 4.2 is required"
 
 
+def _stub_styleguide_prefetch(mocker, *, default_theme="plain", available_themes=None):
+    if available_themes is None:
+        available_themes = [("plain", "Plain")]
+
+    mocker.patch(
+        "cast.management.commands.styleguide_prefetch.get_template_base_dir_choices",
+        return_value=available_themes,
+    )
+    styleguide_data = object()
+    build_styleguide_data = mocker.patch(
+        "cast.management.commands.styleguide_prefetch._build_styleguide_data",
+        return_value=styleguide_data,
+    )
+    render_styleguide_context = mocker.patch("cast.management.commands.styleguide_prefetch._styleguide_context")
+    default_theme_mock = mocker.patch(
+        "cast.management.commands.styleguide_prefetch._styleguide_default_theme",
+        return_value=default_theme,
+    )
+    return styleguide_data, build_styleguide_data, render_styleguide_context, default_theme_mock
+
+
 class StubStorage:
     def __init__(self) -> None:
         self._files: dict[str, BytesIO] = {}
@@ -553,28 +574,44 @@ def test_recalc_video_posters_reports_zero_processed(mocker):
     assert "processed=0 errors=0" in output.getvalue()
 
 
-@pytest.mark.slow
-def test_styleguide_prefetch_command(settings, db):
-    settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
+def test_styleguide_prefetch_command(settings, mocker):
+    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
+        mocker
+    )
+
     call_command("styleguide_prefetch", theme="plain")
+    request = build_styleguide_data.call_args.args[0]
+    assert request.path == "/cast/styleguide/"
+    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
 
 
-@pytest.mark.slow
-def test_styleguide_prefetch_command_default_theme(settings, db):
-    settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
+def test_styleguide_prefetch_command_default_theme(settings, mocker):
+    styleguide_data, build_styleguide_data, render_styleguide_context, default_theme = _stub_styleguide_prefetch(
+        mocker
+    )
+
     call_command("styleguide_prefetch")
+    request = build_styleguide_data.call_args.args[0]
+    default_theme.assert_called_once_with()
+    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
 
 
-@pytest.mark.slow
-def test_styleguide_prefetch_command_invalid_theme(settings, db):
-    settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
+def test_styleguide_prefetch_command_invalid_theme(settings, mocker):
+    mocker.patch(
+        "cast.management.commands.styleguide_prefetch.get_template_base_dir_choices",
+        return_value=[("plain", "Plain")],
+    )
     with pytest.raises(CommandError):
         call_command("styleguide_prefetch", theme="not-a-theme")
 
 
-@pytest.mark.slow
-def test_styleguide_prefetch_command_with_renditions(settings, db):
-    settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
+def test_styleguide_prefetch_command_with_renditions(settings, mocker):
     settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = False
+    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
+        mocker
+    )
+
     call_command("styleguide_prefetch", theme="plain", with_renditions=True)
+    request = build_styleguide_data.call_args.args[0]
+    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
     assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is True
