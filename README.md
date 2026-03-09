@@ -13,6 +13,15 @@ and [Wagtail](https://wagtail.org).
 
 **Documentation: [django-cast.readthedocs.io](https://django-cast.readthedocs.io/en/develop/)**
 
+## Getting Started
+
+- New project: use the [quickstart installation guide](https://django-cast.readthedocs.io/en/develop/installation.html#new-project-setup)
+  and `django-cast-quickstart`
+- Existing Django project: follow the
+  [integration installation guide](https://django-cast.readthedocs.io/en/develop/installation.html#integrating-into-existing-projects)
+- Local development on django-cast itself: see the
+  [development guide](https://django-cast.readthedocs.io/en/develop/development.html)
+
 ## Key Features
 - [Responsive images](https://django-cast.readthedocs.io/en/develop/media/images-and-galleries.html)
 - Wagtail as CMS makes it possible for non-technical people to manage the content
