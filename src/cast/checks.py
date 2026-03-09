@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from django.apps import AppConfig
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
@@ -52,7 +54,11 @@ def _find_stale_assets(base_dir: Path) -> list[str]:
 
 
 @register("cast")
-def check_cast_setting_types(app_configs, **kwargs):  # type: ignore[no-untyped-def]
+def check_cast_setting_types(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
     """Validate basic types for core CAST_* settings."""
     errors: list[Error] = []
 
@@ -72,7 +78,11 @@ def check_cast_setting_types(app_configs, **kwargs):  # type: ignore[no-untyped-
 
 
 @register("cast")
-def check_asset_freshness(app_configs, **kwargs):  # type: ignore[no-untyped-def]
+def check_asset_freshness(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Warning]:
     """Warn when Vite assets are stale (DEBUG mode only)."""
     warnings: list[Warning] = []
 
@@ -98,7 +108,11 @@ def check_asset_freshness(app_configs, **kwargs):  # type: ignore[no-untyped-def
 
 
 @register("cast")
-def check_cast_comments_ordering(app_configs, **kwargs):  # type: ignore[no-untyped-def]
+def check_cast_comments_ordering(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
     """Ensure cast comments app is loaded before django_comments."""
     installed_apps = list(getattr(settings, "INSTALLED_APPS", []))
     cast_comments_app = "cast.comments.apps.CastCommentsConfig"
@@ -128,7 +142,11 @@ def check_cast_comments_ordering(app_configs, **kwargs):  # type: ignore[no-unty
 
 
 @register("cast")
-def check_cast_required_middleware(app_configs, **kwargs):  # type: ignore[no-untyped-def]
+def check_cast_required_middleware(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
     """Ensure middleware required by django-cast is present."""
     configured_middleware = set(getattr(settings, "MIDDLEWARE", []))
     missing_middleware = [middleware for middleware in CAST_MIDDLEWARE if middleware not in configured_middleware]
