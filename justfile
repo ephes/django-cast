@@ -59,6 +59,10 @@ test:
 test-fast:
     uv run pytest -m "not slow"
 
+# Run only intentionally slow tests
+test-slow:
+    uv run pytest -m slow
+
 # Run a specific test (pass path or node id)
 test-one TARGET:
     uv run pytest {{TARGET}} -v

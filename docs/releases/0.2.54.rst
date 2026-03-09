@@ -90,6 +90,8 @@
 - Made the optional theme-template contract more forgiving by falling back
   to ``cast/plain`` when a discovered theme omits ``transcript.html`` or
   ``gallery_modal.html``.
+- Added ``just test-slow`` so contributors can run only the intentionally
+  slower integration/dev-surface tests that complement ``just test-fast``.
 - Restricted ``GET /api/comment_training_data/`` to staff users so comment
   training exports are no longer exposed to arbitrary authenticated users.
 - Made slug-based feed, transcript, and meta endpoints site-scoped so

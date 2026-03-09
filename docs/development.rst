@@ -285,6 +285,20 @@ Run the Python test suite:
    $ just test
    # or directly: uv run pytest
 
+Run only the intentionally slower integration/dev-surface checks:
+
+.. code-block:: bash
+
+   $ just test-slow
+   # or directly: uv run pytest -m slow
+
+Run only the faster non-slow tests:
+
+.. code-block:: bash
+
+   $ just test-fast
+   # or directly: uv run pytest -m "not slow"
+
 For specific tests:
 
 .. code-block:: bash
