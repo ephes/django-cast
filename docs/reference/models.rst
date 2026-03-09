@@ -428,8 +428,72 @@ Repository Models
 
 The repository pattern provides optimized data access with minimal queries.
 
+Public import surface
+=====================
+
+Import repository helpers from ``cast.models.repository``.
+The package exports the supported public names for repository classes,
+serialization helpers, selected builder helpers, and repository type aliases.
+The example below is a curated subset showing the most common imports, not the
+full ``__all__`` surface.
+
+.. code-block:: python
+
+    from cast.models.repository import (
+        BlogIndexContext,
+        EpisodeFeedContext,
+        FeedContext,
+        PostDetailContext,
+        PostQuerySnapshot,
+        deserialize_audio,
+        deserialize_blog,
+        deserialize_episode,
+        deserialize_image,
+        deserialize_post,
+        deserialize_renditions,
+        deserialize_transcript,
+        deserialize_video,
+        serialize_audio,
+        serialize_blog,
+        serialize_episode,
+        serialize_image,
+        serialize_post,
+        serialize_renditions,
+        serialize_transcript,
+        serialize_video,
+    )
+
+Additional public exports include builder helpers such as
+``add_queryset_data``, ``data_for_blog_cachable``, and ``get_facet_choices``;
+utility helpers such as ``cache_page_url`` and ``rendition_to_dict``; and type
+aliases such as ``PostByID``, ``AudioById``, and ``RenditionsForPosts``.
+
+The 0.2.54 cleanup removed the older alias names. Use the canonical names below
+when upgrading existing code:
+
+=========================  ==========================
+Removed                    Replacement
+=========================  ==========================
+``QuerysetData``           ``PostQuerySnapshot``
+``PostDetailRepository``   ``PostDetailContext``
+``BlogIndexRepository``    ``BlogIndexContext``
+``FeedRepository``         ``FeedContext``
+``EpisodeFeedRepository``  ``EpisodeFeedContext``
+``audio_to_dict``          ``serialize_audio``
+``video_to_dict``          ``serialize_video``
+``image_to_dict``          ``serialize_image``
+``blog_to_dict``           ``serialize_blog``
+``blog_from_data``         ``deserialize_blog``
+``post_to_dict``           ``serialize_post``
+``episode_to_dict``        ``serialize_episode``
+``transcript_to_dict``     ``serialize_transcript``
+=========================  ==========================
+
+The removed aliases are not kept as compatibility shims. Importing them now
+raises ``ImportError`` or ``AttributeError`` depending on how they are accessed.
+
 PostQuerySnapshot
-============
+=================
 
 Base repository for post querysets with prefetched relations.
 

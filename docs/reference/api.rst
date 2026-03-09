@@ -296,6 +296,11 @@ Update selected theme::
 
     {"theme_slug": "bootstrap5"}
 
+The theme-update endpoint is session-based and does not require
+authentication with django-cast's default DRF configuration. It validates the
+submitted theme slug and stores the selection using the same theme-selection
+flow as the frontend theme switcher.
+
 Comment Moderation
 ~~~~~~~~~~~~~~~~~~
 
@@ -314,7 +319,7 @@ Pagination
 List endpoints support pagination:
 
 - Default page size: 40
-- Maximum page size: 10000
+- Maximum page size: 200
 - Query parameters: ``page``, ``pageSize``
 
 Example::
