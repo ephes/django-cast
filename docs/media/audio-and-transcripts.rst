@@ -79,12 +79,22 @@ Voxhelm Integration
 -------------------
 
 If your audio files are available through absolute HTTP(S) URLs, you can use
-the built-in ``generate_transcripts`` management command to request a
-transcription from Voxhelm and populate all three transcript artifacts on the
-existing ``Transcript`` model.
+the Wagtail admin or the built-in ``generate_transcripts`` management command
+to request a transcription from Voxhelm and populate all three transcript
+artifacts on the existing ``Transcript`` model.
+
+In Wagtail admin, editors with the required page/media permissions can trigger
+transcript generation directly from:
+
+* an episode edit view
+* an audio edit view
+
+Site admins can manage the Voxhelm API base URL, API token, and optional
+model/language defaults in ``Settings -> Voxhelm settings``.
 
 .. code-block:: bash
 
+    # Operator fallback
     python manage.py generate_transcripts --episode-id 42
 
 django-cast currently keeps Podlove and DOTe conversion local. Voxhelm is used

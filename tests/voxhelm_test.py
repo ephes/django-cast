@@ -6,9 +6,10 @@ from urllib.error import URLError
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.test import RequestFactory
 from wagtail.models import Collection
 
-from cast.models import Audio
+from cast.models import Audio, VoxhelmSettings
 from cast.voxhelm import (
     TranscriptGenerationResult,
     VoxhelmClient,
@@ -62,8 +63,53 @@ def test_settings_helpers_and_client_from_settings(settings, monkeypatch):
     client = VoxhelmClient.from_settings()
     assert client.api_base == "https://voxhelm.example/v1"
     assert client.api_key == "secret"
+    assert client.model == "auto"
+    assert client.language == ""
     assert client.job_timeout_seconds == 12.5
     assert client.request_timeout_seconds == 45.0
+
+
+@pytest.mark.django_db
+def test_site_settings_override_django_settings(site, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
+    settings.CAST_VOXHELM_API_KEY = "settings-secret"
+    VoxhelmSettings.objects.update_or_create(
+        site=site,
+        defaults={
+            "api_base": "https://site.example",
+            "api_token": "site-secret",
+            "model": "whisper-1",
+            "language": "de",
+        },
+    )
+
+    client = VoxhelmClient.from_settings(request_or_site=site)
+
+    assert client.api_base == "https://site.example/v1"
+    assert client.api_key == "site-secret"
+    assert client.model == "whisper-1"
+    assert client.language == "de"
+
+
+@pytest.mark.django_db
+def test_site_settings_can_be_loaded_from_request(site, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
+    settings.CAST_VOXHELM_API_KEY = "settings-secret"
+    VoxhelmSettings.objects.update_or_create(
+        site=site,
+        defaults={
+            "api_base": "https://site.example",
+            "api_token": "site-secret",
+            "model": "whisper-1",
+            "language": "de",
+        },
+    )
+    request = RequestFactory().get("/", HTTP_HOST=site.hostname)
+
+    client = VoxhelmClient.from_settings(request_or_site=request)
+
+    assert client.api_base == "https://site.example/v1"
+    assert client.api_key == "site-secret"
 
 
 def test_require_setting_raises_when_missing(settings, monkeypatch):
@@ -255,8 +301,10 @@ def test_client_url_error_is_wrapped(mocker):
 
 
 def test_client_submit_job_includes_language_when_configured(settings, mocker):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
     settings.CAST_VOXHELM_LANGUAGE = "de"
-    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+    client = VoxhelmClient.from_settings()
     request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-1"})
 
     client.submit_transcription_job(
@@ -266,6 +314,21 @@ def test_client_submit_job_includes_language_when_configured(settings, mocker):
     )
 
     assert request_json.call_args.kwargs["payload"]["language"] == "de"
+
+
+def test_client_submit_job_uses_explicit_model_and_empty_language(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", model="whisper-1", language="")
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-1"})
+
+    client.submit_transcription_job(
+        source_url="https://media.example.com/episode.mp3",
+        task_ref="cast-audio-2",
+        context={"audio_id": 2},
+    )
+
+    payload = request_json.call_args.kwargs["payload"]
+    assert payload["model"] == "whisper-1"
+    assert "language" not in payload
 
 
 def test_client_wait_for_job_times_out(mocker):

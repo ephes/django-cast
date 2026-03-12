@@ -16,6 +16,7 @@ from .theme import (
 )
 from .transcript import Transcript
 from .video import Video, get_video_dimensions
+from .voxhelm_settings import VoxhelmSettings
 
 __all__ = [
     "Audio",
@@ -39,6 +40,7 @@ __all__ = [
     "SpamFilter",
     "Transcript",
     "Video",
+    "VoxhelmSettings",
     "get_video_dimensions",
     "Podcast",
     "TemplateBaseDirectory",

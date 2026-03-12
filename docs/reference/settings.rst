@@ -90,25 +90,27 @@ CAST_VOXHELM_API_BASE
 Base URL for the Voxhelm service used by ``generate_transcripts``. The value
 may point at either the service root (for example
 ``https://voxhelm.example.com``) or the ``/v1`` API prefix. This can be set as
-either a Django setting or an environment variable.
+either a Django setting or an environment variable, or per site through the
+Wagtail admin ``Settings -> Voxhelm settings`` screen.
 
 CAST_VOXHELM_API_KEY
 ====================
 
 Bearer token used for Voxhelm job submission, polling, and artifact download.
-This can be set as either a Django setting or an environment variable.
+This can be set as either a Django setting or an environment variable, or per
+site through the Wagtail admin ``Settings -> Voxhelm settings`` screen.
 
 CAST_VOXHELM_MODEL
 ==================
 
 Optional Voxhelm batch model value for transcript generation. Defaults to
-``"auto"``.
+``"auto"``. This can also be managed per site in Wagtail admin.
 
 CAST_VOXHELM_LANGUAGE
 =====================
 
 Optional language hint passed through to Voxhelm batch jobs. By default no
-language hint is sent.
+language hint is sent. This can also be managed per site in Wagtail admin.
 
 CAST_VOXHELM_POLL_INTERVAL
 ==========================
@@ -128,6 +130,14 @@ CAST_VOXHELM_REQUEST_TIMEOUT
 Per-request HTTP timeout in seconds for Voxhelm API calls and artifact
 downloads. Defaults to ``30.0`` seconds. This is separate from
 ``CAST_VOXHELM_POLL_TIMEOUT``, which controls the overall job wait deadline.
+
+Wagtail Admin Configuration
+===========================
+
+django-cast also exposes a site-scoped ``Voxhelm settings`` model in Wagtail
+admin for the API base URL, API token, and optional model/language
+preferences. These values take precedence over Django settings and environment
+variables for Wagtail-admin-triggered transcript generation on that site.
 
 *********
 Templates

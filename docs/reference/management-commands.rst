@@ -18,6 +18,12 @@ audio objects through a Voxhelm batch transcription job. The command keeps the
 existing ``Transcript`` model contract unchanged by storing Podlove JSON,
 WebVTT, and DOTe files back onto the model.
 
+For editors, the primary workflow is now in Wagtail admin: episode edit views
+and audio edit views expose a ``Generate transcript`` action, and Voxhelm
+connection details can be managed in ``Settings -> Voxhelm settings``. The
+management command remains available as operator tooling and fallback
+automation.
+
 Configuration:
 
 - ``CAST_VOXHELM_API_BASE``: Voxhelm service root or ``/v1`` API base
@@ -26,7 +32,8 @@ Configuration:
   ``CAST_VOXHELM_POLL_INTERVAL``, ``CAST_VOXHELM_POLL_TIMEOUT``,
   ``CAST_VOXHELM_REQUEST_TIMEOUT``
 
-These values can be configured as Django settings or environment variables.
+These values can be configured as Django settings, environment variables, or
+site-scoped Wagtail settings.
 
 .. code-block:: bash
 

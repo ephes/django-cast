@@ -12,6 +12,8 @@ from urllib.request import Request, urlopen
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
+from django.http import HttpRequest
+from wagtail.models import Site
 
 from .models import Transcript
 
@@ -19,6 +21,12 @@ if TYPE_CHECKING:
     from .models import Audio
 
 TERMINAL_JOB_STATES = {"succeeded", "failed", "canceled", "expired"}
+SITE_SETTING_FIELD_MAP = {
+    "CAST_VOXHELM_API_BASE": "api_base",
+    "CAST_VOXHELM_API_KEY": "api_token",
+    "CAST_VOXHELM_MODEL": "model",
+    "CAST_VOXHELM_LANGUAGE": "language",
+}
 
 
 class VoxhelmError(RuntimeError):
@@ -40,22 +48,40 @@ def normalize_api_base(api_base: str) -> tuple[str, str]:
     return normalized, f"{normalized}/v1"
 
 
-def get_setting(name: str, default: object = None) -> object:
+def get_site_setting_value(name: str, request_or_site: HttpRequest | Site | None) -> object:
+    field_name = SITE_SETTING_FIELD_MAP.get(name)
+    if field_name is None or request_or_site is None:
+        return None
+
+    from .models import VoxhelmSettings
+
+    if isinstance(request_or_site, Site):
+        site_settings = VoxhelmSettings.for_site(request_or_site)
+    else:
+        site_settings = VoxhelmSettings.for_request(request_or_site)
+    value = getattr(site_settings, field_name, "")
+    return value.strip()
+
+
+def get_setting(name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None) -> object:
+    site_value = get_site_setting_value(name, request_or_site)
+    if site_value not in {None, ""}:
+        return site_value
     value = getattr(settings, name, None)
     if value not in {None, ""}:
         return value
     return os.getenv(name, default)
 
 
-def require_setting(name: str) -> str:
-    value = get_setting(name)
+def require_setting(name: str, *, request_or_site: HttpRequest | Site | None = None) -> str:
+    value = get_setting(name, request_or_site=request_or_site)
     if not isinstance(value, str) or not value.strip():
         raise ImproperlyConfigured(f"{name} must be configured as a Django setting or environment variable.")
     return value.strip()
 
 
-def get_float_setting(name: str, default: float) -> float:
-    return float(str(get_setting(name, default)))
+def get_float_setting(name: str, default: float, *, request_or_site: HttpRequest | Site | None = None) -> float:
+    return float(str(get_setting(name, default, request_or_site=request_or_site)))
 
 
 def transcript_complete(transcript: Transcript) -> bool:
@@ -198,24 +224,34 @@ class VoxhelmClient:
         *,
         api_base: str,
         api_key: str,
+        model: str = "auto",
+        language: str = "",
         poll_interval_seconds: float = 2.0,
         job_timeout_seconds: float = 900.0,
         request_timeout_seconds: float = 30.0,
     ) -> None:
         self.root_url, self.api_base = normalize_api_base(api_base)
         self.api_key = api_key
+        self.model = model
+        self.language = language
         self.poll_interval_seconds = poll_interval_seconds
         self.job_timeout_seconds = job_timeout_seconds
         self.request_timeout_seconds = request_timeout_seconds
 
     @classmethod
-    def from_settings(cls) -> VoxhelmClient:
+    def from_settings(cls, *, request_or_site: HttpRequest | Site | None = None) -> VoxhelmClient:
         return cls(
-            api_base=require_setting("CAST_VOXHELM_API_BASE"),
-            api_key=require_setting("CAST_VOXHELM_API_KEY"),
-            poll_interval_seconds=get_float_setting("CAST_VOXHELM_POLL_INTERVAL", 2.0),
-            job_timeout_seconds=get_float_setting("CAST_VOXHELM_POLL_TIMEOUT", 900.0),
-            request_timeout_seconds=get_float_setting("CAST_VOXHELM_REQUEST_TIMEOUT", 30.0),
+            api_base=require_setting("CAST_VOXHELM_API_BASE", request_or_site=request_or_site),
+            api_key=require_setting("CAST_VOXHELM_API_KEY", request_or_site=request_or_site),
+            model=str(get_setting("CAST_VOXHELM_MODEL", "auto", request_or_site=request_or_site)).strip() or "auto",
+            language=str(get_setting("CAST_VOXHELM_LANGUAGE", "", request_or_site=request_or_site)).strip(),
+            poll_interval_seconds=get_float_setting(
+                "CAST_VOXHELM_POLL_INTERVAL", 2.0, request_or_site=request_or_site
+            ),
+            job_timeout_seconds=get_float_setting("CAST_VOXHELM_POLL_TIMEOUT", 900.0, request_or_site=request_or_site),
+            request_timeout_seconds=get_float_setting(
+                "CAST_VOXHELM_REQUEST_TIMEOUT", 30.0, request_or_site=request_or_site
+            ),
         )
 
     def build_url(self, path: str) -> str:
@@ -261,15 +297,14 @@ class VoxhelmClient:
             "priority": "normal",
             "lane": "batch",
             "backend": "auto",
-            "model": str(get_setting("CAST_VOXHELM_MODEL", "auto")),
+            "model": self.model,
             "input": {"kind": "url", "url": source_url},
             "output": {"formats": ["json", "vtt"]},
             "context": context,
             "task_ref": task_ref,
         }
-        language = get_setting("CAST_VOXHELM_LANGUAGE")
-        if isinstance(language, str) and language.strip():
-            payload["language"] = language.strip()
+        if self.language:
+            payload["language"] = self.language
         return self.request_json(method="POST", path="jobs", payload=payload)
 
     def get_job(self, job_id: str) -> dict[str, Any]:
@@ -291,8 +326,13 @@ class VoxhelmClient:
 
 
 class VoxhelmTranscriptService:
-    def __init__(self, *, client: VoxhelmClient | None = None) -> None:
-        self.client = client or VoxhelmClient.from_settings()
+    def __init__(
+        self,
+        *,
+        client: VoxhelmClient | None = None,
+        request_or_site: HttpRequest | Site | None = None,
+    ) -> None:
+        self.client = client or VoxhelmClient.from_settings(request_or_site=request_or_site)
 
     def generate_for_audio(self, audio: Audio, *, task_ref: str | None = None) -> TranscriptGenerationResult:
         if audio.pk is None:
