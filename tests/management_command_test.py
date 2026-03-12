@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from io import BytesIO
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import django
@@ -11,6 +12,7 @@ try:
     from django.core.files.storage import storages
 except ImportError:
     pass
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import CommandError, call_command
 
 try:
@@ -19,6 +21,7 @@ except ImportError:
     pass
 from cast.devdata import create_transcript
 from cast.management.commands.media_stale import Command as MediaStaleCommand
+from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
 
 from .factories import BlogFactory
 from .multisite_helpers import create_site_root
@@ -615,3 +618,206 @@ def test_styleguide_prefetch_command_with_renditions(settings, mocker):
     request = build_styleguide_data.call_args.args[0]
     render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
     assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is True
+
+
+def test_generate_transcripts_requires_targets():
+    with pytest.raises(CommandError, match="Provide at least one --episode-id or --audio-id"):
+        call_command("generate_transcripts")
+
+
+def test_generate_transcripts_get_existing_transcript_handles_missing_relation():
+    class MissingTranscriptAudio:
+        @property
+        def transcript(self):
+            raise ObjectDoesNotExist
+
+    from cast.management.commands.generate_transcripts import Command
+
+    assert Command._get_existing_transcript(audio=MissingTranscriptAudio()) is None
+
+
+def test_generate_transcripts_rejects_unknown_episode_id(mocker):
+    queryset = mocker.Mock()
+    queryset.select_related.return_value = queryset
+    queryset.order_by.return_value = []
+    mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=queryset)
+
+    with pytest.raises(CommandError, match="Unknown episode id"):
+        call_command("generate_transcripts", "--episode-id", "7")
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_rejects_unknown_audio_id():
+    with pytest.raises(CommandError, match="Unknown audio id"):
+        call_command("generate_transcripts", "--audio-id", "999999")
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_rejects_episode_without_audio(mocker):
+    queryset = mocker.Mock()
+    queryset.select_related.return_value = queryset
+    queryset.order_by.return_value = [SimpleNamespace(pk=1, podcast_audio_id=None)]
+    mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=queryset)
+
+    with pytest.raises(CommandError, match="has no podcast audio"):
+        call_command("generate_transcripts", "--episode-id", "1")
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_skips_complete_transcript(mocker, audio):
+    create_transcript(
+        audio=audio,
+        podlove={"transcripts": [{"text": "existing"}]},
+        vtt="WEBVTT\n\n00:00:00.000 --> 00:00:00.500\nexisting\n",
+        dote={
+            "lines": [
+                {
+                    "startTime": "00:00:00,000",
+                    "endTime": "00:00:00,500",
+                    "speakerDesignation": "",
+                    "text": "existing",
+                }
+            ]
+        },
+    )
+    service_cls = mocker.patch("cast.management.commands.generate_transcripts.VoxhelmTranscriptService")
+    output = StringIO()
+
+    call_command("generate_transcripts", "--audio-id", str(audio.pk), stdout=output)
+
+    assert "skipped audio=" in output.getvalue()
+    assert "processed=1 created=0 updated=0 skipped=1 errors=0" in output.getvalue()
+    service_cls.return_value.generate_for_audio.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_does_not_skip_empty_transcript(mocker, audio):
+    transcript = create_transcript(
+        audio=audio,
+        podlove={"transcripts": []},
+        vtt="WEBVTT\n\n",
+        dote={"lines": []},
+    )
+    service = mocker.Mock()
+    service.generate_for_audio.return_value = TranscriptGenerationResult(
+        transcript=transcript,
+        created=False,
+        job_id="job-789",
+        source_url="https://media.example.com/episode.m4a",
+    )
+    mocker.patch(
+        "cast.management.commands.generate_transcripts.VoxhelmTranscriptService",
+        return_value=service,
+    )
+    output = StringIO()
+
+    call_command("generate_transcripts", "--audio-id", str(audio.pk), stdout=output)
+
+    assert "skipped audio=" not in output.getvalue()
+    assert "updated audio=" in output.getvalue()
+    service.generate_for_audio.assert_called_once_with(audio, task_ref=f"cast-audio-{audio.pk}")
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_calls_service_for_episode(mocker, audio):
+    transcript = create_transcript(audio=audio)
+    queryset = mocker.Mock()
+    queryset.select_related.return_value = queryset
+    queryset.order_by.return_value = [SimpleNamespace(pk=7, podcast_audio_id=audio.pk, podcast_audio=audio)]
+    mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=queryset)
+    service = mocker.Mock()
+    service.generate_for_audio.return_value = TranscriptGenerationResult(
+        transcript=transcript,
+        created=True,
+        job_id="job-123",
+        source_url="https://media.example.com/episode.m4a",
+    )
+    service_cls = mocker.patch(
+        "cast.management.commands.generate_transcripts.VoxhelmTranscriptService",
+        return_value=service,
+    )
+    output = StringIO()
+
+    call_command("generate_transcripts", "--episode-id", "7", stdout=output)
+
+    assert "created audio=" in output.getvalue()
+    assert "job=job-123" in output.getvalue()
+    assert "processed=1 created=1 updated=0 skipped=0 errors=0" in output.getvalue()
+    service_cls.assert_called_once_with()
+    service.generate_for_audio.assert_called_once()
+    called_audio = service.generate_for_audio.call_args.args[0]
+    assert called_audio.pk == audio.pk
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_force_updates_and_uses_unique_task_ref(mocker, audio):
+    transcript = create_transcript(audio=audio)
+    service = mocker.Mock()
+    service.generate_for_audio.return_value = TranscriptGenerationResult(
+        transcript=transcript,
+        created=False,
+        job_id="job-456",
+        source_url="https://media.example.com/episode.m4a",
+    )
+    mocker.patch(
+        "cast.management.commands.generate_transcripts.VoxhelmTranscriptService",
+        return_value=service,
+    )
+    output = StringIO()
+
+    call_command("generate_transcripts", "--audio-id", str(audio.pk), "--force", stdout=output)
+
+    assert "updated audio=" in output.getvalue()
+    task_ref = service.generate_for_audio.call_args.kwargs["task_ref"]
+    assert task_ref.startswith(f"cast-audio-{audio.pk}-")
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_reports_errors_and_raises(mocker, audio):
+    service = mocker.Mock()
+    service.generate_for_audio.side_effect = VoxhelmError("backend exploded")
+    mocker.patch(
+        "cast.management.commands.generate_transcripts.VoxhelmTranscriptService",
+        return_value=service,
+    )
+    output = StringIO()
+    error_output = StringIO()
+
+    with pytest.raises(CommandError, match="1 transcript generations failed"):
+        call_command("generate_transcripts", "--audio-id", str(audio.pk), stdout=output, stderr=error_output)
+
+    assert "error audio=" in error_output.getvalue()
+    assert "processed=1 created=0 updated=0 skipped=0 errors=1" in output.getvalue()
+
+
+def test_generate_transcripts_resolve_audios_skips_duplicates_and_unsaved(mocker):
+    from cast.management.commands.generate_transcripts import Command
+
+    shared_audio = SimpleNamespace(pk=5)
+    episode_queryset = mocker.Mock()
+    episode_queryset.select_related.return_value = episode_queryset
+    episode_queryset.order_by.return_value = [SimpleNamespace(pk=1, podcast_audio_id=5, podcast_audio=shared_audio)]
+    direct_queryset = mocker.Mock()
+    direct_queryset.select_related.return_value = direct_queryset
+    direct_queryset.order_by.return_value = [shared_audio, SimpleNamespace(pk=None)]
+    mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=episode_queryset)
+    mocker.patch("cast.management.commands.generate_transcripts.Audio.objects.filter", return_value=direct_queryset)
+
+    assert Command()._resolve_audios(episode_ids=[1], audio_ids=[5]) == [shared_audio]
+
+
+def test_generate_transcripts_resolve_audios_skips_unsaved_episode_audio(mocker):
+    from cast.management.commands.generate_transcripts import Command
+
+    episode_queryset = mocker.Mock()
+    episode_queryset.select_related.return_value = episode_queryset
+    episode_queryset.order_by.return_value = [
+        SimpleNamespace(pk=1, podcast_audio_id=7, podcast_audio=SimpleNamespace(pk=None))
+    ]
+    direct_queryset = mocker.Mock()
+    direct_queryset.select_related.return_value = direct_queryset
+    direct_queryset.order_by.return_value = []
+    mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=episode_queryset)
+    mocker.patch("cast.management.commands.generate_transcripts.Audio.objects.filter", return_value=direct_queryset)
+
+    assert Command()._resolve_audios(episode_ids=[1], audio_ids=[]) == []

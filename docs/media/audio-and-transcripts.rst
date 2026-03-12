@@ -74,3 +74,18 @@ feed:
 
 * `vtt` - WebVTT, a subtitle format in plain text
 * `dote` - DOTE, a json transcript format
+
+Voxhelm Integration
+-------------------
+
+If your audio files are available through absolute HTTP(S) URLs, you can use
+the built-in ``generate_transcripts`` management command to request a
+transcription from Voxhelm and populate all three transcript artifacts on the
+existing ``Transcript`` model.
+
+.. code-block:: bash
+
+    python manage.py generate_transcripts --episode-id 42
+
+django-cast currently keeps Podlove and DOTe conversion local. Voxhelm is used
+for the batch transcription job plus JSON/WebVTT artifact retrieval.

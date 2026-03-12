@@ -80,6 +80,55 @@ Defaults to ``[(1110, 740), (120, 80)]``.
 
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(1110, 740), (120, 80)]
 
+*************
+Transcription
+*************
+
+CAST_VOXHELM_API_BASE
+=====================
+
+Base URL for the Voxhelm service used by ``generate_transcripts``. The value
+may point at either the service root (for example
+``https://voxhelm.example.com``) or the ``/v1`` API prefix. This can be set as
+either a Django setting or an environment variable.
+
+CAST_VOXHELM_API_KEY
+====================
+
+Bearer token used for Voxhelm job submission, polling, and artifact download.
+This can be set as either a Django setting or an environment variable.
+
+CAST_VOXHELM_MODEL
+==================
+
+Optional Voxhelm batch model value for transcript generation. Defaults to
+``"auto"``.
+
+CAST_VOXHELM_LANGUAGE
+=====================
+
+Optional language hint passed through to Voxhelm batch jobs. By default no
+language hint is sent.
+
+CAST_VOXHELM_POLL_INTERVAL
+==========================
+
+Polling interval in seconds for ``generate_transcripts`` while waiting for a
+Voxhelm batch job to finish. Defaults to ``2.0`` seconds.
+
+CAST_VOXHELM_POLL_TIMEOUT
+=========================
+
+Maximum time in seconds to wait for a Voxhelm batch job before the command
+fails. Defaults to ``900.0`` seconds.
+
+CAST_VOXHELM_REQUEST_TIMEOUT
+============================
+
+Per-request HTTP timeout in seconds for Voxhelm API calls and artifact
+downloads. Defaults to ``30.0`` seconds. This is separate from
+``CAST_VOXHELM_POLL_TIMEOUT``, which controls the overall job wait deadline.
+
 *********
 Templates
 *********
