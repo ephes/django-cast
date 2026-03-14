@@ -7,7 +7,7 @@ from .models import TranscriptGeneration
 from .voxhelm import VoxhelmTranscriptService
 
 
-@task(enqueue_on_commit=False)
+@task(backend="cast_transcripts", enqueue_on_commit=False)
 def complete_transcript_generation(generation_id: int) -> None:
     generation = get_object_or_404(
         TranscriptGeneration.objects.select_related("audio", "site"),

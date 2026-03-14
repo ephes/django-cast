@@ -5,7 +5,7 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("wagtailcore", "0096_pages_view_restriction_types"),
+        ("wagtailcore", "0094_alter_page_locale"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ("cast", "0064_voxhelmsettings"),
     ]

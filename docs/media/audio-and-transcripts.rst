@@ -99,7 +99,10 @@ Site admins can manage the Voxhelm API base URL, API token, and optional
 model/language defaults in ``Settings -> Voxhelm settings``.
 
 To make the non-blocking Wagtail flow work, configure Django Tasks with the
-database backend and run a worker alongside Django:
+database backend and run a worker alongside Django. Keep the global
+``default`` backend immediate so third-party apps that decorate tasks at
+import time do not pull in the database backend before app loading has
+finished:
 
 .. code-block:: python
 
@@ -107,14 +110,18 @@ database backend and run a worker alongside Django:
 
     TASKS = {
         "default": {
+            "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+            "ENQUEUE_ON_COMMIT": False,
+        },
+        "cast_transcripts": {
             "BACKEND": "django_tasks.backends.database.DatabaseBackend",
             "ENQUEUE_ON_COMMIT": False,
-        }
+        },
     }
 
 .. code-block:: bash
 
-    python manage.py db_worker
+    python manage.py db_worker --backend cast_transcripts
 
 .. code-block:: bash
 
