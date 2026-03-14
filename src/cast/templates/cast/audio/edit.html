@@ -46,6 +46,22 @@
             {% endfor %}
             <li>
               <input class="button" type="submit" value="{% trans 'Save' %}" />
+              {% if user_can_generate_transcript %}
+                <button
+                  class="button button-secondary button-longrunning"
+                  type="submit"
+                  formaction="{{ generate_transcript_url }}"
+                  formmethod="post"
+                  formnovalidate
+                  data-controller="w-progress"
+                  data-action="w-progress#activate"
+                  data-w-progress-active-value="{% trans 'Generating transcript…' %}"
+                >
+                  {% icon name="doc-full" classname="button-longrunning__icon" %}
+                  {% icon name="spinner" %}
+                  <em data-w-progress-target="label">{% trans "Generate transcript" %}</em>
+                </button>
+              {% endif %}
               {% if user_can_delete %}
                 <a href="{% url 'castaudio:delete' audio.id %}" class="button button-secondary no">{% trans "Delete" %}</a>
               {% endif %}

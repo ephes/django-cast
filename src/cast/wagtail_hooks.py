@@ -16,6 +16,7 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from taggit.models import Tag
 from wagtail import hooks
+from wagtail.admin.action_menu import ActionMenuItem
 from wagtail.admin.menu import MenuItem
 from wagtail.admin.panels import FieldPanel
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
@@ -23,8 +24,9 @@ from wagtail.rich_text.pages import PageLinkHandler
 from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
 
-from .admin_urls import audio, transcript, video
-from .models import Audio, Transcript, Video
+from .admin_urls import audio, transcript, video, voxhelm
+from .models import Audio, Episode, Transcript, Video
+from .views.voxhelm import user_can_generate_transcript_for_episode
 
 _T = TypeVar("_T")
 
@@ -36,6 +38,7 @@ def register_admin_urls() -> list:
         path("audio/", include((audio, "castaudio"), namespace="castaudio")),
         path("media/", include((video, "castvideo"), namespace="castvideo")),
         path("transcript/", include((transcript, "cast-transcript"), namespace="cast-transcript")),
+        path("voxhelm/", include((voxhelm, "cast-voxhelm"), namespace="cast-voxhelm")),
     ]
 
 
@@ -143,6 +146,28 @@ class TagsSnippetViewSet(SnippetViewSet):
 
 
 register_snippet(TagsSnippetViewSet)
+
+
+class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
+    label = _("Generate transcript")
+    name = "action-generate-transcript"
+    icon_name = "doc-full"
+    template_name = "cast/wagtail/voxhelm_generate_transcript_action.html"
+
+    def is_shown(self, context):
+        page = context.get("page")
+        if context.get("view") != "edit" or not isinstance(page, Episode):
+            return False
+        return user_can_generate_transcript_for_episode(request=context["request"], episode=page)
+
+    def get_url(self, parent_context):
+        page = parent_context["page"]
+        return reverse("cast-voxhelm:generate_episode", args=(page.pk,))
+
+
+@hooks.register("register_page_action_menu_item")
+def register_generate_episode_transcript_menu_item() -> GenerateEpisodeTranscriptMenuItem:
+    return GenerateEpisodeTranscriptMenuItem(order=70)
 
 
 class PageLinkHandlerWithCache(PageLinkHandler):

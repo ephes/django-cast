@@ -7,6 +7,60 @@ Management Commands
 Django Cast provides several management commands, primarily for managing
 media files, image renditions, and reference content.
 
+Transcripts
+===========
+
+generate_transcripts
+--------------------
+
+Generate or refresh transcript artifacts for specific podcast episodes or
+audio objects through a Voxhelm batch transcription job. The command keeps the
+existing ``Transcript`` model contract unchanged by storing Podlove JSON,
+WebVTT, and DOTe files back onto the model.
+
+For editors, the primary workflow is now in Wagtail admin: episode edit views
+and audio edit views expose a ``Generate transcript`` action, and Voxhelm
+connection details can be managed in ``Settings -> Voxhelm settings``. The
+management command remains available as operator tooling and fallback
+automation.
+
+Configuration:
+
+- ``CAST_VOXHELM_API_BASE``: Voxhelm service root or ``/v1`` API base
+- ``CAST_VOXHELM_API_KEY``: bearer token for the producer
+- optional: ``CAST_VOXHELM_MODEL``, ``CAST_VOXHELM_LANGUAGE``,
+  ``CAST_VOXHELM_POLL_INTERVAL``, ``CAST_VOXHELM_POLL_TIMEOUT``,
+  ``CAST_VOXHELM_REQUEST_TIMEOUT``
+
+These values can be configured as Django settings, environment variables, or
+site-scoped Wagtail settings.
+
+.. code-block:: bash
+
+    # Generate a transcript for one episode
+    python manage.py generate_transcripts --episode-id 42
+
+    # Target audio objects directly
+    python manage.py generate_transcripts --audio-id 10 --audio-id 11
+
+    # Regenerate even when transcript files already exist
+    python manage.py generate_transcripts --episode-id 42 --force
+
+Options:
+
+``--episode-id ID``
+    Episode id to transcribe. Can be passed more than once.
+
+``--audio-id ID``
+    Audio id to transcribe directly. Can be passed more than once.
+
+``--force``
+    Regenerate transcripts even when Podlove, WebVTT, and DOTe files already
+    exist for the selected audio object.
+
+The command prints per-audio status lines and a final summary in the form
+``processed=<n> created=<n> updated=<n> skipped=<n> errors=<n>``.
+
 Image Renditions
 ================
 

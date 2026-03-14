@@ -74,3 +74,29 @@ feed:
 
 * `vtt` - WebVTT, a subtitle format in plain text
 * `dote` - DOTE, a json transcript format
+
+Voxhelm Integration
+-------------------
+
+If your audio files are available through absolute HTTP(S) URLs, you can use
+the Wagtail admin or the built-in ``generate_transcripts`` management command
+to request a transcription from Voxhelm and populate all three transcript
+artifacts on the existing ``Transcript`` model.
+
+In Wagtail admin, editors with the required page/media permissions can trigger
+transcript generation directly from:
+
+* an episode edit view
+* an audio edit view
+
+Site admins can manage the Voxhelm API base URL, API token, and optional
+model/language defaults in ``Settings -> Voxhelm settings``.
+
+.. code-block:: bash
+
+    # Operator fallback
+    python manage.py generate_transcripts --episode-id 42
+
+django-cast now consumes Voxhelm-owned Podlove, DOTe, and WebVTT transcript
+artifacts directly from the batch job result and persists them onto the
+existing ``Transcript`` model without local format conversion.
