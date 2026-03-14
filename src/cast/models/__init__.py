@@ -14,6 +14,7 @@ from .theme import (
     get_soft_required_template_names,
     get_strictly_required_template_names,
 )
+from .transcript_generation import TranscriptGeneration
 from .transcript import Transcript
 from .video import Video, get_video_dimensions
 from .voxhelm_settings import VoxhelmSettings
@@ -38,6 +39,7 @@ __all__ = [
     "Episode",
     "sync_media_ids",
     "SpamFilter",
+    "TranscriptGeneration",
     "Transcript",
     "Video",
     "VoxhelmSettings",

@@ -26,7 +26,7 @@ from wagtail.snippets.views.snippets import SnippetViewSet
 
 from .admin_urls import audio, transcript, video, voxhelm
 from .models import Audio, Episode, Transcript, Video
-from .views.voxhelm import user_can_generate_transcript_for_episode
+from .views.voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_episode
 
 _T = TypeVar("_T")
 
@@ -163,6 +163,24 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
     def get_url(self, parent_context):
         page = parent_context["page"]
         return reverse("cast-voxhelm:generate_episode", args=(page.pk,))
+
+    def get_context_data(self, parent_context):
+        context = super().get_context_data(parent_context)
+        page = parent_context["page"]
+        audio = getattr(page, "podcast_audio", None)
+        if isinstance(audio, Audio):
+            context.update(get_audio_transcript_status_context(audio=audio))
+        else:
+            context.update(
+                {
+                    "transcript_generation_active": False,
+                    "transcript_generation_status": "",
+                    "transcript_generation_message": "",
+                    "transcript_generation_error": "",
+                    "transcript_generation_transcript_url": "",
+                }
+            )
+        return context
 
 
 @hooks.register("register_page_action_menu_item")

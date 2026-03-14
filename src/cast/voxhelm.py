@@ -13,9 +13,10 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
 from django.http import HttpRequest
+from django.urls import reverse
 from wagtail.models import Site
 
-from .models import Transcript
+from .models import Transcript, TranscriptGeneration
 
 if TYPE_CHECKING:
     from .models import Audio
@@ -39,6 +40,20 @@ class TranscriptGenerationResult:
     created: bool
     job_id: str
     source_url: str
+
+
+@dataclass(frozen=True)
+class TranscriptSubmission:
+    job_id: str
+    source_url: str
+    task_ref: str
+    job_payload: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class TranscriptEnqueueResult:
+    generation: TranscriptGeneration
+    enqueued: bool
 
 
 def normalize_api_base(api_base: str) -> tuple[str, str]:
@@ -129,6 +144,46 @@ def replace_file(field, filename: str, content: bytes) -> None:
     if field.name:
         field.delete(save=False)
     field.save(filename, ContentFile(content), save=False)
+
+
+def build_audio_task_ref(audio_id: int) -> str:
+    return f"cast-audio-{audio_id}"
+
+
+def get_transcript_generation(audio: Audio) -> TranscriptGeneration | None:
+    try:
+        return audio.transcript_generation
+    except TranscriptGeneration.DoesNotExist:
+        return None
+
+
+def get_transcript_generation_status_context(*, audio: Audio) -> dict[str, str | bool]:
+    generation = get_transcript_generation(audio)
+    if generation is None:
+        return {
+            "transcript_generation_active": False,
+            "transcript_generation_status": "",
+            "transcript_generation_message": "",
+            "transcript_generation_error": "",
+            "transcript_generation_transcript_url": "",
+        }
+
+    message_lookup = {
+        TranscriptGeneration.Status.QUEUED.value: "Transcript generation is queued.",
+        TranscriptGeneration.Status.RUNNING.value: "Transcript generation is running.",
+        TranscriptGeneration.Status.SUCCEEDED.value: "Transcript generation completed.",
+        TranscriptGeneration.Status.FAILED.value: "Transcript generation failed.",
+    }
+    transcript_url = ""
+    if generation.status == TranscriptGeneration.Status.SUCCEEDED and hasattr(audio, "transcript"):
+        transcript_url = reverse("cast-transcript:edit", args=(audio.transcript.pk,))
+    return {
+        "transcript_generation_active": generation.is_active,
+        "transcript_generation_status": generation.get_status_display(),
+        "transcript_generation_message": message_lookup[generation.status],
+        "transcript_generation_error": generation.error_message,
+        "transcript_generation_transcript_url": transcript_url,
+    }
 
 
 class VoxhelmClient:
@@ -247,17 +302,41 @@ class VoxhelmTranscriptService:
     ) -> None:
         self.client = client or VoxhelmClient.from_settings(request_or_site=request_or_site)
 
-    def generate_for_audio(self, audio: Audio, *, task_ref: str | None = None) -> TranscriptGenerationResult:
+    def submit_for_audio(self, audio: Audio, *, task_ref: str | None = None) -> TranscriptSubmission:
         if audio.pk is None:
             raise VoxhelmError("Audio must be saved before requesting a transcript.")
 
         source_url = resolve_audio_source_url(audio)
+        resolved_task_ref = task_ref or build_audio_task_ref(audio.pk)
         job_payload = self.client.submit_transcription_job(
             source_url=source_url,
-            task_ref=task_ref or f"cast-audio-{audio.pk}",
+            task_ref=resolved_task_ref,
             context={"consumer": "django-cast", "audio_id": audio.pk},
         )
-        job_id = str(job_payload.get("id", ""))
+        state = str(job_payload.get("state", ""))
+        if state in TERMINAL_JOB_STATES and state != "succeeded":
+            raise VoxhelmError(build_failure_message(job_payload))
+        job_id = str(job_payload.get("id", "")).strip()
+        if not job_id:
+            raise VoxhelmError("Voxhelm job response did not include a job id.")
+        return TranscriptSubmission(
+            job_id=job_id,
+            source_url=source_url,
+            task_ref=resolved_task_ref,
+            job_payload=job_payload,
+        )
+
+    def complete_audio_job(
+        self,
+        audio: Audio,
+        *,
+        job_id: str,
+        source_url: str,
+        initial_job_payload: dict[str, Any] | None = None,
+    ) -> TranscriptGenerationResult:
+        job_payload = initial_job_payload or {}
+        if str(job_payload.get("id", "")) != job_id:
+            job_payload = {}
         if str(job_payload.get("state", "")) not in TERMINAL_JOB_STATES:
             job_payload = self.client.wait_for_job(job_id)
         if job_payload.get("state") != "succeeded":
@@ -274,6 +353,15 @@ class VoxhelmTranscriptService:
             created=created,
             job_id=job_id,
             source_url=source_url,
+        )
+
+    def generate_for_audio(self, audio: Audio, *, task_ref: str | None = None) -> TranscriptGenerationResult:
+        submission = self.submit_for_audio(audio, task_ref=task_ref)
+        return self.complete_audio_job(
+            audio,
+            job_id=submission.job_id,
+            source_url=submission.source_url,
+            initial_job_payload=submission.job_payload,
         )
 
     @staticmethod
@@ -302,3 +390,49 @@ class VoxhelmTranscriptService:
         replace_file(transcript.dote, f"{file_stem}.dote.json", dote)
         replace_file(transcript.vtt, f"{file_stem}.vtt", vtt)
         transcript.save()
+
+
+def enqueue_audio_transcript_generation(
+    *,
+    audio: Audio,
+    request_or_site: HttpRequest | Site | None = None,
+    requested_by=None,
+) -> TranscriptEnqueueResult:
+    if audio.pk is None:
+        raise VoxhelmError("Audio must be saved before requesting a transcript.")
+
+    generation, created = TranscriptGeneration.objects.get_or_create(
+        audio=audio,
+        defaults={"task_ref": build_audio_task_ref(audio.pk)},
+    )
+    if not created and generation.is_active:
+        return TranscriptEnqueueResult(generation=generation, enqueued=False)
+
+    try:
+        submission = VoxhelmTranscriptService(request_or_site=request_or_site).submit_for_audio(
+            audio,
+            task_ref=build_audio_task_ref(audio.pk),
+        )
+    except Exception as exc:
+        if created:
+            generation.mark_failed(str(exc))
+        raise
+    site = request_or_site if isinstance(request_or_site, Site) else None
+    generation.queue_submission(
+        task_ref=submission.task_ref,
+        voxhelm_job_id=submission.job_id,
+        source_url=submission.source_url,
+        task_result_id="",
+        site=site,
+        requested_by=requested_by,
+    )
+    from .voxhelm_tasks import complete_transcript_generation
+
+    try:
+        task_result = complete_transcript_generation.enqueue(generation.pk)
+    except Exception as exc:
+        generation.mark_failed(str(exc))
+        raise
+    generation.task_result_id = str(task_result.id)
+    generation.save(update_fields=["task_result_id", "updated_at"])
+    return TranscriptEnqueueResult(generation=generation, enqueued=True)

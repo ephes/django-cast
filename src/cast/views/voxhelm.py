@@ -12,7 +12,12 @@ from wagtail.models import Site
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ..models import Audio, Episode
-from ..voxhelm import VoxhelmError, VoxhelmTranscriptService
+from ..models.transcript_generation import TranscriptGeneration
+from ..voxhelm import (
+    VoxhelmError,
+    enqueue_audio_transcript_generation,
+    get_transcript_generation_status_context,
+)
 
 audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
 
@@ -44,12 +49,16 @@ def _get_redirect_url(request: HttpRequest, default_url: str) -> str:
     return default_url
 
 
-def _add_generation_message(request: HttpRequest, *, title: str, created: bool, transcript_id: int) -> None:
-    verb = _("created") if created else _("updated")
+def _add_generation_queued_message(
+    request: HttpRequest, *, title: str, generation: TranscriptGeneration, enqueued: bool
+) -> None:
+    if not enqueued:
+        messages.info(request, _("Transcript generation is already in progress for '%(title)s'.") % {"title": title})
+        return
     messages.success(
         request,
-        _("Transcript %(verb)s for '%(title)s'.") % {"verb": verb, "title": title},
-        buttons=[messages.button(reverse("cast-transcript:edit", args=(transcript_id,)), _("Edit transcript"))],
+        _("Transcript generation queued for '%(title)s'.") % {"title": title},
+        buttons=[messages.button(reverse("castaudio:edit", args=(generation.audio_id,)), _("View status"))],
     )
 
 
@@ -65,15 +74,15 @@ def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpRe
         raise PermissionDenied
     site = episode.get_site() or Site.find_for_request(request)
     try:
-        result = VoxhelmTranscriptService(request_or_site=site).generate_for_audio(audio)
+        result = enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=request.user)
     except VoxhelmError as exc:
         messages.error(request, _("Transcript generation failed: %(message)s") % {"message": exc})
         return redirect(redirect_url)
-    _add_generation_message(
+    _add_generation_queued_message(
         request,
         title=episode.title,
-        created=result.created,
-        transcript_id=result.transcript.pk,
+        generation=result.generation,
+        enqueued=result.enqueued,
     )
     return redirect(redirect_url)
 
@@ -86,16 +95,22 @@ def generate_audio_transcript(request: HttpRequest, audio_id: int) -> HttpRespon
     if not user_can_generate_transcript_for_audio(request=request, audio=audio):
         raise PermissionDenied
     try:
-        result = VoxhelmTranscriptService(
-            request_or_site=resolve_site_for_audio(request=request, audio=audio)
-        ).generate_for_audio(audio)
+        result = enqueue_audio_transcript_generation(
+            audio=audio,
+            request_or_site=resolve_site_for_audio(request=request, audio=audio),
+            requested_by=request.user,
+        )
     except VoxhelmError as exc:
         messages.error(request, _("Transcript generation failed: %(message)s") % {"message": exc})
         return redirect(redirect_url)
-    _add_generation_message(
+    _add_generation_queued_message(
         request,
         title=audio.title or str(audio.pk),
-        created=result.created,
-        transcript_id=result.transcript.pk,
+        generation=result.generation,
+        enqueued=result.enqueued,
     )
     return redirect(redirect_url)
+
+
+def get_audio_transcript_status_context(*, audio: Audio) -> dict[str, str | bool]:
+    return get_transcript_generation_status_context(audio=audio)

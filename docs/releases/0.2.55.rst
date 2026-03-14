@@ -1,4 +1,14 @@
 0.2.55 (unreleased)
 -------------------
 
-- No changes yet.
+- Made Wagtail transcript generation non-blocking for the Voxhelm admin flow:
+  Episode and Audio admin actions now submit the Voxhelm job, persist narrow
+  local queued/running/succeeded/failed state, and finish transcript polling
+  and artifact persistence in a Django Tasks background worker.
+- Hardened the Audio edit-view transcript action by moving it onto its own
+  POST form and returning editors to a clean, usable edit surface with
+  persisted transcript-generation status instead of leaving the admin form in
+  a broken or partially rendered state.
+- Kept ``generate_transcripts`` as the synchronous/operator-facing fallback
+  while documenting the required Django Tasks database-backend configuration
+  for the editor-facing async flow.

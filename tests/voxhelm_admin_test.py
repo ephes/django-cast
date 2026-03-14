@@ -5,9 +5,9 @@ from django.contrib.messages import get_messages
 from django.test import RequestFactory
 from django.urls import reverse
 
-from cast.devdata import create_transcript
-from cast.models import VoxhelmSettings
-from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
+from cast.models import TranscriptGeneration, VoxhelmSettings
+from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
+from cast.voxhelm import VoxhelmError, build_audio_task_ref
 from cast.views import voxhelm as voxhelm_views
 
 
@@ -109,6 +109,25 @@ def test_episode_edit_page_shows_generate_transcript_action(admin_client, episod
 
 
 @pytest.mark.django_db
+def test_episode_edit_page_shows_transcript_generation_status(admin_client, episode):
+    audio = episode.podcast_audio
+    assert audio is not None
+    TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.RUNNING,
+        task_ref=build_audio_task_ref(audio.pk),
+        voxhelm_job_id="job-episode",
+    )
+
+    response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Transcript status:" in content
+    assert "Running" in content
+
+
+@pytest.mark.django_db
 def test_audio_edit_page_shows_generate_transcript_action(admin_client, audio):
     response = admin_client.get(reverse("castaudio:edit", args=(audio.pk,)))
 
@@ -119,55 +138,77 @@ def test_audio_edit_page_shows_generate_transcript_action(admin_client, audio):
 
 
 @pytest.mark.django_db
+def test_audio_edit_page_shows_transcript_generation_status(admin_client, audio):
+    TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.FAILED,
+        task_ref=build_audio_task_ref(audio.pk),
+        error_message="upstream broke",
+    )
+
+    response = admin_client.get(reverse("castaudio:edit", args=(audio.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Transcript status:" in content
+    assert "Failed" in content
+    assert "upstream broke" in content
+
+
+@pytest.mark.django_db
 def test_generate_episode_transcript_from_wagtail_admin(admin_client, episode, mocker):
     audio = episode.podcast_audio
     assert audio is not None
-    transcript = create_transcript(audio=audio)
-    service_cls = mocker.patch("cast.views.voxhelm.VoxhelmTranscriptService")
-    service_cls.return_value.generate_for_audio.return_value = TranscriptGenerationResult(
-        transcript=transcript,
-        created=True,
-        job_id="job-1",
-        source_url="https://media.example.com/episode.mp3",
+    generation = TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.QUEUED,
+        task_ref=build_audio_task_ref(audio.pk),
+    )
+    enqueue = mocker.patch(
+        "cast.views.voxhelm.enqueue_audio_transcript_generation",
+        return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
     )
 
     response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
 
     assert response.status_code == 200
-    service_cls.assert_called_once_with(request_or_site=episode.get_site())
-    service_cls.return_value.generate_for_audio.assert_called_once_with(audio)
+    enqueue.assert_called_once_with(audio=audio, request_or_site=episode.get_site(), requested_by=mocker.ANY)
     messages = [message.message for message in get_messages(response.wsgi_request)]
-    assert any("Transcript created for" in message and episode.title in message for message in messages)
+    assert any("Transcript generation queued for" in message and episode.title in message for message in messages)
 
 
 @pytest.mark.django_db
 def test_generate_audio_transcript_from_wagtail_admin(admin_client, episode, mocker):
     audio = episode.podcast_audio
     assert audio is not None
-    transcript = create_transcript(audio=audio)
-    service_cls = mocker.patch("cast.views.voxhelm.VoxhelmTranscriptService")
-    service_cls.return_value.generate_for_audio.return_value = TranscriptGenerationResult(
-        transcript=transcript,
-        created=False,
-        job_id="job-2",
-        source_url="https://media.example.com/episode.mp3",
+    generation = TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.QUEUED,
+        task_ref=build_audio_task_ref(audio.pk),
+    )
+    enqueue = mocker.patch(
+        "cast.views.voxhelm.enqueue_audio_transcript_generation",
+        return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
     )
 
     response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
-    service_cls.assert_called_once_with(request_or_site=episode.get_site())
-    service_cls.return_value.generate_for_audio.assert_called_once_with(audio)
+    enqueue.assert_called_once_with(audio=audio, request_or_site=episode.get_site(), requested_by=mocker.ANY)
     messages = [message.message for message in get_messages(response.wsgi_request)]
-    assert any("Transcript updated for" in message and audio.title in message for message in messages)
+    assert any("Transcript generation queued for" in message and audio.title in message for message in messages)
+    content = response.content.decode("utf-8")
+    assert "Save" in content
+    assert "Transcript status:" in content
+    assert "Queued" in content
 
 
 @pytest.mark.django_db
 def test_generate_audio_transcript_reports_errors(admin_client, episode, mocker):
     audio = episode.podcast_audio
     assert audio is not None
-    service_cls = mocker.patch("cast.views.voxhelm.VoxhelmTranscriptService")
-    service_cls.return_value.generate_for_audio.side_effect = VoxhelmError("upstream broke")
+    enqueue = mocker.patch("cast.views.voxhelm.enqueue_audio_transcript_generation")
+    enqueue.side_effect = VoxhelmError("upstream broke")
 
     response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
@@ -178,19 +219,20 @@ def test_generate_audio_transcript_reports_errors(admin_client, episode, mocker)
 
 @pytest.mark.django_db
 def test_generate_audio_transcript_falls_back_to_request_site(admin_client, audio, site, mocker):
-    transcript = create_transcript(audio=audio)
-    service_cls = mocker.patch("cast.views.voxhelm.VoxhelmTranscriptService")
-    service_cls.return_value.generate_for_audio.return_value = TranscriptGenerationResult(
-        transcript=transcript,
-        created=True,
-        job_id="job-3",
-        source_url="https://media.example.com/episode.mp3",
+    generation = TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.QUEUED,
+        task_ref=build_audio_task_ref(audio.pk),
+    )
+    enqueue = mocker.patch(
+        "cast.views.voxhelm.enqueue_audio_transcript_generation",
+        return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
     )
 
     response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
-    service_cls.assert_called_once_with(request_or_site=site)
+    enqueue.assert_called_once_with(audio=audio, request_or_site=site, requested_by=mocker.ANY)
 
 
 @pytest.mark.django_db
@@ -225,6 +267,24 @@ def test_episode_without_audio_hides_generate_transcript_action(admin_client, un
     assert "Generate transcript" not in response.content.decode("utf-8")
 
 
+def test_generate_episode_transcript_menu_item_context_handles_missing_audio(user, unpublished_episode_without_audio):
+    request = RequestFactory().get("/")
+    request.user = user
+    item = GenerateEpisodeTranscriptMenuItem(order=70)
+
+    context = item.get_context_data(
+        {
+            "request": request,
+            "page": unpublished_episode_without_audio,
+            "view": "edit",
+            "locked_for_user": False,
+        }
+    )
+
+    assert context["transcript_generation_status"] == ""
+    assert context["transcript_generation_message"] == ""
+
+
 @pytest.mark.django_db
 def test_generate_episode_transcript_denies_when_audio_is_missing(
     admin_client, unpublished_episode_without_audio, mocker
@@ -243,14 +303,31 @@ def test_generate_episode_transcript_denies_when_audio_is_missing(
 def test_generate_episode_transcript_reports_errors(admin_client, episode, mocker):
     audio = episode.podcast_audio
     assert audio is not None
-    service_cls = mocker.patch("cast.views.voxhelm.VoxhelmTranscriptService")
-    service_cls.return_value.generate_for_audio.side_effect = VoxhelmError("episode broke")
+    enqueue = mocker.patch("cast.views.voxhelm.enqueue_audio_transcript_generation")
+    enqueue.side_effect = VoxhelmError("episode broke")
 
     response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
     assert any("Transcript generation failed: episode broke" in message for message in messages)
+
+
+@pytest.mark.django_db
+def test_generate_audio_transcript_duplicate_submission_reports_in_progress(admin_client, audio):
+    TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.RUNNING,
+        task_ref=build_audio_task_ref(audio.pk),
+        voxhelm_job_id="job-running",
+        task_result_id="task-running",
+    )
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+
+    assert response.status_code == 200
+    messages = [message.message for message in get_messages(response.wsgi_request)]
+    assert any("already in progress" in message for message in messages)
 
 
 def test_get_redirect_url_prefers_safe_next():

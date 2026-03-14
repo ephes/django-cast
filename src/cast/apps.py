@@ -9,6 +9,7 @@ CAST_APPS = [
     # Filtering and API
     "django_filters",
     "django_htmx",
+    "django_tasks.backends.database",
     "rest_framework",
     # Comments system
     "cast.comments.apps.CastCommentsConfig",  # must be before django_comments

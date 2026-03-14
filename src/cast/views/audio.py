@@ -14,7 +14,7 @@ from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import AudioForm, NonEmptySearchForm
 from ..models import Audio
 from . import AuthenticatedHttpRequest
-from .voxhelm import user_can_generate_transcript_for_audio
+from .voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_audio
 from .wagtail_pagination import paginate, pagination_template
 
 
@@ -161,6 +161,7 @@ def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
             "generate_transcript_url": reverse("cast-voxhelm:generate_audio", args=(audio.pk,)),
             "user_can_delete": True,
             "user_can_generate_transcript": user_can_generate_transcript_for_audio(request=request, audio=audio),
+            **get_audio_transcript_status_context(audio=audio),
         },
     )
 

@@ -89,8 +89,32 @@ transcript generation directly from:
 * an episode edit view
 * an audio edit view
 
+The admin request now returns after the Voxhelm batch job has been submitted
+and a local completion task has been queued. Editors see local
+queued/running/succeeded/failed status on the same Episode and Audio edit
+surfaces while the background worker polls Voxhelm, downloads the artifacts,
+and updates the ``Transcript`` model.
+
 Site admins can manage the Voxhelm API base URL, API token, and optional
 model/language defaults in ``Settings -> Voxhelm settings``.
+
+To make the non-blocking Wagtail flow work, configure Django Tasks with the
+database backend and run a worker alongside Django:
+
+.. code-block:: python
+
+    INSTALLED_APPS += ["django_tasks.backends.database"]
+
+    TASKS = {
+        "default": {
+            "BACKEND": "django_tasks.backends.database.DatabaseBackend",
+            "ENQUEUE_ON_COMMIT": False,
+        }
+    }
+
+.. code-block:: bash
+
+    python manage.py db_worker
 
 .. code-block:: bash
 
