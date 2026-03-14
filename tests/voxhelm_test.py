@@ -19,9 +19,6 @@ from cast.voxhelm import (
     get_float_setting,
     get_setting,
     normalize_api_base,
-    normalized_segments,
-    render_dote,
-    render_podlove,
     require_setting,
     require_artifact_path,
     resolve_audio_source_url,
@@ -120,58 +117,6 @@ def test_require_setting_raises_when_missing(settings, monkeypatch):
         require_setting("CAST_VOXHELM_API_BASE")
 
 
-def test_normalized_segments_falls_back_to_text():
-    assert normalized_segments({"text": "Hello world"}) == [{"id": 0, "start": 0.0, "end": 0.0, "text": "Hello world"}]
-
-
-def test_normalized_segments_ignores_invalid_entries_and_can_return_empty():
-    assert normalized_segments({"segments": [None, {"text": "   "}, {"start": "bad", "text": "skip me"}]}) == []
-
-
-def test_normalized_segments_handles_invalid_end_and_id():
-    assert normalized_segments({"segments": [{"id": "not-an-int", "start": 1.25, "end": "bad", "text": "Hello"}]}) == [
-        {"id": 0, "start": 1.25, "end": 1.25, "text": "Hello"}
-    ]
-
-
-def test_render_transcript_formats_from_verbose_json():
-    payload = {
-        "segments": [
-            {
-                "id": 1,
-                "start": 0.62,
-                "end": 5.16,
-                "text": "Hello world",
-            }
-        ]
-    }
-
-    assert render_dote(payload) == {
-        "lines": [
-            {
-                "startTime": "00:00:00,620",
-                "endTime": "00:00:05,160",
-                "speakerDesignation": "",
-                "text": "Hello world",
-            }
-        ]
-    }
-    assert render_podlove(payload) == {
-        "version": 1,
-        "transcripts": [
-            {
-                "start": "00:00:00.620",
-                "start_ms": 620,
-                "end": "00:00:05.160",
-                "end_ms": 5160,
-                "speaker": "",
-                "voice": "",
-                "text": "Hello world",
-            }
-        ],
-    }
-
-
 def test_resolve_audio_source_url_requires_absolute_url():
     class Field:
         url = "/media/episode.m4a"
@@ -237,7 +182,7 @@ def test_client_submit_job_and_download_artifact(mocker):
         "backend": "auto",
         "model": "auto",
         "input": {"kind": "url", "url": "https://media.example.com/episode.mp3"},
-        "output": {"formats": ["json", "vtt"]},
+        "output": {"formats": ["podlove", "dote", "vtt"]},
         "context": {"audio_id": 1},
         "task_ref": "cast-audio-1",
     }
@@ -401,32 +346,52 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
     audio = Audio(user=user, m4a=m4a_audio, title="episode", collection=Collection.get_first_root_node())
     audio.save(duration=False, cache_file_sizes=False)
 
-    verbose_json = {
-        "text": "Hello world",
-        "segments": [
-            {
-                "id": 0,
-                "start": 0.0,
-                "end": 1.5,
-                "text": "Hello world",
-            }
-        ],
-    }
-
     class StubClient:
         def __init__(self):
             self.submit_calls = []
 
         def submit_transcription_job(self, *, source_url, task_ref, context):
             self.submit_calls.append((source_url, task_ref, context))
-            return {"id": "job-1", "state": "succeeded", "result": {"artifacts": {"json": "/json", "vtt": "/vtt"}}}
+            return {
+                "id": "job-1",
+                "state": "succeeded",
+                "result": {"artifacts": {"podlove": "/podlove", "dote": "/dote", "vtt": "/vtt"}},
+            }
 
         def wait_for_job(self, job_id):
             raise AssertionError(f"wait_for_job should not run for terminal jobs: {job_id}")
 
         def download_artifact(self, artifact_path):
-            if artifact_path == "/json":
-                return json.dumps(verbose_json).encode("utf-8")
+            if artifact_path == "/podlove":
+                return json.dumps(
+                    {
+                        "version": 1,
+                        "transcripts": [
+                            {
+                                "start": "00:00:00.000",
+                                "start_ms": 0,
+                                "end": "00:00:01.500",
+                                "end_ms": 1500,
+                                "speaker": "",
+                                "voice": "",
+                                "text": "Hello world",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+            if artifact_path == "/dote":
+                return json.dumps(
+                    {
+                        "lines": [
+                            {
+                                "startTime": "00:00:00,000",
+                                "endTime": "00:00:01,500",
+                                "speakerDesignation": "",
+                                "text": "Hello world",
+                            }
+                        ]
+                    }
+                ).encode("utf-8")
             if artifact_path == "/vtt":
                 return b"WEBVTT\n\n00:00:00.000 --> 00:00:01.500\nHello world\n"
             raise AssertionError(f"unexpected artifact: {artifact_path}")
@@ -525,31 +490,52 @@ def test_generate_for_audio_updates_existing_transcript(settings, user, m4a_audi
         },
     )
     old_paths = existing.get_all_paths()
-    verbose_json = {
-        "text": "fresh transcript",
-        "segments": [
-            {
-                "id": 1,
-                "start": 2.0,
-                "end": 4.0,
-                "text": "fresh transcript",
-            }
-        ],
-    }
 
     class StubClient:
         def submit_transcription_job(self, *, source_url, task_ref, context):
             assert source_url == audio.m4a.url
             assert task_ref == f"cast-audio-{audio.pk}"
             assert context == {"consumer": "django-cast", "audio_id": audio.pk}
-            return {"id": "job-2", "state": "succeeded", "result": {"artifacts": {"json": "/json", "vtt": "/vtt"}}}
+            return {
+                "id": "job-2",
+                "state": "succeeded",
+                "result": {"artifacts": {"podlove": "/podlove", "dote": "/dote", "vtt": "/vtt"}},
+            }
 
         def wait_for_job(self, job_id):
             raise AssertionError(f"wait_for_job should not run for terminal jobs: {job_id}")
 
         def download_artifact(self, artifact_path):
-            if artifact_path == "/json":
-                return json.dumps(verbose_json).encode("utf-8")
+            if artifact_path == "/podlove":
+                return json.dumps(
+                    {
+                        "version": 1,
+                        "transcripts": [
+                            {
+                                "start": "00:00:02.000",
+                                "start_ms": 2000,
+                                "end": "00:00:04.000",
+                                "end_ms": 4000,
+                                "speaker": "",
+                                "voice": "",
+                                "text": "fresh transcript",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+            if artifact_path == "/dote":
+                return json.dumps(
+                    {
+                        "lines": [
+                            {
+                                "startTime": "00:00:02,000",
+                                "endTime": "00:00:04,000",
+                                "speakerDesignation": "",
+                                "text": "fresh transcript",
+                            }
+                        ]
+                    }
+                ).encode("utf-8")
             if artifact_path == "/vtt":
                 return b"WEBVTT\n\n00:00:02.000 --> 00:00:04.000\nfresh transcript\n"
             raise AssertionError(f"unexpected artifact: {artifact_path}")
@@ -589,7 +575,8 @@ def test_generate_for_audio_waits_for_queued_job(settings, user, m4a_audio):
 
 
 @pytest.mark.django_db
-def test_generate_for_audio_rejects_non_object_json_artifact(settings, user, m4a_audio):
+@pytest.mark.parametrize("missing_format", ["podlove", "dote", "vtt"])
+def test_generate_for_audio_requires_required_artifacts(settings, user, m4a_audio, missing_format):
     settings.MEDIA_URL = "https://media.example.com/"
     audio = Audio(user=user, m4a=m4a_audio, title="episode")
     audio.save(duration=False, cache_file_sizes=False)
@@ -597,15 +584,21 @@ def test_generate_for_audio_rejects_non_object_json_artifact(settings, user, m4a
     class StubClient:
         def submit_transcription_job(self, *, source_url, task_ref, context):
             del source_url, task_ref, context
-            return {"id": "job-4", "state": "succeeded", "result": {"artifacts": {"json": "/json", "vtt": "/vtt"}}}
+            artifacts = {"podlove": "/podlove", "dote": "/dote", "vtt": "/vtt"}
+            artifacts.pop(missing_format)
+            return {"id": "job-4", "state": "succeeded", "result": {"artifacts": artifacts}}
 
         def wait_for_job(self, job_id):
             raise AssertionError(f"wait_for_job should not run for terminal jobs: {job_id}")
 
         def download_artifact(self, artifact_path):
-            if artifact_path == "/json":
-                return b'["not-an-object"]'
-            return b"WEBVTT\n"
+            if artifact_path == "/podlove":
+                return b'{"version": 1, "transcripts": []}'
+            if artifact_path == "/dote":
+                return b'{"lines": []}'
+            if artifact_path == "/vtt":
+                return b"WEBVTT\n"
+            raise AssertionError(f"unexpected artifact: {artifact_path}")
 
-    with pytest.raises(VoxhelmError, match="not an object"):
+    with pytest.raises(VoxhelmError, match=rf"'{missing_format}' artifact"):
         VoxhelmTranscriptService(client=StubClient()).generate_for_audio(audio)

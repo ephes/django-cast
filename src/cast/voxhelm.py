@@ -101,93 +101,6 @@ def resolve_audio_source_url(audio: Audio) -> str:
     raise VoxhelmError(f"Audio {audio_id} does not expose an absolute HTTP(S) source URL.")
 
 
-def format_dote_timestamp(seconds: float) -> str:
-    milliseconds = max(int(round(seconds * 1000)), 0)
-    hours, remainder = divmod(milliseconds, 3_600_000)
-    minutes, remainder = divmod(remainder, 60_000)
-    whole_seconds, millis = divmod(remainder, 1000)
-    return f"{hours:02}:{minutes:02}:{whole_seconds:02},{millis:03}"
-
-
-def format_podlove_timestamp(seconds: float) -> str:
-    milliseconds = max(int(round(seconds * 1000)), 0)
-    hours, remainder = divmod(milliseconds, 3_600_000)
-    minutes, remainder = divmod(remainder, 60_000)
-    whole_seconds, millis = divmod(remainder, 1000)
-    return f"{hours:02}:{minutes:02}:{whole_seconds:02}.{millis:03}"
-
-
-def normalized_segments(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    raw_segments = payload.get("segments")
-    segments: list[dict[str, Any]] = []
-    if isinstance(raw_segments, list):
-        for index, raw_segment in enumerate(raw_segments):
-            if not isinstance(raw_segment, dict):
-                continue
-            text = str(raw_segment.get("text", "")).strip()
-            if not text:
-                continue
-            try:
-                start = float(raw_segment.get("start", 0.0))
-            except (TypeError, ValueError):
-                continue
-            try:
-                end = float(raw_segment.get("end", start))
-            except (TypeError, ValueError):
-                end = start
-            try:
-                segment_id = int(raw_segment.get("id", index))
-            except (TypeError, ValueError):
-                segment_id = index
-            segments.append(
-                {
-                    "id": segment_id,
-                    "start": start,
-                    "end": max(start, end),
-                    "text": text,
-                }
-            )
-    if segments:
-        return segments
-    text = str(payload.get("text", "")).strip()
-    if text:
-        return [{"id": 0, "start": 0.0, "end": 0.0, "text": text}]
-    return []
-
-
-def render_dote(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "lines": [
-            {
-                "startTime": format_dote_timestamp(segment["start"]),
-                "endTime": format_dote_timestamp(segment["end"]),
-                "speakerDesignation": "",
-                "text": segment["text"],
-            }
-            for segment in normalized_segments(payload)
-        ]
-    }
-
-
-def render_podlove(payload: dict[str, Any]) -> dict[str, Any]:
-    transcripts = []
-    for segment in normalized_segments(payload):
-        start_ms = max(int(round(segment["start"] * 1000)), 0)
-        end_ms = max(int(round(segment["end"] * 1000)), 0)
-        transcripts.append(
-            {
-                "start": format_podlove_timestamp(segment["start"]),
-                "start_ms": start_ms,
-                "end": format_podlove_timestamp(segment["end"]),
-                "end_ms": end_ms,
-                "speaker": "",
-                "voice": "",
-                "text": segment["text"],
-            }
-        )
-    return {"version": 1, "transcripts": transcripts}
-
-
 def require_artifact_path(job_payload: dict[str, Any], format_name: str) -> str:
     result = job_payload.get("result")
     if not isinstance(result, dict):
@@ -299,7 +212,7 @@ class VoxhelmClient:
             "backend": "auto",
             "model": self.model,
             "input": {"kind": "url", "url": source_url},
-            "output": {"formats": ["json", "vtt"]},
+            "output": {"formats": ["podlove", "dote", "vtt"]},
             "context": context,
             "task_ref": task_ref,
         }
@@ -350,13 +263,12 @@ class VoxhelmTranscriptService:
         if job_payload.get("state") != "succeeded":
             raise VoxhelmError(build_failure_message(job_payload))
 
-        verbose_json = json.loads(self.client.download_artifact(require_artifact_path(job_payload, "json")))
-        if not isinstance(verbose_json, dict):
-            raise VoxhelmError("Voxhelm transcript JSON artifact was not an object.")
+        podlove = self.client.download_artifact(require_artifact_path(job_payload, "podlove"))
+        dote = self.client.download_artifact(require_artifact_path(job_payload, "dote"))
         vtt = self.client.download_artifact(require_artifact_path(job_payload, "vtt"))
         transcript, created = self._get_or_create_transcript(audio=audio)
         self._update_collection(transcript=transcript, audio=audio)
-        self._save_artifacts(transcript=transcript, audio=audio, verbose_json=verbose_json, vtt=vtt)
+        self._save_artifacts(transcript=transcript, audio=audio, podlove=podlove, dote=dote, vtt=vtt)
         return TranscriptGenerationResult(
             transcript=transcript,
             created=created,
@@ -381,19 +293,12 @@ class VoxhelmTranscriptService:
         *,
         transcript: Transcript,
         audio: Audio,
-        verbose_json: dict[str, Any],
+        podlove: bytes,
+        dote: bytes,
         vtt: bytes,
     ) -> None:
         file_stem = f"audio-{audio.pk}"
-        replace_file(
-            transcript.podlove,
-            f"{file_stem}.podlove.json",
-            json.dumps(render_podlove(verbose_json), ensure_ascii=True, indent=2).encode("utf-8"),
-        )
-        replace_file(
-            transcript.dote,
-            f"{file_stem}.dote.json",
-            json.dumps(render_dote(verbose_json), ensure_ascii=True, indent=2).encode("utf-8"),
-        )
+        replace_file(transcript.podlove, f"{file_stem}.podlove.json", podlove)
+        replace_file(transcript.dote, f"{file_stem}.dote.json", dote)
         replace_file(transcript.vtt, f"{file_stem}.vtt", vtt)
         transcript.save()

@@ -106,8 +106,9 @@
   to live pages.
 - Added a narrow Voxhelm consumer integration for transcripts:
   ``generate_transcripts`` can now submit a batch job for an episode/audio
-  URL, poll for completion, download Voxhelm JSON/WebVTT artifacts, and
-  persist Podlove/WebVTT/DOTe files onto the existing ``Transcript`` model.
+  URL, poll for completion, download Voxhelm Podlove/DOTe/WebVTT artifacts,
+  and persist those files onto the existing ``Transcript`` model without
+  consumer-local transcript conversion.
 - Added the remaining Wagtail-admin Voxhelm workflow:
   editors can now trigger transcript generation from episode and audio edit
   views, and site admins can manage Voxhelm API base URL/token plus optional

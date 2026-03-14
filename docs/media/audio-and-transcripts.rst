@@ -97,5 +97,6 @@ model/language defaults in ``Settings -> Voxhelm settings``.
     # Operator fallback
     python manage.py generate_transcripts --episode-id 42
 
-django-cast currently keeps Podlove and DOTe conversion local. Voxhelm is used
-for the batch transcription job plus JSON/WebVTT artifact retrieval.
+django-cast now consumes Voxhelm-owned Podlove, DOTe, and WebVTT transcript
+artifacts directly from the batch job result and persists them onto the
+existing ``Transcript`` model without local format conversion.
