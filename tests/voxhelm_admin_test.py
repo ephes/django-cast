@@ -125,6 +125,7 @@ def test_episode_edit_page_shows_transcript_generation_status(admin_client, epis
     content = response.content.decode("utf-8")
     assert "Transcript status:" in content
     assert "Running" in content
+    assert 'class="help-block"' in content
 
 
 @pytest.mark.django_db
@@ -135,6 +136,8 @@ def test_audio_edit_page_shows_generate_transcript_action(admin_client, audio):
     content = response.content.decode("utf-8")
     assert "Generate transcript" in content
     assert reverse("cast-voxhelm:generate_audio", args=(audio.pk,)) in content
+    assert 'class="button button-secondary"' in content
+    assert "button-longrunning" not in content
 
 
 @pytest.mark.django_db
@@ -153,6 +156,8 @@ def test_audio_edit_page_shows_transcript_generation_status(admin_client, audio)
     assert "Transcript status:" in content
     assert "Failed" in content
     assert "upstream broke" in content
+    assert 'class="cast-transcript-status"' in content
+    assert 'class="help-block"' not in content
 
 
 @pytest.mark.django_db

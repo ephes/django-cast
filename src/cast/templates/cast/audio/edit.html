@@ -20,6 +20,19 @@
 {% block extra_css %}
   {{ block.super }}
   {{ form.media.css }}
+  <style>
+    .cast-transcript-actions {
+      margin-top: 1rem;
+    }
+
+    .cast-transcript-actions__form {
+      margin-bottom: 0.75rem;
+    }
+
+    .cast-transcript-status {
+      margin: 0;
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
@@ -53,24 +66,19 @@
           </ul>
         </form>
         {% if user_can_generate_transcript %}
-          <div class="nice-padding-left">
-            <form action="{{ generate_transcript_url }}" method="post">
+          <div class="nice-padding-left cast-transcript-actions">
+            <form action="{{ generate_transcript_url }}" method="post" class="cast-transcript-actions__form">
               {% csrf_token %}
               <input type="hidden" name="next" value="{{ request.get_full_path }}" />
               <button
-                class="button button-secondary button-longrunning"
+                class="button button-secondary"
                 type="submit"
                 {% if transcript_generation_active %}disabled{% endif %}
-                data-controller="w-progress"
-                data-action="w-progress#activate"
-                data-w-progress-active-value="{% trans 'Queuing transcript generation…' %}"
               >
-                {% icon name="doc-full" classname="button-longrunning__icon" %}
-                {% icon name="spinner" %}
-                <em data-w-progress-target="label">{% trans "Generate transcript" %}</em>
+                {% trans "Generate transcript" %}
               </button>
             </form>
-            {% include "cast/wagtail/_voxhelm_transcript_status.html" %}
+            {% include "cast/audio/_transcript_status.html" %}
           </div>
         {% endif %}
       </div>
