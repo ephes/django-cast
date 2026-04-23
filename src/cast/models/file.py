@@ -14,5 +14,6 @@ class File(TimeStampedModel):
 
     def get_all_paths(self) -> set[str]:
         paths = set()
-        paths.add(self.original.name)
+        if self.original.name:
+            paths.add(self.original.name)
         return paths

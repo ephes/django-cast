@@ -25,6 +25,7 @@ from wagtail.models import PageQuerySet
 
 from cast import appsettings
 from cast.models.snippets import PostCategory
+from cast.search_utils import safe_fulltext_queryset
 
 
 class CountFacetWidget(Widget):
@@ -435,4 +436,4 @@ class PostFilterset(django_filters.FilterSet):
 
     @staticmethod
     def fulltext_search(queryset: PageQuerySet, _name: str, value: str) -> models.QuerySet:
-        return queryset.search(value).get_queryset()
+        return safe_fulltext_queryset(queryset, value)

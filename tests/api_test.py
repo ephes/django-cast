@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
 import pytest
 from django.urls import reverse
@@ -19,6 +20,8 @@ from cast.devdata import generate_blog_with_media
 from cast.models import PostCategory
 
 from .factories import PostFactory, UserFactory
+
+SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"
 
 
 def test_api_root(api_client):
@@ -703,6 +706,17 @@ def test_facet_counts_detail_mode_modal_schema(api_client, blog, post):
         assert isinstance(group["options"], list)
         for option in group["options"]:
             assert set(option.keys()) == {"slug", "name", "count"}
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_malformed_search_does_not_raise(api_client, blog, post):
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    query_string = urlencode({"mode": "modal", "search": SCANNER_SEARCH_PAYLOAD})
+
+    r = api_client.get(f"{url}?{query_string}", format="json")
+
+    assert r.status_code == 200
+    assert r.json()["mode"] == "modal"
 
 
 @pytest.mark.django_db

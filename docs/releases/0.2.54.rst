@@ -104,6 +104,9 @@
   multisite installs resolve pages within the current site tree instead of
   failing on duplicate slugs. These lookups now intentionally stay limited
   to live pages.
+- Hardened malformed modelsearch input handling for public post filtering,
+  modal facet counts, and audio/video admin searches so null bytes, repeated
+  hyphens, and very long query strings no longer cause server errors.
 - Added a narrow Voxhelm consumer integration for transcripts:
   ``generate_transcripts`` can now submit a batch job for an episode/audio
   URL, poll for completion, download Voxhelm Podlove/DOTe/WebVTT artifacts,

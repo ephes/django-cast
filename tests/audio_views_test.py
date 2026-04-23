@@ -141,6 +141,14 @@ class TestAudioIndex:
         # make sure audio_urls.audio is included in results
         assert audio_urls.audio.title in content
 
+    def test_get_index_with_empty_normalized_search(self, admin_client, audio_urls):
+        r = admin_client.get(audio_urls.index, {"q": "---\x00"})
+
+        assert r.status_code == 200
+        assert r.context["query_string"] is None
+        assert r.context["is_searching"] is False
+        assert audio_urls.audio in r.context["audios"]
+
     def test_get_index_with_pagination(self, admin_client, user):
         audio_models = []
         for i in range(1, 3):
@@ -389,6 +397,14 @@ class TestAudioChooser:
         assert r.status_code == 200
 
         # make sure searched audios is included in results
+        assert r.context["audios"][0] == audio_urls.audio
+
+    def test_get_chooser_with_empty_normalized_search(self, admin_client, audio_urls):
+        r = admin_client.get(audio_urls.chooser, {"q": "---\x00"})
+
+        assert r.status_code == 200
+        assert r.context["query_string"] is None
+        assert r.context["is_searching"] is False
         assert r.context["audios"][0] == audio_urls.audio
 
     def test_get_chooser_with_pagination(self, admin_client, user):

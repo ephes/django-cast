@@ -132,6 +132,14 @@ class TestVideoIndex:
         print(content)
         assert video_urls.video.title in content
 
+    def test_get_index_with_empty_normalized_search(self, admin_client, video_urls):
+        r = admin_client.get(video_urls.index, {"q": "---\x00"})
+
+        assert r.status_code == 200
+        assert r.context["query_string"] is None
+        assert r.context["is_searching"] is False
+        assert video_urls.video in r.context["videos"]
+
     def test_get_index_with_pagination(self, admin_client, user):
         video_models = []
         for i in range(1, 3):
@@ -266,6 +274,14 @@ class TestVideoEdit:
         assert r.status_code == 302
         assert r.url == video_urls.index
 
+    def test_post_edit_video_original_without_existing_file(self, admin_client, video_without_original, minimal_mp4):
+        edit_url = reverse("castvideo:edit", args=(video_without_original.id,))
+
+        r = admin_client.post(edit_url, {"title": "asdf", "original": minimal_mp4})
+
+        assert r.status_code == 302
+        assert r.url == reverse("castvideo:index")
+
 
 class TestVideoDelete:
     pytestmark = pytest.mark.django_db
@@ -343,6 +359,14 @@ class TestVideoChooser:
         assert r.status_code == 200
 
         # make sure searched video is included in results
+        assert r.context["videos"][0] == video_urls.video
+
+    def test_get_video_chooser_with_empty_normalized_search(self, admin_client, video_urls):
+        r = admin_client.get(video_urls.chooser, {"q": "---\x00"})
+
+        assert r.status_code == 200
+        assert r.context["query_string"] is None
+        assert r.context["is_searching"] is False
         assert r.context["videos"][0] == video_urls.video
 
     def test_get_video_chooser_with_pagination(self, admin_client, user):
