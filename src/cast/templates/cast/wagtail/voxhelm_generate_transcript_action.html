@@ -1,20 +1,20 @@
 {% load i18n wagtailadmin_tags %}
 <input type="hidden" name="next" value="{{ request.get_full_path }}" />
 <button
-    type="submit"
-    name="{{ name }}"
-    value="{{ label }}"
-    class="button button-secondary button-longrunning{% if classname %} {{ classname }}{% endif %}"
-    formaction="{{ url }}"
-    formmethod="post"
-    formnovalidate
-    {% if transcript_generation_active %}disabled{% endif %}
-    data-controller="w-progress"
-    data-action="w-progress#activate"
-    data-w-progress-active-value="{% trans 'Queuing transcript generation…' %}"
+  type="submit"
+  name="{{ name }}"
+  value="{{ label }}"
+  class="button button-secondary button-longrunning{% if classname %} {{ classname }}{% endif %}"
+  formaction="{{ url }}"
+  formmethod="post"
+  formnovalidate
+  {% if transcript_generation_active %}disabled{% endif %}
+  data-controller="w-progress"
+  data-action="w-progress#activate"
+  data-w-progress-active-value="{% trans 'Queuing transcript generation…' %}"
 >
-    {% if icon_name %}{% icon name=icon_name classname="button-longrunning__icon" %}{% endif %}
-    {% icon name="spinner" %}
-    <em data-w-progress-target="label">{{ label }}</em>
+  {% if icon_name %}{% icon name=icon_name classname="button-longrunning__icon" %}{% endif %}
+  {% icon name="spinner" %}
+  <em data-w-progress-target="label">{{ label }}</em>
 </button>
 {% include "cast/wagtail/_voxhelm_transcript_status.html" %}

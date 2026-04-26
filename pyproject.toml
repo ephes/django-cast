@@ -46,6 +46,7 @@ dependencies = [
     "django-tasks",  # async transcript completion
     "django-threadedcomments",  # comments framework
     "django-vite",  # vite support for things like gallery-modal web components
+    "modelsearch",  # full-text search integration
     "Pygments",  # syntax highlighting for code blocks
     "python-dateutil",  # relativedelta for styleguide post dates
     "python-slugify",  # slugify for page slugs

@@ -1,6 +1,5 @@
-import pytest
 from django.db import models
-from modelsearch.backends.base import BaseSearchResults
+import pytest
 
 from cast.search_utils import normalize_modelsearch_query, safe_fulltext_queryset, safe_modelsearch_results
 
@@ -46,7 +45,8 @@ def test_safe_modelsearch_results_preserves_search_results_for_normal_input(requ
 
     results = safe_modelsearch_results(queryset, media.title)
 
-    assert isinstance(results, BaseSearchResults)
+    assert results is not queryset
+    assert list(results) == [media]
 
 
 @pytest.mark.django_db

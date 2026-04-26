@@ -1,4 +1,4 @@
-0.2.55 (unreleased)
+0.2.55 (2026-04-26)
 -------------------
 
 - Added a narrow Voxhelm consumer integration for transcripts:
@@ -24,3 +24,6 @@
 - Hardened malformed modelsearch input handling for public post filtering,
   modal facet counts, and audio/video admin searches so null bytes, repeated
   hyphens, and very long query strings no longer cause server errors.
+- Declared ``modelsearch`` as a runtime package dependency so wheel installs
+  include the full-text search integration used by filters and media admin
+  searches.

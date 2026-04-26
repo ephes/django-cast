@@ -27,6 +27,7 @@ MIDDLEWARE = [
 # Wagtail
 WAGTAILADMIN_BASE_URL = "/cms"
 WAGTAILIMAGES_MAX_UPLOAD_SIZE = 30 * 1024 * 1024
+ALLOWED_HOSTS = ["testserver", "localhost", "example.com"]
 
 TASKS = {
     "default": {
