@@ -42,7 +42,7 @@ and [Wagtail](https://wagtail.org).
 
 See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/operations/deployment.html).
 
-## Upgrade note (0.2.55)
+## Upgrade note (0.2.56)
 
 Repository alias names were removed in a breaking cleanup. Use canonical names only.
 
