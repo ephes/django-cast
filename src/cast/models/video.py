@@ -87,7 +87,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     @property
     def filename(self) -> str:
-        return Path(self.original.name).name
+        return Path(self.original.name or "").name
 
     @property
     def type(self) -> str:
@@ -160,13 +160,14 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     def get_all_paths(self) -> set[str]:
         paths = set()
-        paths.add(self.original.name)
-        if self.poster:
+        if self.original.name:
+            paths.add(self.original.name)
+        if self.poster.name:
             paths.add(self.poster.name)
         return paths
 
     def get_mime_type(self) -> str:
-        ending = self.original.name.split(".")[-1].lower()
+        ending = (self.original.name or "").split(".")[-1].lower()
         return {
             "mp4": "video/mp4",
             "mov": "video/quicktime",

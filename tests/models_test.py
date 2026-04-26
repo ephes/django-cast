@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 from cast import appsettings
 from cast.devdata import create_transcript
-from cast.models import Audio, Blog, Podcast
+from cast.models import Audio, Blog, File, Podcast
 from cast.models.pages import (
     PODLOVE_POSTER_RENDITION_SPEC,
     SOCIAL_COVER_RENDITION_SPEC,
@@ -39,6 +39,9 @@ class TestVideoModel:
     def test_get_all_video_paths_with_poster(self, video_with_poster):
         all_paths = list(video_with_poster.get_all_paths())
         assert len(all_paths) == 2
+
+    def test_get_all_video_paths_without_original(self, video_without_original):
+        assert video_without_original.get_all_paths() == set()
 
     def test_get_all_video_paths_without_thumbnail(self, video):
         class Dummy:
@@ -76,6 +79,12 @@ class TestFileModel:
     def test_get_all_file_paths(self, file_instance):
         all_paths = list(file_instance.get_all_paths())
         assert len(all_paths) == 1
+
+    @pytest.mark.django_db
+    def test_get_all_file_paths_without_original(self, user):
+        file_instance = File(user=user)
+
+        assert file_instance.get_all_paths() == set()
 
 
 @pytest.fixture()

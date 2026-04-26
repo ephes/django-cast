@@ -16,7 +16,7 @@ Filter Parameters
 
 The filter parameter names are shared between UI routes and API routes.
 
-- ``search``: full-text search via ``queryset.search(value).get_queryset()``
+- ``search``: full-text search via Django Cast's modelsearch wrapper
 - ``date_after`` and ``date_before``: date range filter for ``visible_date`` (from the ``date`` filter)
 - ``date_facets``: single month facet, format ``YYYY-MM``
 - ``category_facets``: category slug
@@ -58,6 +58,11 @@ Wagtail API pages endpoint (if cast is mounted at ``/cast/``):
 Facet Behavior
 ==============
 
+- Search input is normalized before it reaches modelsearch. Null bytes are
+  stripped, repeated whitespace/hyphen runs are collapsed, leading/trailing
+  whitespace is removed, and very long values are capped. Malformed or
+  punctuation-only public searches return no results instead of raising a
+  server error.
 - In the default (legacy) mode, facet counts reflect the currently filtered
   queryset. The ``?mode=modal`` API uses a different counting strategy; see
   :ref:`conjunctive_vs_disjunctive` for details.

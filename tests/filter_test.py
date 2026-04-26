@@ -8,6 +8,14 @@ from cast.filters import CountFacetWidget, PostFilterset, SlugChoicesField
 from cast.models import Post, PostCategory
 from tests.factories import PostFactory
 
+SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"
+
+
+def querydict_with_search(search_value: str) -> QueryDict:
+    querydict = QueryDict("", mutable=True)
+    querydict["search"] = search_value
+    return querydict
+
 
 def test_count_facet_widget_render():
     cfw = CountFacetWidget()
@@ -130,6 +138,43 @@ class TestPostFilterset:
         # and the post is not counted in the date facets
         date_facets = filterset.filters["date_facets"].facet_counts
         assert date_facets == {}
+
+    @pytest.mark.parametrize(
+        "search_value",
+        [
+            SCANNER_SEARCH_PAYLOAD,
+            "-",
+            "--",
+            "foo-",
+            "-foo",
+            "\x00foo",
+            "x" * 10_000,
+        ],
+    )
+    def test_malformed_search_input_does_not_raise_when_evaluated(self, post, search_value):
+        queryset = post.blog.unfiltered_published_posts
+        querydict = querydict_with_search(search_value)
+
+        filterset = PostFilterset(querydict, queryset=queryset)
+
+        list(filterset.qs)
+
+    @pytest.mark.parametrize("search_value", ["-", "--"])
+    def test_empty_normalized_search_returns_no_public_results(self, post, search_value):
+        queryset = post.blog.unfiltered_published_posts
+        querydict = querydict_with_search(search_value)
+
+        filterset = PostFilterset(querydict, queryset=queryset)
+
+        assert list(filterset.qs) == []
+
+    def test_null_byte_search_input_is_stripped(self, post):
+        queryset = post.blog.unfiltered_published_posts
+        querydict = querydict_with_search(f"\x00{post.title}")
+
+        filterset = PostFilterset(querydict, queryset=queryset)
+
+        assert post in filterset.qs
 
     def test_post_is_counted_in_category_facets(self, post_with_category):
         # given a queryset with a post in a category

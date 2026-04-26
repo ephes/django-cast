@@ -1,10 +1,12 @@
 from typing import Any, cast
 
+from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
+from modelsearch.backends.base import BaseSearchResults
 from wagtail.admin import messages
 from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.admin.models import popular_tags_for_model
@@ -13,6 +15,7 @@ from wagtail.search.backends import get_search_backends
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm, get_video_form
 from ..models import Video
+from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from . import AuthenticatedHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
@@ -20,15 +23,17 @@ from .wagtail_pagination import paginate, pagination_template
 @vary_on_headers("X-Requested-With")
 def index(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
-    videos = Video.objects.all().order_by(ordering)
+    base_videos = Video.objects.all().order_by(ordering)
+    videos: models.QuerySet | BaseSearchResults = base_videos
 
     # Search
     query_string = None
     if "q" in request.GET:
         form = NonEmptySearchForm(request.GET, placeholder=_("Search video files"))
         if form.is_valid():
-            query_string = form.cleaned_data["q"]
-            videos = videos.search(query_string)
+            raw_query_string = form.cleaned_data["q"]
+            videos = safe_modelsearch_results(base_videos, raw_query_string)
+            query_string = normalize_modelsearch_query(raw_query_string) or None
     else:
         form = NonEmptySearchForm(placeholder=_("Search media"))
 
@@ -108,7 +113,8 @@ def edit(request: HttpRequest, video_id: int) -> HttpResponse:
                 # if providing a new video file, delete the old one.
                 # NB Doing this via original_file.delete() clears the file field,
                 # which definitely isn't what we want...
-                original_file.storage.delete(original_file.name)
+                if original_file.name:
+                    original_file.storage.delete(original_file.name)
             video = form.save()
 
             # Reindex the media entry to make sure all tags are indexed
@@ -168,17 +174,18 @@ def delete(request: HttpRequest, video_id: int) -> HttpResponse:
 
 def chooser(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
-    videos = Video.objects.all().order_by(ordering)
+    base_videos = Video.objects.all().order_by(ordering)
+    videos: models.QuerySet | BaseSearchResults = base_videos
 
     upload_form = cast(Any, get_video_form())(prefix="media-chooser-upload", user=request.user)
 
     if "q" in request.GET or "p" in request.GET:
         search_form = NonEmptySearchForm(request.GET)
         if search_form.is_valid():
-            q = search_form.cleaned_data["q"]
-
-            videos = videos.search(q)
-            is_searching = True
+            raw_query_string = search_form.cleaned_data["q"]
+            videos = safe_modelsearch_results(base_videos, raw_query_string)
+            q = normalize_modelsearch_query(raw_query_string) or None
+            is_searching = bool(q)
         else:
             q = None
             is_searching = False
