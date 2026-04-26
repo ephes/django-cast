@@ -1,6 +1,15 @@
 0.2.55 (unreleased)
 -------------------
 
+- Added a narrow Voxhelm consumer integration for transcripts:
+  ``generate_transcripts`` can now submit a batch job for an episode/audio
+  URL, poll for completion, download Voxhelm Podlove/DOTe/WebVTT artifacts,
+  and persist those files onto the existing ``Transcript`` model without
+  consumer-local transcript conversion.
+- Added the remaining Wagtail-admin Voxhelm workflow:
+  editors can now trigger transcript generation from episode and audio edit
+  views, and site admins can manage Voxhelm API base URL/token plus optional
+  model/language defaults through ``Settings -> Voxhelm settings``.
 - Made Wagtail transcript generation non-blocking for the Voxhelm admin flow:
   Episode and Audio admin actions now submit the Voxhelm job, persist narrow
   local queued/running/succeeded/failed state, and finish transcript polling
@@ -12,3 +21,6 @@
 - Kept ``generate_transcripts`` as the synchronous/operator-facing fallback
   while documenting the required Django Tasks database-backend configuration
   for the editor-facing async flow.
+- Hardened malformed modelsearch input handling for public post filtering,
+  modal facet counts, and audio/video admin searches so null bytes, repeated
+  hyphens, and very long query strings no longer cause server errors.
