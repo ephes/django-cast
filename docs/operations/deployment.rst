@@ -47,6 +47,21 @@ A typical production setup uses Gunicorn behind a reverse proxy:
 
 Manage the process with systemd for automatic restarts and logging.
 
+Transcript Worker
+=================
+
+If the site enables Voxhelm transcript generation from Wagtail admin, run a
+Django Tasks database worker in addition to the web process:
+
+.. code-block:: bash
+
+    python manage.py db_worker --backend cast_transcripts --worker-id homepage-transcripts
+
+Use a distinct ``--worker-id`` per deployed site, for example
+``python-podcast-transcripts`` for a second site sharing the same codebase.
+The default task backend should remain immediate; only the
+``cast_transcripts`` backend should point at ``django_tasks_db.DatabaseBackend``.
+
 Static Files
 ============
 

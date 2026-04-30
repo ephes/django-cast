@@ -139,6 +139,31 @@ admin for the API base URL, API token, and optional model/language
 preferences. These values take precedence over Django settings and environment
 variables for Wagtail-admin-triggered transcript generation on that site.
 
+Wagtail-admin-triggered transcript completion is queued through Django Tasks.
+Production sites should install ``django_tasks`` and ``django_tasks_db``, keep
+the global ``default`` backend immediate, and route ``cast_transcripts`` to the
+database backend:
+
+.. code-block:: python
+
+    INSTALLED_APPS += ["django_tasks", "django_tasks_db"]
+
+    TASKS = {
+        "default": {
+            "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+        },
+        "cast_transcripts": {
+            "BACKEND": "django_tasks_db.DatabaseBackend",
+        },
+    }
+
+Run a database worker for that backend, using a stable worker id per deployed
+site:
+
+.. code-block:: bash
+
+    python manage.py db_worker --backend cast_transcripts --worker-id homepage-transcripts
+
 *********
 Templates
 *********

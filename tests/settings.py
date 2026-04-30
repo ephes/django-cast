@@ -32,10 +32,8 @@ ALLOWED_HOSTS = ["testserver", "localhost", "example.com"]
 TASKS = {
     "default": {
         "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
-        "ENQUEUE_ON_COMMIT": False,
     },
     "cast_transcripts": {
         "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
-        "ENQUEUE_ON_COMMIT": False,
     },
 }

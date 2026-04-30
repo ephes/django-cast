@@ -21,8 +21,10 @@ WebVTT, and DOTe files back onto the model.
 For editors, the primary workflow is now in Wagtail admin: episode edit views
 and audio edit views expose a ``Generate transcript`` action, and Voxhelm
 connection details can be managed in ``Settings -> Voxhelm settings``. The
-management command remains available as operator tooling and fallback
-automation.
+admin workflow queues completion on the ``cast_transcripts`` Django Tasks
+database backend; run ``python manage.py db_worker --backend cast_transcripts
+--worker-id <site>-transcripts`` alongside the web process. The management
+command remains available as operator tooling and fallback automation.
 
 Configuration:
 

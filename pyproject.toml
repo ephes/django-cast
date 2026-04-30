@@ -43,16 +43,17 @@ dependencies = [
     "django-filter",  # filter section on blog index
     "django-htmx",  # htmx support
     "django-model-utils",  # model mixins
-    "django-tasks",  # async transcript completion
+    "django-tasks>=0.12,<0.13",  # async transcript completion
+    "django-tasks-db>=0.12,<0.13",  # database-backed transcript worker
     "django-threadedcomments",  # comments framework
     "django-vite",  # vite support for things like gallery-modal web components
-    "modelsearch",  # full-text search integration
+    "modelsearch>=1.2.2,<1.3",  # full-text search integration
     "Pygments",  # syntax highlighting for code blocks
     "python-dateutil",  # relativedelta for styleguide post dates
     "python-slugify",  # slugify for page slugs
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
-    "wagtail",  # wagtail itself
+    "wagtail>=7.3,<7.4",  # wagtail itself
 ]
 
 [build-system]

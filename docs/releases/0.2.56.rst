@@ -1,3 +1,15 @@
 0.2.56 (unreleased)
 -------------------
 
+- Require Wagtail 7.3, ``django-tasks`` 0.12, and ``django-tasks-db`` 0.12 for
+  Voxhelm transcript generation, and document the ``cast_transcripts`` database
+  worker setup for Wagtail admin transcript completion.
+- Limit the supported Wagtail range to ``>=7.3,<7.4`` and align the default
+  tox matrix with that supported range by removing Wagtail 6 environments.
+- Replace any hand-managed ``django_tasks.backends.database`` entry in
+  ``INSTALLED_APPS`` with ``django_tasks`` and ``django_tasks_db``.
+- Remove any legacy ``ENQUEUE_ON_COMMIT`` keys from ``TASKS`` settings; the
+  current ``django-tasks`` configuration no longer uses that option.
+- Require ``modelsearch>=1.2.2,<1.3`` so full-text search remains compatible
+  with ``django-tasks`` 0.12 while staying inside Wagtail's supported
+  ``modelsearch<1.3`` range.

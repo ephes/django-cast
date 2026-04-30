@@ -106,22 +106,23 @@ finished:
 
 .. code-block:: python
 
-    INSTALLED_APPS += ["django_tasks.backends.database"]
+    INSTALLED_APPS += ["django_tasks", "django_tasks_db"]
 
     TASKS = {
         "default": {
             "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
-            "ENQUEUE_ON_COMMIT": False,
         },
         "cast_transcripts": {
-            "BACKEND": "django_tasks.backends.database.DatabaseBackend",
-            "ENQUEUE_ON_COMMIT": False,
+            "BACKEND": "django_tasks_db.DatabaseBackend",
         },
     }
 
 .. code-block:: bash
 
-    python manage.py db_worker --backend cast_transcripts
+    python manage.py db_worker --backend cast_transcripts --worker-id cast-transcripts
+
+Use a stable, distinct ``--worker-id`` for each deployed site. See
+:doc:`../operations/deployment` for deployment examples.
 
 .. code-block:: bash
 
