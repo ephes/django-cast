@@ -13,3 +13,8 @@
 - Require ``modelsearch>=1.2.2,<1.3`` so full-text search remains compatible
   with ``django-tasks`` 0.12 while staying inside Wagtail's supported
   ``modelsearch<1.3`` range.
+- Replace the raw ``cloc`` plus ``sloccount`` ``just loc`` recipe with the
+  shared ``slopscope`` line-count workflow via a local editable checkout. The
+  command keeps ``cloc`` semantics when ``cloc`` is available and now reports
+  language, source/test, area, and directory summaries instead of the old
+  ``sloccount`` folder-only appendix.

@@ -4,6 +4,8 @@
 default:
     @just --list
 
+SLOPSCOPE_PATH := env_var_or_default("SLOPSCOPE_PATH", "../slopscope")
+
 # Install Python dependencies via uv
 install:
     uv sync
@@ -173,7 +175,4 @@ compare-page PATH *ARGS:
 
 # Count lines of code in the repository (by language + by top-level folder)
 loc:
-    cloc --vcs=git .
-    @echo ""
-    @echo "--- Python SLOC by folder ---"
-    @sloccount --details . 2>/dev/null | awk '/^[0-9]/ && $2=="python" {sums[$3]+=$1} END{for(d in sums) printf "%8d  %s\n", sums[d], d}' | sort -rn
+    uv run --with-editable {{SLOPSCOPE_PATH}} slopscope .
