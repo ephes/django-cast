@@ -1297,7 +1297,7 @@ def _backfill_legacy_styleguide_audio_titles(user) -> None:
     """Migrate legacy 'Styleguide source: <url>' titles to clean display titles."""
     prefix = "Styleguide source: "
     for audio in Audio.objects.filter(user=user, title__startswith=prefix):
-        source_url = audio.title.removeprefix(prefix)
+        source_url = cast(str, audio.title).removeprefix(prefix)
         # Only migrate titles where the suffix looks like a URL
         if not source_url.startswith(("http://", "https://")):
             continue
