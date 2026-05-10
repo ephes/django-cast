@@ -4,7 +4,7 @@
 default:
     @just --list
 
-SLOPSCOPE_PATH := env_var_or_default("SLOPSCOPE_PATH", "../slopscope")
+SLOPSCOPE_SPEC := env_var_or_default("SLOPSCOPE_SPEC", "slopscope")
 
 # Install Python dependencies via uv
 install:
@@ -175,4 +175,4 @@ compare-page PATH *ARGS:
 
 # Count lines of code in the repository (by language + by top-level folder)
 loc:
-    uv run --with-editable {{SLOPSCOPE_PATH}} slopscope .
+    uv run --prerelease allow --with "{{SLOPSCOPE_SPEC}}" --with rich slopscope .
