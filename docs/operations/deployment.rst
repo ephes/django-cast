@@ -51,7 +51,14 @@ Transcript Worker
 =================
 
 If the site enables Voxhelm transcript generation from Wagtail admin, run a
-Django Tasks database worker in addition to the web process:
+Django Tasks database worker in addition to the web process. Install the
+optional ``transcript-worker`` extra first; it requires a Wagtail/django-tasks
+combination compatible with ``django-tasks-db`` 0.12. Wagtail 7.0 LTS uses
+``django-tasks`` 0.7 and is not compatible with that database backend.
+
+.. code-block:: bash
+
+    uv pip install "django-cast[transcript-worker]"
 
 .. code-block:: bash
 

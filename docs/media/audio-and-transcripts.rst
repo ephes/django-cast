@@ -98,15 +98,21 @@ and updates the ``Transcript`` model.
 Site admins can manage the Voxhelm API base URL, API token, and optional
 model/language defaults in ``Settings -> Voxhelm settings``.
 
-To make the non-blocking Wagtail flow work, configure Django Tasks with the
-database backend and run a worker alongside Django. Keep the global
-``default`` backend immediate so third-party apps that decorate tasks at
-import time do not pull in the database backend before app loading has
-finished:
+To make the non-blocking Wagtail flow work, install the optional
+``transcript-worker`` extra, configure Django Tasks with the database backend,
+and run a worker alongside Django. The extra requires a Wagtail/django-tasks
+combination compatible with ``django-tasks-db`` 0.12; Wagtail 7.0 LTS uses
+``django-tasks`` 0.7 and is not compatible with that database backend. Keep the
+global ``default`` backend immediate so third-party apps that decorate tasks at
+import time do not pull in the database backend before app loading has finished:
+
+.. code-block:: bash
+
+    uv pip install "django-cast[transcript-worker]"
 
 .. code-block:: python
 
-    INSTALLED_APPS += ["django_tasks", "django_tasks_db"]
+    INSTALLED_APPS += ["django_tasks_db"]
 
     TASKS = {
         "default": {

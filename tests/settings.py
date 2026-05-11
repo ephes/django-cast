@@ -32,8 +32,13 @@ ALLOWED_HOSTS = ["testserver", "localhost", "example.com"]
 TASKS = {
     "default": {
         "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+        # django-tasks 0.7, used by Wagtail 7.0, defers immediate tasks until
+        # transaction commit by default. Tests assert search results before
+        # pytest-django's outer transaction commits, so execute immediately.
+        "ENQUEUE_ON_COMMIT": False,
     },
     "cast_transcripts": {
         "BACKEND": "django_tasks.backends.immediate.ImmediateBackend",
+        "ENQUEUE_ON_COMMIT": False,
     },
 }

@@ -16,6 +16,7 @@ keywords = [
 classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
+    "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.2",
     "Framework :: Django :: 6.0",
     "Intended Audience :: Developers",
@@ -35,24 +36,28 @@ classifiers = [
 
 dependencies = [
     "crispy-bootstrap4",  # bootstrap4 theme
-    "django>=5.2,<7",  # Django itself
+    "django>=4.2,<7",  # Django itself
     "django-crispy-forms",  # bootstrap4 theme
     "django-contrib-comments",  # comments framework
     "django-environ",  # needed by pluggy and pytest
     "django-filter",  # filter section on blog index
     "django-htmx",  # htmx support
     "django-model-utils",  # model mixins
-    "django-tasks>=0.12,<0.13",  # async transcript completion
-    "django-tasks-db>=0.12,<0.13",  # database-backed transcript worker
+    "django-tasks>=0.7,<0.13",  # async transcript completion
     "django-threadedcomments",  # comments framework
     "django-vite",  # vite support for things like gallery-modal web components
-    "modelsearch>=1.3,<1.4",  # full-text search integration
+    "modelsearch>=1.2.2,<1.4",  # full-text search integration
     "Pygments",  # syntax highlighting for code blocks
     "python-dateutil",  # relativedelta for styleguide post dates
     "python-slugify",  # slugify for page slugs
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
-    "wagtail>=7.4,<7.5",  # wagtail itself
+    "wagtail>=7.0,<8",  # wagtail itself
+]
+
+[project.optional-dependencies]
+transcript-worker = [
+    "django-tasks-db>=0.12,<0.13",  # database-backed transcript worker
 ]
 
 [build-system]

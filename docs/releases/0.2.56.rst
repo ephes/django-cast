@@ -1,21 +1,27 @@
 0.2.56 (unreleased)
 -------------------
 
-- Require Wagtail 7.4, ``django-tasks`` 0.12, and ``django-tasks-db`` 0.12 for
-  Voxhelm transcript generation, and document the ``cast_transcripts`` database
-  worker setup for Wagtail admin transcript completion.
-- Limit the supported Wagtail range to ``>=7.4,<7.5`` and align the default
-  tox matrix with that supported range by removing Wagtail 6 and Django 4.2
-  environments.
-- Drop support for Django 4.2; Django 5.2 or higher is now required because
-  Wagtail 7.4 no longer supports Django 4.2.
+- Require Wagtail 7.0 LTS or newer within Wagtail 7 and allow
+  ``django-tasks>=0.7,<0.13`` so installs can resolve against both Wagtail
+  7.0 LTS and the latest Wagtail 7 release.
+- Move ``django-tasks-db`` to the optional ``transcript-worker`` extra because
+  ``django-tasks-db`` 0.12 requires ``django-tasks`` 0.12, while Wagtail 7.0
+  uses ``django-tasks`` 0.7. Core installs continue to support Wagtail 7.0;
+  sites using the database-backed transcript worker need a newer compatible
+  Wagtail/django-tasks combination.
+- Align the default tox matrix with the supported Wagtail range by testing
+  Wagtail 7.0 LTS and the latest Wagtail 7 release.
 - Replace any hand-managed ``django_tasks.backends.database`` entry in
-  ``INSTALLED_APPS`` with ``django_tasks`` and ``django_tasks_db``.
-- Remove any legacy ``ENQUEUE_ON_COMMIT`` keys from ``TASKS`` settings; the
-  current ``django-tasks`` configuration no longer uses that option.
-- Require ``modelsearch>=1.3,<1.4`` so full-text search remains compatible
-  with ``django-tasks`` 0.12 while staying inside Wagtail's supported
-  ``modelsearch`` range.
+  ``INSTALLED_APPS`` with ``django_tasks_db`` when using the
+  ``transcript-worker`` extra. ``django_tasks_db`` is no longer included in
+  ``CAST_APPS``; sites using the database-backed transcript worker must add it
+  to ``INSTALLED_APPS`` themselves.
+- Remove legacy ``ENQUEUE_ON_COMMIT`` keys from documented production
+  ``TASKS`` settings for the ``transcript-worker`` extra; ``django-tasks``
+  0.12+ no longer uses that option. Wagtail 7.0 LTS still pulls
+  ``django-tasks`` 0.7, where the immediate backend uses that setting.
+- Allow ``modelsearch>=1.2.2,<1.4`` so full-text search remains compatible
+  across Wagtail 7.0 and newer Wagtail 7 resolver requirements.
 - Replace the raw ``cloc`` plus ``sloccount`` ``just loc`` recipe with the
   shared ``slopscope`` line-count workflow via a local editable checkout. The
   command keeps ``cloc`` semantics when ``cloc`` is available and now reports

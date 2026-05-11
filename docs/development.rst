@@ -376,7 +376,7 @@ To test a specific environment:
 
 .. code-block:: bash
 
-   $ uv run tox -e py314-django52-wagtail7
+   $ uv run tox -e py312-django42-wagtail70
 
 Code Quality
 ============

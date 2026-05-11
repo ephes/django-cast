@@ -140,13 +140,20 @@ preferences. These values take precedence over Django settings and environment
 variables for Wagtail-admin-triggered transcript generation on that site.
 
 Wagtail-admin-triggered transcript completion is queued through Django Tasks.
-Production sites should install ``django_tasks`` and ``django_tasks_db``, keep
-the global ``default`` backend immediate, and route ``cast_transcripts`` to the
-database backend:
+Production sites that need a database-backed transcript worker should install
+the optional ``transcript-worker`` extra. That extra requires a
+Wagtail/django-tasks combination compatible with ``django-tasks-db`` 0.12;
+Wagtail 7.0 LTS uses ``django-tasks`` 0.7 and is not compatible with that
+database backend. Keep the global ``default`` backend immediate, and route
+``cast_transcripts`` to the database backend:
+
+.. code-block:: bash
+
+    uv pip install "django-cast[transcript-worker]"
 
 .. code-block:: python
 
-    INSTALLED_APPS += ["django_tasks", "django_tasks_db"]
+    INSTALLED_APPS += ["django_tasks_db"]
 
     TASKS = {
         "default": {
