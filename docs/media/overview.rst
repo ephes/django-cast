@@ -146,7 +146,7 @@ Configure S3 for production:
 Multiple Storage Backends
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Django 4.2+ supports separate storages:
+Configure separate storage backends through Django's ``STORAGES`` setting:
 
 .. code-block:: python
 

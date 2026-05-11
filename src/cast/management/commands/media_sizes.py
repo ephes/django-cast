@@ -6,10 +6,7 @@ from .storage_backend import get_production_and_backup_storage
 
 
 class Command(BaseCommand):
-    help = (
-        "show size of media files on production storage backend"
-        "(requires Django >= 4.2 and production and backup storage configured)"
-    )
+    help = "show size of media files on production storage backend (requires production and backup storage backends configured)"
 
     @staticmethod
     def show_usage(paths):

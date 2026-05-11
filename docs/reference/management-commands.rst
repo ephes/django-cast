@@ -112,8 +112,8 @@ This command takes no options.
 Media Backup and Restore
 ========================
 
-These commands require Django >= 4.2 and both ``production`` and ``backup``
-storage backends to be configured in your ``STORAGES`` setting. See
+These commands require both ``production`` and ``backup`` storage backends to be
+configured in your ``STORAGES`` setting. See
 :doc:`../reference/settings` for storage configuration details.
 
 media_backup
@@ -141,8 +141,8 @@ media_replace
 
 Replace specific files on production storage with versions from the local
 filesystem. Useful when you have a better-compressed version of a video
-but want to keep the same filename. Requires Django >= 4.2 and configured
-``production`` and ``backup`` storage backends.
+but want to keep the same filename. Requires configured ``production`` and
+``backup`` storage backends.
 
 .. code-block:: bash
 
@@ -176,8 +176,8 @@ media_sizes
 -----------
 
 Print the sizes of all media files on the production storage backend,
-categorized by type (video, image, misc) with totals in MB. Requires
-Django >= 4.2 and configured ``production`` and ``backup`` storage backends.
+categorized by type (video, image, misc) with totals in MB. Requires configured
+``production`` and ``backup`` storage backends.
 
 .. code-block:: bash
 
@@ -195,8 +195,7 @@ media_stale
 Find media files in production storage that are not referenced by any
 database record. The command checks paths referenced by image, video,
 audio, transcript, and file records before classifying anything as stale.
-Requires Django >= 4.2 and configured ``production`` and ``backup``
-storage backends.
+Requires configured ``production`` and ``backup`` storage backends.
 
 .. code-block:: bash
 

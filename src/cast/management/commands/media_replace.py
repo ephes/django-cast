@@ -6,8 +6,8 @@ from .storage_backend import get_production_and_backup_storage
 
 class Command(BaseCommand):
     help = (
-        "replace paths on production storage backend with local versions - useful for compressed videos for example"
-        "(requires Django >= 4.2 and production and backup storage configured)"
+        "replace paths on production storage backend with local versions - useful for compressed videos for example "
+        "(requires production and backup storage backends configured)"
     )
 
     def add_arguments(self, parser):

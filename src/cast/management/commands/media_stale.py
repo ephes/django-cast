@@ -9,7 +9,7 @@ from .storage_backend import get_production_and_backup_storage
 class Command(BaseCommand):
     help = (
         "show media files which are in the production storage backend, but not in database and optionally delete them "
-        "(requires Django >= 4.2 and production and backup storage configured)"
+        "(requires production and backup storage backends configured)"
     )
 
     def add_arguments(self, parser):

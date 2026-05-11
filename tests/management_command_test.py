@@ -5,21 +5,13 @@ from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import django
 import pytest
-
-try:
-    from django.core.files.storage import storages
-except ImportError:
-    pass
+from django.core.files.storage import storages
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import CommandError, call_command
 
-try:
-    from cast.management.commands.media_backup import Command as MediaBackupCommand
-except ImportError:
-    pass
 from cast.devdata import create_transcript
+from cast.management.commands.media_backup import Command as MediaBackupCommand
 from cast.management.commands.media_stale import Command as MediaStaleCommand
 from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
 
@@ -27,33 +19,11 @@ from .factories import BlogFactory
 from .multisite_helpers import create_site_root
 
 
-def get_comparable_django_version():
-    django_version = "".join(django.get_version().split(".")[:2])
-    try:
-        return int(django_version)
-    except ValueError:
-        # pre-release probably
-        return int(django_version.split("a")[0])
-
-
-pytestmark = pytest.mark.skipif(
-    get_comparable_django_version() < 42,
-    reason="Django version >= 4.2 is required",
-)
-
-
 def test_media_backup_without_storages(settings):
     settings.STORAGES = {}
     with pytest.raises(CommandError) as err:
         call_command("media_backup")
     assert str(err.value) == "production or backup storage not configured"
-
-
-def test_media_backup_with_wrong_django_version(mocker):
-    mocker.patch("cast.management.commands.storage_backend.DJANGO_VERSION_VALID", False)
-    with pytest.raises(CommandError) as err:
-        call_command("media_backup")
-    assert str(err.value) == "Django version >= 4.2 is required"
 
 
 def _stub_styleguide_prefetch(mocker, *, default_theme="plain", available_themes=None):

@@ -328,11 +328,6 @@ like this:
     }
 
 
-.. important::
-
-    This will only work if you are using Django >= 4.2.
-
-
 ******************
 Faceted Navigation
 ******************
