@@ -1,4 +1,4 @@
-0.2.56 (unreleased)
+0.2.56 (2026-05-12)
 -------------------
 
 - Require Wagtail 7.0 LTS or newer within Wagtail 7 and allow
