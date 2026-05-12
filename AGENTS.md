@@ -55,7 +55,8 @@
 - Main branch is `develop`.
 - Documentation at https://django-cast.readthedocs.io/
 - Source at https://github.com/ephes/django-cast
-- Do not commit any files under `specs/`. Do not ask about committing specs.
+- Local planning lives in `BACKLOG.md`; larger feature notes live in `backlog/` and should be linked from
+  `BACKLOG.md`.
 ### Theme Repos (provide templates that extend django-cast)
 - `../cast-bootstrap5` — Bootstrap 5 theme: templates in `cast_bootstrap5/templates/cast/bootstrap5/`
 - `../cast-vue` — Vue.js theme: templates in `cast_vue/templates/cast/vue/`
@@ -86,3 +87,4 @@
 
 ## Skills
 - `playwright-smoke-tests` (in `~/.codex/skills/playwright-smoke-tests`): Run staging/local Playwright smoke checks for filters/list pages after deploys.
+- Playwright e2e patterns: `.claude/skills/playwright/SKILL.md` (repository-local).
