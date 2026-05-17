@@ -8,6 +8,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - When docs mention future behavior, add or update the matching entry here.
 - Do not keep a separate done list. Completed user-facing work belongs in the current release notes under
   `docs/releases/`; implementation history belongs in git.
+- Use `Depends on` for blocking relationships and `Related to` for non-blocking cross-links.
 - GitHub issues are optional for public coordination, but local planning starts here.
 
 ## Ready
@@ -44,8 +45,17 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: review the existing `django-cast-quickstart`, `example/scripts/bootstrap_example_data.py`, and
     `ensure_reference_site` workflows and decide what onboarding should mean for django-cast users: new project
     setup, local development setup, editor onboarding, or assisted content authoring.
+  - Notes: include "try django-cast with your own podcast feed" as one possible getting-started path, built on
+    top of the podcast feed import workflow.
   - Done when: the current workflows are documented in one place, gaps are listed, and follow-up items are split
     into concrete implementation tasks.
+
+- [ ] Podcast feed import
+  - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
+  - Related to: Revisit onboarding and authoring workflows.
+  - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
+  - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on
+    stable feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
 
 - [ ] Programmatic content editing API
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
