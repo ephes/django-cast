@@ -4,6 +4,14 @@ Development
 
 This guide covers everything you need to know to contribute to django-cast development.
 
+Planning Future Work
+====================
+
+Planned work is tracked in the
+`project backlog <https://github.com/ephes/django-cast/blob/develop/BACKLOG.md>`_.
+Add or update backlog entries there instead of maintaining separate planned-work
+lists in the README or docs.
+
 Development Environment Setup
 =============================
 

@@ -150,7 +150,8 @@ Required Templates
 Templates are split into two tiers: **strictly required** (must exist for
 the theme to be discovered) and **soft-required** (produce a
 ``DeprecationWarning`` when missing but will become strictly required in a
-future release).
+future release). The requirement change is tracked in the
+`project backlog <https://github.com/ephes/django-cast/blob/develop/BACKLOG.md>`__.
 
 **Strictly required** — the theme will not appear in the theme chooser without
 these:

@@ -60,10 +60,10 @@ Repository alias names were removed in a breaking cleanup. Use canonical names o
 - `episode_to_dict` -> `serialize_episode`
 - `transcript_to_dict` -> `serialize_transcript`
 
-## Roadmap
+## Backlog
 
-- Design improvements for the default theme
-- Collaborators for podcast episodes
+Planned work is tracked in [BACKLOG.md](BACKLOG.md), which is the canonical
+place for planned work, research notes, and future cleanup ideas.
 
 ## Contributing
 

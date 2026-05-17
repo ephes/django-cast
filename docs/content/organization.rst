@@ -12,7 +12,8 @@ Categories / Tags
 
 This is a beta feature. It is not yet fully implemented. Since I don't
 know yet if I will go with tags or categories, I added both and wait
-which one sticks 😄.
+which one sticks 😄. Future cleanup is tracked in the
+`project backlog <https://github.com/ephes/django-cast/blob/develop/BACKLOG.md>`__.
 
 Categories
 ==========
