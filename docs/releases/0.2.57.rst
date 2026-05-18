@@ -1,2 +1,6 @@
 0.2.57 (unreleased)
 -------------------
+
+- Added podcast episode contributors with contributor snippets, ordered
+  host/guest assignments, episode-page context, and item-level
+  ``podcast:person`` feed output.

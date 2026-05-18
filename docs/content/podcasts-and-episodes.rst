@@ -33,10 +33,9 @@ Cover Image
 -----------
 
 In addition to the effect setting a cover image for a post has, setting a
-cover image for an episode will also be used as the episode's artwork in the
-podcast feed and in the Podlove Web Player.
-Podlove posters use an automatically generated max-1200x1200 rendition to keep
-image sizes reasonable.
+cover image for an episode will also be used in the Podlove Web Player.
+Podlove posters use an automatically generated max-512x512 WebP rendition to
+keep image sizes reasonable.
 It is also used for social previews via the automatically generated 1200x630
 social rendition.
 
@@ -63,6 +62,31 @@ Keywords
 --------
 
 Keywords are set in the podcast feed as the iTunes keywords tag.
+
+Contributors
+------------
+
+Episode contributors are reusable Wagtail snippets for people who should be
+credited on podcast episodes and in Podcasting 2.0 feed metadata.
+
+Create contributors in Wagtail under **Snippets > Contributors**. A contributor
+has a display name, a stable slug, an optional avatar, an optional short bio, and
+ordered profile links. Profile links use fixed service choices such as Website,
+GitHub, Mastodon, Twitter/X, LinkedIn, and YouTube.
+
+Contributors have a global ``visible`` flag. Turning it off hides that person
+from public episode pages and podcast feeds without deleting existing episode
+assignments.
+
+On an episode edit page, use the **Contributors** panel to add ordered
+contributors. Each assignment chooses a contributor, a role of **Host** or
+**Guest**, and optionally one of the contributor's links to use for that episode.
+
+Public episode templates receive ``episode_contributors`` in context. Podcast
+feed items emit one ``podcast:person`` element for each visible assignment. The
+element text is the contributor display name, ``role`` is the episode assignment
+role, ``img`` is the contributor avatar URL when configured, and ``href`` is the
+selected assignment link when configured.
 
 Explicit
 --------
