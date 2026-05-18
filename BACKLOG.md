@@ -57,6 +57,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on
     stable feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
 
+- [ ] Speaker diarization for generated transcripts
+  - Notes: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
+  - Related to: Podcast contributor follow-up options.
+  - Scope: shape speaker-labeled transcript generation through Voxhelm and decide how django-cast should expose
+    generic speaker labels, speaker names, and contributor mappings.
+  - Done when: Voxhelm support is proven with representative podcast audio, DOTe/Podlove/WebVTT speaker-label
+    behavior is documented, and the first django-cast implementation slice is small enough to estimate.
+
 - [ ] Programmatic content editing API
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
     and revise posts or episodes programmatically.
