@@ -409,6 +409,13 @@ templates:
 ``podlove_load_mode``
     Podlove player loading strategy.
 
+``episode_contributors``
+    Visible, ordered episode contributor assignments for detail renders. Custom
+    themes that override episode body templates should render these assignments
+    when present, usually by including ``cast/contributors.html`` outside feed
+    renders. Use this filtered value rather than ``episode.contributor_assignments``
+    so globally hidden contributors remain hidden.
+
 **Episode detail (``episode.html``):**
 
 ``episode``

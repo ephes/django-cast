@@ -6,7 +6,7 @@ from wagtail.images.models import Rendition
 from .types import RenditionsForPosts, SerializedRenditions
 
 if TYPE_CHECKING:
-    from cast.models import Blog
+    from cast.models import Blog, Contributor, ContributorLink, EpisodeContributor
 
 
 def serialize_audio(audio) -> dict:
@@ -57,6 +57,88 @@ def deserialize_transcript(data: dict[str, Any]):
     from .. import Transcript
 
     return Transcript(**data)
+
+
+def serialize_contributor_link(link: "ContributorLink") -> dict[str, Any]:
+    """Serialize a contributor link for feed/detail cache data."""
+    return {
+        "id": link.pk,
+        "pk": link.pk,
+        "service": link.service,
+        "url": link.url,
+        "sort_order": link.sort_order,
+    }
+
+
+def deserialize_contributor_link(data: dict[str, Any], contributor: "Contributor") -> "ContributorLink":
+    """Reconstruct a contributor link and attach its contributor."""
+    from ..contributors import ContributorLink
+
+    link_data = data.copy()
+    # Keep the reconstructed link attached to the reconstructed contributor so
+    # EpisodeContributor.clean() sees matching contributor_id values.
+    link_data["contributor"] = contributor
+    return ContributorLink(**link_data)
+
+
+def serialize_contributor(contributor: "Contributor") -> dict[str, Any]:
+    """Serialize a contributor snippet for feed/detail cache data."""
+    data = {
+        "id": contributor.pk,
+        "pk": contributor.pk,
+        "display_name": contributor.display_name,
+        "slug": contributor.slug,
+        "visible": contributor.visible,
+        "short_bio": contributor.short_bio,
+    }
+    if contributor.avatar is not None:
+        data["avatar"] = serialize_image(contributor.avatar)
+    rendition_url = getattr(contributor, "_avatar_rendition_url", None)
+    if rendition_url is not None:
+        data["avatar_rendition_url"] = rendition_url
+    return data
+
+
+def deserialize_contributor(data: dict[str, Any]) -> "Contributor":
+    """Reconstruct a contributor snippet."""
+    from ..contributors import Contributor
+
+    contributor_data = data.copy()
+    avatar_data = contributor_data.pop("avatar", None)
+    rendition_url = contributor_data.pop("avatar_rendition_url", None)
+    contributor = Contributor(**contributor_data)
+    if avatar_data is not None:
+        contributor.avatar = deserialize_image(avatar_data)
+    if rendition_url is not None:
+        contributor._avatar_rendition_url = rendition_url
+    return contributor
+
+
+def serialize_episode_contributor(assignment: "EpisodeContributor") -> dict[str, Any]:
+    """Serialize an episode contributor assignment."""
+    data = {
+        "id": assignment.pk,
+        "pk": assignment.pk,
+        "role": assignment.role,
+        "sort_order": assignment.sort_order,
+        "contributor": serialize_contributor(assignment.contributor),
+    }
+    if assignment.link is not None:
+        data["link"] = serialize_contributor_link(assignment.link)
+    return data
+
+
+def deserialize_episode_contributor(data: dict[str, Any]) -> "EpisodeContributor":
+    """Reconstruct an episode contributor assignment."""
+    from ..contributors import EpisodeContributor
+
+    assignment_data = data.copy()
+    contributor = deserialize_contributor(assignment_data.pop("contributor"))
+    link_data = assignment_data.pop("link", None)
+    assignment_data["contributor"] = contributor
+    if link_data is not None:
+        assignment_data["link"] = deserialize_contributor_link(link_data, contributor)
+    return EpisodeContributor(**assignment_data)
 
 
 def serialize_video(video) -> dict:
@@ -157,7 +239,7 @@ def deserialize_post(data: dict[str, Any]):
 
 def serialize_episode(post):
     """Serialize an Episode instance (post with podcast audio) to a plain dict."""
-    return {
+    data = {
         "id": post.pk,
         "pk": post.pk,
         "uuid": post.uuid,
@@ -171,6 +253,10 @@ def serialize_episode(post):
         "explicit": post.explicit,
         "block": post.block,
     }
+    data["contributor_assignments"] = [
+        serialize_episode_contributor(assignment) for assignment in post.visible_contributor_assignments
+    ]
+    return data
 
 
 def deserialize_episode(data: dict[str, Any]):
@@ -180,7 +266,12 @@ def deserialize_episode(data: dict[str, Any]):
     episode_data = data.copy()
     if "podcast_audio" in episode_data:
         episode_data["podcast_audio"] = deserialize_audio(episode_data["podcast_audio"])
-    return Episode(**episode_data)
+    assignments_data = episode_data.pop("contributor_assignments", [])
+    episode = Episode(**episode_data)
+    episode._visible_contributor_assignments = [
+        deserialize_episode_contributor(assignment_data) for assignment_data in assignments_data
+    ]
+    return episode
 
 
 def serialize_image(image):

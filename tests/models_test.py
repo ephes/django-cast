@@ -1,15 +1,18 @@
-import pytest
 import os
+from types import SimpleNamespace
+
+import pytest
 from django import forms
-from django.db import connection
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, connection, transaction
+from django.db.models import ProtectedError
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
-from types import SimpleNamespace
 
 from cast import appsettings
 from cast.devdata import create_transcript
-from cast.models import Audio, Blog, File, Podcast
+from cast.models import Audio, Blog, Contributor, ContributorLink, EpisodeContributor, File, Podcast
 from cast.models.pages import (
     PODLOVE_POSTER_RENDITION_SPEC,
     SOCIAL_COVER_RENDITION_SPEC,
@@ -502,6 +505,306 @@ class TestPostModel:
         player_ids = {element_id for element_id, _url in episode.podlove_players}
         assert player_ids == {f"#audio_{audio.pk}", f"#audio_{other_audio.pk}"}
 
+    def test_episode_visible_contributor_assignments_filters_and_orders(self, episode):
+        hidden = Contributor.objects.create(display_name="Hidden Person", slug="hidden-person", visible=False)
+        visible_guest = Contributor.objects.create(display_name="Visible Guest", slug="visible-guest")
+        visible_host = Contributor.objects.create(display_name="Visible Host", slug="visible-host")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=visible_guest,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=2,
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=hidden,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=1,
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=visible_host,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+
+        assert [assignment.display_name for assignment in episode.visible_contributor_assignments] == [
+            "Visible Host",
+            "Visible Guest",
+        ]
+
+    def test_episode_visible_contributor_assignments_uses_prefetched_assignments(self, episode):
+        contributor = Contributor.objects.create(display_name="Prefetched Guest", slug="prefetched-guest")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=0,
+        )
+        prefetched_episode = Episode.objects.prefetch_related("contributor_assignments__contributor").get(
+            pk=episode.pk
+        )
+
+        assert [assignment.display_name for assignment in prefetched_episode.visible_contributor_assignments] == [
+            "Prefetched Guest",
+        ]
+
+    def test_unsaved_episode_visible_contributor_assignments(self, mocker):
+        class BrokenAssignments:
+            @staticmethod
+            def select_related(*_args):
+                raise ValueError
+
+        episode = Episode()
+        mocker.patch.object(Episode, "contributor_assignments", BrokenAssignments())
+
+        assert episode.visible_contributor_assignments == []
+
+    def test_unsaved_episode_visible_contributor_assignments_include_modelcluster_children(self):
+        host = Contributor.objects.create(display_name="Draft Host", slug="draft-host")
+        guest = Contributor.objects.create(display_name="Draft Guest", slug="draft-guest")
+        hidden = Contributor.objects.create(display_name="Draft Hidden", slug="draft-hidden", visible=False)
+        episode = Episode(title="Draft episode", slug="draft-episode")
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=guest,
+                role=EpisodeContributor.ROLE_GUEST,
+                sort_order=1,
+            )
+        )
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=hidden,
+                role=EpisodeContributor.ROLE_GUEST,
+                sort_order=2,
+            )
+        )
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=host,
+                role=EpisodeContributor.ROLE_HOST,
+                sort_order=0,
+            )
+        )
+
+        assert [assignment.display_name for assignment in episode.visible_contributor_assignments] == [
+            "Draft Host",
+            "Draft Guest",
+        ]
+
+    def test_contributor_helpers(self, rf, image):
+        contributor = Contributor.objects.create(display_name="Visible Guest", slug="visible-guest", avatar=image)
+        link = ContributorLink.objects.create(
+            contributor=contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/guest",
+        )
+
+        assert str(contributor) == "Visible Guest"
+        assert str(link) == "Visible Guest: Website"
+        assert Contributor(display_name="No Avatar", slug="no-avatar").get_avatar_url() == ""
+        assert contributor.get_avatar_url() == image.file.url
+        assert contributor.get_avatar_url(rf.get("/")) == f"http://testserver{image.file.url}"
+        rendition_url = contributor.get_avatar_rendition_url()
+        assert rendition_url
+        assert "fill-80x80" in rendition_url
+        assert contributor.get_avatar_rendition_url() == rendition_url  # cached
+
+    def test_episode_contributor_link_must_belong_to_contributor(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
+        other_link = ContributorLink.objects.create(
+            contributor=other_contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/other",
+        )
+        assignment = EpisodeContributor(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            link=other_link,
+        )
+
+        with pytest.raises(ValidationError):
+            assignment.clean()
+
+    def test_episode_contributor_link_mismatch_rejected_by_direct_save(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
+        other_link = ContributorLink.objects.create(
+            contributor=other_contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/other",
+        )
+        assignment = EpisodeContributor(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            link=other_link,
+        )
+
+        with pytest.raises(ValidationError):
+            assignment.save()
+
+    def test_episode_contributor_link_mismatch_rejected_by_cluster_formset(self, episode):
+        """Wagtail's InlinePanel save path runs through a modelcluster childformset."""
+        from modelcluster.forms import childformset_factory
+
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
+        other_link = ContributorLink.objects.create(
+            contributor=other_contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/other",
+        )
+        formset_class = childformset_factory(Episode, EpisodeContributor, fields=["contributor", "role", "link"])
+        prefix = formset_class.get_default_prefix()
+        formset = formset_class(
+            data={
+                f"{prefix}-TOTAL_FORMS": "1",
+                f"{prefix}-INITIAL_FORMS": "0",
+                f"{prefix}-MIN_NUM_FORMS": "0",
+                f"{prefix}-MAX_NUM_FORMS": "1000",
+                f"{prefix}-0-contributor": str(contributor.pk),
+                f"{prefix}-0-role": EpisodeContributor.ROLE_GUEST,
+                f"{prefix}-0-link": str(other_link.pk),
+                f"{prefix}-0-ORDER": "0",
+                f"{prefix}-0-id": "",
+            },
+            instance=episode,
+        )
+        assert not formset.is_valid()
+        assert "link" in formset.errors[0]
+
+    def test_episode_contributor_is_unique_per_episode_contributor_and_role(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=0,
+        )
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            EpisodeContributor.objects.create(
+                episode=episode,
+                contributor=contributor,
+                role=EpisodeContributor.ROLE_GUEST,
+                sort_order=1,
+            )
+
+    def test_episode_contributor_allows_same_person_in_different_roles(self, episode):
+        contributor = Contributor.objects.create(display_name="Polymath", slug="polymath")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=1,
+        )
+
+        assert EpisodeContributor.objects.filter(episode=episode, contributor=contributor).count() == 2
+
+    def test_episode_contributor_helpers_with_valid_link(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        link = ContributorLink.objects.create(
+            contributor=contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/guest",
+        )
+        assignment = EpisodeContributor(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            link=link,
+        )
+
+        assignment.clean()
+
+        assert str(assignment) == "Guest (Guest)"
+        assert assignment.href == "https://example.com/guest"
+        assert assignment.get_avatar_url() == ""
+
+    def test_contributor_link_in_use_cannot_be_reparented(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
+        link = ContributorLink.objects.create(
+            contributor=contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/guest",
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            link=link,
+        )
+
+        link.url = "https://example.com/guest-updated"
+        link.save()
+
+        link.contributor = other_contributor
+
+        with pytest.raises(ValidationError):
+            link.save()
+        link.refresh_from_db()
+        assert link.contributor == contributor
+
+    def test_contributor_link_reparenting_is_rejected_by_full_clean(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
+        link = ContributorLink.objects.create(
+            contributor=contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/guest",
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            link=link,
+        )
+
+        link.contributor = other_contributor
+
+        with pytest.raises(ValidationError):
+            link.full_clean()
+
+    def test_contributor_link_in_use_cannot_be_deleted(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        link = ContributorLink.objects.create(
+            contributor=contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/guest",
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            link=link,
+        )
+
+        with pytest.raises(ProtectedError):
+            link.delete()
+
+    def test_episode_context_exposes_visible_contributors(self, rf, episode):
+        contributor = Contributor.objects.create(display_name="Visible Guest", slug="visible-guest")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=0,
+        )
+
+        context = episode.get_context(rf.get("/"))
+
+        assert [assignment.display_name for assignment in context["episode_contributors"]] == ["Visible Guest"]
+
     def test_get_context_owner_none(self, rf, post):
         """owner can be None when editing a draft."""
         request = rf.get("/")
@@ -552,6 +855,41 @@ class TestPostModel:
         assert context["self"] is context["page"]
         assert context["page"].owner.username == "owner-from-repository"
         assert context["page"].page_url == expected_page_url
+
+    def test_serve_defaults_to_detail_rendering(self, rf, post, mocker):
+        request = rf.get("/")
+        captured_kwargs = {}
+
+        def fake_page_serve(_page, _request, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return "response"
+
+        mocker.patch("cast.models.pages.Page.serve", fake_page_serve)
+
+        response = post.serve(request)
+
+        assert response == "response"
+        assert captured_kwargs["render_detail"] is True
+
+    def test_serve_keeps_explicit_render_detail_value(self, rf, post, mocker):
+        request = rf.get("/")
+        captured_kwargs = {}
+
+        def fake_page_serve(_page, _request, *args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return "response"
+
+        mocker.patch("cast.models.pages.Page.serve", fake_page_serve)
+
+        response = post.serve(request, render_detail=False)
+
+        assert response == "response"
+        assert captured_kwargs["render_detail"] is False
+
+    def test_preview_context_defaults_to_detail_rendering(self, rf, post):
+        context = post.get_preview_context(rf.get("/"), "")
+
+        assert context["render_detail"] is True
 
     def test_has_selectable_themes(self, rf, post):
         """Theme selector should be enabled on post detail pages."""

@@ -19,7 +19,7 @@ from wagtail.images.models import Image
 from cast import appsettings
 from cast.site_lookup import get_site_specific_page_or_404
 
-from .models import Audio, Blog, Podcast, Post
+from .models import Audio, Blog, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext
 from .views import HtmxHttpRequest
 
@@ -272,6 +272,18 @@ class PodcastIndexElements:
     request: HttpRequest
     repository: FeedContext
 
+    @staticmethod
+    def get_person_attributes(assignment: EpisodeContributor, request: HttpRequest) -> dict[str, str]:
+        attrs = {}
+        valid_roles = {role for role, _label in EpisodeContributor.ROLE_CHOICES}
+        if assignment.role in valid_roles:
+            attrs["role"] = assignment.role
+        if avatar_url := assignment.get_avatar_rendition_url(request):
+            attrs["img"] = avatar_url
+        if href := assignment.href:
+            attrs["href"] = href
+        return attrs
+
     def add_item_elements(self, handler, item) -> None:
         """Add additional elements to the post object"""
         try:
@@ -291,6 +303,12 @@ class PodcastIndexElements:
             podcastindex_transcript_url := episode.get_podcastindex_transcript_url(self.request, repository)
         ) is not None:
             haqe("podcast:transcript", attrs={"type": "application/json", "url": podcastindex_transcript_url})
+        for assignment in episode.visible_contributor_assignments:
+            haqe(
+                "podcast:person",
+                assignment.display_name,
+                attrs=self.get_person_attributes(assignment, self.request),
+            )
 
     def namespace_attributes(self) -> dict:
         namespace_attributes = super().namespace_attributes()  # type: ignore

@@ -45,14 +45,22 @@ integrations.
 Media Menu Items
 -----------------
 
-Three menu items are added to the Wagtail admin sidebar for managing media:
+Four menu items are added to the Wagtail admin sidebar for managing media and podcast credits:
 
 - **Audio** - List, add, edit, and delete audio files with chapter marks
 - **Video** - List, add, edit, and delete video files with poster images
 - **Transcript** - List, add, edit, and delete transcripts
+- **Contributors** - List, add, edit, and delete reusable podcast contributors
 
 Each menu item is permission-aware and only appears for users with the
-appropriate add, change, or delete permissions on the respective model.
+appropriate permissions on the respective model.
+
+Contributors Management
+------------------------
+
+Contributors are registered as Wagtail snippets and are also linked directly
+from the Wagtail admin sidebar. This gives editors a top-level **Contributors**
+entry instead of requiring them to navigate through **Snippets** first.
 
 Tags Management
 ----------------

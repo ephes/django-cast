@@ -1,9 +1,9 @@
 """Wagtail hooks for django-cast admin integration.
 
 Registers custom admin URLs, menu items, and rich-text link handling
-for Audio, Video, and Transcript media types. Also registers a Tags
-snippet viewset for CRUD operations on ``taggit.Tag`` from the Wagtail
-admin sidebar.
+for Audio, Video, Transcript, and Contributor media types. Also
+registers a Tags snippet viewset for CRUD operations on ``taggit.Tag``
+from the Wagtail admin sidebar.
 """
 
 from collections.abc import Iterator, MutableMapping
@@ -22,10 +22,11 @@ from wagtail.admin.panels import FieldPanel
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 from wagtail.rich_text.pages import PageLinkHandler
 from wagtail.snippets.models import register_snippet
+from wagtail.snippets.permissions import user_can_access_snippets
 from wagtail.snippets.views.snippets import SnippetViewSet
 
 from .admin_urls import audio, transcript, video, voxhelm
-from .models import Audio, Episode, Transcript, Video
+from .models import Audio, Contributor, Episode, Transcript, Video
 from .views.voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_episode
 
 _T = TypeVar("_T")
@@ -146,6 +147,25 @@ class TagsSnippetViewSet(SnippetViewSet):
 
 
 register_snippet(TagsSnippetViewSet)
+
+
+class ContributorMenuItem(MenuItem):
+    """Admin sidebar menu item for Contributor snippets."""
+
+    def is_shown(self, request: HttpRequest) -> bool:
+        return user_can_access_snippets(request.user, [Contributor])
+
+
+@hooks.register("register_admin_menu_item")
+def register_contributor_menu_item() -> ContributorMenuItem:
+    """Register the Contributor snippet list in the Wagtail admin sidebar."""
+    return ContributorMenuItem(
+        _("Contributors"),
+        reverse("wagtailsnippets_cast_contributor:list"),
+        name="contributors",
+        icon_name="group",
+        order=210,
+    )
 
 
 class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):

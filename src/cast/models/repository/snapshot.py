@@ -123,6 +123,9 @@ class PostQuerySnapshot:
         images_by_post_id: ImagesByPostID = {}
         page_url_by_id: PageUrlByID = {}
         absolute_page_url_by_id: PageUrlByID = {}
+        from ..pages import Episode
+
+        episode_by_id: dict[int, Episode] = {}
         for post in queryset:
             specific_post = post.specific
             post_by_id[post.pk] = specific_post
@@ -153,6 +156,29 @@ class PostQuerySnapshot:
                         transcript_by_audio_id[podcast_audio.pk] = podcast_audio.transcript
                     except ObjectDoesNotExist:
                         pass
+            if isinstance(specific_post, Episode):
+                episode_by_id[post.pk] = specific_post
+
+        if episode_by_id:
+            from ..contributors import EpisodeContributor
+
+            assignments_by_episode_id: dict[int, list[EpisodeContributor]] = {
+                episode_id: [] for episode_id in episode_by_id
+            }
+            primed_contributors: dict[int, Any] = {}
+            for assignment in (
+                EpisodeContributor.objects.filter(episode_id__in=episode_by_id, contributor__visible=True)
+                .select_related("contributor__avatar", "link")
+                .order_by("episode_id", "sort_order", "pk")
+            ):
+                if assignment.contributor_id in primed_contributors:
+                    assignment.contributor = primed_contributors[assignment.contributor_id]
+                else:
+                    assignment.get_avatar_rendition_url()
+                    primed_contributors[assignment.contributor_id] = assignment.contributor
+                assignments_by_episode_id[assignment.episode_id].append(assignment)
+            for episode_id, episode in episode_by_id.items():
+                episode._visible_contributor_assignments = assignments_by_episode_id[episode_id]
 
         from ..pages import Post
 

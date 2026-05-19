@@ -13,6 +13,11 @@
     <a href="{{ page.page_url }}"><time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date }}</time>,</a>
     <span class="author">{{ page.owner.username | title}}</span>
   </header>
+  {% block episode_contributors %}
+    {% if render_detail and not render_for_feed and episode_contributors %}
+      {% include "cast/contributors.html" %}
+    {% endif %}
+  {% endblock episode_contributors %}
   {% for block in page.body %}
     {% if block.block_type != "detail" or render_detail %}
       <section class="block-{{ block.block_type }}">

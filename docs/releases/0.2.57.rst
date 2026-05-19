@@ -3,4 +3,20 @@
 
 - Added podcast episode contributors with contributor snippets, ordered
   host/guest assignments, episode-page context, and item-level
-  ``podcast:person`` feed output.
+  ``podcast:person`` feed output. The uniqueness constraint on episode
+  contributors covers ``(episode, contributor, role)``, so the same person
+  may be credited as both host and guest on one episode.
+- Contributor avatars are rendered through a ``fill-80x80|format-webp``
+  rendition on episode pages and in ``podcast:person`` feed items, and the
+  rendition URL is precomputed in the post repository so detail and feed
+  rendering remain query-free, including mixed post/episode querysets.
+- Added a top-level Wagtail admin menu item for contributors.
+- Full page ``Post.serve()`` calls and Wagtail previews now expose
+  ``render_detail=True`` to templates by default. Callers can still pass
+  ``render_detail=False`` explicitly for overview-style rendering.
+- Feed repository construction now primes ``lastBuildDate`` from the newest
+  visible post in the feed queryset instead of relying on queryset iteration
+  order.
+- Custom themes that override episode body templates should render
+  ``episode_contributors`` or include ``cast/contributors.html`` to show public
+  episode credits.

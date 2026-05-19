@@ -53,6 +53,7 @@ class PostDetailContext:
         video_by_id: VideoById,
         image_by_id: ImageById,
         renditions_for_posts: RenditionsForPosts,
+        episode_contributors: list[Any] | None = None,
     ):
         self.post_id = post_id
         self.template_base_dir = template_base_dir
@@ -70,6 +71,7 @@ class PostDetailContext:
         self.video_by_id = video_by_id
         self.image_by_id = image_by_id
         self.renditions_for_posts = renditions_for_posts
+        self.episode_contributors = episode_contributors
 
         cache_page_url(post_id, page_url)
 
@@ -88,6 +90,16 @@ class PostDetailContext:
         cover_image_url = ""
         if post.cover_image is not None:
             cover_image_url = cast(Image, post.cover_image).file.url
+        from ..pages import Episode
+
+        episode_contributors = None
+        if isinstance(post, Episode):
+            episode_contributors = post.visible_contributor_assignments
+            for assignment in episode_contributors:
+                assignment.get_avatar_rendition_url()
+        if hasattr(post, "get_transcript_or_none"):
+            # Prime the podcast audio/transcript cache for no-query repository rendering.
+            post.get_transcript_or_none()
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
@@ -105,6 +117,7 @@ class PostDetailContext:
             video_by_id=post.media_lookup.get("video", {}),
             image_by_id=image_by_id,
             renditions_for_posts=post.get_all_renditions_from_queryset([post]),
+            episode_contributors=episode_contributors,
         )
 
 
@@ -184,6 +197,10 @@ class FeedContext:
         clear_cached_page_urls()
         site = Site.find_for_request(request)
         queryset_data = PostQuerySnapshot.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
+        visible_dates = [post.visible_date for post in queryset_data.queryset]
+        if visible_dates:
+            # Avoid a lazy latest-post query when feed root metadata asks for lastBuildDate.
+            blog._last_build_date = max(visible_dates)
         root_nav_links: LinkTuples = []
         if site is not None:
             root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
@@ -319,8 +336,11 @@ class FeedContext:
 
     def get_post_detail_repository(self, post: "Post") -> PostDetailContext:
         """Derive a ``PostDetailContext`` for a single post from this feed's data."""
+        from ..pages import Episode
+
         post_id = post.pk if post.pk is not None else post.id
         blog = self.blog
+        episode_contributors = post.visible_contributor_assignments if isinstance(post, Episode) else None
         return PostDetailContext(
             post_id=post_id,
             template_base_dir=self.template_base_dir,
@@ -338,6 +358,7 @@ class FeedContext:
             renditions_for_posts=self.renditions_for_posts,
             cover_image_url=self.queryset_data.cover_by_post_id.get(post_id, ""),
             cover_alt_text=self.queryset_data.cover_alt_by_post_id.get(post_id, ""),
+            episode_contributors=episode_contributors,
         )
 
     def get_episode_feed_detail_repository(self, episode: "Episode") -> EpisodeFeedContext:

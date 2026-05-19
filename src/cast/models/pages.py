@@ -26,7 +26,7 @@ from slugify import slugify
 from taggit.models import TaggedItemBase
 from wagtail import blocks
 from wagtail.admin.forms import WagtailAdminPageForm
-from wagtail.admin.panels import FieldPanel, MultiFieldPanel
+from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
 from wagtail.api import APIField
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.fields import StreamField
@@ -60,6 +60,7 @@ from .repository import (
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
+    from .contributors import EpisodeContributor
     from .index_pages import Blog, ContextDict, Podcast
     from .transcript import Transcript
 
@@ -167,6 +168,7 @@ class HasPostDetails(Protocol):
     audio_by_id: AudioById
     video_by_id: VideoById
     image_by_id: ImageById
+    episode_contributors: list[Any] | None
 
 
 class Post(Page):
@@ -405,6 +407,8 @@ class Post(Page):
         context["cover_image_url"] = repository.cover_image_url
         context["cover_alt_text"] = repository.cover_alt_text
         context["audio_items"] = list(repository.audio_by_id.items())
+        if (episode_contributors := getattr(repository, "episode_contributors", None)) is not None:
+            context["episode_contributors"] = episode_contributors
         if context["page"].pk is None:
             context["page"].pk = repository.post_id
         return context
@@ -653,10 +657,14 @@ class Post(Page):
         return PostDetailContext.create_from_django_models(request=request, post=self)
 
     def serve(self, request: HtmxHttpRequest, *args, **kwargs):
+        kwargs.setdefault("render_detail", True)
         kwargs["repository"] = repository = self.get_repository(request, kwargs)
         # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
         kwargs["template_base_dir"] = repository.template_base_dir
         return super().serve(request, *args, **kwargs)
+
+    def get_preview_context(self, request, mode_name):
+        return self.get_context(request, render_detail=True)
 
     def serve_preview(self, request, mode_name, *args, **kwargs):
         # sync media ids before preview, because otherwise the repository
@@ -761,11 +769,18 @@ class Episode(Post):
         FieldPanel("keywords"),
         FieldPanel("explicit"),
         FieldPanel("block"),
+        MultiFieldPanel(
+            [InlinePanel("contributor_assignments", label=_("Contributor"))],
+            heading=_("Contributors"),
+            classname="collapsed",
+        ),
     ]
 
     objects: PageManager = PageManager()
     aliases_homepage: Any  # FIXME: why is this needed?
     base_form_class = CustomEpisodeForm
+    # Per-instance repository cache; snapshots/deserializers overwrite this on episode instances.
+    _visible_contributor_assignments: list["EpisodeContributor"] | None = None
 
     def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
         """
@@ -776,10 +791,18 @@ class Episode(Post):
     def get_context(self, request, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         context["episode"] = self
-        cover_image_context = self.get_cover_image_context(context, self.podcast)
+        if "episode_contributors" not in context:
+            context["episode_contributors"] = self.visible_contributor_assignments
+        repository = context.get("repository")
+        podcast = context.get("blog")
+        if podcast is None and repository is not None and hasattr(repository, "blog"):
+            podcast = repository.blog
+        if podcast is None:
+            podcast = self.podcast
+        cover_image_context = self.get_cover_image_context(context, podcast)
         context.update(cover_image_context)
         if hasattr(request, "build_absolute_uri"):
-            blog_slug = context["repository"].blog.slug
+            blog_slug = podcast.slug if podcast is not None else self.blog.slug
             player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": blog_slug})
             player_url = request.build_absolute_uri(player_url)
             context["player_url"] = player_url
@@ -790,7 +813,7 @@ class Episode(Post):
                 )
                 context["episode_transcript_url"] = request.build_absolute_uri(transcript_url)
         elif not context.get("render_for_feed") and self.has_transcript:
-            blog_slug = context["repository"].blog.slug
+            blog_slug = podcast.slug if podcast is not None else self.blog.slug
             context["episode_transcript_url"] = reverse(
                 "cast:episode-transcript",
                 kwargs={"episode_slug": self.slug, "blog_slug": blog_slug},
@@ -809,6 +832,21 @@ class Episode(Post):
         if parent is not None:
             return parent.specific
         return None
+
+    @property
+    def visible_contributor_assignments(self) -> list["EpisodeContributor"]:
+        assignments = self._visible_contributor_assignments
+        if assignments is not None:
+            return assignments
+        prefetched_assignments = getattr(self, "_prefetched_objects_cache", {}).get("contributor_assignments")
+        if prefetched_assignments is not None:
+            assignments_iterable = prefetched_assignments
+        else:
+            try:
+                assignments_iterable = self.contributor_assignments.select_related("contributor__avatar", "link").all()
+            except ValueError:
+                return []
+        return [assignment for assignment in assignments_iterable if assignment.contributor.visible]
 
     def get_enclosure_url(self, audio_format: str) -> str:
         return getattr(self.podcast_audio, audio_format).url

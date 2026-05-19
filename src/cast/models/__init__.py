@@ -1,4 +1,5 @@
 from .audio import Audio, ChapterMark, sync_chapter_marks
+from .contributors import Contributor, ContributorLink, EpisodeContributor
 from .file import File
 from .gallery import Gallery, get_or_create_gallery
 from .index_pages import Blog, Podcast
@@ -36,6 +37,9 @@ __all__ = [
     "ItunesArtWork",
     "Post",
     "PostCategory",
+    "Contributor",
+    "ContributorLink",
+    "EpisodeContributor",
     "Episode",
     "sync_media_ids",
     "SpamFilter",

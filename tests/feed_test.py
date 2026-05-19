@@ -1,4 +1,5 @@
 from datetime import datetime
+from types import SimpleNamespace
 from time import mktime
 from xml.etree import ElementTree
 
@@ -23,7 +24,7 @@ from cast.feeds import (
     RssPodcastFeed,
     _feed_stylesheets,
 )
-from cast.models import Post
+from cast.models import Contributor, ContributorLink, EpisodeContributor, Post
 
 
 def test_unknown_audio_format():
@@ -238,6 +239,54 @@ class TestGeneratedFeeds:
         assert r.status_code == 200
         content = r.content.decode("utf-8")
         assert "podcast:transcript" in content
+
+    def test_podcast_feed_includes_visible_episode_contributors(self, client, episode, image, use_dummy_cache_backend):
+        host = Contributor.objects.create(display_name="Episode Host", slug="episode-host", avatar=image)
+        host_link = ContributorLink.objects.create(
+            contributor=host,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/host",
+            sort_order=0,
+        )
+        guest = Contributor.objects.create(display_name="Episode Guest", slug="episode-guest")
+        hidden = Contributor.objects.create(display_name="Hidden Guest", slug="hidden-guest", visible=False)
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=host,
+            role=EpisodeContributor.ROLE_HOST,
+            link=host_link,
+            sort_order=0,
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=guest,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=1,
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=hidden,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=2,
+        )
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        root = ElementTree.fromstring(content)
+        namespace = {"podcast": "https://podcastindex.org/namespace/1.0/"}
+        people = root.findall(".//podcast:person", namespace)
+        assert [person.text for person in people] == ["Episode Host", "Episode Guest"]
+        assert people[0].attrib["role"] == "host"
+        assert people[0].attrib["href"] == "https://example.com/host"
+        assert people[0].attrib["img"].startswith("http://testserver/media/")
+        assert people[1].attrib == {"role": "guest"}
+        assert "Hidden Guest" not in content
 
 
 def test_itunes_elements_add_root_elements_index_error(mocker):
@@ -504,3 +553,9 @@ def test_podcast_index_elements_catch_no_super_add_item_elements(mocker):
     handler = mocker.MagicMock()
     result = elements.add_item_elements(handler, {"post": mocker.MagicMock()})
     assert result is None
+
+
+def test_podcast_index_person_attributes_omit_unknown_role(rf):
+    assignment = SimpleNamespace(role="producer", href="", get_avatar_rendition_url=lambda _request: "")
+
+    assert PodcastIndexElements.get_person_attributes(assignment, rf.get("/")) == {}

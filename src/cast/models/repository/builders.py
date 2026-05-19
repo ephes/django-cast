@@ -202,11 +202,8 @@ def data_for_blog_cachable(
         request=request, site=Site(**data["site"]), queryset=post_queryset
     )
     data = add_queryset_data(data, queryset_data)
-    last_build_date = None
-    for post in queryset_data.queryset:
-        last_build_date = post.visible_date
-        break
-    if last_build_date is not None:
-        data["last_build_date"] = last_build_date
+    visible_dates = [post.visible_date for post in queryset_data.queryset]
+    if visible_dates:
+        data["last_build_date"] = max(visible_dates)
 
     return data

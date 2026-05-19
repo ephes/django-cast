@@ -1,0 +1,63 @@
+{% load i18n %}
+
+{% with heading_id="episode-contributors-heading-"|add:episode.slug %}
+<section class="episode-contributors" aria-labelledby="{{ heading_id }}">
+  <h3 class="episode-contributors__heading" id="{{ heading_id }}">
+    {% translate "Hosts and Guests" %}
+  </h3>
+  <ul class="episode-contributors__list">
+    {% for assignment in episode_contributors %}
+      <li class="episode-contributors__item">
+        {% with avatar_url=assignment.get_avatar_rendition_url %}
+          {% if assignment.href %}
+            <a
+              class="episode-contributors__identity episode-contributors__identity--link"
+              href="{{ assignment.href }}"
+              rel="noopener"
+            >
+              {% if avatar_url %}
+                <img
+                  class="episode-contributors__avatar"
+                  src="{{ avatar_url }}"
+                  alt=""
+                  width="40"
+                  height="40"
+                  loading="lazy"
+                  decoding="async"
+                >
+              {% else %}
+                <span
+                  class="episode-contributors__avatar episode-contributors__avatar--placeholder"
+                  aria-hidden="true"
+                >{{ assignment.display_name|first }}</span>
+              {% endif %}
+              <span class="episode-contributors__name">{{ assignment.display_name }}</span>
+            </a>
+          {% else %}
+            <span class="episode-contributors__identity">
+              {% if avatar_url %}
+                <img
+                  class="episode-contributors__avatar"
+                  src="{{ avatar_url }}"
+                  alt=""
+                  width="40"
+                  height="40"
+                  loading="lazy"
+                  decoding="async"
+                >
+              {% else %}
+                <span
+                  class="episode-contributors__avatar episode-contributors__avatar--placeholder"
+                  aria-hidden="true"
+                >{{ assignment.display_name|first }}</span>
+              {% endif %}
+              <span class="episode-contributors__name">{{ assignment.display_name }}</span>
+            </span>
+          {% endif %}
+        {% endwith %}
+        <span class="episode-contributors__role">{{ assignment.get_role_display }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endwith %}

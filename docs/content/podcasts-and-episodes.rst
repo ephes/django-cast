@@ -69,10 +69,11 @@ Contributors
 Episode contributors are reusable Wagtail snippets for people who should be
 credited on podcast episodes and in Podcasting 2.0 feed metadata.
 
-Create contributors in Wagtail under **Snippets > Contributors**. A contributor
-has a display name, a stable slug, an optional avatar, an optional short bio, and
-ordered profile links. Profile links use fixed service choices such as Website,
-GitHub, Mastodon, Twitter/X, LinkedIn, and YouTube.
+Create contributors in Wagtail under **Contributors**. They remain available as
+snippets under **Snippets > Contributors** as well. A contributor has a display
+name, a stable slug, an optional avatar, an optional short bio, and ordered
+profile links. Profile links use fixed service choices such as Website, GitHub,
+Mastodon, Twitter/X, LinkedIn, and YouTube.
 
 Contributors have a global ``visible`` flag. Turning it off hides that person
 from public episode pages and podcast feeds without deleting existing episode
@@ -81,12 +82,25 @@ assignments.
 On an episode edit page, use the **Contributors** panel to add ordered
 contributors. Each assignment chooses a contributor, a role of **Host** or
 **Guest**, and optionally one of the contributor's links to use for that episode.
+The same contributor may appear on an episode under more than one role (for
+example as both **Host** and **Guest**), but a given (contributor, role) pair
+can only be assigned once per episode. Episode assignments may reference one of
+the contributor's existing links; links that are in use cannot be deleted or
+moved to another contributor until those assignments are updated.
 
-Public episode templates receive ``episode_contributors`` in context. Podcast
-feed items emit one ``podcast:person`` element for each visible assignment. The
-element text is the contributor display name, ``role`` is the episode assignment
-role, ``img`` is the contributor avatar URL when configured, and ``href`` is the
-selected assignment link when configured.
+Public episode templates receive ``episode_contributors`` in context. The
+built-in themes render those assignments on episode detail pages. Custom themes
+that override episode body templates should render ``episode_contributors`` or
+include ``cast/contributors.html`` to show episode credits. Use this filtered
+context value instead of iterating ``episode.contributor_assignments`` directly;
+it omits contributors whose global ``visible`` flag is disabled. Contributor
+avatars are served as ``fill-80x80|format-webp`` renditions so the original
+upload is not used as a thumbnail.
+
+Podcast feed items emit one ``podcast:person`` element for each visible
+assignment. The element text is the contributor display name, ``role`` is the
+episode assignment role, ``img`` is the contributor avatar rendition URL when
+configured, and ``href`` is the selected assignment link when configured.
 
 Explicit
 --------

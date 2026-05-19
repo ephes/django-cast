@@ -9,6 +9,7 @@ import pickle
 from contextvars import Context, copy_context
 from copy import deepcopy
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 import sqlparse
@@ -18,13 +19,25 @@ from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
 from django.urls import reverse
+from django.utils import timezone
 from wagtail.images.models import Image, Rendition
 from wagtail.models import Site as WagtailSite
 
 from cast.devdata import create_post, create_python_body, create_transcript, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed, RssPodcastFeed
 from cast.filters import PostFilterset
-from cast.models import Audio, Blog, Episode, Podcast, Post, Transcript, Video
+from cast.models import (
+    Audio,
+    Blog,
+    Contributor,
+    ContributorLink,
+    Episode,
+    EpisodeContributor,
+    Podcast,
+    Post,
+    Transcript,
+    Video,
+)
 from cast.models.image_renditions import create_missing_renditions_for_posts
 from cast.models.repository.builders import _blog_url_from_referer
 from cast.models.repository import (
@@ -42,10 +55,12 @@ from cast.models.repository import (
     deserialize_transcript,
     deserialize_video,
     deserialize_blog,
+    deserialize_episode_contributor,
     data_for_blog_cachable,
     get_facet_choices,
     serialize_audio,
     serialize_blog,
+    serialize_episode_contributor,
     serialize_episode,
     serialize_image,
     serialize_post,
@@ -54,6 +69,7 @@ from cast.models.repository import (
     serialize_video,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
+from tests.factories import EpisodeFactory
 
 
 def show_queries(queries):
@@ -774,6 +790,260 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
     assert len(connection.queries) == 0
 
 
+@pytest.mark.django_db
+def test_render_podcast_feed_with_cached_episode_contributors(rf, settings, episode, image):
+    settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    contributor = Contributor.objects.create(display_name="Cached Guest", slug="cached-guest", avatar=image)
+    link = ContributorLink.objects.create(
+        contributor=contributor,
+        service=ContributorLink.SERVICE_WEBSITE,
+        url="https://example.com/cached-guest",
+        sort_order=0,
+    )
+    EpisodeContributor.objects.create(
+        episode=episode,
+        contributor=contributor,
+        role=EpisodeContributor.ROLE_GUEST,
+        link=link,
+        sort_order=0,
+    )
+    request = rf.get(episode.podcast.get_url())
+    request.htmx = False
+    cachable_data = FeedContext.data_for_feed_cachable(request=request, blog=episode.podcast, is_podcast=True)
+    pickled = pickle.dumps(cachable_data)
+    cachable_data = pickle.loads(pickled)
+    repository = FeedContext.create_from_cachable_data(data=cachable_data)
+    feed_url = reverse("cast:podcast_feed_rss", kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"})
+    request = rf.get(feed_url)
+    django_site = DjangoSite(domain="testserver", name="testserver")
+    sites_models.SITE_CACHE[1] = django_site
+
+    reset_queries()
+    response = RssPodcastFeed(repository=repository)(request, slug=episode.podcast.slug, audio_format="m4a")
+
+    html = response.content.decode("utf-8")
+    root = ElementTree.fromstring(html)
+    namespace = {"podcast": "https://podcastindex.org/namespace/1.0/"}
+    [person] = root.findall(".//podcast:person", namespace)
+    assert person.text == "Cached Guest"
+    assert person.attrib["role"] == "guest"
+    assert person.attrib["href"] == "https://example.com/cached-guest"
+    assert person.attrib["img"].startswith("http://testserver/media/")
+    assert "fill-80x80" in person.attrib["img"]
+    assert len(connection.queries) == 0
+    PageLinkHandlerWithCache.cache.clear()
+
+
+@pytest.mark.django_db
+def test_render_episode_detail_with_contributors_from_repository_without_hitting_database(rf, episode, image):
+    contributor = Contributor.objects.create(display_name="Detail Guest", slug="detail-guest", avatar=image)
+    link = ContributorLink.objects.create(
+        contributor=contributor,
+        service=ContributorLink.SERVICE_WEBSITE,
+        url="https://example.com/detail-guest",
+        sort_order=0,
+    )
+    EpisodeContributor.objects.create(
+        episode=episode,
+        contributor=contributor,
+        role=EpisodeContributor.ROLE_GUEST,
+        link=link,
+        sort_order=0,
+    )
+    host = Contributor.objects.create(display_name="Detail Host", slug="detail-host")
+    EpisodeContributor.objects.create(
+        episode=episode,
+        contributor=host,
+        role=EpisodeContributor.ROLE_HOST,
+        sort_order=1,
+    )
+    request = rf.get(episode.get_url())
+    repository = PostDetailContext.create_from_django_models(request=request, post=episode)
+
+    reset_queries()
+    with connection.execute_wrapper(blocker):
+        response = episode.serve(request, repository=repository).render()
+
+    html = response.content.decode("utf-8")
+    assert 'class="episode-contributors"' in html
+    assert 'class="episode-contributors__list"' in html
+    assert 'class="episode-contributors__item"' in html
+    assert 'class="episode-contributors__identity episode-contributors__identity--link"' in html
+    assert "Detail Guest" in html
+    assert "Detail Host" in html
+    assert "https://example.com/detail-guest" in html
+    assert 'src="/media/' in html
+    assert "fill-80x80" in html
+    assert 'alt=""' in html
+    assert 'width="40"' in html
+    assert 'height="40"' in html
+    assert "episode-contributors__avatar--placeholder" in html
+    assert 'aria-hidden="true"' in html
+    assert ">D</span>" in html
+    assert 'class="episode-contributors__role">Guest</span>' in html
+    assert 'class="episode-contributors__role">Host</span>' in html
+    assert html.index("Detail Guest") < html.index("Detail Host")
+    assert html.index('class="episode-contributors"') < html.index("in_all heading")
+    assert len(connection.queries) == 0
+
+
+@pytest.mark.django_db
+def test_render_podcast_feed_from_django_models_with_contributors_without_hitting_database(rf, episode, image):
+    for index in range(3):
+        contributor = Contributor.objects.create(
+            display_name=f"Feed Guest {index}",
+            slug=f"feed-guest-{index}",
+            avatar=image,
+        )
+        link = ContributorLink.objects.create(
+            contributor=contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url=f"https://example.com/feed-guest-{index}",
+            sort_order=0,
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+            link=link,
+            sort_order=index,
+        )
+    post_queryset = (
+        Episode.objects.live()
+        .descendant_of(episode.podcast)
+        .select_related("podcast_audio__transcript")
+        .filter(podcast_audio__isnull=False)
+        .order_by("-visible_date")
+    )
+    repository = FeedContext.create_from_django_models(
+        request=rf.get("/"),
+        blog=episode.podcast,
+        post_queryset=post_queryset,
+        template_base_dir="bootstrap4",
+    )
+    feed_url = reverse("cast:podcast_feed_rss", kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"})
+    request = rf.get(feed_url)
+    django_site = DjangoSite(domain="testserver", name="testserver")
+    sites_models.SITE_CACHE[1] = django_site
+
+    reset_queries()
+    with connection.execute_wrapper(blocker):
+        response = RssPodcastFeed(repository=repository)(request, slug=episode.podcast.slug, audio_format="m4a")
+
+    html = response.content.decode("utf-8")
+    assert "Feed Guest 0" in html
+    assert "Feed Guest 1" in html
+    assert "Feed Guest 2" in html
+    assert len(connection.queries) == 0
+
+
+@pytest.mark.django_db
+def test_post_queryset_snapshot_caches_episode_contributors_for_base_post_queryset(rf, episode):
+    contributor = Contributor.objects.create(display_name="Mixed Feed Guest", slug="mixed-feed-guest")
+    EpisodeContributor.objects.create(
+        episode=episode,
+        contributor=contributor,
+        role=EpisodeContributor.ROLE_GUEST,
+        sort_order=0,
+    )
+    post_queryset = Post.objects.live().descendant_of(episode.podcast).order_by("-visible_date")
+
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
+        request=rf.get("/"),
+        site=episode.podcast.get_site(),
+        queryset=post_queryset,
+    )
+    snapshot_episode = queryset_data.post_by_id[episode.pk]
+
+    reset_queries()
+    with connection.execute_wrapper(blocker):
+        assignments = snapshot_episode.visible_contributor_assignments
+
+    assert [assignment.display_name for assignment in assignments] == ["Mixed Feed Guest"]
+    assert len(connection.queries) == 0
+
+
+@pytest.mark.django_db
+def test_post_queryset_snapshot_primes_repeated_contributor_avatar_once(rf, episode, mocker):
+    contributor = Contributor.objects.create(display_name="Repeat Guest", slug="repeat-guest")
+    EpisodeContributor.objects.create(
+        episode=episode,
+        contributor=contributor,
+        role=EpisodeContributor.ROLE_GUEST,
+        sort_order=0,
+    )
+    other_episode = EpisodeFactory(
+        owner=episode.owner,
+        parent=episode.podcast,
+        title="other podcast episode",
+        slug="other-podcast-entry",
+        podcast_audio=episode.podcast_audio,
+        body=episode.body,
+    )
+    EpisodeContributor.objects.create(
+        episode=other_episode,
+        contributor=contributor,
+        role=EpisodeContributor.ROLE_GUEST,
+        sort_order=0,
+    )
+    compute_avatar_rendition_url = mocker.patch(
+        "cast.models.contributors.Contributor._compute_avatar_rendition_url",
+        return_value="/media/avatar.webp",
+    )
+    post_queryset = Post.objects.live().descendant_of(episode.podcast).order_by("-visible_date")
+
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
+        request=rf.get("/"),
+        site=episode.podcast.get_site(),
+        queryset=post_queryset,
+    )
+    assignments = [
+        queryset_data.post_by_id[episode.pk].visible_contributor_assignments[0],
+        queryset_data.post_by_id[other_episode.pk].visible_contributor_assignments[0],
+    ]
+
+    assert compute_avatar_rendition_url.call_count == 1
+    assert assignments[0].contributor is assignments[1].contributor
+    assert [assignment.get_avatar_rendition_url() for assignment in assignments] == [
+        "/media/avatar.webp",
+        "/media/avatar.webp",
+    ]
+
+
+@pytest.mark.django_db
+def test_feed_repository_last_build_date_uses_newest_visible_date(rf, episode):
+    older_date = timezone.now() - timezone.timedelta(days=2)
+    newer_date = timezone.now()
+    episode.visible_date = older_date
+    episode.save()
+    newer_episode = EpisodeFactory(
+        owner=episode.owner,
+        parent=episode.podcast,
+        title="newer podcast episode",
+        slug="newer-podcast-entry",
+        visible_date=newer_date,
+        podcast_audio=episode.podcast_audio,
+        body=episode.body,
+    )
+    post_queryset = Episode.objects.live().descendant_of(episode.podcast).order_by("visible_date")
+
+    repository = FeedContext.create_from_django_models(
+        request=rf.get("/"),
+        blog=episode.podcast,
+        post_queryset=post_queryset,
+        template_base_dir="bootstrap4",
+    )
+    data = data_for_blog_cachable(
+        request=rf.get("/"),
+        blog=episode.podcast,
+        is_paginated=False,
+        post_queryset=post_queryset,
+    )
+
+    assert repository.blog.last_build_date == newer_episode.visible_date
+    assert data["last_build_date"] == newer_episode.visible_date
+
+
 # Small tests for repository coverage
 
 
@@ -827,6 +1097,58 @@ def test_serialize_media_helpers():
     assert serialize_video(video)["original"] == "video.mp4"
     assert serialize_image(image)["file"] == "image.jpg"
     assert serialize_transcript(transcript)["podlove"] == "podlove.json"
+
+
+@pytest.mark.django_db
+def test_serialize_episode_contributor_roundtrip(episode, image):
+    contributor = Contributor.objects.create(display_name="Episode Guest", slug="episode-guest", avatar=image)
+    contributor._avatar_rendition_url = "/media/images/test.fill-80x80.format-webp.webp"
+    link = ContributorLink.objects.create(
+        contributor=contributor,
+        service=ContributorLink.SERVICE_WEBSITE,
+        url="https://example.com/guest",
+        sort_order=0,
+    )
+    assignment = EpisodeContributor.objects.create(
+        episode=episode,
+        contributor=contributor,
+        role=EpisodeContributor.ROLE_GUEST,
+        link=link,
+        sort_order=0,
+    )
+    # Carry the precomputed rendition URL through serialization, not the live FK instance.
+    assignment.contributor = contributor
+
+    data = serialize_episode_contributor(assignment)
+    rebuilt = deserialize_episode_contributor(data)
+    assert rebuilt.contributor.get_avatar_rendition_url() == "/media/images/test.fill-80x80.format-webp.webp"
+
+    assert rebuilt.display_name == "Episode Guest"
+    assert rebuilt.href == "https://example.com/guest"
+    assert rebuilt.contributor_id == contributor.pk
+    assert rebuilt.link.contributor_id == contributor.pk
+    assert rebuilt.link.contributor is rebuilt.contributor
+    assert rebuilt.link.service == ContributorLink.SERVICE_WEBSITE
+    assert rebuilt.sort_order == 0
+    rebuilt.clean()
+
+
+@pytest.mark.django_db
+def test_serialize_episode_contributor_without_avatar_rendition(episode):
+    contributor = Contributor.objects.create(display_name="Plain Guest", slug="plain-guest")
+    assignment = EpisodeContributor.objects.create(
+        episode=episode,
+        contributor=contributor,
+        role=EpisodeContributor.ROLE_GUEST,
+        sort_order=0,
+    )
+
+    data = serialize_episode_contributor(assignment)
+    rebuilt = deserialize_episode_contributor(data)
+
+    assert "avatar_rendition_url" not in data["contributor"]
+    assert rebuilt.contributor.get_avatar_rendition_url() == ""
+    assert rebuilt.href == ""
 
 
 def test_get_facet_choices():

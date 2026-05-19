@@ -1,4 +1,8 @@
 import pytest
+from django.contrib.auth.models import AnonymousUser, Permission
+from django.contrib.contenttypes.models import ContentType
+from django.test import RequestFactory
+from django.urls import reverse
 
 from cast.admin import (
     AdminUserMixin,
@@ -7,7 +11,8 @@ from cast.admin import (
     cache_file_sizes,
     retrain,
 )
-from cast.models import SpamFilter, Video
+from cast.models import Contributor, SpamFilter, Video
+from cast.wagtail_hooks import ContributorMenuItem, register_contributor_menu_item
 
 
 def test_spamfilter_model_admin():
@@ -81,3 +86,35 @@ def test_admin_user_mixin():
     aum = AdminUserMixin()
     initial_data = aum.get_changeform_initial_data(SpyRequest())
     assert initial_data == {"user": SpyRequest.user, "author": SpyRequest.user}
+
+
+def test_register_contributor_menu_item():
+    item = register_contributor_menu_item()
+
+    assert isinstance(item, ContributorMenuItem)
+    assert str(item.label) == "Contributors"
+    assert item.url == reverse("wagtailsnippets_cast_contributor:list")
+    assert item.name == "contributors"
+    assert item.icon_name == "group"
+    assert item.order == 210
+
+
+@pytest.mark.django_db
+def test_contributor_menu_item_visibility_requires_snippet_permission(user):
+    item = ContributorMenuItem("Contributors", reverse("wagtailsnippets_cast_contributor:list"))
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
+
+    assert not item.is_shown(request)
+
+    request.user = user
+    assert not item.is_shown(request)
+
+    content_type = ContentType.objects.get_for_model(Contributor)
+    permission = Permission.objects.get(content_type=content_type, codename="view_contributor")
+    user.user_permissions.add(permission)
+    for cache_name in ("_perm_cache", "_user_perm_cache", "_group_perm_cache"):
+        if hasattr(user, cache_name):
+            delattr(user, cache_name)
+
+    assert item.is_shown(request)
