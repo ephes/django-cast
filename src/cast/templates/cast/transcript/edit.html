@@ -52,6 +52,35 @@
             </li>
           </ul>
         </form>
+
+        <hr />
+
+        <h2>{% trans "Map speakers to contributors" %}</h2>
+        {% if speaker_labels %}
+          <p>{% trans "Replace diarization speaker labels in the Podlove and DOTe transcript files. WebVTT files are not changed." %}</p>
+          {% if not contributor_assignments %}
+            <p>{% trans "No episode contributors are available for this transcript's audio." %}</p>
+          {% endif %}
+          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
+            {% csrf_token %}
+            <ul class="fields">
+              {% for field in speaker_mapping_form %}
+                {% if field.is_hidden %}
+                  {{ field }}
+                {% else %}
+                  <li>
+                    {% include "wagtailadmin/shared/field.html" %}
+                  </li>
+                {% endif %}
+              {% endfor %}
+              <li>
+                <input class="button" type="submit" value="{% trans 'Apply speaker mapping' %}"{% if not contributor_assignments %} disabled{% endif %} />
+              </li>
+            </ul>
+          </form>
+        {% else %}
+          <p>{% trans "No speaker labels were found in the Podlove or DOTe transcript files." %}</p>
+        {% endif %}
       </div>
     </div>
   {% endblock %}

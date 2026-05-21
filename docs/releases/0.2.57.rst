@@ -18,6 +18,10 @@
   rendition URL is precomputed in the post repository so detail and feed
   rendering remain query-free, including mixed post/episode querysets.
 - Added a top-level Wagtail admin menu item for contributors.
+- Added Wagtail transcript editing support for mapping diarization speaker
+  labels such as ``Speaker 1`` to an episode contributor. The admin workflow
+  rewrites Podlove and DOTe transcript speaker fields while leaving WebVTT
+  unchanged.
 - Fixed the Wagtail page action menu styling for transcript generation while
   keeping transcript status and edit links visible to editors.
 - Full page ``Post.serve()`` calls and Wagtail previews now expose

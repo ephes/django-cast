@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, TypedDict
 
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -13,14 +13,20 @@ from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
-from ..forms import NonEmptySearchForm, TranscriptForm
-from ..models import Blog, Episode, Post, Transcript, get_template_base_dir
+from ..forms import NonEmptySearchForm, SpeakerContributorMappingForm, TranscriptForm, SPEAKER_MAPPING_ACTION
+from ..models import Blog, Episode, EpisodeContributor, Post, Transcript, get_template_base_dir
 from ..site_lookup import get_site_specific_page_or_404
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
 
 TRANSCRIPT_FALLBACK_THEME = "plain"
+
+
+class SpeakerMappingContext(TypedDict):
+    contributor_assignments: list[EpisodeContributor]
+    multiple_episodes: bool
+    speaker_labels: list[str]
 
 
 def _resolve_transcript_template(base_template_dir: str) -> str:
@@ -131,10 +137,35 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     )
 
 
+def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext:
+    episodes = list(transcript.audio.episodes.prefetch_related("contributor_assignments__contributor").all())
+    contributor_assignments: list[EpisodeContributor] = []
+    for episode in episodes:
+        contributor_assignments.extend(episode.visible_contributor_assignments)
+    speaker_labels = transcript.get_speaker_labels()
+    return {
+        "contributor_assignments": contributor_assignments,
+        "multiple_episodes": len(episodes) > 1,
+        "speaker_labels": speaker_labels,
+    }
+
+
 def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     transcript = get_object_or_404(Transcript, id=transcript_id)
+    speaker_mapping_context = get_speaker_mapping_context(transcript)
 
-    if request.method == "POST":
+    if request.method == "POST" and request.POST.get("action") == SPEAKER_MAPPING_ACTION:
+        form = TranscriptForm(instance=transcript, user=request.user)
+        speaker_mapping_form = SpeakerContributorMappingForm(request.POST, **speaker_mapping_context)
+        if speaker_mapping_form.is_valid():
+            if transcript.rewrite_speaker_labels(speaker_mapping_form.speaker_mapping):
+                messages.success(request, _("Speaker labels updated."))
+            else:
+                messages.warning(request, _("No speaker labels were changed."))
+            return redirect("cast-transcript:edit", transcript_id=transcript.id)
+        messages.error(request, _("The speaker labels could not be updated due to errors."))
+    elif request.method == "POST":
+        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
         form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
         if form.is_valid():
             transcript = form.save()
@@ -153,6 +184,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
             messages.error(request, _("The transcript could not be saved due to errors."))
     else:
         form = TranscriptForm(instance=transcript, user=request.user)
+        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
 
     return render(
         request,
@@ -160,6 +192,9 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         {
             "transcript": transcript,
             "form": form,
+            "speaker_mapping_form": speaker_mapping_form,
+            "speaker_labels": speaker_mapping_context["speaker_labels"],
+            "contributor_assignments": speaker_mapping_context["contributor_assignments"],
             "user_can_delete": True,
         },
     )

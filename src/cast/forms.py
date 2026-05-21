@@ -7,7 +7,7 @@ a search form that rejects empty queries.
 
 import json
 from datetime import datetime, time
-from typing import cast
+from typing import Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -18,7 +18,10 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
-from .models import Audio, ChapterMark, Transcript, Video, get_template_base_dir_choices
+from .models import Audio, ChapterMark, EpisodeContributor, Transcript, Video, get_template_base_dir_choices
+
+
+SPEAKER_MAPPING_ACTION = "map-speakers"
 
 
 class VideoForm(forms.ModelForm):
@@ -278,6 +281,53 @@ class TranscriptForm(BaseCollectionMemberForm):
         if isinstance(header, bytes):
             return header.decode("utf-8-sig", errors="ignore").lstrip()
         return str(header).lstrip()
+
+
+class SpeakerContributorMappingForm(forms.Form):
+    """Dynamic form mapping transcript speaker labels to episode contributors."""
+
+    action = forms.CharField(initial=SPEAKER_MAPPING_ACTION, widget=forms.HiddenInput())
+    speaker_mapping: dict[str, str]
+
+    def __init__(
+        self,
+        *args,
+        speaker_labels: list[str],
+        contributor_assignments: list[EpisodeContributor],
+        multiple_episodes: bool = False,
+        **kwargs,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.speaker_labels = speaker_labels
+        self.contributor_assignments = contributor_assignments
+        self.assignment_lookup = {str(assignment.pk): assignment for assignment in contributor_assignments}
+        choices: list[tuple[str, str]] = [("", str(_("Leave unchanged")))]
+        choices.extend(
+            (str(assignment.pk), self._assignment_label(assignment, multiple_episodes=multiple_episodes))
+            for assignment in contributor_assignments
+        )
+        self.speaker_field_names = {}
+        for index, speaker_label in enumerate(speaker_labels):
+            field_name = f"speaker_{index}"
+            self.speaker_field_names[field_name] = speaker_label
+            self.fields[field_name] = forms.ChoiceField(label=speaker_label, choices=choices, required=False)
+
+    @staticmethod
+    def _assignment_label(assignment: EpisodeContributor, *, multiple_episodes: bool) -> str:
+        label = f"{assignment.display_name} ({assignment.get_role_display()})"
+        if multiple_episodes:
+            label = f"{label} — {assignment.episode.title}"
+        return label
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean() or {}
+        speaker_mapping = {}
+        for field_name, speaker_label in self.speaker_field_names.items():
+            assignment_id = cleaned_data.get(field_name)
+            if assignment_id:
+                speaker_mapping[speaker_label] = self.assignment_lookup[str(assignment_id)].display_name
+        self.speaker_mapping = speaker_mapping
+        return cleaned_data
 
 
 class NonEmptySearchForm(SearchForm):

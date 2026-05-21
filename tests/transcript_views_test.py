@@ -1,3 +1,4 @@
+import json
 from unittest.mock import patch
 
 import pytest
@@ -7,8 +8,9 @@ from django.template import TemplateDoesNotExist
 from django.urls import reverse
 
 from cast.devdata import create_transcript
-from cast.models import Transcript
-from cast.views.transcript import _resolve_transcript_template
+from cast.forms import SpeakerContributorMappingForm
+from cast.models import Contributor, EpisodeContributor, Transcript
+from cast.views.transcript import _resolve_transcript_template, get_speaker_mapping_context
 
 from .factories import BlogFactory, EpisodeFactory
 from .multisite_helpers import create_site_root
@@ -188,6 +190,212 @@ class TestTranscriptAdd:
         podlove_transcript.seek(0)
         submitted_transcript_content = podlove_transcript.read().decode("utf-8")
         assert saved_transcript_content == submitted_transcript_content
+
+
+class TestTranscriptSpeakerMapping:
+    pytestmark = pytest.mark.django_db
+
+    def test_get_speaker_labels_from_podlove_and_dote(self, audio):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Speaker 2", "voice": "Speaker 1", "text": "Hello"},
+                    {"speaker": "", "voice": None, "text": "empty"},
+                    "not an object",
+                ]
+            },
+            dote={
+                "lines": [
+                    {"speakerDesignation": "Speaker 3", "text": "Hi"},
+                    {"speakerDesignation": "  ", "text": "blank"},
+                    "not an object",
+                ]
+            },
+        )
+
+        assert transcript.get_speaker_labels() == ["Speaker 1", "Speaker 2", "Speaker 3"]
+
+    def test_get_speaker_labels_handles_missing_and_invalid_files(self, audio):
+        transcript = create_transcript(audio=audio)
+        assert transcript.get_speaker_labels() == []
+
+        transcript.podlove.name = "cast_transcript/missing-podlove.json"
+        transcript.dote.save("invalid-dote.json", ContentFile("not json"))
+        transcript.save()
+        assert transcript.get_speaker_labels() == []
+
+        transcript.podlove.save("list-podlove.json", ContentFile("[]"))
+        transcript.dote.name = "cast_transcript/missing-dote.json"
+        transcript.save()
+        assert transcript.get_speaker_labels() == []
+
+    def test_rewrite_speaker_labels_updates_podlove_and_dote_but_not_vtt(self, audio):
+        vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nSpeaker 1: unchanged"
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"},
+                    {"speaker": "Speaker 2", "voice": "Other", "text": "Hi"},
+                    "not an object",
+                ]
+            },
+            dote={
+                "lines": [
+                    {"speakerDesignation": "Speaker 2", "text": "Hi"},
+                    {"speakerDesignation": None, "text": "No speaker"},
+                    "not an object",
+                ]
+            },
+            vtt=vtt,
+        )
+
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice", "Speaker 2": "Bob"})
+
+        with transcript.podlove.open("r") as podlove_file:
+            podlove_data = json.load(podlove_file)
+        with transcript.dote.open("r") as dote_file:
+            dote_data = json.load(dote_file)
+        with transcript.vtt.open("r") as vtt_file:
+            vtt_content = vtt_file.read()
+        assert podlove_data["transcripts"][0]["speaker"] == "Alice"
+        assert podlove_data["transcripts"][0]["voice"] == "Alice"
+        assert podlove_data["transcripts"][1]["speaker"] == "Bob"
+        assert podlove_data["transcripts"][1]["voice"] == "Other"
+        assert dote_data["lines"][0]["speakerDesignation"] == "Bob"
+        assert vtt_content == vtt
+
+    def test_rewrite_speaker_labels_returns_false_without_changes(self, audio):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+
+        assert not transcript.rewrite_speaker_labels({})
+        assert not transcript.rewrite_speaker_labels({"Speaker 1": "Speaker 1"})
+        assert not transcript.rewrite_speaker_labels({"Speaker 2": "Alice"})
+
+    def test_save_json_file_handles_missing_existing_file(self, audio):
+        transcript = create_transcript(audio=audio, podlove={"transcripts": []})
+        transcript.podlove.storage.delete(transcript.podlove.name)
+
+        transcript._save_json_file("podlove", {"transcripts": [{"speaker": "Speaker 1"}]})
+
+        with transcript.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"] == [{"speaker": "Speaker 1"}]
+
+    def test_speaker_mapping_form_maps_to_episode_contributor_display_name(self, episode):
+        contributor = Contributor.objects.create(display_name="Alice", slug="alice")
+        assignment = EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_HOST,
+        )
+        form = SpeakerContributorMappingForm(
+            {"action": "map-speakers", "speaker_0": str(assignment.pk)},
+            speaker_labels=["Speaker 1"],
+            contributor_assignments=[assignment],
+        )
+
+        assert form.is_valid()
+        assert form.speaker_mapping == {"Speaker 1": "Alice"}
+        assert form.fields["speaker_0"].choices == [("", "Leave unchanged"), (str(assignment.pk), "Alice (Host)")]
+
+    def test_speaker_mapping_form_labels_multiple_episodes(self, episode, podcast_episode_with_same_audio):
+        alice = Contributor.objects.create(display_name="Alice", slug="alice")
+        bob = Contributor.objects.create(display_name="Bob", slug="bob")
+        first_assignment = EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=alice,
+            role=EpisodeContributor.ROLE_HOST,
+        )
+        second_assignment = EpisodeContributor.objects.create(
+            episode=podcast_episode_with_same_audio,
+            contributor=bob,
+            role=EpisodeContributor.ROLE_GUEST,
+        )
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+
+        context = get_speaker_mapping_context(transcript)
+        form = SpeakerContributorMappingForm(**context)
+
+        assert context["multiple_episodes"] is True
+        assert context["contributor_assignments"] == [first_assignment, second_assignment]
+        assert form.fields["speaker_0"].choices == [
+            ("", "Leave unchanged"),
+            (str(first_assignment.pk), f"Alice (Host) — {episode.title}"),
+            (str(second_assignment.pk), f"Bob (Guest) — {podcast_episode_with_same_audio.title}"),
+        ]
+
+    def test_post_speaker_mapping_rewrites_transcript_files(self, admin_client, episode):
+        contributor = Contributor.objects.create(display_name="Alice", slug="alice")
+        assignment = EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_HOST,
+        )
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+            dote={"lines": [{"speakerDesignation": "Speaker 1", "text": "Hello"}]},
+        )
+        edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+
+        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": str(assignment.pk)})
+
+        assert response.status_code == 302
+        assert response.url == edit_url
+        with transcript.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Alice"
+        with transcript.dote.open("r") as dote_file:
+            assert json.load(dote_file)["lines"][0]["speakerDesignation"] == "Alice"
+
+    def test_post_speaker_mapping_with_no_selected_contributor_keeps_labels(self, admin_client, episode):
+        contributor = Contributor.objects.create(display_name="Alice", slug="alice")
+        EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+        edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+
+        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": ""})
+
+        assert response.status_code == 302
+        with transcript.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Speaker 1"
+
+    def test_post_speaker_mapping_invalid_form(self, admin_client, episode):
+        contributor = Contributor.objects.create(display_name="Alice", slug="alice")
+        EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+        edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+
+        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": "99999"})
+
+        assert response.status_code == 200
+        assert response.context["message"] == "The speaker labels could not be updated due to errors."
+
+    def test_post_speaker_mapping_without_contributors_rejects_bypassed_disabled_button(self, admin_client, episode):
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+        edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+
+        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": "99999"})
+
+        assert response.status_code == 200
+        assert response.context["message"] == "The speaker labels could not be updated due to errors."
+        with transcript.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Speaker 1"
 
 
 class TestTranscriptEdit:
