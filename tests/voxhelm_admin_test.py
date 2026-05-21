@@ -34,6 +34,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
             "api_token": "very-secret-token",
             "model": "auto",
             "language": "",
+            "diarization_enabled": True,
         },
     )
     edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
@@ -52,6 +53,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
             "api_token": "",
             "model": "whisper-1",
             "language": "de",
+            "diarization_enabled": "false",
         },
         follow=True,
     )
@@ -62,6 +64,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     assert setting.api_token == "very-secret-token"
     assert setting.model == "whisper-1"
     assert setting.language == "de"
+    assert setting.diarization_enabled is False
 
     response = admin_client.post(
         edit_url,
@@ -70,6 +73,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
             "api_token": "replacement-token",
             "model": "whisper-1",
             "language": "de",
+            "diarization_enabled": "true",
         },
         follow=True,
     )
@@ -77,6 +81,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     assert response.status_code == 200
     setting.refresh_from_db()
     assert setting.api_token == "replacement-token"
+    assert setting.diarization_enabled is True
 
 
 @pytest.mark.django_db
@@ -90,12 +95,15 @@ def test_voxhelm_settings_new_instance_allows_empty_token(admin_client, site):
             "api_token": "",
             "model": "",
             "language": "",
+            "diarization_enabled": "unknown",
         },
         follow=True,
     )
 
     assert response.status_code == 200
-    assert VoxhelmSettings.for_site(site).api_token == ""
+    setting = VoxhelmSettings.for_site(site)
+    assert setting.api_token == ""
+    assert setting.diarization_enabled is None
 
 
 @pytest.mark.django_db

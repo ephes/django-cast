@@ -1,6 +1,12 @@
 0.2.57 (unreleased)
 -------------------
 
+- Added Voxhelm speaker diarization configuration via
+  ``CAST_VOXHELM_DIARIZATION_ENABLED`` and the site-level Wagtail Voxhelm
+  settings. The default remains disabled and the Voxhelm ``diarization`` job
+  payload is only sent when explicitly enabled. Enable it only when the Voxhelm
+  backend has diarization configured; full-episode diarization can be slow and
+  should run through the transcript worker.
 - Added podcast episode contributors with contributor snippets, ordered
   host/guest assignments, episode-page context, and item-level
   ``podcast:person`` feed output. The uniqueness constraint on episode

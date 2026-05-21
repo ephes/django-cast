@@ -35,12 +35,23 @@ class VoxhelmSettings(BaseSiteSetting):
         max_length=32,
         help_text=_("Optional language hint sent to Voxhelm jobs."),
     )
+    diarization_enabled: models.BooleanField = models.BooleanField(
+        blank=True,
+        default=None,
+        help_text=_(
+            "Leave unset to use Django settings or environment variables. Enable to request Voxhelm speaker "
+            "diarization for this site. Disable to explicitly turn it off for this site."
+        ),
+        null=True,
+        verbose_name=_("Speaker diarization"),
+    )
 
     panels = [
         FieldPanel("api_base"),
         FieldPanel("api_token"),
         FieldPanel("model"),
         FieldPanel("language"),
+        FieldPanel("diarization_enabled"),
     ]
 
     class Meta:

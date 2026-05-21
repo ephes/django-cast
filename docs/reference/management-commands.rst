@@ -32,11 +32,16 @@ Configuration:
 - ``CAST_VOXHELM_API_BASE``: Voxhelm service root or ``/v1`` API base
 - ``CAST_VOXHELM_API_KEY``: bearer token for the producer
 - optional: ``CAST_VOXHELM_MODEL``, ``CAST_VOXHELM_LANGUAGE``,
-  ``CAST_VOXHELM_POLL_INTERVAL``, ``CAST_VOXHELM_POLL_TIMEOUT``,
-  ``CAST_VOXHELM_REQUEST_TIMEOUT``
+  ``CAST_VOXHELM_DIARIZATION_ENABLED``, ``CAST_VOXHELM_POLL_INTERVAL``,
+  ``CAST_VOXHELM_POLL_TIMEOUT``, ``CAST_VOXHELM_REQUEST_TIMEOUT``
 
-These values can be configured as Django settings, environment variables, or
-site-scoped Wagtail settings.
+For the management command, configure these values as Django settings or
+environment variables. The Wagtail admin transcript workflow can also use
+site-scoped Wagtail settings for editor-triggered jobs.
+``CAST_VOXHELM_DIARIZATION_ENABLED`` defaults to ``False``; enable it only when
+the Voxhelm backend has diarization configured.
+Full-episode diarization can be slow, so prefer the queued Wagtail transcript
+worker flow for editor-triggered jobs.
 
 .. code-block:: bash
 

@@ -27,7 +27,10 @@ SITE_SETTING_FIELD_MAP = {
     "CAST_VOXHELM_API_KEY": "api_token",
     "CAST_VOXHELM_MODEL": "model",
     "CAST_VOXHELM_LANGUAGE": "language",
+    "CAST_VOXHELM_DIARIZATION_ENABLED": "diarization_enabled",
 }
+TRUE_SETTING_VALUES = {"1", "true", "yes", "on"}
+FALSE_SETTING_VALUES = {"0", "false", "no", "off"}
 
 
 class VoxhelmError(RuntimeError):
@@ -75,7 +78,9 @@ def get_site_setting_value(name: str, request_or_site: HttpRequest | Site | None
     else:
         site_settings = VoxhelmSettings.for_request(request_or_site)
     value = getattr(site_settings, field_name, "")
-    return value.strip()
+    if isinstance(value, str):
+        return value.strip()
+    return value
 
 
 def get_setting(name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None) -> object:
@@ -97,6 +102,25 @@ def require_setting(name: str, *, request_or_site: HttpRequest | Site | None = N
 
 def get_float_setting(name: str, default: float, *, request_or_site: HttpRequest | Site | None = None) -> float:
     return float(str(get_setting(name, default, request_or_site=request_or_site)))
+
+
+def get_bool_setting(name: str, default: bool = False, *, request_or_site: HttpRequest | Site | None = None) -> bool:
+    value = get_setting(name, default, request_or_site=request_or_site)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if not normalized:
+            return default
+        if normalized in TRUE_SETTING_VALUES:
+            return True
+        if normalized in FALSE_SETTING_VALUES:
+            return False
+    raise ImproperlyConfigured(
+        f"{name} must be configured as a boolean value: one of 1, true, yes, on, 0, false, no, or off."
+    )
 
 
 def transcript_complete(transcript: Transcript) -> bool:
@@ -194,14 +218,18 @@ class VoxhelmClient:
         api_key: str,
         model: str = "auto",
         language: str = "",
+        diarization_enabled: bool = False,
         poll_interval_seconds: float = 2.0,
         job_timeout_seconds: float = 900.0,
         request_timeout_seconds: float = 30.0,
     ) -> None:
+        if not isinstance(diarization_enabled, bool):
+            raise TypeError("diarization_enabled must be a bool.")
         self.root_url, self.api_base = normalize_api_base(api_base)
         self.api_key = api_key
         self.model = model
         self.language = language
+        self.diarization_enabled = diarization_enabled
         self.poll_interval_seconds = poll_interval_seconds
         self.job_timeout_seconds = job_timeout_seconds
         self.request_timeout_seconds = request_timeout_seconds
@@ -213,6 +241,9 @@ class VoxhelmClient:
             api_key=require_setting("CAST_VOXHELM_API_KEY", request_or_site=request_or_site),
             model=str(get_setting("CAST_VOXHELM_MODEL", "auto", request_or_site=request_or_site)).strip() or "auto",
             language=str(get_setting("CAST_VOXHELM_LANGUAGE", "", request_or_site=request_or_site)).strip(),
+            diarization_enabled=get_bool_setting(
+                "CAST_VOXHELM_DIARIZATION_ENABLED", False, request_or_site=request_or_site
+            ),
             poll_interval_seconds=get_float_setting(
                 "CAST_VOXHELM_POLL_INTERVAL", 2.0, request_or_site=request_or_site
             ),
@@ -273,6 +304,8 @@ class VoxhelmClient:
         }
         if self.language:
             payload["language"] = self.language
+        if self.diarization_enabled:
+            payload["diarization"] = {"enabled": True}
         return self.request_json(method="POST", path="jobs", payload=payload)
 
     def get_job(self, job_id: str) -> dict[str, Any]:

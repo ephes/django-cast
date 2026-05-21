@@ -68,6 +68,10 @@ Use a distinct ``--worker-id`` per deployed site, for example
 ``python-podcast-transcripts`` for a second site sharing the same codebase.
 The default task backend should remain immediate; only the
 ``cast_transcripts`` backend should point at ``django_tasks_db.DatabaseBackend``.
+If ``CAST_VOXHELM_DIARIZATION_ENABLED`` is enabled, make sure the Voxhelm
+backend has diarization support configured. Full-episode diarization can be
+slow and CPU-heavy, so keep it on the queued transcript worker path instead of
+waiting for completion in a Wagtail admin request.
 
 Static Files
 ============

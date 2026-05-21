@@ -112,6 +112,28 @@ CAST_VOXHELM_LANGUAGE
 Optional language hint passed through to Voxhelm batch jobs. By default no
 language hint is sent. This can also be managed per site in Wagtail admin.
 
+CAST_VOXHELM_DIARIZATION_ENABLED
+================================
+
+Whether to request generic speaker diarization for Voxhelm transcript jobs.
+Defaults to ``False``. When enabled, django-cast sends
+``{"diarization": {"enabled": True}}`` in the top-level Voxhelm job payload;
+when disabled or unset, the field is omitted and existing transcription behavior
+is unchanged.
+
+This can be set as a Django setting or environment variable. Common boolean
+strings such as ``1``, ``true``, ``yes``, and ``on`` enable diarization;
+``0``, ``false``, ``no``, and ``off`` disable it. The Wagtail admin
+``Settings -> Voxhelm settings`` screen also exposes a site-level value with
+three states: inherit the Django/environment configuration, explicitly enabled,
+or explicitly disabled. An explicit site-level disabled value overrides a
+global enabled value.
+
+The Voxhelm deployment must have its diarization backend configured before this
+setting is enabled. Diarization can make full-episode transcription slower, so
+production sites should use the queued transcript worker flow rather than
+expecting a web request to wait for completion.
+
 CAST_VOXHELM_POLL_INTERVAL
 ==========================
 
@@ -135,9 +157,11 @@ Wagtail Admin Configuration
 ===========================
 
 django-cast also exposes a site-scoped ``Voxhelm settings`` model in Wagtail
-admin for the API base URL, API token, and optional model/language
-preferences. These values take precedence over Django settings and environment
-variables for Wagtail-admin-triggered transcript generation on that site.
+admin for the API base URL, API token, optional model/language preferences,
+and optional diarization override. These values take precedence over Django
+settings and environment variables for Wagtail-admin-triggered transcript
+generation on that site; the diarization field can also be left unset to inherit
+the Django/environment value.
 
 Wagtail-admin-triggered transcript completion is queued through Django Tasks.
 Production sites that need a database-backed transcript worker should install

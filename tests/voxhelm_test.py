@@ -22,6 +22,7 @@ from cast.voxhelm import (
     build_audio_task_ref,
     build_failure_message,
     enqueue_audio_transcript_generation,
+    get_bool_setting,
     get_float_setting,
     get_setting,
     get_transcript_generation,
@@ -70,8 +71,53 @@ def test_settings_helpers_and_client_from_settings(settings, monkeypatch):
     assert client.api_key == "secret"
     assert client.model == "auto"
     assert client.language == ""
+    assert client.diarization_enabled is False
     assert client.job_timeout_seconds == 12.5
     assert client.request_timeout_seconds == 45.0
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        (True, True),
+        (False, False),
+        (1, True),
+        (0, False),
+        (" yes ", True),
+        ("OFF", False),
+    ],
+)
+def test_get_bool_setting_parses_django_setting_values(settings, configured, expected):
+    settings.CAST_BOOL_SETTING = configured
+
+    assert get_bool_setting("CAST_BOOL_SETTING") is expected
+
+
+def test_get_bool_setting_reads_environment_values(settings, monkeypatch):
+    settings.CAST_BOOL_ENV_TRUE = ""
+    settings.CAST_BOOL_ENV_FALSE = ""
+    monkeypatch.setenv("CAST_BOOL_ENV_TRUE", "on")
+    monkeypatch.setenv("CAST_BOOL_ENV_FALSE", "0")
+
+    assert get_bool_setting("CAST_BOOL_ENV_TRUE") is True
+    assert get_bool_setting("CAST_BOOL_ENV_FALSE", True) is False
+
+
+def test_get_bool_setting_treats_blank_strings_as_unset(settings, monkeypatch):
+    settings.CAST_BOOL_BLANK_DJANGO = "  "
+    settings.CAST_BOOL_BLANK_ENV = ""
+    monkeypatch.setenv("CAST_BOOL_BLANK_ENV", "")
+
+    assert get_bool_setting("CAST_BOOL_BLANK_DJANGO", True) is True
+    assert get_bool_setting("CAST_BOOL_BLANK_ENV") is False
+
+
+@pytest.mark.parametrize("configured", ["maybe", 2])
+def test_get_bool_setting_rejects_invalid_values(settings, configured):
+    settings.CAST_BOOL_INVALID = configured
+
+    with pytest.raises(ImproperlyConfigured, match="CAST_BOOL_INVALID"):
+        get_bool_setting("CAST_BOOL_INVALID")
 
 
 @pytest.mark.django_db
@@ -85,6 +131,7 @@ def test_site_settings_override_django_settings(site, settings):
             "api_token": "site-secret",
             "model": "whisper-1",
             "language": "de",
+            "diarization_enabled": True,
         },
     )
 
@@ -94,6 +141,7 @@ def test_site_settings_override_django_settings(site, settings):
     assert client.api_key == "site-secret"
     assert client.model == "whisper-1"
     assert client.language == "de"
+    assert client.diarization_enabled is True
 
 
 @pytest.mark.django_db
@@ -107,6 +155,7 @@ def test_site_settings_can_be_loaded_from_request(site, settings):
             "api_token": "site-secret",
             "model": "whisper-1",
             "language": "de",
+            "diarization_enabled": True,
         },
     )
     request = RequestFactory().get("/", HTTP_HOST=site.hostname)
@@ -115,6 +164,63 @@ def test_site_settings_can_be_loaded_from_request(site, settings):
 
     assert client.api_base == "https://site.example/v1"
     assert client.api_key == "site-secret"
+    assert client.diarization_enabled is True
+
+
+@pytest.mark.django_db
+def test_site_settings_explicit_false_overrides_global_diarization_true(site, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
+    settings.CAST_VOXHELM_API_KEY = "settings-secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = True
+    VoxhelmSettings.objects.update_or_create(site=site, defaults={"diarization_enabled": False})
+
+    client = VoxhelmClient.from_settings(request_or_site=site)
+
+    assert client.diarization_enabled is False
+
+
+@pytest.mark.django_db
+def test_site_settings_unset_diarization_inherits_global_true(site, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
+    settings.CAST_VOXHELM_API_KEY = "settings-secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = True
+    VoxhelmSettings.objects.update_or_create(site=site, defaults={"diarization_enabled": None})
+
+    client = VoxhelmClient.from_settings(request_or_site=site)
+
+    assert client.diarization_enabled is True
+
+
+def test_client_from_settings_reads_diarization_from_django_setting(settings):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = True
+
+    client = VoxhelmClient.from_settings()
+
+    assert client.diarization_enabled is True
+
+
+def test_client_from_settings_reads_diarization_from_environment(settings, monkeypatch):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = ""
+    monkeypatch.setenv("CAST_VOXHELM_DIARIZATION_ENABLED", "true")
+
+    client = VoxhelmClient.from_settings()
+
+    assert client.diarization_enabled is True
+
+
+def test_client_from_settings_prefers_django_false_over_environment_true(settings, monkeypatch):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = False
+    monkeypatch.setenv("CAST_VOXHELM_DIARIZATION_ENABLED", "true")
+
+    client = VoxhelmClient.from_settings()
+
+    assert client.diarization_enabled is False
 
 
 def test_require_setting_raises_when_missing(settings, monkeypatch):
@@ -194,6 +300,19 @@ def test_client_submit_job_and_download_artifact(mocker):
         "context": {"audio_id": 1},
         "task_ref": "cast-audio-1",
     }
+
+
+def test_client_submit_job_includes_diarization_when_enabled(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-1"})
+
+    client.submit_transcription_job(
+        source_url="https://media.example.com/episode.mp3",
+        task_ref="cast-audio-1",
+        context={"audio_id": 1},
+    )
+
+    assert request_json.call_args.kwargs["payload"]["diarization"] == {"enabled": True}
 
 
 def test_client_build_url_variants_and_get_job(mocker):
@@ -282,6 +401,11 @@ def test_client_submit_job_uses_explicit_model_and_empty_language(mocker):
     payload = request_json.call_args.kwargs["payload"]
     assert payload["model"] == "whisper-1"
     assert "language" not in payload
+
+
+def test_client_rejects_non_bool_diarization_enabled():
+    with pytest.raises(TypeError, match="diarization_enabled must be a bool"):
+        VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled="false")  # type: ignore[arg-type]
 
 
 def test_client_wait_for_job_times_out(mocker):
@@ -380,10 +504,19 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
                                 "start_ms": 0,
                                 "end": "00:00:01.500",
                                 "end_ms": 1500,
-                                "speaker": "",
-                                "voice": "",
+                                "speaker": "Speaker 1",
+                                "voice": "Speaker 1",
                                 "text": "Hello world",
-                            }
+                            },
+                            {
+                                "start": "00:00:01.500",
+                                "start_ms": 1500,
+                                "end": "00:00:03.000",
+                                "end_ms": 3000,
+                                "speaker": "Speaker 2",
+                                "voice": "Speaker 2",
+                                "text": "Hi there",
+                            },
                         ],
                     }
                 ).encode("utf-8")
@@ -394,9 +527,15 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
                             {
                                 "startTime": "00:00:00,000",
                                 "endTime": "00:00:01,500",
-                                "speakerDesignation": "",
+                                "speakerDesignation": "Speaker 1",
                                 "text": "Hello world",
-                            }
+                            },
+                            {
+                                "startTime": "00:00:01,500",
+                                "endTime": "00:00:03,000",
+                                "speakerDesignation": "Speaker 2",
+                                "text": "Hi there",
+                            },
                         ]
                     }
                 ).encode("utf-8")
@@ -421,10 +560,19 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
                 "start_ms": 0,
                 "end": "00:00:01.500",
                 "end_ms": 1500,
-                "speaker": "",
-                "voice": "",
+                "speaker": "Speaker 1",
+                "voice": "Speaker 1",
                 "text": "Hello world",
-            }
+            },
+            {
+                "start": "00:00:01.500",
+                "start_ms": 1500,
+                "end": "00:00:03.000",
+                "end_ms": 3000,
+                "speaker": "Speaker 2",
+                "voice": "Speaker 2",
+                "text": "Hi there",
+            },
         ],
     }
     assert result.transcript.dote_data == {
@@ -432,9 +580,15 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
             {
                 "startTime": "00:00:00,000",
                 "endTime": "00:00:01,500",
-                "speakerDesignation": "",
+                "speakerDesignation": "Speaker 1",
                 "text": "Hello world",
-            }
+            },
+            {
+                "startTime": "00:00:01,500",
+                "endTime": "00:00:03,000",
+                "speakerDesignation": "Speaker 2",
+                "text": "Hi there",
+            },
         ]
     }
     with result.transcript.vtt.open("r") as handle:
