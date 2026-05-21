@@ -170,8 +170,16 @@ def replace_file(field, filename: str, content: bytes) -> None:
     field.save(filename, ContentFile(content), save=False)
 
 
-def build_audio_task_ref(audio_id: int) -> str:
-    return f"cast-audio-{audio_id}"
+def build_audio_task_ref(audio_id: int, *, diarization_enabled: bool = False) -> str:
+    task_ref = f"cast-audio-{audio_id}"
+    if diarization_enabled:
+        return f"{task_ref}-diarized"
+    return task_ref
+
+
+def client_diarization_enabled(client: object) -> bool:
+    # Strict ``is True`` keeps duck-typed test clients and mocks without a real bool on the non-diarized path.
+    return getattr(client, "diarization_enabled", False) is True
 
 
 def get_transcript_generation(audio: Audio) -> TranscriptGeneration | None:
@@ -340,7 +348,10 @@ class VoxhelmTranscriptService:
             raise VoxhelmError("Audio must be saved before requesting a transcript.")
 
         source_url = resolve_audio_source_url(audio)
-        resolved_task_ref = task_ref or build_audio_task_ref(audio.pk)
+        resolved_task_ref = task_ref or build_audio_task_ref(
+            audio.pk,
+            diarization_enabled=client_diarization_enabled(self.client),
+        )
         job_payload = self.client.submit_transcription_job(
             source_url=source_url,
             task_ref=resolved_task_ref,
@@ -434,17 +445,26 @@ def enqueue_audio_transcript_generation(
     if audio.pk is None:
         raise VoxhelmError("Audio must be saved before requesting a transcript.")
 
+    generation = get_transcript_generation(audio)
+    if generation is not None and generation.is_active:
+        return TranscriptEnqueueResult(generation=generation, enqueued=False)
+
+    service = VoxhelmTranscriptService(request_or_site=request_or_site)
+    task_ref = build_audio_task_ref(
+        audio.pk,
+        diarization_enabled=client_diarization_enabled(service.client),
+    )
     generation, created = TranscriptGeneration.objects.get_or_create(
         audio=audio,
-        defaults={"task_ref": build_audio_task_ref(audio.pk)},
+        defaults={"task_ref": task_ref},
     )
     if not created and generation.is_active:
         return TranscriptEnqueueResult(generation=generation, enqueued=False)
 
     try:
-        submission = VoxhelmTranscriptService(request_or_site=request_or_site).submit_for_audio(
+        submission = service.submit_for_audio(
             audio,
-            task_ref=build_audio_task_ref(audio.pk),
+            task_ref=task_ref,
         )
     except Exception as exc:
         if created:

@@ -258,6 +258,11 @@ def test_build_failure_message_prefers_error_message():
     assert "failed" in build_failure_message({"id": "job-3", "state": "failed", "error": {"message": "  "}})
 
 
+def test_build_audio_task_ref_supports_diarized_variant():
+    assert build_audio_task_ref(1) == "cast-audio-1"
+    assert build_audio_task_ref(1, diarization_enabled=True) == "cast-audio-1-diarized"
+
+
 def test_client_submit_job_and_download_artifact(mocker):
     requests = []
 
@@ -634,6 +639,43 @@ def test_submit_for_audio_returns_submission_metadata(settings, user, m4a_audio)
 
 
 @pytest.mark.django_db
+def test_submit_for_audio_uses_diarized_task_ref_for_diarized_client(settings, user, m4a_audio):
+    settings.MEDIA_URL = "https://media.example.com/"
+    audio = Audio(user=user, m4a=m4a_audio, title="episode")
+    audio.save(duration=False, cache_file_sizes=False)
+
+    class StubClient:
+        diarization_enabled = True
+
+        def submit_transcription_job(self, *, source_url, task_ref, context):
+            del source_url, context
+            assert task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
+            return {"id": "job-submit", "state": "queued"}
+
+    submission = VoxhelmTranscriptService(client=StubClient()).submit_for_audio(audio)
+
+    assert submission.task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_with_real_diarized_client_uses_diarized_task_ref_and_payload(
+    settings, user, m4a_audio, mocker
+):
+    settings.MEDIA_URL = "https://media.example.com/"
+    audio = Audio(user=user, m4a=m4a_audio, title="episode")
+    audio.save(duration=False, cache_file_sizes=False)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-submit", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(audio)
+
+    payload = request_json.call_args.kwargs["payload"]
+    assert submission.task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
+    assert payload["task_ref"] == build_audio_task_ref(audio.pk, diarization_enabled=True)
+    assert payload["diarization"] == {"enabled": True}
+
+
+@pytest.mark.django_db
 def test_submit_for_audio_raises_for_terminal_failed_state(settings, user, m4a_audio):
     settings.MEDIA_URL = "https://media.example.com/"
     audio = Audio(user=user, m4a=m4a_audio, title="episode")
@@ -729,6 +771,95 @@ def test_enqueue_audio_transcript_generation_reuses_active_job(mocker, audio):
     assert result.enqueued is False
     assert result.generation.pk == generation.pk
     submit.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_enqueue_audio_transcript_generation_reuses_active_job_found_after_initial_lookup(mocker, audio):
+    generation = TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.RUNNING,
+        task_ref=build_audio_task_ref(audio.pk),
+        voxhelm_job_id="job-running",
+        task_result_id="task-1",
+        source_url="https://media.example.com/audio.m4a",
+    )
+    service = mocker.Mock()
+    service.client = SimpleNamespace(diarization_enabled=False)
+    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.get_transcript_generation", return_value=None)
+
+    result = enqueue_audio_transcript_generation(audio=audio)
+
+    assert result.enqueued is False
+    assert result.generation.pk == generation.pk
+    service.submit_for_audio.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_enqueue_audio_transcript_generation_uses_diarized_task_ref_from_site_settings(mocker, audio, site, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
+    settings.CAST_VOXHELM_API_KEY = "settings-secret"
+    VoxhelmSettings.objects.update_or_create(
+        site=site,
+        defaults={
+            "api_base": "https://site.example",
+            "api_token": "site-secret",
+            "diarization_enabled": True,
+        },
+    )
+    task_ref = build_audio_task_ref(audio.pk, diarization_enabled=True)
+    submission = TranscriptSubmission(
+        job_id="job-diarized",
+        source_url="https://media.example.com/audio.m4a",
+        task_ref=task_ref,
+        job_payload={"id": "job-diarized", "state": "queued"},
+    )
+    submit = mocker.patch("cast.voxhelm.VoxhelmTranscriptService.submit_for_audio", return_value=submission)
+    enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
+
+    result = enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=audio.user)
+
+    assert result.enqueued is True
+    generation = get_transcript_generation(audio)
+    assert generation is not None
+    assert generation.task_ref == task_ref
+    assert generation.voxhelm_job_id == "job-diarized"
+    submit.assert_called_once_with(audio, task_ref=task_ref)
+
+
+@pytest.mark.django_db
+def test_enqueue_audio_transcript_generation_requeues_inactive_generation_with_diarized_task_ref(mocker, audio):
+    generation = TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.SUCCEEDED,
+        task_ref=build_audio_task_ref(audio.pk),
+        voxhelm_job_id="job-old",
+        task_result_id="task-old",
+        source_url="https://media.example.com/audio.m4a",
+    )
+    task_ref = build_audio_task_ref(audio.pk, diarization_enabled=True)
+    submission = TranscriptSubmission(
+        job_id="job-diarized",
+        source_url="https://media.example.com/audio.m4a",
+        task_ref=task_ref,
+        job_payload={"id": "job-diarized", "state": "queued"},
+    )
+    service = mocker.Mock()
+    service.client = SimpleNamespace(diarization_enabled=True)
+    service.submit_for_audio.return_value = submission
+    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
+
+    result = enqueue_audio_transcript_generation(audio=audio)
+
+    generation.refresh_from_db()
+    assert result.enqueued is True
+    assert result.generation.pk == generation.pk
+    assert generation.task_ref == task_ref
+    assert generation.voxhelm_job_id == "job-diarized"
+    service.submit_for_audio.assert_called_once_with(audio, task_ref=task_ref)
 
 
 @pytest.mark.django_db
