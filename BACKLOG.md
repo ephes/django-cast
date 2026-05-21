@@ -26,6 +26,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: a narrow branch proves whether typed read shapes clarify repository logic without changing
     template contracts or query counts.
 
+- [ ] Show diarized speaker labels in the Podlove player
+  - Notes: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
+  - Related to: Speaker diarization for generated transcripts.
+  - Scope: confirm the Podlove Web Player contributor schema, then extend the player API payload with matching
+    top-level contributors so the player renders the speaker names already present in transcript segments.
+  - Done when: the player contributor contract is verified, `/api/audios/podlove/<audio>/post/<post>/` includes
+    deduplicated contributor entries for non-blank transcript speaker labels, existing transcript payload behavior is
+    preserved, and the player displays speaker names on a diarized staging episode.
+
 ## Research / Shaping
 
 - [ ] Typeahead search
@@ -60,10 +69,11 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Speaker diarization for generated transcripts
   - Notes: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
   - Related to: Podcast contributor follow-up options.
-  - Scope: shape speaker-labeled transcript generation through Voxhelm and decide how django-cast should expose
-    generic speaker labels, speaker names, and contributor mappings.
-  - Done when: Voxhelm support is proven with representative podcast audio, DOTe/Podlove/WebVTT speaker-label
-    behavior is documented, and the first django-cast implementation slice is small enough to estimate.
+  - Scope: decide whether the current destructive Podlove/DOTe speaker rewrite workflow is the accepted v1, or
+    whether django-cast should replace it with the originally proposed non-destructive `TranscriptSpeakerMapping`
+    model and read-time mapping layer.
+  - Done when: the mapping persistence decision is recorded, any follow-up implementation slices are split into
+    Ready items, and stale assumptions in the diarization note are removed.
 
 - [ ] Programmatic content editing API
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,

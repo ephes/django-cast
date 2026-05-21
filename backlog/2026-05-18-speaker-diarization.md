@@ -29,11 +29,16 @@ identity. `Speaker 1` means "the first detected speaker cluster", not "the first
 
 ## Decision
 
+Status note: this section documents the originally preferred non-destructive design. The landed `0.2.57` workflow is
+different: it rewrites Podlove/DOTe speaker labels in place after editor approval. See [Current State](#current-state)
+for shipped behavior and remaining gaps. The open shaping item in `BACKLOG.md` decides whether to keep the destructive
+workflow as v1 or implement the non-destructive mapping model described here.
+
 Do not send episode contributors to Voxhelm for the first django-cast diarization implementation.
 
-The first implementation should send only the generic diarization flag, persist the raw Voxhelm artifacts unchanged,
-then let django-cast extract the generic labels and map them to contributor records or one-off display names in an
-editor-controlled workflow.
+The originally proposed durable implementation sends only the generic diarization flag, persists the raw Voxhelm
+artifacts unchanged, then lets django-cast extract the generic labels and map them to contributor records or one-off
+display names in an editor-controlled workflow.
 
 Reasons:
 
@@ -49,11 +54,38 @@ Future Voxhelm speaker hints are still possible, but they should be treated as s
 assignments, unless Voxhelm adds an explicit speaker-recognition contract with confidence scores and reviewed voice
 enrollment.
 
+## Current State
+
+The first usable django-cast diarization path has landed for `0.2.57`:
+
+- Voxhelm jobs can request generic diarization through `CAST_VOXHELM_DIARIZATION_ENABLED` or the site-level Wagtail
+  Voxhelm setting.
+- Diarized jobs use a distinct `task_ref` suffix so older non-diarized Voxhelm jobs are not reused.
+- django-cast still sends no contributor identities to Voxhelm.
+- Generated Podlove, DOTe, and WebVTT artifacts are saved from Voxhelm as returned.
+- The transcript edit view extracts Podlove/DOTe speaker labels and lets editors map them to episode contributors.
+- The current mapping UI rewrites Podlove `speaker`/`voice` and DOTe `speakerDesignation` fields in place, while
+  leaving WebVTT unchanged.
+- Mapping choices include persisted and draft episode contributor assignments.
+- `python-podcast` is pinned to a django-cast `develop` commit with these changes and has deployment notes plus a
+  longer `CAST_VOXHELM_POLL_TIMEOUT` for full-episode diarization jobs.
+
+Important gaps remain:
+
+- There is no `TranscriptSpeakerMapping` model yet.
+- The current mapping workflow is destructive after editor approval; it does not preserve raw `Speaker N` labels for
+  later audit/remapping without regenerating or re-uploading artifacts.
+- There is no one-off display-name mapping for speakers who should not become contributor snippets.
+- Mapping rows are not preserved across transcript regeneration or manual re-upload because no mapping rows exist.
+- The Podlove player API can return transcript segments with `speaker`/`voice` values but no top-level `contributors`
+  list, so Podlove Web Player does not render the speaker names even though the transcript detail view does.
+
 ## Options
 
 ### Option A: Raw Diarization Plus Editor Mapping
 
-Recommended.
+Recommended for a durable, reversible mapping workflow. The current `0.2.57` implementation is a smaller
+contributor-only rewrite workflow; see [Current State](#current-state).
 
 1. django-cast requests generic diarization from Voxhelm.
 2. Voxhelm returns `Speaker N` labels in Podlove and DOTe.
@@ -96,6 +128,10 @@ different feature from plain diarization and should not block generic speaker la
 
 Prefer a non-destructive read-time mapping layer.
 
+Status note: the current `0.2.57` v1 does not do this; it rewrites Podlove/DOTe files after editor approval. This
+option remains the durable mapping design if django-cast decides raw-label preservation and remapping are worth the
+extra model/UI complexity.
+
 The current public endpoints already load transcript JSON before returning it, so django-cast can apply a mapping when
 serving:
 
@@ -114,6 +150,9 @@ should either keep separate raw files or be able to regenerate mapped files from
 The first mapping slice can leave WebVTT unchanged.
 
 ## Proposed Data Model
+
+This data model is only needed if django-cast chooses the non-destructive mapping path. The current `0.2.57` v1 has no
+mapping model and rewrites transcript files after editor approval.
 
 Prefer a normalized mapping model over storing raw JSON on `Transcript`:
 
@@ -148,6 +187,8 @@ A JSON field such as `Transcript.speaker_mapping = {"Speaker 1": "alice"}` would
 forms, validation, future links, contributor deletion behavior, and per-label review state.
 
 ## Editor Workflow
+
+This describes the desired workflow for the non-destructive mapping path, not the current contributor-only rewrite UI.
 
 1. After Voxhelm generation, manual transcript import, or manual transcript re-upload, extract speaker labels from
    Podlove and DOTe.
@@ -189,6 +230,46 @@ context or show contributors grouped across all referencing episodes.
 8. Document the setting, Voxhelm diarization requirement, and operational expectation that full-episode diarization is
    slow and must use the existing queued/running transcript flow.
 
+Status: landed in `0.2.57`.
+
+### Ready Slice: Podlove Player Speaker Labels
+
+Problem: on staging, `/api/audios/podlove/82/post/140/` can return transcript segments such as:
+
+```json
+{
+  "speaker": "Dominik",
+  "voice": "Dominik",
+  "text": "..."
+}
+```
+
+But the same payload does not include top-level Podlove player `contributors`. Podlove Web Player resolves transcript
+speaker ids through top-level contributor objects and renders `speaker.name`; it does not render the raw transcript
+`speaker` string directly. The transcript detail view works because Django templates render `{{ segment.speaker }}`
+directly.
+
+First implementation:
+
+1. Confirm the Podlove Web Player v5 `contributors` schema and transcript `speaker`/`voice` id resolution against
+   player source or official docs before changing the API payload.
+2. Add `contributors` to `AudioPodloveSerializer`.
+3. Derive first-appearance, deduplicated contributors from non-blank Podlove transcript `speaker` and `voice` values.
+   Do not use `Transcript.get_speaker_labels()` directly for this payload: it sorts labels and also includes DOTe
+   `speakerDesignation` values.
+4. Use the label as both `id` and `name` for the immediate fix if step 1 confirms that this matches the player
+   contract, for example `{"id": "Dominik", "name": "Dominik"}`.
+5. Keep the existing `transcripts` payload unchanged.
+6. Avoid parsing `transcript.podlove` twice per player API request; share one JSON load between transcript and
+   contributor extraction.
+7. Add tests for contributor extraction, duplicate handling, blank labels, invalid/missing transcript JSON, and the
+   existing no-transcript path.
+8. Verify on a diarized staging episode that Podlove Web Player displays speaker labels.
+
+If the non-destructive mapping model is implemented later, this API can switch from label-derived contributor objects
+to mapped contributor/display-name objects while keeping transcript `speaker` ids and top-level contributor ids in
+sync.
+
 ### Slice 2: Mapping Model And Label Extraction
 
 1. Add `TranscriptSpeakerMapping`.
@@ -196,6 +277,9 @@ context or show contributors grouped across all referencing episodes.
 3. Populate missing mapping rows after transcript generation and when opening/saving transcript admin forms.
 4. Add tests for label extraction, duplicate handling, blank speaker fields, and preserving existing mappings across
    regeneration or manual re-upload.
+
+Status: label extraction landed as `Transcript.get_speaker_labels()`. The mapping model and persisted mapping rows
+remain unbuilt, pending the persistence decision.
 
 ### Slice 3: Editor Mapping UI And Public Output
 
@@ -205,6 +289,9 @@ context or show contributors grouped across all referencing episodes.
 3. Keep WebVTT unchanged unless a separate VTT speaker-label design is accepted.
 4. Add tests for mapped Podlove output, mapped PodcastIndex output, unmapped fallback behavior, and hidden/deleted
    contributor behavior.
+
+Status: partially landed as a contributor-only Wagtail form that rewrites Podlove/DOTe files in place. Read-time
+mapping, one-off display names, and persistent mapping records remain undecided.
 
 ## python-podcast Integration Notes
 
@@ -232,6 +319,10 @@ context or show contributors grouped across all referencing episodes.
 - How should overlapping speech, merged clusters, or split clusters be represented in the editor?
 
 ## Acceptance Criteria
+
+Status note: these criteria describe the complete durable diarization design. The current `0.2.57` v1 meets the
+generic Voxhelm enablement and contributor-controlled rewrite path, but it does not retain raw artifacts after mapping
+and does not support one-off display names. Those parts depend on the open mapping persistence decision.
 
 - django-cast can submit Voxhelm transcript jobs with generic diarization enabled by configuration.
 - Existing behavior remains unchanged when the setting is false.
