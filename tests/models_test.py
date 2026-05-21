@@ -13,6 +13,7 @@ from django.utils import timezone
 from cast import appsettings
 from cast.devdata import create_transcript
 from cast.models import Audio, Blog, Contributor, ContributorLink, EpisodeContributor, File, Podcast
+from cast.models.contributors import ContributorLinkSelect
 from cast.models.pages import (
     PODLOVE_POSTER_RENDITION_SPEC,
     SOCIAL_COVER_RENDITION_SPEC,
@@ -681,6 +682,39 @@ class TestPostModel:
         )
         assert not formset.is_valid()
         assert "link" in formset.errors[0]
+
+    def test_episode_contributor_link_field_uses_filtering_widget(self, episode):
+        form_class = Episode.get_edit_handler().get_form_class()
+        form = form_class(instance=episode)
+        link_widget = form.formsets["contributor_assignments"].empty_form.fields["link"].widget
+
+        assert isinstance(link_widget, ContributorLinkSelect)
+        assert link_widget.attrs["data-cast-contributor-link-select"] == "true"
+        assert "cast/js/wagtail/contributor-link-select.js" in str(link_widget.media)
+        assert "cast/js/wagtail/contributor-link-select.js" in str(form.media)
+
+    def test_contributor_link_select_marks_options_with_contributor_id(self, episode):
+        contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+        link = ContributorLink.objects.create(
+            contributor=contributor,
+            service=ContributorLink.SERVICE_WEBSITE,
+            url="https://example.com/guest",
+        )
+        other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
+        other_link = ContributorLink.objects.create(
+            contributor=other_contributor,
+            service=ContributorLink.SERVICE_MASTODON,
+            url="https://example.com/other",
+        )
+        form_class = Episode.get_edit_handler().get_form_class()
+        form = form_class(instance=episode)
+        link_field = form.formsets["contributor_assignments"].empty_form.fields["link"]
+
+        html = link_field.widget.render("link", str(link.pk), attrs={"id": "link"})
+
+        assert '<option value="">---------</option>' in html
+        assert f'<option value="{link.pk}" selected data-cast-contributor-id="{contributor.pk}">' in html
+        assert f'<option value="{other_link.pk}" data-cast-contributor-id="{other_contributor.pk}">' in html
 
     def test_episode_contributor_is_unique_per_episode_contributor_and_role(self, episode):
         contributor = Contributor.objects.create(display_name="Guest", slug="guest")

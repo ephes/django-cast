@@ -1,5 +1,6 @@
 from typing import Any
 
+from django import forms
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import HttpRequest
@@ -134,6 +135,33 @@ class ContributorLink(Orderable):
             )
 
 
+class ContributorLinkSelect(forms.Select):
+    """Select widget that exposes contributor ownership to the episode admin JS."""
+
+    def __init__(self, attrs: dict[str, str] | None = None) -> None:
+        attrs = {"data-cast-contributor-link-select": "true", **(attrs or {})}
+        super().__init__(attrs=attrs)
+
+    def create_option(
+        self,
+        name: str,
+        value: Any,
+        label: int | str,
+        selected: bool,
+        index: int,
+        subindex: int | None = None,
+        attrs: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        link = getattr(value, "instance", None)
+        if link is not None:
+            option["attrs"]["data-cast-contributor-id"] = str(link.contributor_id)
+        return option
+
+    class Media:
+        js = ["cast/js/wagtail/contributor-link-select.js"]
+
+
 class EpisodeContributor(Orderable):
     """Ordered contributor assignment for a podcast episode."""
 
@@ -159,7 +187,7 @@ class EpisodeContributor(Orderable):
     panels = [
         FieldPanel("contributor"),
         FieldPanel("role"),
-        FieldPanel("link"),
+        FieldPanel("link", widget=ContributorLinkSelect),
     ]
 
     class Meta(Orderable.Meta):

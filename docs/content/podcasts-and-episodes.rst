@@ -82,6 +82,8 @@ assignments.
 On an episode edit page, use the **Contributors** panel to add ordered
 contributors. Each assignment chooses a contributor, a role of **Host** or
 **Guest**, and optionally one of the contributor's links to use for that episode.
+After a contributor is selected, the link field only offers that contributor's
+profile links.
 The same contributor may appear on an episode under more than one role (for
 example as both **Host** and **Guest**), but a given (contributor, role) pair
 can only be assigned once per episode. Episode assignments may reference one of
