@@ -17,6 +17,8 @@
   rendition URL is precomputed in the post repository so detail and feed
   rendering remain query-free, including mixed post/episode querysets.
 - Added a top-level Wagtail admin menu item for contributors.
+- Fixed the Wagtail page action menu styling for transcript generation while
+  keeping transcript status and edit links visible to editors.
 - Full page ``Post.serve()`` calls and Wagtail previews now expose
   ``render_detail=True`` to templates by default. Callers can still pass
   ``render_detail=False`` explicitly for overview-style rendering.

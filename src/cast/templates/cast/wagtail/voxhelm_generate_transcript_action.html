@@ -1,11 +1,10 @@
 {% load i18n wagtailadmin_tags %}
-<input type="hidden" name="next" value="{{ request.get_full_path }}" />
 <button
   type="submit"
   name="{{ name }}"
   value="{{ label }}"
-  class="button button-secondary button-longrunning{% if classname %} {{ classname }}{% endif %}"
-  formaction="{{ url }}"
+  class="button button-longrunning{% if classname %} {{ classname }}{% endif %}"
+  formaction="{{ action_url }}"
   formmethod="post"
   formnovalidate
   {% if transcript_generation_active %}disabled{% endif %}
@@ -17,4 +16,15 @@
   {% icon name="spinner" %}
   <em data-w-progress-target="label">{{ label }}</em>
 </button>
-{% include "cast/wagtail/_voxhelm_transcript_status.html" %}
+{% if transcript_generation_status %}
+  <a role="status">
+    <strong>{% trans "Transcript status:" %}</strong> {{ transcript_generation_status }}.
+    {{ transcript_generation_message }}
+    {% if transcript_generation_error %}
+      {% blocktrans with message=transcript_generation_error %}Last error: {{ message }}{% endblocktrans %}
+    {% endif %}
+  </a>
+{% endif %}
+{% if transcript_generation_transcript_url %}
+  <a href="{{ transcript_generation_transcript_url }}">{% trans "Edit transcript" %}</a>
+{% endif %}

@@ -9,6 +9,7 @@ from the Wagtail admin sidebar.
 from collections.abc import Iterator, MutableMapping
 from contextvars import ContextVar
 from typing import TypeVar, overload
+from urllib.parse import urlencode
 
 from django.http import HttpRequest
 from django.urls import include, path, reverse
@@ -186,6 +187,9 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
 
     def get_context_data(self, parent_context):
         context = super().get_context_data(parent_context)
+        url = context["url"]
+        separator = "&" if "?" in url else "?"
+        context["action_url"] = f"{url}{separator}{urlencode({'next': parent_context['request'].get_full_path()})}"
         page = parent_context["page"]
         audio = getattr(page, "podcast_audio", None)
         if isinstance(audio, Audio):

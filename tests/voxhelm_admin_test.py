@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -5,7 +7,7 @@ from django.contrib.messages import get_messages
 from django.test import RequestFactory
 from django.urls import reverse
 
-from cast.models import TranscriptGeneration, VoxhelmSettings
+from cast.models import Transcript, TranscriptGeneration, VoxhelmSettings
 from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
 from cast.voxhelm import VoxhelmError, build_audio_task_ref
 from cast.views import voxhelm as voxhelm_views
@@ -108,12 +110,15 @@ def test_voxhelm_settings_new_instance_allows_empty_token(admin_client, site):
 
 @pytest.mark.django_db
 def test_episode_edit_page_shows_generate_transcript_action(admin_client, episode):
-    response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
+    edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
+    response = admin_client.get(f"{edit_url}?show=comments&tab=content")
 
     assert response.status_code == 200
     content = response.content.decode("utf-8")
+    expected_action = f"{reverse('cast-voxhelm:generate_episode', args=(episode.pk,))}?{urlencode({'next': f'{edit_url}?show=comments&tab=content'})}"
     assert "Generate transcript" in content
-    assert reverse("cast-voxhelm:generate_episode", args=(episode.pk,)) in content
+    assert expected_action in content
+    assert "button-secondary button-longrunning" not in content
 
 
 @pytest.mark.django_db
@@ -133,7 +138,29 @@ def test_episode_edit_page_shows_transcript_generation_status(admin_client, epis
     content = response.content.decode("utf-8")
     assert "Transcript status:" in content
     assert "Running" in content
-    assert 'class="help-block"' in content
+    assert 'role="status"' in content
+    assert 'class="help-block"' not in content
+
+
+@pytest.mark.django_db
+def test_episode_edit_page_links_succeeded_transcript(admin_client, episode):
+    audio = episode.podcast_audio
+    assert audio is not None
+    transcript = Transcript.objects.create(audio=audio)
+    TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.SUCCEEDED,
+        task_ref=build_audio_task_ref(audio.pk),
+        voxhelm_job_id="job-episode",
+    )
+
+    response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Succeeded" in content
+    assert "Edit transcript" in content
+    assert reverse("cast-transcript:edit", args=(transcript.pk,)) in content
 
 
 @pytest.mark.django_db
@@ -182,9 +209,13 @@ def test_generate_episode_transcript_from_wagtail_admin(admin_client, episode, m
         return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
     )
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+    edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
+    response = admin_client.post(
+        f"{reverse('cast-voxhelm:generate_episode', args=(episode.pk,))}?next={edit_url}", follow=True
+    )
 
     assert response.status_code == 200
+    assert response.redirect_chain[0][0] == edit_url
     enqueue.assert_called_once_with(audio=audio, request_or_site=episode.get_site(), requested_by=mocker.ANY)
     messages = [message.message for message in get_messages(response.wsgi_request)]
     assert any("Transcript generation queued for" in message and episode.title in message for message in messages)
@@ -347,6 +378,12 @@ def test_get_redirect_url_prefers_safe_next():
     request = RequestFactory().post("/", {"next": "/cms/pages/1/edit/"})
 
     assert voxhelm_views._get_redirect_url(request, "/fallback/") == "/cms/pages/1/edit/"
+
+
+def test_get_redirect_url_rejects_protocol_relative_next():
+    request = RequestFactory().post("/", {"next": "//evil.example/cms/pages/1/edit/"})
+
+    assert voxhelm_views._get_redirect_url(request, "/fallback/") == "/fallback/"
 
 
 @pytest.mark.django_db

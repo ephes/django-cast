@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
 from wagtail.admin import messages
@@ -43,8 +44,12 @@ def resolve_site_for_audio(*, request: HttpRequest, audio: Audio) -> Site | None
 
 
 def _get_redirect_url(request: HttpRequest, default_url: str) -> str:
-    next_url = request.POST.get("next")
-    if isinstance(next_url, str) and next_url.startswith("/"):
+    next_url = request.POST.get("next") or request.GET.get("next")
+    if isinstance(next_url, str) and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
         return next_url
     return default_url
 
