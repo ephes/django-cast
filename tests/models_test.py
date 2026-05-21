@@ -581,6 +581,12 @@ class TestPostModel:
         )
         episode.contributor_assignments.add(
             EpisodeContributor(
+                role=EpisodeContributor.ROLE_GUEST,
+                sort_order=3,
+            )
+        )
+        episode.contributor_assignments.add(
+            EpisodeContributor(
                 contributor=host,
                 role=EpisodeContributor.ROLE_HOST,
                 sort_order=0,

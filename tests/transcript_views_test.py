@@ -8,7 +8,7 @@ from django.template import TemplateDoesNotExist
 from django.urls import reverse
 
 from cast.devdata import create_transcript
-from cast.forms import SpeakerContributorMappingForm
+from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
 from cast.models import Contributor, EpisodeContributor, Transcript
 from cast.views.transcript import _resolve_transcript_template, get_speaker_mapping_context
 
@@ -330,6 +330,95 @@ class TestTranscriptSpeakerMapping:
             (str(first_assignment.pk), f"Alice (Host) — {episode.title}"),
             (str(second_assignment.pk), f"Bob (Guest) — {podcast_episode_with_same_audio.title}"),
         ]
+
+    def test_speaker_mapping_context_uses_draft_contributor_assignments(self, episode):
+        contributor = Contributor.objects.create(display_name="Draft Host", slug="draft-host")
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=contributor,
+                role=EpisodeContributor.ROLE_HOST,
+            )
+        )
+        episode.save_revision()
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+
+        context = get_speaker_mapping_context(transcript)
+        form = SpeakerContributorMappingForm(**context)
+
+        assert EpisodeContributor.objects.filter(episode=episode).count() == 0
+        assert [assignment.display_name for assignment in context["contributor_assignments"]] == ["Draft Host"]
+        assert context["contributor_assignments"][0].pk is None
+        draft_value = f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{episode.pk}:{contributor.pk}:{EpisodeContributor.ROLE_HOST}"
+        assert form.fields["speaker_0"].choices == [("", "Leave unchanged"), (draft_value, "Draft Host (Host)")]
+
+    def test_speaker_mapping_context_uses_stable_draft_assignment_values_with_mixed_assignments(self, episode):
+        saved_contributor = Contributor.objects.create(display_name="Saved Host", slug="saved-host")
+        saved_assignment = EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=saved_contributor,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        draft_contributor = Contributor.objects.create(display_name="Draft Guest", slug="draft-guest")
+        hidden_contributor = Contributor.objects.create(
+            display_name="Hidden Guest", slug="hidden-guest", visible=False
+        )
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=draft_contributor,
+                role=EpisodeContributor.ROLE_GUEST,
+                sort_order=1,
+            )
+        )
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=hidden_contributor,
+                role=EpisodeContributor.ROLE_GUEST,
+                sort_order=2,
+            )
+        )
+        episode.save_revision()
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+
+        form = SpeakerContributorMappingForm(**get_speaker_mapping_context(transcript))
+
+        draft_value = (
+            f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{episode.pk}:{draft_contributor.pk}:{EpisodeContributor.ROLE_GUEST}"
+        )
+        assert form.fields["speaker_0"].choices == [
+            ("", "Leave unchanged"),
+            (str(saved_assignment.pk), "Saved Host (Host)"),
+            (draft_value, "Draft Guest (Guest)"),
+        ]
+
+    def test_post_speaker_mapping_uses_draft_contributor_assignments(self, admin_client, episode):
+        contributor = Contributor.objects.create(display_name="Draft Host", slug="draft-host")
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=contributor,
+                role=EpisodeContributor.ROLE_HOST,
+            )
+        )
+        episode.save_revision()
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+        )
+        edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+
+        draft_value = f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{episode.pk}:{contributor.pk}:{EpisodeContributor.ROLE_HOST}"
+
+        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": draft_value})
+
+        assert response.status_code == 302
+        with transcript.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Draft Host"
 
     def test_post_speaker_mapping_rewrites_transcript_files(self, admin_client, episode):
         contributor = Contributor.objects.create(display_name="Alice", slug="alice")

@@ -22,6 +22,8 @@
   labels such as ``Speaker 1`` to an episode contributor. The admin workflow
   rewrites Podlove and DOTe transcript speaker fields while leaving WebVTT
   unchanged.
+- Transcript speaker mapping now uses draft episode contributor assignments,
+  so editors can map speakers before publishing an unfinished episode.
 - Fixed the Wagtail page action menu styling for transcript generation while
   keeping transcript status and edit links visible to editors.
 - Full page ``Post.serve()`` calls and Wagtail previews now expose

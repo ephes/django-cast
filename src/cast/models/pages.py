@@ -846,7 +846,11 @@ class Episode(Post):
                 assignments_iterable = self.contributor_assignments.select_related("contributor__avatar", "link").all()
             except ValueError:
                 return []
-        return [assignment for assignment in assignments_iterable if assignment.contributor.visible]
+        return [
+            assignment
+            for assignment in assignments_iterable
+            if assignment.contributor_id is not None and assignment.contributor.visible
+        ]
 
     def get_enclosure_url(self, audio_format: str) -> str:
         return getattr(self.podcast_audio, audio_format).url

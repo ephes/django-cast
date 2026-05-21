@@ -22,6 +22,7 @@ from .models import Audio, ChapterMark, EpisodeContributor, Transcript, Video, g
 
 
 SPEAKER_MAPPING_ACTION = "map-speakers"
+DRAFT_SPEAKER_ASSIGNMENT_PREFIX = "draft:"
 
 
 class VideoForm(forms.ModelForm):
@@ -300,17 +301,27 @@ class SpeakerContributorMappingForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.speaker_labels = speaker_labels
         self.contributor_assignments = contributor_assignments
-        self.assignment_lookup = {str(assignment.pk): assignment for assignment in contributor_assignments}
+        self.assignment_lookup: dict[str, EpisodeContributor] = {}
         choices: list[tuple[str, str]] = [("", str(_("Leave unchanged")))]
-        choices.extend(
-            (str(assignment.pk), self._assignment_label(assignment, multiple_episodes=multiple_episodes))
-            for assignment in contributor_assignments
-        )
+        for assignment in contributor_assignments:
+            assignment_value = self._assignment_value(assignment)
+            self.assignment_lookup[assignment_value] = assignment
+            choices.append((assignment_value, self._assignment_label(assignment, multiple_episodes=multiple_episodes)))
         self.speaker_field_names = {}
         for index, speaker_label in enumerate(speaker_labels):
             field_name = f"speaker_{index}"
             self.speaker_field_names[field_name] = speaker_label
             self.fields[field_name] = forms.ChoiceField(label=speaker_label, choices=choices, required=False)
+
+    @staticmethod
+    def _assignment_value(assignment: EpisodeContributor) -> str:
+        if assignment.pk is not None:
+            return str(assignment.pk)
+        # Draft revision inline children do not have primary keys yet; use the episode/contributor/role tuple
+        # that uniquely identifies persisted episode contributor assignments instead of a request-local index.
+        return (
+            f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{assignment.episode.pk}:{assignment.contributor_id}:{assignment.role}"
+        )
 
     @staticmethod
     def _assignment_label(assignment: EpisodeContributor, *, multiple_episodes: bool) -> str:
@@ -325,7 +336,7 @@ class SpeakerContributorMappingForm(forms.Form):
         for field_name, speaker_label in self.speaker_field_names.items():
             assignment_id = cleaned_data.get(field_name)
             if assignment_id:
-                speaker_mapping[speaker_label] = self.assignment_lookup[str(assignment_id)].display_name
+                speaker_mapping[speaker_label] = self.assignment_lookup[assignment_id].display_name
         self.speaker_mapping = speaker_mapping
         return cleaned_data
 

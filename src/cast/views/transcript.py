@@ -1,5 +1,5 @@
 import json
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -137,8 +137,17 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     )
 
 
+def _episode_from_latest_revision(episode: Episode) -> Episode:
+    return cast(Episode, episode.get_latest_revision_as_object())
+
+
 def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext:
-    episodes = list(transcript.audio.episodes.prefetch_related("contributor_assignments__contributor").all())
+    episodes = [
+        _episode_from_latest_revision(episode)
+        for episode in transcript.audio.episodes.select_related("latest_revision")
+        .prefetch_related("contributor_assignments__contributor")
+        .all()
+    ]
     contributor_assignments: list[EpisodeContributor] = []
     for episode in episodes:
         contributor_assignments.extend(episode.visible_contributor_assignments)
