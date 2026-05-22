@@ -694,13 +694,11 @@ class CustomEpisodeForm(WagtailAdminPageForm):
     we have to check which button was clicked in the admin form.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["action-publish"] = forms.CharField(required=False, widget=forms.HiddenInput())
-
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
-        if cleaned_data.get("action-publish") and cleaned_data.get("podcast_audio") is None:
+        action_publish_values = self.data.getlist("action-publish") if hasattr(self.data, "getlist") else []
+        publish_requested = any(action_publish_values) or bool(self.data.get("action-publish"))
+        if publish_requested and cleaned_data.get("podcast_audio") is None:
             raise forms.ValidationError({"podcast_audio": _("An episode must have an audio file to be published.")})
         return cleaned_data
 

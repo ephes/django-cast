@@ -6,6 +6,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.db.models import ProtectedError
+from django.http import QueryDict
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -1180,6 +1181,8 @@ def test_custom_episode_form():
     form = CustomEpisodeForm()
     assert not form.is_valid()
 
+    assert "action-publish" not in form.fields
+
     # test the form with the "Save draft" button clicked (no audio file is ok)
     form = CustomEpisodeForm({"podcast_audio": None})
     assert form.is_valid()
@@ -1188,6 +1191,64 @@ def test_custom_episode_form():
     form = CustomEpisodeForm({"action-publish": "action-publish", "podcast_audio": None})
     form.fields["podcast_audio"] = forms.IntegerField(required=False)
     assert not form.is_valid()
+
+    # tolerate duplicate publish values without rendering a hidden field that can shadow Wagtail's submit button
+    form = CustomEpisodeForm(QueryDict("action-publish=action-publish&action-publish=&podcast_audio="))
+    form.fields["podcast_audio"] = forms.IntegerField(required=False)
+    assert not form.is_valid()
+
+
+@pytest.mark.django_db
+def test_episode_edit_view_publish_action_publishes_contributor_assignments(admin_client, episode):
+    contributor = Contributor.objects.create(display_name="Published Guest", slug="published-guest")
+    edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
+    post_data = {
+        "action-publish": "action-publish",
+        "title": episode.title,
+        "slug": episode.slug,
+        "visible_date": timezone.localtime(episode.visible_date).strftime("%Y-%m-%d %H:%M"),
+        "podcast_audio": str(episode.podcast_audio_id),
+        "body-count": "1",
+        "body-0-deleted": "",
+        "body-0-order": "0",
+        "body-0-type": "overview",
+        "body-0-value-count": "1",
+        "body-0-value-0-deleted": "",
+        "body-0-value-0-order": "0",
+        "body-0-value-0-type": "heading",
+        "body-0-value-0-value": "Published overview",
+        "keywords": "",
+        "explicit": "1",
+        "cover_image": "",
+        "cover_alt_text": "",
+        "tags": "",
+        "seo_title": "",
+        "search_description": "",
+        "go_live_at": "",
+        "expire_at": "",
+        "comments-TOTAL_FORMS": "0",
+        "comments-INITIAL_FORMS": "0",
+        "comments-MIN_NUM_FORMS": "0",
+        "comments-MAX_NUM_FORMS": "1000",
+        "contributor_assignments-TOTAL_FORMS": "1",
+        "contributor_assignments-INITIAL_FORMS": "0",
+        "contributor_assignments-MIN_NUM_FORMS": "0",
+        "contributor_assignments-MAX_NUM_FORMS": "1000",
+        "contributor_assignments-0-contributor": str(contributor.pk),
+        "contributor_assignments-0-role": EpisodeContributor.ROLE_GUEST,
+        "contributor_assignments-0-link": "",
+        "contributor_assignments-0-ORDER": "0",
+        "contributor_assignments-0-id": "",
+    }
+
+    response = admin_client.post(edit_url, post_data)
+
+    assert response.status_code == 302
+    episode.refresh_from_db()
+    assert episode.live is True
+    assert episode.contributor_assignments.get().contributor == contributor
+    live_episode = episode.live_revision.as_object()
+    assert [assignment.contributor for assignment in live_episode.contributor_assignments.all()] == [contributor]
 
 
 @pytest.mark.django_db
