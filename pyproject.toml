@@ -6,6 +6,7 @@ authors = [
     {name = "Dominik Geldmacher", email = "oryon@cyberise.de"},
 ]
 description = "Django Cast is a blogging and podcasting package built on Django and Wagtail CMS"
+readme = "README.md"
 requires-python = ">=3.11"
 keywords = [
     "blog",
