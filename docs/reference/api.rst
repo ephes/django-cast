@@ -82,7 +82,15 @@ Podlove player format (public)::
     GET /api/audios/podlove/{id}/
     GET /api/audios/podlove/{id}/post/{post_id}/
 
-Returns audio data formatted for the Podlove Web Player, including chapters and transcripts.
+Returns audio data formatted for the Podlove Web Player, including chapters,
+transcripts, and a top-level ``contributors`` list. Contributors are derived
+from non-blank transcript ``speaker``/``voice`` labels in first-appearance
+order; the Podlove Web Player resolves transcript segment speakers against
+them and renders their names::
+
+    "contributors": [
+        {"id": "Speaker 1", "name": "Speaker 1"}
+    ]
 
 Audio list/detail responses include these serializer fields:
 

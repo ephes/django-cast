@@ -26,15 +26,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: a narrow branch proves whether typed read shapes clarify repository logic without changing
     template contracts or query counts.
 
-- [ ] Show diarized speaker labels in the Podlove player
-  - Notes: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
-  - Related to: Speaker diarization for generated transcripts.
-  - Scope: confirm the Podlove Web Player contributor schema, then extend the player API payload with matching
-    top-level contributors so the player renders the speaker names already present in transcript segments.
-  - Done when: the player contributor contract is verified, `/api/audios/podlove/<audio>/post/<post>/` includes
-    deduplicated contributor entries for non-blank transcript speaker labels, existing transcript payload behavior is
-    preserved, and the player displays speaker names on a diarized staging episode.
-
 ## Research / Shaping
 
 - [ ] Typeahead search

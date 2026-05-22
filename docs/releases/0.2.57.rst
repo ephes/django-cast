@@ -27,6 +27,12 @@
   unchanged.
 - Transcript speaker mapping now uses draft episode contributor assignments,
   so editors can map speakers before publishing an unfinished episode.
+- The Podlove player API (``/api/audios/podlove/<id>/``) now includes a
+  top-level ``contributors`` list derived from non-blank transcript
+  ``speaker`` and ``voice`` labels in first-appearance order. Podlove Web
+  Player resolves transcript segment speakers against these contributor
+  entries and renders their names. The existing ``transcripts`` payload is
+  unchanged and the Podlove transcript file is read once per response.
 - Fixed the Wagtail page action menu styling for transcript generation while
   keeping transcript status and edit links visible to editors.
 - Full page ``Post.serve()`` calls and Wagtail previews now expose

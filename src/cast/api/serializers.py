@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Literal, Union
+from typing import Any, Literal, Union
 
 from rest_framework import serializers
 
@@ -36,10 +36,31 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     duration = serializers.CharField(source="duration_str")
     link = serializers.URLField(source="episode_url")
     transcripts = serializers.SerializerMethodField()
+    contributors = serializers.SerializerMethodField()
 
     class Meta:
         model = Audio
-        fields = ("version", "show", "title", "subtitle", "audio", "duration", "chapters", "link", "transcripts")
+        fields = (
+            "version",
+            "show",
+            "title",
+            "subtitle",
+            "audio",
+            "duration",
+            "chapters",
+            "link",
+            "transcripts",
+            "contributors",
+        )
+
+    def to_representation(self, instance: Audio) -> dict:
+        # Load the Podlove transcript JSON once so the transcripts and
+        # contributors fields share a single file read per response.
+        self._podlove_data = self._load_podlove_data(instance)
+        try:
+            return super().to_representation(instance)
+        finally:
+            del self._podlove_data
 
     def get_show(self, _instance: Audio) -> dict:
         post = self.context.get("post")  # Get the Post object from the context
@@ -61,25 +82,59 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     def get_version(_instance: Audio) -> int:
         return 5
 
-    @staticmethod
-    def get_transcripts(instance: Audio) -> list[dict]:
+    def _load_podlove_data(self, instance: Audio) -> dict[str, Any]:
+        """Return the parsed Podlove transcript JSON for ``instance``.
+
+        Returns an empty dict when there is no transcript, no Podlove file, the
+        file is missing from storage, or its content is not a JSON object.
+        """
         if not hasattr(instance, "transcript"):
-            return []
+            return {}
         transcript = instance.transcript
-        if transcript.podlove is None:
-            return []
-        # Open the file and load its contents as JSON
-        with transcript.podlove.open("r") as file:
-            try:
+        if not transcript.podlove:
+            return {}
+        try:
+            with transcript.podlove.open("r") as file:
                 data = json.load(file)  # assumes the file content is JSON
-                try:
-                    transcripts = data["transcripts"]
-                except KeyError:
-                    # maybe DOTe instead of Podlove -> empty list
-                    transcripts = []
-                return transcripts
-            except json.JSONDecodeError:
-                return []
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _podlove_data_for(self, instance: Audio) -> dict[str, Any]:
+        """Return the Podlove JSON, reusing the per-response load when available."""
+        cached = getattr(self, "_podlove_data", None)
+        if cached is not None:
+            return cached
+        return self._load_podlove_data(instance)
+
+    def get_transcripts(self, instance: Audio) -> list[dict]:
+        """Return the Podlove transcript segments for the Podlove Web Player."""
+        # maybe DOTe instead of Podlove or no transcript at all -> empty list
+        return self._podlove_data_for(instance).get("transcripts", [])
+
+    def get_contributors(self, instance: Audio) -> list[dict[str, str]]:
+        """Return Podlove player contributors derived from transcript speaker labels.
+
+        Podlove Web Player resolves a transcript segment's ``speaker`` id against
+        the top-level ``contributors`` list and renders ``contributor.name``.
+        Contributors are collected in first-appearance order from non-blank
+        ``speaker`` and ``voice`` values; the raw label is used as both ``id``
+        and ``name`` so it keeps matching the segment ``speaker`` id.
+        """
+        contributors: list[dict[str, str]] = []
+        seen: set[str] = set()
+        transcripts = self._podlove_data_for(instance).get("transcripts", [])
+        if not isinstance(transcripts, list):
+            return contributors
+        for segment in transcripts:
+            if not isinstance(segment, dict):
+                continue
+            for field_name in ("speaker", "voice"):
+                label = segment.get(field_name)
+                if isinstance(label, str) and label.strip() and label not in seen:
+                    seen.add(label)
+                    contributors.append({"id": label, "name": label})
+        return contributors
 
 
 class SimpleBlogSerializer(serializers.HyperlinkedModelSerializer):

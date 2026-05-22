@@ -69,6 +69,8 @@ The first usable django-cast diarization path has landed for `0.2.57`:
 - Mapping choices include persisted and draft episode contributor assignments.
 - `python-podcast` is pinned to a django-cast `develop` commit with these changes and has deployment notes plus a
   longer `CAST_VOXHELM_POLL_TIMEOUT` for full-episode diarization jobs.
+- The Podlove player API (`AudioPodloveSerializer`) returns a top-level `contributors` list derived from non-blank
+  transcript `speaker`/`voice` labels, so Podlove Web Player can resolve and render transcript segment speaker names.
 
 Important gaps remain:
 
@@ -77,8 +79,6 @@ Important gaps remain:
   later audit/remapping without regenerating or re-uploading artifacts.
 - There is no one-off display-name mapping for speakers who should not become contributor snippets.
 - Mapping rows are not preserved across transcript regeneration or manual re-upload because no mapping rows exist.
-- The Podlove player API can return transcript segments with `speaker`/`voice` values but no top-level `contributors`
-  list, so Podlove Web Player does not render the speaker names even though the transcript detail view does.
 
 ## Options
 
@@ -265,6 +265,15 @@ First implementation:
 7. Add tests for contributor extraction, duplicate handling, blank labels, invalid/missing transcript JSON, and the
    existing no-transcript path.
 8. Verify on a diarized staging episode that Podlove Web Player displays speaker labels.
+
+Status: landed in `0.2.57`. The Podlove Web Player v5 contributor contract was verified against the player source
+(`store/speakers` reads the top-level `contributors`; `effects/transcripts/fetch.js` resolves a segment `speaker`
+against contributor `id`; `tabs/transcripts/Entry.vue` renders `contributor.name`). `AudioPodloveSerializer` now emits
+the `contributors` payload with `{"id": label, "name": label}` entries, shares a single Podlove JSON load with
+`get_transcripts`, and has focused tests. Implementation, automated tests, and docs are complete, so this slice is not
+tracked as open work in `BACKLOG.md`. The one follow-up is an operational deploy-time check rather than implementation
+work: confirm on a diarized staging episode (for example, the next `python-podcast` diarized deploy) that Podlove Web
+Player renders the speaker names end to end.
 
 If the non-destructive mapping model is implemented later, this API can switch from label-derived contributor objects
 to mapped contributor/display-name objects while keeping transcript `speaker` ids and top-level contributor ids in

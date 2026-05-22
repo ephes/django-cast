@@ -16,7 +16,7 @@ from cast.api.views import (
     StandardResultsSetPagination,
     ThemeListView,
 )
-from cast.devdata import generate_blog_with_media
+from cast.devdata import create_transcript, generate_blog_with_media
 from cast.models import PostCategory
 
 from .factories import PostFactory, UserFactory
@@ -432,6 +432,201 @@ class TestPodcastAudio:
 
         # When we call the get_transcripts method, then we expect an empty list
         assert serializer.get_transcripts(audio) == []
+
+    def test_audio_podlove_serializer_get_contributors(self, mocker):
+        """get_contributors gracefully handles missing transcripts, files, and invalid JSON."""
+        # Given an episode without an audio/transcript
+        episode = mocker.MagicMock()
+        episode.podcast_audio = None
+        serializer = AudioPodloveSerializer(context={"post": episode})
+        # When we call get_contributors, then we expect an empty list
+        assert serializer.get_contributors(episode.podcast_audio) == []
+
+        # Given an audio with a transcript without a podlove file
+        audio = mocker.MagicMock()
+        audio.transcript = mocker.MagicMock()
+        audio.transcript.podlove = None
+        assert serializer.get_contributors(audio) == []
+
+        # Given a podlove file with valid diarized JSON
+        mock_file = mocker.MagicMock()
+        mock_file.__enter__.return_value = mock_file
+        mock_file.read.return_value = json.dumps(
+            {"transcripts": [{"speaker": "Alice", "voice": "Alice", "text": "Hello"}]}
+        )
+        mock_podlove = mocker.MagicMock()
+        mock_podlove.open.return_value = mock_file
+        transcript = mocker.MagicMock()
+        transcript.podlove = mock_podlove
+        audio = mocker.MagicMock()
+        audio.transcript = transcript
+        # When we call get_contributors, then we expect one contributor per label
+        assert serializer.get_contributors(audio) == [{"id": "Alice", "name": "Alice"}]
+
+        # Given a podlove file without a "transcripts" key
+        mock_file.read.return_value = json.dumps({"invalid_key": []})
+        assert serializer.get_contributors(audio) == []
+
+        # Given invalid JSON in the podlove file
+        mock_file.read.return_value = "{ invalid json }"
+        assert serializer.get_contributors(audio) == []
+
+        # Given podlove JSON that is not an object
+        mock_file.read.return_value = json.dumps([])
+        assert serializer.get_contributors(audio) == []
+
+        # Given a podlove file that is missing from storage
+        mock_podlove.open.side_effect = FileNotFoundError
+        assert serializer.get_contributors(audio) == []
+
+    def test_podlove_detail_endpoint_includes_contributors(self, api_client, episode):
+        """Diarized transcript speaker labels surface as top-level Podlove player contributors."""
+        audio = episode.podcast_audio
+        create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {
+                        "start": "00:00:00.000",
+                        "end": "00:00:01.000",
+                        "speaker": "Dominik",
+                        "voice": "Dominik",
+                        "text": "Hallo",
+                    },
+                    {
+                        "start": "00:00:01.000",
+                        "end": "00:00:02.000",
+                        "speaker": "Jochen",
+                        "voice": "Jochen",
+                        "text": "Hi",
+                    },
+                    {
+                        "start": "00:00:02.000",
+                        "end": "00:00:03.000",
+                        "speaker": "Dominik",
+                        "voice": "Dominik",
+                        "text": "Tschüss",
+                    },
+                ]
+            },
+        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+
+        r = api_client.get(podlove_detail_url, format="json")
+        assert r.status_code == 200
+
+        data = r.json()
+        # contributors are deduplicated in first-appearance order
+        assert data["contributors"] == [
+            {"id": "Dominik", "name": "Dominik"},
+            {"id": "Jochen", "name": "Jochen"},
+        ]
+        # the existing transcripts payload stays behavior-compatible
+        assert [segment["text"] for segment in data["transcripts"]] == ["Hallo", "Hi", "Tschüss"]
+
+    def test_podlove_detail_endpoint_contributors_empty_without_transcript(self, api_client, audio):
+        """The contributors payload is an empty list when the audio has no transcript."""
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+
+        r = api_client.get(podlove_detail_url, format="json")
+        assert r.status_code == 200
+        assert r.json()["contributors"] == []
+
+    def test_audio_podlove_serializer_loads_podlove_once(self, api_client, episode, mocker):
+        """The transcripts and contributors fields share a single Podlove JSON load per response."""
+        audio = episode.podcast_audio
+        create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Alice", "voice": "Alice", "text": "Hello"}]},
+        )
+        load_spy = mocker.spy(AudioPodloveSerializer, "_load_podlove_data")
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+
+        r = api_client.get(podlove_detail_url, format="json")
+        assert r.status_code == 200
+        # transcripts + contributors are served from one parsed Podlove file
+        assert load_spy.call_count == 1
+
+    def test_podlove_detail_endpoint_contributor_query_count_is_constant(self, api_client):
+        """Contributors are derived from the parsed Podlove JSON, so the DB query
+        count does not grow with the number of transcript speakers."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from cast.devdata import create_audio
+
+        def make_podlove_url(speaker_count):
+            audio = create_audio()
+            create_transcript(
+                audio=audio,
+                podlove={
+                    "transcripts": [
+                        {"speaker": f"Speaker {index}", "voice": f"Speaker {index}", "text": "x"}
+                        for index in range(speaker_count)
+                    ]
+                },
+            )
+            return reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+
+        url_few = make_podlove_url(1)
+        url_many = make_podlove_url(40)
+
+        # warm up lazy caches (content types, etc.) so the comparison is fair
+        assert api_client.get(url_few, format="json").status_code == 200
+
+        with CaptureQueriesContext(connection) as queries_few:
+            response_few = api_client.get(url_few, format="json")
+        with CaptureQueriesContext(connection) as queries_many:
+            response_many = api_client.get(url_many, format="json")
+
+        assert response_few.status_code == 200
+        assert response_many.status_code == 200
+        assert len(response_many.json()["contributors"]) == 40
+        # contributor extraction reads the parsed JSON, not the database
+        assert len(queries_many.captured_queries) == len(queries_few.captured_queries)
+
+
+@pytest.mark.parametrize(
+    "transcripts, expected",
+    [
+        # speaker-only segment
+        ([{"speaker": "Alice", "text": "a"}], [{"id": "Alice", "name": "Alice"}]),
+        # voice-only segment
+        ([{"voice": "Bob", "text": "b"}], [{"id": "Bob", "name": "Bob"}]),
+        # matching speaker and voice collapse to one contributor
+        ([{"speaker": "Alice", "voice": "Alice"}], [{"id": "Alice", "name": "Alice"}]),
+        # differing speaker and voice both contribute, speaker first
+        (
+            [{"speaker": "Alice", "voice": "Bob"}],
+            [{"id": "Alice", "name": "Alice"}, {"id": "Bob", "name": "Bob"}],
+        ),
+        # duplicates across segments are deduplicated
+        (
+            [{"speaker": "Alice"}, {"speaker": "Bob"}, {"speaker": "Alice"}],
+            [{"id": "Alice", "name": "Alice"}, {"id": "Bob", "name": "Bob"}],
+        ),
+        # blank and non-string labels are ignored
+        ([{"speaker": "", "voice": "   "}, {"speaker": None, "voice": 5}], []),
+        # first-appearance order is preserved (not sorted)
+        (
+            [{"speaker": "Zoe"}, {"speaker": "Amy"}],
+            [{"id": "Zoe", "name": "Zoe"}, {"id": "Amy", "name": "Amy"}],
+        ),
+        # non-dict segments are skipped
+        (["not a dict", 5, {"speaker": "Alice"}], [{"id": "Alice", "name": "Alice"}]),
+        # an empty timeline yields no contributors
+        ([], []),
+        # a non-list "transcripts" value is ignored instead of raising
+        (None, []),
+        (1, []),
+    ],
+)
+def test_audio_podlove_serializer_contributor_extraction(transcripts, expected):
+    """Contributors are derived from non-blank speaker/voice labels in first-appearance order."""
+    serializer = AudioPodloveSerializer()
+    serializer._podlove_data = {"transcripts": transcripts}
+
+    assert serializer.get_contributors(None) == expected
 
 
 class TestCommentTrainingData:
