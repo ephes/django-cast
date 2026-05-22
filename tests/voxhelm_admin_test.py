@@ -139,7 +139,8 @@ def test_episode_edit_page_shows_transcript_generation_status(admin_client, epis
     content = response.content.decode("utf-8")
     assert "Transcript status:" in content
     assert "Running" in content
-    assert 'role="status"' in content
+    assert 'class="cast-transcript-status w-mb-4"' in content
+    assert '<a role="status">' not in content
     assert 'class="help-block"' not in content
 
 
@@ -162,6 +163,7 @@ def test_episode_edit_page_links_succeeded_transcript(admin_client, episode):
     assert "Succeeded" in content
     assert "Edit transcript" in content
     assert reverse("cast-transcript:edit", args=(transcript.pk,)) in content
+    assert '<a role="status">' not in content
 
 
 @pytest.mark.django_db
@@ -400,8 +402,9 @@ def test_generate_episode_transcript_menu_item_context_handles_missing_audio(use
         }
     )
 
-    assert context["transcript_generation_status"] == ""
-    assert context["transcript_generation_message"] == ""
+    assert context["transcript_generation_active"] is False
+    assert "transcript_generation_status" not in context
+    assert "transcript_generation_message" not in context
 
 
 @pytest.mark.django_db

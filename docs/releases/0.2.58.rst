@@ -7,5 +7,8 @@
 - Clarified Voxhelm token handling in the Wagtail settings UI and deployment
   docs: an existing token keeps the password field blank by design, and sites
   can keep tokens in deployment-managed environment variables.
+- Moved episode transcript generation status out of the Wagtail page action
+  menu and into the episode edit form so status text and edit links no longer
+  overlap the save dropdown.
 - Fixed episode publishing from the Wagtail editor by no longer rendering a
   hidden ``action-publish`` field that could shadow Wagtail's publish button.

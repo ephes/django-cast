@@ -46,6 +46,7 @@ from cast.blocks import (
     VideoChooserBlock,
 )
 from cast.models import get_or_create_gallery
+from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
 from ..views import HtmxHttpRequest
 from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
@@ -745,6 +746,7 @@ class Episode(Post):
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
         FieldPanel("podcast_audio"),
+        EpisodeTranscriptStatusPanel(heading=_("Transcript generation")),
         MultiFieldPanel(
             [FieldPanel("categories", widget=forms.CheckboxSelectMultiple)],
             heading="Categories",

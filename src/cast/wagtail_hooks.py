@@ -193,17 +193,10 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
         page = parent_context["page"]
         audio = getattr(page, "podcast_audio", None)
         if isinstance(audio, Audio):
-            context.update(get_audio_transcript_status_context(audio=audio))
+            status_context = get_audio_transcript_status_context(audio=audio)
+            context["transcript_generation_active"] = status_context["transcript_generation_active"]
         else:
-            context.update(
-                {
-                    "transcript_generation_active": False,
-                    "transcript_generation_status": "",
-                    "transcript_generation_message": "",
-                    "transcript_generation_error": "",
-                    "transcript_generation_transcript_url": "",
-                }
-            )
+            context["transcript_generation_active"] = False
         return context
 
 
