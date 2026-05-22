@@ -68,6 +68,12 @@ Use a distinct ``--worker-id`` per deployed site, for example
 ``python-podcast-transcripts`` for a second site sharing the same codebase.
 The default task backend should remain immediate; only the
 ``cast_transcripts`` backend should point at ``django_tasks_db.DatabaseBackend``.
+The web process and transcript worker must both receive the Voxhelm
+configuration used for job submission and artifact downloads. For
+deployment-managed secrets, set ``CAST_VOXHELM_API_BASE`` and
+``CAST_VOXHELM_API_KEY`` in the shared process environment; the Wagtail
+``Voxhelm settings`` token field can stay blank in that setup. If a site-level
+Wagtail value is set, it takes precedence for that site.
 If ``CAST_VOXHELM_DIARIZATION_ENABLED`` is enabled, make sure the Voxhelm
 backend has diarization support configured. Full-episode diarization can be
 slow and CPU-heavy, so keep it on the queued transcript worker path instead of

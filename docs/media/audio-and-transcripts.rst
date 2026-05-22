@@ -98,6 +98,21 @@ and updates the ``Transcript`` model.
 Site admins can manage the Voxhelm API base URL, API token, and optional
 model/language defaults in ``Settings -> Voxhelm settings``.
 
+When an existing API token is stored in Wagtail, the token field is intentionally
+blank when you reopen the settings form. If the help text says that a token is
+configured, submit the form with the field blank to keep the stored token, or
+enter a new token to replace it.
+
+Production sites can also keep Voxhelm credentials in deployment-managed Django
+settings or environment variables instead of the Wagtail database. django-cast
+looks up site-level Wagtail values first, then Django settings, then environment
+variables. Use ``CAST_VOXHELM_API_BASE`` and ``CAST_VOXHELM_API_KEY`` for the
+required service URL and bearer token; optional defaults use
+``CAST_VOXHELM_MODEL``, ``CAST_VOXHELM_LANGUAGE``, and
+``CAST_VOXHELM_DIARIZATION_ENABLED``. If the token should be managed as a
+deployment secret, leave the Wagtail API token blank and provide
+``CAST_VOXHELM_API_KEY`` to both the web process and transcript worker.
+
 To make the non-blocking Wagtail flow work, install the optional
 ``transcript-worker`` extra, configure Django Tasks with the database backend,
 and run a worker alongside Django. The extra requires a Wagtail/django-tasks

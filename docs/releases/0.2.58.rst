@@ -1,2 +1,9 @@
 0.2.58 (unreleased)
 -------------------
+
+- Changed Wagtail-admin Voxhelm transcript generation to report missing
+  ``CAST_VOXHELM_API_BASE`` / ``CAST_VOXHELM_API_KEY`` plus invalid boolean or
+  numeric configuration as admin error messages instead of server errors.
+- Clarified Voxhelm token handling in the Wagtail settings UI and deployment
+  docs: an existing token keeps the password field blank by design, and sites
+  can keep tokens in deployment-managed environment variables.

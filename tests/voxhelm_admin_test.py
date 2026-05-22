@@ -46,6 +46,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     assert response.status_code == 200
     content = response.content.decode("utf-8")
     assert "very-secret-token" not in content
+    assert "A token is configured" in content
     assert "Leave blank to keep the existing token" in content
 
     response = admin_client.post(
@@ -259,6 +260,80 @@ def test_generate_audio_transcript_reports_errors(admin_client, episode, mocker)
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
     assert any("Transcript generation failed: upstream broke" in message for message in messages)
+
+
+@pytest.mark.django_db
+def test_generate_episode_transcript_reports_missing_site_token(admin_client, episode, settings, monkeypatch):
+    audio = episode.podcast_audio
+    assert audio is not None
+    site = episode.get_site()
+    assert site is not None
+    settings.CAST_VOXHELM_API_KEY = ""
+    monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+    VoxhelmSettings.objects.update_or_create(
+        site=site,
+        defaults={
+            "api_base": "https://voxhelm.example",
+            "api_token": "",
+        },
+    )
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+
+    assert response.status_code == 200
+    messages = [message.message for message in get_messages(response.wsgi_request)]
+    assert any(
+        "Transcript generation failed: CAST_VOXHELM_API_KEY must be configured" in message for message in messages
+    )
+    assert any("Voxhelm settings" in message for message in messages)
+
+
+@pytest.mark.django_db
+def test_generate_audio_transcript_reports_missing_api_base(admin_client, audio, settings, monkeypatch):
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+
+    assert response.status_code == 200
+    messages = [message.message for message in get_messages(response.wsgi_request)]
+    assert any(
+        "Transcript generation failed: CAST_VOXHELM_API_BASE must be configured" in message for message in messages
+    )
+
+
+@pytest.mark.django_db
+def test_generate_audio_transcript_reports_invalid_boolean_setting(admin_client, audio, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = "sometimes"
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+
+    assert response.status_code == 200
+    messages = [message.message for message in get_messages(response.wsgi_request)]
+    assert any(
+        "Transcript generation failed: CAST_VOXHELM_DIARIZATION_ENABLED must be configured as a boolean value"
+        in message
+        for message in messages
+    )
+
+
+@pytest.mark.django_db
+def test_generate_audio_transcript_reports_invalid_numeric_setting(admin_client, audio, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_POLL_TIMEOUT = "6h"
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+
+    assert response.status_code == 200
+    messages = [message.message for message in get_messages(response.wsgi_request)]
+    assert any(
+        "Transcript generation failed: CAST_VOXHELM_POLL_TIMEOUT must be configured as a numeric value" in message
+        for message in messages
+    )
 
 
 @pytest.mark.django_db

@@ -101,7 +101,13 @@ def require_setting(name: str, *, request_or_site: HttpRequest | Site | None = N
 
 
 def get_float_setting(name: str, default: float, *, request_or_site: HttpRequest | Site | None = None) -> float:
-    return float(str(get_setting(name, default, request_or_site=request_or_site)))
+    value = get_setting(name, default, request_or_site=request_or_site)
+    try:
+        return float(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ImproperlyConfigured(
+            f"{name} must be configured as a numeric value in seconds through a Django setting or environment variable."
+        ) from exc
 
 
 def get_bool_setting(name: str, default: bool = False, *, request_or_site: HttpRequest | Site | None = None) -> bool:

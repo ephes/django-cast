@@ -68,7 +68,8 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         super().__init__(*args, **kwargs)
         if self.instance.pk and self.instance.api_token:
             self.fields["api_token"].help_text = _(
-                "Leave blank to keep the existing token. Enter a new token to replace it."
+                "A token is configured. The field is intentionally blank for security. Leave blank to keep the "
+                "existing token, or enter a new token to replace it."
             )
 
     def clean_api_base(self) -> str:

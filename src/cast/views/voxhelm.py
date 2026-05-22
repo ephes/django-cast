@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -67,6 +67,21 @@ def _add_generation_queued_message(
     )
 
 
+def _add_generation_configuration_error_message(request: HttpRequest, exc: ImproperlyConfigured) -> None:
+    messages.error(
+        request,
+        _(
+            "Transcript generation failed: %(message)s Check Voxhelm configuration in Settings -> Voxhelm settings, "
+            "Django settings, or deployment environment variables."
+        )
+        % {"message": exc},
+    )
+
+
+def _add_generation_error_message(request: HttpRequest, exc: VoxhelmError) -> None:
+    messages.error(request, _("Transcript generation failed: %(message)s") % {"message": exc})
+
+
 @login_required
 @require_POST
 def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpResponse:
@@ -80,8 +95,11 @@ def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpRe
     site = episode.get_site() or Site.find_for_request(request)
     try:
         result = enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=request.user)
+    except ImproperlyConfigured as exc:
+        _add_generation_configuration_error_message(request, exc)
+        return redirect(redirect_url)
     except VoxhelmError as exc:
-        messages.error(request, _("Transcript generation failed: %(message)s") % {"message": exc})
+        _add_generation_error_message(request, exc)
         return redirect(redirect_url)
     _add_generation_queued_message(
         request,
@@ -105,8 +123,11 @@ def generate_audio_transcript(request: HttpRequest, audio_id: int) -> HttpRespon
             request_or_site=resolve_site_for_audio(request=request, audio=audio),
             requested_by=request.user,
         )
+    except ImproperlyConfigured as exc:
+        _add_generation_configuration_error_message(request, exc)
+        return redirect(redirect_url)
     except VoxhelmError as exc:
-        messages.error(request, _("Transcript generation failed: %(message)s") % {"message": exc})
+        _add_generation_error_message(request, exc)
         return redirect(redirect_url)
     _add_generation_queued_message(
         request,
