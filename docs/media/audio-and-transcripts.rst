@@ -153,3 +153,9 @@ Use a stable, distinct ``--worker-id`` for each deployed site. See
 django-cast now consumes Voxhelm-owned Podlove, DOTe, and WebVTT transcript
 artifacts directly from the batch job result and persists them onto the
 existing ``Transcript`` model without local format conversion.
+
+When generated transcripts include diarization speaker labels, the Wagtail
+transcript edit form lets editors map those labels to episode contributors.
+The mapping form shows short transcript samples for each speaker and, when the
+audio file is playable from the admin, timestamp controls that seek the audio
+preview to the sample position.

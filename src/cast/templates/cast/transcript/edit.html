@@ -1,5 +1,6 @@
 {% extends "wagtailadmin/base.html" %}
 {% load i18n %}
+{% load l10n %}
 {% load wagtailimages_tags wagtailadmin_tags %}
 {% block titletag %}{% blocktrans with title=transcript.pk %}Editing {{ title }}{% endblocktrans %}{% endblock %}
 
@@ -15,11 +16,118 @@
       });
     });
   </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var audio = document.querySelector('[data-cast-speaker-audio]');
+      if (!audio) {
+        return;
+      }
+      document.querySelectorAll('[data-cast-speaker-seek]').forEach(function(button) {
+        button.addEventListener('click', function() {
+          var seconds = Number(button.getAttribute('data-cast-speaker-seek'));
+          if (Number.isNaN(seconds)) {
+            return;
+          }
+          audio.currentTime = seconds;
+          var playPromise = audio.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(function() {});
+          }
+        });
+      });
+    });
+  </script>
 {% endblock %}
 
 {% block extra_css %}
   {{ block.super }}
   {{ form.media.css }}
+  <style>
+    .cast-speaker-audio {
+      margin: 1rem 0 1.5rem;
+      max-width: 42rem;
+    }
+
+    .cast-speaker-audio audio {
+      width: 100%;
+    }
+
+    .cast-speaker-mapping {
+      list-style: none;
+      margin: 1.5rem 0;
+      padding: 0;
+    }
+
+    .cast-speaker-mapping__row {
+      align-items: start;
+      border-top: 1px solid var(--w-color-border-furniture, #4c4c4c);
+      display: grid;
+      gap: 1rem 2rem;
+      grid-template-columns: minmax(16rem, 28rem) minmax(0, 1fr);
+      padding: 1.25rem 0;
+    }
+
+    .cast-speaker-mapping__row:last-child {
+      border-bottom: 1px solid var(--w-color-border-furniture, #4c4c4c);
+    }
+
+    .cast-speaker-mapping__field .field {
+      margin-bottom: 0;
+    }
+
+    .cast-speaker-samples {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .cast-speaker-samples__empty {
+      color: var(--w-color-text-label, inherit);
+      margin: 0;
+    }
+
+    .cast-speaker-sample {
+      display: grid;
+      gap: 0.5rem;
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+      margin-bottom: 0.75rem;
+    }
+
+    .cast-speaker-sample:last-child {
+      margin-bottom: 0;
+    }
+
+    .cast-speaker-sample__time,
+    .cast-speaker-sample__time-label {
+      color: var(--w-color-text-label, inherit);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.4;
+      min-width: 0;
+      text-align: left;
+    }
+
+    .cast-speaker-sample__time {
+      background: none;
+      border: 0;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+      text-underline-offset: 0.15em;
+    }
+
+    .cast-speaker-sample__text {
+      line-height: 1.4;
+      margin: 0;
+      min-width: 0;
+    }
+
+    @media (max-width: 700px) {
+      .cast-speaker-mapping__row,
+      .cast-speaker-sample {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
@@ -58,21 +166,62 @@
         <h2>{% trans "Map speakers to contributors" %}</h2>
         {% if speaker_labels %}
           <p>{% trans "Replace diarization speaker labels in the Podlove and DOTe transcript files. WebVTT files are not changed." %}</p>
+          {% if transcript_audio_sources %}
+            <div class="cast-speaker-audio">
+              <audio controls preload="metadata" data-cast-speaker-audio>
+                {% for source in transcript_audio_sources %}
+                  <source src="{{ source.url }}" type="{{ source.mimeType }}" />
+                {% endfor %}
+              </audio>
+            </div>
+          {% endif %}
           {% if not contributor_assignments %}
             <p>{% trans "No episode contributors are available for this transcript's audio." %}</p>
           {% endif %}
           <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
             {% csrf_token %}
-            <ul class="fields">
-              {% for field in speaker_mapping_form %}
-                {% if field.is_hidden %}
-                  {{ field }}
-                {% else %}
-                  <li>
-                    {% include "wagtailadmin/shared/field.html" %}
-                  </li>
-                {% endif %}
+            {% for hidden_field in speaker_mapping_form.hidden_fields %}
+              {{ hidden_field }}
+            {% endfor %}
+            <ul class="cast-speaker-mapping">
+              {% for row in speaker_mapping_rows %}
+                <li class="cast-speaker-mapping__row">
+                  <div class="cast-speaker-mapping__field">
+                    {% include "wagtailadmin/shared/field.html" with field=row.field %}
+                  </div>
+                  <div class="cast-speaker-mapping__samples">
+                    {% if row.samples %}
+                      <ol class="cast-speaker-samples">
+                        {% for sample in row.samples %}
+                          <li class="cast-speaker-sample">
+                            {% if sample.has_start_time and transcript_audio_sources %}
+                              <button
+                                class="cast-speaker-sample__time"
+                                type="button"
+                                data-cast-speaker-seek="{{ sample.start_seconds|unlocalize }}"
+                              >
+                                {{ sample.timestamp_label }}
+                              </button>
+                            {% elif sample.timestamp_label %}
+                              <span class="cast-speaker-sample__time-label">{{ sample.timestamp_label }}</span>
+                            {% else %}
+                              <span class="cast-speaker-sample__time-label"></span>
+                            {% endif %}
+                            <p class="cast-speaker-sample__text">{{ sample.text }}</p>
+                          </li>
+                        {% endfor %}
+                      </ol>
+                    {% else %}
+                      <p class="cast-speaker-samples__empty">{% trans "No transcript samples found for this speaker." %}</p>
+                    {% endif %}
+                  </div>
+                </li>
               {% endfor %}
+            </ul>
+            <ul class="fields">
+              {% if speaker_mapping_form.non_field_errors %}
+                <li>{{ speaker_mapping_form.non_field_errors }}</li>
+              {% endif %}
               <li>
                 <input class="button" type="submit" value="{% trans 'Apply speaker mapping' %}"{% if not contributor_assignments %} disabled{% endif %} />
               </li>

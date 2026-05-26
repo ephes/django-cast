@@ -1,6 +1,7 @@
 import json
 from typing import Any, TypedDict, cast
 
+from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template import TemplateDoesNotExist
@@ -14,7 +15,15 @@ from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm, SpeakerContributorMappingForm, TranscriptForm, SPEAKER_MAPPING_ACTION
-from ..models import Blog, Episode, EpisodeContributor, Post, Transcript, get_template_base_dir
+from ..models import (
+    Blog,
+    Episode,
+    EpisodeContributor,
+    Post,
+    Transcript,
+    TranscriptSpeakerSample,
+    get_template_base_dir,
+)
 from ..site_lookup import get_site_specific_page_or_404
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .wagtail_pagination import paginate, pagination_template
@@ -27,6 +36,18 @@ class SpeakerMappingContext(TypedDict):
     contributor_assignments: list[EpisodeContributor]
     multiple_episodes: bool
     speaker_labels: list[str]
+
+
+class SpeakerMappingRow(TypedDict):
+    field: BoundField
+    samples: list[TranscriptSpeakerSample]
+
+
+class AudioSource(TypedDict):
+    mimeType: str
+    size: str
+    title: str
+    url: str
 
 
 def _resolve_transcript_template(base_template_dir: str) -> str:
@@ -159,6 +180,43 @@ def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext
     }
 
 
+def get_speaker_mapping_rows(
+    speaker_mapping_form: SpeakerContributorMappingForm,
+    speaker_samples: dict[str, list[TranscriptSpeakerSample]],
+) -> list[SpeakerMappingRow]:
+    return [
+        {
+            "field": speaker_mapping_form[field_name],
+            "samples": speaker_samples.get(speaker_label, []),
+        }
+        for field_name, speaker_label in speaker_mapping_form.speaker_field_names.items()
+    ]
+
+
+def get_transcript_audio_sources(transcript: Transcript) -> list[AudioSource]:
+    sources: list[AudioSource] = []
+    audio = transcript.audio
+    for audio_format, field in audio.uploaded_audio_files:
+        try:
+            if not hasattr(field, "url"):
+                continue
+            if not field.storage.exists(field.name):
+                continue
+            file_size = audio.get_file_size(audio_format)
+            url = field.url
+        except (FileNotFoundError, OSError, ValueError):
+            continue
+        sources.append(
+            {
+                "mimeType": audio.mime_lookup[audio_format],
+                "size": str(file_size),
+                "title": str(audio.title_lookup[audio_format]),
+                "url": url,
+            }
+        )
+    return sources
+
+
 def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     transcript = get_object_or_404(Transcript, id=transcript_id)
     speaker_mapping_context = get_speaker_mapping_context(transcript)
@@ -194,6 +252,10 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     else:
         form = TranscriptForm(instance=transcript, user=request.user)
         speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+    speaker_mapping_rows = get_speaker_mapping_rows(
+        speaker_mapping_form,
+        transcript.get_speaker_samples(),
+    )
 
     return render(
         request,
@@ -201,8 +263,10 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         {
             "transcript": transcript,
             "form": form,
+            "speaker_mapping_rows": speaker_mapping_rows,
             "speaker_mapping_form": speaker_mapping_form,
             "speaker_labels": speaker_mapping_context["speaker_labels"],
+            "transcript_audio_sources": get_transcript_audio_sources(transcript),
             "contributor_assignments": speaker_mapping_context["contributor_assignments"],
             "user_can_delete": True,
         },

@@ -10,6 +10,9 @@
 - Moved episode transcript generation status out of the Wagtail page action
   menu and into the episode edit form so status text and edit links no longer
   overlap the save dropdown.
+- Added transcript samples and timestamp seek controls to the Wagtail
+  transcript speaker-mapping form so editors can identify diarized speakers
+  before assigning them to episode contributors.
 - Fixed episode publishing from the Wagtail editor by no longer rendering a
   hidden ``action-publish`` field that could shadow Wagtail's publish button.
 - Fixed episode contributor editing so links for a contributor created after

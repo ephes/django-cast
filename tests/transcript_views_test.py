@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -6,11 +7,16 @@ from django.core.files.base import ContentFile
 from django.test import override_settings
 from django.template import TemplateDoesNotExist
 from django.urls import reverse
+from django.utils import translation
 
 from cast.devdata import create_transcript
 from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
 from cast.models import Contributor, EpisodeContributor, Transcript
-from cast.views.transcript import _resolve_transcript_template, get_speaker_mapping_context
+from cast.views.transcript import (
+    _resolve_transcript_template,
+    get_speaker_mapping_context,
+    get_transcript_audio_sources,
+)
 
 from .factories import BlogFactory, EpisodeFactory
 from .multisite_helpers import create_site_root
@@ -229,6 +235,163 @@ class TestTranscriptSpeakerMapping:
         transcript.dote.name = "cast_transcript/missing-dote.json"
         transcript.save()
         assert transcript.get_speaker_labels() == []
+
+    def test_speaker_labels_samples_and_rewrite_strip_label_whitespace(self, audio):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {
+                        "speaker": " Speaker 1 ",
+                        "voice": " Speaker 1 ",
+                        "start": "00:00:01.500",
+                        "text": "This sample sentence has enough content to identify speaker one.",
+                    }
+                ]
+            },
+            dote={
+                "lines": [
+                    {
+                        "speakerDesignation": " Speaker 2 ",
+                        "startTime": "00:00:02,500",
+                        "text": "This sample sentence has enough content to identify speaker two.",
+                    }
+                ]
+            },
+        )
+
+        assert transcript.get_speaker_labels() == ["Speaker 1", "Speaker 2"]
+        samples = transcript.get_speaker_samples()
+        assert sorted(samples.keys()) == ["Speaker 1", "Speaker 2"]
+
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice", "Speaker 2": "Bob"})
+
+        with transcript.podlove.open("r") as podlove_file:
+            podlove_data = json.load(podlove_file)
+        with transcript.dote.open("r") as dote_file:
+            dote_data = json.load(dote_file)
+        assert podlove_data["transcripts"][0]["speaker"] == "Alice"
+        assert podlove_data["transcripts"][0]["voice"] == "Alice"
+        assert dote_data["lines"][0]["speakerDesignation"] == "Bob"
+
+    def test_get_speaker_samples_spreads_useful_podlove_samples(self, audio):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    "not an object",
+                    {"speaker": "", "text": "No speaker label here"},
+                    {"speaker": "Speaker 1", "text": None},
+                    {"speaker": "Speaker 1", "start_ms": 620, "text": "ja"},
+                    {
+                        "speaker": "Speaker 1",
+                        "start_ms": 10_000,
+                        "text": "First substantial sentence from speaker one that is long enough to be useful.",
+                    },
+                    {
+                        "speaker": "Speaker 1",
+                        "start": "00:05:00.000",
+                        "text": "Second substantial sentence from speaker one that helps identify the voice.",
+                    },
+                    {
+                        "speaker": "Speaker 1",
+                        "startTime": 900,
+                        "text": "Third substantial sentence from speaker one with useful identifying content.",
+                    },
+                    {
+                        "speaker": "Speaker 1",
+                        "start": "00:20:00.000",
+                        "text": "Fourth substantial sentence from speaker one near the end of the episode.",
+                    },
+                    {
+                        "voice": "Voice 1",
+                        "text": "Voice only segment has enough words to become a transcript sample.",
+                    },
+                ]
+            },
+        )
+
+        samples = transcript.get_speaker_samples(max_chars=48)
+
+        assert [sample.timestamp_label for sample in samples["Speaker 1"]] == ["00:10", "15:00", "20:00"]
+        assert samples["Speaker 1"][0].text == "First substantial sentence from speaker one..."
+        assert samples["Speaker 1"][0].start_seconds == 10
+        assert samples["Speaker 1"][0].has_start_time
+        assert [sample.text for sample in samples["Speaker 1"]] == [
+            "First substantial sentence from speaker one...",
+            "Third substantial sentence from speaker one...",
+            "Fourth substantial sentence from speaker one...",
+        ]
+        assert samples["Voice 1"][0].timestamp_label == ""
+        assert samples["Voice 1"][0].start_seconds is None
+        assert not samples["Voice 1"][0].has_start_time
+        assert transcript.get_speaker_samples(limit=1)["Speaker 1"][0].timestamp_label == "00:10"
+        assert transcript.get_speaker_samples(limit=0) == {}
+
+    def test_get_speaker_samples_uses_dote_fallback_and_low_signal_fallback(self, audio):
+        low_signal_text = "ja ja ja ja ja ja ja ja ja ja ja ja ja ja ja ja"
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Speaker 2", "start": "00:00:00.000", "text": low_signal_text},
+                    {"speaker": "Speaker 3", "start": "00:00:02.000", "text": low_signal_text},
+                ]
+            },
+            dote={
+                "lines": [
+                    "not an object",
+                    {"speakerDesignation": "", "text": "Missing speaker"},
+                    {"speakerDesignation": "Speaker 4", "text": None},
+                    {
+                        "speakerDesignation": "Speaker 2",
+                        "startTime": "00:00:01,500",
+                        "text": "DOTe fallback has a longer sentence with enough identifying words.",
+                    },
+                    {
+                        "speakerDesignation": "Hour Speaker",
+                        "startTime": "01:02:03,900",
+                        "text": "Hour timestamp sentence has enough useful identifying transcript content.",
+                    },
+                ]
+            },
+        )
+
+        samples = transcript.get_speaker_samples()
+
+        assert samples["Speaker 2"][0].text == "DOTe fallback has a longer sentence with enough identifying words."
+        assert samples["Speaker 2"][0].timestamp_label == "00:01"
+        assert samples["Speaker 2"][0].start_seconds == 1.5
+        assert samples["Speaker 3"][0].text == low_signal_text
+        assert samples["Hour Speaker"][0].timestamp_label == "01:02:03"
+
+    def test_speaker_sample_helpers_handle_edge_cases(self):
+        assert Transcript._parse_timestamp_seconds(True) is None
+        assert Transcript._parse_timestamp_seconds(None) is None
+        assert Transcript._parse_timestamp_seconds("") is None
+        assert Transcript._parse_timestamp_seconds("not a timestamp") is None
+        assert Transcript._parse_timestamp_seconds("00:00:not-a-number") is None
+        assert Transcript._parse_timestamp_seconds("00:00:00:00") is None
+        assert Transcript._parse_timestamp_seconds(-1) is None
+        assert Transcript._parse_timestamp_seconds("-1") is None
+        assert Transcript._parse_timestamp_seconds("65.5") == 65.5
+        assert Transcript._parse_timestamp_seconds("01:02") == 62
+        assert (
+            Transcript._parse_record_start_seconds(
+                {"start_ms": False, "start": "00:00:02"},
+                timestamp_fields=("start",),
+            )
+            == 2
+        )
+        assert Transcript._parse_record_start_seconds({"start_ms": -1}, timestamp_fields=("start",)) is None
+        assert Transcript._format_sample_timestamp(None) == ""
+
+        assert Transcript._clean_sample_text(5) == ""
+        assert not Transcript._sample_text_is_useful("short", min_chars=10, min_words=1)
+        assert not Transcript._sample_text_is_useful("one two three", min_chars=1, min_words=4)
+        assert not Transcript._sample_text_is_useful("okay", min_chars=1, min_words=1)
+        assert not Transcript._sample_text_is_useful("mhm mhm mhm mhm", min_chars=1, min_words=4)
+        assert Transcript._sample_text_is_useful("你好 你好 你好 你好", min_chars=1, min_words=4)
 
     def test_rewrite_speaker_labels_updates_podlove_and_dote_but_not_vtt(self, audio):
         vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nSpeaker 1: unchanged"
@@ -485,6 +648,83 @@ class TestTranscriptSpeakerMapping:
         assert response.context["message"] == "The speaker labels could not be updated due to errors."
         with transcript.podlove.open("r") as podlove_file:
             assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Speaker 1"
+
+    def test_get_edit_transcript_renders_speaker_samples_and_audio_seek_controls(self, admin_client, audio):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {
+                        "speaker": "Speaker 1",
+                        "start": "00:00:01.500",
+                        "text": "This sample sentence is long enough to identify the diarized speaker.",
+                    }
+                ]
+            },
+        )
+        edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+
+        with translation.override("de"):
+            response = admin_client.get(edit_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "cast-speaker-mapping__row" in content
+        assert "This sample sentence is long enough to identify the diarized speaker." in content
+        assert "data-cast-speaker-audio" in content
+        assert 'type="audio/mp4"' in content
+        assert 'data-cast-speaker-seek="1.5"' in content
+
+    def test_get_edit_transcript_omits_audio_seek_controls_when_audio_file_is_missing(self, admin_client, audio):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {
+                        "speaker": "Speaker 1",
+                        "start": "00:00:01.500",
+                        "text": "This sample sentence is long enough to render without playable audio.",
+                    }
+                ]
+            },
+        )
+        audio.m4a.storage.delete(audio.m4a.name)
+        edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+
+        response = admin_client.get(edit_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "This sample sentence is long enough to render without playable audio." in content
+        assert "<audio controls" not in content
+        assert 'data-cast-speaker-seek="1.5"' not in content
+        assert "00:01" in content
+
+    def test_get_transcript_audio_sources_skips_unplayable_fields(self):
+        class MissingUrlField:
+            name = "cast_audio/no-url.mp3"
+
+        class ExistingStorage:
+            def exists(self, name):
+                return True
+
+        class BrokenUrlField:
+            name = "cast_audio/broken.m4a"
+            storage = ExistingStorage()
+
+            @property
+            def url(self):
+                raise OSError
+
+        audio = SimpleNamespace(
+            uploaded_audio_files=[("mp3", MissingUrlField()), ("m4a", BrokenUrlField())],
+            mime_lookup={"mp3": "audio/mpeg", "m4a": "audio/mp4"},
+            title_lookup={"mp3": "Audio MP3", "m4a": "Audio M4A"},
+            get_file_size=lambda _audio_format: 1,
+        )
+        transcript = SimpleNamespace(audio=audio)
+
+        assert get_transcript_audio_sources(transcript) == []
 
 
 class TestTranscriptEdit:
