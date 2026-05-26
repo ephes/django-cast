@@ -1,9 +1,32 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-function renderInlineRow(contributorId = "1", selectedLinkId = "", includeOptionsUrl = false) {
+type RenderInlineRowOptions = {
+  includeOptionsUrl?: boolean;
+  rowId?: string;
+  selectedRole?: string;
+};
+
+function renderInlineRow(
+  contributorId = "1",
+  selectedLinkId = "",
+  includeOptionsOrConfig: boolean | RenderInlineRowOptions = false,
+) {
+  const config: RenderInlineRowOptions =
+    typeof includeOptionsOrConfig === "boolean"
+      ? { includeOptionsUrl: includeOptionsOrConfig }
+      : includeOptionsOrConfig;
+  const includeOptionsUrl = config.includeOptionsUrl || false;
+  const rowId = config.rowId ?? "saved-assignment";
+  const selectedRole = config.selectedRole || "guest";
+
   document.body.innerHTML = `
     <div id="inline_child_contributor_assignments-0" data-inline-panel-child>
       <input type="hidden" name="contributor_assignments-0-contributor" value="${contributorId}" />
+      <input type="hidden" name="contributor_assignments-0-id" value="${rowId}" />
+      <select name="contributor_assignments-0-role">
+        <option value="host"${selectedRole === "host" ? " selected" : ""}>Host</option>
+        <option value="guest"${selectedRole === "guest" ? " selected" : ""}>Guest</option>
+      </select>
       <select data-cast-contributor-link-select="true"${
         includeOptionsUrl ? ' data-cast-contributor-link-options-url="/cms/contributors/links/"' : ""
       } name="contributor_assignments-0-link">
@@ -20,11 +43,15 @@ function renderInlineRow(contributorId = "1", selectedLinkId = "", includeOption
 }
 
 function linkSelect() {
-  return document.querySelector("select") as HTMLSelectElement;
+  return document.querySelector("select[data-cast-contributor-link-select]") as HTMLSelectElement;
 }
 
 function contributorInput() {
   return document.querySelector('input[name$="-contributor"]') as HTMLInputElement;
+}
+
+function roleSelect() {
+  return document.querySelector('select[name$="-role"]') as HTMLSelectElement;
 }
 
 function optionTexts(select = linkSelect()) {
@@ -40,16 +67,27 @@ async function flushPromises() {
 }
 
 function deferredResponse(links: Array<{ contributorId: string; text: string; value: string }>) {
-  let resolve: (response: { ok: true; json: () => Promise<{ links: typeof links }> }) => void = () => {};
-  const promise = new Promise<{ ok: true; json: () => Promise<{ links: typeof links }> }>((promiseResolve) => {
+  type LinkResponse = {
+    defaultLinkId: string;
+    defaultRole: string;
+    links: typeof links;
+  };
+  let resolve: (response: { ok: true; json: () => Promise<LinkResponse> }) => void = () => {};
+  const promise = new Promise<{ ok: true; json: () => Promise<LinkResponse> }>((promiseResolve) => {
     resolve = promiseResolve;
   });
   return {
     promise,
-    resolve: () =>
+    resolve: (overrides: Partial<LinkResponse> = {}) =>
       resolve({
         ok: true,
-        json: () => Promise.resolve({ links }),
+        json: () =>
+          Promise.resolve({
+            defaultLinkId: links[0]?.value || "",
+            defaultRole: "",
+            links,
+            ...overrides,
+          }),
       }),
   };
 }
@@ -75,6 +113,7 @@ describe("contributor-link-select", () => {
 
     expect(optionTexts()).toEqual(["---------", "Jochen: Mastodon"]);
     expect(linkSelect().disabled).toBe(false);
+    expect(linkSelect().value).toBe("");
   });
 
   it("updates the link choices when the contributor chooser value changes", () => {
@@ -85,12 +124,15 @@ describe("contributor-link-select", () => {
     contributorInput().dispatchEvent(new Event("change", { bubbles: true }));
 
     expect(optionTexts()).toEqual(["---------", "Mira: Website"]);
+    expect(linkSelect().value).toBe("22");
   });
 
   it("loads links for a contributor that was created after the form rendered", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({
+        defaultLinkId: "33",
+        defaultRole: "",
         links: [{ contributorId: "3", text: "Nora: Website", value: "33" }],
       }),
     });
@@ -108,6 +150,7 @@ describe("contributor-link-select", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][0])).toContain("/cms/contributors/links/?contributor_id=3");
     expect(optionTexts()).toEqual(["---------", "Nora: Website"]);
+    expect(linkSelect().value).toBe("33");
     expect(linkSelect().disabled).toBe(false);
   });
 
@@ -137,10 +180,11 @@ describe("contributor-link-select", () => {
     await flushPromises();
 
     expect(optionTexts()).toEqual(["---------", "Ola: Website"]);
+    expect(linkSelect().value).toBe("44");
     expect(linkSelect().disabled).toBe(false);
   });
 
-  it("clears an already selected link when it belongs to the previous contributor", () => {
+  it("replaces an already selected link when it belongs to the previous contributor", () => {
     renderInlineRow("1", "11");
     initContributorLinkSelects();
 
@@ -152,8 +196,8 @@ describe("contributor-link-select", () => {
     contributorInput().value = "2";
     contributorInput().dispatchEvent(new Event("change", { bubbles: true }));
 
-    expect(select.value).toBe("");
-    expect(changeEvents).toBe(1);
+    expect(select.value).toBe("22");
+    expect(changeEvents).toBe(2);
   });
 
   it("disables the link select until a contributor is selected", () => {
@@ -163,6 +207,127 @@ describe("contributor-link-select", () => {
 
     expect(optionTexts()).toEqual(["---------"]);
     expect(linkSelect().disabled).toBe(true);
+  });
+
+  it("fills contributor defaults when a contributor is selected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        defaultLinkId: "22",
+        defaultRole: "host",
+        links: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderInlineRow("1", "", { includeOptionsUrl: true });
+    initContributorLinkSelects();
+    let roleChangeEvents = 0;
+    let linkChangeEvents = 0;
+    roleSelect().addEventListener("change", () => {
+      roleChangeEvents += 1;
+    });
+    linkSelect().addEventListener("change", () => {
+      linkChangeEvents += 1;
+    });
+
+    contributorInput().value = "2";
+    contributorInput().dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(linkSelect().value).toBe("");
+    expect(roleSelect().value).toBe("guest");
+
+    await flushPromises();
+
+    expect(roleSelect().value).toBe("host");
+    expect(linkSelect().value).toBe("22");
+    expect(roleChangeEvents).toBe(1);
+    expect(linkChangeEvents).toBe(1);
+  });
+
+  it("does not overwrite a manually changed role when contributor defaults load", async () => {
+    const response = deferredResponse([]);
+    const fetchMock = vi.fn().mockReturnValue(response.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    renderInlineRow("1", "", { includeOptionsUrl: true });
+    initContributorLinkSelects();
+
+    contributorInput().value = "2";
+    contributorInput().dispatchEvent(new Event("change", { bubbles: true }));
+    roleSelect().value = "host";
+    roleSelect().dispatchEvent(new Event("change", { bubbles: true }));
+
+    response.resolve({
+      defaultLinkId: "22",
+      defaultRole: "guest",
+      links: [],
+    });
+    await flushPromises();
+
+    expect(roleSelect().value).toBe("host");
+  });
+
+  it("uses the new contributor default role after an earlier manual role change", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          defaultLinkId: "22",
+          defaultRole: "host",
+          links: [],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          defaultLinkId: "33",
+          defaultRole: "host",
+          links: [{ contributorId: "3", text: "Nora: Website", value: "33" }],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    renderInlineRow("1", "", { includeOptionsUrl: true });
+    initContributorLinkSelects();
+
+    contributorInput().value = "2";
+    contributorInput().dispatchEvent(new Event("change", { bubbles: true }));
+
+    await flushPromises();
+
+    expect(roleSelect().value).toBe("host");
+
+    roleSelect().value = "guest";
+    roleSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    contributorInput().value = "3";
+    contributorInput().dispatchEvent(new Event("change", { bubbles: true }));
+
+    await flushPromises();
+
+    expect(roleSelect().value).toBe("host");
+    expect(linkSelect().value).toBe("33");
+  });
+
+  it("fills defaults on init for an unsaved row with a preselected contributor", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        defaultLinkId: "11",
+        defaultRole: "host",
+        links: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderInlineRow("1", "", { includeOptionsUrl: true, rowId: "" });
+
+    initContributorLinkSelects();
+
+    expect(linkSelect().value).toBe("");
+
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(roleSelect().value).toBe("host");
+    expect(linkSelect().value).toBe("11");
   });
 
   it("initializes newly added Wagtail inline rows", () => {

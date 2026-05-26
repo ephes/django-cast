@@ -89,6 +89,7 @@ def serialize_contributor(contributor: "Contributor") -> dict[str, Any]:
         "display_name": contributor.display_name,
         "slug": contributor.slug,
         "visible": contributor.visible,
+        "default_role": contributor.default_role,
         "short_bio": contributor.short_bio,
     }
     if contributor.avatar is not None:

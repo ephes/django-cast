@@ -1101,7 +1101,12 @@ def test_serialize_media_helpers():
 
 @pytest.mark.django_db
 def test_serialize_episode_contributor_roundtrip(episode, image):
-    contributor = Contributor.objects.create(display_name="Episode Guest", slug="episode-guest", avatar=image)
+    contributor = Contributor.objects.create(
+        display_name="Episode Guest",
+        slug="episode-guest",
+        avatar=image,
+        default_role=EpisodeContributor.ROLE_HOST,
+    )
     contributor._avatar_rendition_url = "/media/images/test.fill-80x80.format-webp.webp"
     link = ContributorLink.objects.create(
         contributor=contributor,
@@ -1124,6 +1129,7 @@ def test_serialize_episode_contributor_roundtrip(episode, image):
     assert rebuilt.contributor.get_avatar_rendition_url() == "/media/images/test.fill-80x80.format-webp.webp"
 
     assert rebuilt.display_name == "Episode Guest"
+    assert rebuilt.contributor.default_role == EpisodeContributor.ROLE_HOST
     assert rebuilt.href == "https://example.com/guest"
     assert rebuilt.contributor_id == contributor.pk
     assert rebuilt.link.contributor_id == contributor.pk

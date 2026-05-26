@@ -71,9 +71,10 @@ credited on podcast episodes and in Podcasting 2.0 feed metadata.
 
 Create contributors in Wagtail under **Contributors**. They remain available as
 snippets under **Snippets > Contributors** as well. A contributor has a display
-name, a stable slug, an optional avatar, an optional short bio, and ordered
-profile links. Profile links use fixed service choices such as Website, GitHub,
-Mastodon, Twitter/X, LinkedIn, and YouTube.
+name, a stable slug, a default episode role, an optional avatar, an optional
+short bio, and ordered profile links. Profile links use fixed service choices
+such as Website, GitHub, Mastodon, Twitter/X, LinkedIn, and YouTube. The first
+ordered profile link is used as the default episode link.
 
 Contributors have a global ``visible`` flag. Turning it off hides that person
 from public episode pages and podcast feeds without deleting existing episode
@@ -83,7 +84,8 @@ On an episode edit page, use the **Contributors** panel to add ordered
 contributors. Each assignment chooses a contributor, a role of **Host** or
 **Guest**, and optionally one of the contributor's links to use for that episode.
 After a contributor is selected, the link field only offers that contributor's
-profile links.
+profile links. New assignments use the contributor's default role and first
+ordered profile link, but editors can still change both fields per episode.
 The same contributor may appear on an episode under more than one role (for
 example as both **Host** and **Guest**), but a given (contributor, role) pair
 can only be assigned once per episode. Episode assignments may reference one of

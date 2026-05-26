@@ -3,6 +3,8 @@
 
   const selectSelector = "select[data-cast-contributor-link-select]";
   const contributorInputSelector = 'input[type="hidden"][name$="-contributor"]';
+  const roleSelectSelector = 'select[name$="-role"]';
+  const rowIdInputSelector = 'input[type="hidden"][name$="-id"]';
 
   function getRow(element) {
     return element.closest("[data-inline-panel-child]");
@@ -16,9 +18,30 @@
     return row.querySelector(contributorInputSelector);
   }
 
+  function getRoleSelect(select) {
+    const row = getRow(select);
+    if (!row) {
+      return null;
+    }
+    return row.querySelector(roleSelectSelector);
+  }
+
+  function getRowIdInput(select) {
+    const row = getRow(select);
+    if (!row) {
+      return null;
+    }
+    return row.querySelector(rowIdInputSelector);
+  }
+
   function getContributorId(select) {
     const contributorInput = getContributorInput(select);
     return contributorInput ? contributorInput.value : "";
+  }
+
+  function isUnsavedRow(select) {
+    const rowIdInput = getRowIdInput(select);
+    return Boolean(rowIdInput && !rowIdInput.value);
   }
 
   function collectOptions(select) {
@@ -32,6 +55,29 @@
       value: option.value,
     }));
     return select.castContributorLinkOptions;
+  }
+
+  function collectContributorDefaults(select) {
+    if (!select.castContributorDefaults) {
+      select.castContributorDefaults = {};
+    }
+    return select.castContributorDefaults;
+  }
+
+  function mergeContributorDefaults(select, contributorId, data) {
+    if (!contributorId || !data) {
+      return;
+    }
+
+    const defaults = collectContributorDefaults(select);
+    const contributorDefaults = defaults[contributorId] || {};
+    if (Object.prototype.hasOwnProperty.call(data, "defaultLinkId")) {
+      contributorDefaults.defaultLinkId = String(data.defaultLinkId || "");
+    }
+    if (Object.prototype.hasOwnProperty.call(data, "defaultRole")) {
+      contributorDefaults.defaultRole = String(data.defaultRole || "");
+    }
+    defaults[contributorId] = contributorDefaults;
   }
 
   function mergeOptions(select, optionList) {
@@ -88,6 +134,7 @@
         if (Array.isArray(data.links)) {
           mergeOptions(select, data.links);
         }
+        mergeContributorDefaults(select, contributorId, data);
       })
       .catch(() => {
         delete select.castContributorLinkOptionRequests[contributorId];
@@ -132,9 +179,65 @@
     }
   }
 
-  function syncSelectWithFreshOptions(select) {
+  function dispatchChange(element) {
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function setRoleSelectDefault(roleSelect, value) {
+    roleSelect.dataset.castContributorRoleDefaulting = "true";
+    roleSelect.value = value;
+    dispatchChange(roleSelect);
+    delete roleSelect.dataset.castContributorRoleDefaulting;
+  }
+
+  function getContributorDefaultLinkId(select, contributorId) {
+    const defaults = collectContributorDefaults(select)[contributorId];
+    if (defaults && Object.prototype.hasOwnProperty.call(defaults, "defaultLinkId")) {
+      return defaults.defaultLinkId;
+    }
+    if (getContributorOptionsUrl(select, contributorId)) {
+      return "";
+    }
+
+    const firstContributorOption = collectOptions(select).find(
+      (optionData) => optionData.value && optionData.contributorId === contributorId,
+    );
+    return firstContributorOption ? firstContributorOption.value : "";
+  }
+
+  function applyContributorDefaults(select, contributorId) {
+    if (!contributorId) {
+      return;
+    }
+
+    const defaults = collectContributorDefaults(select)[contributorId] || {};
+    const roleSelect = getRoleSelect(select);
+    if (
+      roleSelect &&
+      defaults.defaultRole &&
+      roleSelect.dataset.castContributorRoleTouched !== "true" &&
+      roleSelect.value !== defaults.defaultRole
+    ) {
+      setRoleSelectDefault(roleSelect, defaults.defaultRole);
+    }
+
+    const defaultLinkId = getContributorDefaultLinkId(select, contributorId);
+    if (
+      !select.value &&
+      defaultLinkId &&
+      Array.from(select.options).some((option) => option.value === defaultLinkId)
+    ) {
+      select.value = defaultLinkId;
+      dispatchChange(select);
+    }
+  }
+
+  function syncSelectWithFreshOptions(select, applyDefaults) {
     const contributorId = getContributorId(select);
     syncSelect(select);
+    if (applyDefaults) {
+      applyContributorDefaults(select, contributorId);
+    }
 
     const request = loadContributorOptions(select, contributorId);
     if (!request) {
@@ -149,12 +252,27 @@
       }
       delete select.dataset.castContributorLinkSelectLoading;
       syncSelect(select);
+      if (applyDefaults) {
+        applyContributorDefaults(select, contributorId);
+      }
     });
+  }
+
+  function resetRoleTouched(select) {
+    const roleSelect = getRoleSelect(select);
+    if (roleSelect) {
+      delete roleSelect.dataset.castContributorRoleTouched;
+    }
+  }
+
+  function handleContributorChange(select) {
+    resetRoleTouched(select);
+    syncSelectWithFreshOptions(select, true);
   }
 
   function initSelect(select) {
     if (select.dataset.castContributorLinkSelectInitialized === "true") {
-      syncSelectWithFreshOptions(select);
+      syncSelectWithFreshOptions(select, false);
       return;
     }
 
@@ -163,10 +281,23 @@
 
     const contributorInput = getContributorInput(select);
     if (contributorInput) {
-      contributorInput.addEventListener("change", () => syncSelectWithFreshOptions(select));
+      contributorInput.addEventListener("change", () => handleContributorChange(select));
+    }
+
+    const roleSelect = getRoleSelect(select);
+    if (roleSelect) {
+      roleSelect.addEventListener("change", () => {
+        if (roleSelect.dataset.castContributorRoleDefaulting === "true") {
+          return;
+        }
+        roleSelect.dataset.castContributorRoleTouched = "true";
+      });
     }
 
     syncSelect(select);
+    if (isUnsavedRow(select) && getContributorId(select)) {
+      syncSelectWithFreshOptions(select, true);
+    }
   }
 
   function initAll(root) {

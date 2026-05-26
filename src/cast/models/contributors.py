@@ -13,6 +13,14 @@ from wagtail.models import Orderable
 from wagtail.snippets.models import register_snippet
 
 
+CONTRIBUTOR_ROLE_HOST = "host"
+CONTRIBUTOR_ROLE_GUEST = "guest"
+CONTRIBUTOR_ROLE_CHOICES = (
+    (CONTRIBUTOR_ROLE_HOST, _("Host")),
+    (CONTRIBUTOR_ROLE_GUEST, _("Guest")),
+)
+
+
 @register_snippet
 class Contributor(ClusterableModel):
     """Public person snippet used for podcast episode credits."""
@@ -24,6 +32,12 @@ class Contributor(ClusterableModel):
     visible = models.BooleanField(
         default=True,
         help_text=_("Globally hide this contributor from public episode pages and podcast feeds."),
+    )
+    default_role = models.CharField(
+        max_length=32,
+        choices=CONTRIBUTOR_ROLE_CHOICES,
+        default=CONTRIBUTOR_ROLE_GUEST,
+        help_text=_("Default role to use when this contributor is added to an episode."),
     )
     avatar = models.ForeignKey(
         "wagtailimages.Image",
@@ -39,6 +53,7 @@ class Contributor(ClusterableModel):
         FieldPanel("display_name"),
         FieldPanel("slug"),
         FieldPanel("visible"),
+        FieldPanel("default_role"),
         FieldPanel("avatar"),
         FieldPanel("short_bio"),
         MultiFieldPanel(
@@ -170,12 +185,9 @@ class ContributorLinkSelect(forms.Select):
 class EpisodeContributor(Orderable):
     """Ordered contributor assignment for a podcast episode."""
 
-    ROLE_HOST = "host"
-    ROLE_GUEST = "guest"
-    ROLE_CHOICES = (
-        (ROLE_HOST, _("Host")),
-        (ROLE_GUEST, _("Guest")),
-    )
+    ROLE_HOST = CONTRIBUTOR_ROLE_HOST
+    ROLE_GUEST = CONTRIBUTOR_ROLE_GUEST
+    ROLE_CHOICES = CONTRIBUTOR_ROLE_CHOICES
 
     episode = ParentalKey("cast.Episode", related_name="contributor_assignments", on_delete=models.CASCADE)
     contributor = models.ForeignKey(Contributor, on_delete=models.PROTECT, related_name="episode_assignments")

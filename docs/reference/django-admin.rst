@@ -61,6 +61,9 @@ Contributors Management
 Contributors are registered as Wagtail snippets and are also linked directly
 from the Wagtail admin sidebar. This gives editors a top-level **Contributors**
 entry instead of requiring them to navigate through **Snippets** first.
+Contributor snippets include a default episode role and ordered profile links.
+When an editor adds a contributor to an episode, the episode assignment starts
+with that role and the first ordered profile link.
 
 Tags Management
 ----------------

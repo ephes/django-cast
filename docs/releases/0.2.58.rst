@@ -18,3 +18,6 @@
 - Fixed episode contributor editing so links for a contributor created after
   the episode edit form was opened become selectable without first saving and
   reloading the episode draft.
+- Added contributor defaults for episode assignments: contributors now carry a
+  default role, and the first ordered contributor link is preselected when a
+  contributor is added to an episode.
