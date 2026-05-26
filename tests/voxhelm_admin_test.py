@@ -7,7 +7,7 @@ from django.contrib.messages import get_messages
 from django.test import RequestFactory
 from django.urls import reverse
 
-from cast.models import Transcript, TranscriptGeneration, VoxhelmSettings
+from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptGeneration, VoxhelmSettings
 from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
 from cast.voxhelm import VoxhelmError, build_audio_task_ref
 from cast.views import voxhelm as voxhelm_views
@@ -219,14 +219,44 @@ def test_generate_episode_transcript_from_wagtail_admin(admin_client, episode, m
 
     assert response.status_code == 200
     assert response.redirect_chain[0][0] == edit_url
-    enqueue.assert_called_once_with(
-        audio=audio,
-        request_or_site=episode.get_site(),
-        requested_by=mocker.ANY,
-        episode=episode,
-    )
+    enqueue.assert_called_once()
+    assert enqueue.call_args.kwargs["audio"] == audio
+    assert enqueue.call_args.kwargs["request_or_site"] == episode.get_site()
+    assert enqueue.call_args.kwargs["requested_by"] == mocker.ANY
+    assert enqueue.call_args.kwargs["episode"].pk == episode.pk
     messages = [message.message for message in get_messages(response.wsgi_request)]
     assert any("Transcript generation queued for" in message and episode.title in message for message in messages)
+
+
+@pytest.mark.django_db
+def test_generate_episode_transcript_uses_draft_contributor_assignments(admin_client, episode, mocker):
+    audio = episode.podcast_audio
+    assert audio is not None
+    contributor = Contributor.objects.create(display_name="Draft Host", slug="draft-host")
+    episode.contributor_assignments.add(
+        EpisodeContributor(
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_HOST,
+        )
+    )
+    episode.save_revision()
+    generation = TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.QUEUED,
+        task_ref=build_audio_task_ref(audio.pk),
+    )
+    enqueue = mocker.patch(
+        "cast.views.voxhelm.enqueue_audio_transcript_generation",
+        return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
+    )
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+
+    assert response.status_code == 200
+    draft_episode = enqueue.call_args.kwargs["episode"]
+    assert draft_episode.pk == episode.pk
+    assert EpisodeContributor.objects.filter(episode=episode).count() == 0
+    assert [assignment.display_name for assignment in draft_episode.contributor_assignments.all()] == ["Draft Host"]
 
 
 @pytest.mark.django_db
