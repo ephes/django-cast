@@ -26,7 +26,7 @@ from wagtail.snippets.models import register_snippet
 from wagtail.snippets.permissions import user_can_access_snippets
 from wagtail.snippets.views.snippets import SnippetViewSet
 
-from .admin_urls import audio, transcript, video, voxhelm
+from .admin_urls import audio, contributors, transcript, video, voxhelm
 from .models import Audio, Contributor, Episode, Transcript, Video
 from .views.voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_episode
 
@@ -39,6 +39,7 @@ def register_admin_urls() -> list:
     return [
         path("audio/", include((audio, "castaudio"), namespace="castaudio")),
         path("media/", include((video, "castvideo"), namespace="castvideo")),
+        path("contributors/", include((contributors, "cast-contributors"), namespace="cast-contributors")),
         path("transcript/", include((transcript, "cast-transcript"), namespace="cast-transcript")),
         path("voxhelm/", include((voxhelm, "cast-voxhelm"), namespace="cast-voxhelm")),
     ]

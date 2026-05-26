@@ -4,6 +4,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import HttpRequest
+from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
@@ -138,9 +139,13 @@ class ContributorLink(Orderable):
 class ContributorLinkSelect(forms.Select):
     """Select widget that exposes contributor ownership to the episode admin JS."""
 
-    def __init__(self, attrs: dict[str, str] | None = None) -> None:
-        attrs = {"data-cast-contributor-link-select": "true", **(attrs or {})}
-        super().__init__(attrs=attrs)
+    def __init__(self, attrs: dict[str, Any] | None = None) -> None:
+        default_attrs: dict[str, Any] = {
+            "data-cast-contributor-link-select": "true",
+            "data-cast-contributor-link-options-url": reverse_lazy("cast-contributors:links"),
+        }
+        default_attrs.update(attrs or {})
+        super().__init__(attrs=default_attrs)
 
     def create_option(
         self,

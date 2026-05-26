@@ -12,3 +12,6 @@
   overlap the save dropdown.
 - Fixed episode publishing from the Wagtail editor by no longer rendering a
   hidden ``action-publish`` field that could shadow Wagtail's publish button.
+- Fixed episode contributor editing so links for a contributor created after
+  the episode edit form was opened become selectable without first saving and
+  reloading the episode draft.

@@ -691,6 +691,7 @@ class TestPostModel:
 
         assert isinstance(link_widget, ContributorLinkSelect)
         assert link_widget.attrs["data-cast-contributor-link-select"] == "true"
+        assert str(link_widget.attrs["data-cast-contributor-link-options-url"]) == reverse("cast-contributors:links")
         assert "cast/js/wagtail/contributor-link-select.js" in str(link_widget.media)
         assert "cast/js/wagtail/contributor-link-select.js" in str(form.media)
 

@@ -1,4 +1,5 @@
 import pytest
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.test import RequestFactory
@@ -11,7 +12,7 @@ from cast.admin import (
     cache_file_sizes,
     retrain,
 )
-from cast.models import Contributor, SpamFilter, Video
+from cast.models import Contributor, ContributorLink, SpamFilter, Video
 from cast.wagtail_hooks import ContributorMenuItem, register_contributor_menu_item
 
 
@@ -118,3 +119,97 @@ def test_contributor_menu_item_visibility_requires_snippet_permission(user):
             delattr(user, cache_name)
 
     assert item.is_shown(request)
+
+
+@pytest.mark.django_db
+def test_contributor_link_options(admin_client):
+    contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+    other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
+    second_link = ContributorLink.objects.create(
+        contributor=contributor,
+        service=ContributorLink.SERVICE_MASTODON,
+        url="https://example.com/mastodon",
+        sort_order=2,
+    )
+    first_link = ContributorLink.objects.create(
+        contributor=contributor,
+        service=ContributorLink.SERVICE_WEBSITE,
+        url="https://example.com/guest",
+        sort_order=1,
+    )
+    ContributorLink.objects.create(
+        contributor=other_contributor,
+        service=ContributorLink.SERVICE_WEBSITE,
+        url="https://example.com/other",
+    )
+
+    response = admin_client.get(reverse("cast-contributors:links"), {"contributor_id": contributor.pk})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "links": [
+            {
+                "contributorId": str(contributor.pk),
+                "text": "Guest: Website",
+                "value": str(first_link.pk),
+            },
+            {
+                "contributorId": str(contributor.pk),
+                "text": "Guest: Mastodon",
+                "value": str(second_link.pk),
+            },
+        ]
+    }
+
+
+@pytest.mark.django_db
+def test_contributor_link_options_with_invalid_contributor_id(admin_client):
+    response = admin_client.get(reverse("cast-contributors:links"), {"contributor_id": "invalid"})
+
+    assert response.status_code == 200
+    assert response.json() == {"links": []}
+
+
+@pytest.mark.django_db
+def test_contributor_link_options_requires_contributor_snippet_permission(client):
+    contributor = Contributor.objects.create(display_name="Guest", slug="guest")
+    link = ContributorLink.objects.create(
+        contributor=contributor,
+        service=ContributorLink.SERVICE_WEBSITE,
+        url="https://example.com/guest",
+    )
+    user = get_user_model().objects.create_user(
+        username="contributor-link-options-admin",
+        password="password",
+        is_staff=True,
+    )
+    access_admin = Permission.objects.get(codename="access_admin", content_type__app_label="wagtailadmin")
+    user.user_permissions.add(access_admin)
+    assert client.login(username="contributor-link-options-admin", password="password")
+
+    response = client.get(reverse("cast-contributors:links"), {"contributor_id": contributor.pk})
+
+    assert response.status_code == 403
+    assert response.json() == {"links": []}
+
+    view_contributor = Permission.objects.get(
+        content_type=ContentType.objects.get_for_model(Contributor),
+        codename="view_contributor",
+    )
+    user.user_permissions.add(view_contributor)
+    for cache_name in ("_perm_cache", "_user_perm_cache", "_group_perm_cache"):
+        if hasattr(user, cache_name):
+            delattr(user, cache_name)
+
+    response = client.get(reverse("cast-contributors:links"), {"contributor_id": contributor.pk})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "links": [
+            {
+                "contributorId": str(contributor.pk),
+                "text": "Guest: Website",
+                "value": str(link.pk),
+            }
+        ]
+    }
