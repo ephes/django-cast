@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from time import monotonic, sleep
 from typing import TYPE_CHECKING, Any
@@ -176,11 +177,60 @@ def replace_file(field, filename: str, content: bytes) -> None:
     field.save(filename, ContentFile(content), save=False)
 
 
-def build_audio_task_ref(audio_id: int, *, diarization_enabled: bool = False) -> str:
+def build_audio_task_ref(
+    audio_id: int,
+    *,
+    diarization_enabled: bool = False,
+    diarization_speaker_count: int | None = None,
+) -> str:
     task_ref = f"cast-audio-{audio_id}"
-    if diarization_enabled:
-        return f"{task_ref}-diarized"
+    if not diarization_enabled:
+        return task_ref
+    task_ref = f"{task_ref}-diarized"
+    if diarization_speaker_count is not None:
+        task_ref = f"{task_ref}-{diarization_speaker_count}-speakers"
     return task_ref
+
+
+def append_diarization_speaker_count_to_task_ref(task_ref: str, speaker_count: int | None) -> str:
+    if speaker_count is None:
+        return task_ref
+    suffix = f"-{speaker_count}-speakers"
+    if task_ref.endswith(suffix):
+        return task_ref
+    if re.search(r"-diarized-\d+-speakers$", task_ref):
+        return re.sub(r"-\d+-speakers$", suffix, task_ref)
+    return f"{task_ref}{suffix}"
+
+
+def count_episode_diarization_speakers(episode: Any) -> int | None:
+    assignments = getattr(episode, "contributor_assignments", None)
+    if assignments is None:
+        return None
+    if hasattr(assignments, "all"):
+        assignments = assignments.all()
+
+    contributor_ids = set()
+    for assignment in assignments:
+        contributor_id = getattr(assignment, "contributor_id", None)
+        if contributor_id is not None:
+            contributor_ids.add(contributor_id)
+    if len(contributor_ids) < 2:
+        return None
+    return len(contributor_ids)
+
+
+def resolve_diarization_speaker_count(audio: Audio, *, episode: Any | None = None) -> int | None:
+    if episode is not None:
+        return count_episode_diarization_speakers(episode)
+    episode_manager = getattr(audio, "episodes", None)
+    if episode_manager is None:
+        return None
+
+    episodes = list(episode_manager.all())
+    if len(episodes) != 1:
+        return None
+    return count_episode_diarization_speakers(episodes[0])
 
 
 def client_diarization_enabled(client: object) -> bool:
@@ -304,7 +354,18 @@ class VoxhelmClient:
             raise VoxhelmError("Voxhelm returned a non-object JSON payload.")
         return data
 
-    def submit_transcription_job(self, *, source_url: str, task_ref: str, context: dict[str, Any]) -> dict[str, Any]:
+    def submit_transcription_job(
+        self,
+        *,
+        source_url: str,
+        task_ref: str,
+        context: dict[str, Any],
+        speaker_count: int | None = None,
+    ) -> dict[str, Any]:
+        if speaker_count is not None and (
+            not isinstance(speaker_count, int) or isinstance(speaker_count, bool) or speaker_count < 1
+        ):
+            raise VoxhelmError("speaker_count must be a positive integer when provided.")
         payload = {
             "job_type": "transcribe",
             "priority": "normal",
@@ -319,7 +380,10 @@ class VoxhelmClient:
         if self.language:
             payload["language"] = self.language
         if self.diarization_enabled:
-            payload["diarization"] = {"enabled": True}
+            diarization: dict[str, Any] = {"enabled": True}
+            if speaker_count is not None:
+                diarization["num_speakers"] = speaker_count
+            payload["diarization"] = diarization
         return self.request_json(method="POST", path="jobs", payload=payload)
 
     def get_job(self, job_id: str) -> dict[str, Any]:
@@ -349,19 +413,34 @@ class VoxhelmTranscriptService:
     ) -> None:
         self.client = client or VoxhelmClient.from_settings(request_or_site=request_or_site)
 
-    def submit_for_audio(self, audio: Audio, *, task_ref: str | None = None) -> TranscriptSubmission:
+    def submit_for_audio(
+        self,
+        audio: Audio,
+        *,
+        task_ref: str | None = None,
+        episode: Any | None = None,
+    ) -> TranscriptSubmission:
         if audio.pk is None:
             raise VoxhelmError("Audio must be saved before requesting a transcript.")
 
         source_url = resolve_audio_source_url(audio)
+        diarization_enabled = client_diarization_enabled(self.client)
+        speaker_count = resolve_diarization_speaker_count(audio, episode=episode) if diarization_enabled else None
         resolved_task_ref = task_ref or build_audio_task_ref(
             audio.pk,
-            diarization_enabled=client_diarization_enabled(self.client),
+            diarization_enabled=diarization_enabled,
+            diarization_speaker_count=speaker_count,
         )
+        if task_ref is not None and diarization_enabled:
+            resolved_task_ref = append_diarization_speaker_count_to_task_ref(
+                resolved_task_ref,
+                speaker_count,
+            )
         job_payload = self.client.submit_transcription_job(
             source_url=source_url,
             task_ref=resolved_task_ref,
             context={"consumer": "django-cast", "audio_id": audio.pk},
+            speaker_count=speaker_count,
         )
         state = str(job_payload.get("state", ""))
         if state in TERMINAL_JOB_STATES and state != "succeeded":
@@ -405,8 +484,14 @@ class VoxhelmTranscriptService:
             source_url=source_url,
         )
 
-    def generate_for_audio(self, audio: Audio, *, task_ref: str | None = None) -> TranscriptGenerationResult:
-        submission = self.submit_for_audio(audio, task_ref=task_ref)
+    def generate_for_audio(
+        self,
+        audio: Audio,
+        *,
+        task_ref: str | None = None,
+        episode: Any | None = None,
+    ) -> TranscriptGenerationResult:
+        submission = self.submit_for_audio(audio, task_ref=task_ref, episode=episode)
         return self.complete_audio_job(
             audio,
             job_id=submission.job_id,
@@ -447,6 +532,7 @@ def enqueue_audio_transcript_generation(
     audio: Audio,
     request_or_site: HttpRequest | Site | None = None,
     requested_by=None,
+    episode: Any | None = None,
 ) -> TranscriptEnqueueResult:
     if audio.pk is None:
         raise VoxhelmError("Audio must be saved before requesting a transcript.")
@@ -456,9 +542,12 @@ def enqueue_audio_transcript_generation(
         return TranscriptEnqueueResult(generation=generation, enqueued=False)
 
     service = VoxhelmTranscriptService(request_or_site=request_or_site)
+    diarization_enabled = client_diarization_enabled(service.client)
+    speaker_count = resolve_diarization_speaker_count(audio, episode=episode) if diarization_enabled else None
     task_ref = build_audio_task_ref(
         audio.pk,
-        diarization_enabled=client_diarization_enabled(service.client),
+        diarization_enabled=diarization_enabled,
+        diarization_speaker_count=speaker_count,
     )
     generation, created = TranscriptGeneration.objects.get_or_create(
         audio=audio,
@@ -471,6 +560,7 @@ def enqueue_audio_transcript_generation(
         submission = service.submit_for_audio(
             audio,
             task_ref=task_ref,
+            episode=episode,
         )
     except Exception as exc:
         if created:

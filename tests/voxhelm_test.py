@@ -11,14 +11,16 @@ from django.urls import reverse
 from wagtail.models import Collection
 
 from cast.devdata import create_transcript
-from cast.models import Audio, TranscriptGeneration, VoxhelmSettings
+from cast.models import Audio, Contributor, EpisodeContributor, TranscriptGeneration, VoxhelmSettings
 from cast.voxhelm_tasks import complete_transcript_generation
+from tests.factories import EpisodeFactory
 from cast.voxhelm import (
     TranscriptGenerationResult,
     TranscriptSubmission,
     VoxhelmClient,
     VoxhelmError,
     VoxhelmTranscriptService,
+    append_diarization_speaker_count_to_task_ref,
     build_audio_task_ref,
     build_failure_message,
     enqueue_audio_transcript_generation,
@@ -31,6 +33,7 @@ from cast.voxhelm import (
     require_setting,
     require_artifact_path,
     resolve_audio_source_url,
+    resolve_diarization_speaker_count,
     transcript_complete,
 )
 
@@ -261,6 +264,60 @@ def test_build_failure_message_prefers_error_message():
 def test_build_audio_task_ref_supports_diarized_variant():
     assert build_audio_task_ref(1) == "cast-audio-1"
     assert build_audio_task_ref(1, diarization_enabled=True) == "cast-audio-1-diarized"
+    assert (
+        build_audio_task_ref(1, diarization_enabled=True, diarization_speaker_count=4)
+        == "cast-audio-1-diarized-4-speakers"
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_diarization_speaker_count_counts_unique_episode_contributors(episode):
+    first = Contributor.objects.create(display_name="First", slug="first")
+    second = Contributor.objects.create(display_name="Second", slug="second")
+    hidden = Contributor.objects.create(display_name="Hidden", slug="hidden", visible=False)
+    EpisodeContributor.objects.create(episode=episode, contributor=first, role=EpisodeContributor.ROLE_HOST)
+    EpisodeContributor.objects.create(episode=episode, contributor=second, role=EpisodeContributor.ROLE_GUEST)
+    EpisodeContributor.objects.create(episode=episode, contributor=hidden, role=EpisodeContributor.ROLE_GUEST)
+
+    assert resolve_diarization_speaker_count(episode.podcast_audio) == 3
+
+
+@pytest.mark.django_db
+def test_resolve_diarization_speaker_count_avoids_multi_episode_union(episode, podcast, body):
+    first = Contributor.objects.create(display_name="First", slug="first")
+    second = Contributor.objects.create(display_name="Second", slug="second")
+    third = Contributor.objects.create(display_name="Third", slug="third")
+    EpisodeContributor.objects.create(episode=episode, contributor=first, role=EpisodeContributor.ROLE_HOST)
+    EpisodeContributor.objects.create(episode=episode, contributor=second, role=EpisodeContributor.ROLE_GUEST)
+    other_episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="other podcast episode",
+        slug="other-podcast-entry",
+        podcast_audio=episode.podcast_audio,
+        body=body,
+    )
+    EpisodeContributor.objects.create(
+        episode=other_episode,
+        contributor=first,
+        role=EpisodeContributor.ROLE_HOST,
+    )
+    EpisodeContributor.objects.create(
+        episode=other_episode,
+        contributor=third,
+        role=EpisodeContributor.ROLE_GUEST,
+    )
+
+    assert resolve_diarization_speaker_count(episode.podcast_audio) is None
+    assert resolve_diarization_speaker_count(episode.podcast_audio, episode=episode) == 2
+
+
+def test_append_diarization_speaker_count_to_task_ref_preserves_unrelated_suffix():
+    assert append_diarization_speaker_count_to_task_ref("custom-2-speakers", 4) == "custom-2-speakers-4-speakers"
+    assert (
+        append_diarization_speaker_count_to_task_ref("cast-audio-1-diarized-2-speakers", 4)
+        == "cast-audio-1-diarized-4-speakers"
+    )
 
 
 def test_client_submit_job_and_download_artifact(mocker):
@@ -318,6 +375,32 @@ def test_client_submit_job_includes_diarization_when_enabled(mocker):
     )
 
     assert request_json.call_args.kwargs["payload"]["diarization"] == {"enabled": True}
+
+
+def test_client_submit_job_includes_diarization_speaker_count_when_provided(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-1"})
+
+    client.submit_transcription_job(
+        source_url="https://media.example.com/episode.mp3",
+        task_ref="cast-audio-1-diarized-4-speakers",
+        context={"audio_id": 1},
+        speaker_count=4,
+    )
+
+    assert request_json.call_args.kwargs["payload"]["diarization"] == {"enabled": True, "num_speakers": 4}
+
+
+def test_client_submit_job_rejects_invalid_speaker_count():
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+
+    with pytest.raises(VoxhelmError, match="speaker_count"):
+        client.submit_transcription_job(
+            source_url="https://media.example.com/episode.mp3",
+            task_ref="cast-audio-1",
+            context={"audio_id": 1},
+            speaker_count=0,
+        )
 
 
 def test_client_build_url_variants_and_get_job(mocker):
@@ -487,8 +570,8 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
         def __init__(self):
             self.submit_calls = []
 
-        def submit_transcription_job(self, *, source_url, task_ref, context):
-            self.submit_calls.append((source_url, task_ref, context))
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+            self.submit_calls.append((source_url, task_ref, context, speaker_count))
             return {
                 "id": "job-1",
                 "state": "succeeded",
@@ -603,6 +686,7 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
             audio.m4a.url,
             f"cast-audio-{audio.pk}",
             {"consumer": "django-cast", "audio_id": audio.pk},
+            None,
         )
     ]
 
@@ -622,10 +706,11 @@ def test_submit_for_audio_returns_submission_metadata(settings, user, m4a_audio)
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context):
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
             assert source_url == audio.m4a.url
             assert task_ref == build_audio_task_ref(audio.pk)
             assert context == {"consumer": "django-cast", "audio_id": audio.pk}
+            assert speaker_count is None
             return {"id": "job-submit", "state": "queued"}
 
     submission = VoxhelmTranscriptService(client=StubClient()).submit_for_audio(audio)
@@ -647,9 +732,10 @@ def test_submit_for_audio_uses_diarized_task_ref_for_diarized_client(settings, u
     class StubClient:
         diarization_enabled = True
 
-        def submit_transcription_job(self, *, source_url, task_ref, context):
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
             del source_url, context
             assert task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
+            assert speaker_count is None
             return {"id": "job-submit", "state": "queued"}
 
     submission = VoxhelmTranscriptService(client=StubClient()).submit_for_audio(audio)
@@ -676,14 +762,105 @@ def test_submit_for_audio_with_real_diarized_client_uses_diarized_task_ref_and_p
 
 
 @pytest.mark.django_db
+def test_submit_for_audio_uses_episode_contributor_count_as_diarization_hint(settings, episode, mocker):
+    settings.MEDIA_URL = "https://media.example.com/"
+    first = Contributor.objects.create(display_name="First", slug="first")
+    second = Contributor.objects.create(display_name="Second", slug="second")
+    third = Contributor.objects.create(display_name="Third", slug="third")
+    fourth = Contributor.objects.create(display_name="Fourth", slug="fourth")
+    for contributor in (first, second, third, fourth):
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+        )
+    audio = episode.podcast_audio
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-submit", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(audio)
+
+    expected_task_ref = build_audio_task_ref(audio.pk, diarization_enabled=True, diarization_speaker_count=4)
+    payload = request_json.call_args.kwargs["payload"]
+    assert submission.task_ref == expected_task_ref
+    assert payload["task_ref"] == expected_task_ref
+    assert payload["diarization"] == {"enabled": True, "num_speakers": 4}
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_skips_speaker_hint_for_multi_episode_audio(settings, episode, podcast, body, mocker):
+    settings.MEDIA_URL = "https://media.example.com/"
+    first = Contributor.objects.create(display_name="First", slug="multi-first")
+    second = Contributor.objects.create(display_name="Second", slug="multi-second")
+    third = Contributor.objects.create(display_name="Third", slug="multi-third")
+    EpisodeContributor.objects.create(episode=episode, contributor=first, role=EpisodeContributor.ROLE_HOST)
+    EpisodeContributor.objects.create(episode=episode, contributor=second, role=EpisodeContributor.ROLE_GUEST)
+    other_episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="another podcast episode",
+        slug="another-podcast-entry",
+        podcast_audio=episode.podcast_audio,
+        body=body,
+    )
+    EpisodeContributor.objects.create(
+        episode=other_episode,
+        contributor=first,
+        role=EpisodeContributor.ROLE_HOST,
+    )
+    EpisodeContributor.objects.create(
+        episode=other_episode,
+        contributor=third,
+        role=EpisodeContributor.ROLE_GUEST,
+    )
+    audio = episode.podcast_audio
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-submit", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(audio)
+
+    payload = request_json.call_args.kwargs["payload"]
+    assert submission.task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
+    assert payload["task_ref"] == build_audio_task_ref(audio.pk, diarization_enabled=True)
+    assert payload["diarization"] == {"enabled": True}
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_appends_speaker_count_to_supplied_task_ref(settings, episode, mocker):
+    settings.MEDIA_URL = "https://media.example.com/"
+    for index in range(4):
+        contributor = Contributor.objects.create(display_name=f"Speaker {index}", slug=f"speaker-{index}")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+        )
+    audio = episode.podcast_audio
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-submit", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(
+        audio,
+        task_ref=build_audio_task_ref(audio.pk, diarization_enabled=True),
+        episode=episode,
+    )
+
+    expected_task_ref = build_audio_task_ref(audio.pk, diarization_enabled=True, diarization_speaker_count=4)
+    payload = request_json.call_args.kwargs["payload"]
+    assert submission.task_ref == expected_task_ref
+    assert payload["task_ref"] == expected_task_ref
+    assert payload["diarization"] == {"enabled": True, "num_speakers": 4}
+
+
+@pytest.mark.django_db
 def test_submit_for_audio_raises_for_terminal_failed_state(settings, user, m4a_audio):
     settings.MEDIA_URL = "https://media.example.com/"
     audio = Audio(user=user, m4a=m4a_audio, title="episode")
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context):
-            del source_url, task_ref, context
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+            del source_url, task_ref, context, speaker_count
             return {"id": "job-failed", "state": "failed", "error": {"message": "boom"}}
 
     with pytest.raises(VoxhelmError, match="boom"):
@@ -697,8 +874,8 @@ def test_submit_for_audio_requires_job_id(settings, user, m4a_audio):
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context):
-            del source_url, task_ref, context
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+            del source_url, task_ref, context, speaker_count
             return {"state": "queued"}
 
     with pytest.raises(VoxhelmError, match="job id"):
@@ -750,7 +927,11 @@ def test_enqueue_audio_transcript_generation_creates_local_state(mocker, audio, 
     assert generation.site == site
     assert generation.requested_by == audio.user
     service_cls.assert_called_once_with(request_or_site=site)
-    service.submit_for_audio.assert_called_once_with(audio, task_ref=build_audio_task_ref(audio.pk))
+    service.submit_for_audio.assert_called_once_with(
+        audio,
+        task_ref=build_audio_task_ref(audio.pk),
+        episode=None,
+    )
     enqueue_mock.assert_called_once_with(generation.pk)
 
 
@@ -825,7 +1006,41 @@ def test_enqueue_audio_transcript_generation_uses_diarized_task_ref_from_site_se
     assert generation is not None
     assert generation.task_ref == task_ref
     assert generation.voxhelm_job_id == "job-diarized"
-    submit.assert_called_once_with(audio, task_ref=task_ref)
+    submit.assert_called_once_with(audio, task_ref=task_ref, episode=None)
+
+
+@pytest.mark.django_db
+def test_enqueue_audio_transcript_generation_uses_episode_speaker_count(mocker, episode):
+    audio = episode.podcast_audio
+    assert audio is not None
+    for index in range(4):
+        contributor = Contributor.objects.create(display_name=f"Speaker {index}", slug=f"enqueue-speaker-{index}")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_GUEST,
+        )
+    task_ref = build_audio_task_ref(audio.pk, diarization_enabled=True, diarization_speaker_count=4)
+    submission = TranscriptSubmission(
+        job_id="job-diarized",
+        source_url="https://media.example.com/audio.m4a",
+        task_ref=task_ref,
+        job_payload={"id": "job-diarized", "state": "queued"},
+    )
+    service = mocker.Mock()
+    service.client = SimpleNamespace(diarization_enabled=True)
+    service.submit_for_audio.return_value = submission
+    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
+
+    result = enqueue_audio_transcript_generation(audio=audio, episode=episode)
+
+    generation = get_transcript_generation(audio)
+    assert result.enqueued is True
+    assert generation is not None
+    assert generation.task_ref == task_ref
+    service.submit_for_audio.assert_called_once_with(audio, task_ref=task_ref, episode=episode)
 
 
 @pytest.mark.django_db
@@ -859,7 +1074,7 @@ def test_enqueue_audio_transcript_generation_requeues_inactive_generation_with_d
     assert result.generation.pk == generation.pk
     assert generation.task_ref == task_ref
     assert generation.voxhelm_job_id == "job-diarized"
-    service.submit_for_audio.assert_called_once_with(audio, task_ref=task_ref)
+    service.submit_for_audio.assert_called_once_with(audio, task_ref=task_ref, episode=None)
 
 
 @pytest.mark.django_db
@@ -1047,10 +1262,11 @@ def test_generate_for_audio_updates_existing_transcript(settings, user, m4a_audi
     old_paths = existing.get_all_paths()
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context):
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
             assert source_url == audio.m4a.url
             assert task_ref == f"cast-audio-{audio.pk}"
             assert context == {"consumer": "django-cast", "audio_id": audio.pk}
+            assert speaker_count is None
             return {
                 "id": "job-2",
                 "state": "succeeded",
@@ -1114,8 +1330,8 @@ def test_generate_for_audio_waits_for_queued_job(settings, user, m4a_audio):
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context):
-            del source_url, task_ref, context
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+            del source_url, task_ref, context, speaker_count
             return {"id": "job-3", "state": "queued"}
 
         def wait_for_job(self, job_id):
@@ -1171,8 +1387,8 @@ def test_generate_for_audio_requires_required_artifacts(settings, user, m4a_audi
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context):
-            del source_url, task_ref, context
+        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+            del source_url, task_ref, context, speaker_count
             artifacts = {"podlove": "/podlove", "dote": "/dote", "vtt": "/vtt"}
             artifacts.pop(missing_format)
             return {"id": "job-4", "state": "succeeded", "result": {"artifacts": artifacts}}

@@ -94,7 +94,12 @@ def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpRe
         raise PermissionDenied
     site = episode.get_site() or Site.find_for_request(request)
     try:
-        result = enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=request.user)
+        result = enqueue_audio_transcript_generation(
+            audio=audio,
+            request_or_site=site,
+            requested_by=request.user,
+            episode=episode,
+        )
     except ImproperlyConfigured as exc:
         _add_generation_configuration_error_message(request, exc)
         return redirect(redirect_url)

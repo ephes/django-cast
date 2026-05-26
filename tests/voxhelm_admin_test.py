@@ -219,7 +219,12 @@ def test_generate_episode_transcript_from_wagtail_admin(admin_client, episode, m
 
     assert response.status_code == 200
     assert response.redirect_chain[0][0] == edit_url
-    enqueue.assert_called_once_with(audio=audio, request_or_site=episode.get_site(), requested_by=mocker.ANY)
+    enqueue.assert_called_once_with(
+        audio=audio,
+        request_or_site=episode.get_site(),
+        requested_by=mocker.ANY,
+        episode=episode,
+    )
     messages = [message.message for message in get_messages(response.wsgi_request)]
     assert any("Transcript generation queued for" in message and episode.title in message for message in messages)
 

@@ -21,3 +21,9 @@
 - Added contributor defaults for episode assignments: contributors now carry a
   default role, and the first ordered contributor link is preselected when a
   contributor is added to an episode.
+- Voxhelm transcript generation now sends the episode contributor count as a
+  diarization speaker-count hint and includes it in the task reference, so
+  regenerating multi-speaker episodes can force the expected number of
+  speakers. Episode-level generation uses that episode's contributors;
+  audio-level generation only sends this hint when the audio belongs to exactly
+  one episode.
