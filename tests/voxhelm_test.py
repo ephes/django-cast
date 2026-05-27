@@ -23,6 +23,7 @@ from cast.voxhelm import (
     append_diarization_speaker_count_to_task_ref,
     build_audio_task_ref,
     build_failure_message,
+    count_episode_diarization_speakers,
     enqueue_audio_transcript_generation,
     get_bool_setting,
     get_float_setting,
@@ -313,11 +314,43 @@ def test_resolve_diarization_speaker_count_avoids_multi_episode_union(episode, p
 
 
 def test_append_diarization_speaker_count_to_task_ref_preserves_unrelated_suffix():
+    assert append_diarization_speaker_count_to_task_ref("custom", None) == "custom"
+    assert append_diarization_speaker_count_to_task_ref("custom-4-speakers", 4) == "custom-4-speakers"
     assert append_diarization_speaker_count_to_task_ref("custom-2-speakers", 4) == "custom-2-speakers-4-speakers"
     assert (
         append_diarization_speaker_count_to_task_ref("cast-audio-1-diarized-2-speakers", 4)
         == "cast-audio-1-diarized-4-speakers"
     )
+
+
+def test_count_episode_diarization_speakers_handles_missing_and_sparse_assignments():
+    assert count_episode_diarization_speakers(SimpleNamespace()) is None
+    assert (
+        count_episode_diarization_speakers(
+            SimpleNamespace(
+                contributor_assignments=[
+                    SimpleNamespace(contributor_id=None),
+                    SimpleNamespace(contributor_id=1),
+                ]
+            )
+        )
+        is None
+    )
+    assert (
+        count_episode_diarization_speakers(
+            SimpleNamespace(
+                contributor_assignments=[
+                    SimpleNamespace(contributor_id=1),
+                    SimpleNamespace(contributor_id=2),
+                ]
+            )
+        )
+        == 2
+    )
+
+
+def test_resolve_diarization_speaker_count_without_episode_manager():
+    assert resolve_diarization_speaker_count(SimpleNamespace()) is None
 
 
 def test_client_submit_job_and_download_artifact(mocker):

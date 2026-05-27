@@ -1163,12 +1163,33 @@ class TestEpisodeModel:
         repository.transcript.vtt = None
         assert episode.get_vtt_transcript_url(request, repository) is None
 
+    def test_get_vtt_transcript_url_includes_episode_context(self, rf, episode):
+        transcript = create_transcript(audio=episode.podcast_audio, vtt="WEBVTT\n\n")
+        request = rf.get("/")
+
+        url = episode.get_vtt_transcript_url(request, None)
+
+        expected = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
+        assert url == request.build_absolute_uri(f"{expected}?episode_id={episode.pk}")
+
     def test_get_podcastindex_transcript_url_no_transcript(self, rf, mocker):
         episode = Episode(id=1)
         request = rf.get("/")
         repository = mocker.MagicMock()
         repository.transcript.dote = None
         assert episode.get_podcastindex_transcript_url(request, repository) is None
+
+    def test_get_podcastindex_transcript_url_includes_episode_context(self, rf, episode):
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            dote={"lines": [{"startTime": "00:00:00,000", "endTime": "00:00:01,000", "text": "Hello"}]},
+        )
+        request = rf.get("/")
+
+        url = episode.get_podcastindex_transcript_url(request, None)
+
+        expected = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.pk})
+        assert url == request.build_absolute_uri(f"{expected}?episode_id={episode.pk}")
 
 
 @pytest.mark.django_db

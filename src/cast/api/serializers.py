@@ -5,6 +5,11 @@ from typing import Any, Literal, Union
 from rest_framework import serializers
 
 from ..models import Audio, Blog, Video
+from ..transcript_sanitization import (
+    podlove_contributors_from_data,
+    sanitize_podlove_data,
+    strict_public_speaker_labels_for_audio,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +61,11 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     def to_representation(self, instance: Audio) -> dict:
         # Load the Podlove transcript JSON once so the transcripts and
         # contributors fields share a single file read per response.
-        self._podlove_data = self._load_podlove_data(instance)
+        raw_podlove_data = self._load_podlove_data(instance)
+        post = self.context.get("post")
+        episode = getattr(post, "specific", post)
+        allowed_speaker_labels = strict_public_speaker_labels_for_audio(instance, episode=episode)
+        self._podlove_data = sanitize_podlove_data(raw_podlove_data, allowed_speaker_labels)
         try:
             return super().to_representation(instance)
         finally:
@@ -121,20 +130,7 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         ``speaker`` and ``voice`` values; the raw label is used as both ``id``
         and ``name`` so it keeps matching the segment ``speaker`` id.
         """
-        contributors: list[dict[str, str]] = []
-        seen: set[str] = set()
-        transcripts = self._podlove_data_for(instance).get("transcripts", [])
-        if not isinstance(transcripts, list):
-            return contributors
-        for segment in transcripts:
-            if not isinstance(segment, dict):
-                continue
-            for field_name in ("speaker", "voice"):
-                label = segment.get(field_name)
-                if isinstance(label, str) and label.strip() and label not in seen:
-                    seen.add(label)
-                    contributors.append({"id": label, "name": label})
-        return contributors
+        return podlove_contributors_from_data(self._podlove_data_for(instance))
 
 
 class SimpleBlogSerializer(serializers.HyperlinkedModelSerializer):

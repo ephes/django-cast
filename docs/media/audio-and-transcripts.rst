@@ -159,3 +159,14 @@ transcript edit form lets editors map those labels to episode contributors.
 The mapping form shows short transcript samples for each speaker and, when the
 audio file is playable from the admin, timestamp controls that seek the audio
 preview to the sample position.
+
+Generated transcript text is stored with the shared audio file and can appear
+on already published episodes as soon as generation completes. Public speaker
+metadata is stricter: player JSON, public transcript JSON, PodcastIndex JSON,
+HTML transcript pages, and supported WebVTT speaker labels only expose speaker
+names that match visible contributors on the live episode. Draft-only
+contributor mappings and unmapped diarization labels such as ``Speaker 1`` are
+hidden from public output until the matching contributor assignment is
+published. If a transcript is not connected to any live episode yet, public
+transcript endpoints expose no speaker labels. The stored transcript files are
+not rewritten by this public sanitization step.

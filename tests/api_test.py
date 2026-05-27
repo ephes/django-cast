@@ -17,7 +17,7 @@ from cast.api.views import (
     ThemeListView,
 )
 from cast.devdata import create_transcript, generate_blog_with_media
-from cast.models import PostCategory
+from cast.models import Contributor, EpisodeContributor, PostCategory
 
 from .factories import PostFactory, UserFactory
 
@@ -482,6 +482,20 @@ class TestPodcastAudio:
     def test_podlove_detail_endpoint_includes_contributors(self, api_client, episode):
         """Diarized transcript speaker labels surface as top-level Podlove player contributors."""
         audio = episode.podcast_audio
+        dominik = Contributor.objects.create(display_name="Dominik", slug="dominik")
+        jochen = Contributor.objects.create(display_name="Jochen", slug="jochen")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=dominik,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=jochen,
+            role=EpisodeContributor.ROLE_GUEST,
+            sort_order=1,
+        )
         create_transcript(
             audio=audio,
             podlove={
@@ -524,6 +538,78 @@ class TestPodcastAudio:
         # the existing transcripts payload stays behavior-compatible
         assert [segment["text"] for segment in data["transcripts"]] == ["Hallo", "Hi", "Tschüss"]
 
+    def test_podlove_detail_endpoint_sanitizes_draft_and_unmapped_speakers(self, api_client, episode):
+        """Public player output only exposes speaker labels from live episode contributors."""
+        audio = episode.podcast_audio
+        live_contributor = Contributor.objects.create(display_name="Live Host", slug="live-host")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=live_contributor,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        draft_contributor = Contributor.objects.create(display_name="Draft Guest", slug="draft-guest")
+        episode.contributor_assignments.add(
+            EpisodeContributor(
+                contributor=draft_contributor,
+                role=EpisodeContributor.ROLE_GUEST,
+                sort_order=1,
+            )
+        )
+        episode.save_revision()
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Live Host", "voice": "Live Host", "text": "Live speaker"},
+                    {"speaker": "Draft Guest", "voice": "Draft Guest", "text": "Draft speaker"},
+                    {"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Unmapped speaker"},
+                ]
+            },
+        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
+
+        response = api_client.get(podlove_detail_url, format="json")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["contributors"] == [{"id": "Live Host", "name": "Live Host"}]
+        assert data["transcripts"][0]["speaker"] == "Live Host"
+        assert "speaker" not in data["transcripts"][1]
+        assert "voice" not in data["transcripts"][1]
+        assert "speaker" not in data["transcripts"][2]
+        assert "voice" not in data["transcripts"][2]
+        with transcript.podlove.open("r") as podlove_file:
+            stored_data = json.load(podlove_file)
+        assert stored_data["transcripts"][1]["speaker"] == "Draft Guest"
+        assert stored_data["transcripts"][2]["speaker"] == "Speaker 1"
+
+    def test_podlove_detail_endpoint_sanitizes_draft_only_audio(self, api_client, episode):
+        """Public player output exposes no speaker labels when the audio has no live episode anchor."""
+        episode.live = False
+        episode.save(update_fields=["live"])
+        audio = episode.podcast_audio
+        create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Draft Guest", "voice": "Draft Guest", "text": "Draft speaker"},
+                    {"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Unmapped speaker"},
+                ]
+            },
+        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+
+        response = api_client.get(podlove_detail_url, format="json")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["contributors"] == []
+        assert "speaker" not in data["transcripts"][0]
+        assert "voice" not in data["transcripts"][0]
+        assert "speaker" not in data["transcripts"][1]
+        assert "voice" not in data["transcripts"][1]
+
     def test_podlove_detail_endpoint_contributors_empty_without_transcript(self, api_client, audio):
         """The contributors payload is an empty list when the audio has no transcript."""
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
@@ -548,8 +634,7 @@ class TestPodcastAudio:
         assert load_spy.call_count == 1
 
     def test_podlove_detail_endpoint_contributor_query_count_is_constant(self, api_client):
-        """Contributors are derived from the parsed Podlove JSON, so the DB query
-        count does not grow with the number of transcript speakers."""
+        """Raw transcript speaker count does not affect public player query count."""
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
@@ -581,8 +666,9 @@ class TestPodcastAudio:
 
         assert response_few.status_code == 200
         assert response_many.status_code == 200
-        assert len(response_many.json()["contributors"]) == 40
-        # contributor extraction reads the parsed JSON, not the database
+        # Without a live episode anchor, raw speaker labels are sanitized away.
+        assert response_many.json()["contributors"] == []
+        # Sanitization does not perform database work per raw transcript speaker.
         assert len(queries_many.captured_queries) == len(queries_few.captured_queries)
 
 

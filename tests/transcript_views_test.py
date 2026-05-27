@@ -956,6 +956,106 @@ class TestGetTranscriptAsJson:
         # Then we get the transcript in the expected format
         assert r.json()["transcripts"] == podlove["transcripts"]
 
+    def test_get_transcript_as_json_sanitizes_public_speaker_labels(self, client, episode):
+        live_contributor = Contributor.objects.create(display_name="Live Host", slug="live-host")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=live_contributor,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        draft_contributor = Contributor.objects.create(display_name="Draft Guest", slug="draft-guest")
+        episode.contributor_assignments.add(
+            EpisodeContributor(contributor=draft_contributor, role=EpisodeContributor.ROLE_GUEST, sort_order=1)
+        )
+        episode.save_revision()
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Live Host", "voice": "Live Host", "text": "Live speaker"},
+                    {"speaker": "Draft Guest", "voice": "Draft Guest", "text": "Draft speaker"},
+                    {"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Unmapped speaker"},
+                ]
+            },
+        )
+
+        url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["transcripts"][0]["speaker"] == "Live Host"
+        assert "speaker" not in data["transcripts"][1]
+        assert "voice" not in data["transcripts"][1]
+        assert "speaker" not in data["transcripts"][2]
+        assert "voice" not in data["transcripts"][2]
+        with transcript.podlove.open("r") as podlove_file:
+            stored_data = json.load(podlove_file)
+        assert stored_data["transcripts"][1]["speaker"] == "Draft Guest"
+
+    def test_public_direct_endpoints_sanitize_draft_only_audio(self, client, episode):
+        episode.live = False
+        episode.save(update_fields=["live"])
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Draft Guest", "voice": "Draft Guest", "text": "Draft speaker"},
+                    {"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Unmapped speaker"},
+                ]
+            },
+            dote={
+                "lines": [
+                    {
+                        "startTime": "00:00:00,000",
+                        "endTime": "00:00:01,000",
+                        "speakerDesignation": "Draft Guest",
+                        "text": "Draft speaker",
+                    },
+                    {
+                        "startTime": "00:00:01,000",
+                        "endTime": "00:00:02,000",
+                        "speakerDesignation": "Speaker 1",
+                        "text": "Unmapped speaker",
+                    },
+                ]
+            },
+            vtt=(
+                "WEBVTT\n\n"
+                "00:00:00.000 --> 00:00:01.000\n"
+                "Speaker 1: Unmapped speaker\n\n"
+                "00:00:01.000 --> 00:00:02.000\n"
+                "<v Draft Guest>Draft speaker</v>\n"
+            ),
+        )
+
+        podlove_response = client.get(reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.id}))
+        podcastindex_response = client.get(reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id}))
+        vtt_response = client.get(reverse("cast:webvtt-transcript", kwargs={"pk": transcript.id}))
+        html_response = client.get(reverse("cast:html-transcript-no-post", kwargs={"transcript_pk": transcript.id}))
+
+        assert podlove_response.status_code == 200
+        assert "speaker" not in podlove_response.json()["transcripts"][0]
+        assert "voice" not in podlove_response.json()["transcripts"][0]
+        assert "speaker" not in podlove_response.json()["transcripts"][1]
+        assert "voice" not in podlove_response.json()["transcripts"][1]
+        assert podcastindex_response.status_code == 200
+        assert [segment["speaker"] for segment in podcastindex_response.json()["segments"]] == ["", ""]
+        assert vtt_response.status_code == 200
+        vtt_content = vtt_response.content.decode("utf-8")
+        assert "Speaker 1" not in vtt_content
+        assert "Draft Guest" not in vtt_content
+        assert "Draft speaker" in vtt_content
+        assert html_response.status_code == 200
+        html_content = html_response.content.decode("utf-8")
+        assert "Draft Guest" not in html_content
+        assert "Speaker 1" not in html_content
+        assert "Draft speaker" in html_content
+        with transcript.podlove.open("r") as podlove_file:
+            stored_data = json.load(podlove_file)
+        assert stored_data["transcripts"][0]["speaker"] == "Draft Guest"
+
 
 class TestGetTranscriptAsPodcastIndexJson:
     pytestmark = pytest.mark.django_db
@@ -1017,11 +1117,69 @@ class TestGetTranscriptAsPodcastIndexJson:
                 {
                     "startTime": 0.62,
                     "endTime": 5.16,
-                    "speaker": "speaker",
+                    "speaker": "",
                     "body": "Ja, hallo liebe Hörerinnen und Hörer. Willkommen beim Python-Podcast der 5ten Episode.",
                 },
             ],
         }
+
+    def test_get_transcript_as_json_missing_dote_file_returns_empty_json(self, client):
+        transcript = create_transcript(dote={"lines": []})
+        transcript.dote.storage.delete(transcript.dote.name)
+
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert response.json() == {}
+
+    def test_get_transcript_as_json_sanitizes_public_speaker_labels(self, client, episode):
+        live_contributor = Contributor.objects.create(display_name="Live Host", slug="live-host")
+        EpisodeContributor.objects.create(
+            episode=episode, contributor=live_contributor, role=EpisodeContributor.ROLE_HOST
+        )
+        draft_contributor = Contributor.objects.create(display_name="Draft Guest", slug="draft-guest")
+        episode.contributor_assignments.add(
+            EpisodeContributor(contributor=draft_contributor, role=EpisodeContributor.ROLE_GUEST)
+        )
+        episode.save_revision()
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            dote={
+                "lines": [
+                    {
+                        "startTime": "00:00:00,000",
+                        "endTime": "00:00:01,000",
+                        "speakerDesignation": "Live Host",
+                        "text": "Live speaker",
+                    },
+                    {
+                        "startTime": "00:00:01,000",
+                        "endTime": "00:00:02,000",
+                        "speakerDesignation": "Draft Guest",
+                        "text": "Draft speaker",
+                    },
+                    {
+                        "startTime": "00:00:02,000",
+                        "endTime": "00:00:03,000",
+                        "speakerDesignation": "Speaker 1",
+                        "text": "Unmapped speaker",
+                    },
+                ]
+            },
+        )
+
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [segment["speaker"] for segment in data["segments"]] == ["Live Host", "", ""]
+        assert "Draft Guest" not in response.content.decode("utf-8")
+        assert "Speaker 1" not in response.content.decode("utf-8")
+        with transcript.dote.open("r") as dote_file:
+            stored_data = json.load(dote_file)
+        assert stored_data["lines"][1]["speakerDesignation"] == "Draft Guest"
 
 
 class TestGetTranscriptAsWebVtt:
@@ -1057,6 +1215,33 @@ class TestGetTranscriptAsWebVtt:
         # Then we get the transcript in the expected format
         content = r.content.decode("utf-8")
         assert content == vtt
+
+    def test_get_transcript_as_vtt_sanitizes_generated_speaker_labels(self, client, episode):
+        live_contributor = Contributor.objects.create(display_name="Live Host", slug="live-host")
+        EpisodeContributor.objects.create(
+            episode=episode, contributor=live_contributor, role=EpisodeContributor.ROLE_HOST
+        )
+        vtt = (
+            "WEBVTT\n\n"
+            "00:00:00.000 --> 00:00:01.000\n"
+            "Live Host: Hallo\n\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "Speaker 1: Unmapped speaker\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "<v Speaker 2>Voice span speaker</v>\n"
+        )
+        transcript = create_transcript(audio=episode.podcast_audio, vtt=vtt)
+
+        url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "Live Host: Hallo" in content
+        assert "Speaker 1" not in content
+        assert "Unmapped speaker" in content
+        assert "Speaker 2" not in content
+        assert "Voice span speaker" in content
 
 
 @pytest.fixture
@@ -1180,6 +1365,8 @@ class TestGetTranscriptAsHtml:
         )
 
     def test_get_transcript_as_html_canonical_success(self, client, episode):
+        contributor = Contributor.objects.create(display_name="Host", slug="host")
+        EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
         podlove = {
             "transcripts": [
                 {
@@ -1201,6 +1388,39 @@ class TestGetTranscriptAsHtml:
         assert "Host" in content
         assert episode.title in content
         assert episode.get_url() in content
+
+    def test_get_transcript_as_html_canonical_sanitizes_public_speaker_labels(self, client, episode):
+        live_contributor = Contributor.objects.create(display_name="Live Host", slug="live-host")
+        EpisodeContributor.objects.create(
+            episode=episode, contributor=live_contributor, role=EpisodeContributor.ROLE_HOST
+        )
+        draft_contributor = Contributor.objects.create(display_name="Draft Guest", slug="draft-guest")
+        episode.contributor_assignments.add(
+            EpisodeContributor(contributor=draft_contributor, role=EpisodeContributor.ROLE_GUEST)
+        )
+        episode.save_revision()
+        create_transcript(
+            audio=episode.podcast_audio,
+            podlove={
+                "transcripts": [
+                    {"start": "00:00:00.000", "speaker": "Live Host", "text": "Live speaker"},
+                    {"start": "00:00:01.000", "speaker": "Draft Guest", "text": "Draft speaker"},
+                    {"start": "00:00:02.000", "speaker": "Speaker 1", "text": "Unmapped speaker"},
+                ]
+            },
+        )
+        url = reverse("cast:episode-transcript", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "Live Host" in content
+        assert "Live speaker" in content
+        assert "Draft Guest" not in content
+        assert "Draft speaker" in content
+        assert "Speaker 1" not in content
+        assert "Unmapped speaker" in content
 
     def test_get_transcript_as_html_canonical_without_transcript(self, client, episode):
         url = reverse("cast:episode-transcript", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})

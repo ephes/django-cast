@@ -888,6 +888,7 @@ class Episode(Post):
         if (transcript := self.get_transcript_or_none(repository)) is not None:
             if transcript.vtt is not None:
                 relative_url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk})
+                relative_url = f"{relative_url}?episode_id={self.pk}"
                 return request.build_absolute_uri(relative_url)
         return None
 
@@ -912,6 +913,7 @@ class Episode(Post):
         if (transcript := self.get_transcript_or_none(repository)) is not None:
             if transcript.dote is not None:
                 relative_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.pk})
+                relative_url = f"{relative_url}?episode_id={self.pk}"
                 return request.build_absolute_uri(relative_url)
         return None
 

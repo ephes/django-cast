@@ -24,7 +24,15 @@ from ..models import (
     TranscriptSpeakerSample,
     get_template_base_dir,
 )
+from ..models.transcript import convert_dote_to_podcastindex_transcript
 from ..site_lookup import get_site_specific_page_or_404
+from ..transcript_sanitization import (
+    public_episode_from_request,
+    sanitize_dote_data,
+    sanitize_podlove_data,
+    sanitize_webvtt_content,
+    strict_public_speaker_labels_for_transcript,
+)
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
@@ -73,6 +81,7 @@ def _render_transcript_html(
         data = transcript.podlove_data
     except json.JSONDecodeError:
         return HttpResponse("Invalid JSON format in podlove file", status=400)
+    data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
     if episode is not None:
         context = episode.get_context(request)
         context["episode"] = episode
@@ -405,7 +414,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     )
 
 
-def podlove_transcript_json(_request: HttpRequest, pk) -> HttpResponse:
+def podlove_transcript_json(request: HttpRequest, pk) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     if transcript.podlove:
@@ -415,34 +424,50 @@ def podlove_transcript_json(_request: HttpRequest, pk) -> HttpResponse:
                 data = json.load(file)  # assumes the file content is JSON
             except json.JSONDecodeError:
                 return HttpResponse("Invalid JSON format in podlove file", status=400)
+        episode = public_episode_from_request(request, transcript=transcript)
+        data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
         return JsonResponse(data)
     return HttpResponse("Podlove file not available", status=404)
 
 
-def podcastindex_transcript_json(_request: HttpRequest, pk: int) -> HttpResponse:
+def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podcastindex transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     if not transcript.dote:
         return HttpResponse("podcastindex JSON file not available", status=404)
     try:
-        return JsonResponse(transcript.podcastindex_data)
+        episode = public_episode_from_request(request, transcript=transcript)
+        dote_data = transcript.dote_data
+        if not dote_data:
+            return JsonResponse(dote_data)
+        dote_data = sanitize_dote_data(
+            dote_data,
+            strict_public_speaker_labels_for_transcript(transcript, episode=episode),
+        )
+        return JsonResponse(convert_dote_to_podcastindex_transcript(dote_data))
     except json.JSONDecodeError:
         return HttpResponse("Invalid JSON format in dote file", status=400)
 
 
-def webvtt_transcript(_request: HttpRequest, pk: int) -> HttpResponse:
+def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the transcript content as WebVTT because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     if transcript.vtt:
         # Open the file and return its contents as WebVTT
         with transcript.vtt.open("r") as file:
-            return HttpResponse(file.read(), content_type="text/vtt")
+            content = file.read()
+        episode = public_episode_from_request(request, transcript=transcript)
+        content = sanitize_webvtt_content(
+            content,
+            strict_public_speaker_labels_for_transcript(transcript, episode=episode),
+        )
+        return HttpResponse(content, content_type="text/vtt")
     return HttpResponse("WebVTT file not available", status=404)
 
 
 def episode_transcript(request: HtmxHttpRequest, blog_slug: str, episode_slug: str) -> HttpResponse:
     blog = get_site_specific_page_or_404(Blog, request, slug=blog_slug)
-    episode = get_object_or_404(Episode.objects.descendant_of(blog), slug=episode_slug)
+    episode = get_object_or_404(Episode.objects.descendant_of(blog), slug=episode_slug, live=True)
     transcript = episode.get_transcript_or_none()
     if transcript is None:
         raise Http404("Transcript not found")

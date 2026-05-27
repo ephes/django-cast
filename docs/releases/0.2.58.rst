@@ -27,3 +27,10 @@
   speakers. Episode-level generation uses that episode's contributors;
   audio-level generation only sends this hint when the audio belongs to exactly
   one episode.
+- Public transcript and Podlove player output now sanitize speaker metadata
+  against live episode contributors. Regenerated transcript text can still
+  appear immediately for shared audio, but draft-only contributor names and
+  unmapped diarization labels are hidden from player JSON, transcript JSON,
+  HTML transcripts, feed-linked PodcastIndex output, and applicable WebVTT
+  output. Public transcript endpoints expose no speaker labels when the
+  transcript is not connected to a live episode yet.
