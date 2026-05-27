@@ -124,6 +124,45 @@ Reliable automatic mapping would need voice references or enrollment data for kn
 consent, storage rules, and a Voxhelm API that can compare diarized clusters against enrolled voices. That is a
 different feature from plain diarization and should not block generic speaker labels.
 
+If this becomes active work, model the django-cast side as private contributor voice reference material, not as public
+contributor profile data. The reference should be a related object owned by `Contributor`, for example:
+
+```python
+class ContributorVoiceReference(models.Model):
+    contributor = models.ForeignKey(Contributor, related_name="voice_references", on_delete=models.CASCADE)
+    source_audio = models.ForeignKey(Audio, null=True, blank=True, on_delete=models.SET_NULL)
+    source_episode = models.ForeignKey(Episode, null=True, blank=True, on_delete=models.SET_NULL)
+    clip = models.FileField(blank=True)
+    start_seconds = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    end_seconds = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    status = models.CharField(max_length=32, default="pending")
+    notes = models.TextField(blank=True)
+```
+
+The exact storage fields can change, but the important constraints are:
+
+- voice references are private admin/editor data and must not appear in public contributor APIs, feeds, repository
+  exports, or theme context by default
+- one contributor can have multiple reference clips
+- references can come from any episode, not only the episode being transcribed
+- same-episode references are usually strongest because microphone, room, language, vocal effort, and mastering chain
+  match the target audio
+- cross-episode references are still valid and are likely the practical reusable production model for recurring
+  contributors, but they need validation against real podcast material before automatic application is trusted
+- clean solo speech is more valuable than long noisy clips; prefer reviewed ranges or uploaded clips over arbitrary
+  whole-episode audio
+- newly created references should start as pending and require explicit editor review before they are sent to Voxhelm
+  for automatic speaker identification
+- Voxhelm should own embedding extraction and model-versioned embedding/centroid caching where possible, so
+  django-cast does not persist model-specific voiceprint blobs that become stale when Voxhelm changes embedding models
+- when Voxhelm changes embedding models, it should re-extract centroids from django-cast's stored references rather
+  than requiring django-cast to migrate cached embedding blobs
+
+The django-cast to Voxhelm contract should send contributor ids plus private reference clip URLs/artifacts or source
+ranges. Voxhelm should return speaker suggestions with confidence, margin, candidates, and `needs_review` metadata.
+django-cast should treat these as mapping suggestions unless the site explicitly opts into conservative automatic
+application.
+
 ### Option D: Rewrite Files Versus Apply Mapping At Read Time
 
 Prefer a non-destructive read-time mapping layer.
@@ -326,6 +365,11 @@ mapping, one-off display names, and persistent mapping records remain undecided.
   from the editor, or deleted?
 - Should a later VTT speaker-label format be generated, and which clients consume it correctly?
 - How should overlapping speech, merged clusters, or split clusters be represented in the editor?
+- What consent, retention, and access rules should apply to private contributor voice reference clips?
+- Should Voxhelm receive signed private clip URLs, copied job artifacts, source ranges into existing private media, or
+  precomputed embeddings?
+- How well do cross-episode contributor references perform compared with same-episode references for `python-podcast`
+  regulars?
 
 ## Acceptance Criteria
 
