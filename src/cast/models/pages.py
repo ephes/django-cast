@@ -665,7 +665,7 @@ class Post(Page):
         return super().serve(request, *args, **kwargs)
 
     def get_preview_context(self, request, mode_name):
-        return self.get_context(request, render_detail=True)
+        return self.get_context(request, render_detail=True, is_preview=True)
 
     def serve_preview(self, request, mode_name, *args, **kwargs):
         # sync media ids before preview, because otherwise the repository
@@ -801,18 +801,21 @@ class Episode(Post):
             podcast = self.podcast
         cover_image_context = self.get_cover_image_context(context, podcast)
         context.update(cover_image_context)
+        include_public_transcript_url = (
+            not kwargs.get("is_preview") and not context.get("render_for_feed") and self.has_transcript
+        )
         if hasattr(request, "build_absolute_uri"):
             blog_slug = podcast.slug if podcast is not None else self.blog.slug
             player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": blog_slug})
             player_url = request.build_absolute_uri(player_url)
             context["player_url"] = player_url
-            if not context.get("render_for_feed") and self.has_transcript:
+            if include_public_transcript_url:
                 transcript_url = reverse(
                     "cast:episode-transcript",
                     kwargs={"episode_slug": self.slug, "blog_slug": blog_slug},
                 )
                 context["episode_transcript_url"] = request.build_absolute_uri(transcript_url)
-        elif not context.get("render_for_feed") and self.has_transcript:
+        elif include_public_transcript_url:
             blog_slug = podcast.slug if podcast is not None else self.blog.slug
             context["episode_transcript_url"] = reverse(
                 "cast:episode-transcript",

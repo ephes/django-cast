@@ -42,3 +42,7 @@
   HTML transcripts, feed-linked PodcastIndex output, and applicable WebVTT
   output. Public transcript endpoints expose no speaker labels when the
   transcript is not connected to a live episode yet.
+- PodcastIndex transcript JSON now returns ``404`` when a transcript points to
+  a missing DOTe file instead of returning an empty ``200`` response. Wagtail
+  episode previews also omit live-only public transcript links, so draft
+  previews do not expose transcript URLs that would 404.

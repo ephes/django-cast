@@ -1258,15 +1258,35 @@ class TestGetTranscriptAsPodcastIndexJson:
             ],
         }
 
-    def test_get_transcript_as_json_missing_dote_file_returns_empty_json(self, client):
+    def test_get_transcript_as_json_empty_dote_lines_returns_empty_segments(self, client):
         transcript = create_transcript(dote={"lines": []})
-        transcript.dote.storage.delete(transcript.dote.name)
+
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert response.json() == {"version": "1.0", "segments": []}
+
+    def test_get_transcript_as_json_empty_dote_object_returns_empty_json(self, client):
+        transcript = create_transcript()
+        transcript.dote.save("empty-dote.json", ContentFile("{}"))
+        transcript.save()
 
         url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
         response = client.get(url)
 
         assert response.status_code == 200
         assert response.json() == {}
+
+    def test_get_transcript_as_json_missing_dote_file_returns_404(self, client):
+        transcript = create_transcript(dote={"lines": []})
+        transcript.dote.storage.delete(transcript.dote.name)
+
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        response = client.get(url)
+
+        assert response.status_code == 404
+        assert response.content.decode("utf-8") == "podcastindex JSON file missing"
 
     def test_get_transcript_as_json_sanitizes_public_speaker_labels(self, client, episode):
         live_contributor = Contributor.objects.create(display_name="Live Host", slug="live-host")

@@ -13,13 +13,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
-- [ ] Tighten transcript public/admin boundary follow-ups
-  - Scope: decide whether a missing DOTE file with a populated transcript field should return 404 instead of the
-    historical ``200 {}``, and manually verify the Wagtail draft episode transcript preview path after public
-    transcript URLs became live-only.
-  - Done when: the missing-file behavior is either changed and tested or explicitly retained, the draft-preview
-    behavior is documented or covered by a focused test, and release notes are updated if public behavior changes.
-
 - [ ] Harden modelsearch follow-ups
   - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)
   - Scope: decide whether the current normalization-only guard needs a database-exception backstop, and file

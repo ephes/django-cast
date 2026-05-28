@@ -437,7 +437,8 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
         return HttpResponse("podcastindex JSON file not available", status=404)
     try:
         episode = public_episode_from_request(request, transcript=transcript)
-        dote_data = transcript.dote_data
+        with transcript.dote.open("r") as file:
+            dote_data = json.load(file)
         if not dote_data:
             return JsonResponse(dote_data)
         dote_data = sanitize_dote_data(
@@ -445,6 +446,8 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
             strict_public_speaker_labels_for_transcript(transcript, episode=episode),
         )
         return JsonResponse(convert_dote_to_podcastindex_transcript(dote_data))
+    except (FileNotFoundError, OSError):
+        return HttpResponse("podcastindex JSON file missing", status=404)
     except json.JSONDecodeError:
         return HttpResponse("Invalid JSON format in dote file", status=400)
 

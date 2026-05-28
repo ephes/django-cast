@@ -1156,6 +1156,21 @@ class TestEpisodeModel:
         )
         assert context["episode_transcript_url"] == expected
 
+    def test_unpublished_episode_preview_omits_live_only_transcript_url(self, rf, client, episode):
+        create_transcript(audio=episode.podcast_audio, podlove={"transcripts": [{"start": "00:00:00.000"}]})
+        episode.unpublish()
+        episode.refresh_from_db()
+
+        context = episode.get_preview_context(rf.get("/"), "")
+
+        assert context["render_detail"] is True
+        assert "episode_transcript_url" not in context
+        url = reverse(
+            "cast:episode-transcript",
+            kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug},
+        )
+        assert client.get(url).status_code == 404
+
     def test_get_vtt_transcript_url_no_transcript(self, rf, mocker):
         episode = Episode(id=1)
         request = rf.get("/")
