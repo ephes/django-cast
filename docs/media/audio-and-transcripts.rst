@@ -158,7 +158,8 @@ When generated transcripts include diarization speaker labels, the Wagtail
 transcript edit form lets editors map those labels to episode contributors.
 The mapping form shows short transcript samples for each speaker and, when the
 audio file is playable from the admin, timestamp controls that seek the audio
-preview to the sample position.
+preview to the sample position. Applying a mapping rewrites the stored Podlove
+and DOTe speaker fields and matching WebVTT voice labels.
 
 Generated transcript text is stored with the shared audio file and can appear
 on already published episodes as soon as generation completes. Public speaker

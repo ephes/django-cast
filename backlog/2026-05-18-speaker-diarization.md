@@ -19,7 +19,7 @@ When enabled, Voxhelm emits generic speaker labels:
 - verbose JSON segment `speaker`: `Speaker 1`
 - DOTe line `speakerDesignation`: `Speaker 1`
 - Podlove transcript `speaker` / `voice`: `Speaker 1`
-- WebVTT remains unchanged for now.
+- WebVTT voice labels such as `<v Speaker 1>...` may appear when the returned VTT carries speaker spans.
 
 This was smoke-tested locally against a short `pp_67` clip. The Voxhelm job succeeded and returned `Speaker 1` /
 `Speaker 2` labels in JSON, DOTe, and Podlove.
@@ -64,8 +64,8 @@ The first usable django-cast diarization path has landed for `0.2.57`:
 - django-cast still sends no contributor identities to Voxhelm.
 - Generated Podlove, DOTe, and WebVTT artifacts are saved from Voxhelm as returned.
 - The transcript edit view extracts Podlove/DOTe speaker labels and lets editors map them to episode contributors.
-- The current mapping UI rewrites Podlove `speaker`/`voice` and DOTe `speakerDesignation` fields in place, while
-  leaving WebVTT unchanged.
+- The current mapping UI rewrites Podlove `speaker`/`voice`, DOTe `speakerDesignation`, and matching WebVTT voice
+  labels in place.
 - Mapping choices include persisted and draft episode contributor assignments.
 - `python-podcast` is pinned to a django-cast `develop` commit with these changes and has deployment notes plus a
   longer `CAST_VOXHELM_POLL_TIMEOUT` for full-episode diarization jobs.
@@ -186,7 +186,8 @@ keeps remapping cheap.
 
 Materializing mapped artifacts is a possible later optimization if static file consumers need it, but then django-cast
 should either keep separate raw files or be able to regenerate mapped files from raw artifacts plus the mapping model.
-The first mapping slice can leave WebVTT unchanged.
+The landed destructive v1 also rewrites matching WebVTT voice labels; a future non-destructive layer would need to
+apply the same mapping to VTT output or materialized VTT artifacts.
 
 ## Proposed Data Model
 
@@ -334,12 +335,12 @@ remain unbuilt, pending the persistence decision.
 1. Add a Wagtail admin mapping editor.
 2. Apply mappings in Podlove JSON, the Podlove player API, HTML transcript views, and DOTe-derived PodcastIndex JSON at
    read time.
-3. Keep WebVTT unchanged unless a separate VTT speaker-label design is accepted.
+3. Apply mappings to WebVTT voice labels as well.
 4. Add tests for mapped Podlove output, mapped PodcastIndex output, unmapped fallback behavior, and hidden/deleted
    contributor behavior.
 
-Status: partially landed as a contributor-only Wagtail form that rewrites Podlove/DOTe files in place. Read-time
-mapping, one-off display names, and persistent mapping records remain undecided.
+Status: partially landed as a contributor-only Wagtail form that rewrites Podlove/DOTe/WebVTT files in place.
+Read-time mapping, one-off display names, and persistent mapping records remain undecided.
 
 ## python-podcast Integration Notes
 

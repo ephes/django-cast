@@ -393,8 +393,17 @@ class TestTranscriptSpeakerMapping:
         assert not Transcript._sample_text_is_useful("mhm mhm mhm mhm", min_chars=1, min_words=4)
         assert Transcript._sample_text_is_useful("你好 你好 你好 你好", min_chars=1, min_words=4)
 
-    def test_rewrite_speaker_labels_updates_podlove_and_dote_but_not_vtt(self, audio):
-        vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nSpeaker 1: unchanged"
+    def test_rewrite_speaker_labels_updates_podlove_dote_and_vtt_voice_labels(self, audio):
+        vtt = (
+            "WEBVTT\r\n\r\n"
+            "00:00:00.000 --> 00:00:01.000\r\n"
+            "<v Speaker 1>Hello from speaker one</v>\r\n\r\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "<v Speaker 1>Opening-only voice tag\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "<v Speaker 3>Unmapped voice</v>\n"
+            "Speaker 1 remains cue text\n"
+        )
         transcript = create_transcript(
             audio=audio,
             podlove={
@@ -420,24 +429,59 @@ class TestTranscriptSpeakerMapping:
             podlove_data = json.load(podlove_file)
         with transcript.dote.open("r") as dote_file:
             dote_data = json.load(dote_file)
-        with transcript.vtt.open("r") as vtt_file:
-            vtt_content = vtt_file.read()
+        with transcript.vtt.open("rb") as vtt_file:
+            vtt_content = vtt_file.read().decode("utf-8")
         assert podlove_data["transcripts"][0]["speaker"] == "Alice"
         assert podlove_data["transcripts"][0]["voice"] == "Alice"
         assert podlove_data["transcripts"][1]["speaker"] == "Bob"
         assert podlove_data["transcripts"][1]["voice"] == "Other"
         assert dote_data["lines"][0]["speakerDesignation"] == "Bob"
-        assert vtt_content == vtt
+        assert vtt_content == (
+            "WEBVTT\r\n\r\n"
+            "00:00:00.000 --> 00:00:01.000\r\n"
+            "<v Alice>Hello from speaker one</v>\r\n\r\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "<v Alice>Opening-only voice tag\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "<v Speaker 3>Unmapped voice</v>\n"
+            "Speaker 1 remains cue text\n"
+        )
+
+    def test_rewrite_speaker_labels_saves_when_only_vtt_changes(self, audio):
+        transcript = create_transcript(
+            audio=audio,
+            vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>Only WebVTT\n",
+        )
+        original_vtt_name = transcript.vtt.name
+
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice"})
+
+        transcript.refresh_from_db()
+        assert transcript.vtt.name == original_vtt_name
+        with transcript.vtt.open("r") as vtt_file:
+            assert vtt_file.read() == "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Alice>Only WebVTT\n"
 
     def test_rewrite_speaker_labels_returns_false_without_changes(self, audio):
         transcript = create_transcript(
             audio=audio,
             podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+            vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>Hello\n",
         )
 
         assert not transcript.rewrite_speaker_labels({})
         assert not transcript.rewrite_speaker_labels({"Speaker 1": "Speaker 1"})
         assert not transcript.rewrite_speaker_labels({"Speaker 2": "Alice"})
+        with transcript.vtt.open("r") as vtt_file:
+            assert vtt_file.read() == "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>Hello\n"
+
+    def test_rewrite_speaker_labels_ignores_missing_vtt_file(self, audio):
+        transcript = create_transcript(
+            audio=audio,
+            vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>Hello\n",
+        )
+        transcript.vtt.storage.delete(transcript.vtt.name)
+
+        assert not transcript.rewrite_speaker_labels({"Speaker 1": "Alice"})
 
     def test_save_json_file_handles_missing_existing_file(self, audio):
         transcript = create_transcript(audio=audio, podlove={"transcripts": []})

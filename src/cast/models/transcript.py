@@ -35,6 +35,8 @@ LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
         "yes",
     }
 )
+WEBVTT_TIMING_SEPARATOR = "-->"
+WEBVTT_VOICE_OPENING_RE = re.compile(r"<v(?:\s+([^>]+))?>")
 
 
 @dataclass(frozen=True)
@@ -186,15 +188,18 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         )
 
     def rewrite_speaker_labels(self, mapping: Mapping[str, str]) -> bool:
-        """Rewrite speaker labels in Podlove and DOTe transcript files.
+        """Rewrite speaker labels in stored transcript artifacts.
 
-        The mapping is destructive: matching Podlove ``speaker``/``voice`` and
-        DOTe ``speakerDesignation`` values are replaced in-place. WebVTT files
-        are intentionally left unchanged because they do not carry speaker data.
+        The mapping is destructive: matching Podlove ``speaker``/``voice``,
+        DOTe ``speakerDesignation``, and WebVTT voice-label values are replaced
+        in-place.
         """
-        cleaned_mapping = {
-            source: target for source, target in mapping.items() if source and target and source != target
-        }
+        cleaned_mapping: dict[str, str] = {}
+        for source, target in mapping.items():
+            source_label = self._clean_speaker_label(source)
+            target_label = self._clean_speaker_label(target)
+            if source_label and target_label and source_label != target_label:
+                cleaned_mapping[source_label] = target_label
         if not cleaned_mapping:
             return False
 
@@ -208,6 +213,13 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         if self._rewrite_dote_speakers(dote_data, cleaned_mapping):
             self._save_json_file("dote", dote_data)
             changed_fields.append("dote")
+
+        if self.vtt:
+            vtt_content = self._load_text_file("vtt")
+            rewritten_vtt_content, vtt_changed = self._rewrite_webvtt_speakers(vtt_content, cleaned_mapping)
+            if vtt_changed:
+                self._save_text_file("vtt", rewritten_vtt_content)
+                changed_fields.append("vtt")
 
         if not changed_fields:
             return False
@@ -228,12 +240,26 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         return data
 
     def _save_json_file(self, field_name: str, data: dict[str, Any]) -> None:
+        content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        self._save_file_content(field_name, content)
+
+    def _load_text_file(self, field_name: str) -> str:
+        file_field = getattr(self, field_name)
+        try:
+            with file_field.open("rb") as file:
+                return file.read().decode("utf-8")
+        except (FileNotFoundError, OSError, UnicodeDecodeError):
+            return ""
+
+    def _save_text_file(self, field_name: str, content: str) -> None:
+        self._save_file_content(field_name, content.encode("utf-8"))
+
+    def _save_file_content(self, field_name: str, content: bytes) -> None:
         file_field = getattr(self, field_name)
         file_name = file_field.name
         # Keep the file path stable for existing URLs; rewriting is intentionally destructive.
         if file_field.storage.exists(file_name):
             file_field.storage.delete(file_name)
-        content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         file_field.name = file_field.storage.save(file_name, ContentFile(content))
 
     def _get_podlove_speaker_sample_candidates(
@@ -506,6 +532,39 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 line["speakerDesignation"] = mapping[label]
                 changed = True
         return changed
+
+    @classmethod
+    def _rewrite_webvtt_speakers(cls, content: str, mapping: Mapping[str, str]) -> tuple[str, bool]:
+        rewritten_lines = []
+        changed = False
+        in_cue_payload = False
+        for line in content.splitlines(keepends=True):
+            stripped = line.strip()
+            if not stripped:
+                in_cue_payload = False
+                rewritten_lines.append(line)
+            elif WEBVTT_TIMING_SEPARATOR in line:
+                in_cue_payload = True
+                rewritten_lines.append(line)
+            elif in_cue_payload:
+                line, line_changed = cls._rewrite_webvtt_payload_line(line, mapping)
+                changed = changed or line_changed
+                rewritten_lines.append(line)
+            else:
+                rewritten_lines.append(line)
+        return "".join(rewritten_lines), changed
+
+    @classmethod
+    def _rewrite_webvtt_payload_line(cls, line: str, mapping: Mapping[str, str]) -> tuple[str, bool]:
+        def replace_voice_opening(match: re.Match[str]) -> str:
+            label = cls._clean_speaker_label(match.group(1))
+            target_label = mapping.get(label)
+            if target_label is None:
+                return match.group(0)
+            return f"<v {target_label}>"
+
+        rewritten_line = WEBVTT_VOICE_OPENING_RE.sub(replace_voice_opening, line)
+        return rewritten_line, rewritten_line != line
 
 
 def time_to_seconds(time_str) -> float:

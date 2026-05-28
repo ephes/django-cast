@@ -13,6 +13,9 @@
 - Added transcript samples and timestamp seek controls to the Wagtail
   transcript speaker-mapping form so editors can identify diarized speakers
   before assigning them to episode contributors.
+- Transcript speaker mapping now also rewrites matching WebVTT voice labels,
+  so feed-linked WebVTT transcripts stay in sync with mapped Podlove and DOTe
+  speaker fields.
 - Fixed episode publishing from the Wagtail editor by no longer rendering a
   hidden ``action-publish`` field that could shadow Wagtail's publish button.
 - Fixed episode contributor editing so links for a contributor created after
