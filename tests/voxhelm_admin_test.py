@@ -1,4 +1,5 @@
 from urllib.parse import urlencode
+from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -7,9 +8,9 @@ from django.contrib.messages import get_messages
 from django.test import RequestFactory
 from django.urls import reverse
 
-from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptGeneration, VoxhelmSettings
+from cast.models import Audio, Contributor, EpisodeContributor, Transcript, TranscriptGeneration, VoxhelmSettings
 from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
-from cast.voxhelm import VoxhelmError, build_audio_task_ref
+from cast.voxhelm import TranscriptSubmission, VoxhelmError, build_audio_task_ref
 from cast.views import voxhelm as voxhelm_views
 
 
@@ -283,6 +284,74 @@ def test_generate_audio_transcript_from_wagtail_admin(admin_client, episode, moc
     assert "Save" in content
     assert "Transcript status:" in content
     assert "Queued" in content
+
+
+@pytest.mark.django_db
+def test_generate_audio_transcript_honors_disabled_audio_mode(admin_client, episode, settings, mocker):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = True
+    audio = episode.podcast_audio
+    assert audio is not None
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.DISABLED
+    audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+    task_ref = build_audio_task_ref(audio.pk)
+    submit = mocker.patch(
+        "cast.voxhelm.VoxhelmTranscriptService.submit_for_audio",
+        return_value=TranscriptSubmission(
+            job_id="job-disabled-admin",
+            source_url="https://media.example.com/audio.m4a",
+            task_ref=task_ref,
+            job_payload={"id": "job-disabled-admin", "state": "queued"},
+        ),
+    )
+    enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-disabled-admin"))
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+
+    assert response.status_code == 200
+    generation = TranscriptGeneration.objects.get(audio=audio)
+    assert generation.task_ref == task_ref
+    submit.assert_called_once_with(audio, task_ref=task_ref, episode=None)
+
+
+@pytest.mark.django_db
+def test_generate_episode_transcript_honors_enabled_audio_mode_and_draft_speaker_count(
+    admin_client, episode, settings, mocker
+):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = False
+    audio = episode.podcast_audio
+    assert audio is not None
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.ENABLED
+    audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+    first = Contributor.objects.create(display_name="Admin First", slug="admin-enabled-first")
+    second = Contributor.objects.create(display_name="Admin Second", slug="admin-enabled-second")
+    episode.contributor_assignments.add(EpisodeContributor(contributor=first, role=EpisodeContributor.ROLE_HOST))
+    episode.contributor_assignments.add(EpisodeContributor(contributor=second, role=EpisodeContributor.ROLE_GUEST))
+    episode.save_revision()
+    task_ref = build_audio_task_ref(audio.pk, diarization_enabled=True, diarization_speaker_count=2)
+    submit = mocker.patch(
+        "cast.voxhelm.VoxhelmTranscriptService.submit_for_audio",
+        return_value=TranscriptSubmission(
+            job_id="job-enabled-admin",
+            source_url="https://media.example.com/audio.m4a",
+            task_ref=task_ref,
+            job_payload={"id": "job-enabled-admin", "state": "queued"},
+        ),
+    )
+    enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-enabled-admin"))
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+
+    assert response.status_code == 200
+    generation = TranscriptGeneration.objects.get(audio=audio)
+    assert generation.task_ref == task_ref
+    assert submit.call_args.kwargs["task_ref"] == task_ref
+    assert submit.call_args.kwargs["episode"].pk == episode.pk
 
 
 @pytest.mark.django_db

@@ -98,6 +98,14 @@ class TestAudioForm:
         form = AudioForm({})
         assert form.is_valid()
         assert form.cleaned_data["chaptermarks"] == []
+        assert form.cleaned_data["transcript_diarization_mode"] == Audio.TranscriptDiarizationMode.INHERIT
+
+    def test_transcript_diarization_mode_field_is_editable(self):
+        form = AudioForm({"transcript_diarization_mode": Audio.TranscriptDiarizationMode.DISABLED})
+
+        assert form.is_valid()
+        assert form.cleaned_data["transcript_diarization_mode"] == Audio.TranscriptDiarizationMode.DISABLED
+        assert "shared by multiple episodes" in form.fields["transcript_diarization_mode"].help_text
 
     def test_chaptermarks_empty(self):
         form = AudioForm({"chaptermarks": ""})

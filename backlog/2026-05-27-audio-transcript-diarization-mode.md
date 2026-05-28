@@ -1,5 +1,12 @@
 # Audio Transcript Diarization Mode
 
+Status: implemented for the 0.2.58 development cycle. The shipped slice adds
+``Audio.transcript_diarization_mode``, makes Voxhelm generation resolve the
+audio-level mode before building payloads and task references, keeps episode
+context for ``generate_transcripts --episode-id``, and suppresses public speaker
+labels at read time for disabled audio without rewriting stored transcript
+artifacts.
+
 ## Context
 
 Voxhelm can diarize mastered/mixed audio, but that result is inherently weaker than diarization derived from separate

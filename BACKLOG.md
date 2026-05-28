@@ -13,17 +13,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
-- [ ] Add audio-level diarization mode for transcript generation
-  - Notes: [backlog/2026-05-27-audio-transcript-diarization-mode.md](backlog/2026-05-27-audio-transcript-diarization-mode.md)
-  - Scope: add a persistent ``Audio.transcript_diarization_mode`` setting that controls whether Voxhelm speaker
-    diarization is inherited from site/global settings, explicitly enabled, or explicitly disabled for that audio.
-    Disabled mode should suppress public speaker labels without rewriting stored transcript artifacts. This should
-    not disable transcript segmentation/timestamps, only speaker assignment from mixed mastered audio.
-  - Done when: audio admin generation, episode admin generation, and ``generate_transcripts`` honor the transcript
-    diarization mode; disabled mode sends no diarization payload or speaker-count hint; help text makes clear that
-    regeneration updates the shared transcript for every episode using that audio; and docs/release notes/tests cover
-    the behavior.
-
 - [ ] Tighten transcript public/admin boundary follow-ups
   - Scope: decide whether a missing DOTE file with a populated transcript field should return 404 instead of the
     historical ``200 {}``, and manually verify the Wagtail draft episode transcript preview path after public

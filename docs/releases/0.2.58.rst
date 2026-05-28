@@ -30,6 +30,11 @@
   speakers. Episode-level generation uses that episode's contributors;
   audio-level generation only sends this hint when the audio belongs to exactly
   one episode.
+- Audio objects now have a transcript diarization mode with ``inherit``,
+  ``enabled``, and ``disabled`` states. Disabled mode submits future Voxhelm
+  jobs without diarization or speaker-count hints and hides stored speaker
+  labels from public transcript output without rewriting the stored transcript
+  files.
 - Public transcript and Podlove player output now sanitize speaker metadata
   against live episode contributors. Regenerated transcript text can still
   appear immediately for shared audio, but draft-only contributor names and

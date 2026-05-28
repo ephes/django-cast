@@ -156,6 +156,13 @@ class AudioForm(BaseCollectionMemberForm):
             "opus": forms.ClearableFileInput,
         }
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["transcript_diarization_mode"].required = False
+
+    def clean_transcript_diarization_mode(self) -> str:
+        return self.cleaned_data.get("transcript_diarization_mode") or Audio.TranscriptDiarizationMode.INHERIT
+
     def get_chaptermarks_from_field_or_files(self, audio: Audio) -> list[ChapterMark]:
         chaptermarks = self.cleaned_data["chaptermarks"]
         if len(chaptermarks) == 0:

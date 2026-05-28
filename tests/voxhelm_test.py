@@ -25,6 +25,7 @@ from cast.voxhelm import (
     build_failure_message,
     count_episode_diarization_speakers,
     enqueue_audio_transcript_generation,
+    ensure_diarized_task_ref,
     get_bool_setting,
     get_float_setting,
     get_setting,
@@ -34,7 +35,10 @@ from cast.voxhelm import (
     require_setting,
     require_artifact_path,
     resolve_audio_source_url,
+    resolve_audio_diarization_enabled,
+    resolve_audio_task_ref,
     resolve_diarization_speaker_count,
+    strip_diarized_task_ref,
     transcript_complete,
 )
 
@@ -271,6 +275,46 @@ def test_build_audio_task_ref_supports_diarized_variant():
     )
 
 
+def test_resolve_audio_task_ref_normalizes_explicit_refs():
+    assert ensure_diarized_task_ref("cast-audio-1") == "cast-audio-1-diarized"
+    assert ensure_diarized_task_ref("cast-audio-1-diarized-3-speakers") == "cast-audio-1-diarized-3-speakers"
+    assert strip_diarized_task_ref("cast-audio-1-diarized-3-speakers") == "cast-audio-1"
+    assert (
+        resolve_audio_task_ref(
+            1,
+            task_ref="cast-audio-1-force",
+            diarization_enabled=True,
+            diarization_speaker_count=3,
+        )
+        == "cast-audio-1-force-diarized-3-speakers"
+    )
+    assert (
+        resolve_audio_task_ref(
+            1,
+            task_ref="cast-audio-1-force-diarized-3-speakers",
+            diarization_enabled=False,
+        )
+        == "cast-audio-1-force"
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_audio_diarization_enabled_honors_audio_mode(audio):
+    client = SimpleNamespace(diarization_enabled=False)
+
+    assert resolve_audio_diarization_enabled(audio, client) is False
+
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.ENABLED
+    assert resolve_audio_diarization_enabled(audio, client) is True
+
+    client.diarization_enabled = True
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.DISABLED
+    assert resolve_audio_diarization_enabled(audio, client) is False
+
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.INHERIT
+    assert resolve_audio_diarization_enabled(audio, client) is True
+
+
 @pytest.mark.django_db
 def test_resolve_diarization_speaker_count_counts_unique_episode_contributors(episode):
     first = Contributor.objects.create(display_name="First", slug="first")
@@ -424,6 +468,32 @@ def test_client_submit_job_includes_diarization_speaker_count_when_provided(mock
     assert request_json.call_args.kwargs["payload"]["diarization"] == {"enabled": True, "num_speakers": 4}
 
 
+def test_client_submit_job_diarization_override_controls_payload(mocker):
+    enabled_client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    enabled_request_json = mocker.patch.object(enabled_client, "request_json", return_value={"id": "job-1"})
+
+    enabled_client.submit_transcription_job(
+        source_url="https://media.example.com/episode.mp3",
+        task_ref="cast-audio-1",
+        context={"audio_id": 1},
+        diarization_enabled=False,
+    )
+
+    assert "diarization" not in enabled_request_json.call_args.kwargs["payload"]
+
+    disabled_client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=False)
+    disabled_request_json = mocker.patch.object(disabled_client, "request_json", return_value={"id": "job-2"})
+
+    disabled_client.submit_transcription_job(
+        source_url="https://media.example.com/episode.mp3",
+        task_ref="cast-audio-1-diarized",
+        context={"audio_id": 1},
+        diarization_enabled=True,
+    )
+
+    assert disabled_request_json.call_args.kwargs["payload"]["diarization"] == {"enabled": True}
+
+
 def test_client_submit_job_rejects_invalid_speaker_count():
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
 
@@ -529,6 +599,18 @@ def test_client_rejects_non_bool_diarization_enabled():
         VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled="false")  # type: ignore[arg-type]
 
 
+def test_client_submit_job_rejects_non_bool_diarization_override():
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(TypeError, match="diarization_enabled must be a bool"):
+        client.submit_transcription_job(
+            source_url="https://media.example.com/episode.mp3",
+            task_ref="cast-audio-1",
+            context={"audio_id": 1},
+            diarization_enabled="false",  # type: ignore[arg-type]
+        )
+
+
 def test_client_wait_for_job_times_out(mocker):
     client = VoxhelmClient(
         api_base="https://voxhelm.example",
@@ -603,8 +685,11 @@ def test_generate_for_audio_creates_transcript(settings, user, m4a_audio):
         def __init__(self):
             self.submit_calls = []
 
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
             self.submit_calls.append((source_url, task_ref, context, speaker_count))
+            assert diarization_enabled is False
             return {
                 "id": "job-1",
                 "state": "succeeded",
@@ -739,11 +824,14 @@ def test_submit_for_audio_returns_submission_metadata(settings, user, m4a_audio)
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
             assert source_url == audio.m4a.url
             assert task_ref == build_audio_task_ref(audio.pk)
             assert context == {"consumer": "django-cast", "audio_id": audio.pk}
             assert speaker_count is None
+            assert diarization_enabled is False
             return {"id": "job-submit", "state": "queued"}
 
     submission = VoxhelmTranscriptService(client=StubClient()).submit_for_audio(audio)
@@ -765,10 +853,13 @@ def test_submit_for_audio_uses_diarized_task_ref_for_diarized_client(settings, u
     class StubClient:
         diarization_enabled = True
 
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
             del source_url, context
             assert task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
             assert speaker_count is None
+            assert diarization_enabled is True
             return {"id": "job-submit", "state": "queued"}
 
     submission = VoxhelmTranscriptService(client=StubClient()).submit_for_audio(audio)
@@ -792,6 +883,52 @@ def test_submit_for_audio_with_real_diarized_client_uses_diarized_task_ref_and_p
     assert submission.task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
     assert payload["task_ref"] == build_audio_task_ref(audio.pk, diarization_enabled=True)
     assert payload["diarization"] == {"enabled": True}
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_enabled_mode_overrides_disabled_client(settings, user, m4a_audio, mocker):
+    settings.MEDIA_URL = "https://media.example.com/"
+    audio = Audio(
+        user=user,
+        m4a=m4a_audio,
+        title="episode",
+        transcript_diarization_mode=Audio.TranscriptDiarizationMode.ENABLED,
+    )
+    audio.save(duration=False, cache_file_sizes=False)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=False)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-submit", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(audio)
+
+    payload = request_json.call_args.kwargs["payload"]
+    assert submission.task_ref == build_audio_task_ref(audio.pk, diarization_enabled=True)
+    assert payload["task_ref"] == build_audio_task_ref(audio.pk, diarization_enabled=True)
+    assert payload["diarization"] == {"enabled": True}
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_disabled_mode_overrides_diarized_client_and_skips_speaker_hint(settings, episode, mocker):
+    settings.MEDIA_URL = "https://media.example.com/"
+    first = Contributor.objects.create(display_name="Disabled First", slug="disabled-first")
+    second = Contributor.objects.create(display_name="Disabled Second", slug="disabled-second")
+    EpisodeContributor.objects.create(episode=episode, contributor=first, role=EpisodeContributor.ROLE_HOST)
+    EpisodeContributor.objects.create(episode=episode, contributor=second, role=EpisodeContributor.ROLE_GUEST)
+    audio = episode.podcast_audio
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.DISABLED
+    audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-submit", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(
+        audio,
+        task_ref=build_audio_task_ref(audio.pk, diarization_enabled=True, diarization_speaker_count=2),
+        episode=episode,
+    )
+
+    payload = request_json.call_args.kwargs["payload"]
+    assert submission.task_ref == build_audio_task_ref(audio.pk)
+    assert payload["task_ref"] == build_audio_task_ref(audio.pk)
+    assert "diarization" not in payload
 
 
 @pytest.mark.django_db
@@ -892,8 +1029,10 @@ def test_submit_for_audio_raises_for_terminal_failed_state(settings, user, m4a_a
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
-            del source_url, task_ref, context, speaker_count
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
+            del source_url, task_ref, context, speaker_count, diarization_enabled
             return {"id": "job-failed", "state": "failed", "error": {"message": "boom"}}
 
     with pytest.raises(VoxhelmError, match="boom"):
@@ -907,8 +1046,10 @@ def test_submit_for_audio_requires_job_id(settings, user, m4a_audio):
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
-            del source_url, task_ref, context, speaker_count
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
+            del source_url, task_ref, context, speaker_count, diarization_enabled
             return {"state": "queued"}
 
     with pytest.raises(VoxhelmError, match="job id"):
@@ -1059,6 +1200,72 @@ def test_enqueue_audio_transcript_generation_uses_episode_speaker_count(mocker, 
         source_url="https://media.example.com/audio.m4a",
         task_ref=task_ref,
         job_payload={"id": "job-diarized", "state": "queued"},
+    )
+    service = mocker.Mock()
+    service.client = SimpleNamespace(diarization_enabled=True)
+    service.submit_for_audio.return_value = submission
+    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
+
+    result = enqueue_audio_transcript_generation(audio=audio, episode=episode)
+
+    generation = get_transcript_generation(audio)
+    assert result.enqueued is True
+    assert generation is not None
+    assert generation.task_ref == task_ref
+    service.submit_for_audio.assert_called_once_with(audio, task_ref=task_ref, episode=episode)
+
+
+@pytest.mark.django_db
+def test_enqueue_audio_transcript_generation_enabled_mode_overrides_client_disabled(mocker, episode):
+    audio = episode.podcast_audio
+    assert audio is not None
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.ENABLED
+    audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+    first = Contributor.objects.create(display_name="Enabled First", slug="enqueue-enabled-first")
+    second = Contributor.objects.create(display_name="Enabled Second", slug="enqueue-enabled-second")
+    EpisodeContributor.objects.create(episode=episode, contributor=first, role=EpisodeContributor.ROLE_HOST)
+    EpisodeContributor.objects.create(episode=episode, contributor=second, role=EpisodeContributor.ROLE_GUEST)
+    task_ref = build_audio_task_ref(audio.pk, diarization_enabled=True, diarization_speaker_count=2)
+    submission = TranscriptSubmission(
+        job_id="job-enabled",
+        source_url="https://media.example.com/audio.m4a",
+        task_ref=task_ref,
+        job_payload={"id": "job-enabled", "state": "queued"},
+    )
+    service = mocker.Mock()
+    service.client = SimpleNamespace(diarization_enabled=False)
+    service.submit_for_audio.return_value = submission
+    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
+
+    result = enqueue_audio_transcript_generation(audio=audio, episode=episode)
+
+    generation = get_transcript_generation(audio)
+    assert result.enqueued is True
+    assert generation is not None
+    assert generation.task_ref == task_ref
+    service.submit_for_audio.assert_called_once_with(audio, task_ref=task_ref, episode=episode)
+
+
+@pytest.mark.django_db
+def test_enqueue_audio_transcript_generation_disabled_mode_overrides_client_enabled(mocker, episode):
+    audio = episode.podcast_audio
+    assert audio is not None
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.DISABLED
+    audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+    first = Contributor.objects.create(display_name="Disabled First", slug="enqueue-disabled-first")
+    second = Contributor.objects.create(display_name="Disabled Second", slug="enqueue-disabled-second")
+    EpisodeContributor.objects.create(episode=episode, contributor=first, role=EpisodeContributor.ROLE_HOST)
+    EpisodeContributor.objects.create(episode=episode, contributor=second, role=EpisodeContributor.ROLE_GUEST)
+    task_ref = build_audio_task_ref(audio.pk)
+    submission = TranscriptSubmission(
+        job_id="job-disabled",
+        source_url="https://media.example.com/audio.m4a",
+        task_ref=task_ref,
+        job_payload={"id": "job-disabled", "state": "queued"},
     )
     service = mocker.Mock()
     service.client = SimpleNamespace(diarization_enabled=True)
@@ -1295,11 +1502,14 @@ def test_generate_for_audio_updates_existing_transcript(settings, user, m4a_audi
     old_paths = existing.get_all_paths()
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
             assert source_url == audio.m4a.url
             assert task_ref == f"cast-audio-{audio.pk}"
             assert context == {"consumer": "django-cast", "audio_id": audio.pk}
             assert speaker_count is None
+            assert diarization_enabled is False
             return {
                 "id": "job-2",
                 "state": "succeeded",
@@ -1363,8 +1573,10 @@ def test_generate_for_audio_waits_for_queued_job(settings, user, m4a_audio):
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
-            del source_url, task_ref, context, speaker_count
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
+            del source_url, task_ref, context, speaker_count, diarization_enabled
             return {"id": "job-3", "state": "queued"}
 
         def wait_for_job(self, job_id):
@@ -1420,8 +1632,10 @@ def test_generate_for_audio_requires_required_artifacts(settings, user, m4a_audi
     audio.save(duration=False, cache_file_sizes=False)
 
     class StubClient:
-        def submit_transcription_job(self, *, source_url, task_ref, context, speaker_count=None):
-            del source_url, task_ref, context, speaker_count
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
+            del source_url, task_ref, context, speaker_count, diarization_enabled
             artifacts = {"podlove": "/podlove", "dote": "/dote", "vtt": "/vtt"}
             artifacts.pop(missing_format)
             return {"id": "job-4", "state": "succeeded", "result": {"artifacts": artifacts}}

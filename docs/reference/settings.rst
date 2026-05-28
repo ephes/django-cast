@@ -134,6 +134,13 @@ setting is enabled. Diarization can make full-episode transcription slower, so
 production sites should use the queued transcript worker flow rather than
 expecting a web request to wait for completion.
 
+Individual audio objects can override this generation default with their
+``transcript_diarization_mode`` field. ``inherit`` uses the setting documented
+here, ``enabled`` requests diarization even when this setting is false, and
+``disabled`` omits both the diarization payload and speaker-count hint for that
+audio. The audio-level disabled mode also hides stored speaker labels from
+public transcript output without rewriting the stored transcript files.
+
 CAST_VOXHELM_POLL_INTERVAL
 ==========================
 

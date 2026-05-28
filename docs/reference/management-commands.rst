@@ -43,6 +43,14 @@ the Voxhelm backend has diarization configured.
 Full-episode diarization can be slow, so prefer the queued Wagtail transcript
 worker flow for editor-triggered jobs.
 
+The command honors each selected audio object's
+``transcript_diarization_mode``. ``inherit`` uses the global Django or
+environment setting above, ``enabled`` requests diarization for that audio, and
+``disabled`` omits the diarization payload, speaker-count hint, and diarized
+task-reference variant. When targeting an episode, the command keeps the
+episode context so enabled diarization can use that episode's contributor count
+as the speaker-count hint.
+
 .. code-block:: bash
 
     # Generate a transcript for one episode

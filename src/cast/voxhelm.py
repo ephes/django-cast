@@ -203,6 +203,37 @@ def append_diarization_speaker_count_to_task_ref(task_ref: str, speaker_count: i
     return f"{task_ref}{suffix}"
 
 
+def ensure_diarized_task_ref(task_ref: str) -> str:
+    if re.search(r"-diarized(?:-\d+-speakers)?$", task_ref):
+        return task_ref
+    return f"{task_ref}-diarized"
+
+
+def strip_diarized_task_ref(task_ref: str) -> str:
+    return re.sub(r"-diarized(?:-\d+-speakers)?$", "", task_ref)
+
+
+def resolve_audio_task_ref(
+    audio_id: int,
+    *,
+    task_ref: str | None = None,
+    diarization_enabled: bool = False,
+    diarization_speaker_count: int | None = None,
+) -> str:
+    if task_ref is None:
+        return build_audio_task_ref(
+            audio_id,
+            diarization_enabled=diarization_enabled,
+            diarization_speaker_count=diarization_speaker_count,
+        )
+    if not diarization_enabled:
+        return strip_diarized_task_ref(task_ref)
+    return append_diarization_speaker_count_to_task_ref(
+        ensure_diarized_task_ref(task_ref),
+        diarization_speaker_count,
+    )
+
+
 def count_episode_diarization_speakers(episode: Any) -> int | None:
     assignments = getattr(episode, "contributor_assignments", None)
     if assignments is None:
@@ -236,6 +267,15 @@ def resolve_diarization_speaker_count(audio: Audio, *, episode: Any | None = Non
 def client_diarization_enabled(client: object) -> bool:
     # Strict ``is True`` keeps duck-typed test clients and mocks without a real bool on the non-diarized path.
     return getattr(client, "diarization_enabled", False) is True
+
+
+def resolve_audio_diarization_enabled(audio: Audio, client: object) -> bool:
+    mode = getattr(audio, "transcript_diarization_mode", "inherit")
+    if mode == "enabled":
+        return True
+    if mode == "disabled":
+        return False
+    return client_diarization_enabled(client)
 
 
 def get_transcript_generation(audio: Audio) -> TranscriptGeneration | None:
@@ -361,11 +401,15 @@ class VoxhelmClient:
         task_ref: str,
         context: dict[str, Any],
         speaker_count: int | None = None,
+        diarization_enabled: bool | None = None,
     ) -> dict[str, Any]:
         if speaker_count is not None and (
             not isinstance(speaker_count, int) or isinstance(speaker_count, bool) or speaker_count < 1
         ):
             raise VoxhelmError("speaker_count must be a positive integer when provided.")
+        send_diarization = self.diarization_enabled if diarization_enabled is None else diarization_enabled
+        if not isinstance(send_diarization, bool):
+            raise TypeError("diarization_enabled must be a bool when provided.")
         payload = {
             "job_type": "transcribe",
             "priority": "normal",
@@ -379,7 +423,7 @@ class VoxhelmClient:
         }
         if self.language:
             payload["language"] = self.language
-        if self.diarization_enabled:
+        if send_diarization:
             diarization: dict[str, Any] = {"enabled": True}
             if speaker_count is not None:
                 diarization["num_speakers"] = speaker_count
@@ -424,23 +468,20 @@ class VoxhelmTranscriptService:
             raise VoxhelmError("Audio must be saved before requesting a transcript.")
 
         source_url = resolve_audio_source_url(audio)
-        diarization_enabled = client_diarization_enabled(self.client)
+        diarization_enabled = resolve_audio_diarization_enabled(audio, self.client)
         speaker_count = resolve_diarization_speaker_count(audio, episode=episode) if diarization_enabled else None
-        resolved_task_ref = task_ref or build_audio_task_ref(
+        resolved_task_ref = resolve_audio_task_ref(
             audio.pk,
+            task_ref=task_ref,
             diarization_enabled=diarization_enabled,
             diarization_speaker_count=speaker_count,
         )
-        if task_ref is not None and diarization_enabled:
-            resolved_task_ref = append_diarization_speaker_count_to_task_ref(
-                resolved_task_ref,
-                speaker_count,
-            )
         job_payload = self.client.submit_transcription_job(
             source_url=source_url,
             task_ref=resolved_task_ref,
             context={"consumer": "django-cast", "audio_id": audio.pk},
             speaker_count=speaker_count,
+            diarization_enabled=diarization_enabled,
         )
         state = str(job_payload.get("state", ""))
         if state in TERMINAL_JOB_STATES and state != "succeeded":
@@ -542,9 +583,9 @@ def enqueue_audio_transcript_generation(
         return TranscriptEnqueueResult(generation=generation, enqueued=False)
 
     service = VoxhelmTranscriptService(request_or_site=request_or_site)
-    diarization_enabled = client_diarization_enabled(service.client)
+    diarization_enabled = resolve_audio_diarization_enabled(audio, service.client)
     speaker_count = resolve_diarization_speaker_count(audio, episode=episode) if diarization_enabled else None
-    task_ref = build_audio_task_ref(
+    task_ref = resolve_audio_task_ref(
         audio.pk,
         diarization_enabled=diarization_enabled,
         diarization_speaker_count=speaker_count,

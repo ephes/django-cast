@@ -9,6 +9,11 @@ from cast.models.audio import Audio, ChapterMark, sync_chapter_marks
 class TestAudioModel:
     pytestmark = pytest.mark.django_db
 
+    def test_transcript_diarization_mode_defaults_to_inherit(self, user):
+        audio = Audio.objects.create(user=user, title="Default mode", duration=None)
+
+        assert audio.transcript_diarization_mode == Audio.TranscriptDiarizationMode.INHERIT
+
     def test_get_file_formats(self, audio):
         assert audio.file_formats == "m4a"
 

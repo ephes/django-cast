@@ -113,6 +113,20 @@ required service URL and bearer token; optional defaults use
 deployment secret, leave the Wagtail API token blank and provide
 ``CAST_VOXHELM_API_KEY`` to both the web process and transcript worker.
 
+Each audio object also has a transcript diarization mode. The default
+``inherit`` mode keeps using the site/global Voxhelm diarization setting for
+future transcript generation. Editors can set an individual audio to
+``enabled`` to request diarization even when the site/global default is off, or
+to ``disabled`` to submit future Voxhelm jobs without the diarization payload or
+speaker-count hint. The setting belongs to the shared audio transcript, so
+changing it can affect every episode that uses the same audio.
+
+Disabling diarization is non-destructive. It keeps transcript text, timestamps,
+and stored Podlove, DOTe, and WebVTT files in place, but public transcript
+surfaces hide stored speaker labels for that audio. Re-enable the mode later to
+allow existing labels to appear again when they pass the live-contributor
+sanitizer.
+
 To make the non-blocking Wagtail flow work, install the optional
 ``transcript-worker`` extra, configure Django Tasks with the database backend,
 and run a worker alongside Django. The extra requires a Wagtail/django-tasks

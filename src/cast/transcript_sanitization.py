@@ -20,10 +20,16 @@ def clean_speaker_label(value: Any) -> str:
     return value.strip()
 
 
+def audio_transcript_diarization_disabled(audio: Any | None) -> bool:
+    return getattr(audio, "transcript_diarization_mode", "") == "disabled"
+
+
 def public_speaker_labels_for_episode(episode: Any | None, *, audio: Any | None = None) -> set[str] | None:
     """Return public speaker labels for a live episode, or ``None`` without episode context."""
     if episode is None:
         return None
+    if audio_transcript_diarization_disabled(audio):
+        return set()
 
     from .models import Episode
 
@@ -50,6 +56,8 @@ def public_speaker_labels_for_transcript(transcript: Any, *, episode: Any | None
     anchors expose no speaker labels.
     """
     audio = getattr(transcript, "audio", None)
+    if audio_transcript_diarization_disabled(audio):
+        return set()
     explicit_labels = public_speaker_labels_for_episode(episode, audio=audio)
     if explicit_labels is not None:
         return explicit_labels
@@ -80,6 +88,8 @@ def strict_public_speaker_labels_for_transcript(transcript: Any, *, episode: Any
 
 
 def public_speaker_labels_for_audio(audio: Any, *, episode: Any | None = None) -> set[str] | None:
+    if audio_transcript_diarization_disabled(audio):
+        return set()
     explicit_labels = public_speaker_labels_for_episode(episode, audio=audio)
     if explicit_labels is not None:
         return explicit_labels

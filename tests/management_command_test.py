@@ -685,7 +685,7 @@ def test_generate_transcripts_does_not_skip_empty_transcript(mocker, audio):
 
     assert "skipped audio=" not in output.getvalue()
     assert "updated audio=" in output.getvalue()
-    service.generate_for_audio.assert_called_once_with(audio, task_ref=f"cast-audio-{audio.pk}")
+    service.generate_for_audio.assert_called_once_with(audio, task_ref=f"cast-audio-{audio.pk}", episode=None)
 
 
 @pytest.mark.django_db
@@ -693,7 +693,8 @@ def test_generate_transcripts_calls_service_for_episode(mocker, audio):
     transcript = create_transcript(audio=audio)
     queryset = mocker.Mock()
     queryset.select_related.return_value = queryset
-    queryset.order_by.return_value = [SimpleNamespace(pk=7, podcast_audio_id=audio.pk, podcast_audio=audio)]
+    episode = SimpleNamespace(pk=7, podcast_audio_id=audio.pk, podcast_audio=audio)
+    queryset.order_by.return_value = [episode]
     mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=queryset)
     service = mocker.Mock()
     service.generate_for_audio.return_value = TranscriptGenerationResult(
@@ -717,6 +718,7 @@ def test_generate_transcripts_calls_service_for_episode(mocker, audio):
     service.generate_for_audio.assert_called_once()
     called_audio = service.generate_for_audio.call_args.args[0]
     assert called_audio.pk == audio.pk
+    assert service.generate_for_audio.call_args.kwargs["episode"] == episode
 
 
 @pytest.mark.django_db
@@ -760,7 +762,7 @@ def test_generate_transcripts_reports_errors_and_raises(mocker, audio):
     assert "processed=1 created=0 updated=0 skipped=0 errors=1" in output.getvalue()
 
 
-def test_generate_transcripts_resolve_audios_skips_duplicates_and_unsaved(mocker):
+def test_generate_transcripts_resolve_targets_skips_duplicates_and_unsaved(mocker):
     from cast.management.commands.generate_transcripts import Command
 
     shared_audio = SimpleNamespace(pk=5)
@@ -773,10 +775,13 @@ def test_generate_transcripts_resolve_audios_skips_duplicates_and_unsaved(mocker
     mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=episode_queryset)
     mocker.patch("cast.management.commands.generate_transcripts.Audio.objects.filter", return_value=direct_queryset)
 
-    assert Command()._resolve_audios(episode_ids=[1], audio_ids=[5]) == [shared_audio]
+    targets = Command()._resolve_targets(episode_ids=[1], audio_ids=[5])
+
+    assert [target.audio for target in targets] == [shared_audio]
+    assert targets[0].episode.pk == 1
 
 
-def test_generate_transcripts_resolve_audios_skips_unsaved_episode_audio(mocker):
+def test_generate_transcripts_resolve_targets_skips_unsaved_episode_audio(mocker):
     from cast.management.commands.generate_transcripts import Command
 
     episode_queryset = mocker.Mock()
@@ -790,4 +795,4 @@ def test_generate_transcripts_resolve_audios_skips_unsaved_episode_audio(mocker)
     mocker.patch("cast.management.commands.generate_transcripts.Episode.objects.filter", return_value=episode_queryset)
     mocker.patch("cast.management.commands.generate_transcripts.Audio.objects.filter", return_value=direct_queryset)
 
-    assert Command()._resolve_audios(episode_ids=[1], audio_ids=[]) == []
+    assert Command()._resolve_targets(episode_ids=[1], audio_ids=[]) == []

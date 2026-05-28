@@ -43,10 +43,26 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     transcript linking, and Podlove Web Player integration for podcast episodes.
     """
 
+    class TranscriptDiarizationMode(models.TextChoices):
+        INHERIT = "inherit", _("Inherit")
+        ENABLED = "enabled", _("Enabled")
+        DISABLED = "disabled", _("Disabled")
+
     user = models.ForeignKey(get_user_model(), on_delete=models.CASCADE)
     duration = models.DurationField(null=True, blank=True)
     title = models.CharField(max_length=255, null=True, blank=True)
     subtitle = models.CharField(max_length=512, null=True, blank=True)
+    transcript_diarization_mode = models.CharField(
+        max_length=16,
+        choices=TranscriptDiarizationMode.choices,
+        default=TranscriptDiarizationMode.INHERIT,
+        help_text=_(
+            "Controls speaker diarization for transcript generation and public speaker-label display for this "
+            "audio. Disabling keeps transcript text and timestamps, hides any stored speaker labels publicly, and "
+            "future generations will not request speaker diarization. This audio transcript may be shared by "
+            "multiple episodes."
+        ),
+    )
 
     m4a = models.FileField(upload_to="cast_audio/", null=True, blank=True)
     mp3 = models.FileField(upload_to="cast_audio/", null=True, blank=True)
@@ -64,7 +80,16 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     audio_formats: list[str] = list(mime_lookup.keys())
     title_lookup: dict[str, str] = {key: f"Audio {key.upper()}" for key in audio_formats}
 
-    admin_form_fields: tuple[str, ...] = ("title", "subtitle", "m4a", "mp3", "oga", "opus", "tags")
+    admin_form_fields: tuple[str, ...] = (
+        "title",
+        "subtitle",
+        "transcript_diarization_mode",
+        "m4a",
+        "mp3",
+        "oga",
+        "opus",
+        "tags",
+    )
 
     search_fields = CollectionMember.search_fields + [
         index.SearchField("title", partial_match=True, boost=10),

@@ -17,7 +17,7 @@ from cast.api.views import (
     ThemeListView,
 )
 from cast.devdata import create_transcript, generate_blog_with_media
-from cast.models import Contributor, EpisodeContributor, PostCategory
+from cast.models import Audio, Contributor, EpisodeContributor, PostCategory
 
 from .factories import PostFactory, UserFactory
 
@@ -583,6 +583,43 @@ class TestPodcastAudio:
             stored_data = json.load(podlove_file)
         assert stored_data["transcripts"][1]["speaker"] == "Draft Guest"
         assert stored_data["transcripts"][2]["speaker"] == "Speaker 1"
+
+    def test_podlove_detail_endpoint_disabled_audio_suppresses_speakers(self, api_client, episode):
+        """Audio-level disabled mode hides otherwise public transcript speaker labels."""
+        audio = episode.podcast_audio
+        audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.DISABLED
+        audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+        live_contributor = Contributor.objects.create(display_name="Live Host", slug="disabled-api-live-host")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=live_contributor,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {"speaker": "Live Host", "voice": "Live Host", "text": "Live speaker"},
+                    {"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Generic speaker"},
+                ]
+            },
+        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
+
+        response = api_client.get(podlove_detail_url, format="json")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["contributors"] == []
+        assert "speaker" not in data["transcripts"][0]
+        assert "voice" not in data["transcripts"][0]
+        assert "speaker" not in data["transcripts"][1]
+        assert "voice" not in data["transcripts"][1]
+        with transcript.podlove.open("r") as podlove_file:
+            stored_data = json.load(podlove_file)
+        assert stored_data["transcripts"][0]["speaker"] == "Live Host"
+        assert stored_data["transcripts"][1]["speaker"] == "Speaker 1"
 
     def test_podlove_detail_endpoint_sanitizes_draft_only_audio(self, api_client, episode):
         """Public player output exposes no speaker labels when the audio has no live episode anchor."""

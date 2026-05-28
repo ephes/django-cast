@@ -4,8 +4,9 @@ import pytest
 from django.core.exceptions import ObjectDoesNotExist
 
 from cast.devdata import create_transcript
-from cast.models import Contributor, EpisodeContributor
+from cast.models import Audio, Contributor, EpisodeContributor
 from cast.transcript_sanitization import (
+    audio_transcript_diarization_disabled,
     podlove_contributors_from_data,
     public_episode_from_request,
     public_speaker_labels_for_audio,
@@ -60,6 +61,23 @@ def test_public_speaker_labels_for_audio_with_missing_related_transcript():
             raise ObjectDoesNotExist
 
     assert public_speaker_labels_for_audio(AudioWithoutTranscript()) is None
+
+
+@pytest.mark.django_db
+def test_disabled_audio_returns_empty_public_speaker_labels(episode):
+    contributor = Contributor.objects.create(display_name="Live Host", slug="disabled-live-host")
+    EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+    audio = episode.podcast_audio
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.DISABLED
+    audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+    transcript = create_transcript(audio=audio, podlove={"transcripts": [{"speaker": "Live Host"}]})
+
+    assert audio_transcript_diarization_disabled(audio)
+    assert public_speaker_labels_for_episode(episode, audio=audio) == set()
+    assert public_speaker_labels_for_audio(audio, episode=episode) == set()
+    assert public_speaker_labels_for_transcript(transcript, episode=episode) == set()
+    assert strict_public_speaker_labels_for_audio(audio, episode=episode) == set()
+    assert strict_public_speaker_labels_for_transcript(transcript, episode=episode) == set()
 
 
 @pytest.mark.django_db

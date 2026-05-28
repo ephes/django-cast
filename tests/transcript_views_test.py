@@ -1100,6 +1100,97 @@ class TestGetTranscriptAsJson:
             stored_data = json.load(podlove_file)
         assert stored_data["transcripts"][0]["speaker"] == "Draft Guest"
 
+    def test_disabled_audio_suppresses_public_speaker_labels_without_rewriting_files(self, client, episode):
+        live_contributor = Contributor.objects.create(display_name="Live Host", slug="disabled-live-host")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=live_contributor,
+            role=EpisodeContributor.ROLE_HOST,
+        )
+        audio = episode.podcast_audio
+        audio.transcript_diarization_mode = audio.TranscriptDiarizationMode.DISABLED
+        audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {
+                        "start": "00:00:00.000",
+                        "end": "00:00:01.000",
+                        "speaker": "Live Host",
+                        "voice": "Live Host",
+                        "text": "Live speaker",
+                    },
+                    {
+                        "start": "00:00:01.000",
+                        "end": "00:00:02.000",
+                        "speaker": "Speaker 1",
+                        "voice": "Speaker 1",
+                        "text": "Generic speaker",
+                    },
+                ]
+            },
+            dote={
+                "lines": [
+                    {
+                        "startTime": "00:00:00,000",
+                        "endTime": "00:00:01,000",
+                        "speakerDesignation": "Live Host",
+                        "text": "Live speaker",
+                    },
+                    {
+                        "startTime": "00:00:01,000",
+                        "endTime": "00:00:02,000",
+                        "speakerDesignation": "Speaker 1",
+                        "text": "Generic speaker",
+                    },
+                ]
+            },
+            vtt=(
+                "WEBVTT\n\n"
+                "00:00:00.000 --> 00:00:01.000\n"
+                "<v Live Host>Live speaker</v>\n\n"
+                "00:00:01.000 --> 00:00:02.000\n"
+                "Speaker 1: Generic speaker\n"
+            ),
+        )
+
+        podlove_response = client.get(reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.id}))
+        podcastindex_response = client.get(reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id}))
+        vtt_response = client.get(reverse("cast:webvtt-transcript", kwargs={"pk": transcript.id}))
+        html_response = client.get(
+            reverse("cast:episode-transcript", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})
+        )
+
+        assert podlove_response.status_code == 200
+        podlove_data = podlove_response.json()
+        assert "speaker" not in podlove_data["transcripts"][0]
+        assert "voice" not in podlove_data["transcripts"][0]
+        assert "speaker" not in podlove_data["transcripts"][1]
+        assert "voice" not in podlove_data["transcripts"][1]
+        assert podcastindex_response.status_code == 200
+        assert [segment["speaker"] for segment in podcastindex_response.json()["segments"]] == ["", ""]
+        assert vtt_response.status_code == 200
+        assert vtt_response.content.decode("utf-8") == (
+            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nLive speaker\n\n00:00:01.000 --> 00:00:02.000\nGeneric speaker\n"
+        )
+        assert html_response.status_code == 200
+        html_content = html_response.content.decode("utf-8")
+        assert "Live Host" not in html_content
+        assert "Speaker 1" not in html_content
+        assert "Live speaker" in html_content
+        assert "Generic speaker" in html_content
+        with transcript.podlove.open("r") as podlove_file:
+            stored_podlove = json.load(podlove_file)
+        with transcript.dote.open("r") as dote_file:
+            stored_dote = json.load(dote_file)
+        with transcript.vtt.open("r") as vtt_file:
+            stored_vtt = vtt_file.read()
+        assert stored_podlove["transcripts"][0]["speaker"] == "Live Host"
+        assert stored_podlove["transcripts"][1]["speaker"] == "Speaker 1"
+        assert stored_dote["lines"][0]["speakerDesignation"] == "Live Host"
+        assert "<v Live Host>Live speaker</v>" in stored_vtt
+
 
 class TestGetTranscriptAsPodcastIndexJson:
     pytestmark = pytest.mark.django_db
