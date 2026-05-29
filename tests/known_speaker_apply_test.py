@@ -82,10 +82,10 @@ def test_review_summary_ignores_confident_segment_without_name(audio):
 
 
 @pytest.mark.django_db
-def test_apply_labels_confident_segments_only(audio):
+def test_apply_without_smoothing_labels_confident_only(audio):
     transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, speakers=SPEAKERS)
 
-    applied = transcript.apply_known_speaker_suggestions()
+    applied = transcript.apply_known_speaker_suggestions(smooth=False)
 
     assert applied == 4  # 2 podlove + 2 dote (uncertain middle segment skipped)
     podlove = transcript.podlove_data["transcripts"]
@@ -99,6 +99,43 @@ def test_apply_labels_confident_segments_only(audio):
     assert dote[2]["speakerDesignation"] == "Dominik"
     # The private sidecar is preserved for audit/re-application.
     assert transcript.get_speaker_suggestions()
+
+
+@pytest.mark.django_db
+def test_apply_smooths_uncertain_segments_by_default(audio):
+    transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, speakers=SPEAKERS)
+
+    applied = transcript.apply_known_speaker_suggestions()
+
+    # Every segment is labeled: the uncertain middle one carries the previous
+    # confident speaker forward so the transcript reads continuously.
+    assert applied == 6  # 3 podlove + 3 dote
+    podlove = transcript.podlove_data["transcripts"]
+    assert [s["speaker"] for s in podlove] == ["Johannes", "Johannes", "Dominik"]
+    dote = transcript.dote_data["lines"]
+    assert [line["speakerDesignation"] for line in dote] == ["Johannes", "Johannes", "Dominik"]
+    # The sidecar still records the segment as uncertain for audit.
+    assert transcript.get_speaker_suggestions()[1]["speaker_uncertain"] is True
+
+
+@pytest.mark.django_db
+def test_apply_smoothing_backfills_leading_uncertain(audio):
+    # A leading uncertain segment is backfilled from the first confident speaker.
+    podlove = {
+        "transcripts": [
+            {"start_ms": 1000, "speaker": "", "voice": "", "text": "a"},
+            {"start_ms": 2000, "speaker": "", "voice": "", "text": "b"},
+        ]
+    }
+    speakers = {
+        "segments": [
+            {"index": 0, "start": 1.0, "speaker": None, "speaker_uncertain": True},
+            {"index": 1, "start": 2.0, "speaker": "Ronny", "speaker_uncertain": False},
+        ]
+    }
+    transcript = make_transcript(audio, podlove=podlove, speakers=speakers)
+    transcript.apply_known_speaker_suggestions()
+    assert [s["speaker"] for s in transcript.podlove_data["transcripts"]] == ["Ronny", "Ronny"]
 
 
 @pytest.mark.django_db

@@ -71,5 +71,9 @@
   distribution so editors can see uncertainty before approving. An "Approve and
   apply confident suggestions" action writes only confident (non-uncertain)
   speaker names into the public Podlove and DOTe transcript output, matched to
-  segments by start time; uncertain or low-margin segments are left for review.
-  The private suggestion sidecar is preserved for audit and re-application.
+  segments by start time. By default, uncertain segments between known speakers
+  are smoothed by carrying the surrounding confident speaker forward, so the
+  public transcript reads continuously instead of showing speaker-less
+  paragraphs; pass ``smooth=False`` to label only confident segments. The
+  private suggestion sidecar (including the uncertainty flags) is preserved for
+  audit and re-application.

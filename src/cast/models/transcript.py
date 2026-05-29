@@ -14,6 +14,13 @@ from . import Audio
 from .contributors import get_voice_reference_storage
 
 
+def _segment_sort_key(segment: dict) -> float:
+    try:
+        return float(segment.get("start") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _dote_timestamp_to_ms(value: object) -> int | None:
     """Parse a DOTe ``HH:MM:SS,mmm`` timestamp into milliseconds."""
     if not isinstance(value, str):
@@ -203,20 +210,29 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             "metadata": self.get_speaker_suggestion_summary(),
         }
 
-    def apply_known_speaker_suggestions(self) -> int:
-        """Apply confident known-speaker suggestions to public Podlove/DOTe output.
+    def apply_known_speaker_suggestions(self, *, smooth: bool = True) -> int:
+        """Apply known-speaker suggestions to public Podlove/DOTe output.
 
         Editor approval step: confident (non-uncertain) per-segment suggestions
         are written into the public Podlove ``speaker``/``voice`` and DOTe
         ``speakerDesignation`` fields, matched to segments by start time.
-        Uncertain suggestions are skipped and left for review. The private
-        ``speakers`` sidecar is preserved so raw metadata stays available for
-        audit and re-application. Returns the number of segments labeled.
+
+        With ``smooth=True`` (the default), uncertain segments are filled with
+        the surrounding confident speaker (carry the previous confident speaker
+        forward, backfill any leading gap) so the public transcript reads
+        continuously instead of showing speaker-less paragraphs between labeled
+        ones. With ``smooth=False`` only confident segments are labeled and
+        uncertain ones are left blank for review.
+
+        The private ``speakers`` sidecar is preserved unchanged, so the raw
+        per-segment candidates and uncertainty flags stay available for audit
+        and re-application. Returns the number of segments labeled.
         """
+        suggestions = sorted(self.get_speaker_suggestions(), key=_segment_sort_key)
+        display_names = self._resolve_known_speaker_display_names(suggestions, smooth=smooth)
         names_by_start_ms: dict[int, str] = {}
-        for segment in self.get_speaker_suggestions():
-            name = segment.get("speaker")
-            if not name or segment.get("speaker_uncertain"):
+        for segment, name in zip(suggestions, display_names):
+            if not name:
                 continue
             try:
                 start_ms = int(round(float(segment["start"]) * 1000))
@@ -230,6 +246,35 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         if applied:
             self.save()
         return applied
+
+    @staticmethod
+    def _resolve_known_speaker_display_names(suggestions: list[dict], *, smooth: bool) -> list[str | None]:
+        """Per-segment display speaker: confident as-is, uncertain smoothed.
+
+        Smoothing carries the previous confident speaker forward over uncertain
+        segments, then backfills any leading uncertain run from the first
+        confident speaker, so every segment between known speakers is attributed.
+        """
+        confident: list[str | None] = []
+        for segment in suggestions:
+            name = segment.get("speaker")
+            confident.append(name if (name and not segment.get("speaker_uncertain")) else None)
+        if not smooth:
+            return confident
+        smoothed: list[str | None] = list(confident)
+        last: str | None = None
+        for position, name in enumerate(smoothed):
+            if name is not None:
+                last = name
+            elif last is not None:
+                smoothed[position] = last
+        following: str | None = None
+        for position in range(len(smoothed) - 1, -1, -1):
+            if smoothed[position] is not None:
+                following = smoothed[position]
+            elif following is not None:
+                smoothed[position] = following
+        return smoothed
 
     def _apply_suggestions_to_podlove(self, names_by_start_ms: dict[int, str]) -> int:
         data = self._load_transcript_json("podlove")
