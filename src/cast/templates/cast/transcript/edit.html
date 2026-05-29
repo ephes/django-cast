@@ -163,6 +163,32 @@
 
         <hr />
 
+        {% if known_speaker_review.total %}
+          <h2>{% trans "Known-speaker suggestions" %}</h2>
+          <p>
+            {% blocktrans with confident=known_speaker_review.confident uncertain=known_speaker_review.uncertain total=known_speaker_review.total %}
+              Voxhelm returned {{ total }} known-speaker suggestions: {{ confident }} confident and {{ uncertain }} uncertain (needs review).
+            {% endblocktrans %}
+          </p>
+          <ul class="cast-known-speaker-review">
+            {% for name, count in known_speaker_review.by_speaker.items %}
+              <li>{{ name }}: {{ count }} {% trans "confident segments" %}</li>
+            {% endfor %}
+          </ul>
+          <p>{% trans "Uncertain or low-margin segments are left for review and are not applied to public output. Approving applies only confident suggestions to the public Podlove and DOTe transcripts." %}</p>
+          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="apply-known-speakers" />
+            <ul class="fields">
+              <li>
+                <input class="button" type="submit" value="{% trans 'Approve and apply confident suggestions' %}"{% if not known_speaker_review.confident %} disabled{% endif %} />
+              </li>
+            </ul>
+          </form>
+
+          <hr />
+        {% endif %}
+
         <h2>{% trans "Map speakers to contributors" %}</h2>
         {% if speaker_labels %}
           <p>{% trans "Replace diarization speaker labels in the Podlove and DOTe transcript files, plus matching WebVTT voice labels." %}</p>

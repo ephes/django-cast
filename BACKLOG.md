@@ -13,15 +13,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
-- [ ] Apply known-speaker suggestions to public transcript output
+- [ ] Apply known-speaker suggestions to WebVTT and per-segment review
   - Notes: [backlog/2026-05-28-contributor-voice-references.md](backlog/2026-05-28-contributor-voice-references.md)
   - Related to: Speaker diarization for generated transcripts.
-  - Scope: private voice-reference storage, the Voxhelm known-speaker request contract, and private storage of the
-    returned per-segment suggestion sidecar have landed (see `0.2.58` release notes). The remaining slice is the
-    Wagtail admin review UI that surfaces per-segment suggestions and their uncertainty, lets an editor approve
-    them, and applies approved speaker identities to public Podlove/DOTe/WebVTT output through the mapping layer.
-  - Done when: editors can review uncertain/low-margin segments, approve suggestions, and have approved speaker
-    identities appear in public transcript output, with raw Voxhelm metadata preserved for audit and remapping.
+  - Scope: private voice-reference storage, the Voxhelm known-speaker request contract, private suggestion-sidecar
+    storage, and the admin review panel that approves and applies confident suggestions to public Podlove/DOTe
+    output have landed (see `0.2.58` release notes). Remaining: apply approved speaker identities to WebVTT voice
+    labels too, and add optional per-segment (rather than whole-transcript) approval for low-margin ranges.
+  - Done when: approved known-speaker identities also appear in public WebVTT output, and editors can approve or
+    correct individual uncertain segments, with raw Voxhelm metadata preserved for audit and remapping.
 
 - [ ] Harden modelsearch follow-ups
   - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)

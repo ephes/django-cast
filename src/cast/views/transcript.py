@@ -14,7 +14,13 @@ from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
-from ..forms import NonEmptySearchForm, SpeakerContributorMappingForm, TranscriptForm, SPEAKER_MAPPING_ACTION
+from ..forms import (
+    KNOWN_SPEAKER_APPLY_ACTION,
+    NonEmptySearchForm,
+    SpeakerContributorMappingForm,
+    SPEAKER_MAPPING_ACTION,
+    TranscriptForm,
+)
 from ..models import (
     Blog,
     Episode,
@@ -230,6 +236,17 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     transcript = get_object_or_404(Transcript, id=transcript_id)
     speaker_mapping_context = get_speaker_mapping_context(transcript)
 
+    if request.method == "POST" and request.POST.get("action") == KNOWN_SPEAKER_APPLY_ACTION:
+        applied = transcript.apply_known_speaker_suggestions()
+        if applied:
+            messages.success(
+                request,
+                _("Applied {0} confident known-speaker suggestions to public transcript output.").format(applied),
+            )
+        else:
+            messages.warning(request, _("No confident known-speaker suggestions were available to apply."))
+        return redirect("cast-transcript:edit", transcript_id=transcript.id)
+
     if request.method == "POST" and request.POST.get("action") == SPEAKER_MAPPING_ACTION:
         form = TranscriptForm(instance=transcript, user=request.user)
         speaker_mapping_form = SpeakerContributorMappingForm(request.POST, **speaker_mapping_context)
@@ -277,6 +294,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
             "speaker_labels": speaker_mapping_context["speaker_labels"],
             "transcript_audio_sources": get_transcript_audio_sources(transcript),
             "contributor_assignments": speaker_mapping_context["contributor_assignments"],
+            "known_speaker_review": transcript.known_speaker_review_summary(),
             "user_can_delete": True,
         },
     )

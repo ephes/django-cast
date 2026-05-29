@@ -65,5 +65,11 @@
   uncertainty, and raw diarization labels) in protected storage. They are
   reviewable editorial state and are excluded from public transcript output.
   Known-speaker results stay suggestions: public speaker identities are not
-  shown until reviewed and approved. Applying approved suggestions to public
-  transcript output through the admin is the next slice.
+  shown until reviewed and approved.
+- Added a known-speaker review panel to the Wagtail transcript edit view. It
+  shows the confident/uncertain suggestion counts and the confident speaker
+  distribution so editors can see uncertainty before approving. An "Approve and
+  apply confident suggestions" action writes only confident (non-uncertain)
+  speaker names into the public Podlove and DOTe transcript output, matched to
+  segments by start time; uncertain or low-margin segments are left for review.
+  The private suggestion sidecar is preserved for audit and re-application.

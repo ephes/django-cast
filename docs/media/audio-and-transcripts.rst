@@ -247,3 +247,13 @@ public Podlove, DOTe, and WebVTT artifacts unlabeled for known-speaker jobs, so
 no speaker identity is shown publicly until an editor reviews and approves the
 suggestions. Uncertain or low-margin segments are flagged for review rather than
 applied automatically.
+
+The Wagtail transcript edit view shows a known-speaker review panel with the
+confident and uncertain suggestion counts and the confident speaker
+distribution. *Approve and apply confident suggestions* writes only the
+confident speaker names into the public Podlove ``speaker``/``voice`` and DOTe
+``speakerDesignation`` fields, matched to transcript segments by start time.
+Uncertain segments are left unlabeled for review, and the private suggestion
+sidecar is kept so the raw Voxhelm metadata stays available for audit and
+re-application. Applying WebVTT voice labels from known-speaker suggestions is
+not part of this step yet.

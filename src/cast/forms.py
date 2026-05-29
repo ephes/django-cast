@@ -22,6 +22,7 @@ from .models import Audio, ChapterMark, EpisodeContributor, Transcript, Video, g
 
 
 SPEAKER_MAPPING_ACTION = "map-speakers"
+KNOWN_SPEAKER_APPLY_ACTION = "apply-known-speakers"
 DRAFT_SPEAKER_ASSIGNMENT_PREFIX = "draft:"
 
 

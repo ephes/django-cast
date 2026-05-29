@@ -14,6 +14,17 @@ from . import Audio
 from .contributors import get_voice_reference_storage
 
 
+def _dote_timestamp_to_ms(value: object) -> int | None:
+    """Parse a DOTe ``HH:MM:SS,mmm`` timestamp into milliseconds."""
+    if not isinstance(value, str):
+        return None
+    match = re.fullmatch(r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})", value.strip())
+    if match is None:
+        return None
+    hours, minutes, seconds, millis = (int(part) for part in match.groups())
+    return ((hours * 3600 + minutes * 60 + seconds) * 1000) + millis
+
+
 SPEAKER_SAMPLE_LIMIT = 3
 SPEAKER_SAMPLE_MAX_CHARS = 180
 SPEAKER_SAMPLE_MIN_CHARS = 35
@@ -167,6 +178,108 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
 
     def has_uncertain_speaker_suggestions(self) -> bool:
         return any(segment.get("speaker_uncertain") for segment in self.get_speaker_suggestions())
+
+    def known_speaker_review_summary(self) -> dict:
+        """Reviewable overview of known-speaker suggestions for the admin.
+
+        Surfaces confident/uncertain counts and the confident speaker
+        distribution so editors can see uncertainty before approving.
+        """
+        suggestions = self.get_speaker_suggestions()
+        by_speaker: dict[str, int] = {}
+        uncertain = 0
+        for segment in suggestions:
+            if segment.get("speaker_uncertain"):
+                uncertain += 1
+                continue
+            name = segment.get("speaker")
+            if name:
+                by_speaker[name] = by_speaker.get(name, 0) + 1
+        return {
+            "total": len(suggestions),
+            "confident": len(suggestions) - uncertain,
+            "uncertain": uncertain,
+            "by_speaker": dict(sorted(by_speaker.items())),
+            "metadata": self.get_speaker_suggestion_summary(),
+        }
+
+    def apply_known_speaker_suggestions(self) -> int:
+        """Apply confident known-speaker suggestions to public Podlove/DOTe output.
+
+        Editor approval step: confident (non-uncertain) per-segment suggestions
+        are written into the public Podlove ``speaker``/``voice`` and DOTe
+        ``speakerDesignation`` fields, matched to segments by start time.
+        Uncertain suggestions are skipped and left for review. The private
+        ``speakers`` sidecar is preserved so raw metadata stays available for
+        audit and re-application. Returns the number of segments labeled.
+        """
+        names_by_start_ms: dict[int, str] = {}
+        for segment in self.get_speaker_suggestions():
+            name = segment.get("speaker")
+            if not name or segment.get("speaker_uncertain"):
+                continue
+            try:
+                start_ms = int(round(float(segment["start"]) * 1000))
+            except (TypeError, ValueError, KeyError):
+                continue
+            names_by_start_ms[start_ms] = name
+        if not names_by_start_ms:
+            return 0
+        applied = self._apply_suggestions_to_podlove(names_by_start_ms)
+        applied += self._apply_suggestions_to_dote(names_by_start_ms)
+        if applied:
+            self.save()
+        return applied
+
+    def _apply_suggestions_to_podlove(self, names_by_start_ms: dict[int, str]) -> int:
+        data = self._load_transcript_json("podlove")
+        segments = data.get("transcripts")
+        if not isinstance(segments, list):
+            return 0
+        applied = 0
+        for segment in segments:
+            if not isinstance(segment, dict):
+                continue
+            start_ms = segment.get("start_ms")
+            if not isinstance(start_ms, int):
+                continue
+            name = names_by_start_ms.get(start_ms)
+            if name:
+                segment["speaker"] = name
+                segment["voice"] = name
+                applied += 1
+        if applied:
+            self._write_transcript_json("podlove", data)
+        return applied
+
+    def _apply_suggestions_to_dote(self, names_by_start_ms: dict[int, str]) -> int:
+        data = self._load_transcript_json("dote")
+        lines = data.get("lines")
+        if not isinstance(lines, list):
+            return 0
+        applied = 0
+        for line in lines:
+            if not isinstance(line, dict):
+                continue
+            start_ms = _dote_timestamp_to_ms(line.get("startTime"))
+            if start_ms is None:
+                continue
+            name = names_by_start_ms.get(start_ms)
+            if name:
+                line["speakerDesignation"] = name
+                applied += 1
+        if applied:
+            self._write_transcript_json("dote", data)
+        return applied
+
+    def _write_transcript_json(self, field_name: str, data: dict) -> None:
+        # Only called after _load_transcript_json read this field's file, so the
+        # field always has a stored name here.
+        field = getattr(self, field_name)
+        payload = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        filename = field.name.rsplit("/", 1)[-1]
+        field.delete(save=False)
+        field.save(filename, ContentFile(payload), save=False)
 
     @property
     def podcastindex_data(self) -> dict:
