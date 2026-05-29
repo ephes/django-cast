@@ -46,3 +46,11 @@
   a missing DOTe file instead of returning an empty ``200`` response. Wagtail
   episode previews also omit live-only public transcript links, so draft
   previews do not expose transcript URLs that would 404.
+- Added private contributor voice references: contributors can store reviewed
+  clean-solo clips or source ranges into existing audio as private,
+  admin-only known-speaker reference material. References require confirmed
+  consent before approval, support a protected ``"cast_voice_references"``
+  ``STORAGES`` alias for uploaded clips, and are excluded from public
+  contributor APIs, feeds, theme context, repository serialization, and public
+  transcript output. This first slice only adds private storage; it does not
+  send references to Voxhelm or change public transcript output.

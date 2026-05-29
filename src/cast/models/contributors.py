@@ -60,6 +60,10 @@ class Contributor(ClusterableModel):
             [InlinePanel("links", label=_("Link"))],
             heading=_("Links"),
         ),
+        MultiFieldPanel(
+            [InlinePanel("voice_references", label=_("Voice reference"))],
+            heading=_("Voice references (private)"),
+        ),
     ]
 
     class Meta:
@@ -89,6 +93,150 @@ class Contributor(ClusterableModel):
         if self.avatar is None:
             return ""
         return self.avatar.get_rendition(self.AVATAR_RENDITION_FILTER).url
+
+
+def get_voice_reference_storage():
+    """Return the storage backend for private contributor voice-reference clips.
+
+    Production deployments should configure a protected (non-public) storage
+    backend under the ``"cast_voice_references"`` alias in ``STORAGES`` so that
+    reference clips are not served from public media. When the alias is absent
+    we fall back to the default storage and document the protection requirement.
+    """
+    from django.core.files.storage import InvalidStorageError, default_storage, storages
+
+    try:
+        return storages["cast_voice_references"]
+    except InvalidStorageError:
+        return default_storage
+
+
+class ContributorVoiceReferenceQuerySet(models.QuerySet):
+    def approved(self) -> "ContributorVoiceReferenceQuerySet":
+        return self.filter(status=ContributorVoiceReference.Status.APPROVED)
+
+    def usable_known_speaker(self) -> "ContributorVoiceReferenceQuerySet":
+        """Approved references whose contributor may drive public transcript names.
+
+        Hidden contributors are excluded unless an editor explicitly opted the
+        reference into known-speaker use through ``allow_for_hidden_contributor``.
+        """
+        return self.approved().filter(
+            models.Q(contributor__visible=True) | models.Q(allow_for_hidden_contributor=True)
+        )
+
+
+class ContributorVoiceReference(Orderable):
+    """Private, admin-only voice-reference material for a contributor.
+
+    A reference is either an uploaded/managed clip or a source range into
+    existing audio, never both. References are sensitive editorial data and must
+    not be exposed through public contributor APIs, feeds, theme context,
+    repository serialization, static exports, or public transcript output.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        APPROVED = "approved", _("Approved")
+        DISABLED = "disabled", _("Disabled")
+        REJECTED = "rejected", _("Rejected")
+
+    contributor = ParentalKey(Contributor, related_name="voice_references", on_delete=models.CASCADE)
+    title = models.CharField(max_length=128, blank=True, help_text=_("Optional internal label for this reference."))
+    source_audio = models.ForeignKey(
+        "cast.Audio",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=_("Audio the source range points into. Required for source-range references."),
+    )
+    source_episode = models.ForeignKey(
+        "cast.Episode",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=_("Optional episode this reference was captured from, for editorial context."),
+    )
+    clip = models.FileField(
+        upload_to="cast_voice_references/",
+        storage=get_voice_reference_storage,
+        null=True,
+        blank=True,
+        help_text=_("Uploaded clean solo clip. Use protected storage; do not expose publicly."),
+    )
+    start_seconds = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    end_seconds = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
+    status = models.CharField(
+        max_length=32,
+        choices=Status.choices,
+        default=Status.PENDING,
+        help_text=_("References start as pending and must be approved before Voxhelm use."),
+    )
+    consent_confirmed = models.BooleanField(
+        default=False,
+        help_text=_("Confirms the contributor consented to voice-reference use. Required to approve."),
+    )
+    allow_for_hidden_contributor = models.BooleanField(
+        default=False,
+        help_text=_("Allow known-speaker use for public transcripts even if the contributor is hidden."),
+    )
+    notes = models.TextField(blank=True, help_text=_("Optional reviewer notes."))
+
+    objects = ContributorVoiceReferenceQuerySet.as_manager()
+
+    panels = [
+        FieldPanel("title"),
+        FieldPanel("clip"),
+        FieldPanel("source_audio"),
+        FieldPanel("source_episode"),
+        FieldPanel("start_seconds"),
+        FieldPanel("end_seconds"),
+        FieldPanel("status"),
+        FieldPanel("consent_confirmed"),
+        FieldPanel("allow_for_hidden_contributor"),
+        FieldPanel("notes"),
+    ]
+
+    class Meta(Orderable.Meta):
+        verbose_name = _("Contributor voice reference")
+        verbose_name_plural = _("Contributor voice references")
+        ordering = ["sort_order"]
+
+    def __str__(self) -> str:
+        label = self.title or (_("source range") if self.is_source_range else _("clip"))
+        return f"{self.contributor.display_name}: {label} ({self.get_status_display()})"
+
+    @property
+    def is_source_range(self) -> bool:
+        return self.start_seconds is not None and self.end_seconds is not None
+
+    @property
+    def is_usable_for_voxhelm(self) -> bool:
+        return self.status == self.Status.APPROVED
+
+    def clean(self) -> None:
+        super().clean()
+        has_clip = bool(self.clip)
+        has_range_bounds = self.start_seconds is not None or self.end_seconds is not None
+        if has_clip and has_range_bounds:
+            raise ValidationError(_("Provide either an uploaded clip or a source range, not both."))
+        if not has_clip and not has_range_bounds:
+            raise ValidationError(_("Provide either an uploaded clip or a source range."))
+        if has_range_bounds:
+            if self.start_seconds is None or self.end_seconds is None:
+                raise ValidationError(_("A source range needs both a start and an end time."))
+            if self.source_audio_id is None:
+                raise ValidationError(_("A source range needs source audio."))
+            if self.start_seconds >= self.end_seconds:
+                raise ValidationError(_("The source range start time must be before its end time."))
+        if self.status == self.Status.APPROVED and not self.consent_confirmed:
+            raise ValidationError(_("Approving a voice reference requires confirmed consent."))
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 class ContributorLink(Orderable):

@@ -185,3 +185,41 @@ hidden from public output until the matching contributor assignment is
 published. If a transcript is not connected to any live episode yet, public
 transcript endpoints expose no speaker labels. The stored transcript files are
 not rewritten by this public sanitization step.
+
+Private contributor voice references
+------------------------------------
+
+Anonymous diarization clusters voices but cannot reliably identify a known
+recurring speaker, and the speaker-mapping form can only rename clusters that
+diarization actually produced. To support known-speaker recognition, a
+contributor can carry private *voice references*: reviewed clean-solo speech
+that a known-speaker backend can use to recognise that contributor's voice.
+
+Voice references are sensitive, admin-only editorial data. They are **never**
+exposed through public contributor APIs, podcast feeds, theme context,
+repository serialization, static exports, or public transcript output. Manage
+them from the Wagtail contributor snippet under *Voice references (private)*.
+
+Each reference is either an uploaded clean-solo clip **or** a source range into
+existing audio, never both:
+
+- A *source range* points at an existing :class:`Audio` object with
+  ``start_seconds`` and ``end_seconds`` (start must be before end).
+- An *uploaded clip* is stored through a protected storage backend. Configure a
+  non-public backend under the ``"cast_voice_references"`` alias in
+  ``STORAGES`` so reference clips are not served from public media; when the
+  alias is absent django-cast falls back to the default storage and you must
+  protect it yourself.
+
+References start as ``pending`` and must be explicitly ``approved`` before they
+can be sent to a known-speaker backend. Approval requires confirming contributor
+consent (``consent_confirmed``). The remaining statuses are ``disabled`` and
+``rejected``, both retained for audit but never used. Hiding or disabling a
+public contributor never deletes reference material; a hidden contributor is
+also excluded from known-speaker use for public transcripts unless an editor
+explicitly opts a reference in with ``allow_for_hidden_contributor``.
+
+Voice references store only reviewed reference material and editorial state.
+They deliberately do **not** store model-specific voice embeddings, because
+embeddings are owned by the transcription backend and would become stale when
+that backend changes its embedding model.

@@ -13,6 +13,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
+- [ ] Add private contributor voice references
+  - Notes: [backlog/2026-05-28-contributor-voice-references.md](backlog/2026-05-28-contributor-voice-references.md)
+  - Related to: Speaker diarization for generated transcripts; Podcast contributor follow-up options.
+  - Scope: add private, admin-only contributor voice reference storage for reviewed clips or source ranges. Do not
+    submit references to Voxhelm or change public transcript output in this first slice.
+  - Done when: voice references have validated model/admin coverage, privacy boundaries are tested, docs explain the
+    storage/consent expectations, and no voice-reference data appears in public APIs, feeds, theme context, or
+    repository exports.
+
 - [ ] Harden modelsearch follow-ups
   - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)
   - Scope: decide whether the current normalization-only guard needs a database-exception backstop, and file
@@ -59,12 +68,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Speaker diarization for generated transcripts
   - Notes: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
-  - Related to: Podcast contributor follow-up options.
-  - Scope: decide whether the current destructive Podlove/DOTe speaker rewrite workflow is the accepted v1, or
-    whether django-cast should replace it with the originally proposed non-destructive `TranscriptSpeakerMapping`
-    model and read-time mapping layer.
-  - Done when: the mapping persistence decision is recorded, any follow-up implementation slices are split into
-    Ready items, and stale assumptions in the diarization note are removed.
+  - Related to: [backlog/2026-05-28-contributor-voice-references.md](backlog/2026-05-28-contributor-voice-references.md);
+    Podcast contributor follow-up options.
+  - Scope: decide the durable transcript speaker state model now that Voxhelm research shows anonymous diarization is
+    fallback-only for known-speaker podcasts: destructive rewrites vs read-time mappings, how returned voice-reference
+    suggestions are stored/reviewed, and which Voxhelm metadata must be preserved.
+  - Done when: the mapping/suggestion persistence decision is recorded, Voxhelm known-speaker follow-up slices are
+    split into Ready items, and stale anonymous-diarization assumptions in the note are removed.
 
 - [ ] Programmatic content editing API
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
