@@ -45,6 +45,17 @@ class VoxhelmSettings(BaseSiteSetting):
         null=True,
         verbose_name=_("Speaker diarization"),
     )
+    known_speaker_enabled: models.BooleanField = models.BooleanField(
+        blank=True,
+        default=None,
+        help_text=_(
+            "Leave unset to use Django settings or environment variables. Enable to send approved contributor "
+            "voice references for known-speaker recognition when diarization runs. Returned speaker identities "
+            "remain reviewable suggestions and are not shown publicly until approved."
+        ),
+        null=True,
+        verbose_name=_("Known-speaker recognition"),
+    )
 
     panels = [
         FieldPanel("api_base"),
@@ -52,6 +63,7 @@ class VoxhelmSettings(BaseSiteSetting):
         FieldPanel("model"),
         FieldPanel("language"),
         FieldPanel("diarization_enabled"),
+        FieldPanel("known_speaker_enabled"),
     ]
 
     class Meta:

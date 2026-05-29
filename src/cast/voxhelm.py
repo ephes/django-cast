@@ -29,7 +29,9 @@ SITE_SETTING_FIELD_MAP = {
     "CAST_VOXHELM_MODEL": "model",
     "CAST_VOXHELM_LANGUAGE": "language",
     "CAST_VOXHELM_DIARIZATION_ENABLED": "diarization_enabled",
+    "CAST_VOXHELM_KNOWN_SPEAKER_ENABLED": "known_speaker_enabled",
 }
+KNOWN_SPEAKER_STRATEGY = "pyannote_known_speaker"
 TRUE_SETTING_VALUES = {"1", "true", "yes", "on"}
 FALSE_SETTING_VALUES = {"0", "false", "no", "off"}
 
@@ -160,6 +162,19 @@ def require_artifact_path(job_payload: dict[str, Any], format_name: str) -> str:
     return artifact_path
 
 
+def optional_artifact_path(job_payload: dict[str, Any], format_name: str) -> str | None:
+    result = job_payload.get("result")
+    if not isinstance(result, dict):
+        return None
+    artifacts = result.get("artifacts")
+    if not isinstance(artifacts, dict):
+        return None
+    artifact_path = artifacts.get(format_name)
+    if isinstance(artifact_path, str) and artifact_path:
+        return artifact_path
+    return None
+
+
 def build_failure_message(job_payload: dict[str, Any]) -> str:
     error = job_payload.get("error")
     if isinstance(error, dict):
@@ -264,6 +279,77 @@ def resolve_diarization_speaker_count(audio: Audio, *, episode: Any | None = Non
     return count_episode_diarization_speakers(episodes[0])
 
 
+def build_known_speaker_references(episode: Any) -> list[dict[str, Any]]:
+    """Build the Voxhelm known-speaker reference payload for an episode.
+
+    Only approved, usable references for the episode's expected contributors are
+    included. Hidden contributors are excluded unless a reference explicitly
+    opted into hidden-contributor use. References resolve to absolute reference
+    audio URLs (source ranges into existing audio, or uploaded clips); any
+    reference without a resolvable URL is skipped.
+    """
+    if episode is None:
+        return []
+    assignments = getattr(episode, "contributor_assignments", None)
+    if assignments is None:
+        return []
+    if hasattr(assignments, "all"):
+        assignments = assignments.all()
+
+    ordered_contributors: dict[Any, Any] = {}
+    for assignment in assignments:
+        contributor_id = getattr(assignment, "contributor_id", None)
+        contributor = getattr(assignment, "contributor", None)
+        if contributor_id is not None and contributor is not None and contributor_id not in ordered_contributors:
+            ordered_contributors[contributor_id] = contributor
+    if not ordered_contributors:
+        return []
+
+    from .models.contributors import ContributorVoiceReference
+
+    references = (
+        ContributorVoiceReference.objects.usable_known_speaker()
+        .filter(contributor_id__in=list(ordered_contributors))
+        .select_related("source_audio")
+        .order_by("contributor_id", "sort_order", "id")
+    )
+    grouped: dict[Any, list[dict[str, Any]]] = {}
+    for reference in references:
+        entry = build_known_speaker_reference_entry(reference)
+        if entry is not None:
+            grouped.setdefault(reference.contributor_id, []).append(entry)
+
+    known_speakers: list[dict[str, Any]] = []
+    for contributor_id, contributor in ordered_contributors.items():
+        entries = grouped.get(contributor_id)
+        if entries:
+            known_speakers.append({"id": str(contributor_id), "name": contributor.display_name, "references": entries})
+    return known_speakers
+
+
+def build_known_speaker_reference_entry(reference: Any) -> dict[str, Any] | None:
+    if reference.is_source_range and reference.source_audio_id is not None:
+        try:
+            url = resolve_audio_source_url(reference.source_audio)
+        except VoxhelmError:
+            return None
+        return {
+            "kind": "source_range",
+            "audio": {"kind": "url", "url": url},
+            "start": float(reference.start_seconds),
+            "end": float(reference.end_seconds),
+        }
+    if reference.clip:
+        url = getattr(reference.clip, "url", "")
+        if isinstance(url, str) and url.startswith(("http://", "https://")):
+            return {"kind": "clip_artifact", "audio": {"kind": "url", "url": url}}
+    return None
+
+
+def client_known_speaker_enabled(client: object) -> bool:
+    return getattr(client, "known_speaker_enabled", False) is True
+
+
 def client_diarization_enabled(client: object) -> bool:
     # Strict ``is True`` keeps duck-typed test clients and mocks without a real bool on the non-diarized path.
     return getattr(client, "diarization_enabled", False) is True
@@ -323,17 +409,21 @@ class VoxhelmClient:
         model: str = "auto",
         language: str = "",
         diarization_enabled: bool = False,
+        known_speaker_enabled: bool = False,
         poll_interval_seconds: float = 2.0,
         job_timeout_seconds: float = 900.0,
         request_timeout_seconds: float = 30.0,
     ) -> None:
         if not isinstance(diarization_enabled, bool):
             raise TypeError("diarization_enabled must be a bool.")
+        if not isinstance(known_speaker_enabled, bool):
+            raise TypeError("known_speaker_enabled must be a bool.")
         self.root_url, self.api_base = normalize_api_base(api_base)
         self.api_key = api_key
         self.model = model
         self.language = language
         self.diarization_enabled = diarization_enabled
+        self.known_speaker_enabled = known_speaker_enabled
         self.poll_interval_seconds = poll_interval_seconds
         self.job_timeout_seconds = job_timeout_seconds
         self.request_timeout_seconds = request_timeout_seconds
@@ -347,6 +437,9 @@ class VoxhelmClient:
             language=str(get_setting("CAST_VOXHELM_LANGUAGE", "", request_or_site=request_or_site)).strip(),
             diarization_enabled=get_bool_setting(
                 "CAST_VOXHELM_DIARIZATION_ENABLED", False, request_or_site=request_or_site
+            ),
+            known_speaker_enabled=get_bool_setting(
+                "CAST_VOXHELM_KNOWN_SPEAKER_ENABLED", False, request_or_site=request_or_site
             ),
             poll_interval_seconds=get_float_setting(
                 "CAST_VOXHELM_POLL_INTERVAL", 2.0, request_or_site=request_or_site
@@ -402,6 +495,7 @@ class VoxhelmClient:
         context: dict[str, Any],
         speaker_count: int | None = None,
         diarization_enabled: bool | None = None,
+        known_speakers: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         if speaker_count is not None and (
             not isinstance(speaker_count, int) or isinstance(speaker_count, bool) or speaker_count < 1
@@ -427,6 +521,9 @@ class VoxhelmClient:
             diarization: dict[str, Any] = {"enabled": True}
             if speaker_count is not None:
                 diarization["num_speakers"] = speaker_count
+            if known_speakers:
+                diarization["strategy"] = KNOWN_SPEAKER_STRATEGY
+                diarization["known_speakers"] = known_speakers
             payload["diarization"] = diarization
         return self.request_json(method="POST", path="jobs", payload=payload)
 
@@ -476,12 +573,19 @@ class VoxhelmTranscriptService:
             diarization_enabled=diarization_enabled,
             diarization_speaker_count=speaker_count,
         )
+        known_speakers: list[dict[str, Any]] = []
+        if diarization_enabled and client_known_speaker_enabled(self.client) and episode is not None:
+            known_speakers = build_known_speaker_references(episode)
+        extra_job_kwargs: dict[str, Any] = {}
+        if known_speakers:
+            extra_job_kwargs["known_speakers"] = known_speakers
         job_payload = self.client.submit_transcription_job(
             source_url=source_url,
             task_ref=resolved_task_ref,
             context={"consumer": "django-cast", "audio_id": audio.pk},
             speaker_count=speaker_count,
             diarization_enabled=diarization_enabled,
+            **extra_job_kwargs,
         )
         state = str(job_payload.get("state", ""))
         if state in TERMINAL_JOB_STATES and state != "succeeded":
@@ -515,9 +619,13 @@ class VoxhelmTranscriptService:
         podlove = self.client.download_artifact(require_artifact_path(job_payload, "podlove"))
         dote = self.client.download_artifact(require_artifact_path(job_payload, "dote"))
         vtt = self.client.download_artifact(require_artifact_path(job_payload, "vtt"))
+        speakers_path = optional_artifact_path(job_payload, "speakers")
+        speakers = self.client.download_artifact(speakers_path) if speakers_path else None
         transcript, created = self._get_or_create_transcript(audio=audio)
         self._update_collection(transcript=transcript, audio=audio)
-        self._save_artifacts(transcript=transcript, audio=audio, podlove=podlove, dote=dote, vtt=vtt)
+        self._save_artifacts(
+            transcript=transcript, audio=audio, podlove=podlove, dote=dote, vtt=vtt, speakers=speakers
+        )
         return TranscriptGenerationResult(
             transcript=transcript,
             created=created,
@@ -560,11 +668,14 @@ class VoxhelmTranscriptService:
         podlove: bytes,
         dote: bytes,
         vtt: bytes,
+        speakers: bytes | None = None,
     ) -> None:
         file_stem = f"audio-{audio.pk}"
         replace_file(transcript.podlove, f"{file_stem}.podlove.json", podlove)
         replace_file(transcript.dote, f"{file_stem}.dote.json", dote)
         replace_file(transcript.vtt, f"{file_stem}.vtt", vtt)
+        if speakers is not None:
+            replace_file(transcript.speakers, f"{file_stem}.speakers.json", speakers)
         transcript.save()
 
 

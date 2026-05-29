@@ -54,3 +54,16 @@
   contributor APIs, feeds, theme context, repository serialization, and public
   transcript output. This first slice only adds private storage; it does not
   send references to Voxhelm or change public transcript output.
+- Added a known-speaker recognition opt-in (``CAST_VOXHELM_KNOWN_SPEAKER_ENABLED``
+  or the site-level Wagtail Voxhelm setting). When enabled, diarized Voxhelm
+  jobs for an episode also send the approved voice references of that episode's
+  expected contributors as known-speaker reference material (source ranges into
+  existing audio or uploaded clips), never public profile URLs. Hidden
+  contributors are excluded unless a reference explicitly opts in.
+- Voxhelm-returned known-speaker suggestions are stored as a private
+  ``Transcript.speakers`` sidecar (per-segment candidates, confidence, margin,
+  uncertainty, and raw diarization labels) in protected storage. They are
+  reviewable editorial state and are excluded from public transcript output.
+  Known-speaker results stay suggestions: public speaker identities are not
+  shown until reviewed and approved. Applying approved suggestions to public
+  transcript output through the admin is the next slice.

@@ -11,6 +11,7 @@ from wagtail.models import CollectionMember
 from wagtail.search import index
 
 from . import Audio
+from .contributors import get_voice_reference_storage
 
 
 SPEAKER_SAMPLE_LIMIT = 3
@@ -91,6 +92,18 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         verbose_name="DOTe Transcript",
         help_text="The DOTe json format for feed / podcatchers",
     )
+    speakers = models.FileField(
+        upload_to="cast_transcript_speakers/",
+        storage=get_voice_reference_storage,
+        null=True,
+        blank=True,
+        verbose_name="Known-speaker suggestions",
+        help_text=(
+            "Private known-speaker suggestions returned by Voxhelm: per-segment "
+            "candidates, confidence, margin, uncertainty, and raw diarization "
+            "labels. Reviewable editorial state, never public transcript output."
+        ),
+    )
 
     admin_form_fields: tuple[str, ...] = ("audio", "podlove", "vtt", "dote")
 
@@ -126,6 +139,34 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             except (FileNotFoundError, OSError):
                 data = {}
         return data
+
+    @property
+    def speakers_data(self) -> dict:
+        """Parsed known-speaker suggestion sidecar, or an empty dict.
+
+        This is private editorial review state. It must never be serialized into
+        public transcript output, feeds, theme context, or APIs.
+        """
+        data: dict = {}
+        if self.speakers:
+            try:
+                with self.speakers.open("r") as file:
+                    data = json.load(file)
+            except (FileNotFoundError, OSError, ValueError):
+                data = {}
+        return data if isinstance(data, dict) else {}
+
+    def get_speaker_suggestions(self) -> list[dict]:
+        """Per-segment known-speaker suggestions for editor review."""
+        segments = self.speakers_data.get("segments", [])
+        return [segment for segment in segments if isinstance(segment, dict)]
+
+    def get_speaker_suggestion_summary(self) -> dict:
+        summary = self.speakers_data.get("summary", {})
+        return summary if isinstance(summary, dict) else {}
+
+    def has_uncertain_speaker_suggestions(self) -> bool:
+        return any(segment.get("speaker_uncertain") for segment in self.get_speaker_suggestions())
 
     @property
     def podcastindex_data(self) -> dict:

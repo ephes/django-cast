@@ -223,3 +223,27 @@ Voice references store only reviewed reference material and editorial state.
 They deliberately do **not** store model-specific voice embeddings, because
 embeddings are owned by the transcription backend and would become stale when
 that backend changes its embedding model.
+
+Known-speaker recognition
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Enable known-speaker recognition with ``CAST_VOXHELM_KNOWN_SPEAKER_ENABLED`` or
+the site-level Voxhelm setting. When enabled, a diarized transcript-generation
+request for an episode also sends the approved voice references of that
+episode's expected contributors to Voxhelm as known-speaker reference material.
+Only approved references are sent, and hidden contributors are excluded unless a
+reference explicitly opted in. References are delivered as source ranges into
+existing audio or as uploaded clips, never as public profile URLs.
+
+Voxhelm classifies the transcript segments against those references and returns
+per-segment *suggestions*: the most likely contributor, a candidate list,
+confidence, a margin, an uncertainty flag, and the raw anonymous diarization
+label. django-cast stores these as a private ``Transcript.speakers`` sidecar in
+protected storage. They are reviewable editorial state and never appear in
+public transcript output, feeds, theme context, or APIs.
+
+Known-speaker results are suggestions, not final identity. Voxhelm leaves the
+public Podlove, DOTe, and WebVTT artifacts unlabeled for known-speaker jobs, so
+no speaker identity is shown publicly until an editor reviews and approves the
+suggestions. Uncertain or low-margin segments are flagged for review rather than
+applied automatically.

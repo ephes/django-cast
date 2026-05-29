@@ -13,14 +13,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
-- [ ] Add private contributor voice references
+- [ ] Apply known-speaker suggestions to public transcript output
   - Notes: [backlog/2026-05-28-contributor-voice-references.md](backlog/2026-05-28-contributor-voice-references.md)
-  - Related to: Speaker diarization for generated transcripts; Podcast contributor follow-up options.
-  - Scope: add private, admin-only contributor voice reference storage for reviewed clips or source ranges. Do not
-    submit references to Voxhelm or change public transcript output in this first slice.
-  - Done when: voice references have validated model/admin coverage, privacy boundaries are tested, docs explain the
-    storage/consent expectations, and no voice-reference data appears in public APIs, feeds, theme context, or
-    repository exports.
+  - Related to: Speaker diarization for generated transcripts.
+  - Scope: private voice-reference storage, the Voxhelm known-speaker request contract, and private storage of the
+    returned per-segment suggestion sidecar have landed (see `0.2.58` release notes). The remaining slice is the
+    Wagtail admin review UI that surfaces per-segment suggestions and their uncertainty, lets an editor approve
+    them, and applies approved speaker identities to public Podlove/DOTe/WebVTT output through the mapping layer.
+  - Done when: editors can review uncertain/low-margin segments, approve suggestions, and have approved speaker
+    identities appear in public transcript output, with raw Voxhelm metadata preserved for audit and remapping.
 
 - [ ] Harden modelsearch follow-ups
   - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)
