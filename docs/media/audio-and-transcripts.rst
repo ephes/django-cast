@@ -168,6 +168,19 @@ django-cast now consumes Voxhelm-owned Podlove, DOTe, and WebVTT transcript
 artifacts directly from the batch job result and persists them onto the
 existing ``Transcript`` model without local format conversion.
 
+Speaker labels are assigned per transcript segment at the transcription
+backend's own segmentation granularity. Voxhelm groups speech into multi-second
+ASR segments and labels each segment with a single (dominant) speaker, so during
+rapid exchanges a segment can span more than one turn -- for example a brief
+"Welcome, <name>" from a host at the start of a guest's first segment. The whole
+segment then carries one speaker label, so the displayed speaker can be
+approximate for a second or two until the next segment boundary, where it
+"catches up". django-cast stores and renders the backend's segments as-is and
+does not re-split them by turn; finer turn alignment (or word-level speaker
+timing) is a transcription-backend concern. Re-mapping labels or applying
+known-speaker review changes *which* name a segment shows, not where segment
+boundaries fall.
+
 When generated transcripts include diarization speaker labels, the Wagtail
 transcript edit form lets editors map those labels to episode contributors.
 The mapping form shows short transcript samples for each speaker and, when the
