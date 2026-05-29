@@ -40,6 +40,7 @@ SPEAKER_SAMPLE_MIN_WORDS = 4
 VOICE_REFERENCE_CANDIDATE_LIMIT = 3
 VOICE_REFERENCE_CANDIDATE_TARGET_SECONDS = Decimal("30.000")
 VOICE_REFERENCE_CANDIDATE_MIN_SECONDS = Decimal("8.000")
+VOICE_REFERENCE_CANDIDATE_MAX_GAP_SECONDS = Decimal("2.000")
 VOICE_REFERENCE_CANDIDATE_MAX_CHARS = 240
 VOICE_REFERENCE_CANDIDATE_QUANTUM = Decimal("0.001")
 LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
@@ -445,6 +446,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         *,
         target_seconds: Decimal = VOICE_REFERENCE_CANDIDATE_TARGET_SECONDS,
         min_seconds: Decimal = VOICE_REFERENCE_CANDIDATE_MIN_SECONDS,
+        max_gap_seconds: Decimal = VOICE_REFERENCE_CANDIDATE_MAX_GAP_SECONDS,
         limit_per_speaker: int = VOICE_REFERENCE_CANDIDATE_LIMIT,
     ) -> list[TranscriptVoiceReferenceCandidate]:
         """Return source-range candidates derived from diarized Podlove segments.
@@ -457,11 +459,12 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             return []
         target_seconds = _quantize_seconds(Decimal(str(target_seconds)))
         min_seconds = _quantize_seconds(Decimal(str(min_seconds)))
-        if target_seconds <= 0 or min_seconds <= 0:
+        max_gap_seconds = _quantize_seconds(Decimal(str(max_gap_seconds)))
+        if target_seconds <= 0 or min_seconds <= 0 or max_gap_seconds < 0:
             return []
 
         candidates_by_speaker: dict[str, list[TranscriptVoiceReferenceCandidate]] = {}
-        for run in self._get_podlove_voice_reference_runs():
+        for run in self._get_podlove_voice_reference_runs(max_gap_seconds=max_gap_seconds):
             candidate = self._build_voice_reference_candidate_from_run(
                 run,
                 target_seconds=target_seconds,
@@ -556,7 +559,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             file_field.storage.delete(file_name)
         file_field.name = file_field.storage.save(file_name, ContentFile(content))
 
-    def _get_podlove_voice_reference_runs(self) -> list[list[_PodloveVoiceReferenceSegment]]:
+    def _get_podlove_voice_reference_runs(
+        self, *, max_gap_seconds: Decimal = VOICE_REFERENCE_CANDIDATE_MAX_GAP_SECONDS
+    ) -> list[list[_PodloveVoiceReferenceSegment]]:
         runs: list[list[_PodloveVoiceReferenceSegment]] = []
         current_run: list[_PodloveVoiceReferenceSegment] = []
         podlove_data = self._load_transcript_json("podlove")
@@ -570,7 +575,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             if (
                 current_run
                 and parsed_segment.speaker_label == current_run[-1].speaker_label
-                and parsed_segment.start_seconds >= current_run[-1].end_seconds
+                and Decimal("0") <= parsed_segment.start_seconds - current_run[-1].end_seconds <= max_gap_seconds
             ):
                 current_run.append(parsed_segment)
             else:

@@ -84,6 +84,37 @@ class TestVoiceReferenceCandidateDerivation:
 
         assert transcript.get_voice_reference_candidates() == []
 
+    def test_derivation_breaks_same_speaker_runs_across_large_gaps(self, audio):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    podlove_segment("Alice", "0", "10", text="Alice speaks before a long transcript gap."),
+                    podlove_segment("Alice", "100", "110", text="Alice speaks after a long transcript gap."),
+                ]
+            },
+        )
+
+        candidates = transcript.get_voice_reference_candidates()
+
+        assert [
+            (candidate.start_seconds, candidate.end_seconds, candidate.duration_seconds, candidate.text)
+            for candidate in candidates
+        ] == [
+            (
+                Decimal("0.000"),
+                Decimal("10.000"),
+                Decimal("10.000"),
+                "Alice speaks before a long transcript gap.",
+            ),
+            (
+                Decimal("100.000"),
+                Decimal("110.000"),
+                Decimal("10.000"),
+                "Alice speaks after a long transcript gap.",
+            ),
+        ]
+
     def test_derivation_uses_timestamp_strings_and_does_not_mutate_transcript_files(self, audio):
         podlove = {
             "transcripts": [
@@ -113,6 +144,7 @@ class TestVoiceReferenceCandidateDerivation:
 
         assert transcript.get_voice_reference_candidates(limit_per_speaker=0) == []
         assert transcript.get_voice_reference_candidates(target_seconds=Decimal("0")) == []
+        assert transcript.get_voice_reference_candidates(max_gap_seconds=Decimal("-0.001")) == []
 
     def test_private_empty_run_builder_guard(self):
         assert (

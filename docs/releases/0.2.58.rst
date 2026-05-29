@@ -83,3 +83,5 @@
   existing transcript audio player, and create pending or explicitly
   consent-gated approved ``ContributorVoiceReference`` rows without editors
   typing raw ``start_seconds`` / ``end_seconds`` for the normal workflow.
+  Candidate ranges split across large untranscribed gaps so a same-speaker label
+  cannot produce one proposed reference that silently spans unrelated audio.
