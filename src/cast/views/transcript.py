@@ -1,6 +1,7 @@
 import json
 from typing import Any, TypedDict, cast
 
+from django.core.exceptions import ValidationError
 from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,16 +21,21 @@ from ..forms import (
     SpeakerContributorMappingForm,
     SPEAKER_MAPPING_ACTION,
     TranscriptForm,
+    VoiceReferenceCandidateCreateForm,
+    VOICE_REFERENCE_CREATE_ACTION,
 )
 from ..models import (
     Blog,
+    Contributor,
     Episode,
     EpisodeContributor,
     Post,
     Transcript,
     TranscriptSpeakerSample,
+    TranscriptVoiceReferenceCandidate,
     get_template_base_dir,
 )
+from ..models.contributors import ContributorVoiceReference
 from ..models.transcript import convert_dote_to_podcastindex_transcript
 from ..site_lookup import get_site_specific_page_or_404
 from ..transcript_sanitization import (
@@ -50,11 +56,25 @@ class SpeakerMappingContext(TypedDict):
     contributor_assignments: list[EpisodeContributor]
     multiple_episodes: bool
     speaker_labels: list[str]
+    source_episode: Episode | None
 
 
 class SpeakerMappingRow(TypedDict):
     field: BoundField
     samples: list[TranscriptSpeakerSample]
+
+
+class VoiceReferenceCandidateRow(TypedDict):
+    candidate: TranscriptVoiceReferenceCandidate
+    contributor: Contributor | None
+    duplicate_reference: ContributorVoiceReference | None
+    form_id: str
+
+
+class VoiceReferenceCandidateGroup(TypedDict):
+    contributor: Contributor | None
+    speaker_label: str
+    rows: list[VoiceReferenceCandidateRow]
 
 
 class AudioSource(TypedDict):
@@ -192,6 +212,7 @@ def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext
         "contributor_assignments": contributor_assignments,
         "multiple_episodes": len(episodes) > 1,
         "speaker_labels": speaker_labels,
+        "source_episode": episodes[0] if len(episodes) == 1 else None,
     }
 
 
@@ -206,6 +227,131 @@ def get_speaker_mapping_rows(
         }
         for field_name, speaker_label in speaker_mapping_form.speaker_field_names.items()
     ]
+
+
+def resolve_voice_reference_contributor(
+    speaker_label: str,
+    contributor_assignments: list[EpisodeContributor],
+) -> Contributor | None:
+    contributors: dict[int, Contributor] = {}
+    for assignment in contributor_assignments:
+        if assignment.display_name != speaker_label or assignment.contributor_id is None:
+            continue
+        contributors[assignment.contributor_id] = assignment.contributor
+    if len(contributors) == 1:
+        return next(iter(contributors.values()))
+    return None
+
+
+def get_duplicate_voice_reference(
+    *,
+    transcript: Transcript,
+    contributor: Contributor,
+    candidate: TranscriptVoiceReferenceCandidate,
+) -> ContributorVoiceReference | None:
+    return (
+        ContributorVoiceReference.objects.filter(
+            contributor=contributor,
+            source_audio=transcript.audio,
+            start_seconds=candidate.start_seconds,
+            end_seconds=candidate.end_seconds,
+        )
+        .order_by("pk")
+        .first()
+    )
+
+
+def get_voice_reference_candidate_groups(
+    transcript: Transcript,
+    speaker_mapping_context: SpeakerMappingContext,
+) -> list[VoiceReferenceCandidateGroup]:
+    groups: dict[str, VoiceReferenceCandidateGroup] = {}
+    candidates = transcript.get_voice_reference_candidates()
+    for index, candidate in enumerate(candidates):
+        contributor = resolve_voice_reference_contributor(
+            candidate.speaker_label,
+            speaker_mapping_context["contributor_assignments"],
+        )
+        group_key = (
+            f"contributor:{contributor.pk}" if contributor is not None else f"speaker:{candidate.speaker_label}"
+        )
+        group = groups.setdefault(
+            group_key,
+            {
+                "contributor": contributor,
+                "speaker_label": candidate.speaker_label,
+                "rows": [],
+            },
+        )
+        duplicate_reference = (
+            get_duplicate_voice_reference(transcript=transcript, contributor=contributor, candidate=candidate)
+            if contributor is not None
+            else None
+        )
+        group["rows"].append(
+            {
+                "candidate": candidate,
+                "contributor": contributor,
+                "duplicate_reference": duplicate_reference,
+                "form_id": f"cast-voice-reference-{transcript.pk}-{index}",
+            }
+        )
+    return list(groups.values())
+
+
+def get_voice_reference_candidate(
+    transcript: Transcript,
+    *,
+    speaker_label: str,
+    candidate_rank: int,
+) -> TranscriptVoiceReferenceCandidate | None:
+    for candidate in transcript.get_voice_reference_candidates():
+        if candidate.speaker_label == speaker_label and candidate.rank == candidate_rank:
+            return candidate
+    return None
+
+
+def create_voice_reference_from_candidate(
+    transcript: Transcript,
+    speaker_mapping_context: SpeakerMappingContext,
+    candidate: TranscriptVoiceReferenceCandidate,
+    *,
+    status: str,
+    consent_confirmed: bool,
+) -> tuple[ContributorVoiceReference, bool]:
+    contributor = resolve_voice_reference_contributor(
+        candidate.speaker_label,
+        speaker_mapping_context["contributor_assignments"],
+    )
+    if contributor is None:
+        raise ValidationError(
+            _("Map this speaker label to one episode contributor before creating a voice reference.")
+        )
+    duplicate_reference = get_duplicate_voice_reference(
+        transcript=transcript,
+        contributor=contributor,
+        candidate=candidate,
+    )
+    if duplicate_reference is not None:
+        return duplicate_reference, False
+    reference = ContributorVoiceReference(
+        contributor=contributor,
+        source_audio=transcript.audio,
+        source_episode=speaker_mapping_context["source_episode"],
+        start_seconds=candidate.start_seconds,
+        end_seconds=candidate.end_seconds,
+        status=status,
+        consent_confirmed=consent_confirmed,
+        notes=_("Created from transcript %(transcript_id)s, speaker label '%(speaker_label)s'.")
+        % {"transcript_id": transcript.pk, "speaker_label": candidate.speaker_label},
+    )
+    reference.full_clean()
+    reference.save()
+    return reference, True
+
+
+def validation_error_message(error: ValidationError) -> str:
+    return " ".join(error.messages)
 
 
 def get_transcript_audio_sources(transcript: Transcript) -> list[AudioSource]:
@@ -246,8 +392,52 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         else:
             messages.warning(request, _("No confident known-speaker suggestions were available to apply."))
         return redirect("cast-transcript:edit", transcript_id=transcript.id)
-
-    if request.method == "POST" and request.POST.get("action") == SPEAKER_MAPPING_ACTION:
+    elif request.method == "POST" and request.POST.get("action") == VOICE_REFERENCE_CREATE_ACTION:
+        form = TranscriptForm(instance=transcript, user=request.user)
+        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+        voice_reference_form = VoiceReferenceCandidateCreateForm(request.POST)
+        if voice_reference_form.is_valid():
+            candidate = get_voice_reference_candidate(
+                transcript,
+                speaker_label=voice_reference_form.cleaned_data["speaker_label"],
+                candidate_rank=voice_reference_form.cleaned_data["candidate_rank"],
+            )
+            if candidate is None:
+                messages.error(request, _("The selected voice-reference candidate is no longer available."))
+            else:
+                try:
+                    reference, created = create_voice_reference_from_candidate(
+                        transcript,
+                        speaker_mapping_context,
+                        candidate,
+                        status=voice_reference_form.cleaned_data["voice_reference_status"],
+                        consent_confirmed=voice_reference_form.cleaned_data["consent_confirmed"],
+                    )
+                except ValidationError as error:
+                    messages.error(request, validation_error_message(error))
+                else:
+                    if created:
+                        if reference.status == ContributorVoiceReference.Status.APPROVED:
+                            messages.success(
+                                request,
+                                _("Created approved voice reference for {0}.").format(reference.contributor),
+                            )
+                        else:
+                            messages.success(
+                                request,
+                                _("Saved pending voice reference for {0}.").format(reference.contributor),
+                            )
+                    else:
+                        messages.warning(
+                            request,
+                            _("A voice reference for {0} already exists for this source range.").format(
+                                reference.contributor
+                            ),
+                        )
+                    return redirect("cast-transcript:edit", transcript_id=transcript.id)
+        else:
+            messages.error(request, _("The voice reference could not be created due to errors."))
+    elif request.method == "POST" and request.POST.get("action") == SPEAKER_MAPPING_ACTION:
         form = TranscriptForm(instance=transcript, user=request.user)
         speaker_mapping_form = SpeakerContributorMappingForm(request.POST, **speaker_mapping_context)
         if speaker_mapping_form.is_valid():
@@ -282,6 +472,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         speaker_mapping_form,
         transcript.get_speaker_samples(),
     )
+    voice_reference_candidate_groups = get_voice_reference_candidate_groups(transcript, speaker_mapping_context)
 
     return render(
         request,
@@ -294,6 +485,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
             "speaker_labels": speaker_mapping_context["speaker_labels"],
             "transcript_audio_sources": get_transcript_audio_sources(transcript),
             "contributor_assignments": speaker_mapping_context["contributor_assignments"],
+            "voice_reference_candidate_groups": voice_reference_candidate_groups,
             "known_speaker_review": transcript.known_speaker_review_summary(),
             "user_can_delete": True,
         },

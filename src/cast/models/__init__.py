@@ -16,7 +16,7 @@ from .theme import (
     get_strictly_required_template_names,
 )
 from .transcript_generation import TranscriptGeneration
-from .transcript import Transcript, TranscriptSpeakerSample
+from .transcript import Transcript, TranscriptSpeakerSample, TranscriptVoiceReferenceCandidate
 from .video import Video, get_video_dimensions
 from .voxhelm_settings import VoxhelmSettings
 
@@ -46,6 +46,7 @@ __all__ = [
     "TranscriptGeneration",
     "Transcript",
     "TranscriptSpeakerSample",
+    "TranscriptVoiceReferenceCandidate",
     "Video",
     "VoxhelmSettings",
     "get_video_dimensions",

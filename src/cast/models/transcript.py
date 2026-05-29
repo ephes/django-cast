@@ -2,7 +2,8 @@ import json
 import re
 import unicodedata
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from django.core.files.base import ContentFile
@@ -36,6 +37,11 @@ SPEAKER_SAMPLE_LIMIT = 3
 SPEAKER_SAMPLE_MAX_CHARS = 180
 SPEAKER_SAMPLE_MIN_CHARS = 35
 SPEAKER_SAMPLE_MIN_WORDS = 4
+VOICE_REFERENCE_CANDIDATE_LIMIT = 3
+VOICE_REFERENCE_CANDIDATE_TARGET_SECONDS = Decimal("30.000")
+VOICE_REFERENCE_CANDIDATE_MIN_SECONDS = Decimal("8.000")
+VOICE_REFERENCE_CANDIDATE_MAX_CHARS = 240
+VOICE_REFERENCE_CANDIDATE_QUANTUM = Decimal("0.001")
 LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
     {
         "ah",
@@ -58,6 +64,21 @@ WEBVTT_TIMING_SEPARATOR = "-->"
 WEBVTT_VOICE_OPENING_RE = re.compile(r"<v(?:\s+([^>]+))?>")
 
 
+def _quantize_seconds(value: Decimal) -> Decimal:
+    return value.quantize(VOICE_REFERENCE_CANDIDATE_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _format_decimal_timestamp(value: Decimal) -> str:
+    total_milliseconds = int((value * 1000).to_integral_value(rounding=ROUND_HALF_UP))
+    total_seconds, milliseconds = divmod(total_milliseconds, 1000)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+    return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+
+
 @dataclass(frozen=True)
 class TranscriptSpeakerSample:
     """Short transcript excerpt used to identify diarized speakers in the admin."""
@@ -72,6 +93,30 @@ class TranscriptSpeakerSample:
 
 
 @dataclass(frozen=True)
+class TranscriptVoiceReferenceCandidate:
+    """Timed clean-solo source-range candidate derived from diarized transcript data."""
+
+    speaker_label: str
+    start_seconds: Decimal
+    end_seconds: Decimal
+    duration_seconds: Decimal
+    text: str
+    rank: int
+
+    @property
+    def start_timestamp_label(self) -> str:
+        return _format_decimal_timestamp(self.start_seconds)
+
+    @property
+    def end_timestamp_label(self) -> str:
+        return _format_decimal_timestamp(self.end_seconds)
+
+    @property
+    def duration_label(self) -> str:
+        return _format_decimal_timestamp(self.duration_seconds)
+
+
+@dataclass(frozen=True)
 class _SpeakerSampleCandidate:
     speaker_label: str
     text: str
@@ -79,6 +124,15 @@ class _SpeakerSampleCandidate:
     start_seconds: float | None
     position: int
     useful: bool
+
+
+@dataclass(frozen=True)
+class _PodloveVoiceReferenceSegment:
+    speaker_label: str
+    start_seconds: Decimal
+    end_seconds: Decimal
+    text: str
+    position: int
 
 
 class Transcript(CollectionMember, index.Indexed, models.Model):
@@ -386,6 +440,47 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             limit=limit,
         )
 
+    def get_voice_reference_candidates(
+        self,
+        *,
+        target_seconds: Decimal = VOICE_REFERENCE_CANDIDATE_TARGET_SECONDS,
+        min_seconds: Decimal = VOICE_REFERENCE_CANDIDATE_MIN_SECONDS,
+        limit_per_speaker: int = VOICE_REFERENCE_CANDIDATE_LIMIT,
+    ) -> list[TranscriptVoiceReferenceCandidate]:
+        """Return source-range candidates derived from diarized Podlove segments.
+
+        Candidates are contiguous, same-label Podlove runs with usable start and
+        end times. Derivation is read-only: transcript files and private
+        known-speaker sidecars are never mutated by this helper.
+        """
+        if limit_per_speaker <= 0:
+            return []
+        target_seconds = _quantize_seconds(Decimal(str(target_seconds)))
+        min_seconds = _quantize_seconds(Decimal(str(min_seconds)))
+        if target_seconds <= 0 or min_seconds <= 0:
+            return []
+
+        candidates_by_speaker: dict[str, list[TranscriptVoiceReferenceCandidate]] = {}
+        for run in self._get_podlove_voice_reference_runs():
+            candidate = self._build_voice_reference_candidate_from_run(
+                run,
+                target_seconds=target_seconds,
+                min_seconds=min_seconds,
+            )
+            if candidate is None:
+                continue
+            candidates_by_speaker.setdefault(candidate.speaker_label, []).append(candidate)
+
+        ranked_candidates: list[TranscriptVoiceReferenceCandidate] = []
+        for speaker_label in sorted(candidates_by_speaker):
+            speaker_candidates = sorted(
+                candidates_by_speaker[speaker_label],
+                key=lambda candidate: (-candidate.duration_seconds, candidate.start_seconds, candidate.end_seconds),
+            )
+            for rank, candidate in enumerate(speaker_candidates[:limit_per_speaker], start=1):
+                ranked_candidates.append(replace(candidate, rank=rank))
+        return ranked_candidates
+
     def rewrite_speaker_labels(self, mapping: Mapping[str, str]) -> bool:
         """Rewrite speaker labels in stored transcript artifacts.
 
@@ -460,6 +555,96 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         if file_field.storage.exists(file_name):
             file_field.storage.delete(file_name)
         file_field.name = file_field.storage.save(file_name, ContentFile(content))
+
+    def _get_podlove_voice_reference_runs(self) -> list[list[_PodloveVoiceReferenceSegment]]:
+        runs: list[list[_PodloveVoiceReferenceSegment]] = []
+        current_run: list[_PodloveVoiceReferenceSegment] = []
+        podlove_data = self._load_transcript_json("podlove")
+        for position, segment in enumerate(podlove_data.get("transcripts", [])):
+            parsed_segment = self._parse_podlove_voice_reference_segment(segment, position=position)
+            if parsed_segment is None:
+                if current_run:
+                    runs.append(current_run)
+                    current_run = []
+                continue
+            if (
+                current_run
+                and parsed_segment.speaker_label == current_run[-1].speaker_label
+                and parsed_segment.start_seconds >= current_run[-1].end_seconds
+            ):
+                current_run.append(parsed_segment)
+            else:
+                if current_run:
+                    runs.append(current_run)
+                current_run = [parsed_segment]
+        if current_run:
+            runs.append(current_run)
+        return runs
+
+    @classmethod
+    def _parse_podlove_voice_reference_segment(
+        cls, segment: Any, *, position: int
+    ) -> _PodloveVoiceReferenceSegment | None:
+        if not isinstance(segment, dict):
+            return None
+        speaker_labels = {
+            label
+            for field_name in ("speaker", "voice")
+            if (label := cls._clean_speaker_label(segment.get(field_name)))
+        }
+        if len(speaker_labels) != 1:
+            return None
+        text = cls._clean_sample_text(segment.get("text"))
+        if not text:
+            return None
+        start_seconds = cls._parse_record_decimal_seconds(
+            segment,
+            millisecond_field="start_ms",
+            timestamp_fields=("start", "startTime"),
+        )
+        end_seconds = cls._parse_record_decimal_seconds(
+            segment,
+            millisecond_field="end_ms",
+            timestamp_fields=("end", "endTime"),
+        )
+        if start_seconds is None or end_seconds is None or start_seconds >= end_seconds:
+            return None
+        return _PodloveVoiceReferenceSegment(
+            speaker_label=next(iter(speaker_labels)),
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
+            text=text,
+            position=position,
+        )
+
+    @classmethod
+    def _build_voice_reference_candidate_from_run(
+        cls,
+        run: list[_PodloveVoiceReferenceSegment],
+        *,
+        target_seconds: Decimal,
+        min_seconds: Decimal,
+    ) -> TranscriptVoiceReferenceCandidate | None:
+        if not run:
+            return None
+        start_seconds = run[0].start_seconds
+        uncapped_end_seconds = run[-1].end_seconds
+        end_seconds = min(uncapped_end_seconds, start_seconds + target_seconds)
+        duration_seconds = _quantize_seconds(end_seconds - start_seconds)
+        if duration_seconds < min_seconds:
+            return None
+        text = cls._truncate_sample_text(
+            " ".join(segment.text for segment in run if segment.start_seconds < end_seconds),
+            max_chars=VOICE_REFERENCE_CANDIDATE_MAX_CHARS,
+        )
+        return TranscriptVoiceReferenceCandidate(
+            speaker_label=run[0].speaker_label,
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
+            duration_seconds=duration_seconds,
+            text=text,
+            rank=0,
+        )
 
     def _get_podlove_speaker_sample_candidates(
         self,
@@ -664,6 +849,54 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             if start_seconds is not None:
                 return start_seconds
         return None
+
+    @classmethod
+    def _parse_record_decimal_seconds(
+        cls,
+        record: dict[str, Any],
+        *,
+        millisecond_field: str,
+        timestamp_fields: tuple[str, ...],
+    ) -> Decimal | None:
+        milliseconds = record.get(millisecond_field)
+        if not isinstance(milliseconds, bool) and isinstance(milliseconds, int | float) and milliseconds >= 0:
+            return _quantize_seconds(Decimal(str(milliseconds)) / Decimal("1000"))
+        for field_name in timestamp_fields:
+            seconds = cls._parse_timestamp_decimal_seconds(record.get(field_name))
+            if seconds is not None:
+                return seconds
+        return None
+
+    @staticmethod
+    def _parse_timestamp_decimal_seconds(value: Any) -> Decimal | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int | float):
+            return _quantize_seconds(Decimal(str(value))) if value >= 0 else None
+        if not isinstance(value, str):
+            return None
+        timestamp = value.strip().replace(",", ".")
+        if not timestamp:
+            return None
+        parts = timestamp.split(":")
+        try:
+            if len(parts) == 3:
+                hours = int(parts[0])
+                minutes = int(parts[1])
+                seconds = Decimal(parts[2])
+            elif len(parts) == 2:
+                hours = 0
+                minutes = int(parts[0])
+                seconds = Decimal(parts[1])
+            elif len(parts) == 1:
+                seconds = Decimal(timestamp)
+                return _quantize_seconds(seconds) if seconds >= 0 else None
+            else:
+                return None
+        except (ValueError, ArithmeticError):
+            return None
+        total_seconds = (Decimal(hours) * Decimal("3600")) + (Decimal(minutes) * Decimal("60")) + seconds
+        return _quantize_seconds(total_seconds) if total_seconds >= 0 else None
 
     @staticmethod
     def _parse_timestamp_seconds(value: Any) -> float | None:

@@ -19,10 +19,12 @@ from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
 from .models import Audio, ChapterMark, EpisodeContributor, Transcript, Video, get_template_base_dir_choices
+from .models.contributors import ContributorVoiceReference
 
 
 SPEAKER_MAPPING_ACTION = "map-speakers"
 KNOWN_SPEAKER_APPLY_ACTION = "apply-known-speakers"
+VOICE_REFERENCE_CREATE_ACTION = "create-voice-reference"
 DRAFT_SPEAKER_ASSIGNMENT_PREFIX = "draft:"
 
 
@@ -304,8 +306,10 @@ class SpeakerContributorMappingForm(forms.Form):
         speaker_labels: list[str],
         contributor_assignments: list[EpisodeContributor],
         multiple_episodes: bool = False,
+        source_episode: Any | None = None,
         **kwargs,
     ) -> None:
+        del source_episode
         super().__init__(*args, **kwargs)
         self.speaker_labels = speaker_labels
         self.contributor_assignments = contributor_assignments
@@ -346,6 +350,29 @@ class SpeakerContributorMappingForm(forms.Form):
             if assignment_id:
                 speaker_mapping[speaker_label] = self.assignment_lookup[assignment_id].display_name
         self.speaker_mapping = speaker_mapping
+        return cleaned_data
+
+
+class VoiceReferenceCandidateCreateForm(forms.Form):
+    """Validate a transcript voice-reference candidate create action."""
+
+    action = forms.CharField(initial=VOICE_REFERENCE_CREATE_ACTION, widget=forms.HiddenInput())
+    speaker_label = forms.CharField(widget=forms.HiddenInput())
+    candidate_rank = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+    voice_reference_status = forms.ChoiceField(
+        choices=(
+            (ContributorVoiceReference.Status.PENDING, _("Save pending reference")),
+            (ContributorVoiceReference.Status.APPROVED, _("Create approved reference")),
+        )
+    )
+    consent_confirmed = forms.BooleanField(required=False)
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean() or {}
+        status = cleaned_data.get("voice_reference_status")
+        consent_confirmed = bool(cleaned_data.get("consent_confirmed"))
+        if status == ContributorVoiceReference.Status.APPROVED and not consent_confirmed:
+            raise ValidationError(_("Creating an approved voice reference requires confirmed contributor consent."))
         return cleaned_data
 
 

@@ -77,3 +77,9 @@
   paragraphs; pass ``smooth=False`` to label only confident segments. The
   private suggestion sidecar (including the uncertainty flags) is preserved for
   audit and re-application.
+- Added a Wagtail transcript voice-reference candidate picker. Diarized Podlove
+  transcripts now derive clean solo source-range candidates grouped by resolved
+  speaker/contributor context, audition them with bounded playback in the
+  existing transcript audio player, and create pending or explicitly
+  consent-gated approved ``ContributorVoiceReference`` rows without editors
+  typing raw ``start_seconds`` / ``end_seconds`` for the normal workflow.

@@ -232,6 +232,18 @@ public contributor never deletes reference material; a hidden contributor is
 also excluded from known-speaker use for public transcripts unless an editor
 explicitly opts a reference in with ``allow_for_hidden_contributor``.
 
+For diarized Podlove transcripts, editors normally create source-range
+references from the Wagtail transcript edit view instead of typing raw seconds
+in the Contributor snippet. After mapping speaker labels to episode
+contributors, the transcript view shows *Voice-reference candidates*: contiguous
+solo-looking speaker runs with start, end, duration, and transcript text. The
+candidate buttons use the transcript audio player and stop playback at the
+candidate end time so the range can be auditioned before saving. Saving without
+confirmed consent creates a ``pending`` reference; creating an ``approved``
+reference requires the editor to explicitly tick the consent confirmation in
+that row. Existing matching source-range references are shown as already
+present and are not duplicated.
+
 Voice references store only reviewed reference material and editorial state.
 They deliberately do **not** store model-specific voice embeddings, because
 embeddings are owned by the transcription backend and would become stale when

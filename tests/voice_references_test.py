@@ -220,6 +220,24 @@ class TestVoiceReferencePrivacy:
         assert "voice.wav" not in serialized
         assert "cast_voice_references" not in serialized
 
+    def test_serialize_contributor_excludes_source_range_voice_references(self, audio):
+        from cast.models.repository.serialization import serialize_contributor
+
+        contributor = Contributor.objects.create(display_name="Johannes", slug="johannes-source")
+        ContributorVoiceReference.objects.create(
+            contributor=contributor,
+            source_audio=audio,
+            start_seconds="1.000",
+            end_seconds="12.000",
+        )
+
+        serialized = repr(serialize_contributor(contributor)).lower()
+
+        assert "voice_reference" not in serialized
+        assert "source_audio" not in serialized
+        assert "start_seconds" not in serialized
+        assert "end_seconds" not in serialized
+
 
 @pytest.mark.django_db
 class TestVoiceReferenceAdmin:

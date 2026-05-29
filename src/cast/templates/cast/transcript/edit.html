@@ -19,21 +19,41 @@
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       var audio = document.querySelector('[data-cast-speaker-audio]');
-      if (!audio) {
-        return;
-      }
-      document.querySelectorAll('[data-cast-speaker-seek]').forEach(function(button) {
-        button.addEventListener('click', function() {
-          var seconds = Number(button.getAttribute('data-cast-speaker-seek'));
-          if (Number.isNaN(seconds)) {
-            return;
-          }
-          audio.currentTime = seconds;
-          var playPromise = audio.play();
-          if (playPromise && typeof playPromise.catch === 'function') {
-            playPromise.catch(function() {});
+      if (audio) {
+        var boundedEnd = null;
+        audio.addEventListener('timeupdate', function() {
+          if (boundedEnd !== null && audio.currentTime >= boundedEnd) {
+            audio.pause();
+            boundedEnd = null;
           }
         });
+        document.querySelectorAll('[data-cast-speaker-seek]').forEach(function(button) {
+          button.addEventListener('click', function() {
+            var seconds = Number(button.getAttribute('data-cast-speaker-seek'));
+            var endSeconds = Number(button.getAttribute('data-cast-speaker-end'));
+            if (Number.isNaN(seconds)) {
+              return;
+            }
+            boundedEnd = Number.isNaN(endSeconds) ? null : endSeconds;
+            audio.currentTime = seconds;
+            var playPromise = audio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+              playPromise.catch(function() {});
+            }
+          });
+        });
+      }
+      document.querySelectorAll('[data-cast-voice-reference-form]').forEach(function(form) {
+        var checkbox = form.querySelector('[data-cast-voice-reference-consent]');
+        var approveButton = form.querySelector('[data-cast-voice-reference-approve]');
+        if (!checkbox || !approveButton) {
+          return;
+        }
+        var syncApprovalState = function() {
+          approveButton.disabled = !checkbox.checked;
+        };
+        checkbox.addEventListener('change', syncApprovalState);
+        syncApprovalState();
       });
     });
   </script>
@@ -119,6 +139,73 @@
       line-height: 1.4;
       margin: 0;
       min-width: 0;
+    }
+
+    .cast-voice-reference-group {
+      border-top: 1px solid var(--w-color-border-furniture, #4c4c4c);
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+    }
+
+    .cast-voice-reference-table {
+      border-collapse: collapse;
+      margin: 0.75rem 0 1.5rem;
+      width: 100%;
+    }
+
+    .cast-voice-reference-table th,
+    .cast-voice-reference-table td {
+      border-bottom: 1px solid var(--w-color-border-furniture, #4c4c4c);
+      padding: 0.6rem 0.75rem 0.6rem 0;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .cast-voice-reference-table th {
+      color: var(--w-color-text-label, inherit);
+      font-size: 0.875rem;
+    }
+
+    .cast-voice-reference-table__time {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .cast-voice-reference-table__text {
+      min-width: 14rem;
+    }
+
+    .cast-voice-reference-actions {
+      display: grid;
+      gap: 0.5rem;
+      min-width: 14rem;
+    }
+
+    .cast-voice-reference-actions label {
+      align-items: start;
+      display: flex;
+      gap: 0.4rem;
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    @media (max-width: 900px) {
+      .cast-voice-reference-table,
+      .cast-voice-reference-table thead,
+      .cast-voice-reference-table tbody,
+      .cast-voice-reference-table th,
+      .cast-voice-reference-table td,
+      .cast-voice-reference-table tr {
+        display: block;
+      }
+
+      .cast-voice-reference-table thead {
+        display: none;
+      }
+
+      .cast-voice-reference-table td {
+        padding-right: 0;
+      }
     }
 
     @media (max-width: 700px) {
@@ -253,6 +340,113 @@
               </li>
             </ul>
           </form>
+
+          <h2>{% trans "Voice-reference candidates" %}</h2>
+          {% if voice_reference_candidate_groups %}
+            {% for group in voice_reference_candidate_groups %}
+              <section class="cast-voice-reference-group">
+                <h3>
+                  {% if group.contributor %}
+                    {{ group.contributor.display_name }}
+                  {% else %}
+                    {{ group.speaker_label }}
+                  {% endif %}
+                </h3>
+                {% if not group.contributor %}
+                  <p>{% trans "Map this speaker label to one contributor before creating a voice reference." %}</p>
+                {% endif %}
+                <table class="cast-voice-reference-table">
+                  <thead>
+                    <tr>
+                      <th>{% trans "Speaker" %}</th>
+                      <th>{% trans "Start" %}</th>
+                      <th>{% trans "End" %}</th>
+                      <th>{% trans "Duration" %}</th>
+                      <th>{% trans "Text" %}</th>
+                      <th>{% trans "Audition" %}</th>
+                      <th>{% trans "Reference" %}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in group.rows %}
+                      <tr>
+                        <td>{{ row.candidate.speaker_label }}</td>
+                        <td class="cast-voice-reference-table__time">{{ row.candidate.start_timestamp_label }}</td>
+                        <td class="cast-voice-reference-table__time">{{ row.candidate.end_timestamp_label }}</td>
+                        <td class="cast-voice-reference-table__time">{{ row.candidate.duration_label }}</td>
+                        <td class="cast-voice-reference-table__text">{{ row.candidate.text }}</td>
+                        <td>
+                          {% if transcript_audio_sources %}
+                            <button
+                              class="button button-small button-secondary"
+                              type="button"
+                              data-cast-speaker-seek="{{ row.candidate.start_seconds|unlocalize }}"
+                              data-cast-speaker-end="{{ row.candidate.end_seconds|unlocalize }}"
+                            >
+                              {% trans "Play range" %}
+                            </button>
+                          {% else %}
+                            {% trans "No playable audio" %}
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if row.duplicate_reference %}
+                            {% trans "Existing reference" %}
+                          {% elif row.contributor %}
+                            <form
+                              action="{% url 'cast-transcript:edit' transcript.id %}"
+                              method="POST"
+                              novalidate
+                              data-cast-voice-reference-form
+                            >
+                              {% csrf_token %}
+                              <input type="hidden" name="action" value="create-voice-reference" />
+                              <input type="hidden" name="speaker_label" value="{{ row.candidate.speaker_label }}" />
+                              <input type="hidden" name="candidate_rank" value="{{ row.candidate.rank }}" />
+                              <div class="cast-voice-reference-actions">
+                                <button
+                                  class="button button-small button-secondary"
+                                  type="submit"
+                                  name="voice_reference_status"
+                                  value="pending"
+                                >
+                                  {% trans "Save pending" %}
+                                </button>
+                                <label for="{{ row.form_id }}-consent">
+                                  <input
+                                    id="{{ row.form_id }}-consent"
+                                    type="checkbox"
+                                    name="consent_confirmed"
+                                    value="on"
+                                    data-cast-voice-reference-consent
+                                  />
+                                  {% trans "Contributor consent confirmed" %}
+                                </label>
+                                <button
+                                  class="button button-small"
+                                  type="submit"
+                                  name="voice_reference_status"
+                                  value="approved"
+                                  data-cast-voice-reference-approve
+                                  disabled
+                                >
+                                  {% trans "Create approved" %}
+                                </button>
+                              </div>
+                            </form>
+                          {% else %}
+                            {% trans "Needs contributor mapping" %}
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </section>
+            {% endfor %}
+          {% else %}
+            <p>{% trans "No source-range candidates were found for this transcript." %}</p>
+          {% endif %}
         {% else %}
           <p>{% trans "No speaker labels were found in the Podlove or DOTe transcript files." %}</p>
         {% endif %}
