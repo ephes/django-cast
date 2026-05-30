@@ -141,6 +141,25 @@ here, ``enabled`` requests diarization even when this setting is false, and
 audio. The audio-level disabled mode also hides stored speaker labels from
 public transcript output without rewriting the stored transcript files.
 
+CAST_VOXHELM_KNOWN_SPEAKER_ENABLED
+==================================
+
+Whether to send approved contributor voice references to Voxhelm as
+known-speaker reference material for diarized transcript jobs. Defaults to
+``False``. When enabled, a diarized job for an episode also sends the approved
+voice references of that episode's expected contributors (source ranges into
+existing audio or uploaded clips), never public profile URLs. Hidden
+contributors are excluded unless a reference explicitly opts in.
+
+This can be set as a Django setting or environment variable, using the same
+boolean strings as ``CAST_VOXHELM_DIARIZATION_ENABLED``. The Wagtail admin
+``Settings -> Voxhelm settings`` screen also exposes a site-level value.
+
+Known-speaker recognition requires diarization for the job and applies to
+episode-level generation. Voxhelm-returned results are stored as private,
+reviewable per-segment suggestions and are not shown publicly until an editor
+reviews and approves them.
+
 CAST_VOXHELM_POLL_INTERVAL
 ==========================
 

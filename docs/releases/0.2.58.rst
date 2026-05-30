@@ -52,8 +52,9 @@
   consent before approval, support a protected ``"cast_voice_references"``
   ``STORAGES`` alias for uploaded clips, and are excluded from public
   contributor APIs, feeds, theme context, repository serialization, and public
-  transcript output. This first slice only adds private storage; it does not
-  send references to Voxhelm or change public transcript output.
+  transcript output. This entry covers the private storage foundation; sending
+  references to Voxhelm and reviewing the returned suggestions are described in
+  the known-speaker entries below.
 - Added a known-speaker recognition opt-in (``CAST_VOXHELM_KNOWN_SPEAKER_ENABLED``
   or the site-level Wagtail Voxhelm setting). When enabled, diarized Voxhelm
   jobs for an episode also send the approved voice references of that episode's
