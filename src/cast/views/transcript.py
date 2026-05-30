@@ -387,7 +387,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         if applied:
             messages.success(
                 request,
-                _("Applied {0} confident known-speaker suggestions to public transcript output.").format(applied),
+                _("Applied known-speaker names to {0} public transcript entries.").format(applied),
             )
         else:
             messages.warning(request, _("No confident known-speaker suggestions were available to apply."))

@@ -77,6 +77,9 @@
   paragraphs; pass ``smooth=False`` to label only confident segments. The
   private suggestion sidecar (including the uncertainty flags) is preserved for
   audit and re-application.
+- Applying approved known-speaker suggestions now also inserts or replaces
+  matching WebVTT cue voice labels by cue start time, keeping feed-linked WebVTT
+  transcripts in sync with Podlove and DOTe output.
 - Added a Wagtail transcript voice-reference candidate picker. Diarized Podlove
   transcripts now derive clean solo source-range candidates grouped by resolved
   speaker/contributor context, audition them with bounded playback in the

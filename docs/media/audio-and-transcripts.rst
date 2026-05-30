@@ -277,9 +277,10 @@ applied automatically.
 The Wagtail transcript edit view shows a known-speaker review panel with the
 confident and uncertain suggestion counts and the confident speaker
 distribution. *Approve and apply confident suggestions* writes only the
-confident speaker names into the public Podlove ``speaker``/``voice`` and DOTe
-``speakerDesignation`` fields, matched to transcript segments by start time.
-Uncertain segments are left unlabeled for review, and the private suggestion
-sidecar is kept so the raw Voxhelm metadata stays available for audit and
-re-application. Applying WebVTT voice labels from known-speaker suggestions is
-not part of this step yet.
+resolved speaker names into the public Podlove ``speaker``/``voice``, DOTe
+``speakerDesignation``, and matching WebVTT cue voice labels, matched to
+transcript segments or cues by start time. Confident suggestions are used
+directly; by default uncertain segments between known speakers are smoothed from
+the surrounding confident speaker so the public artifacts stay consistent. The
+private suggestion sidecar is kept so the raw Voxhelm metadata stays available
+for audit and re-application.

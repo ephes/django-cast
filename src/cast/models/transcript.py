@@ -33,6 +33,22 @@ def _dote_timestamp_to_ms(value: object) -> int | None:
     return ((hours * 3600 + minutes * 60 + seconds) * 1000) + millis
 
 
+def _webvtt_timestamp_to_ms(value: object) -> int | None:
+    """Parse a WebVTT ``HH:MM:SS.mmm`` or ``MM:SS.mmm`` timestamp into milliseconds."""
+    if not isinstance(value, str):
+        return None
+    match = re.fullmatch(r"(?:(\d+):)?(\d{2}):(\d{2})\.(\d{1,3})", value.strip())
+    if match is None:
+        return None
+    hours, minutes, seconds, millis = match.groups()
+    return ((int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds)) * 1000) + int(millis.ljust(3, "0"))
+
+
+def _webvtt_timing_line_start_ms(line: str) -> int | None:
+    start_timestamp = line.split(WEBVTT_TIMING_SEPARATOR, 1)[0].strip()
+    return _webvtt_timestamp_to_ms(start_timestamp)
+
+
 SPEAKER_SAMPLE_LIMIT = 3
 SPEAKER_SAMPLE_MAX_CHARS = 180
 SPEAKER_SAMPLE_MIN_CHARS = 35
@@ -266,11 +282,12 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         }
 
     def apply_known_speaker_suggestions(self, *, smooth: bool = True) -> int:
-        """Apply known-speaker suggestions to public Podlove/DOTe output.
+        """Apply known-speaker suggestions to public transcript output.
 
         Editor approval step: confident (non-uncertain) per-segment suggestions
-        are written into the public Podlove ``speaker``/``voice`` and DOTe
-        ``speakerDesignation`` fields, matched to segments by start time.
+        are written into the public Podlove ``speaker``/``voice``, DOTe
+        ``speakerDesignation``, and WebVTT voice-label fields, matched to
+        segments or cues by start time.
 
         With ``smooth=True`` (the default), uncertain segments are filled with
         the surrounding confident speaker (carry the previous confident speaker
@@ -281,7 +298,8 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
 
         The private ``speakers`` sidecar is preserved unchanged, so the raw
         per-segment candidates and uncertainty flags stay available for audit
-        and re-application. Returns the number of segments labeled.
+        and re-application. Returns the number of public transcript entries
+        labeled across stored formats.
         """
         suggestions = sorted(self.get_speaker_suggestions(), key=_segment_sort_key)
         display_names = self._resolve_known_speaker_display_names(suggestions, smooth=smooth)
@@ -298,6 +316,8 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             return 0
         applied = self._apply_suggestions_to_podlove(names_by_start_ms)
         applied += self._apply_suggestions_to_dote(names_by_start_ms)
+        if self.vtt:
+            applied += self._apply_suggestions_to_webvtt(names_by_start_ms)
         if applied:
             self.save()
         return applied
@@ -371,6 +391,80 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         if applied:
             self._write_transcript_json("dote", data)
         return applied
+
+    def _apply_suggestions_to_webvtt(self, names_by_start_ms: dict[int, str]) -> int:
+        content = self._load_text_file("vtt")
+        rewritten_content, applied, changed = self._apply_suggestions_to_webvtt_content(content, names_by_start_ms)
+        if changed:
+            self._save_text_file("vtt", rewritten_content)
+        return applied
+
+    @classmethod
+    def _apply_suggestions_to_webvtt_content(
+        cls, content: str, names_by_start_ms: Mapping[int, str]
+    ) -> tuple[str, int, bool]:
+        rewritten_lines: list[str] = []
+        payload_lines: list[str] | None = None
+        current_name: str | None = None
+        applied = 0
+        changed = False
+
+        def flush_payload() -> None:
+            nonlocal applied, changed, current_name, payload_lines
+            if payload_lines is None:
+                return
+            lines = payload_lines
+            if current_name:
+                lines, cue_changed, cue_applied = cls._set_webvtt_cue_voice(lines, current_name)
+                if cue_applied:
+                    applied += 1
+                changed = changed or cue_changed
+            rewritten_lines.extend(lines)
+            current_name = None
+            payload_lines = None
+
+        for line in content.splitlines(keepends=True):
+            if payload_lines is not None:
+                if not line.strip():
+                    flush_payload()
+                    rewritten_lines.append(line)
+                else:
+                    payload_lines.append(line)
+                continue
+
+            if WEBVTT_TIMING_SEPARATOR in line:
+                start_ms = _webvtt_timing_line_start_ms(line)
+                current_name = names_by_start_ms.get(start_ms) if start_ms is not None else None
+                payload_lines = []
+            rewritten_lines.append(line)
+
+        flush_payload()
+        return "".join(rewritten_lines), applied, changed
+
+    @classmethod
+    def _set_webvtt_cue_voice(cls, lines: list[str], name: str) -> tuple[list[str], bool, bool]:
+        rewritten_lines = []
+        changed = False
+        has_voice_opening = False
+        for line in lines:
+            rewritten_line, line_changed, line_has_voice_opening = cls._set_webvtt_payload_line_voice(line, name)
+            rewritten_lines.append(rewritten_line)
+            changed = changed or line_changed
+            has_voice_opening = has_voice_opening or line_has_voice_opening
+        if has_voice_opening:
+            return rewritten_lines, changed, True
+        if not rewritten_lines:
+            return rewritten_lines, False, False
+        rewritten_lines[0] = f"{cls._webvtt_voice_opening(name)}{rewritten_lines[0]}"
+        return rewritten_lines, True, True
+
+    @classmethod
+    def _set_webvtt_payload_line_voice(cls, line: str, name: str) -> tuple[str, bool, bool]:
+        rewritten_line, replacements = WEBVTT_VOICE_OPENING_RE.subn(
+            lambda _match: cls._webvtt_voice_opening(name),
+            line,
+        )
+        return rewritten_line, rewritten_line != line, replacements > 0
 
     def _write_transcript_json(self, field_name: str, data: dict) -> None:
         # Only called after _load_transcript_json read this field's file, so the
@@ -998,10 +1092,14 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             target_label = mapping.get(label)
             if target_label is None:
                 return match.group(0)
-            return f"<v {target_label}>"
+            return cls._webvtt_voice_opening(target_label)
 
         rewritten_line = WEBVTT_VOICE_OPENING_RE.sub(replace_voice_opening, line)
         return rewritten_line, rewritten_line != line
+
+    @staticmethod
+    def _webvtt_voice_opening(label: str) -> str:
+        return f"<v {label}>"
 
 
 def time_to_seconds(time_str) -> float:
