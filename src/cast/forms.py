@@ -12,13 +12,23 @@ from typing import Any, cast
 from django import forms
 from django.core.exceptions import ValidationError
 from django.forms.models import modelform_factory
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin import widgets
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
-from .models import Audio, ChapterMark, EpisodeContributor, Transcript, Video, get_template_base_dir_choices
+from .models import (
+    Audio,
+    ChapterMark,
+    Contributor,
+    EpisodeContributor,
+    Transcript,
+    TranscriptSpeakerMapping,
+    Video,
+    get_template_base_dir_choices,
+)
 from .models.contributors import ContributorVoiceReference
 from .models.transcript import (
     KNOWN_SPEAKER_DECISION_APPROVE,
@@ -304,15 +314,17 @@ class TranscriptForm(BaseCollectionMemberForm):
 
 
 class SpeakerContributorMappingForm(forms.Form):
-    """Dynamic form mapping transcript speaker labels to episode contributors."""
+    """Dynamic form mapping raw transcript speaker labels to durable targets."""
 
     action = forms.CharField(initial=SPEAKER_MAPPING_ACTION, widget=forms.HiddenInput())
     speaker_mapping: dict[str, str]
+    mapping_updates: dict[str, dict[str, Any]]
 
     def __init__(
         self,
         *args,
-        speaker_labels: list[str],
+        speaker_mappings: list[TranscriptSpeakerMapping] | None = None,
+        speaker_labels: list[str] | None = None,
         contributor_assignments: list[EpisodeContributor],
         multiple_episodes: bool = False,
         source_episode: Any | None = None,
@@ -320,19 +332,40 @@ class SpeakerContributorMappingForm(forms.Form):
     ) -> None:
         del source_episode
         super().__init__(*args, **kwargs)
-        self.speaker_labels = speaker_labels
+        self.speaker_mappings = speaker_mappings or []
+        self.speaker_labels = speaker_labels or [mapping.speaker_label for mapping in self.speaker_mappings]
         self.contributor_assignments = contributor_assignments
-        self.assignment_lookup: dict[str, EpisodeContributor] = {}
-        choices: list[tuple[str, str]] = [("", str(_("Leave unchanged")))]
+        self.contributor_lookup: dict[str, Contributor] = {}
+        self.contributor_value_by_id: dict[int, str] = {}
+        choices: list[tuple[str, str]] = [("", str(_("Unmapped")))]
+        seen_contributor_values = set()
         for assignment in contributor_assignments:
             assignment_value = self._assignment_value(assignment)
-            self.assignment_lookup[assignment_value] = assignment
+            if assignment_value in seen_contributor_values:
+                continue
+            seen_contributor_values.add(assignment_value)
+            self.contributor_lookup[assignment_value] = assignment.contributor
+            if assignment.contributor_id is not None:
+                self.contributor_value_by_id.setdefault(assignment.contributor_id, assignment_value)
             choices.append((assignment_value, self._assignment_label(assignment, multiple_episodes=multiple_episodes)))
-        self.speaker_field_names = {}
-        for index, speaker_label in enumerate(speaker_labels):
+        self.speaker_field_names: dict[str, str] = {}
+        self.display_field_names: dict[str, str] = {}
+        self.mapping_by_label = {mapping.speaker_label: mapping for mapping in self.speaker_mappings}
+        for index, speaker_label in enumerate(self.speaker_labels):
             field_name = f"speaker_{index}"
+            display_field_name = f"speaker_display_name_{index}"
+            mapping = self.mapping_by_label.get(speaker_label)
             self.speaker_field_names[field_name] = speaker_label
-            self.fields[field_name] = forms.ChoiceField(label=speaker_label, choices=choices, required=False)
+            self.display_field_names[display_field_name] = speaker_label
+            target_field = forms.ChoiceField(label=speaker_label, choices=choices, required=False)
+            display_field = forms.CharField(label=_("One-off display name"), max_length=128, required=False)
+            if mapping is not None:
+                if mapping.contributor_id is not None:
+                    target_field.initial = self.contributor_value_by_id.get(mapping.contributor_id, "")
+                elif mapping.display_name:
+                    display_field.initial = mapping.display_name
+            self.fields[field_name] = target_field
+            self.fields[display_field_name] = display_field
 
     @staticmethod
     def _assignment_value(assignment: EpisodeContributor) -> str:
@@ -354,12 +387,79 @@ class SpeakerContributorMappingForm(forms.Form):
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean() or {}
         speaker_mapping = {}
+        mapping_updates: dict[str, dict[str, Any]] = {}
+        raw_speaker_labels = {Transcript._clean_speaker_label(label) for label in self.speaker_labels}
+        display_field_by_label = {
+            speaker_label: field_name for field_name, speaker_label in self.display_field_names.items()
+        }
         for field_name, speaker_label in self.speaker_field_names.items():
-            assignment_id = cleaned_data.get(field_name)
-            if assignment_id:
-                speaker_mapping[speaker_label] = self.assignment_lookup[assignment_id].display_name
+            contributor_value = cleaned_data.get(field_name)
+            display_name = Transcript._clean_speaker_label(cleaned_data.get(display_field_by_label[speaker_label]))
+            contributor = self.contributor_lookup.get(contributor_value) if contributor_value else None
+            if contributor_value and contributor is None:
+                self.add_error(field_name, _("Select a valid contributor."))
+                continue
+            if contributor is not None and display_name:
+                self.add_error(display_field_by_label[speaker_label], _("Use either a contributor or a display name."))
+                continue
+            if display_name and display_name in raw_speaker_labels:
+                self.add_error(
+                    display_field_by_label[speaker_label],
+                    _("Use a display name that does not match a raw transcript speaker label."),
+                )
+                continue
+            if contributor is not None:
+                speaker_mapping[speaker_label] = contributor.display_name
+            elif display_name:
+                speaker_mapping[speaker_label] = display_name
+            mapping_updates[speaker_label] = {
+                "mapping": self.mapping_by_label.get(speaker_label),
+                "contributor": contributor,
+                "display_name": display_name,
+            }
         self.speaker_mapping = speaker_mapping
+        self.mapping_updates = mapping_updates
         return cleaned_data
+
+    def save(self) -> int:
+        changed = 0
+        now = timezone.now()
+        fingerprints_by_transcript_id: dict[int, str] = {}
+        for update in self.mapping_updates.values():
+            mapping = update["mapping"]
+            if mapping is None:
+                continue
+            contributor = update["contributor"]
+            display_name = update["display_name"]
+            if contributor is not None or display_name:
+                review_state = TranscriptSpeakerMapping.ReviewState.APPROVED
+                reviewed_at = now
+            else:
+                review_state = TranscriptSpeakerMapping.ReviewState.UNMAPPED
+                reviewed_at = None
+            if mapping.transcript_id not in fingerprints_by_transcript_id:
+                fingerprints_by_transcript_id[mapping.transcript_id] = (
+                    mapping.transcript.transcript_artifact_fingerprint()
+                )
+            source_artifact_fingerprint = fingerprints_by_transcript_id[mapping.transcript_id]
+            next_values = {
+                "contributor": contributor,
+                "display_name": display_name,
+                "review_state": review_state,
+                "reviewed_at": reviewed_at,
+                "source_artifact_fingerprint": source_artifact_fingerprint,
+                "active": True,
+            }
+            update_fields = []
+            for field_name, value in next_values.items():
+                if getattr(mapping, field_name) != value:
+                    setattr(mapping, field_name, value)
+                    update_fields.append(field_name)
+            if update_fields:
+                mapping.full_clean()
+                mapping.save(update_fields=update_fields)
+                changed += 1
+        return changed
 
 
 class KnownSpeakerSegmentReviewForm(forms.Form):

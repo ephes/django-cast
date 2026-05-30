@@ -33,6 +33,7 @@ from ..models import (
     EpisodeContributor,
     Post,
     Transcript,
+    TranscriptSpeakerMapping,
     TranscriptSpeakerSample,
     TranscriptVoiceReferenceCandidate,
     get_template_base_dir,
@@ -41,6 +42,9 @@ from ..models.contributors import ContributorVoiceReference
 from ..models.transcript import _dote_timestamp_to_ms, convert_dote_to_podcastindex_transcript
 from ..site_lookup import get_site_specific_page_or_404
 from ..transcript_sanitization import (
+    apply_public_speaker_mapping_to_dote_data,
+    apply_public_speaker_mapping_to_podlove_data,
+    apply_public_speaker_mapping_to_webvtt_content,
     public_episode_from_request,
     sanitize_dote_data,
     sanitize_podlove_data,
@@ -57,13 +61,16 @@ TRANSCRIPT_FALLBACK_THEME = "plain"
 class SpeakerMappingContext(TypedDict):
     contributor_assignments: list[EpisodeContributor]
     multiple_episodes: bool
+    speaker_mappings: list[TranscriptSpeakerMapping]
     speaker_labels: list[str]
     source_episode: Episode | None
 
 
 class SpeakerMappingRow(TypedDict):
-    field: BoundField
+    display_name_field: BoundField
+    mapping: TranscriptSpeakerMapping
     samples: list[TranscriptSpeakerSample]
+    target_field: BoundField
 
 
 class VoiceReferenceCandidateRow(TypedDict):
@@ -119,6 +126,7 @@ def _render_transcript_html(
         data = transcript.podlove_data
     except json.JSONDecodeError:
         return HttpResponse("Invalid JSON format in podlove file", status=400)
+    data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
     data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
     if episode is not None:
         context = episode.get_context(request)
@@ -210,6 +218,7 @@ def _episode_from_latest_revision(episode: Episode) -> Episode:
 
 
 def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext:
+    transcript.sync_speaker_mappings()
     episodes = [
         _episode_from_latest_revision(episode)
         for episode in transcript.audio.episodes.select_related("latest_revision")
@@ -219,10 +228,12 @@ def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext
     contributor_assignments: list[EpisodeContributor] = []
     for episode in episodes:
         contributor_assignments.extend(episode.visible_contributor_assignments)
-    speaker_labels = transcript.get_speaker_labels()
+    speaker_mappings = list(transcript.speaker_mappings.select_related("contributor").all())
+    speaker_labels = [mapping.speaker_label for mapping in speaker_mappings if mapping.active]
     return {
         "contributor_assignments": contributor_assignments,
         "multiple_episodes": len(episodes) > 1,
+        "speaker_mappings": speaker_mappings,
         "speaker_labels": speaker_labels,
         "source_episode": episodes[0] if len(episodes) == 1 else None,
     }
@@ -234,10 +245,13 @@ def get_speaker_mapping_rows(
 ) -> list[SpeakerMappingRow]:
     return [
         {
-            "field": speaker_mapping_form[field_name],
+            "display_name_field": speaker_mapping_form[f"speaker_display_name_{index}"],
+            "mapping": speaker_mapping_form.mapping_by_label[speaker_label],
             "samples": speaker_samples.get(speaker_label, []),
+            "target_field": speaker_mapping_form[field_name],
         }
-        for field_name, speaker_label in speaker_mapping_form.speaker_field_names.items()
+        for index, (field_name, speaker_label) in enumerate(speaker_mapping_form.speaker_field_names.items())
+        if speaker_label in speaker_mapping_form.mapping_by_label
     ]
 
 
@@ -527,10 +541,10 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         form = TranscriptForm(instance=transcript, user=request.user)
         speaker_mapping_form = SpeakerContributorMappingForm(request.POST, **speaker_mapping_context)
         if speaker_mapping_form.is_valid():
-            if transcript.rewrite_speaker_labels(speaker_mapping_form.speaker_mapping):
-                messages.success(request, _("Speaker labels updated."))
+            if speaker_mapping_form.save():
+                messages.success(request, _("Speaker mappings saved."))
             else:
-                messages.warning(request, _("No speaker labels were changed."))
+                messages.warning(request, _("No speaker mappings were changed."))
             return redirect("cast-transcript:edit", transcript_id=transcript.id)
         messages.error(request, _("The speaker labels could not be updated due to errors."))
     elif request.method == "POST":
@@ -730,6 +744,7 @@ def podlove_transcript_json(request: HttpRequest, pk) -> HttpResponse:
             except json.JSONDecodeError:
                 return HttpResponse("Invalid JSON format in podlove file", status=400)
         episode = public_episode_from_request(request, transcript=transcript)
+        data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
         data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
         return JsonResponse(data)
     return HttpResponse("Podlove file not available", status=404)
@@ -746,6 +761,7 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
             dote_data = json.load(file)
         if not dote_data:
             return JsonResponse(dote_data)
+        dote_data = apply_public_speaker_mapping_to_dote_data(dote_data, transcript, episode=episode)
         dote_data = sanitize_dote_data(
             dote_data,
             strict_public_speaker_labels_for_transcript(transcript, episode=episode),
@@ -765,6 +781,7 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
         with transcript.vtt.open("r") as file:
             content = file.read()
         episode = public_episode_from_request(request, transcript=transcript)
+        content = apply_public_speaker_mapping_to_webvtt_content(content, transcript, episode=episode)
         content = sanitize_webvtt_content(
             content,
             strict_public_speaker_labels_for_transcript(transcript, episode=episode),

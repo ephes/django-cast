@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import unicodedata
@@ -6,13 +7,15 @@ from dataclasses import dataclass, replace
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import models
+from django.utils import timezone
 from wagtail.models import CollectionMember
 from wagtail.search import index
 
 from . import Audio
-from .contributors import get_voice_reference_storage
+from .contributors import Contributor, get_voice_reference_storage
 
 
 def _segment_sort_key(segment: dict) -> float:
@@ -78,12 +81,14 @@ LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
     }
 )
 WEBVTT_TIMING_SEPARATOR = "-->"
-WEBVTT_VOICE_OPENING_RE = re.compile(r"<v(?:\s+([^>]+))?>")
+WEBVTT_VOICE_OPENING_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>")
 WEBVTT_VOICE_CLOSING_RE = re.compile(r"</v>")
+WEBVTT_GENERIC_SPEAKER_PREFIX_RE = re.compile(r"^(?P<label>Speaker\s+\d+)\s*:\s*(?P<text>.*)$", re.IGNORECASE)
 KNOWN_SPEAKER_EDITOR_DECISION_FIELD = "editor_decision"
 KNOWN_SPEAKER_DECISION_APPROVE = "approve"
 KNOWN_SPEAKER_DECISION_CORRECT = "correct"
 KNOWN_SPEAKER_DECISION_REJECT = "reject"
+TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS = ("podlove", "dote", "vtt")
 
 
 def _quantize_seconds(value: Decimal) -> Decimal:
@@ -204,6 +209,18 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     class Meta:
         ordering = ("-id",)
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        update_fields = kwargs.get("update_fields")
+        super().save(*args, **kwargs)
+        if self._should_sync_speaker_mappings(update_fields):
+            self.sync_speaker_mappings()
+
+    @staticmethod
+    def _should_sync_speaker_mappings(update_fields: Any) -> bool:
+        if update_fields is None:
+            return True
+        return bool(set(update_fields).intersection((*TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS, "audio")))
+
     def get_all_paths(self) -> set[str]:
         paths = set()
         for field_name in ("podlove", "vtt", "dote"):
@@ -249,6 +266,84 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             except (FileNotFoundError, OSError, ValueError):
                 data = {}
         return data if isinstance(data, dict) else {}
+
+    def transcript_artifact_fingerprint(self) -> str:
+        """Return a stable hash for the current raw public transcript artifacts."""
+        digest = hashlib.sha256()
+        saw_content = False
+        for field_name in TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS:
+            content = self._read_file_bytes(field_name)
+            if content is None:
+                continue
+            saw_content = True
+            digest.update(field_name.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(content)
+            digest.update(b"\0")
+        return digest.hexdigest() if saw_content else ""
+
+    def _read_file_bytes(self, field_name: str) -> bytes | None:
+        file_field = getattr(self, field_name)
+        if not file_field:
+            return None
+        try:
+            with file_field.open("rb") as file:
+                return file.read()
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+
+    def sync_speaker_mappings(self) -> None:
+        """Synchronize durable anonymous-speaker mapping rows with raw artifacts."""
+        if self.pk is None:
+            return
+        speaker_labels = self.get_speaker_labels()
+        seen_labels = set(speaker_labels)
+        fingerprint = self.transcript_artifact_fingerprint()
+        now = timezone.now()
+        existing_mappings = {mapping.speaker_label: mapping for mapping in self.speaker_mappings.all()}
+
+        for speaker_label in speaker_labels:
+            mapping = existing_mappings.get(speaker_label)
+            if mapping is None:
+                TranscriptSpeakerMapping.objects.create(
+                    transcript=self,
+                    speaker_label=speaker_label,
+                    source_artifact_fingerprint=fingerprint,
+                    last_seen=now,
+                )
+                continue
+            update_fields = []
+            if not mapping.active:
+                mapping.active = True
+                update_fields.append("active")
+            if mapping.last_seen != now:
+                mapping.last_seen = now
+                update_fields.append("last_seen")
+            if mapping.review_state == TranscriptSpeakerMapping.ReviewState.APPROVED:
+                if mapping.contributor_id is None and not mapping.display_name:
+                    mapping.review_state = TranscriptSpeakerMapping.ReviewState.STALE
+                    update_fields.append("review_state")
+                elif mapping.source_artifact_fingerprint != fingerprint:
+                    mapping.review_state = TranscriptSpeakerMapping.ReviewState.STALE
+                    update_fields.append("review_state")
+            elif mapping.source_artifact_fingerprint != fingerprint:
+                mapping.source_artifact_fingerprint = fingerprint
+                update_fields.append("source_artifact_fingerprint")
+            if update_fields:
+                mapping.save(update_fields=update_fields)
+
+        for speaker_label, mapping in existing_mappings.items():
+            if speaker_label in seen_labels:
+                continue
+            update_fields = []
+            if mapping.active:
+                mapping.active = False
+                update_fields.append("active")
+            if mapping.review_state == TranscriptSpeakerMapping.ReviewState.APPROVED:
+                mapping.review_state = TranscriptSpeakerMapping.ReviewState.STALE
+                update_fields.append("review_state")
+            if update_fields:
+                mapping.save(update_fields=update_fields)
 
     def get_speaker_suggestions(self) -> list[dict]:
         """Per-segment known-speaker suggestions for editor review."""
@@ -706,7 +801,33 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             label = self._clean_speaker_label(line.get("speakerDesignation"))
             if label:
                 labels.add(label)
+        if self.vtt:
+            labels.update(self._get_webvtt_speaker_labels(self._load_text_file("vtt")))
         return sorted(labels)
+
+    @classmethod
+    def _get_webvtt_speaker_labels(cls, content: str) -> set[str]:
+        labels: set[str] = set()
+        in_cue_payload = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                in_cue_payload = False
+                continue
+            if WEBVTT_TIMING_SEPARATOR in line:
+                in_cue_payload = True
+                continue
+            if not in_cue_payload:
+                continue
+            for match in WEBVTT_VOICE_OPENING_RE.finditer(line):
+                label = cls._clean_speaker_label(match.group("label"))
+                if label:
+                    labels.add(label)
+            generic_prefix_match = WEBVTT_GENERIC_SPEAKER_PREFIX_RE.match(stripped)
+            if generic_prefix_match is not None:
+                label = cls._clean_speaker_label(generic_prefix_match.group("label"))
+                labels.add(label)
+        return labels
 
     def get_speaker_samples(
         self,
@@ -844,7 +965,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         try:
             with file_field.open("rb") as file:
                 return file.read().decode("utf-8")
-        except (FileNotFoundError, OSError, UnicodeDecodeError):
+        except (FileNotFoundError, OSError, UnicodeDecodeError, ValueError):
             return ""
 
     def _save_text_file(self, field_name: str, content: str) -> None:
@@ -1293,18 +1414,88 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     @classmethod
     def _rewrite_webvtt_payload_line(cls, line: str, mapping: Mapping[str, str]) -> tuple[str, bool]:
         def replace_voice_opening(match: re.Match[str]) -> str:
-            label = cls._clean_speaker_label(match.group(1))
+            label = cls._clean_speaker_label(match.group("label"))
             target_label = mapping.get(label)
             if target_label is None:
                 return match.group(0)
-            return cls._webvtt_voice_opening(target_label)
+            return cls._webvtt_voice_opening(target_label, classes=match.group("classes"))
 
         rewritten_line = WEBVTT_VOICE_OPENING_RE.sub(replace_voice_opening, line)
         return rewritten_line, rewritten_line != line
 
     @staticmethod
-    def _webvtt_voice_opening(label: str) -> str:
-        return f"<v {label}>"
+    def _webvtt_voice_opening(label: str, *, classes: str = "") -> str:
+        return f"<v{classes} {label}>"
+
+
+class TranscriptSpeakerMapping(models.Model):
+    """Durable editor mapping for raw anonymous transcript speaker labels."""
+
+    class ReviewState(models.TextChoices):
+        UNMAPPED = "unmapped", "Unmapped"
+        APPROVED = "approved", "Approved"
+        STALE = "stale", "Needs review"
+
+    transcript = models.ForeignKey(Transcript, related_name="speaker_mappings", on_delete=models.CASCADE)
+    speaker_label = models.CharField(max_length=256)
+    contributor = models.ForeignKey(
+        Contributor,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="Reusable contributor target for this raw transcript speaker label.",
+    )
+    display_name = models.CharField(
+        max_length=128,
+        blank=True,
+        help_text="One-off public name for this transcript speaker label.",
+    )
+    review_state = models.CharField(
+        max_length=32,
+        choices=ReviewState.choices,
+        default=ReviewState.UNMAPPED,
+    )
+    source_artifact_fingerprint = models.CharField(max_length=64, blank=True)
+    active = models.BooleanField(default=True)
+    last_seen = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("transcript_id", "-active", "speaker_label")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transcript", "speaker_label"],
+                name="unique_transcript_speaker_label",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.transcript_id}: {self.speaker_label}"
+
+    @property
+    def target_display_name(self) -> str:
+        if self.contributor_id is not None and self.contributor is not None:
+            return self.contributor.display_name
+        return Transcript._clean_speaker_label(self.display_name)
+
+    def clean(self) -> None:
+        super().clean()
+        self.speaker_label = Transcript._clean_speaker_label(self.speaker_label)
+        self.display_name = Transcript._clean_speaker_label(self.display_name)
+        has_contributor = self.contributor_id is not None
+        has_display_name = bool(self.display_name)
+        if has_contributor and has_display_name:
+            raise ValidationError("Choose either a contributor or a display name, not both.")
+        if self.review_state == self.ReviewState.APPROVED and not (has_contributor or has_display_name):
+            raise ValidationError("Approved speaker mappings need a contributor or display name.")
+
+    def is_current_for_fingerprint(self, fingerprint: str) -> bool:
+        return (
+            self.active
+            and self.review_state == self.ReviewState.APPROVED
+            and self.source_artifact_fingerprint == fingerprint
+        )
 
 
 def time_to_seconds(time_str) -> float:

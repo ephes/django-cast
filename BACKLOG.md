@@ -57,16 +57,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on
     stable feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
 
-- [ ] Speaker diarization for generated transcripts
-  - Notes: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
-  - Related to: [backlog/2026-05-28-contributor-voice-references.md](backlog/2026-05-28-contributor-voice-references.md);
-    Podcast contributor follow-up options.
-  - Scope: decide the durable transcript speaker state model now that Voxhelm research shows anonymous diarization is
-    fallback-only for known-speaker podcasts: destructive rewrites vs read-time mappings, how returned voice-reference
-    suggestions are stored/reviewed, and which Voxhelm metadata must be preserved.
-  - Done when: the mapping/suggestion persistence decision is recorded, Voxhelm known-speaker follow-up slices are
-    split into Ready items, and stale anonymous-diarization assumptions in the note are removed.
-
 - [ ] Programmatic content editing API
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
     and revise posts or episodes programmatically.

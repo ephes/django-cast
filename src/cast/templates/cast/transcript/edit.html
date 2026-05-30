@@ -392,8 +392,8 @@
         {% endif %}
 
         <h2>{% trans "Map speakers to contributors" %}</h2>
-        {% if speaker_labels %}
-          <p>{% trans "Replace diarization speaker labels in the Podlove and DOTe transcript files, plus matching WebVTT voice labels." %}</p>
+        {% if speaker_mapping_rows %}
+          <p>{% trans "Store approved speaker mappings for public transcript output without rewriting the raw Podlove, DOTe, or WebVTT files." %}</p>
           {% if transcript_audio_sources %}
             <div class="cast-speaker-audio">
               <audio controls preload="metadata" data-cast-speaker-audio>
@@ -404,7 +404,7 @@
             </div>
           {% endif %}
           {% if not contributor_assignments %}
-            <p>{% trans "No episode contributors are available for this transcript's audio." %}</p>
+            <p>{% trans "No episode contributors are available for this transcript's audio. Use one-off display names for speakers who should not become reusable contributors." %}</p>
           {% endif %}
           <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
             {% csrf_token %}
@@ -415,7 +415,13 @@
               {% for row in speaker_mapping_rows %}
                 <li class="cast-speaker-mapping__row">
                   <div class="cast-speaker-mapping__field">
-                    {% include "wagtailadmin/shared/field.html" with field=row.field %}
+                    <p>
+                      <strong>{{ row.mapping.speaker_label }}</strong><br />
+                      {{ row.mapping.get_review_state_display }}
+                      {% if not row.mapping.active %} · {% trans "inactive" %}{% endif %}
+                    </p>
+                    {% include "wagtailadmin/shared/field.html" with field=row.target_field %}
+                    {% include "wagtailadmin/shared/field.html" with field=row.display_name_field %}
                   </div>
                   <div class="cast-speaker-mapping__samples">
                     {% if row.samples %}
@@ -451,7 +457,7 @@
                 <li>{{ speaker_mapping_form.non_field_errors }}</li>
               {% endif %}
               <li>
-                <input class="button" type="submit" value="{% trans 'Apply speaker mapping' %}"{% if not contributor_assignments %} disabled{% endif %} />
+                <input class="button" type="submit" value="{% trans 'Save speaker mappings' %}" />
               </li>
             </ul>
           </form>
@@ -563,7 +569,7 @@
             <p>{% trans "No source-range candidates were found for this transcript." %}</p>
           {% endif %}
         {% else %}
-          <p>{% trans "No speaker labels were found in the Podlove or DOTe transcript files." %}</p>
+          <p>{% trans "No speaker labels were found in the Podlove, DOTe, or WebVTT transcript files." %}</p>
         {% endif %}
       </div>
     </div>

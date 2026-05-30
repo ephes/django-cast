@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from ..models import Audio, Blog, Video
 from ..transcript_sanitization import (
+    apply_public_speaker_mapping_to_podlove_data,
     podlove_contributors_from_data,
     sanitize_podlove_data,
     strict_public_speaker_labels_for_audio,
@@ -61,9 +62,9 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     def to_representation(self, instance: Audio) -> dict:
         # Load the Podlove transcript JSON once so the transcripts and
         # contributors fields share a single file read per response.
-        raw_podlove_data = self._load_podlove_data(instance)
         post = self.context.get("post")
         episode = getattr(post, "specific", post)
+        raw_podlove_data = self._load_podlove_data(instance, episode=episode)
         allowed_speaker_labels = strict_public_speaker_labels_for_audio(instance, episode=episode)
         self._podlove_data = sanitize_podlove_data(raw_podlove_data, allowed_speaker_labels)
         try:
@@ -91,7 +92,7 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     def get_version(_instance: Audio) -> int:
         return 5
 
-    def _load_podlove_data(self, instance: Audio) -> dict[str, Any]:
+    def _load_podlove_data(self, instance: Audio, *, episode: Any | None = None) -> dict[str, Any]:
         """Return the parsed Podlove transcript JSON for ``instance``.
 
         Returns an empty dict when there is no transcript, no Podlove file, the
@@ -107,14 +108,18 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
                 data = json.load(file)  # assumes the file content is JSON
         except (FileNotFoundError, OSError, json.JSONDecodeError):
             return {}
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        return apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
 
     def _podlove_data_for(self, instance: Audio) -> dict[str, Any]:
         """Return the Podlove JSON, reusing the per-response load when available."""
         cached = getattr(self, "_podlove_data", None)
         if cached is not None:
             return cached
-        return self._load_podlove_data(instance)
+        post = self.context.get("post")
+        episode = getattr(post, "specific", post)
+        return self._load_podlove_data(instance, episode=episode)
 
     def get_transcripts(self, instance: Audio) -> list[dict]:
         """Return the Podlove transcript segments for the Podlove Web Player."""

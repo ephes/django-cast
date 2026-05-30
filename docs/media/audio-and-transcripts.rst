@@ -182,22 +182,31 @@ known-speaker review changes *which* name a segment shows, not where segment
 boundaries fall.
 
 When generated transcripts include diarization speaker labels, the Wagtail
-transcript edit form lets editors map those labels to episode contributors.
-The mapping form shows short transcript samples for each speaker and, when the
-audio file is playable from the admin, timestamp controls that seek the audio
-preview to the sample position. Applying a mapping rewrites the stored Podlove
-and DOTe speaker fields and matching WebVTT voice labels.
+transcript edit form lets editors map those raw labels to episode contributors
+or one-off display names. The mapping form shows short transcript samples for
+each speaker and, when the audio file is playable from the admin, timestamp
+controls that seek the audio preview to the sample position. Saving a mapping
+stores reviewable mapping rows on the transcript; the stored Podlove, DOTe, and
+WebVTT artifacts remain unchanged. If a transcript is regenerated or manually
+re-uploaded, old approvals are kept for review but are marked as needing review
+when the raw artifacts change, labels that disappeared become inactive history,
+and new labels start unmapped.
 
 Generated transcript text is stored with the shared audio file and can appear
 on already published episodes as soon as generation completes. Public speaker
 metadata is stricter: player JSON, public transcript JSON, PodcastIndex JSON,
-HTML transcript pages, and supported WebVTT speaker labels only expose speaker
-names that match visible contributors on the live episode. Draft-only
-contributor mappings and unmapped diarization labels such as ``Speaker 1`` are
-hidden from public output until the matching contributor assignment is
-published. If a transcript is not connected to any live episode yet, public
-transcript endpoints expose no speaker labels. The stored transcript files are
-not rewritten by this public sanitization step.
+HTML transcript pages, and supported WebVTT speaker labels apply approved
+speaker mappings at read time and then sanitize the result. Contributor
+mappings are public only when the contributor is visible on the live episode;
+approved one-off display names can be public without creating reusable
+contributor snippets. Draft-only contributor mappings, hidden or deleted
+contributors, stale approvals, disabled diarization mode, and unmapped labels
+such as ``Speaker 1`` are hidden from public output. If a transcript is not
+connected to any live episode yet, public transcript endpoints expose no
+speaker labels. The stored transcript files are not rewritten by this mapping
+or sanitization step. One-off display names cannot duplicate a raw transcript
+speaker label; this keeps an approved one-off name from accidentally allowing an
+unmapped anonymous label with the same text.
 
 Private contributor voice references
 ------------------------------------
