@@ -20,12 +20,21 @@ from wagtail.permission_policies.collections import CollectionOwnershipPermissio
 
 from .models import Audio, ChapterMark, EpisodeContributor, Transcript, Video, get_template_base_dir_choices
 from .models.contributors import ContributorVoiceReference
+from .models.transcript import (
+    KNOWN_SPEAKER_DECISION_APPROVE,
+    KNOWN_SPEAKER_DECISION_CORRECT,
+    KNOWN_SPEAKER_DECISION_REJECT,
+    KNOWN_SPEAKER_EDITOR_DECISION_FIELD,
+)
 
 
 SPEAKER_MAPPING_ACTION = "map-speakers"
 KNOWN_SPEAKER_APPLY_ACTION = "apply-known-speakers"
+KNOWN_SPEAKER_REVIEW_ACTION = "review-known-speakers"
 VOICE_REFERENCE_CREATE_ACTION = "create-voice-reference"
 DRAFT_SPEAKER_ASSIGNMENT_PREFIX = "draft:"
+KNOWN_SPEAKER_REVIEW_BULK_VALUE = "__bulk__"
+KNOWN_SPEAKER_REVIEW_BLANK_VALUE = "__blank__"
 
 
 class VideoForm(forms.ModelForm):
@@ -350,6 +359,119 @@ class SpeakerContributorMappingForm(forms.Form):
             if assignment_id:
                 speaker_mapping[speaker_label] = self.assignment_lookup[assignment_id].display_name
         self.speaker_mapping = speaker_mapping
+        return cleaned_data
+
+
+class KnownSpeakerSegmentReviewForm(forms.Form):
+    """Dynamic form for per-segment known-speaker editor decisions."""
+
+    action = forms.CharField(initial=KNOWN_SPEAKER_REVIEW_ACTION, widget=forms.HiddenInput())
+    segment_decisions: dict[int, dict[str, str] | None]
+
+    def __init__(
+        self,
+        *args,
+        segments: list[dict],
+        contributor_assignments: list[EpisodeContributor],
+        multiple_episodes: bool = False,
+        **kwargs,
+    ) -> None:
+        del multiple_episodes
+        super().__init__(*args, **kwargs)
+        self.segments = segments
+        self.segment_field_names: dict[str, int] = {}
+        self.speaker_choice_lookup: dict[str, str] = {}
+        self.speaker_value_by_name: dict[str, str] = {}
+        speaker_names = self._speaker_names(segments, contributor_assignments)
+        choices: list[tuple[str, str]] = [
+            (KNOWN_SPEAKER_REVIEW_BULK_VALUE, str(_("Use bulk result"))),
+            (KNOWN_SPEAKER_REVIEW_BLANK_VALUE, str(_("Leave blank"))),
+        ]
+        for name in speaker_names:
+            value = self._speaker_choice_value(name)
+            self.speaker_choice_lookup[value] = name
+            self.speaker_value_by_name[name] = value
+            choices.append((value, name))
+        for position, segment in enumerate(segments):
+            field_name = f"known_speaker_segment_{position}"
+            self.segment_field_names[field_name] = position
+            field = forms.ChoiceField(
+                label=_("Resolution"),
+                choices=choices,
+                required=False,
+            )
+            field.initial = self._initial_value(segment)
+            self.fields[field_name] = field
+
+    @classmethod
+    def _speaker_names(
+        cls,
+        segments: list[dict],
+        contributor_assignments: list[EpisodeContributor],
+    ) -> list[str]:
+        names: list[str] = []
+        for segment in segments:
+            cls._append_name(names, segment.get("speaker"))
+            cls._append_candidate_names(names, segment.get("candidates"))
+            decision = Transcript._normalize_known_speaker_editor_decision(
+                segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD)
+            )
+            if decision is not None:
+                cls._append_name(names, decision["speaker"])
+        for assignment in contributor_assignments:
+            cls._append_name(names, assignment.display_name)
+        return names
+
+    @classmethod
+    def _append_candidate_names(cls, names: list[str], candidates: object) -> None:
+        if not isinstance(candidates, list):
+            return
+        for candidate in candidates:
+            if isinstance(candidate, dict):
+                cls._append_name(
+                    names,
+                    candidate.get("speaker") or candidate.get("name") or candidate.get("display_name"),
+                )
+            else:
+                cls._append_name(names, candidate)
+
+    @staticmethod
+    def _append_name(names: list[str], value: object) -> None:
+        name = Transcript._clean_speaker_label(value)
+        if name and name not in names:
+            names.append(name)
+
+    @staticmethod
+    def _speaker_choice_value(name: str) -> str:
+        return f"speaker:{name}"
+
+    def _initial_value(self, segment: dict) -> str:
+        decision = Transcript._normalize_known_speaker_editor_decision(
+            segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD)
+        )
+        if decision is None:
+            return KNOWN_SPEAKER_REVIEW_BULK_VALUE
+        if decision["action"] == KNOWN_SPEAKER_DECISION_REJECT:
+            return KNOWN_SPEAKER_REVIEW_BLANK_VALUE
+        return self.speaker_value_by_name[decision["speaker"]]
+
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean() or {}
+        segment_decisions: dict[int, dict[str, str] | None] = {}
+        for field_name, position in self.segment_field_names.items():
+            value = cleaned_data.get(field_name) or KNOWN_SPEAKER_REVIEW_BULK_VALUE
+            if value == KNOWN_SPEAKER_REVIEW_BULK_VALUE:
+                segment_decisions[position] = None
+            elif value == KNOWN_SPEAKER_REVIEW_BLANK_VALUE:
+                segment_decisions[position] = {"action": KNOWN_SPEAKER_DECISION_REJECT, "speaker": ""}
+            else:
+                speaker = self.speaker_choice_lookup[value]
+                suggested_speaker = Transcript._clean_speaker_label(self.segments[position].get("speaker"))
+                action = (
+                    KNOWN_SPEAKER_DECISION_APPROVE if speaker == suggested_speaker else KNOWN_SPEAKER_DECISION_CORRECT
+                )
+                segment_decisions[position] = {"action": action, "speaker": speaker}
+        self.segment_decisions = segment_decisions
         return cleaned_data
 
 

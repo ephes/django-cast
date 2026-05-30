@@ -141,6 +141,44 @@
       min-width: 0;
     }
 
+    .cast-known-speaker-segments {
+      border-collapse: collapse;
+      margin: 1rem 0 1.5rem;
+      width: 100%;
+    }
+
+    .cast-known-speaker-segments th,
+    .cast-known-speaker-segments td {
+      border-bottom: 1px solid var(--w-color-border-furniture, #4c4c4c);
+      padding: 0.6rem 0.75rem 0.6rem 0;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .cast-known-speaker-segments th {
+      color: var(--w-color-text-label, inherit);
+      font-size: 0.875rem;
+    }
+
+    .cast-known-speaker-segments__time {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .cast-known-speaker-segments__text {
+      min-width: 14rem;
+    }
+
+    .cast-known-speaker-segments__metadata {
+      color: var(--w-color-text-label, inherit);
+      font-size: 0.875rem;
+      margin: 0.25rem 0 0;
+    }
+
+    .cast-known-speaker-segments__field select {
+      max-width: 100%;
+    }
+
     .cast-voice-reference-group {
       border-top: 1px solid var(--w-color-border-furniture, #4c4c4c);
       margin-top: 1.25rem;
@@ -190,6 +228,12 @@
     }
 
     @media (max-width: 900px) {
+      .cast-known-speaker-segments,
+      .cast-known-speaker-segments thead,
+      .cast-known-speaker-segments tbody,
+      .cast-known-speaker-segments th,
+      .cast-known-speaker-segments td,
+      .cast-known-speaker-segments tr,
       .cast-voice-reference-table,
       .cast-voice-reference-table thead,
       .cast-voice-reference-table tbody,
@@ -199,10 +243,12 @@
         display: block;
       }
 
+      .cast-known-speaker-segments thead,
       .cast-voice-reference-table thead {
         display: none;
       }
 
+      .cast-known-speaker-segments td,
       .cast-voice-reference-table td {
         padding-right: 0;
       }
@@ -262,13 +308,82 @@
               <li>{{ name }}: {{ count }} {% trans "confident segments" %}</li>
             {% endfor %}
           </ul>
-          <p>{% trans "Uncertain or low-margin segments are left for review and are not applied to public output. Approving applies only confident suggestions to the public Podlove and DOTe transcripts." %}</p>
+          <p>{% trans "The bulk action applies known-speaker names to public Podlove, DOTe, and WebVTT output by start time and may smooth uncertain segments between confident speakers. Use the segment review table to override a segment or leave it blank." %}</p>
           <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
             {% csrf_token %}
             <input type="hidden" name="action" value="apply-known-speakers" />
             <ul class="fields">
               <li>
                 <input class="button" type="submit" value="{% trans 'Approve and apply confident suggestions' %}"{% if not known_speaker_review.confident %} disabled{% endif %} />
+              </li>
+            </ul>
+          </form>
+
+          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
+            {% csrf_token %}
+            {% for hidden_field in known_speaker_review_form.hidden_fields %}
+              {{ hidden_field }}
+            {% endfor %}
+            <table class="cast-known-speaker-segments">
+              <thead>
+                <tr>
+                  <th>{% trans "Time" %}</th>
+                  <th>{% trans "Text" %}</th>
+                  <th>{% trans "Suggestion" %}</th>
+                  <th>{% trans "Resolution" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in known_speaker_review_rows %}
+                  <tr>
+                    <td class="cast-known-speaker-segments__time">
+                      {% if row.timestamp_label %}
+                        {{ row.timestamp_label }}
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                    <td class="cast-known-speaker-segments__text">
+                      {% if row.text %}
+                        {{ row.text }}
+                      {% else %}
+                        {% trans "No text available" %}
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if row.speaker %}
+                        {{ row.speaker }}
+                      {% else %}
+                        {% trans "No suggestion" %}
+                      {% endif %}
+                      <p class="cast-known-speaker-segments__metadata">
+                        {% if row.uncertain %}
+                          {% trans "Needs review" %}
+                        {% else %}
+                          {% trans "Confident" %}
+                        {% endif %}
+                        {% if row.confidence is not None %}
+                          · {% blocktrans with confidence=row.confidence %}confidence {{ confidence }}{% endblocktrans %}
+                        {% endif %}
+                        {% if row.margin is not None %}
+                          · {% blocktrans with margin=row.margin %}margin {{ margin }}{% endblocktrans %}
+                        {% endif %}
+                      </p>
+                    </td>
+                    <td class="cast-known-speaker-segments__field">
+                      {{ row.field.errors }}
+                      {{ row.field }}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            <ul class="fields">
+              {% if known_speaker_review_form.non_field_errors %}
+                <li>{{ known_speaker_review_form.non_field_errors }}</li>
+              {% endif %}
+              <li>
+                <input class="button button-secondary" type="submit" value="{% trans 'Save segment decisions' %}" />
               </li>
             </ul>
           </form>

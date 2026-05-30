@@ -17,6 +17,8 @@ from wagtail.search.backends import get_search_backends
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import (
     KNOWN_SPEAKER_APPLY_ACTION,
+    KNOWN_SPEAKER_REVIEW_ACTION,
+    KnownSpeakerSegmentReviewForm,
     NonEmptySearchForm,
     SpeakerContributorMappingForm,
     SPEAKER_MAPPING_ACTION,
@@ -36,7 +38,7 @@ from ..models import (
     get_template_base_dir,
 )
 from ..models.contributors import ContributorVoiceReference
-from ..models.transcript import convert_dote_to_podcastindex_transcript
+from ..models.transcript import _dote_timestamp_to_ms, convert_dote_to_podcastindex_transcript
 from ..site_lookup import get_site_specific_page_or_404
 from ..transcript_sanitization import (
     public_episode_from_request,
@@ -75,6 +77,16 @@ class VoiceReferenceCandidateGroup(TypedDict):
     contributor: Contributor | None
     speaker_label: str
     rows: list[VoiceReferenceCandidateRow]
+
+
+class KnownSpeakerReviewRow(TypedDict):
+    confidence: Any
+    field: BoundField
+    margin: Any
+    speaker: str
+    text: str
+    timestamp_label: str
+    uncertain: bool
 
 
 class AudioSource(TypedDict):
@@ -229,6 +241,56 @@ def get_speaker_mapping_rows(
     ]
 
 
+def get_known_speaker_text_by_start_ms(transcript: Transcript) -> dict[int, str]:
+    texts: dict[int, str] = {}
+    podlove_segments = transcript.podlove_data.get("transcripts", [])
+    if isinstance(podlove_segments, list):
+        for segment in podlove_segments:
+            if not isinstance(segment, dict):
+                continue
+            start_ms = segment.get("start_ms")
+            text = Transcript._clean_sample_text(segment.get("text"))
+            if isinstance(start_ms, int) and text:
+                texts.setdefault(start_ms, text)
+    dote_lines = transcript.dote_data.get("lines", [])
+    if isinstance(dote_lines, list):
+        for line in dote_lines:
+            if not isinstance(line, dict):
+                continue
+            start_ms = _dote_timestamp_to_ms(line.get("startTime"))
+            text = Transcript._clean_sample_text(line.get("text"))
+            if start_ms is not None and text:
+                texts.setdefault(start_ms, text)
+    return texts
+
+
+def get_known_speaker_review_rows(
+    transcript: Transcript,
+    known_speaker_review_form: KnownSpeakerSegmentReviewForm,
+) -> list[KnownSpeakerReviewRow]:
+    text_by_start_ms = get_known_speaker_text_by_start_ms(transcript)
+    rows: list[KnownSpeakerReviewRow] = []
+    for field_name, position in known_speaker_review_form.segment_field_names.items():
+        segment = known_speaker_review_form.segments[position]
+        start_seconds = Transcript._parse_timestamp_seconds(segment.get("start"))
+        start_ms = int(round(start_seconds * 1000)) if start_seconds is not None else None
+        text = Transcript._clean_sample_text(segment.get("text"))
+        if not text and start_ms is not None:
+            text = text_by_start_ms.get(start_ms, "")
+        rows.append(
+            {
+                "confidence": segment.get("confidence"),
+                "field": known_speaker_review_form[field_name],
+                "margin": segment.get("margin"),
+                "speaker": Transcript._clean_speaker_label(segment.get("speaker")),
+                "text": Transcript._truncate_sample_text(text, max_chars=140) if text else "",
+                "timestamp_label": Transcript._format_sample_timestamp(start_seconds),
+                "uncertain": bool(segment.get("speaker_uncertain") or segment.get("low_margin")),
+            }
+        )
+    return rows
+
+
 def resolve_voice_reference_contributor(
     speaker_label: str,
     contributor_assignments: list[EpisodeContributor],
@@ -381,6 +443,7 @@ def get_transcript_audio_sources(transcript: Transcript) -> list[AudioSource]:
 def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     transcript = get_object_or_404(Transcript, id=transcript_id)
     speaker_mapping_context = get_speaker_mapping_context(transcript)
+    known_speaker_review_form: KnownSpeakerSegmentReviewForm | None = None
 
     if request.method == "POST" and request.POST.get("action") == KNOWN_SPEAKER_APPLY_ACTION:
         applied = transcript.apply_known_speaker_suggestions()
@@ -392,6 +455,29 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         else:
             messages.warning(request, _("No confident known-speaker suggestions were available to apply."))
         return redirect("cast-transcript:edit", transcript_id=transcript.id)
+    elif request.method == "POST" and request.POST.get("action") == KNOWN_SPEAKER_REVIEW_ACTION:
+        form = TranscriptForm(instance=transcript, user=request.user)
+        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+        known_speaker_review_form = KnownSpeakerSegmentReviewForm(
+            request.POST,
+            segments=transcript.get_speaker_suggestions(),
+            contributor_assignments=speaker_mapping_context["contributor_assignments"],
+            multiple_episodes=speaker_mapping_context["multiple_episodes"],
+        )
+        if known_speaker_review_form.is_valid():
+            changed = transcript.save_known_speaker_editor_decisions(known_speaker_review_form.segment_decisions)
+            applied = transcript.apply_known_speaker_suggestions(smooth=False)
+            if changed or applied:
+                messages.success(
+                    request,
+                    _("Saved known-speaker segment decisions and applied {0} public transcript entries.").format(
+                        applied
+                    ),
+                )
+            else:
+                messages.warning(request, _("No known-speaker segment decisions were changed."))
+            return redirect("cast-transcript:edit", transcript_id=transcript.id)
+        messages.error(request, _("The known-speaker segment decisions could not be saved due to errors."))
     elif request.method == "POST" and request.POST.get("action") == VOICE_REFERENCE_CREATE_ACTION:
         form = TranscriptForm(instance=transcript, user=request.user)
         speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
@@ -468,10 +554,17 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     else:
         form = TranscriptForm(instance=transcript, user=request.user)
         speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+    if known_speaker_review_form is None:
+        known_speaker_review_form = KnownSpeakerSegmentReviewForm(
+            segments=transcript.get_speaker_suggestions(),
+            contributor_assignments=speaker_mapping_context["contributor_assignments"],
+            multiple_episodes=speaker_mapping_context["multiple_episodes"],
+        )
     speaker_mapping_rows = get_speaker_mapping_rows(
         speaker_mapping_form,
         transcript.get_speaker_samples(),
     )
+    known_speaker_review_rows = get_known_speaker_review_rows(transcript, known_speaker_review_form)
     voice_reference_candidate_groups = get_voice_reference_candidate_groups(transcript, speaker_mapping_context)
 
     return render(
@@ -487,6 +580,8 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
             "contributor_assignments": speaker_mapping_context["contributor_assignments"],
             "voice_reference_candidate_groups": voice_reference_candidate_groups,
             "known_speaker_review": transcript.known_speaker_review_summary(),
+            "known_speaker_review_form": known_speaker_review_form,
+            "known_speaker_review_rows": known_speaker_review_rows,
             "user_can_delete": True,
         },
     )

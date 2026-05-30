@@ -13,15 +13,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
-- [ ] Per-segment known-speaker review and correction
-  - Related to: Speaker diarization for generated transcripts.
-  - Scope: the current review panel only offers all-or-nothing bulk apply of confident suggestions (with
-    neighbor smoothing for uncertain segments). Add optional per-segment review so editors can approve, reject,
-    or correct individual uncertain or low-margin segments instead of accepting the whole-transcript result.
-  - Done when: editors can resolve individual uncertain segments to a chosen speaker (or leave them blank) from
-    the transcript edit view, the choice is applied to public Podlove, DOTe, and WebVTT output, raw Voxhelm
-    metadata is preserved for audit and re-application, and the workflow has focused tests.
-
 - [ ] Harden modelsearch follow-ups
   - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)
   - Scope: decide whether the current normalization-only guard needs a database-exception backstop, and file

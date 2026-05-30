@@ -71,16 +71,19 @@
   shows the confident/uncertain suggestion counts and the confident speaker
   distribution so editors can see uncertainty before approving. An "Approve and
   apply confident suggestions" action writes only confident (non-uncertain)
-  speaker names into the public Podlove and DOTe transcript output, matched to
-  segments by start time. By default, uncertain segments between known speakers
-  are smoothed by carrying the surrounding confident speaker forward, so the
-  public transcript reads continuously instead of showing speaker-less
-  paragraphs; pass ``smooth=False`` to label only confident segments. The
-  private suggestion sidecar (including the uncertainty flags) is preserved for
-  audit and re-application.
-- Applying approved known-speaker suggestions now also inserts or replaces
-  matching WebVTT cue voice labels by cue start time, keeping feed-linked WebVTT
-  transcripts in sync with Podlove and DOTe output.
+  speaker names into the public Podlove, DOTe, and WebVTT transcript output,
+  matched to segments or cues by start time. By default, uncertain segments
+  between known speakers are smoothed by carrying the surrounding confident
+  speaker forward, so the public transcript reads continuously instead of
+  showing speaker-less paragraphs; pass ``smooth=False`` to label only
+  confident segments. The private suggestion sidecar (including the uncertainty
+  flags) is preserved for audit and re-application.
+- Known-speaker review now supports per-segment approve, reject-to-blank, and
+  correction decisions from the Wagtail transcript edit view. Segment decisions
+  are stored additively as private ``editor_decision`` metadata in the
+  ``Transcript.speakers`` sidecar, override the confident/smoothed bulk result,
+  and are applied to matching Podlove, DOTe, and WebVTT entries by start time
+  while preserving the raw Voxhelm metadata for audit.
 - Added a Wagtail transcript voice-reference candidate picker. Diarized Podlove
   transcripts now derive clean solo source-range candidates grouped by resolved
   speaker/contributor context, audition them with bounded playback in the

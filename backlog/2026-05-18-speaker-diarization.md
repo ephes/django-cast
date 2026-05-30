@@ -52,13 +52,16 @@ The django-cast side of that direction is tracked separately in
 
 ## Decision
 
-Status note: this section documents the originally preferred non-destructive design. The landed `0.2.57` workflow is
-different: it rewrites Podlove/DOTe speaker labels in place after editor approval. See [Current State](#current-state)
-for shipped behavior and remaining gaps.
+Status note: this section documents the originally preferred non-destructive design. The landed workflow is
+different: manual speaker mapping (`0.2.57`) rewrites Podlove/DOTe/WebVTT speaker labels in place after editor
+approval. The known-speaker path (`0.2.58`) keeps the raw Voxhelm suggestions in a private sidecar and applies only
+the editor-approved names to the public artifacts. See [Current State](#current-state) for shipped behavior and
+remaining gaps.
 
 The open shaping item in `BACKLOG.md` is now broader than "destructive rewrite versus read-time mapping". It also has
 to decide how django-cast stores reviewable known-speaker suggestions returned by Voxhelm and how much raw
-diarization/voice-reference metadata must be preserved.
+diarization/voice-reference metadata must be preserved. The known-speaker suggestion sidecar (`0.2.58`) already
+records one answer for the suggestion-storage half of that question.
 
 Do not send episode contributors to Voxhelm for the first django-cast diarization implementation.
 
@@ -82,17 +85,37 @@ scores, margins, candidate lists, raw diarization labels, and uncertainty flags.
 
 ## Current State
 
-The first usable django-cast diarization path has landed for `0.2.57`:
+The first usable django-cast diarization path landed for `0.2.57`, and the known-speaker recognition path landed for
+`0.2.58`:
 
 - Voxhelm jobs can request generic diarization through `CAST_VOXHELM_DIARIZATION_ENABLED` or the site-level Wagtail
   Voxhelm setting.
 - Diarized jobs use a distinct `task_ref` suffix so older non-diarized Voxhelm jobs are not reused.
-- django-cast still sends no contributor identities to Voxhelm.
+- Generic diarization sends no contributor identities to Voxhelm; the known-speaker path sends only approved private
+  voice references (source ranges or uploaded clips), never names or public profile URLs.
 - Generated Podlove, DOTe, and WebVTT artifacts are saved from Voxhelm as returned.
 - The transcript edit view extracts Podlove/DOTe speaker labels and lets editors map them to episode contributors.
-- The current mapping UI rewrites Podlove `speaker`/`voice`, DOTe `speakerDesignation`, and matching WebVTT voice
+- The manual mapping UI rewrites Podlove `speaker`/`voice`, DOTe `speakerDesignation`, and matching WebVTT voice
   labels in place.
 - Mapping choices include persisted and draft episode contributor assignments.
+- Per-audio transcript diarization mode (`inherit`/`enabled`/`disabled`) controls future Voxhelm jobs and hides
+  stored speaker labels from public output without rewriting files.
+- Public transcript surfaces sanitize speaker metadata against live episode contributors, so draft-only names and
+  unmapped `Speaker N` labels are hidden until the matching contributor assignment is published.
+- Contributors can store private, admin-only `ContributorVoiceReference` material (reviewed clean-solo clips or
+  source ranges into existing audio) as known-speaker reference data, consent-gated before approval.
+- When known-speaker recognition is enabled, Voxhelm-returned per-segment suggestions (candidates, confidence,
+  margin, uncertainty, raw diarization label) are stored as a private `Transcript.speakers` sidecar in protected
+  storage and are never exposed publicly.
+- The transcript edit view shows a known-speaker review panel; "Approve and apply confident suggestions" writes the
+  resolved names into public Podlove, DOTe, and WebVTT output (matched by start time), with optional neighbor
+  smoothing for uncertain segments, while preserving the raw sidecar for audit and re-application.
+- The known-speaker review panel also supports per-segment approve, reject-to-blank, and correction decisions.
+  Decisions are stored additively as `editor_decision` metadata inside the private `Transcript.speakers` sidecar,
+  take precedence over the confident/smoothed bulk result, and apply to matching Podlove, DOTe, and WebVTT entries by
+  start time.
+- The transcript edit view also offers a voice-reference candidate picker that proposes clean solo source ranges
+  (split across large untranscribed gaps) for creating pending or consent-gated approved references.
 - `python-podcast` is pinned to a django-cast `develop` commit with these changes and has deployment notes plus a
   longer `CAST_VOXHELM_POLL_TIMEOUT` for full-episode diarization jobs.
 - The Podlove player API (`AudioPodloveSerializer`) returns a top-level `contributors` list derived from non-blank
@@ -100,15 +123,13 @@ The first usable django-cast diarization path has landed for `0.2.57`:
 
 Important gaps remain:
 
-- There is no `TranscriptSpeakerMapping` model yet.
-- The current mapping workflow is destructive after editor approval; it does not preserve raw `Speaker N` labels for
-  later audit/remapping without regenerating or re-uploading artifacts.
+- There is no `TranscriptSpeakerMapping` model yet. Manual mapping is still a destructive in-place rewrite that does
+  not, on its own, preserve raw `Speaker N` labels for later audit/remapping without regenerating or re-uploading
+  artifacts. (The known-speaker path does preserve its raw suggestions in the private `speakers` sidecar, but that
+  sidecar only exists for known-speaker jobs, not for plain anonymous-diarization mapping.)
 - There is no one-off display-name mapping for speakers who should not become contributor snippets.
 - Mapping rows are not preserved across transcript regeneration or manual re-upload because no mapping rows exist.
 - Anonymous diarization can merge real speakers in production podcast audio; mapping cannot fix a missing cluster.
-- django-cast has no private contributor voice-reference model yet, so Voxhelm cannot receive reviewed known-speaker
-  reference material.
-- django-cast does not yet store candidate/margin/uncertainty metadata for speaker suggestions returned by Voxhelm.
 
 ## Options
 
@@ -291,9 +312,10 @@ context or show contributors grouped across all referencing episodes.
 Add private django-cast storage for reviewed contributor voice reference clips or source ranges. This is tracked in
 [Contributor Voice References](2026-05-28-contributor-voice-references.md).
 
-Status: open Ready item in `BACKLOG.md`. This first slice should not submit references to Voxhelm or change public
-transcript output. It creates the private, admin-only data model and privacy boundaries needed for known-speaker
-speaker-recognition follow-ups.
+Status: landed in `0.2.58`. The private, admin-only `ContributorVoiceReference` model (reviewed clean-solo clips or
+source ranges, consent-gated before approval, excluded from all public surfaces) shipped, establishing the privacy
+boundaries the known-speaker recognition follow-ups build on. This first slice did not submit references to Voxhelm or
+change public transcript output.
 
 ### Slice 1: Generic Diarization Enablement
 
@@ -400,8 +422,14 @@ speaker-state integration summary.
 4. Apply approved speaker identity through the mapping/read-time output layer.
 5. Preserve raw Voxhelm metadata for audit and remapping.
 
-Status: unbuilt. Voxhelm research recommends classifying transcript segments directly from the mastered mono audio and
-using diarization turns as smoothing/fallback rather than the primary unit for known-speaker recovery.
+Status: landed in `0.2.58`. Diarized jobs that opt into known-speaker recognition send approved reference material for
+expected contributors, and Voxhelm-returned candidates/confidence/margin/raw labels/uncertainty are stored as the
+private `Transcript.speakers` sidecar and preserved for audit and re-application. The Wagtail transcript edit view
+shows the known-speaker review panel, supports per-segment approve/reject/correct decisions for uncertain or
+low-margin segments, stores those decisions additively in the sidecar, and applies the resolved names or blanks to
+public Podlove, DOTe, and WebVTT output by start time. Voxhelm research still recommends classifying transcript
+segments directly from the mastered mono audio and using diarization turns as smoothing/fallback rather than the
+primary unit for known-speaker recovery.
 
 ## python-podcast Integration Notes
 

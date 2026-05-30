@@ -79,6 +79,11 @@ LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
 )
 WEBVTT_TIMING_SEPARATOR = "-->"
 WEBVTT_VOICE_OPENING_RE = re.compile(r"<v(?:\s+([^>]+))?>")
+WEBVTT_VOICE_CLOSING_RE = re.compile(r"</v>")
+KNOWN_SPEAKER_EDITOR_DECISION_FIELD = "editor_decision"
+KNOWN_SPEAKER_DECISION_APPROVE = "approve"
+KNOWN_SPEAKER_DECISION_CORRECT = "correct"
+KNOWN_SPEAKER_DECISION_REJECT = "reject"
 
 
 def _quantize_seconds(value: Decimal) -> Decimal:
@@ -296,31 +301,116 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         ones. With ``smooth=False`` only confident segments are labeled and
         uncertain ones are left blank for review.
 
-        The private ``speakers`` sidecar is preserved unchanged, so the raw
-        per-segment candidates and uncertainty flags stay available for audit
-        and re-application. Returns the number of public transcript entries
-        labeled across stored formats.
+        Explicit per-segment editor decisions stored in the private sidecar
+        take precedence over the confident/smoothed result. Rejected segments
+        clear any existing public speaker label for that start time.
+
+        The raw Voxhelm metadata in the private ``speakers`` sidecar is
+        preserved, so the raw per-segment candidates and uncertainty flags stay
+        available for audit and re-application. Returns the number of public
+        transcript entries matched across stored formats.
         """
         suggestions = sorted(self.get_speaker_suggestions(), key=_segment_sort_key)
         display_names = self._resolve_known_speaker_display_names(suggestions, smooth=smooth)
         names_by_start_ms: dict[int, str] = {}
+        rejected_start_ms: set[int] = set()
         for segment, name in zip(suggestions, display_names):
-            if not name:
-                continue
             try:
                 start_ms = int(round(float(segment["start"]) * 1000))
             except (TypeError, ValueError, KeyError):
                 continue
-            names_by_start_ms[start_ms] = name
-        if not names_by_start_ms:
+            if name:
+                names_by_start_ms[start_ms] = name
+                rejected_start_ms.discard(start_ms)
+            elif self._segment_has_reject_decision(segment):
+                rejected_start_ms.add(start_ms)
+        if not names_by_start_ms and not rejected_start_ms:
             return 0
-        applied = self._apply_suggestions_to_podlove(names_by_start_ms)
-        applied += self._apply_suggestions_to_dote(names_by_start_ms)
+        applied = self._clear_suggestions_from_podlove(rejected_start_ms)
+        applied += self._clear_suggestions_from_dote(rejected_start_ms)
         if self.vtt:
-            applied += self._apply_suggestions_to_webvtt(names_by_start_ms)
+            applied += self._clear_suggestions_from_webvtt(rejected_start_ms)
+        if names_by_start_ms:
+            applied += self._apply_suggestions_to_podlove(names_by_start_ms)
+            applied += self._apply_suggestions_to_dote(names_by_start_ms)
+            if self.vtt:
+                applied += self._apply_suggestions_to_webvtt(names_by_start_ms)
         if applied:
             self.save()
         return applied
+
+    def save_known_speaker_editor_decisions(
+        self,
+        decisions_by_position: Mapping[int, Mapping[str, str] | None],
+    ) -> int:
+        """Persist per-segment editor decisions in the private sidecar.
+
+        Decisions are additive metadata on each segment. Raw Voxhelm fields
+        such as ``speaker``, ``speaker_uncertain``, candidate lists, confidence,
+        margin, and raw diarization labels are never overwritten.
+        """
+        data = self.speakers_data
+        segments = data.get("segments")
+        if not isinstance(segments, list):
+            return 0
+        changed = 0
+        suggestion_position = -1
+        for segment in segments:
+            if not isinstance(segment, dict):
+                continue
+            suggestion_position += 1
+            if suggestion_position not in decisions_by_position:
+                continue
+            decision = self._normalize_known_speaker_editor_decision(decisions_by_position[suggestion_position])
+            existing_decision = self._normalize_known_speaker_editor_decision(
+                segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD)
+            )
+            if decision is None:
+                if KNOWN_SPEAKER_EDITOR_DECISION_FIELD in segment:
+                    del segment[KNOWN_SPEAKER_EDITOR_DECISION_FIELD]
+                    changed += 1
+                continue
+            if existing_decision == decision:
+                continue
+            segment[KNOWN_SPEAKER_EDITOR_DECISION_FIELD] = decision
+            changed += 1
+        if not changed:
+            return 0
+        self._write_speakers_data(data)
+        self.save(update_fields=["speakers"])
+        return changed
+
+    def get_known_speaker_editor_decisions(self) -> dict[int, dict[str, str]]:
+        """Return valid per-segment editor decisions keyed by sidecar position."""
+        decisions: dict[int, dict[str, str]] = {}
+        for position, segment in enumerate(self.get_speaker_suggestions()):
+            decision = self._normalize_known_speaker_editor_decision(segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD))
+            if decision is not None:
+                decisions[position] = decision
+        return decisions
+
+    @classmethod
+    def _normalize_known_speaker_editor_decision(cls, decision: object) -> dict[str, str] | None:
+        if not isinstance(decision, Mapping):
+            return None
+        action = decision.get("action")
+        if action == KNOWN_SPEAKER_DECISION_REJECT:
+            return {"action": KNOWN_SPEAKER_DECISION_REJECT, "speaker": ""}
+        if action not in {KNOWN_SPEAKER_DECISION_APPROVE, KNOWN_SPEAKER_DECISION_CORRECT}:
+            return None
+        speaker = cls._clean_speaker_label(decision.get("speaker"))
+        if not speaker:
+            return None
+        return {"action": str(action), "speaker": speaker}
+
+    @classmethod
+    def _segment_has_reject_decision(cls, segment: Mapping[str, object]) -> bool:
+        decision = cls._normalize_known_speaker_editor_decision(segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD))
+        return bool(decision and decision["action"] == KNOWN_SPEAKER_DECISION_REJECT)
+
+    def _write_speakers_data(self, data: dict[str, Any]) -> None:
+        content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        self._save_file_content("speakers", content)
 
     @staticmethod
     def _resolve_known_speaker_display_names(suggestions: list[dict], *, smooth: bool) -> list[str | None]:
@@ -334,22 +424,34 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         for segment in suggestions:
             name = segment.get("speaker")
             confident.append(name if (name and not segment.get("speaker_uncertain")) else None)
+        display_names: list[str | None]
         if not smooth:
-            return confident
-        smoothed: list[str | None] = list(confident)
-        last: str | None = None
-        for position, name in enumerate(smoothed):
-            if name is not None:
-                last = name
-            elif last is not None:
-                smoothed[position] = last
-        following: str | None = None
-        for position in range(len(smoothed) - 1, -1, -1):
-            if smoothed[position] is not None:
-                following = smoothed[position]
-            elif following is not None:
-                smoothed[position] = following
-        return smoothed
+            display_names = confident
+        else:
+            smoothed: list[str | None] = list(confident)
+            last: str | None = None
+            for position, name in enumerate(smoothed):
+                if name is not None:
+                    last = name
+                elif last is not None:
+                    smoothed[position] = last
+            following: str | None = None
+            for position in range(len(smoothed) - 1, -1, -1):
+                if smoothed[position] is not None:
+                    following = smoothed[position]
+                elif following is not None:
+                    smoothed[position] = following
+            display_names = smoothed
+        for position, segment in enumerate(suggestions):
+            decision = Transcript._normalize_known_speaker_editor_decision(
+                segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD)
+            )
+            if decision is None:
+                continue
+            display_names[position] = (
+                None if decision["action"] == KNOWN_SPEAKER_DECISION_REJECT else decision["speaker"]
+            )
+        return display_names
 
     def _apply_suggestions_to_podlove(self, names_by_start_ms: dict[int, str]) -> int:
         data = self._load_transcript_json("podlove")
@@ -391,6 +493,109 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         if applied:
             self._write_transcript_json("dote", data)
         return applied
+
+    def _clear_suggestions_from_podlove(self, start_milliseconds: set[int]) -> int:
+        data = self._load_transcript_json("podlove")
+        segments = data.get("transcripts")
+        if not isinstance(segments, list):
+            return 0
+        applied = 0
+        changed = False
+        for segment in segments:
+            if not isinstance(segment, dict):
+                continue
+            start_ms = segment.get("start_ms")
+            if not isinstance(start_ms, int) or start_ms not in start_milliseconds:
+                continue
+            applied += 1
+            changed = changed or segment.get("speaker") != "" or segment.get("voice") != ""
+            segment["speaker"] = ""
+            segment["voice"] = ""
+        if changed:
+            self._write_transcript_json("podlove", data)
+        return applied
+
+    def _clear_suggestions_from_dote(self, start_milliseconds: set[int]) -> int:
+        data = self._load_transcript_json("dote")
+        lines = data.get("lines")
+        if not isinstance(lines, list):
+            return 0
+        applied = 0
+        changed = False
+        for line in lines:
+            if not isinstance(line, dict):
+                continue
+            start_ms = _dote_timestamp_to_ms(line.get("startTime"))
+            if start_ms is None or start_ms not in start_milliseconds:
+                continue
+            applied += 1
+            changed = changed or line.get("speakerDesignation") != ""
+            line["speakerDesignation"] = ""
+        if changed:
+            self._write_transcript_json("dote", data)
+        return applied
+
+    def _clear_suggestions_from_webvtt(self, start_milliseconds: set[int]) -> int:
+        content = self._load_text_file("vtt")
+        rewritten_content, applied, changed = self._clear_suggestions_from_webvtt_content(content, start_milliseconds)
+        if changed:
+            self._save_text_file("vtt", rewritten_content)
+        return applied
+
+    @classmethod
+    def _clear_suggestions_from_webvtt_content(
+        cls, content: str, start_milliseconds: set[int]
+    ) -> tuple[str, int, bool]:
+        rewritten_lines: list[str] = []
+        payload_lines: list[str] | None = None
+        should_clear = False
+        applied = 0
+        changed = False
+
+        def flush_payload() -> None:
+            nonlocal applied, changed, payload_lines, should_clear
+            if payload_lines is None:
+                return
+            lines = payload_lines
+            if should_clear:
+                lines, cue_changed, cue_applied = cls._clear_webvtt_cue_voice(lines)
+                if cue_applied:
+                    applied += 1
+                changed = changed or cue_changed
+            rewritten_lines.extend(lines)
+            payload_lines = None
+            should_clear = False
+
+        for line in content.splitlines(keepends=True):
+            if payload_lines is not None:
+                if not line.strip():
+                    flush_payload()
+                    rewritten_lines.append(line)
+                else:
+                    payload_lines.append(line)
+                continue
+
+            if WEBVTT_TIMING_SEPARATOR in line:
+                start_ms = _webvtt_timing_line_start_ms(line)
+                should_clear = start_ms in start_milliseconds if start_ms is not None else False
+                payload_lines = []
+            rewritten_lines.append(line)
+
+        flush_payload()
+        return "".join(rewritten_lines), applied, changed
+
+    @classmethod
+    def _clear_webvtt_cue_voice(cls, lines: list[str]) -> tuple[list[str], bool, bool]:
+        if not lines:
+            return lines, False, False
+        rewritten_lines = []
+        changed = False
+        for line in lines:
+            rewritten_line = WEBVTT_VOICE_OPENING_RE.sub("", line)
+            rewritten_line = WEBVTT_VOICE_CLOSING_RE.sub("", rewritten_line)
+            changed = changed or rewritten_line != line
+            rewritten_lines.append(rewritten_line)
+        return rewritten_lines, changed, True
 
     def _apply_suggestions_to_webvtt(self, names_by_start_ms: dict[int, str]) -> int:
         content = self._load_text_file("vtt")
