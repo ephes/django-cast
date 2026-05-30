@@ -97,3 +97,7 @@
   typing raw ``start_seconds`` / ``end_seconds`` for the normal workflow.
   Candidate ranges split across large untranscribed gaps so a same-speaker label
   cannot produce one proposed reference that silently spans unrelated audio.
+- Added ``CAST_POST_BODY_BLOCKS`` so projects can append custom Wagtail blocks
+  independently to the ``overview`` and ``detail`` sections of ``Post.body``
+  without editing django-cast's ``ContentBlock`` class or leaking consumer block
+  paths into cast migrations.

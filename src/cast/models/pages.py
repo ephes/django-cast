@@ -28,7 +28,6 @@ from wagtail import blocks
 from wagtail.admin.forms import WagtailAdminPageForm
 from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
 from wagtail.api import APIField
-from wagtail.embeds.blocks import EmbedBlock
 from wagtail.fields import StreamField
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image, Rendition
@@ -38,14 +37,11 @@ from wagtail.search import index
 from cast import appsettings
 from cast.follow_links import get_follow_links
 from cast.blocks import (
-    AudioChooserBlock,
     CastImageChooserBlock,
-    CodeBlock,
     GalleryBlock,
-    GalleryBlockWithLayout,
-    VideoChooserBlock,
 )
 from cast.models import get_or_create_gallery
+from cast.post_body_blocks import configured_content_blocks, default_content_blocks
 from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
 from ..views import HtmxHttpRequest
@@ -75,14 +71,19 @@ PODLOVE_POSTER_RENDITION_SPEC = "max-512x512|format-webp"
 
 
 class ContentBlock(blocks.StreamBlock):
-    heading: blocks.CharBlock = blocks.CharBlock(classname="full title")
-    paragraph: blocks.RichTextBlock = blocks.RichTextBlock()
-    code: CodeBlock = CodeBlock(icon="code")
-    image: CastImageChooserBlock = CastImageChooserBlock(template="cast/image/image.html")
-    gallery: GalleryBlockWithLayout = GalleryBlockWithLayout()
-    embed: EmbedBlock = EmbedBlock()
-    video: VideoChooserBlock = VideoChooserBlock(template="cast/video/video.html", icon="media")
-    audio: AudioChooserBlock = AudioChooserBlock(template="cast/audio/audio.html", icon="media")
+    def __init__(self, *, section: str, **kwargs: Any) -> None:
+        self.section = section
+        super().__init__(default_content_blocks() + configured_content_blocks(section), **kwargs)
+
+    def deconstruct(self) -> tuple[str, list[Any], dict[str, str]]:
+        return ("cast.models.pages.ContentBlock", [], {"section": self.section})
+
+    def deconstruct_with_lookup(self, lookup: Any) -> tuple[str, list[Any], dict[str, str]]:
+        return self.deconstruct()
+
+    @classmethod
+    def construct_from_lookup(cls, lookup: Any, *args: Any, **kwargs: Any) -> "ContentBlock":
+        return cls(*args, **kwargs)
 
     class Meta:
         icon = "form"
@@ -209,8 +210,8 @@ class Post(Page):
     # wagtail
     body = StreamField(
         [
-            ("overview", ContentBlock()),
-            ("detail", ContentBlock()),
+            ("overview", ContentBlock(section="overview")),
+            ("detail", ContentBlock(section="detail")),
         ],
         use_json_field=True,
     )

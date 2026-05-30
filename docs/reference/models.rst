@@ -95,8 +95,8 @@ Main content model for blog posts with rich media support.
         cover_image = ForeignKey('wagtailimages.Image')
         cover_alt_text = CharField(max_length=255)
         body = StreamField([
-            ("overview", StreamBlock(...)),
-            ("detail", StreamBlock(...)),
+            ("overview", ContentBlock(section="overview")),
+            ("detail", ContentBlock(section="detail")),
         ])
 
         # Media relationships
@@ -116,7 +116,10 @@ The ``body`` field contains two sections:
 - ``overview``: Summary content shown on index pages
 - ``detail``: Full content shown on detail pages
 
-Both sections support blocks for text, images, galleries, video, audio, code, and embeds.
+Both sections support django-cast's built-in blocks for text, images,
+galleries, video, audio, code, and embeds. Projects can append custom blocks per
+section with ``CAST_POST_BODY_BLOCKS``; those custom blocks are inherited by
+episodes because episodes use ``Post.body``.
 
 **Key Methods:**
 
@@ -592,7 +595,11 @@ Special Behaviors
 Media Synchronization
 =====================
 
-Posts automatically sync media references from StreamField content to ManyToMany relationships using the ``sync_media_ids()`` method. This happens on save and ensures media is properly associated for queries.
+Posts automatically sync media references from built-in StreamField media blocks
+to ManyToMany relationships using the ``sync_media_ids()`` method. This happens
+on save and ensures built-in image, gallery, video, and audio blocks are
+properly associated for queries. Media references inside custom
+``CAST_POST_BODY_BLOCKS`` blocks are not synced automatically.
 
 Rendition Management
 ====================

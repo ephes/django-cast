@@ -11,6 +11,7 @@ from django.core.checks.registry import registry
 from cast.apps import CAST_MIDDLEWARE
 from cast.checks import _find_stale_assets, _newest_source_mtime, check_asset_freshness, check_cast_setting_types
 from cast.checks import check_cast_comments_ordering, check_cast_required_middleware
+from cast.checks import check_post_body_block_setting
 
 
 @pytest.fixture()
@@ -167,6 +168,54 @@ class TestCheckCastSettingTypes:
         assert len(errors) == 1
         assert errors[0].id == "cast.E001"
         assert "CAST_IMAGE_FORMATS must be of type list." == errors[0].msg
+
+
+class TestCheckPostBodyBlockSetting:
+    def test_missing_or_valid_setting(self, settings):
+        settings.CAST_POST_BODY_BLOCKS = None
+        assert check_post_body_block_setting(None) == []
+
+        settings.CAST_POST_BODY_BLOCKS = {
+            "overview": ("tests.custom_post_body_blocks.overview_callout_block",),
+            "detail": ["tests.custom_post_body_blocks.detail_callout_block"],
+        }
+        assert check_post_body_block_setting(None) == []
+
+    @pytest.mark.parametrize(
+        "configured, expected_message",
+        [
+            ("not-a-dict", "must be a dict"),
+            ({"teaser": []}, "unsupported section 'teaser'"),
+            ({"detail": "tests.custom_post_body_blocks.detail_callout_block"}, "must be a list or tuple"),
+            ({"detail": [None]}, "must be a non-empty dotted factory path string"),
+            ({"detail": ["tests.custom_post_body_blocks.missing"]}, "could not import"),
+            ({"detail": ["tests.custom_post_body_blocks.not_callable"]}, "must point to a callable factory"),
+            ({"detail": ["tests.custom_post_body_blocks.raising_block"]}, "raised RuntimeError"),
+            ({"detail": ["tests.custom_post_body_blocks.invalid_shape_block"]}, "must return a two-item tuple"),
+            ({"detail": ["tests.custom_post_body_blocks.non_string_name_block"]}, "non-string block name"),
+            ({"detail": ["tests.custom_post_body_blocks.empty_name_block"]}, "empty block name"),
+            ({"detail": ["tests.custom_post_body_blocks.invalid_block_instance"]}, "expected a wagtail.blocks.Block"),
+            ({"detail": ["tests.custom_post_body_blocks.paragraph_collision_block"]}, "collides"),
+            (
+                {
+                    "detail": [
+                        "tests.custom_post_body_blocks.detail_callout_block",
+                        "tests.custom_post_body_blocks.repeated_detail_callout_block",
+                    ]
+                },
+                "is duplicated",
+            ),
+        ],
+    )
+    def test_invalid_setting_returns_actionable_error(self, settings, configured, expected_message):
+        settings.CAST_POST_BODY_BLOCKS = configured
+
+        errors = check_post_body_block_setting(None)
+
+        assert len(errors) == 1
+        assert errors[0].id == "cast.E004"
+        assert expected_message in errors[0].msg
+        assert "dotted no-argument factories" in errors[0].hint
 
 
 class TestCheckCastConfiguration:

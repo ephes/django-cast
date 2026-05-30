@@ -170,7 +170,8 @@ SEO Settings
 Content Structure
 =================
 
-Posts use a StreamField with two main sections:
+Posts use a StreamField with two main sections. Episodes inherit the same body
+field from posts.
 
 Overview Section
 ----------------
@@ -191,7 +192,7 @@ The detail section contains the full article content that appears only on the po
 Available Content Blocks
 ------------------------
 
-Both sections support these block types:
+Both sections support these built-in block types:
 
 - **Heading**: Section headers for organization
 - **Paragraph**: Rich text with formatting, links, and inline images
@@ -201,6 +202,13 @@ Both sections support these block types:
 - **Video**: Self-hosted video files
 - **Audio**: Audio files with the Podlove Web Player
 - **Code**: Syntax-highlighted code blocks
+
+Projects can append site-specific blocks to either section with
+``CAST_POST_BODY_BLOCKS``. Custom blocks render through the same post detail,
+index/list preview, feed, API HTML, and Wagtail preview paths as the built-in
+blocks. Media references inside custom blocks are not synced to the post media
+relationships; automatic media sync is limited to the built-in image, gallery,
+video, and audio blocks.
 
 For detailed information about content blocks, see :doc:`/content/streamfield`.
 

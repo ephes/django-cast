@@ -11,6 +11,7 @@ from django.conf import settings
 from django.core.checks import Error, Warning, register
 
 from cast.apps import CAST_MIDDLEWARE
+from cast.post_body_blocks import validate_post_body_block_setting
 
 # Source extensions to consider
 SOURCE_EXTENSIONS = frozenset({".ts", ".tsx", ".js", ".jsx", ".vue", ".css", ".scss", ".sass"})
@@ -75,6 +76,23 @@ def check_cast_setting_types(
             )
 
     return errors
+
+
+@register("cast")
+def check_post_body_block_setting(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Validate CAST_POST_BODY_BLOCKS custom block factories."""
+    return [
+        Error(
+            message,
+            hint="Use dotted no-argument factories returning (name, wagtail.blocks.Block).",
+            id="cast.E004",
+        )
+        for message in validate_post_body_block_setting()
+    ]
 
 
 @register("cast")

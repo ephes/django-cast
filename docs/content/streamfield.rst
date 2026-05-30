@@ -1,7 +1,7 @@
 StreamField Blocks
 ==================
 
-Django Cast uses Wagtail's StreamField to provide flexible content editing. Posts and Episodes have a ``body`` field with two sections: ``overview`` (summary) and ``detail`` (full content). Both sections support the same rich set of content blocks.
+Django Cast uses Wagtail's StreamField to provide flexible content editing. Posts and Episodes have a ``body`` field with two sections: ``overview`` (summary) and ``detail`` (full content). Both sections support the same built-in content blocks, and projects can append custom blocks with ``CAST_POST_BODY_BLOCKS``.
 
 Overview
 --------
@@ -11,8 +11,8 @@ The StreamField structure allows authors to create dynamic content layouts by co
 .. code-block:: python
 
     body = StreamField([
-        ("overview", ContentBlock()),
-        ("detail", ContentBlock()),
+        ("overview", ContentBlock(section="overview")),
+        ("detail", ContentBlock(section="detail")),
     ])
 
 Content Sections
@@ -356,16 +356,39 @@ Example custom quote block:
             template = 'cast/blocks/quote.html'
             icon = 'quote'
 
-Adding to ContentBlock
-~~~~~~~~~~~~~~~~~~~~~~
+Registering Custom Blocks
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Projects append custom blocks with ``CAST_POST_BODY_BLOCKS``. Do not edit
+django-cast's ``ContentBlock`` class directly; that makes migrations and
+upgrades harder to keep stable.
+
+The setting maps the ``overview`` and ``detail`` sections to dotted factory
+paths. Each factory must return a ``(name, block)`` tuple, where ``name`` is the
+stable StreamField block type and ``block`` is a Wagtail ``Block`` instance.
 
 .. code-block:: python
 
-    class ContentBlock(blocks.StreamBlock):
-        heading = blocks.CharBlock(classname="full title")
-        paragraph = blocks.RichTextBlock()
-        quote = QuoteBlock()  # Add custom block
-        # ... other blocks
+    CAST_POST_BODY_BLOCKS = {
+        "overview": [],
+        "detail": [
+            "myproject.blocks.quote_block",
+        ],
+    }
+
+.. code-block:: python
+
+    # myproject/blocks.py
+    def quote_block():
+        return "quote", QuoteBlock()
+
+Configured blocks are appended after django-cast's built-in blocks. The two
+sections are independent, so a block registered for ``detail`` is not available
+in ``overview`` unless it is also listed there.
+
+Block names are content schema. Keep them stable after content has been saved:
+renaming or removing a custom block can make existing StreamField content
+uneditable or unrenderable until it is migrated or the block is restored.
 
 Custom Template
 ~~~~~~~~~~~~~~~
@@ -380,6 +403,22 @@ Custom Template
             <cite>— {{ value.author }}</cite>
         {% endif %}
     </blockquote>
+
+Custom block templates are rendered in post detail pages, index/list previews,
+feeds, API HTML fields, and Wagtail previews through the normal
+``{% include_block %}`` path. If a block needs different output in feeds, check
+the ``render_for_feed`` context value and avoid markup that is unsafe or
+unhelpful in RSS/Atom descriptions.
+
+Media Sync Limits
+~~~~~~~~~~~~~~~~~
+
+The first custom-block extension point does not add media extraction hooks.
+``Post.sync_media_ids()`` still syncs only django-cast's built-in ``image``,
+``gallery``, ``video``, and ``audio`` blocks to the post media relationships.
+Custom blocks can render chooser values normally, but their media references are
+not added to ``Post.images``, ``Post.galleries``, ``Post.videos``, or
+``Post.audios`` automatically.
 
 Media Selection
 ---------------
