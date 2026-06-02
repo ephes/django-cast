@@ -1,7 +1,19 @@
 {% load static %}
 {% load wagtailimages_tags %}
+{% load cast_audio_player %}
+{% cast_audio_player_mode as audio_player_mode %}
 {% if page.pk %}
   {% if not render_for_feed %}
+    {% if audio_player_mode == "custom" %}
+      {% comment %}
+        The custom player renders only on the detail path. List cards
+        (render_detail=False) render no audio player, no inline transcript, and
+        load no player JS — the deliberate "fewer players on overview" outcome.
+      {% endcomment %}
+      {% if render_detail %}
+        {% cast_custom_player value page %}
+      {% endif %}
+    {% else %}
     <podlove-player
       id="audio_{{ value.pk }}"
       data-variant="xl"
@@ -75,5 +87,6 @@
         </div>
       {% endif %}
     </podlove-player>
+    {% endif %}
   {% endif %}
 {% endif %}

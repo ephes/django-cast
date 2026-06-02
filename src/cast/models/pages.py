@@ -35,6 +35,7 @@ from wagtail.models import Page, PageManager
 from wagtail.search import index
 
 from cast import appsettings
+from cast.player import audio_player_context_flags
 from cast.follow_links import get_follow_links
 from cast.blocks import (
     CastImageChooserBlock,
@@ -402,6 +403,7 @@ class Post(Page):
         context["comments_are_enabled"] = repository.comments_are_enabled
         context["root_nav_links"] = repository.root_nav_links
         context["has_audio"] = repository.has_audio
+        context.update(audio_player_context_flags(enabled=repository.has_audio))
         context["page_url"] = repository.page_url
         context["absolute_page_url"] = repository.absolute_page_url
         context["owner_username"] = repository.owner_username

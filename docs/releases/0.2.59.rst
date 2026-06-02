@@ -1,4 +1,23 @@
 0.2.59 (unreleased)
 -------------------
 
+- Added an optional custom audio player: a dependency-free vanilla-TypeScript
+  web component (transport, interactive transcript, and chapter navigation) that
+  can replace the Podlove Web Player on episode detail pages. Enable it with the
+  new ``CAST_AUDIO_PLAYER = "custom"`` setting (default ``"podlove"`` keeps the
+  existing behaviour). The player renders from a sanitized, normalized JSON
+  payload inlined into the page (no runtime transcript fetch for normal-length
+  episodes, no hover/click-to-load facade), follows the host site's colors via
+  CSS custom properties (light/dark/forced-colors), and ships with zero runtime
+  dependencies. It renders only on the episode detail path; list/overview cards
+  render no player in custom mode, feeds are unchanged, and the cast-vue SPA
+  ``podlove_players`` API path is untouched.
+- Added ``CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES`` (default ``150000``): when a
+  transcript's serialized cues exceed the cap, the player payload references a
+  new public, sanitized fallback endpoint
+  (``cast:api:audio_player_transcript`` at
+  ``/api/audios/<pk>/player-transcript/``) that serves the same normalized,
+  sanitized ``{"cues": [...]}`` shape — never the raw Podlove file — and the
+  component fetches it once. Both settings are validated by the cast system
+  checks.
 - Update bundled htmx from 2.0.8 to 2.0.10.

@@ -19,6 +19,7 @@ from wagtail.images.models import Image
 from wagtail.models import Page, PageManager
 
 from cast import appsettings
+from cast.player import audio_player_context_flags
 from cast.follow_links import get_follow_links
 from cast.filters import PostFilterset, get_active_facets, has_active_filters
 from cast.models.itunes import ItunesArtWork
@@ -288,6 +289,7 @@ class Blog(Page):
         context["filterset"] = repository.filterset
         context["template_base_dir"] = repository.template_base_dir
         context["use_audio_player"] = repository.use_audio_player
+        context.update(audio_player_context_flags(enabled=repository.use_audio_player))
         context["root_nav_links"] = repository.root_nav_links
         return context
 

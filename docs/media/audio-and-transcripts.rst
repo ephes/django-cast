@@ -53,6 +53,87 @@ version 5 is used.
     ``/api/audios/player_config/``. You can override the default tokens and
     fonts per theme using the ``CAST_PODLOVE_PLAYER_THEMES`` setting.
 
+.. _custom_audio_player:
+
+Custom Audio Player
+===================
+
+As an alternative to the Podlove Web Player, django-cast ships an optional
+**custom audio player**: a dependency-free vanilla-TypeScript web component that
+couples three concerns — playback transport, an interactive transcript, and
+chapter navigation. It renders immediately from a sanitized JSON payload inlined
+into the page, adapts to the host site's colors via CSS custom properties (light,
+dark, and forced-colors), and adds no runtime dependencies and no
+hover/click-to-load facade.
+
+Enabling
+--------
+
+Set ``CAST_AUDIO_PLAYER`` to choose the player:
+
+* ``"podlove"`` (default) — the Podlove Web Player, unchanged.
+* ``"custom"`` — the custom web-component player.
+
+.. code-block:: python
+
+    CAST_AUDIO_PLAYER = "custom"
+
+The custom player renders **only on the episode detail path**, at the
+StreamField ``audio`` block render location (where Podlove renders on
+server-rendered themes). List/overview cards render no audio player in custom
+mode (the deliberate "fewer players on overview" outcome), feeds are unchanged,
+and the cast-vue SPA ``podlove_players`` API path is untouched.
+
+The detail and list contexts expose two derived booleans —
+``use_podlove_player`` and ``use_custom_audio_player`` — that themes use to gate
+their asset/preconnect includes. The component is built and shipped by
+django-cast and included with the ``cast`` app:
+
+.. code-block:: django
+
+    {% vite_asset 'src/audio/custom-player.ts' app="cast" %}
+
+Inline payload and the transcript size cap
+------------------------------------------
+
+For normal-length episodes the transcript cues are inlined into the page as JSON
+(via ``json_script``), so there is no runtime transcript fetch. The
+``CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES`` setting (default ``150000``) bounds
+the inlined transcript, measured as the byte length of the serialized cues
+array. When a transcript exceeds the cap, the payload instead references a public
+fallback endpoint and the component fetches the cues once.
+
+The fallback endpoint is ``cast:api:audio_player_transcript`` at
+``/api/audios/<pk>/player-transcript/``. It takes a ``post_id`` (to establish the
+episode/contributor context for sanitization), is public-read, validates that
+the post is live and owns the audio, and returns the same normalized, sanitized
+``{"cues": [...]}`` shape used inline — **never** the raw Podlove file.
+
+Both payload paths run transcript data through the same public speaker-label
+sanitization as the Podlove API output, so non-public speaker labels and raw
+``podlove_data`` never leak.
+
+Theming tokens
+--------------
+
+The player's structural CSS uses these CSS custom properties (with fallbacks);
+host sites theme the player by mapping them, without changing the component:
+
+* ``--cast-player-bg`` (fallback ``Canvas`` / ``#fff``)
+* ``--cast-player-fg`` (``CanvasText`` / ``#111``)
+* ``--cast-player-muted`` (``#666``)
+* ``--cast-player-accent`` (``#2d8260``)
+* ``--cast-player-progress`` (``var(--cast-player-accent)``)
+* ``--cast-player-progress-track`` (``#ccc``)
+* ``--cast-player-highlight-bg`` (``#fff3b0``)
+* ``--cast-player-focus`` (``var(--cast-player-accent)``)
+
+A ``@media (forced-colors: active)`` block keeps borders, the focus ring, and the
+current-cue marker legible in high-contrast mode. The transcript and chapter
+elements read their data from the controller, so a theme can relocate them
+anywhere on the detail page by moving the ``<cast-transcript for="...">`` /
+``<cast-chapters for="...">`` elements while keeping the same ``for=`` id.
+
 .. _transcript_overview:
 
 Transcripts

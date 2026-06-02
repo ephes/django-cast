@@ -1,0 +1,171 @@
+/* Custom audio player — structural CSS only. Colors come from CSS custom
+ * properties consumed with var(--token, fallback) so a host site themes the
+ * player purely by declaring the tokens (e.g. on :root or [data-bs-theme]);
+ * the fallbacks apply only when a token is unset. The tokens are intentionally
+ * NOT declared on the component itself — doing so would shadow host overrides
+ * for the element. Light/dark follow the host scheme + prefers-color-scheme;
+ * the forced-colors block keeps controls legible in high-contrast mode. */
+
+cast-audio-player {
+  display: block;
+  color: var(--cast-player-fg, CanvasText);
+  background: var(--cast-player-bg, Canvas);
+}
+
+cast-audio-player audio {
+  display: none;
+}
+
+.cast-player__transport {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3rem; /* reserve dimensions — no layout shift on buffering */
+}
+
+.cast-player__play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--cast-player-progress-track, #ccc);
+  border-radius: 50%;
+  background: var(--cast-player-bg, Canvas);
+  color: var(--cast-player-accent, #2d8260);
+  cursor: pointer;
+}
+
+.cast-player__seek {
+  flex: 1 1 auto;
+  accent-color: var(--cast-player-progress, var(--cast-player-accent, #2d8260));
+}
+
+.cast-player__time {
+  font-variant-numeric: tabular-nums;
+  color: var(--cast-player-muted, #666);
+  white-space: nowrap;
+}
+
+.cast-player__status {
+  min-height: 1.25rem; /* reserve to avoid layout shift */
+}
+
+.cast-player__unavailable {
+  color: var(--cast-player-muted, #666);
+}
+
+.cast-player__shortcuts {
+  font-size: 0.875rem;
+  color: var(--cast-player-muted, #666);
+}
+
+/* Transcript */
+.cast-transcript__heading {
+  font-size: 1.125rem;
+}
+
+.cast-transcript__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.cast-transcript__cues {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.cast-transcript__cue {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.cast-transcript__cue.is-current {
+  background: var(--cast-player-highlight-bg, #fff3b0);
+}
+
+.cast-transcript__speaker {
+  font-weight: 600;
+  margin-right: 0.5rem;
+  color: var(--cast-player-accent, #2d8260);
+}
+
+.cast-transcript__cue mark {
+  background: var(--cast-player-highlight-bg, #fff3b0);
+  color: inherit;
+}
+
+/* Chapters */
+.cast-chapters__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cast-chapters__button {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.cast-chapters__button.is-current {
+  background: var(--cast-player-highlight-bg, #fff3b0);
+}
+
+.cast-chapters__time {
+  font-variant-numeric: tabular-nums;
+  color: var(--cast-player-muted, #666);
+}
+
+/* Focus visibility (≥3:1) */
+.cast-player__play:focus-visible,
+.cast-player__seek:focus-visible,
+.cast-transcript__cue:focus-visible,
+.cast-chapters__button:focus-visible {
+  outline: 3px solid var(--cast-player-focus, var(--cast-player-accent, #2d8260));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cast-transcript__cues {
+    scroll-behavior: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  .cast-player__play,
+  .cast-chapters__button.is-current,
+  .cast-transcript__cue.is-current {
+    border: 1px solid currentColor;
+  }
+  .cast-transcript__cue.is-current,
+  .cast-chapters__button.is-current {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+  .cast-player__play:focus-visible,
+  .cast-player__seek:focus-visible,
+  .cast-transcript__cue:focus-visible,
+  .cast-chapters__button:focus-visible {
+    outline-color: currentColor;
+  }
+}

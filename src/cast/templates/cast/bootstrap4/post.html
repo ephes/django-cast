@@ -67,7 +67,11 @@
   {{ block.super }}
   {% vite_hmr_client app="cast" %}
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
-  {% vite_asset 'src/audio/podlove-player.ts' app="cast" %}
+  {% if use_custom_audio_player %}
+    {% vite_asset 'src/audio/custom-player.ts' app="cast" %}
+  {% elif use_podlove_player %}
+    {% vite_asset 'src/audio/podlove-player.ts' app="cast" %}
+  {% endif %}
 
   <!-- full query is needed for comments -->
   <script defer src="{% static 'cast/js/jquery/jquery-3.7.1.min.js' %}"></script>

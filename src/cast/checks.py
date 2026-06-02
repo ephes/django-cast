@@ -26,7 +26,11 @@ CAST_SETTING_TYPES: tuple[tuple[str, type], ...] = (
     ("CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", list),
     ("CAST_REPOSITORY", str),
     ("CAST_PODLOVE_PLAYER_THEMES", dict),
+    ("CAST_AUDIO_PLAYER", str),
+    ("CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES", int),
 )
+
+VALID_AUDIO_PLAYERS = frozenset({"podlove", "custom"})
 
 
 def _newest_source_mtime(source_dir: Path) -> float | None:
@@ -74,6 +78,38 @@ def check_cast_setting_types(
                     id="cast.E001",
                 )
             )
+
+    return errors
+
+
+@register("cast")
+def check_cast_audio_player_settings(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Validate the values of the custom-audio-player settings."""
+    errors: list[Error] = []
+
+    player = getattr(settings, "CAST_AUDIO_PLAYER", None)
+    if player is not None and player not in VALID_AUDIO_PLAYERS:
+        valid = ", ".join(sorted(VALID_AUDIO_PLAYERS))
+        errors.append(
+            Error(
+                f"CAST_AUDIO_PLAYER must be one of: {valid}.",
+                id="cast.E005",
+            )
+        )
+
+    cap = getattr(settings, "CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES", None)
+    # ``isinstance(True, int)`` is True, so booleans must be excluded explicitly.
+    if cap is not None and (isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0):
+        errors.append(
+            Error(
+                "CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES must be a positive integer.",
+                id="cast.E006",
+            )
+        )
 
     return errors
 

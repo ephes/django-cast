@@ -24,6 +24,11 @@ urlpatterns: list[Any] = [
         views.AudioPodloveDetailView.as_view(),
         name="audio_podlove_detail",
     ),
+    re_path(
+        r"^audios/(?P<pk>\d+)/player-transcript/$",
+        views.AudioPlayerTranscriptView.as_view(),
+        name="audio_player_transcript",
+    ),
     path("audios/player_config/", views.PlayerConfig.as_view(), name="player_config"),
     # facet counts
     path("facet_counts/", views.FacetCountListView.as_view(), name="facet-counts-list"),

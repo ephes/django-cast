@@ -4,14 +4,14 @@ from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
-from django.http import HttpRequest, JsonResponse
+from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import CreateView
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -31,6 +31,7 @@ from ..models import (
     get_template_base_dir_choices,
 )
 from ..modal_facet_counts import get_modal_facet_counts
+from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
 from ..views import HtmxHttpRequest
 from ..views.theme import set_template_base_dir
@@ -144,6 +145,42 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
 
         serializer = self.get_serializer(instance, context=context)
         return Response(serializer.data)
+
+
+class AudioPlayerTranscriptView(generics.RetrieveAPIView):
+    """Public, sanitized transcript-cue fallback for the custom audio player.
+
+    Serves the same normalized, sanitized ``{"cues": [...]}`` shape the inline
+    ``json_script`` uses for over-cap transcripts — never the raw Podlove file.
+    """
+
+    queryset = Audio.objects.all()
+    permission_classes = (AllowAny,)
+
+    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+        audio = self.get_object()
+        post_id = kwargs.get("post_id") or request.query_params.get("post_id")
+        post = self._get_owning_live_post(post_id, audio)
+        if post is None:
+            # Do not leak unsanitized data for a missing/mismatched context.
+            raise Http404("No transcript available for this audio in the given context.")
+        payload = build_player_payload(audio, post=post, request=request, inline_transcript=False)
+        return Response({"cues": payload["transcript"]["cues"]})
+
+    @staticmethod
+    def _get_owning_live_post(post_id: Any, audio: Audio) -> Post | None:
+        if post_id is None:
+            return None
+        try:
+            post = Post.objects.get(pk=int(post_id), live=True)
+        except (Post.DoesNotExist, ValueError, TypeError):
+            return None
+        specific = post.specific
+        if audio.pk in specific.media_lookup.get("audio", {}):
+            return post
+        if getattr(specific, "podcast_audio_id", None) == audio.pk:
+            return post
+        return None
 
 
 class PlayerConfig(generics.RetrieveAPIView):
