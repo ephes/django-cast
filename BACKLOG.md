@@ -13,13 +13,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
-- [ ] Harden modelsearch follow-ups
-  - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)
-  - Scope: decide whether the current normalization-only guard needs a database-exception backstop, and file
-    the upstream `django-modelsearch` issue.
-  - Done when: the local behavior decision is documented, any needed guard is implemented and tested, and the
-    upstream issue is filed or explicitly deferred.
-
 - [ ] Repository read-model cleanup experiment
   - Notes: [backlog/2026-04-18-repository-readmodels.md](backlog/2026-04-18-repository-readmodels.md)
   - Scope: try local typed read shapes around the repository layer before considering `django-mantle`.
