@@ -49,6 +49,10 @@ function mount(payload: PlayerPayload, { transcriptFirst = false } = {}) {
   return { player: player as HTMLElement & { controller?: any }, transcript };
 }
 
+function openPanel(transcript: HTMLElement): void {
+  (transcript.querySelector(".cast-panel__toggle") as HTMLButtonElement).click();
+}
+
 beforeEach(() => {
   document.body.innerHTML = "";
   _clearRegistry();
@@ -85,10 +89,22 @@ describe("cast-transcript rendering", () => {
     expect(cue.textContent).toContain("<script>alert(1)</script>");
   });
 
-  it("renders speaker labels in a separate span", () => {
+  it("renders a timestamp and speaker label per cue", () => {
     const { transcript } = mount(makePayload());
-    const speaker = transcript.querySelector(".cast-transcript__speaker") as HTMLElement;
-    expect(speaker.textContent).toBe("Alice");
+    const cue = transcript.querySelector(".cast-transcript__cue") as HTMLElement;
+    expect(cue.querySelector(".cast-transcript__time")?.textContent).toBe("0:00");
+    expect(cue.querySelector(".cast-transcript__speaker")?.textContent).toBe("Alice");
+  });
+
+  it("repeats the speaker label only on speaker change", () => {
+    const cues: Cue[] = [
+      { start: 0, end: 1, speaker: "Alice", text: "one" },
+      { start: 1, end: 2, speaker: "Alice", text: "two" },
+      { start: 2, end: 3, speaker: "Bob", text: "three" },
+    ];
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    const speakers = transcript.querySelectorAll(".cast-transcript__speaker");
+    expect(Array.from(speakers).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
   });
 
   it("renders nothing when there is no transcript", () => {
@@ -108,9 +124,28 @@ describe("cast-transcript rendering", () => {
     (transcript.querySelectorAll(".cast-transcript__cue")[1] as HTMLButtonElement).click();
     expect(audio.currentTime).toBeCloseTo(2.01);
   });
+
+  it("is collapsed by default and toggles open", () => {
+    const { transcript } = mount(makePayload());
+    const section = transcript.querySelector(".cast-transcript") as HTMLElement;
+    expect(section.classList.contains("is-open")).toBe(false);
+    openPanel(transcript);
+    expect(section.classList.contains("is-open")).toBe(true);
+    expect((transcript.querySelector(".cast-panel__toggle") as HTMLElement).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+  });
+
+  it("marks the collapsed panel inert so cues leave the tab order", () => {
+    const { transcript } = mount(makePayload());
+    const body = transcript.querySelector(".cast-panel__body") as HTMLElement;
+    expect(body.hasAttribute("inert")).toBe(true); // collapsed by default
+    openPanel(transcript);
+    expect(body.hasAttribute("inert")).toBe(false);
+  });
 });
 
-describe("cast-transcript highlight + auto-scroll", () => {
+describe("cast-transcript highlight + follow", () => {
   it("marks the current cue with aria-current on cuechange (no aria-live region)", () => {
     const { player, transcript } = mount(makePayload());
     const audio = player.querySelector("audio") as HTMLAudioElement;
@@ -118,42 +153,46 @@ describe("cast-transcript highlight + auto-scroll", () => {
     audio.dispatchEvent(new Event("timeupdate"));
     const cues = transcript.querySelectorAll(".cast-transcript__cue");
     expect(cues[1].getAttribute("aria-current")).toBe("true");
+    expect(cues[1].classList.contains("is-current")).toBe(true);
     expect(transcript.querySelector(".cast-transcript__cues")?.hasAttribute("aria-live")).toBe(false);
   });
 
-  it("auto-scrolls the current cue into view, smoothly unless reduced-motion", () => {
-    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
-    const { player } = mount(makePayload());
+  it("follow auto-scrolls the current cue when the panel is open", () => {
+    const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
     const audio = player.querySelector("audio") as HTMLAudioElement;
     audio.currentTime = 3;
     audio.dispatchEvent(new Event("timeupdate"));
     expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: "smooth" }));
   });
 
-  it("respects reduced-motion (auto behavior)", () => {
-    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
-    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
-    const { player } = mount(makePayload());
-    const audio = player.querySelector("audio") as HTMLAudioElement;
-    audio.currentTime = 3;
-    audio.dispatchEvent(new Event("timeupdate"));
-    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
-  });
-
-  it("does not auto-scroll when the toggle is off", () => {
+  it("does not auto-scroll when Follow is off", () => {
     const { player, transcript } = mount(makePayload());
-    const toggle = Array.from(transcript.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).find((i) =>
-      i.parentElement?.textContent?.includes("Auto-scroll"),
-    )!;
-    expect(toggle.parentElement?.textContent).toContain("Auto-scroll");
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event("change"));
+    openPanel(transcript);
+    const follow = transcript.querySelector(".cast-transcript__follow") as HTMLButtonElement;
+    expect(follow.getAttribute("aria-pressed")).toBe("true");
+    follow.click();
+    expect(follow.getAttribute("aria-pressed")).toBe("false");
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
     const audio = player.querySelector("audio") as HTMLAudioElement;
     audio.currentTime = 3;
     audio.dispatchEvent(new Event("timeupdate"));
     expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("respects reduced-motion (auto behavior)", () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
+    const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const audio = player.querySelector("audio") as HTMLAudioElement;
+    audio.currentTime = 3;
+    audio.dispatchEvent(new Event("timeupdate"));
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
   });
 });
 
@@ -164,46 +203,59 @@ describe("cast-transcript search", () => {
 
   it("marks matches via DOM splitting, case-insensitive, text-only", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const input = searchInput(transcript);
     input.value = "WORLD";
     input.dispatchEvent(new Event("input"));
     const marks = transcript.querySelectorAll("mark");
-    expect(marks).toHaveLength(2); // "hello world", "goodbye world"
+    expect(marks).toHaveLength(2);
     expect(marks[0].textContent).toBe("world");
-    // speaker labels are not searched
-    input.value = "Alice";
+    input.value = "Alice"; // speaker labels are not searched
     input.dispatchEvent(new Event("input"));
     expect(transcript.querySelectorAll("mark")).toHaveLength(0);
   });
 
-  it("announces the match count via a status region", () => {
+  it("announces the match count and highlights the first match", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const input = searchInput(transcript);
     input.value = "world";
     input.dispatchEvent(new Event("input"));
     const status = transcript.querySelector(".cast-transcript__search-status") as HTMLElement;
     expect(status.getAttribute("aria-live")).toBe("polite");
     expect(status.textContent).toBe("2 matches");
+    // the first match is made the active match (visible) automatically
+    expect(transcript.querySelectorAll("mark.is-active-match")).toHaveLength(1);
   });
 
-  it("next/prev scroll+focus+wrap without seeking", () => {
+  it("next/prev wrap and move the active match without seeking", () => {
     const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
     const audio = player.querySelector("audio") as HTMLAudioElement;
     audio.currentTime = 99;
     const input = searchInput(transcript);
     input.value = "world";
     input.dispatchEvent(new Event("input"));
-    const next = transcript.querySelector(".cast-transcript__match-next") as HTMLButtonElement;
-    const focus = vi.spyOn(HTMLElement.prototype, "focus");
-    next.click(); // first match
-    next.click(); // second match
-    next.click(); // wraps to first
-    expect(focus).toHaveBeenCalled();
-    expect(audio.currentTime).toBe(99); // never seeked
+    const next = transcript.querySelector(".cast-transcript__nav[aria-label='Next match']") as HTMLButtonElement;
+    next.click();
+    next.click(); // wraps back to first
+    expect(transcript.querySelectorAll("mark.is-active-match")).toHaveLength(1);
+    expect(audio.currentTime).toBe(99);
+  });
+
+  it("keeps focus in the search input while typing (auto-jump does not steal focus)", () => {
+    const { transcript } = mount(makePayload());
+    openPanel(transcript);
+    const input = searchInput(transcript);
+    input.focus();
+    input.value = "world";
+    input.dispatchEvent(new Event("input"));
+    expect(document.activeElement).toBe(input);
   });
 
   it("clears marks when the query is emptied", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const input = searchInput(transcript);
     input.value = "world";
     input.dispatchEvent(new Event("input"));
@@ -214,11 +266,13 @@ describe("cast-transcript search", () => {
 });
 
 describe("cast-transcript keyboard-navigable toggle", () => {
+  function tabbableToggle(transcript: HTMLElement): HTMLInputElement {
+    return transcript.querySelector(".cast-transcript__options input[type='checkbox']") as HTMLInputElement;
+  }
+
   it("flips tabindex and persists the preference", () => {
     const { transcript } = mount(makePayload());
-    const toggle = Array.from(transcript.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).find((i) =>
-      i.parentElement?.textContent?.includes("Keyboard-navigable"),
-    )!;
+    const toggle = tabbableToggle(transcript);
     toggle.checked = true;
     toggle.dispatchEvent(new Event("change"));
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLButtonElement;
@@ -246,7 +300,6 @@ describe("cast-transcript fallback path", () => {
     const { player, transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
     expect(transcript.querySelector(".cast-transcript__loading")).not.toBeNull();
     await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
-    // only the player fetched, exactly once; the transcript never fetches
     expect(fetchMock).toHaveBeenCalledTimes(1);
     void player;
     vi.unstubAllGlobals();

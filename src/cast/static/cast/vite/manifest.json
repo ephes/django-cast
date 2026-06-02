@@ -1,11 +1,11 @@
 {
   "src/audio/custom-player.ts": {
-    "file": "customPlayer-CbhdfvIx.js",
+    "file": "customPlayer-BVoPwDe4.js",
     "name": "customPlayer",
     "src": "src/audio/custom-player.ts",
     "isEntry": true,
     "css": [
-      "customPlayer-Bt6Y7aQe.css"
+      "customPlayer-C1PZ3GYg.css"
     ]
   },
   "src/audio/podlove-player.ts": {

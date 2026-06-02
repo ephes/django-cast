@@ -73,6 +73,15 @@ describe("cast-chapters", () => {
     expect(buttons[0].hasAttribute("aria-current")).toBe(false);
   });
 
+  it("collapses to inert so chapter buttons leave the tab order", () => {
+    const { chapters: el } = mount(makePayload({ chapters }));
+    const body = el.querySelector(".cast-panel__body") as HTMLElement;
+    expect(body.hasAttribute("inert")).toBe(false); // open by default
+    (el.querySelector(".cast-panel__toggle") as HTMLButtonElement).click();
+    expect(body.hasAttribute("inert")).toBe(true);
+    expect((el.querySelector(".cast-panel__toggle") as HTMLElement).getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("seeks on activation", () => {
     const { player, chapters: el } = mount(makePayload({ chapters }));
     const audio = player.querySelector("audio") as HTMLAudioElement;

@@ -117,22 +117,34 @@ Theming tokens
 --------------
 
 The player's structural CSS uses these CSS custom properties (with fallbacks);
-host sites theme the player by mapping them, without changing the component:
+host sites theme the player by mapping them, without changing the component. In
+practice the only token most sites need to set is ``--cast-player-accent`` — the
+surface, line, highlight, and focus colours are derived from it (as translucent
+accent overlays) so highlights stay visible on both light and dark backgrounds:
 
-* ``--cast-player-bg`` (fallback ``Canvas`` / ``#fff``)
-* ``--cast-player-fg`` (``CanvasText`` / ``#111``)
-* ``--cast-player-muted`` (``#666``)
-* ``--cast-player-accent`` (``#2d8260``)
-* ``--cast-player-progress`` (``var(--cast-player-accent)``)
-* ``--cast-player-progress-track`` (``#ccc``)
-* ``--cast-player-highlight-bg`` (``#fff3b0``)
-* ``--cast-player-focus`` (``var(--cast-player-accent)``)
+* ``--cast-player-accent`` (fallback ``#2d8260``) — the brand accent; drives the
+  play button, progress fill, timecodes, current-cue/chapter highlight, and
+  search marks.
+* ``--cast-player-fg`` (``CanvasText``) and ``--cast-player-bg`` (``Canvas``) —
+  text and the share-dialog background.
+* ``--cast-player-muted`` (``#6b7280``) — secondary text.
+* ``--cast-player-on-accent`` (``#fff``) — text/icon colour on accent fills.
+* ``--cast-player-progress-track`` (translucent ``currentColor``) — the unfilled
+  seek track.
+* ``--cast-player-surface`` / ``--cast-player-line`` (derived from accent) —
+  panel background and borders.
+* ``--cast-player-focus`` (``var(--cast-player-accent)``) — the focus ring.
+* ``--cast-player-mono`` — the monospace stack for timecodes.
 
 A ``@media (forced-colors: active)`` block keeps borders, the focus ring, and the
-current-cue marker legible in high-contrast mode. The transcript and chapter
-elements read their data from the controller, so a theme can relocate them
-anywhere on the detail page by moving the ``<cast-transcript for="...">`` /
-``<cast-chapters for="...">`` elements while keeping the same ``for=`` id.
+current-cue marker legible in high-contrast mode, and a
+``@media (prefers-reduced-motion: reduce)`` block disables transitions. The
+transcript and chapter elements read their data from the controller, so a theme
+can relocate them anywhere on the detail page by moving the
+``<cast-transcript for="...">`` / ``<cast-chapters for="...">`` elements while
+keeping the same ``for=`` id. The transcript is a collapsible panel (search, a
+follow-along auto-scroll toggle, current-cue highlight, and a share-with-time
+control on the transport are built in).
 
 .. _transcript_overview:
 

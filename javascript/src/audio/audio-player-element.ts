@@ -14,6 +14,20 @@ const PLAY_ICON =
   '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 const PAUSE_ICON =
   '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+const SHARE_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+
+function timecode(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function parseTimecode(raw: string): number | null {
+  const match = /^(\d{1,3}):([0-5]\d)$/.exec(raw.trim());
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -46,6 +60,9 @@ export class CastAudioPlayerElement extends HTMLElement {
   private keydownListener?: EventListener;
   private lastPublicEmit = Number.NEGATIVE_INFINITY;
   private publicTimer: ReturnType<typeof setTimeout> | null = null;
+  private shareDialog?: HTMLDialogElement;
+  private shareTimeInput?: HTMLInputElement;
+  private shareBuildUrl?: () => void;
 
   connectedCallback(): void {
     if (this.controller) {
@@ -76,6 +93,7 @@ export class CastAudioPlayerElement extends HTMLElement {
     this.subscribe();
     if (!this.disabled) {
       this.installKeyboardShortcuts();
+      this.applyStartAt();
     }
 
     if (isFallbackTranscript(payload.transcript)) {
@@ -177,6 +195,13 @@ export class CastAudioPlayerElement extends HTMLElement {
     this.statusRegion = status;
 
     transport.append(playButton, range, output);
+    if (!this.disabled) {
+      const share = el("button", "cast-player__share", { type: "button" });
+      share.setAttribute("aria-label", "Share with current time");
+      share.innerHTML = SHARE_ICON;
+      share.addEventListener("click", () => this.openShare());
+      transport.appendChild(share);
+    }
     this.appendChild(transport);
     this.appendChild(status);
 
@@ -186,6 +211,130 @@ export class CastAudioPlayerElement extends HTMLElement {
       this.appendChild(message);
     } else {
       this.appendChild(this.renderShortcutsHelp());
+      this.appendChild(this.buildShareDialog());
+    }
+  }
+
+  // ---- share with timestamp -------------------------------------------------
+
+  private buildShareDialog(): HTMLDialogElement {
+    const dialog = el("dialog", "cast-share");
+
+    const titleId = `cast-share-title-${this.playerId || "player"}`;
+    const title = el("h2", "cast-share__title", { id: titleId });
+    title.textContent = "Share";
+    dialog.setAttribute("aria-labelledby", titleId);
+
+    const startRow = el("div", "cast-share__row");
+    const toggleLabel = el("label", "cast-share__startat");
+    const startToggle = el("input", undefined, { type: "checkbox" });
+    startToggle.checked = true;
+    const toggleText = el("span");
+    toggleText.textContent = " Start at ";
+    const timeInput = el("input", "cast-share__time", {
+      type: "text",
+      inputmode: "numeric",
+      pattern: "[0-9]{1,3}:[0-5][0-9]",
+    });
+    timeInput.setAttribute("aria-label", "Start time (minutes:seconds)");
+    toggleLabel.append(startToggle, toggleText, timeInput);
+    startRow.appendChild(toggleLabel);
+
+    const urlRow = el("div", "cast-share__row");
+    const urlInput = el("input", "cast-share__url", { type: "text", readonly: "" });
+    urlInput.setAttribute("aria-label", "Share URL");
+    const copyButton = el("button", "cast-share__copy", { type: "button" });
+    copyButton.textContent = "Copy";
+    urlRow.append(urlInput, copyButton);
+
+    const closeRow = el("div", "cast-share__row");
+    const closeButton = el("button", "cast-share__close", { type: "button" });
+    closeButton.textContent = "Close";
+    closeRow.appendChild(closeButton);
+
+    const buildUrl = () => {
+      const base = new URL(window.location.href);
+      base.searchParams.delete("t");
+      if (startToggle.checked) {
+        const seconds = parseTimecode(timeInput.value);
+        if (seconds != null) {
+          base.searchParams.set("t", String(seconds));
+        }
+      }
+      urlInput.value = base.toString();
+    };
+
+    startToggle.addEventListener("change", () => {
+      timeInput.disabled = !startToggle.checked;
+      buildUrl();
+    });
+    timeInput.addEventListener("input", buildUrl);
+    copyButton.addEventListener("click", () => {
+      void navigator.clipboard?.writeText(urlInput.value).then(
+        () => {
+          copyButton.textContent = "Copied!";
+          window.setTimeout(() => (copyButton.textContent = "Copy"), 1500);
+        },
+        () => {
+          urlInput.select();
+        },
+      );
+    });
+    closeButton.addEventListener("click", () => this.closeShare());
+
+    dialog.append(title, startRow, urlRow, closeRow);
+    this.shareDialog = dialog;
+    this.shareTimeInput = timeInput;
+    this.shareBuildUrl = buildUrl;
+    return dialog;
+  }
+
+  private openShare(): void {
+    if (!this.shareDialog || !this.shareTimeInput || !this.shareBuildUrl) {
+      return;
+    }
+    this.shareTimeInput.value = timecode(this.currentTime);
+    this.shareBuildUrl();
+    if (typeof this.shareDialog.showModal === "function") {
+      this.shareDialog.showModal();
+    } else {
+      this.shareDialog.setAttribute("open", "");
+    }
+  }
+
+  private closeShare(): void {
+    if (!this.shareDialog) {
+      return;
+    }
+    // Mirror the open path: only native dialogs get close(); the attribute
+    // fallback is removed otherwise.
+    if (this.shareDialog.hasAttribute("open") && typeof this.shareDialog.close !== "function") {
+      this.shareDialog.removeAttribute("open");
+    } else if (typeof this.shareDialog.close === "function") {
+      this.shareDialog.close();
+    }
+  }
+
+  // Seek to the ?t=<seconds> deep-link once metadata is available.
+  private applyStartAt(): void {
+    const raw = new URL(window.location.href).searchParams.get("t");
+    if (raw === null) {
+      return;
+    }
+    const seconds = Number(raw);
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      return;
+    }
+    const seekOnce = () => this.controller?.seek(seconds);
+    if (typeof this.controller?.duration === "number") {
+      seekOnce();
+    } else {
+      const onDuration = () => {
+        this.controller?.removeEventListener("durationchange", onDuration);
+        seekOnce();
+      };
+      this.controller?.addEventListener("durationchange", onDuration);
+      this.controllerListeners.push(["durationchange", onDuration as EventListener]);
     }
   }
 
@@ -254,11 +403,21 @@ export class CastAudioPlayerElement extends HTMLElement {
     }
     if (this.range) {
       this.range.setAttribute("aria-valuetext", typeof duration === "number" ? this.valueText(t, duration) : spokenTime(t));
+      this.updateProgressFill(t, duration);
     }
     if (this.output) {
       this.output.textContent = `${formatTime(t)} / ${typeof duration === "number" ? formatTime(duration) : "--:--"}`;
     }
     this.emitPublicTimeUpdate(t, duration);
+  }
+
+  // Paint the accent fill of the custom range track via a CSS variable.
+  private updateProgressFill(currentTime: number, duration: number | null): void {
+    if (!this.range) {
+      return;
+    }
+    const pct = typeof duration === "number" && duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+    this.range.style.setProperty("--cast-progress", `${pct}%`);
   }
 
   private onDurationChange(): void {
@@ -271,6 +430,7 @@ export class CastAudioPlayerElement extends HTMLElement {
       this.range.max = String(duration);
       this.range.disabled = this.disabled;
       this.range.setAttribute("aria-valuetext", this.valueText(controller.currentTime, duration));
+      this.updateProgressFill(controller.currentTime, duration);
       if (this.output) {
         this.output.textContent = `${formatTime(controller.currentTime)} / ${formatTime(duration)}`;
       }

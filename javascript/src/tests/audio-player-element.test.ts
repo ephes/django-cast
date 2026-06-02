@@ -212,3 +212,42 @@ describe("cast-audio-player fallback hydration", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("cast-audio-player share with timestamp", () => {
+  it("opens a share dialog prefilled with the current time and a ?t= link", () => {
+    const player = mountPlayer(makePayload({ duration: 600 }));
+    const audio = audioOf(player);
+    audio.currentTime = 125; // 2:05
+    const share = player.querySelector(".cast-player__share") as HTMLButtonElement;
+    const dialog = player.querySelector("dialog.cast-share") as HTMLDialogElement;
+    // the dialog has an accessible name via aria-labelledby -> the Share heading
+    const labelledby = dialog.getAttribute("aria-labelledby");
+    expect(labelledby).toBeTruthy();
+    expect(dialog.querySelector(`#${labelledby}`)?.textContent).toBe("Share");
+    share.click();
+    expect(dialog.hasAttribute("open")).toBe(true); // jsdom has no showModal -> open fallback
+    const time = dialog.querySelector(".cast-share__time") as HTMLInputElement;
+    const url = dialog.querySelector(".cast-share__url") as HTMLInputElement;
+    expect(time.value).toBe("2:05");
+    expect(url.value).toContain("t=125");
+
+    // Close mirrors the open fallback (jsdom has no showModal/close -> open attr).
+    const close = dialog.querySelector(".cast-share__close") as HTMLButtonElement;
+    close.click();
+    expect(dialog.hasAttribute("open")).toBe(false);
+  });
+
+  it("no share button in the disabled (no-sources) state", () => {
+    const player = mountPlayer(makePayload({ sources: [] }));
+    expect(player.querySelector(".cast-player__share")).toBeNull();
+  });
+});
+
+describe("cast-audio-player ?t= deep link", () => {
+  it("seeks to the ?t= seconds on load", () => {
+    window.history.replaceState({}, "", "/?t=42");
+    const player = mountPlayer(makePayload({ duration: 600 }));
+    expect(audioOf(player).currentTime).toBe(42);
+    window.history.replaceState({}, "", "/");
+  });
+});
