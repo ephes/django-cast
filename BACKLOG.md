@@ -13,6 +13,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
+- [ ] Authorize public audio and transcript object endpoints
+  - Scope: require public Podlove audio and transcript responses to be anchored to a live, public episode that
+    references the requested `Audio` or `Transcript`, instead of serving raw object IDs directly.
+  - Affected routes include `/api/audios/podlove/<audio_pk>/`, `/api/audios/podlove/<audio_pk>/post/<post_pk>/`,
+    `/transcripts/podlove/<transcript_pk>/`, `/transcripts/podcastindex/<transcript_pk>/`,
+    `/transcripts/vtt/<transcript_pk>/`, and `/transcripts/html/<transcript_pk>/`.
+  - Done when: bare or mismatched object IDs return 404, Wagtail page view restrictions are respected, and focused
+    regression tests cover draft, unpublished, unattached, and restricted episode/audio/transcript cases.
+
 - [ ] Repository read-model cleanup experiment
   - Notes: [backlog/2026-04-18-repository-readmodels.md](backlog/2026-04-18-repository-readmodels.md)
   - Scope: try local typed read shapes around the repository layer before considering `django-mantle`.
