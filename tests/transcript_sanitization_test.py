@@ -111,6 +111,32 @@ def test_public_speaker_mapping_context_edge_cases(episode, audio):
 
 
 @pytest.mark.django_db
+def test_public_speaker_mapping_uses_stable_fingerprint_after_s3_style_prior_reads(
+    episode, s3_style_fieldfile_reopen_guard
+):
+    contributor = Contributor.objects.create(display_name="Alice", slug="s3-mapping-alice")
+    EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+    transcript = create_transcript(
+        audio=episode.podcast_audio,
+        podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Podlove line"}]},
+        dote={"lines": [{"speakerDesignation": "Speaker 1", "text": "DOTe line"}]},
+        vtt=("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>WebVTT line</v>\n"),
+    )
+    fingerprint = transcript.transcript_artifact_fingerprint()
+    mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
+    mapping.contributor = contributor
+    mapping.review_state = TranscriptSpeakerMapping.ReviewState.APPROVED
+    mapping.source_artifact_fingerprint = fingerprint
+    mapping.save()
+    s3_style_fieldfile_reopen_guard()
+
+    assert transcript.podlove_data["transcripts"][0]["speaker"] == "Speaker 1"
+    assert transcript.dote_data["lines"][0]["speakerDesignation"] == "Speaker 1"
+    assert "Speaker 1" in transcript._load_text_file("vtt")
+    assert public_speaker_mapping_for_transcript(transcript, episode=episode) == {"Speaker 1": "Alice"}
+
+
+@pytest.mark.django_db
 def test_disabled_audio_returns_empty_public_speaker_labels(episode):
     contributor = Contributor.objects.create(display_name="Live Host", slug="disabled-live-host")
     EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)

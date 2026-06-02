@@ -265,6 +265,24 @@ class TestTranscriptSpeakerMapping:
             mapping.source_artifact_fingerprint == transcript.transcript_artifact_fingerprint() for mapping in mappings
         )
 
+    def test_transcript_artifact_fingerprint_stays_stable_after_s3_style_prior_reads(
+        self, audio, s3_style_fieldfile_reopen_guard
+    ):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+            dote={"lines": [{"speakerDesignation": "Speaker 2", "text": "Hi"}]},
+            vtt=("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 3>WebVTT speaker</v>\n"),
+        )
+        expected_fingerprint = transcript.transcript_artifact_fingerprint()
+        s3_style_fieldfile_reopen_guard()
+
+        assert transcript.podlove_data["transcripts"][0]["speaker"] == "Speaker 1"
+        assert transcript.dote_data["lines"][0]["speakerDesignation"] == "Speaker 2"
+        assert "Speaker 3" in transcript._load_text_file("vtt")
+        assert transcript.get_speaker_labels() == ["Speaker 1", "Speaker 2", "Speaker 3"]
+        assert transcript.transcript_artifact_fingerprint() == expected_fingerprint
+
     def test_speaker_mapping_uniqueness_is_per_transcript_label(self, audio):
         transcript = create_transcript(audio=audio, podlove={"transcripts": [{"speaker": "Speaker 1"}]})
         other_transcript = create_transcript(podlove={"transcripts": [{"speaker": "Speaker 1"}]})
@@ -2255,6 +2273,35 @@ class TestGetTranscriptAsHtml:
         assert "Draft speaker" in content
         assert "Speaker 1" not in content
         assert "Unmapped speaker" in content
+
+    def test_get_transcript_as_html_canonical_applies_mapping_after_s3_style_prior_read(
+        self, client, episode, s3_style_fieldfile_reopen_guard
+    ):
+        contributor = Contributor.objects.create(display_name="Alice", slug="html-s3-alice")
+        EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={
+                "transcripts": [
+                    {"start": "00:00:00.000", "speaker": "Speaker 1", "voice": "Speaker 1", "text": "Mapped line"}
+                ]
+            },
+        )
+        fingerprint = transcript.transcript_artifact_fingerprint()
+        mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
+        mapping.contributor = contributor
+        mapping.review_state = TranscriptSpeakerMapping.ReviewState.APPROVED
+        mapping.source_artifact_fingerprint = fingerprint
+        mapping.save()
+        s3_style_fieldfile_reopen_guard()
+        url = reverse("cast:episode-transcript", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "Alice" in content
+        assert "Speaker 1" not in content
 
     def test_get_transcript_as_html_canonical_without_transcript(self, client, episode):
         url = reverse("cast:episode-transcript", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})

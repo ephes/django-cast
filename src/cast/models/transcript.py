@@ -285,10 +285,10 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
 
     def _read_file_bytes(self, field_name: str) -> bytes | None:
         file_field = getattr(self, field_name)
-        if not file_field:
+        if not file_field or not file_field.name:
             return None
         try:
-            with file_field.open("rb") as file:
+            with file_field.storage.open(file_field.name, "rb") as file:
                 return file.read()
         except (FileNotFoundError, OSError, ValueError):
             return None

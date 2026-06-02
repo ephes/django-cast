@@ -17,7 +17,7 @@ from cast.api.views import (
     ThemeListView,
 )
 from cast.devdata import create_transcript, generate_blog_with_media
-from cast.models import Audio, Contributor, EpisodeContributor, PostCategory
+from cast.models import Audio, Contributor, EpisodeContributor, PostCategory, TranscriptSpeakerMapping
 
 from .factories import PostFactory, UserFactory
 
@@ -583,6 +583,38 @@ class TestPodcastAudio:
             stored_data = json.load(podlove_file)
         assert stored_data["transcripts"][1]["speaker"] == "Draft Guest"
         assert stored_data["transcripts"][2]["speaker"] == "Speaker 1"
+
+    def test_podlove_detail_endpoint_applies_mapping_after_s3_style_prior_read(
+        self, api_client, episode, s3_style_fieldfile_reopen_guard
+    ):
+        audio = episode.podcast_audio
+        contributor = Contributor.objects.create(display_name="Alice", slug="api-s3-alice")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=contributor,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        transcript = create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Mapped speaker"}]},
+        )
+        fingerprint = transcript.transcript_artifact_fingerprint()
+        mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
+        mapping.contributor = contributor
+        mapping.review_state = TranscriptSpeakerMapping.ReviewState.APPROVED
+        mapping.source_artifact_fingerprint = fingerprint
+        mapping.save()
+        s3_style_fieldfile_reopen_guard()
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
+
+        response = api_client.get(podlove_detail_url, format="json")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["contributors"] == [{"id": "Alice", "name": "Alice"}]
+        assert data["transcripts"][0]["speaker"] == "Alice"
+        assert data["transcripts"][0]["voice"] == "Alice"
 
     def test_podlove_detail_endpoint_disabled_audio_suppresses_speakers(self, api_client, episode):
         """Audio-level disabled mode hides otherwise public transcript speaker labels."""

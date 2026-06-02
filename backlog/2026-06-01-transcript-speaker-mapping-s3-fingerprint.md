@@ -1,5 +1,8 @@
 # Transcript Speaker-Mapping Fingerprints on S3 Storage
 
+Status: Implemented for django-cast 0.2.58. Kept as historical context for the
+S3-style `FieldFile` reopen failure mode and regression coverage.
+
 ## Summary
 
 Fix read-time public speaker mappings so they do not depend on the order in

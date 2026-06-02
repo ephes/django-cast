@@ -13,13 +13,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
-- [ ] Stabilize transcript speaker-mapping fingerprints on S3 storage
-  - Notes: [backlog/2026-06-01-transcript-speaker-mapping-s3-fingerprint.md](backlog/2026-06-01-transcript-speaker-mapping-s3-fingerprint.md)
-  - Scope: make public transcript speaker mappings independent of `FieldFile` open/read order so S3-backed
-    transcript artifacts map consistently in APIs and transcript pages.
-  - Done when: approved `TranscriptSpeakerMapping` rows apply in the public Podlove API and transcript views even
-    after prior transcript artifact reads on the same model instance, with tests covering S3-style reopen failures.
-
 - [ ] Harden modelsearch follow-ups
   - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)
   - Scope: decide whether the current normalization-only guard needs a database-exception backstop, and file

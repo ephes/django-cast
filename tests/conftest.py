@@ -13,6 +13,7 @@ from django.conf import settings as django_settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
+from django.db.models.fields.files import FieldFile
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
@@ -165,6 +166,28 @@ def _clear_theme_cache():
     _clear_template_base_dir_choices_cache()
     yield
     _clear_template_base_dir_choices_cache()
+
+
+@pytest.fixture()
+def s3_style_fieldfile_reopen_guard(mocker):
+    """Patch FieldFile.open to mimic storage files that cannot reopen in a different mode."""
+    original_open = FieldFile.open
+
+    def enable():
+        def guarded_open(self, mode="rb"):
+            field_name = getattr(getattr(self, "field", None), "name", "")
+            if field_name not in {"podlove", "dote", "vtt"}:
+                return original_open(self, mode)
+            previous_mode = getattr(self, "_cast_test_open_mode", None)
+            if getattr(self, "_file", None) is not None and previous_mode is not None and previous_mode != mode:
+                raise ValueError("Cannot reopen file with a new mode.")
+            result = original_open(self, mode)
+            self._cast_test_open_mode = mode
+            return result
+
+        return mocker.patch.object(FieldFile, "open", guarded_open)
+
+    return enable
 
 
 # Image testing stuff

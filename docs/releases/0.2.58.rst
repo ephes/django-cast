@@ -26,6 +26,9 @@
   read time before the public speaker-label sanitizer. One-off display names
   must not duplicate raw transcript speaker labels, so unmapped anonymous
   labels cannot become public through a value collision.
+- Stabilized transcript speaker-mapping fingerprints on S3-style storage so
+  approved public mappings remain current even after the same transcript
+  instance has already opened Podlove, DOTe, or WebVTT artifacts.
 - Fixed episode publishing from the Wagtail editor by no longer rendering a
   hidden ``action-publish`` field that could shadow Wagtail's publish button.
 - Fixed episode contributor editing so links for a contributor created after
