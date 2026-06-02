@@ -1,2 +1,4 @@
 0.2.59 (unreleased)
 -------------------
+
+- Update bundled htmx from 2.0.8 to 2.0.10.
