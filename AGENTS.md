@@ -57,6 +57,8 @@
 - Source at https://github.com/ephes/django-cast
 - Local planning lives in `BACKLOG.md`; larger feature notes live in `backlog/` and should be linked from
   `BACKLOG.md`.
+- Before committing, bring `BACKLOG.md` and linked `backlog/` notes up to date with the current repo state:
+  remove completed items from active sections and mark retained planning notes as implemented or historical.
 ### Theme Repos (provide templates that extend django-cast)
 - `../cast-bootstrap5` — Bootstrap 5 theme: templates in `cast_bootstrap5/templates/cast/bootstrap5/`
 - `../cast-vue` — Vue.js theme: templates in `cast_vue/templates/cast/vue/`

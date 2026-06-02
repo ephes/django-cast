@@ -1,5 +1,12 @@
 # Post.body StreamField Block Extension Point
 
+## Status
+
+Implemented for django-cast 0.2.58 in commit `f795ed5f`. This note records
+the planning context for that slice; the current user-facing behavior is
+documented in `docs/content/streamfield.rst`, `docs/content/blogs-and-posts.rst`,
+`docs/reference/models.rst`, and `docs/releases/0.2.58.rst`.
+
 ## Summary
 
 Add a supported extension point that lets projects append custom Wagtail blocks to

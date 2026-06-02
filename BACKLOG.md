@@ -20,14 +20,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: approved `TranscriptSpeakerMapping` rows apply in the public Podlove API and transcript views even
     after prior transcript artifact reads on the same model instance, with tests covering S3-style reopen failures.
 
-- [ ] Add a supported Post.body custom block extension point
-  - Notes: [backlog/2026-05-30-post-body-block-extension.md](backlog/2026-05-30-post-body-block-extension.md)
-  - Scope: add a settings-driven API for appending project-specific blocks to the `overview` and `detail`
-    `Post.body` sections while keeping default blocks, rendering paths, and migration behavior stable.
-  - Done when: configured custom blocks render through Wagtail admin, detail/list templates, feed descriptions,
-    API HTML fields, previews, and repository cache reconstruction; invalid settings have checks/tests; and docs
-    plus release notes describe the supported extension point.
-
 - [ ] Harden modelsearch follow-ups
   - Notes: [backlog/2026-04-22-search-hardening-follow-ups.md](backlog/2026-04-22-search-hardening-follow-ups.md)
   - Scope: decide whether the current normalization-only guard needs a database-exception backstop, and file
