@@ -13,6 +13,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Ready
 
+- [ ] Stabilize transcript speaker-mapping fingerprints on S3 storage
+  - Notes: [backlog/2026-06-01-transcript-speaker-mapping-s3-fingerprint.md](backlog/2026-06-01-transcript-speaker-mapping-s3-fingerprint.md)
+  - Scope: make public transcript speaker mappings independent of `FieldFile` open/read order so S3-backed
+    transcript artifacts map consistently in APIs and transcript pages.
+  - Done when: approved `TranscriptSpeakerMapping` rows apply in the public Podlove API and transcript views even
+    after prior transcript artifact reads on the same model instance, with tests covering S3-style reopen failures.
+
 - [ ] Add a supported Post.body custom block extension point
   - Notes: [backlog/2026-05-30-post-body-block-extension.md](backlog/2026-05-30-post-body-block-extension.md)
   - Scope: add a settings-driven API for appending project-specific blocks to the `overview` and `detail`
