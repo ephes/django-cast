@@ -1,4 +1,4 @@
-0.2.58 (unreleased)
+0.2.58 (2026-06-02)
 -------------------
 
 - Changed Wagtail-admin Voxhelm transcript generation to report missing
