@@ -12,11 +12,11 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.core.files.base import ContentFile
 from django.http import HttpRequest
 from django.urls import reverse
 from wagtail.models import Site
 
+from .file_replacement import StagedFileReplacementGroup, stage_file_replacement
 from .models import Transcript, TranscriptGeneration
 
 if TYPE_CHECKING:
@@ -187,9 +187,7 @@ def build_failure_message(job_payload: dict[str, Any]) -> str:
 
 
 def replace_file(field, filename: str, content: bytes) -> None:
-    if field.name:
-        field.delete(save=False)
-    field.save(filename, ContentFile(content), save=False)
+    stage_file_replacement(field, filename, content)
 
 
 def build_audio_task_ref(
@@ -671,12 +669,17 @@ class VoxhelmTranscriptService:
         speakers: bytes | None = None,
     ) -> None:
         file_stem = f"audio-{audio.pk}"
-        replace_file(transcript.podlove, f"{file_stem}.podlove.json", podlove)
-        replace_file(transcript.dote, f"{file_stem}.dote.json", dote)
-        replace_file(transcript.vtt, f"{file_stem}.vtt", vtt)
-        if speakers is not None:
-            replace_file(transcript.speakers, f"{file_stem}.speakers.json", speakers)
-        transcript.save()
+        replacements = StagedFileReplacementGroup()
+        try:
+            replacements.stage(transcript.podlove, f"{file_stem}.podlove.json", podlove)
+            replacements.stage(transcript.dote, f"{file_stem}.dote.json", dote)
+            replacements.stage(transcript.vtt, f"{file_stem}.vtt", vtt)
+            if speakers is not None:
+                replacements.stage(transcript.speakers, f"{file_stem}.speakers.json", speakers)
+            replacements.save_model(transcript)
+        except Exception:
+            replacements.rollback()
+            raise
 
 
 def enqueue_audio_transcript_generation(

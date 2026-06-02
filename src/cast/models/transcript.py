@@ -8,11 +8,12 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
 from wagtail.models import CollectionMember
 from wagtail.search import index
+
+from cast.file_replacement import StagedFileReplacementGroup
 
 from . import Audio
 from .contributors import Contributor, get_voice_reference_storage
@@ -421,17 +422,25 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 rejected_start_ms.add(start_ms)
         if not names_by_start_ms and not rejected_start_ms:
             return 0
-        applied = self._clear_suggestions_from_podlove(rejected_start_ms)
-        applied += self._clear_suggestions_from_dote(rejected_start_ms)
-        if self.vtt:
-            applied += self._clear_suggestions_from_webvtt(rejected_start_ms)
-        if names_by_start_ms:
-            applied += self._apply_suggestions_to_podlove(names_by_start_ms)
-            applied += self._apply_suggestions_to_dote(names_by_start_ms)
+        replacements = StagedFileReplacementGroup()
+        try:
+            applied = self._clear_suggestions_from_podlove(rejected_start_ms, replacements=replacements)
+            applied += self._clear_suggestions_from_dote(rejected_start_ms, replacements=replacements)
             if self.vtt:
-                applied += self._apply_suggestions_to_webvtt(names_by_start_ms)
-        if applied:
-            self.save()
+                applied += self._clear_suggestions_from_webvtt(rejected_start_ms, replacements=replacements)
+            if names_by_start_ms:
+                applied += self._apply_suggestions_to_podlove(names_by_start_ms, replacements=replacements)
+                applied += self._apply_suggestions_to_dote(names_by_start_ms, replacements=replacements)
+                if self.vtt:
+                    applied += self._apply_suggestions_to_webvtt(names_by_start_ms, replacements=replacements)
+            if applied:
+                if replacements.replacements:
+                    replacements.save_model(self)
+                else:
+                    self.save()
+        except Exception:
+            replacements.rollback()
+            raise
         return applied
 
     def save_known_speaker_editor_decisions(
@@ -471,8 +480,13 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             changed += 1
         if not changed:
             return 0
-        self._write_speakers_data(data)
-        self.save(update_fields=["speakers"])
+        replacements = StagedFileReplacementGroup()
+        try:
+            self._write_speakers_data(data, replacements=replacements)
+            replacements.save_model(self, update_fields=["speakers"])
+        except Exception:
+            replacements.rollback()
+            raise
         return changed
 
     def get_known_speaker_editor_decisions(self) -> dict[int, dict[str, str]]:
@@ -503,9 +517,11 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         decision = cls._normalize_known_speaker_editor_decision(segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD))
         return bool(decision and decision["action"] == KNOWN_SPEAKER_DECISION_REJECT)
 
-    def _write_speakers_data(self, data: dict[str, Any]) -> None:
+    def _write_speakers_data(
+        self, data: dict[str, Any], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> None:
         content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
-        self._save_file_content("speakers", content)
+        self._save_file_content("speakers", content, replacements=replacements)
 
     @staticmethod
     def _resolve_known_speaker_display_names(suggestions: list[dict], *, smooth: bool) -> list[str | None]:
@@ -548,7 +564,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             )
         return display_names
 
-    def _apply_suggestions_to_podlove(self, names_by_start_ms: dict[int, str]) -> int:
+    def _apply_suggestions_to_podlove(
+        self, names_by_start_ms: dict[int, str], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> int:
         data = self._load_transcript_json("podlove")
         segments = data.get("transcripts")
         if not isinstance(segments, list):
@@ -566,10 +584,12 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 segment["voice"] = name
                 applied += 1
         if applied:
-            self._write_transcript_json("podlove", data)
+            self._write_transcript_json("podlove", data, replacements=replacements)
         return applied
 
-    def _apply_suggestions_to_dote(self, names_by_start_ms: dict[int, str]) -> int:
+    def _apply_suggestions_to_dote(
+        self, names_by_start_ms: dict[int, str], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> int:
         data = self._load_transcript_json("dote")
         lines = data.get("lines")
         if not isinstance(lines, list):
@@ -586,10 +606,12 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 line["speakerDesignation"] = name
                 applied += 1
         if applied:
-            self._write_transcript_json("dote", data)
+            self._write_transcript_json("dote", data, replacements=replacements)
         return applied
 
-    def _clear_suggestions_from_podlove(self, start_milliseconds: set[int]) -> int:
+    def _clear_suggestions_from_podlove(
+        self, start_milliseconds: set[int], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> int:
         data = self._load_transcript_json("podlove")
         segments = data.get("transcripts")
         if not isinstance(segments, list):
@@ -607,10 +629,12 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             segment["speaker"] = ""
             segment["voice"] = ""
         if changed:
-            self._write_transcript_json("podlove", data)
+            self._write_transcript_json("podlove", data, replacements=replacements)
         return applied
 
-    def _clear_suggestions_from_dote(self, start_milliseconds: set[int]) -> int:
+    def _clear_suggestions_from_dote(
+        self, start_milliseconds: set[int], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> int:
         data = self._load_transcript_json("dote")
         lines = data.get("lines")
         if not isinstance(lines, list):
@@ -627,14 +651,16 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             changed = changed or line.get("speakerDesignation") != ""
             line["speakerDesignation"] = ""
         if changed:
-            self._write_transcript_json("dote", data)
+            self._write_transcript_json("dote", data, replacements=replacements)
         return applied
 
-    def _clear_suggestions_from_webvtt(self, start_milliseconds: set[int]) -> int:
+    def _clear_suggestions_from_webvtt(
+        self, start_milliseconds: set[int], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> int:
         content = self._load_text_file("vtt")
         rewritten_content, applied, changed = self._clear_suggestions_from_webvtt_content(content, start_milliseconds)
         if changed:
-            self._save_text_file("vtt", rewritten_content)
+            self._save_text_file("vtt", rewritten_content, replacements=replacements)
         return applied
 
     @classmethod
@@ -692,11 +718,13 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             rewritten_lines.append(rewritten_line)
         return rewritten_lines, changed, True
 
-    def _apply_suggestions_to_webvtt(self, names_by_start_ms: dict[int, str]) -> int:
+    def _apply_suggestions_to_webvtt(
+        self, names_by_start_ms: dict[int, str], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> int:
         content = self._load_text_file("vtt")
         rewritten_content, applied, changed = self._apply_suggestions_to_webvtt_content(content, names_by_start_ms)
         if changed:
-            self._save_text_file("vtt", rewritten_content)
+            self._save_text_file("vtt", rewritten_content, replacements=replacements)
         return applied
 
     @classmethod
@@ -766,14 +794,15 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         )
         return rewritten_line, rewritten_line != line, replacements > 0
 
-    def _write_transcript_json(self, field_name: str, data: dict) -> None:
+    def _write_transcript_json(
+        self, field_name: str, data: dict, *, replacements: StagedFileReplacementGroup | None = None
+    ) -> None:
         # Only called after _load_transcript_json read this field's file, so the
         # field always has a stored name here.
         field = getattr(self, field_name)
         payload = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         filename = field.name.rsplit("/", 1)[-1]
-        field.delete(save=False)
-        field.save(filename, ContentFile(payload), save=False)
+        self._save_file_content(field_name, payload, filename=filename, replacements=replacements)
 
     @property
     def podcastindex_data(self) -> dict:
@@ -921,26 +950,31 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             return False
 
         changed_fields = []
-        podlove_data = self._load_transcript_json("podlove")
-        if self._rewrite_podlove_speakers(podlove_data, cleaned_mapping):
-            self._save_json_file("podlove", podlove_data)
-            changed_fields.append("podlove")
+        replacements = StagedFileReplacementGroup()
+        try:
+            podlove_data = self._load_transcript_json("podlove")
+            if self._rewrite_podlove_speakers(podlove_data, cleaned_mapping):
+                self._save_json_file("podlove", podlove_data, replacements=replacements)
+                changed_fields.append("podlove")
 
-        dote_data = self._load_transcript_json("dote")
-        if self._rewrite_dote_speakers(dote_data, cleaned_mapping):
-            self._save_json_file("dote", dote_data)
-            changed_fields.append("dote")
+            dote_data = self._load_transcript_json("dote")
+            if self._rewrite_dote_speakers(dote_data, cleaned_mapping):
+                self._save_json_file("dote", dote_data, replacements=replacements)
+                changed_fields.append("dote")
 
-        if self.vtt:
-            vtt_content = self._load_text_file("vtt")
-            rewritten_vtt_content, vtt_changed = self._rewrite_webvtt_speakers(vtt_content, cleaned_mapping)
-            if vtt_changed:
-                self._save_text_file("vtt", rewritten_vtt_content)
-                changed_fields.append("vtt")
+            if self.vtt:
+                vtt_content = self._load_text_file("vtt")
+                rewritten_vtt_content, vtt_changed = self._rewrite_webvtt_speakers(vtt_content, cleaned_mapping)
+                if vtt_changed:
+                    self._save_text_file("vtt", rewritten_vtt_content, replacements=replacements)
+                    changed_fields.append("vtt")
 
-        if not changed_fields:
-            return False
-        self.save(update_fields=changed_fields)
+            if not changed_fields:
+                return False
+            replacements.save_model(self, update_fields=changed_fields)
+        except Exception:
+            replacements.rollback()
+            raise
         return True
 
     def _load_transcript_json(self, field_name: str) -> dict[str, Any]:
@@ -956,9 +990,11 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             return {}
         return data
 
-    def _save_json_file(self, field_name: str, data: dict[str, Any]) -> None:
+    def _save_json_file(
+        self, field_name: str, data: dict[str, Any], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> None:
         content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
-        self._save_file_content(field_name, content)
+        self._save_file_content(field_name, content, replacements=replacements)
 
     def _load_text_file(self, field_name: str) -> str:
         file_field = getattr(self, field_name)
@@ -968,16 +1004,23 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         except (FileNotFoundError, OSError, UnicodeDecodeError, ValueError):
             return ""
 
-    def _save_text_file(self, field_name: str, content: str) -> None:
-        self._save_file_content(field_name, content.encode("utf-8"))
+    def _save_text_file(
+        self, field_name: str, content: str, *, replacements: StagedFileReplacementGroup | None = None
+    ) -> None:
+        self._save_file_content(field_name, content.encode("utf-8"), replacements=replacements)
 
-    def _save_file_content(self, field_name: str, content: bytes) -> None:
+    def _save_file_content(
+        self,
+        field_name: str,
+        content: bytes,
+        *,
+        filename: str | None = None,
+        replacements: StagedFileReplacementGroup | None = None,
+    ) -> None:
         file_field = getattr(self, field_name)
-        file_name = file_field.name
-        # Keep the file path stable for existing URLs; rewriting is intentionally destructive.
-        if file_field.storage.exists(file_name):
-            file_field.storage.delete(file_name)
-        file_field.name = file_field.storage.save(file_name, ContentFile(content))
+        file_name = filename or file_field.name.rsplit("/", 1)[-1]
+        active_replacements = replacements or StagedFileReplacementGroup()
+        active_replacements.stage(file_field, file_name, content)
 
     def _get_podlove_voice_reference_runs(
         self, *, max_gap_seconds: Decimal = VOICE_REFERENCE_CANDIDATE_MAX_GAP_SECONDS

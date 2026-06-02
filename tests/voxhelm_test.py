@@ -34,6 +34,7 @@ from cast.voxhelm import (
     normalize_api_base,
     require_setting,
     require_artifact_path,
+    replace_file,
     resolve_audio_source_url,
     resolve_audio_diarization_enabled,
     resolve_audio_task_ref,
@@ -671,6 +672,28 @@ def test_transcript_complete_requires_non_empty_artifacts():
     assert transcript_complete(complete) is True
     assert transcript_complete(empty_podlove) is False
     assert transcript_complete(empty_dote) is False
+
+
+def test_replace_file_stages_fresh_file_without_deleting_old():
+    class Storage:
+        def __init__(self):
+            self.events = []
+
+        def save(self, name, _content):
+            self.events.append(("save", name))
+            return name
+
+        def delete(self, name):
+            self.events.append(("delete", name))
+
+    storage = Storage()
+    field = SimpleNamespace(name="old-transcript.json", storage=storage)
+
+    replace_file(field, "new-transcript.json", b"new transcript")
+
+    assert field.name.startswith("new-transcript-")
+    assert field.name.endswith(".json")
+    assert storage.events == [("save", field.name)]
 
 
 @pytest.mark.django_db
@@ -1564,6 +1587,58 @@ def test_generate_for_audio_updates_existing_transcript(settings, user, m4a_audi
     assert existing.dote_data["lines"][0]["text"] == "fresh transcript"
     with existing.vtt.open("r") as handle:
         assert handle.read() == "WEBVTT\n\n00:00:02.000 --> 00:00:04.000\nfresh transcript\n"
+
+
+@pytest.mark.django_db
+def test_save_artifacts_keeps_existing_files_when_later_artifact_write_fails(settings, user, m4a_audio, mocker):
+    settings.MEDIA_URL = "https://media.example.com/"
+    audio = Audio(user=user, m4a=m4a_audio, title="episode")
+    audio.save(duration=False, cache_file_sizes=False)
+    existing = create_transcript(
+        audio=audio,
+        podlove={"transcripts": [{"text": "old podlove"}]},
+        vtt="WEBVTT\n\n00:00:00.000 --> 00:00:00.100\nold vtt\n",
+        dote={"lines": [{"text": "old dote"}]},
+    )
+    old_podlove_name = existing.podlove.name
+    old_dote_name = existing.dote.name
+    old_vtt_name = existing.vtt.name
+    storage = existing.podlove.storage
+    original_save = storage.save
+    saved_names = []
+
+    def fail_dote_save(name, content, *args, **kwargs):
+        saved_names.append(name)
+        if "dote" in name:
+            raise OSError("dote write failed")
+        return original_save(name, content, *args, **kwargs)
+
+    mocker.patch.object(storage, "save", side_effect=fail_dote_save)
+
+    with pytest.raises(OSError, match="dote write failed"):
+        VoxhelmTranscriptService._save_artifacts(
+            transcript=existing,
+            audio=audio,
+            podlove=b'{"transcripts": [{"text": "new podlove"}]}',
+            dote=b'{"lines": [{"text": "new dote"}]}',
+            vtt=b"WEBVTT\n\nnew vtt\n",
+        )
+
+    persisted = type(existing).objects.get(pk=existing.pk)
+    assert existing.podlove.name == old_podlove_name
+    assert existing.dote.name == old_dote_name
+    assert existing.vtt.name == old_vtt_name
+    assert persisted.podlove.name == old_podlove_name
+    assert persisted.dote.name == old_dote_name
+    assert persisted.vtt.name == old_vtt_name
+    assert storage.exists(old_podlove_name)
+    assert storage.exists(old_dote_name)
+    assert storage.exists(old_vtt_name)
+    assert not storage.exists(saved_names[0])
+    assert persisted.podlove_data["transcripts"][0]["text"] == "old podlove"
+    assert persisted.dote_data["lines"][0]["text"] == "old dote"
+    with persisted.vtt.open("r") as handle:
+        assert "old vtt" in handle.read()
 
 
 @pytest.mark.django_db

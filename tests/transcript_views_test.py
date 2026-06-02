@@ -1,4 +1,5 @@
 import json
+import re
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -619,19 +620,123 @@ class TestTranscriptSpeakerMapping:
             "Speaker 1 remains cue text\n"
         )
 
-    def test_rewrite_speaker_labels_saves_when_only_vtt_changes(self, audio):
+    def test_rewrite_speaker_labels_saves_when_only_vtt_changes(self, audio, django_capture_on_commit_callbacks):
         transcript = create_transcript(
             audio=audio,
             vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>Only WebVTT\n",
         )
         original_vtt_name = transcript.vtt.name
 
-        assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice"})
+        with django_capture_on_commit_callbacks(execute=True):
+            assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice"})
 
         transcript.refresh_from_db()
-        assert transcript.vtt.name == original_vtt_name
+        assert transcript.vtt.name != original_vtt_name
+        assert not transcript.vtt.storage.exists(original_vtt_name)
         with transcript.vtt.open("r") as vtt_file:
             assert vtt_file.read() == "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Alice>Only WebVTT\n"
+
+    def test_rewrite_speaker_labels_replaces_generated_suffix_instead_of_accumulating_it(self, audio):
+        transcript = Transcript.objects.create(audio=audio)
+        base_name = f"repeat-safe-{transcript.pk}"
+        transcript.podlove.save(
+            f"{base_name}.podlove.json",
+            ContentFile(json.dumps({"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1"}]})),
+            save=False,
+        )
+        transcript.dote.save(
+            f"{base_name}.dote.json",
+            ContentFile(json.dumps({"lines": [{"speakerDesignation": "Speaker 2"}]})),
+            save=False,
+        )
+        transcript.save()
+
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice", "Speaker 2": "Bob"})
+        transcript.refresh_from_db()
+        assert transcript.rewrite_speaker_labels({"Alice": "Carol", "Bob": "Dana"})
+        transcript.refresh_from_db()
+
+        podlove_name = transcript.podlove.name.rsplit("/", 1)[-1]
+        dote_name = transcript.dote.name.rsplit("/", 1)[-1]
+        assert re.fullmatch(rf"{base_name}-[0-9a-f]{{12}}\.podlove\.json", podlove_name)
+        assert re.fullmatch(rf"{base_name}-[0-9a-f]{{12}}\.dote\.json", dote_name)
+        with transcript.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Carol"
+        with transcript.dote.open("r") as dote_file:
+            assert json.load(dote_file)["lines"][0]["speakerDesignation"] == "Dana"
+
+    def test_rewrite_speaker_labels_cleans_up_new_podlove_when_later_dote_write_fails(self, audio, mocker):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+            dote={"lines": [{"speakerDesignation": "Speaker 2", "text": "Hi"}]},
+        )
+        old_podlove_name = transcript.podlove.name
+        old_dote_name = transcript.dote.name
+        storage = transcript.podlove.storage
+        original_save = storage.save
+        saved_names = []
+
+        def fail_dote_save(name, content, *args, **kwargs):
+            saved_names.append(name)
+            if "dote" in name:
+                raise OSError("dote write failed")
+            return original_save(name, content, *args, **kwargs)
+
+        mocker.patch.object(storage, "save", side_effect=fail_dote_save)
+
+        with pytest.raises(OSError, match="dote write failed"):
+            transcript.rewrite_speaker_labels({"Speaker 1": "Alice", "Speaker 2": "Bob"})
+
+        persisted = Transcript.objects.get(pk=transcript.pk)
+        assert transcript.podlove.name == old_podlove_name
+        assert transcript.dote.name == old_dote_name
+        assert persisted.podlove.name == old_podlove_name
+        assert persisted.dote.name == old_dote_name
+        assert storage.exists(old_podlove_name)
+        assert storage.exists(old_dote_name)
+        assert not storage.exists(saved_names[0])
+        with persisted.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Speaker 1"
+        with persisted.dote.open("r") as dote_file:
+            assert json.load(dote_file)["lines"][0]["speakerDesignation"] == "Speaker 2"
+
+    def test_rewrite_speaker_labels_cleans_up_new_files_when_db_save_fails(self, audio, mocker):
+        transcript = create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
+            dote={"lines": [{"speakerDesignation": "Speaker 2", "text": "Hi"}]},
+        )
+        old_podlove_name = transcript.podlove.name
+        old_dote_name = transcript.dote.name
+        storage = transcript.podlove.storage
+        original_save = storage.save
+        saved_names = []
+
+        def recording_save(name, content, *args, **kwargs):
+            saved_name = original_save(name, content, *args, **kwargs)
+            saved_names.append(saved_name)
+            return saved_name
+
+        mocker.patch.object(storage, "save", side_effect=recording_save)
+        mocker.patch.object(Transcript, "save", autospec=True, side_effect=RuntimeError("db save failed"))
+
+        with pytest.raises(RuntimeError, match="db save failed"):
+            transcript.rewrite_speaker_labels({"Speaker 1": "Alice", "Speaker 2": "Bob"})
+
+        persisted = Transcript.objects.get(pk=transcript.pk)
+        assert transcript.podlove.name == old_podlove_name
+        assert transcript.dote.name == old_dote_name
+        assert persisted.podlove.name == old_podlove_name
+        assert persisted.dote.name == old_dote_name
+        assert storage.exists(old_podlove_name)
+        assert storage.exists(old_dote_name)
+        assert saved_names
+        assert all(not storage.exists(name) for name in saved_names)
+        with persisted.podlove.open("r") as podlove_file:
+            assert json.load(podlove_file)["transcripts"][0]["speaker"] == "Speaker 1"
+        with persisted.dote.open("r") as dote_file:
+            assert json.load(dote_file)["lines"][0]["speakerDesignation"] == "Speaker 2"
 
     def test_rewrite_speaker_labels_returns_false_without_changes(self, audio):
         transcript = create_transcript(

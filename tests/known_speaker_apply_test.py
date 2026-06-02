@@ -240,6 +240,34 @@ def test_save_known_speaker_editor_decisions_without_segments_returns_zero(audio
 
 
 @pytest.mark.django_db
+def test_save_known_speaker_editor_decisions_rolls_back_sidecar_when_save_fails(audio, mocker):
+    transcript = make_transcript(audio, speakers=SPEAKERS)
+    old_speakers_name = transcript.speakers.name
+    storage = transcript.speakers.storage
+    original_save = storage.save
+    saved_names = []
+
+    def recording_save(name, content, *args, **kwargs):
+        saved_name = original_save(name, content, *args, **kwargs)
+        saved_names.append(saved_name)
+        return saved_name
+
+    mocker.patch.object(storage, "save", side_effect=recording_save)
+    mocker.patch.object(Transcript, "save", autospec=True, side_effect=RuntimeError("db save failed"))
+
+    with pytest.raises(RuntimeError, match="db save failed"):
+        transcript.save_known_speaker_editor_decisions({0: {"action": KNOWN_SPEAKER_DECISION_REJECT, "speaker": ""}})
+
+    persisted = Transcript.objects.get(pk=transcript.pk)
+    assert transcript.speakers.name == old_speakers_name
+    assert persisted.speakers.name == old_speakers_name
+    assert storage.exists(old_speakers_name)
+    assert saved_names
+    assert all(not storage.exists(name) for name in saved_names)
+    assert persisted.get_known_speaker_editor_decisions() == {}
+
+
+@pytest.mark.django_db
 def test_apply_without_smoothing_labels_confident_only(audio):
     transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, speakers=SPEAKERS)
 
@@ -303,6 +331,39 @@ def test_apply_updates_unlabeled_vtt_by_start_time_with_smoothing(audio):
         )
     with transcript.speakers.open("rb") as speakers_file:
         assert speakers_file.read() == original_speakers_content
+
+
+@pytest.mark.django_db
+def test_apply_known_speaker_suggestions_rolls_back_files_when_save_fails(audio, mocker):
+    transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, speakers=SPEAKERS)
+    old_podlove_name = transcript.podlove.name
+    old_dote_name = transcript.dote.name
+    storage = transcript.podlove.storage
+    original_save = storage.save
+    saved_names = []
+
+    def recording_save(name, content, *args, **kwargs):
+        saved_name = original_save(name, content, *args, **kwargs)
+        saved_names.append(saved_name)
+        return saved_name
+
+    mocker.patch.object(storage, "save", side_effect=recording_save)
+    mocker.patch.object(Transcript, "save", autospec=True, side_effect=RuntimeError("db save failed"))
+
+    with pytest.raises(RuntimeError, match="db save failed"):
+        transcript.apply_known_speaker_suggestions()
+
+    persisted = Transcript.objects.get(pk=transcript.pk)
+    assert transcript.podlove.name == old_podlove_name
+    assert transcript.dote.name == old_dote_name
+    assert persisted.podlove.name == old_podlove_name
+    assert persisted.dote.name == old_dote_name
+    assert storage.exists(old_podlove_name)
+    assert storage.exists(old_dote_name)
+    assert saved_names
+    assert all(not storage.exists(name) for name in saved_names)
+    assert persisted.podlove_data["transcripts"][0]["speaker"] == ""
+    assert persisted.dote_data["lines"][0]["speakerDesignation"] == ""
 
 
 @pytest.mark.django_db
