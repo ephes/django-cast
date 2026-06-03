@@ -2,13 +2,30 @@
 
 ## Status
 
-**Shipped (initial) + redesign and cross-repo rollout in progress.** The custom
-player replaced Podlove on the episode detail path behind `CAST_AUDIO_PLAYER=
-"custom"`. It was implemented in commit `075aa41b` (component, backend payload
-builder, fallback endpoint, settings/checks, docs, tests) and given a first UI
-redesign in commit `effdae09` (transcript/chapters panels, speaker layout, share
-dialog). It is exercised end-to-end in python-podcast via the `local`/`e2e`
-settings (`CAST_AUDIO_PLAYER = "custom"`).
+**Implemented.** This note is the record of what shipped. The custom player
+replaces Podlove on the episode detail path behind `CAST_AUDIO_PLAYER="custom"`
+and is merged to django-cast `develop` (through `e23a2887`): lazy transcript
+loading, the transport/transcript/chapters redesign (thin bar, elapsed+remaining,
+compact toggle row with single-open accordion, speaker layout), the public
+transcript endpoint, settings/checks, docs, and tests (124 vitest cases; backend
+at 100% coverage). It is deployed to `python-podcast.staging.django-cast.com`
+(production stays on Podlove) — Playwright-verified, axe-clean — and adopted on the
+django-chat dev server (forest-green, Podlove-styled; `feat/custom-player`).
+cast-bootstrap5 wiring + a11y fixes live on its `feat/custom-player-rev4` branch.
+
+Further polish and a transcript-caching decision are tracked separately in
+**`2026-06-03-custom-audio-player-follow-ups.md`** (stable toggle width, always-
+folded-on-load, transcript caching options, a diarized-speaker verification
+episode for django-chat) so this note stays a record of the as-built design rather
+than growing. The remaining large item — a persistent cross-navigation player — is
+in the "Persistent Player" section below.
+
+The design history that produced the implementation follows (revisions 1–4).
+Revision 4 (this document) was implemented as described, with two as-built
+deltas worth noting: the collapsed panel bodies are hidden via `display:none`
+(a Blink `grid-rows:0fr` collapse leaked ~1 line with an auto-overflow scroll
+child), and the two toggle buttons are kept in a stable row via `display:contents`
+flattening with the opened body dropping full-width beneath them.
 
 This revision (**revision 4**) folds in what we learned from running the player
 on real episodes plus a second round of UX, performance, and cross-repo
