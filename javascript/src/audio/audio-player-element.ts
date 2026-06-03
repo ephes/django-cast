@@ -5,7 +5,7 @@
 import { AudioController } from "./audio-controller";
 import { formatTime, spokenTime } from "./format";
 import { registerController, unregisterController } from "./player-registry";
-import { isFallbackTranscript, type PlayerPayload } from "./types";
+import type { PlayerPayload } from "./types";
 
 const PUBLIC_EVENT_THROTTLE_MS = 250;
 const SEEK_STEP_SECONDS = 5;
@@ -63,6 +63,7 @@ export class CastAudioPlayerElement extends HTMLElement {
   private shareDialog?: HTMLDialogElement;
   private shareTimeInput?: HTMLInputElement;
   private shareBuildUrl?: () => void;
+  private fetchingTranscript = false;
 
   connectedCallback(): void {
     if (this.controller) {
@@ -87,6 +88,19 @@ export class CastAudioPlayerElement extends HTMLElement {
     this.appendChild(audio);
 
     this.controller = new AudioController(audio, payload);
+    // Install the transcript-fetch listener BEFORE registerController() — that
+    // call dispatches cast:player-ready and can synchronously resolve a
+    // persisted-open <cast-transcript> that immediately calls
+    // requestTranscript(); installing first makes the request impossible to miss.
+    const onTranscriptRequest = ((event: Event) => {
+      const url = (event as CustomEvent<{ url: string }>).detail?.url;
+      if (url) {
+        void this.hydrateFromUrl(url);
+      }
+    }) as EventListener;
+    this.controller.addEventListener("transcriptrequested", onTranscriptRequest);
+    this.controllerListeners.push(["transcriptrequested", onTranscriptRequest]);
+
     registerController(this.playerId, this.controller);
 
     this.renderTransport(payload);
@@ -95,10 +109,8 @@ export class CastAudioPlayerElement extends HTMLElement {
       this.installKeyboardShortcuts();
       this.applyStartAt();
     }
-
-    if (isFallbackTranscript(payload.transcript)) {
-      void this.hydrateFromUrl(payload.transcript.url);
-    }
+    // No eager transcript fetch on connect (revision 4): the transcript loads
+    // only when the user first opens the panel, via requestTranscript().
   }
 
   disconnectedCallback(): void {
@@ -539,18 +551,28 @@ export class CastAudioPlayerElement extends HTMLElement {
   // ---- fallback hydration ---------------------------------------------------
 
   private async hydrateFromUrl(url: string): Promise<void> {
+    if (this.fetchingTranscript) {
+      return; // at most one fetch in flight
+    }
+    this.fetchingTranscript = true;
     try {
       const response = await fetch(url);
       if (!response.ok) {
+        this.controller?.transcriptFailed();
         return;
       }
       const data = (await response.json()) as { cues?: unknown };
       if (this.controller && Array.isArray(data.cues)) {
         this.controller.setCues(data.cues as never);
+      } else {
+        this.controller?.transcriptFailed();
       }
     } catch {
-      // Network/parse failure: leave the transcript empty. The page still has
-      // the no-JS transcript pages as a fallback.
+      // Network/parse failure: clear loading so a later open can retry. The page
+      // still has the no-JS transcript pages as a deeper fallback.
+      this.controller?.transcriptFailed();
+    } finally {
+      this.fetchingTranscript = false;
     }
   }
 }

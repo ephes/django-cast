@@ -6,7 +6,11 @@ export type Chapter = { start: number; title: string };
 
 export type InlineTranscript = { cues: Cue[] };
 export type FallbackTranscript = { url: string };
-export type TranscriptPayload = InlineTranscript | FallbackTranscript;
+// `null` means the audio has no transcript at all. On the rendered page the
+// transcript is never inlined: it is either a `{url}` fetched lazily on first
+// open, or `null`. `{cues}` is only ever produced by the transcript endpoint
+// (handed to the controller via setCues) or constructed directly in tests.
+export type TranscriptPayload = InlineTranscript | FallbackTranscript | null;
 
 export type Source = { type: string; src: string };
 
@@ -21,6 +25,10 @@ export type PlayerPayload = {
   transcript: TranscriptPayload;
 };
 
+export function isInlineTranscript(t: TranscriptPayload): t is InlineTranscript {
+  return !!t && Array.isArray((t as InlineTranscript).cues);
+}
+
 export function isFallbackTranscript(t: TranscriptPayload): t is FallbackTranscript {
-  return typeof (t as FallbackTranscript).url === "string";
+  return !!t && typeof (t as FallbackTranscript).url === "string";
 }

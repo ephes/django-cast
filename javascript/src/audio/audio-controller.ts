@@ -4,6 +4,7 @@
 // EventTarget so the same pub/sub is reused unchanged by a future persistent
 // player.
 
+import { isFallbackTranscript, isInlineTranscript } from "./types";
 import type { Chapter, Cue, PlayerPayload } from "./types";
 
 // Small seek offset so seeking "to a cue" lands strictly inside it
@@ -23,18 +24,28 @@ export class AudioController extends EventTarget {
   private chapterIndex = -1;
   private frameScheduled = false;
   private destroyed = false;
-  private pendingFallback: boolean;
+  // Transcript loading state (revision 4): the transcript is fetched lazily on
+  // first open, never inlined into the page. `transcriptUrl` is set when the
+  // payload carries a `{url}`; `loaded` flips once real cues arrive via
+  // setCues(); `loading` is true between requestTranscript() and setCues()/
+  // transcriptFailed().
+  private readonly transcriptUrl?: string;
+  private loading = false;
+  private loaded: boolean;
   private readonly boundListeners: Array<[string, EventListener]>;
 
   constructor(audio: HTMLAudioElement, payload: PlayerPayload) {
     super();
     this.audio = audio;
     this.payload = payload;
-    this.cues = "cues" in payload.transcript ? payload.transcript.cues.slice() : [];
+    // Inline `{cues}` is only ever supplied by the endpoint hydration or tests;
+    // the rendered page supplies `{url}` (lazy) or `null` (no transcript).
+    this.cues = isInlineTranscript(payload.transcript) ? payload.transcript.cues.slice() : [];
     this.chapters = payload.chapters.slice();
-    // A url-only transcript means cues will arrive later via setCues(); views
-    // show a loading state until then.
-    this.pendingFallback = !("cues" in payload.transcript);
+    this.transcriptUrl = isFallbackTranscript(payload.transcript) ? payload.transcript.url : undefined;
+    // Cues supplied inline count as already loaded; a url-only transcript is
+    // unloaded until requestTranscript() -> fetch -> setCues().
+    this.loaded = isInlineTranscript(payload.transcript);
 
     this.boundListeners = [
       ["play", () => this.dispatch("play")],
@@ -87,9 +98,19 @@ export class AudioController extends EventTarget {
     return this.chapters;
   }
 
-  // True when cues are expected from a fallback fetch that has not completed.
-  get transcriptPending(): boolean {
-    return this.pendingFallback;
+  // True when the audio has a transcript at all (inline cues or a lazy url).
+  get hasTranscript(): boolean {
+    return this.payload.transcript != null;
+  }
+
+  // True between requestTranscript() and the resolving setCues()/transcriptFailed().
+  get transcriptLoading(): boolean {
+    return this.loading;
+  }
+
+  // True once real cues have been installed (inline or via a successful fetch).
+  get transcriptLoaded(): boolean {
+    return this.loaded;
   }
 
   // ---- transport ------------------------------------------------------------
@@ -145,11 +166,35 @@ export class AudioController extends EventTarget {
     }
   }
 
-  // ---- cue installation (fallback path) ------------------------------------
+  // ---- lazy transcript loading ---------------------------------------------
 
+  // Idempotent: ask the player (the sole fetcher) to load the transcript. Only
+  // emits when there is a transcript url that is not already loaded or loading.
+  // A no-op while loading or after a successful load.
+  requestTranscript(): void {
+    if (this.loaded || this.loading || !this.transcriptUrl) {
+      return;
+    }
+    this.loading = true;
+    this.dispatch("transcriptrequested", { url: this.transcriptUrl });
+  }
+
+  // Called by the player when the fetch fails: clear loading WITHOUT marking
+  // loaded, so a later requestTranscript() may retry. No cues are installed.
+  transcriptFailed(): void {
+    if (!this.loading) {
+      return;
+    }
+    this.loading = false;
+    this.dispatch("transcripterror", {});
+  }
+
+  // Install real cues (inline endpoint hydration or a successful fetch). Marks
+  // the transcript loaded, clears loading, and recomputes the current cue.
   setCues(cues: Cue[]): void {
     this.cues = cues.slice();
-    this.pendingFallback = false;
+    this.loaded = true;
+    this.loading = false;
     const previous = this.cueIndex;
     this.cueIndex = this.computeCueIndex(this.currentTime);
     this.dispatch("cueschange", { count: this.cues.length });

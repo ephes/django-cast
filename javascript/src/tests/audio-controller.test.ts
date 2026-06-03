@@ -211,7 +211,56 @@ describe("AudioController events", () => {
     controller.setCues(cues);
     expect(events).toEqual(["cueschange", "cuechange"]);
     expect(controller.currentCueIndex).toBe(0);
-    expect(controller.transcriptPending).toBe(false);
+    expect(controller.transcriptLoaded).toBe(true);
+    expect(controller.transcriptLoading).toBe(false);
+  });
+
+  it("hasTranscript reflects url / cues / null", () => {
+    expect(setup({ transcript: { url: "/x" } }).controller.hasTranscript).toBe(true);
+    expect(setup({ transcript: { cues } }).controller.hasTranscript).toBe(true);
+    expect(setup({ transcript: null }).controller.hasTranscript).toBe(false);
+  });
+
+  it("requestTranscript emits once + sets loading; setCues clears it; no refetch after loaded", () => {
+    const { controller } = setup({ transcript: { url: "/x" } });
+    const urls: string[] = [];
+    controller.addEventListener("transcriptrequested", (e) => urls.push((e as CustomEvent).detail.url));
+    expect(controller.transcriptLoaded).toBe(false);
+    controller.requestTranscript();
+    expect(urls).toEqual(["/x"]);
+    expect(controller.transcriptLoading).toBe(true);
+    controller.requestTranscript(); // no-op while loading
+    expect(urls).toEqual(["/x"]);
+    controller.setCues(cues);
+    expect(controller.transcriptLoaded).toBe(true);
+    expect(controller.transcriptLoading).toBe(false);
+    controller.requestTranscript(); // no-op after loaded
+    expect(urls).toEqual(["/x"]);
+  });
+
+  it("requestTranscript is a no-op when cues are inline (already loaded)", () => {
+    const { controller } = setup({ transcript: { cues } });
+    const urls: string[] = [];
+    controller.addEventListener("transcriptrequested", () => urls.push("x"));
+    expect(controller.transcriptLoaded).toBe(true);
+    controller.requestTranscript();
+    expect(urls).toEqual([]);
+  });
+
+  it("transcriptFailed clears loading without loaded, emits transcripterror, allows retry", () => {
+    const { controller } = setup({ transcript: { url: "/x" } });
+    const events: string[] = [];
+    controller.addEventListener("transcriptrequested", () => events.push("req"));
+    controller.addEventListener("transcripterror", () => events.push("err"));
+    controller.requestTranscript();
+    controller.transcriptFailed();
+    expect(controller.transcriptLoading).toBe(false);
+    expect(controller.transcriptLoaded).toBe(false);
+    expect(events).toEqual(["req", "err"]);
+    controller.transcriptFailed(); // no-op when not loading
+    expect(events).toEqual(["req", "err"]);
+    controller.requestTranscript(); // retry allowed
+    expect(events).toEqual(["req", "err", "req"]);
   });
 
   it("removes listeners on destroy", () => {

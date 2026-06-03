@@ -107,7 +107,12 @@ describe("cast-transcript rendering", () => {
     expect(Array.from(speakers).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
   });
 
-  it("renders nothing when there is no transcript", () => {
+  it("renders nothing when there is no transcript (null)", () => {
+    const { transcript } = mount(makePayload({ transcript: null }));
+    expect(transcript.querySelector(".cast-transcript")).toBeNull();
+  });
+
+  it("renders nothing when the transcript is loaded but empty", () => {
     const { transcript } = mount(makePayload({ transcript: { cues: [] } }));
     expect(transcript.querySelector(".cast-transcript")).toBeNull();
   });
@@ -288,20 +293,78 @@ describe("cast-transcript keyboard-navigable toggle", () => {
   });
 });
 
-describe("cast-transcript fallback path", () => {
-  it("shows loading then populates via setCues, and never fetches itself", async () => {
-    const fetchMock = vi.fn(() =>
+describe("cast-transcript lazy fallback path", () => {
+  const okFetch = () =>
+    vi.fn(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ cues: CUES }),
       }),
     );
+
+  it("does not fetch on mount while collapsed; fetches once on first open", async () => {
+    const fetchMock = okFetch();
     vi.stubGlobal("fetch", fetchMock);
-    const { player, transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
+    const { transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
+    // The button/panel renders, but nothing is fetched and no loading shows yet.
+    expect(transcript.querySelector(".cast-transcript")).not.toBeNull();
+    expect(transcript.querySelector(".cast-transcript__loading")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    // First open triggers exactly one fetch and shows the loading state.
+    openPanel(transcript);
     expect(transcript.querySelector(".cast-transcript__loading")).not.toBeNull();
     await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    void player;
+    // Closing and reopening does not refetch.
+    openPanel(transcript); // close
+    openPanel(transcript); // open again
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("the transcript element never fetches itself (the player owns fetching)", async () => {
+    const fetchMock = okFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    // Mount the transcript WITHOUT a player; opening cannot resolve a controller,
+    // so no fetch can originate from the transcript element.
+    const script = document.createElement("script");
+    script.type = "application/json";
+    script.id = "cast-player-data-5";
+    script.textContent = JSON.stringify(makePayload({ transcript: { url: "/x" } }));
+    document.body.appendChild(script);
+    const transcript = document.createElement("cast-transcript");
+    transcript.setAttribute("for", "cast-player-5");
+    document.body.appendChild(transcript);
+    // No controller resolved -> the element rendered nothing and cannot fetch.
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows 'unavailable' on a failed fetch and retries on a later open", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const { transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
+    openPanel(transcript);
+    await vi.waitFor(() =>
+      expect(transcript.querySelector(".cast-transcript__loading")?.textContent).toContain("unavailable"),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // A later open retries (transcriptFailed cleared loading without marking loaded).
+    fetchMock.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ cues: CUES }) }));
+    openPanel(transcript); // close
+    openPanel(transcript); // open -> retry
+    await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+
+  it("a persisted-open panel loads on connect without a click", async () => {
+    window.localStorage.setItem("cast-transcript-open", "true");
+    const fetchMock = okFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    const { transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
+    await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 });

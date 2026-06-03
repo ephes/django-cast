@@ -93,25 +93,25 @@ django-cast and included with the ``cast`` app:
 
     {% vite_asset 'src/audio/custom-player.ts' app="cast" %}
 
-Inline payload and the transcript size cap
-------------------------------------------
+Inline metadata and the lazy transcript
+---------------------------------------
 
-For normal-length episodes the transcript cues are inlined into the page as JSON
-(via ``json_script``), so there is no runtime transcript fetch. The
-``CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES`` setting (default ``150000``) bounds
-the inlined transcript, measured as the byte length of the serialized cues
-array. When a transcript exceeds the cap, the payload instead references a public
-fallback endpoint and the component fetches the cues once.
+The detail page inlines only the small player payload — audio metadata, sources,
+and chapters — as JSON (via ``json_script``). The transcript is **never inlined**.
+Instead the payload carries a transcript endpoint URL (or ``null`` when the audio
+has no transcript), and the player fetches the cues **lazily**: once, the first
+time the reader opens the Transcript panel. A collapsed transcript triggers no
+fetch, and the detail-page render never builds or sanitizes the transcript at
+all — keeping the page small and the render cheap.
 
-The fallback endpoint is ``cast:api:audio_player_transcript`` at
-``/api/audios/<pk>/player-transcript/``. It takes a ``post_id`` (to establish the
-episode/contributor context for sanitization), is public-read, validates that
-the post is live and owns the audio, and returns the same normalized, sanitized
-``{"cues": [...]}`` shape used inline — **never** the raw Podlove file.
-
-Both payload paths run transcript data through the same public speaker-label
-sanitization as the Podlove API output, so non-public speaker labels and raw
-``podlove_data`` never leak.
+The transcript endpoint is ``cast:api:audio_player_transcript`` at
+``/api/audios/<pk>/player-transcript/``. It takes a ``post_id`` query parameter
+(to establish the episode/contributor context for sanitization), is public-read,
+validates that the post is live and owns the audio, and returns the normalized,
+sanitized ``{"cues": [...]}`` shape — **never** the raw Podlove file. The cue
+normalization and the public speaker-label sanitization (the same applied to the
+Podlove API output) run only in this endpoint, so non-public speaker labels and
+raw ``podlove_data`` never leak.
 
 Theming tokens
 --------------

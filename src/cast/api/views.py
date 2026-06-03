@@ -148,10 +148,11 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
 
 
 class AudioPlayerTranscriptView(generics.RetrieveAPIView):
-    """Public, sanitized transcript-cue fallback for the custom audio player.
+    """Public, sanitized transcript-cue source for the custom audio player.
 
-    Serves the same normalized, sanitized ``{"cues": [...]}`` shape the inline
-    ``json_script`` uses for over-cap transcripts — never the raw Podlove file.
+    The custom player loads the transcript lazily, fetching this endpoint once the
+    first time the reader opens the Transcript panel. Returns the normalized,
+    sanitized ``{"cues": [...]}`` shape — never the raw Podlove file.
     """
 
     queryset = Audio.objects.all()

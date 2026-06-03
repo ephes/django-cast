@@ -54,21 +54,27 @@ export class CastTranscriptElement extends CastPlayerView {
   private matchCursor = -1;
 
   protected onController(controller: AudioController): void {
-    const cues = controller.getCues();
-    if (cues.length === 0 && !controller.transcriptPending) {
-      return; // render nothing
+    if (!controller.hasTranscript) {
+      return; // no transcript at all -> render nothing
+    }
+    if (controller.transcriptLoaded && controller.getCues().length === 0) {
+      return; // loaded but empty (no cues, no pending url) -> render nothing
     }
     this.open = readBool(OPEN_STORAGE_KEY, false);
     this.follow = readBool(FOLLOW_STORAGE_KEY, true);
     this.tabbable = readBool(TABBABLE_STORAGE_KEY, false);
     this.build();
-    if (cues.length === 0 && controller.transcriptPending) {
+    if (controller.transcriptLoaded) {
+      this.renderCues(controller.getCues());
+    } else if (this.open) {
+      // Panel persisted open across navigation: load now and show a loading
+      // state. A collapsed panel stays empty until first opened (lazy).
       this.showLoading();
-    } else {
-      this.renderCues(cues);
+      controller.requestTranscript();
     }
     this.listen("cueschange", () => this.renderCues(controller.getCues()));
     this.listen("cuechange", () => this.setActive(controller.currentCueIndex));
+    this.listen("transcripterror", () => this.onTranscriptError());
   }
 
   // ---- structure ------------------------------------------------------------
@@ -182,14 +188,27 @@ export class CastTranscriptElement extends CastPlayerView {
   }
 
   private showLoading(): void {
-    if (!this.list) {
+    if (!this.list || this.loadingEl) {
       return;
     }
+    this.list.textContent = ""; // clear any prior "unavailable" message before retrying
     const loading = document.createElement("p");
     loading.className = "cast-transcript__loading";
     loading.textContent = "Loading transcript…";
     this.list.appendChild(loading);
     this.loadingEl = loading;
+  }
+
+  private onTranscriptError(): void {
+    if (!this.list) {
+      return;
+    }
+    this.list.textContent = "";
+    this.loadingEl = undefined;
+    const message = document.createElement("p");
+    message.className = "cast-transcript__loading";
+    message.textContent = "Transcript unavailable.";
+    this.list.appendChild(message);
   }
 
   // ---- open / follow toggles ------------------------------------------------
@@ -201,6 +220,11 @@ export class CastTranscriptElement extends CastPlayerView {
     this.applyInert();
     writeBool(OPEN_STORAGE_KEY, this.open);
     if (this.open && this.controller) {
+      // Lazy load on first open: fetch the transcript only now, never on connect.
+      if (!this.controller.transcriptLoaded && !this.controller.transcriptLoading) {
+        this.showLoading();
+        this.controller.requestTranscript();
+      }
       this.setActive(this.controller.currentCueIndex, true);
     }
   }

@@ -16,12 +16,15 @@ The returned ``PlayerPayload`` is a plain ``dict`` matching the TypeScript
       "poster": str,                 # "" if none
       "sources": [{"type": str, "src": str}, ...],
       "chapters": [{"start": int, "title": str}, ...],
-      "transcript": {"cues": [{"start", "end", "speaker", "text"}, ...]}
-                    | {"url": str},  # fallback for over-cap transcripts
+      "transcript": {"url": str} | None,  # inline page payload (lazy)
+                                          # the endpoint returns {"cues": [...]}
     }
 
-Transcript cues always flow through the **public** sanitization path used by the
-serializer, so non-public speaker labels and raw ``podlove_data`` never leak.
+The transcript is **lazy-loaded**: the inline page payload only carries a
+``{"url"}`` (or ``None`` when there is no transcript), and the cues are built and
+sanitized only when the player fetches that endpoint on first open. Transcript
+cues always flow through the **public** sanitization path used by the serializer,
+so non-public speaker labels and raw ``podlove_data`` never leak.
 """
 
 from __future__ import annotations
@@ -270,6 +273,18 @@ def _synthesize_end(collected: list[dict[str, Any]], index: int, start: float, f
     return start + DEFAULT_CUE_SPAN_SECONDS
 
 
+def audio_has_transcript(audio: Any) -> bool:
+    """Cheap check: does this audio have a stored transcript file?
+
+    Deliberately does **not** open/parse/sanitize the file. The inline payload
+    path uses this so a detail-page render never builds or sanitizes the full
+    transcript; cue normalization happens only in the lazy endpoint.
+    """
+    if not hasattr(audio, "transcript"):
+        return False
+    return bool(getattr(audio.transcript, "podlove", None))
+
+
 def _fallback_transcript_url(audio: Any, *, post: Any, request: Any) -> str:
     url = reverse("cast:api:audio_player_transcript", kwargs={"pk": audio.pk})
     if post is not None and getattr(post, "pk", None) is not None:
@@ -295,11 +310,15 @@ def audio_player_context_flags(*, enabled: bool) -> dict[str, bool]:
 def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcript: bool = True) -> dict[str, Any]:
     """Return the normalized :class:`PlayerPayload` ``dict`` for ``audio``.
 
+    The transcript is **lazy-loaded**: it is never inlined into the page.
+
     ``inline_transcript=True`` (the default, used by the inline ``json_script``)
-    applies ``CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES``: when the serialized cues
-    array exceeds the cap, ``transcript`` becomes ``{"url": <fallback endpoint>}``
-    and the cues are omitted from the payload. ``inline_transcript=False`` (used
-    by the fallback endpoint) always returns ``{"cues": [...]}``.
+    sets ``transcript`` to ``{"url": <endpoint>}`` when the audio has a transcript
+    and ``None`` otherwise, **without building or sanitizing any cues** — that
+    work is deferred to the endpoint so a detail-page render stays cheap.
+
+    ``inline_transcript=False`` (used by the transcript endpoint) builds and
+    sanitizes the cues and returns ``{"cues": [...]}``.
     """
     episode = getattr(post, "specific", post)
 
@@ -314,24 +333,14 @@ def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcri
     if episode is not None and hasattr(episode, "get_cover_image_poster_url"):
         poster = episode.get_cover_image_poster_url(request=request, blog=blog)
 
-    cues = build_cues(audio, episode=episode, duration=duration)
-
-    transcript: dict[str, Any]
+    transcript: dict[str, Any] | None
     if inline_transcript:
-        cap = appsettings.CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES
-        cues_bytes = len(json.dumps(cues, ensure_ascii=False).encode("utf-8"))
-        if cues_bytes > cap:
+        if audio_has_transcript(audio):
             transcript = {"url": _fallback_transcript_url(audio, post=post, request=request)}
-            logger.info(
-                "cast player: transcript for audio %s is %d bytes (cap %d); using fallback endpoint",
-                audio.pk,
-                cues_bytes,
-                cap,
-            )
         else:
-            transcript = {"cues": cues}
+            transcript = None
     else:
-        transcript = {"cues": cues}
+        transcript = {"cues": build_cues(audio, episode=episode, duration=duration)}
 
     return {
         "audioId": audio.pk,

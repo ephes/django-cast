@@ -19,7 +19,6 @@ _DYNAMIC_SETTING_DEFAULTS: dict[str, Any] = {
     "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS": [(1110, 740), (120, 80)],
     "CAST_REPOSITORY": "default",
     "CAST_AUDIO_PLAYER": "podlove",
-    "CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES": 150_000,
 }
 
 
@@ -37,7 +36,6 @@ if TYPE_CHECKING:
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
     CAST_REPOSITORY: str
     CAST_AUDIO_PLAYER: str
-    CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES: int
 
 
 def __getattr__(name: str) -> Any:

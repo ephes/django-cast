@@ -270,7 +270,11 @@ class TestBuildPlayerPayload:
         assert payload["poster"] == ""
         assert payload["sources"] == [{"type": "audio/mp4", "src": rf_request.build_absolute_uri(audio.m4a.url)}]
         assert payload["chapters"] == []
-        assert payload["transcript"] == {"cues": [{"start": 0.0, "end": 1.0, "speaker": "", "text": "hi"}]}
+        # Inline path is lazy: it carries the endpoint URL, never the cues.
+        expected_url = rf_request.build_absolute_uri(
+            reverse("cast:api:audio_player_transcript", kwargs={"pk": audio.pk}) + f"?post_id={episode.pk}"
+        )
+        assert payload["transcript"] == {"url": expected_url}
 
     def test_duration_none_when_unset(self, audio, episode, rf_request):
         audio.duration = None  # in-memory; the builder reads the attribute directly
@@ -282,41 +286,45 @@ class TestBuildPlayerPayload:
         payload = build_player_payload(episode.podcast_audio, post=episode, request=rf_request)
         assert payload["poster"].startswith("http")
 
-    def test_over_cap_uses_fallback_url_and_logs(self, audio, episode, rf_request, settings, caplog):
-        settings.CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES = 10
-        create_transcript(
-            audio=audio,
-            podlove={
-                "transcripts": [
-                    {"start_ms": i * 1000, "end_ms": i * 1000 + 500, "text": f"cue number {i}"} for i in range(20)
-                ]
-            },
-        )
-        with caplog.at_level(logging.INFO):
-            payload = build_player_payload(audio, post=episode, request=rf_request)
-        assert "cues" not in payload["transcript"]
-        expected_url = rf_request.build_absolute_uri(
-            reverse("cast:api:audio_player_transcript", kwargs={"pk": audio.pk}) + f"?post_id={episode.pk}"
-        )
-        assert payload["transcript"] == {"url": expected_url}
-        assert any("fallback endpoint" in message for message in caplog.messages)
+    def test_inline_returns_none_without_transcript(self, audio, episode, rf_request):
+        # No transcript file -> inline transcript is None (no button rendered).
+        payload = build_player_payload(audio, post=episode, request=rf_request)
+        assert payload["transcript"] is None
+
+    def test_inline_path_does_not_build_cues(self, audio, episode, rf_request, monkeypatch):
+        # The whole point of lazy loading: the detail-page render must not build
+        # or sanitize the transcript. Cue building happens only on the endpoint.
+        create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
+        import cast.player as player_mod
+
+        calls: list[int] = []
+        real_build_cues = player_mod.build_cues
+
+        def spy(*args, **kwargs):
+            calls.append(1)
+            return real_build_cues(*args, **kwargs)
+
+        monkeypatch.setattr(player_mod, "build_cues", spy)
+        inline = build_player_payload(audio, post=episode, request=rf_request)  # inline_transcript=True
+        assert calls == []  # not built on the inline path
+        assert "url" in inline["transcript"]
+        build_player_payload(audio, post=episode, request=rf_request, inline_transcript=False)
+        assert calls == [1]  # built on the endpoint path
 
     def test_payload_with_post_none(self, audio, rf_request):
-        # post=None: no episode context, no poster, no blog
+        # post=None: no episode context, no poster, no blog, no transcript
         payload = build_player_payload(audio, post=None, request=rf_request)
         assert payload["poster"] == ""
-        assert payload["transcript"] == {"cues": []}
+        assert payload["transcript"] is None
 
-    def test_fallback_url_without_post(self, audio, rf_request, settings):
-        # over-cap with post=None -> fallback URL carries no post_id query
-        settings.CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES = 1
+    def test_inline_url_without_post_has_no_post_id(self, audio, rf_request):
+        # A transcript with post=None -> endpoint URL carries no post_id query.
         create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
         payload = build_player_payload(audio, post=None, request=rf_request)
         expected = rf_request.build_absolute_uri(reverse("cast:api:audio_player_transcript", kwargs={"pk": audio.pk}))
         assert payload["transcript"] == {"url": expected}
 
-    def test_inline_transcript_false_always_returns_cues(self, audio, episode, rf_request, settings):
-        settings.CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES = 1
+    def test_inline_transcript_false_returns_cues(self, audio, episode, rf_request):
         create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
         payload = build_player_payload(audio, post=episode, request=rf_request, inline_transcript=False)
         assert payload["transcript"] == {"cues": [{"start": 0.0, "end": 1.0, "speaker": "", "text": "hi"}]}
@@ -394,7 +402,13 @@ class TestContextFlags:
 class TestSettingsAndChecks:
     def test_defaults_present(self):
         assert appsettings.CAST_AUDIO_PLAYER == "podlove"
-        assert appsettings.CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES == 150_000
+
+    def test_inline_cap_setting_removed(self):
+        # The byte cap was removed when the transcript became always-lazy.
+        from cast.checks import CAST_SETTING_TYPES
+
+        assert not hasattr(appsettings, "CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES")
+        assert all(name != "CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES" for name, _ in CAST_SETTING_TYPES)
 
     def test_audio_player_value_check_passes_for_valid(self, settings):
         settings.CAST_AUDIO_PLAYER = "custom"
@@ -405,17 +419,7 @@ class TestSettingsAndChecks:
         errors = check_cast_audio_player_settings()
         assert [error.id for error in errors] == ["cast.E005"]
 
-    @pytest.mark.parametrize("bad_cap", [0, -1, True, "100"])
-    def test_cap_value_check_fails(self, settings, bad_cap):
-        settings.CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES = bad_cap
-        error_ids = [error.id for error in check_cast_audio_player_settings()]
-        assert "cast.E006" in error_ids
-
-    def test_cap_value_check_passes_for_positive_int(self, settings):
-        settings.CAST_PLAYER_INLINE_TRANSCRIPT_MAX_BYTES = 1000
-        assert check_cast_audio_player_settings() == []
-
-    def test_setting_type_check_includes_new_settings(self, settings):
+    def test_setting_type_check_includes_audio_player(self, settings):
         settings.CAST_AUDIO_PLAYER = 123  # wrong type
         error_ids = [error.id for error in check_cast_setting_types()]
         assert "cast.E001" in error_ids

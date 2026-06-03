@@ -72,7 +72,9 @@ class TestInclusionTagPayload:
         snippet = html[start : html.index("</script>", start)]
         data = json.loads(snippet[snippet.index(">") + 1 :])
         assert data["audioId"] == audio.pk
-        assert data["transcript"] == {"cues": [{"start": 0.0, "end": 1.0, "speaker": "", "text": "hi"}]}
+        # Lazy transcript: the inline payload carries the endpoint URL, not cues.
+        assert "cues" not in data["transcript"]
+        assert "player-transcript" in data["transcript"]["url"]
 
 
 @pytest.mark.django_db

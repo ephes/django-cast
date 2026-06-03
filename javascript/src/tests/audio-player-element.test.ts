@@ -195,8 +195,8 @@ describe("cast-audio-player lifecycle", () => {
   });
 });
 
-describe("cast-audio-player fallback hydration", () => {
-  it("fetches the url once and installs cues via setCues", async () => {
+describe("cast-audio-player lazy transcript hydration", () => {
+  it("does not fetch on connect; fetches once when requestTranscript() is called", async () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve({
         ok: true,
@@ -205,10 +205,29 @@ describe("cast-audio-player fallback hydration", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     const player = mountPlayer(makePayload({ transcript: { url: "/api/audios/7/player-transcript/" } }));
-    expect(player.controller?.transcriptPending).toBe(true);
+    // No eager fetch on connect (revision 4).
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(player.controller?.hasTranscript).toBe(true);
+    expect(player.controller?.transcriptLoaded).toBe(false);
+    // The player is the sole fetcher; it fetches exactly once when asked.
+    player.controller?.requestTranscript();
     await vi.waitFor(() => expect(player.controller?.getCues().length).toBe(1));
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(player.controller?.transcriptPending).toBe(false);
+    expect(player.controller?.transcriptLoaded).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("calls transcriptFailed (no cues, retry allowed) when the fetch is not ok", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: false }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const player = mountPlayer(makePayload({ transcript: { url: "/api/audios/7/player-transcript/" } }));
+    const errors: string[] = [];
+    player.controller?.addEventListener("transcripterror", () => errors.push("err"));
+    player.controller?.requestTranscript();
+    await vi.waitFor(() => expect(errors).toEqual(["err"]));
+    expect(player.controller?.transcriptLoaded).toBe(false);
+    expect(player.controller?.transcriptLoading).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 });
