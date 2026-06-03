@@ -537,44 +537,34 @@ export class CastAudioPlayerElement extends HTMLElement {
     if (!controller || this.disabled) {
       return;
     }
-    // The native range handles its own arrows/Home/End and is unaffected by
-    // Space; never intercept while it is focused.
-    const onRange = event.target === this.range;
+    // Let native controls handle their own keys: the seek range owns
+    // arrows/Home/End, and Space/Enter must activate buttons (play, share,
+    // keyboard-shortcuts) and type into the share inputs. Only treat keys as
+    // player shortcuts when focus is NOT on such a control.
+    const target = event.target as HTMLElement | null;
+    if (target && target.closest("input, button, select, textarea, a[href], [contenteditable]")) {
+      return;
+    }
     switch (event.key) {
       case " ":
       case "k":
       case "K":
-        if (onRange) {
-          return;
-        }
         event.preventDefault();
         controller.toggle();
         break;
       case "ArrowLeft":
-        if (onRange) {
-          return;
-        }
         event.preventDefault();
         controller.seek(controller.currentTime - SEEK_STEP_SECONDS);
         break;
       case "ArrowRight":
-        if (onRange) {
-          return;
-        }
         event.preventDefault();
         controller.seek(controller.currentTime + SEEK_STEP_SECONDS);
         break;
       case "Home":
-        if (onRange) {
-          return;
-        }
         event.preventDefault();
         controller.seek(0);
         break;
       case "End": {
-        if (onRange) {
-          return;
-        }
         const duration = controller.duration;
         if (typeof duration === "number") {
           event.preventDefault();

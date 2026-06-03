@@ -235,11 +235,18 @@ cast-audio-player audio {
   font-size: 0.85rem;
 }
 
-/* Fallback positioning when the native popover API is unavailable. */
-.cast-player__shortcuts-popover:not(:popover-open)[data-open] {
-  display: block;
-  position: fixed;
-  inset: auto auto 1rem 1rem;
+/* Fallback for browsers without the Popover API: the [popover] attribute does
+   not hide content there, so hide it ourselves and reveal it on the data-open
+   toggle. (Popover-capable browsers use the UA top-layer behavior.) */
+@supports not selector(:popover-open) {
+  .cast-player__shortcuts-popover {
+    display: none;
+  }
+  .cast-player__shortcuts-popover[data-open] {
+    display: block;
+    position: fixed;
+    inset: auto auto 1rem 1rem;
+  }
 }
 
 .cast-player__shortcuts-popover h2 {
@@ -702,7 +709,7 @@ cast-audio-player audio {
     background: Highlight;
     color: HighlightText;
   }
-  .cast-transcript__cue.is-current .cast-transcript__line {
+  .cast-transcript__cue.is-current .cast-transcript__text {
     background-image: none;
   }
 }

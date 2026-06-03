@@ -121,6 +121,17 @@ describe("cast-audio-player transport", () => {
     expect(remaining.textContent).toBe("-0:00");
   });
 
+  it("does not hijack Space from interactive controls (e.g. the share button)", () => {
+    const player = mountPlayer(makePayload({ duration: 100 }));
+    const play = player.querySelector(".cast-player__play") as HTMLButtonElement;
+    const share = player.querySelector(".cast-player__share") as HTMLButtonElement;
+    expect(play.getAttribute("aria-label")).toBe("Play");
+    // Space originating from the share button must NOT toggle playback (it should
+    // activate the button natively) — so the play state stays unchanged.
+    share.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    expect(play.getAttribute("aria-label")).toBe("Play");
+  });
+
   it("renders a keyboard-shortcuts button with a popover (not a raw <details>)", () => {
     const player = mountPlayer(makePayload());
     const button = player.querySelector(".cast-player__shortcuts-btn") as HTMLButtonElement;
