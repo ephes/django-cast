@@ -388,3 +388,29 @@ describe("cast-transcript late wiring", () => {
     expect(transcript.querySelectorAll(".cast-transcript__cue")).toHaveLength(3);
   });
 });
+
+describe("cast-transcript + chapters accordion", () => {
+  it("opening one panel closes the other (single open at a time)", () => {
+    const payload = makePayload({
+      chapters: [
+        { start: 0, title: "Intro" },
+        { start: 10, title: "Body" },
+      ],
+    });
+    const { transcript } = mount(payload);
+    const chapters = document.createElement("cast-chapters");
+    chapters.setAttribute("for", "cast-player-5");
+    chapters.setAttribute("data-mode", "list");
+    document.body.appendChild(chapters);
+
+    const tToggle = transcript.querySelector(".cast-panel__toggle") as HTMLButtonElement;
+    const cToggle = chapters.querySelector(".cast-panel__toggle") as HTMLButtonElement;
+
+    tToggle.click(); // open transcript
+    expect(transcript.querySelector(".cast-panel.is-open")).not.toBeNull();
+
+    cToggle.click(); // open chapters -> transcript collapses
+    expect(chapters.querySelector(".cast-panel.is-open")).not.toBeNull();
+    expect(transcript.querySelector(".cast-panel.is-open")).toBeNull();
+  });
+});

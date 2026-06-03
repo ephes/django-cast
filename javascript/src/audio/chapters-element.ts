@@ -31,6 +31,9 @@ function writeBool(key: string, value: boolean): void {
 export class CastChaptersElement extends CastPlayerView {
   private buttons: HTMLButtonElement[] = [];
   private currentLabel?: HTMLElement;
+  private section?: HTMLElement;
+  private body?: HTMLElement;
+  private toggleBtn?: HTMLButtonElement;
 
   protected onController(controller: AudioController): void {
     const chapters = controller.getChapters();
@@ -44,7 +47,30 @@ export class CastChaptersElement extends CastPlayerView {
       this.renderList(controller);
     }
     this.listen("chapterchange", () => this.updateActive(controller.currentChapterIndex));
+    // Accordion: collapse when the sibling transcript panel opens.
+    this.listen("castpanelopen", (event) => {
+      const detail = (event as CustomEvent<{ kind: string }>).detail;
+      if (detail && detail.kind !== "chapters" && this.section?.classList.contains("is-open")) {
+        this.setOpen(false);
+      }
+    });
     this.updateActive(controller.currentChapterIndex);
+  }
+
+  private setOpen(open: boolean): void {
+    if (!this.section || !this.toggleBtn || !this.body) {
+      return;
+    }
+    this.section.classList.toggle("is-open", open);
+    this.toggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      this.body.removeAttribute("inert");
+      // Accordion: tell the sibling transcript panel to collapse.
+      this.controller?.dispatchEvent(new CustomEvent("castpanelopen", { detail: { kind: "chapters" } }));
+    } else {
+      this.body.setAttribute("inert", "");
+    }
+    writeBool(OPEN_STORAGE_KEY, open);
   }
 
   private renderList(controller: AudioController): void {
@@ -104,16 +130,10 @@ export class CastChaptersElement extends CastPlayerView {
     if (!open) {
       body.setAttribute("inert", "");
     }
-    toggle.addEventListener("click", () => {
-      const nowOpen = section.classList.toggle("is-open");
-      toggle.setAttribute("aria-expanded", nowOpen ? "true" : "false");
-      if (nowOpen) {
-        body.removeAttribute("inert");
-      } else {
-        body.setAttribute("inert", "");
-      }
-      writeBool(OPEN_STORAGE_KEY, nowOpen);
-    });
+    this.section = section;
+    this.body = body;
+    this.toggleBtn = toggle;
+    toggle.addEventListener("click", () => this.setOpen(!section.classList.contains("is-open")));
     section.append(header, body);
     this.appendChild(section);
   }

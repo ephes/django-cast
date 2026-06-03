@@ -348,47 +348,32 @@ cast-audio-player audio {
 
 /* ---- Collapsible panels (transcript + chapters) -------------------------- */
 
-/* Default-template grouping: the two compact buttons sit side by side; when one
-   panel opens it takes the full row (via :has) so its body spans full width. */
+/* The two compact toggle buttons stay in a stable top row; an opened panel's
+   body drops to a FULL-WIDTH row BELOW the buttons, so opening one panel never
+   moves the other button. The elements are flattened with display:contents so
+   their header (toggle) and body become flex items of this row: headers are
+   order 0 (the button row), bodies order 1 (full-width rows beneath). */
 .cast-player__panels {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
-  gap: 0.6rem;
+  gap: 0.5rem 0.6rem;
   margin-top: 0.95rem;
 }
 
-.cast-player__panels > * {
-  flex: 0 1 auto;
-}
-
-.cast-player__panels > *:has(.cast-panel.is-open) {
-  flex: 1 1 100%;
-}
-
-.cast-panel {
-  border-radius: var(--_radius);
-}
-
-/* Collapsed: the panel is just its compact pill button — no card, no preview. */
-.cast-panel.is-open {
-  border: 1px solid var(--_line);
-  background: var(--_surface);
-  overflow: hidden;
+.cast-player__panels > cast-transcript,
+.cast-player__panels > cast-chapters,
+.cast-player__panels .cast-panel {
+  display: contents;
 }
 
 .cast-panel__header {
+  order: 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
-.cast-panel.is-open .cast-panel__header {
-  padding: 0.7rem 0.95rem 0.55rem;
-}
-
-/* The toggle is a content-width pill when collapsed. */
+/* Compact pill toggle; the open one reads as a pressed/active tab. */
 .cast-panel__toggle {
   display: inline-flex;
   align-items: center;
@@ -405,18 +390,10 @@ cast-audio-player audio {
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.cast-panel__toggle:hover {
+.cast-panel__toggle:hover,
+.cast-panel.is-open .cast-panel__toggle {
   background: var(--_tint);
   border-color: var(--_accent);
-}
-
-/* Opened: the toggle becomes the panel heading inside the card. */
-.cast-panel.is-open .cast-panel__toggle {
-  border-color: transparent;
-  background: transparent;
-  font-size: 1.05rem;
-  font-weight: 700;
-  padding: 0.15rem 0;
 }
 
 .cast-panel__chevron {
@@ -428,8 +405,7 @@ cast-audio-player audio {
   transform: rotate(90deg);
 }
 
-/* The line/chapter count shows only inside the opened header, never on the
-   collapsed button. */
+/* Count (e.g. "145 LINES") shows only on the open toggle, never collapsed. */
 .cast-panel__count {
   font-family: var(--_mono);
   font-size: 0.72rem;
@@ -443,27 +419,32 @@ cast-audio-player audio {
   display: none;
 }
 
+/* Tools (search / follow / tab-cues) live at the top of the opened body. */
 .cast-panel__tools {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-left: auto;
   flex-wrap: wrap;
-}
-
-.cast-panel:not(.is-open) .cast-panel__tools {
-  display: none;
+  padding: 0.7rem 0.95rem 0.1rem;
 }
 
 .cast-panel__body {
+  order: 1;
+  flex-basis: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
-/* Collapsed: hide the body entirely so no transcript/chapter text can bleed out
-   below the compact button. (A grid-rows 0fr collapse leaks ~1 line in Blink when
-   the child is an auto-overflow scroller, so hide outright.) */
+/* Collapsed: hide the body entirely (no card, no preview, no bleed). */
 .cast-panel:not(.is-open) .cast-panel__body {
   display: none;
+}
+
+/* Opened: the body is the card, full-width below the button row. */
+.cast-panel.is-open .cast-panel__body {
+  border: 1px solid var(--_line);
+  background: var(--_surface);
+  border-radius: var(--_radius);
 }
 
 .cast-panel__scroll {

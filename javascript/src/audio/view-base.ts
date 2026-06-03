@@ -36,8 +36,10 @@ export abstract class CastPlayerView extends HTMLElement {
     this.controller = undefined;
   }
 
-  // Subscribe to a controller event and track it for cleanup.
-  protected listen(type: string, listener: () => void): void {
+  // Subscribe to a controller event and track it for cleanup. The listener may
+  // accept the event (e.g. for accordion coordination); existing callers that
+  // ignore it stay compatible.
+  protected listen(type: string, listener: (event: Event) => void): void {
     this.controller?.addEventListener(type, listener as EventListener);
     this.listeners.push([type, listener as EventListener]);
   }

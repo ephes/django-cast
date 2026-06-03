@@ -76,6 +76,14 @@ export class CastTranscriptElement extends CastPlayerView {
     this.listen("cueschange", () => this.renderCues(controller.getCues()));
     this.listen("cuechange", () => this.setActive(controller.currentCueIndex));
     this.listen("transcripterror", () => this.onTranscriptError());
+    // Accordion: when the sibling panel (chapters) opens, collapse this one so
+    // only one panel is open at a time.
+    this.listen("castpanelopen", (event) => {
+      const detail = (event as CustomEvent<{ kind: string }>).detail;
+      if (detail && detail.kind !== "transcript" && this.open) {
+        this.toggleOpen();
+      }
+    });
   }
 
   // ---- structure ------------------------------------------------------------
@@ -105,7 +113,7 @@ export class CastTranscriptElement extends CastPlayerView {
     this.toggleButton = toggle;
     this.countLabel = count;
 
-    header.append(toggle, this.buildTools());
+    header.append(toggle);
 
     const body = document.createElement("div");
     body.className = "cast-panel__body";
@@ -114,7 +122,9 @@ export class CastTranscriptElement extends CastPlayerView {
     const list = document.createElement("div");
     list.className = "cast-transcript__cues";
     scroll.appendChild(list);
-    body.appendChild(scroll);
+    // Tools (search / follow / tab-cues) live at the top of the body, not in the
+    // button row, so the collapsed toggle stays a compact pill.
+    body.append(this.buildTools(), scroll);
     this.panelBody = body;
     this.scroll = scroll;
     this.list = list;
@@ -221,6 +231,8 @@ export class CastTranscriptElement extends CastPlayerView {
     this.applyInert();
     writeBool(OPEN_STORAGE_KEY, this.open);
     if (this.open && this.controller) {
+      // Accordion: tell the sibling chapters panel to collapse.
+      this.controller.dispatchEvent(new CustomEvent("castpanelopen", { detail: { kind: "transcript" } }));
       // Lazy load on first open: fetch the transcript only now, never on connect.
       if (!this.controller.transcriptLoaded && !this.controller.transcriptLoading) {
         this.showLoading();
