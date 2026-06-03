@@ -38,11 +38,27 @@ function mount(payload: PlayerPayload, mode = "list") {
   return { player: player as HTMLElement & { controller?: any }, chapters };
 }
 
+function installLocalStorage(): void {
+  const store = new Map<string, string>();
+  const mock: Storage = {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    removeItem: (key: string) => store.delete(key),
+    setItem: (key: string, value: string) => store.set(key, String(value)),
+  };
+  Object.defineProperty(window, "localStorage", { configurable: true, value: mock });
+}
+
 beforeEach(() => {
   document.body.innerHTML = "";
   _clearRegistry();
   installMediaMock();
   installSyncRaf();
+  installLocalStorage();
 });
 
 describe("cast-chapters", () => {
@@ -73,13 +89,19 @@ describe("cast-chapters", () => {
     expect(buttons[0].hasAttribute("aria-current")).toBe(false);
   });
 
-  it("collapses to inert so chapter buttons leave the tab order", () => {
+  it("is a collapsed pill by default and expands on toggle (inert when collapsed)", () => {
     const { chapters: el } = mount(makePayload({ chapters }));
     const body = el.querySelector(".cast-panel__body") as HTMLElement;
-    expect(body.hasAttribute("inert")).toBe(false); // open by default
-    (el.querySelector(".cast-panel__toggle") as HTMLButtonElement).click();
+    const toggle = el.querySelector(".cast-panel__toggle") as HTMLButtonElement;
+    // Collapsed by default: body inert, not open.
     expect(body.hasAttribute("inert")).toBe(true);
-    expect((el.querySelector(".cast-panel__toggle") as HTMLElement).getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(el.querySelector(".cast-panel.is-open")).toBeNull();
+    // Expands on click.
+    toggle.click();
+    expect(body.hasAttribute("inert")).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(window.localStorage.getItem("cast-chapters-open")).toBe("true");
   });
 
   it("seeks on activation", () => {

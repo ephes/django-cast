@@ -89,11 +89,15 @@ describe("cast-transcript rendering", () => {
     expect(cue.textContent).toContain("<script>alert(1)</script>");
   });
 
-  it("renders a timestamp and speaker label per cue", () => {
+  it("renders a timestamp per cue and a speaker heading per turn", () => {
     const { transcript } = mount(makePayload());
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLElement;
     expect(cue.querySelector(".cast-transcript__time")?.textContent).toBe("0:00");
-    expect(cue.querySelector(".cast-transcript__speaker")?.textContent).toBe("Alice");
+    // The speaker is its own block heading (not nested inside the cue button).
+    expect(cue.querySelector(".cast-transcript__speaker")).toBeNull();
+    const firstSpeaker = transcript.querySelector(".cast-transcript__speaker") as HTMLElement;
+    expect(firstSpeaker.textContent).toBe("Alice");
+    expect(firstSpeaker.tagName).toBe("DIV");
   });
 
   it("repeats the speaker label only on speaker change", () => {
@@ -271,17 +275,26 @@ describe("cast-transcript search", () => {
 });
 
 describe("cast-transcript keyboard-navigable toggle", () => {
-  function tabbableToggle(transcript: HTMLElement): HTMLInputElement {
-    return transcript.querySelector(".cast-transcript__options input[type='checkbox']") as HTMLInputElement;
+  function tabbableToggle(transcript: HTMLElement): HTMLButtonElement {
+    return transcript.querySelector(".cast-transcript__tabpref") as HTMLButtonElement;
   }
+
+  it("is a labelled pill toggle in the tools row (not a bare checkbox)", () => {
+    const { transcript } = mount(makePayload());
+    const toggle = tabbableToggle(transcript);
+    expect(toggle.tagName).toBe("BUTTON");
+    expect(toggle.getAttribute("aria-label")).toBe("Keyboard-navigable cues");
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(transcript.querySelector(".cast-panel__tools .cast-transcript__tabpref")).not.toBeNull();
+  });
 
   it("flips tabindex and persists the preference", () => {
     const { transcript } = mount(makePayload());
     const toggle = tabbableToggle(transcript);
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change"));
+    toggle.click();
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLButtonElement;
     expect(cue.tabIndex).toBe(0);
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
     expect(window.localStorage.getItem("cast-transcript-tabbable")).toBe("true");
   });
 

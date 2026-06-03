@@ -43,6 +43,7 @@ export class CastTranscriptElement extends CastPlayerView {
   private searchInput?: HTMLInputElement;
   private searchStatus?: HTMLElement;
   private followButton?: HTMLButtonElement;
+  private tabbableButton?: HTMLButtonElement;
   private loadingEl?: HTMLElement;
   private cueButtons: HTMLButtonElement[] = [];
   private cues: readonly Cue[] = [];
@@ -121,7 +122,7 @@ export class CastTranscriptElement extends CastPlayerView {
     // are removed from the tab order and not interactive while hidden.
     this.applyInert();
 
-    section.append(header, body, this.buildOptions());
+    section.append(header, body);
     this.section = section;
     this.appendChild(section);
   }
@@ -166,25 +167,25 @@ export class CastTranscriptElement extends CastPlayerView {
     follow.addEventListener("click", () => this.toggleFollow());
     this.followButton = follow;
 
-    tools.append(search, prev, next, status, follow);
-    return tools;
-  }
-
-  private buildOptions(): HTMLElement {
-    const label = document.createElement("label");
-    label.className = "cast-transcript__options";
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = this.tabbable;
-    input.addEventListener("change", () => {
-      this.tabbable = input.checked;
+    // Keyboard-navigable-cues preference as a styled pill toggle (was a bare
+    // checkbox bleeding out of the panel).
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "cast-transcript__follow cast-transcript__tabpref";
+    tab.textContent = "Tab cues";
+    tab.title = "Make transcript lines keyboard-focusable with Tab";
+    tab.setAttribute("aria-label", "Keyboard-navigable cues");
+    tab.setAttribute("aria-pressed", this.tabbable ? "true" : "false");
+    tab.addEventListener("click", () => {
+      this.tabbable = !this.tabbable;
+      tab.setAttribute("aria-pressed", this.tabbable ? "true" : "false");
       writeBool(TABBABLE_STORAGE_KEY, this.tabbable);
       this.applyTabbable();
     });
-    const text = document.createElement("span");
-    text.textContent = " Keyboard-navigable cues";
-    label.append(input, text);
-    return label;
+    this.tabbableButton = tab;
+
+    tools.append(search, prev, next, status, follow, tab);
+    return tools;
   }
 
   private showLoading(): void {
@@ -265,6 +266,16 @@ export class CastTranscriptElement extends CastPlayerView {
 
     let previousSpeaker = "";
     cues.forEach((cue, index) => {
+      // A speaker change starts a new "turn": the name on its own line, with the
+      // following cue text indented beneath it (django-chat-style).
+      if (cue.speaker && cue.speaker !== previousSpeaker) {
+        const speaker = document.createElement("div");
+        speaker.className = "cast-transcript__speaker";
+        speaker.textContent = cue.speaker; // textContent only
+        this.list!.appendChild(speaker);
+      }
+      previousSpeaker = cue.speaker;
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "cast-transcript__cue";
@@ -276,22 +287,11 @@ export class CastTranscriptElement extends CastPlayerView {
       time.className = "cast-transcript__time";
       time.textContent = formatTime(cue.start);
 
-      const line = document.createElement("span");
-      line.className = "cast-transcript__line";
-      if (cue.speaker && cue.speaker !== previousSpeaker) {
-        const speaker = document.createElement("span");
-        speaker.className = "cast-transcript__speaker";
-        speaker.textContent = cue.speaker; // textContent only
-        line.appendChild(speaker);
-      }
-      previousSpeaker = cue.speaker;
-
       const text = document.createElement("span");
       text.className = "cast-transcript__text";
       text.textContent = cue.text; // textContent only — never innerHTML
-      line.appendChild(text);
 
-      button.append(time, line);
+      button.append(time, text);
       button.addEventListener("click", () => this.controller?.seekToCue(index));
       this.list!.appendChild(button);
       this.cueButtons.push(button);

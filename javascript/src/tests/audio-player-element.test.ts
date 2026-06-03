@@ -69,40 +69,68 @@ describe("cast-audio-player transport", () => {
     expect(button.getAttribute("aria-label")).toBe("Play");
   });
 
-  it("range input calls seek and shows tabular time, with no aria-live on time", () => {
+  it("range input calls seek and shows elapsed + remaining, with no aria-live on time", () => {
     const player = mountPlayer(makePayload({ duration: 75 }));
     const range = player.querySelector(".cast-player__seek") as HTMLInputElement;
-    const output = player.querySelector(".cast-player__time") as HTMLOutputElement;
+    const elapsed = player.querySelector(".cast-player__time") as HTMLOutputElement;
+    const remaining = player.querySelector(".cast-player__remaining") as HTMLOutputElement;
     expect(range.max).toBe("75");
-    expect(output.hasAttribute("aria-live")).toBe(false);
+    expect(elapsed.hasAttribute("aria-live")).toBe(false);
+    expect(remaining.hasAttribute("aria-live")).toBe(false);
     range.value = "65";
     range.dispatchEvent(new Event("input"));
     expect(audioOf(player).currentTime).toBe(65);
-    expect(output.textContent).toBe("1:05 / 1:15");
+    expect(elapsed.textContent).toBe("1:05");
+    expect(remaining.textContent).toBe("-0:10");
     expect(range.getAttribute("aria-valuetext")).toContain("of");
   });
 
-  it("formats hours as h:mm:ss", () => {
+  it("formats hours as h:mm:ss for elapsed and remaining", () => {
     const player = mountPlayer(makePayload({ duration: 3725 }));
-    const output = player.querySelector(".cast-player__time") as HTMLOutputElement;
-    expect(output.textContent).toBe("0:00 / 1:02:05");
+    const elapsed = player.querySelector(".cast-player__time") as HTMLOutputElement;
+    const remaining = player.querySelector(".cast-player__remaining") as HTMLOutputElement;
+    expect(elapsed.textContent).toBe("0:00");
+    expect(remaining.textContent).toBe("-1:02:05");
   });
 
-  it("duration-unknown disables the range and shows --:--, then enables on durationchange", () => {
+  it("duration-unknown disables the range and shows --:-- remaining, then fills on durationchange", () => {
     const player = mountPlayer(makePayload({ duration: null }));
     const range = player.querySelector(".cast-player__seek") as HTMLInputElement;
-    const output = player.querySelector(".cast-player__time") as HTMLOutputElement;
+    const elapsed = player.querySelector(".cast-player__time") as HTMLOutputElement;
+    const remaining = player.querySelector(".cast-player__remaining") as HTMLOutputElement;
     expect(range.disabled).toBe(true);
     expect(range.max).toBe("0");
     expect(range.getAttribute("aria-valuetext")).toBe("duration unknown");
-    expect(output.textContent).toContain("--:--");
+    expect(elapsed.textContent).toBe("0:00");
+    expect(remaining.textContent).toBe("--:--");
 
     const audio = audioOf(player);
     audio.duration = 90;
     audio.dispatchEvent(new Event("durationchange"));
     expect(range.disabled).toBe(false);
     expect(range.max).toBe("90");
-    expect(output.textContent).toBe("0:00 / 1:30");
+    expect(remaining.textContent).toBe("-1:30");
+  });
+
+  it("clamps remaining time to zero past the end", () => {
+    const player = mountPlayer(makePayload({ duration: 75 }));
+    const audio = audioOf(player);
+    audio.currentTime = 80; // past the end
+    audio.dispatchEvent(new Event("timeupdate"));
+    const remaining = player.querySelector(".cast-player__remaining") as HTMLOutputElement;
+    expect(remaining.textContent).toBe("-0:00");
+  });
+
+  it("renders a keyboard-shortcuts button with a popover (not a raw <details>)", () => {
+    const player = mountPlayer(makePayload());
+    const button = player.querySelector(".cast-player__shortcuts-btn") as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.getAttribute("aria-label")).toBe("Keyboard shortcuts");
+    const popover = player.querySelector("#" + button.getAttribute("popovertarget")) as HTMLElement;
+    expect(popover).not.toBeNull();
+    expect(popover.hasAttribute("popover")).toBe(true);
+    expect(popover.textContent).toContain("play / pause");
+    expect(player.querySelector("details.cast-player__shortcuts")).toBeNull();
   });
 
   it("no-sources renders a disabled state with an unavailable message", () => {

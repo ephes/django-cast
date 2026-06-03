@@ -9,6 +9,25 @@ import { CastPlayerView } from "./view-base";
 const CHEVRON =
   '<svg class="cast-panel__chevron" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5l8 7-8 7z"/></svg>';
 
+const OPEN_STORAGE_KEY = "cast-chapters-open";
+
+function readBool(key: string, fallback: boolean): boolean {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === null ? fallback : value === "true";
+  } catch {
+    return fallback;
+  }
+}
+
+function writeBool(key: string, value: boolean): void {
+  try {
+    window.localStorage.setItem(key, value ? "true" : "false");
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export class CastChaptersElement extends CastPlayerView {
   private buttons: HTMLButtonElement[] = [];
   private currentLabel?: HTMLElement;
@@ -29,8 +48,9 @@ export class CastChaptersElement extends CastPlayerView {
   }
 
   private renderList(controller: AudioController): void {
+    const open = readBool(OPEN_STORAGE_KEY, false);
     const section = document.createElement("section");
-    section.className = "cast-chapters cast-panel is-open";
+    section.className = open ? "cast-chapters cast-panel is-open" : "cast-chapters cast-panel";
     section.setAttribute("aria-label", "Chapters");
 
     const header = document.createElement("div");
@@ -38,7 +58,7 @@ export class CastChaptersElement extends CastPlayerView {
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "cast-panel__toggle";
-    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
     toggle.innerHTML = CHEVRON;
     const label = document.createElement("span");
     label.textContent = "Chapters";
@@ -79,16 +99,20 @@ export class CastChaptersElement extends CastPlayerView {
 
     scroll.appendChild(list);
     body.appendChild(scroll);
-    // Default open; collapsing marks the body inert so collapsed chapter buttons
-    // leave the tab order.
+    // Collapsed by default (a compact pill); collapsing marks the body inert so
+    // the chapter buttons leave the tab order. The open state is persisted.
+    if (!open) {
+      body.setAttribute("inert", "");
+    }
     toggle.addEventListener("click", () => {
-      const open = section.classList.toggle("is-open");
-      toggle.setAttribute("aria-expanded", open ? "true" : "false");
-      if (open) {
+      const nowOpen = section.classList.toggle("is-open");
+      toggle.setAttribute("aria-expanded", nowOpen ? "true" : "false");
+      if (nowOpen) {
         body.removeAttribute("inert");
       } else {
         body.setAttribute("inert", "");
       }
+      writeBool(OPEN_STORAGE_KEY, nowOpen);
     });
     section.append(header, body);
     this.appendChild(section);

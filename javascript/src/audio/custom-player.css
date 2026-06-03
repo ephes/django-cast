@@ -22,7 +22,8 @@ cast-chapters {
   --_mono: var(--cast-player-mono, ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace);
   --_radius: 1rem;
   --_pill: 999px;
-  --_thumb: 0.95rem;
+  --_track-h: 0.1875rem; /* thin progress bar (~3px), Podlove/django-chat style */
+  --_thumb: 0.78rem;
   color: var(--_fg);
 }
 
@@ -95,7 +96,7 @@ cast-audio-player audio {
 }
 
 .cast-player__seek::-webkit-slider-runnable-track {
-  height: 0.4rem;
+  height: var(--_track-h);
   border-radius: var(--_pill);
   background: linear-gradient(
     to right,
@@ -105,13 +106,13 @@ cast-audio-player audio {
 }
 
 .cast-player__seek::-moz-range-track {
-  height: 0.4rem;
+  height: var(--_track-h);
   border-radius: var(--_pill);
   background: var(--_track);
 }
 
 .cast-player__seek::-moz-range-progress {
-  height: 0.4rem;
+  height: var(--_track-h);
   border-radius: var(--_pill);
   background: var(--_accent);
 }
@@ -121,7 +122,7 @@ cast-audio-player audio {
   appearance: none;
   width: var(--_thumb);
   height: var(--_thumb);
-  margin-top: calc((0.4rem - var(--_thumb)) / 2);
+  margin-top: calc((var(--_track-h) - var(--_thumb)) / 2);
   border-radius: 50%;
   background: var(--_accent);
   border: 2px solid var(--cast-player-bg, #fff);
@@ -144,7 +145,8 @@ cast-audio-player audio {
   display: none;
 }
 
-.cast-player__time {
+.cast-player__time,
+.cast-player__remaining {
   flex: none;
   font-family: var(--_mono);
   font-variant-numeric: tabular-nums;
@@ -152,6 +154,16 @@ cast-audio-player audio {
   letter-spacing: 0.01em;
   color: var(--_muted);
   white-space: nowrap;
+}
+
+/* Elapsed sits left of the bar, remaining (−m:ss) sits right of it. */
+.cast-player__time {
+  min-width: 3.2em;
+  text-align: right;
+}
+
+.cast-player__remaining {
+  min-width: 3.6em;
 }
 
 .cast-player__share {
@@ -189,19 +201,63 @@ cast-audio-player audio {
   padding: 0.55rem 0.95rem;
 }
 
-.cast-player__shortcuts {
-  margin-top: 0.45rem;
-  font-size: 0.78rem;
-  color: var(--_muted);
-}
-
-.cast-player__shortcuts summary {
+/* Keyboard-shortcuts: a small round button (matching share) that opens a popover
+   listing the shortcuts, instead of a raw <details> disclosure. */
+.cast-player__shortcuts-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 1px solid var(--_line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--_fg);
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
 
-.cast-player__shortcuts ul {
-  margin: 0.35rem 0 0;
+.cast-player__shortcuts-btn:hover {
+  background: var(--_tint);
+  border-color: var(--_accent);
+  transform: translateY(-1px);
+}
+
+.cast-player__shortcuts-popover {
+  margin: 0;
+  border: 1px solid var(--_line);
+  border-radius: var(--_radius);
+  padding: 0.8rem 1rem;
+  background: var(--cast-player-bg, Canvas);
+  color: var(--_fg);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.28);
+  font-size: 0.85rem;
+}
+
+/* Fallback positioning when the native popover API is unavailable. */
+.cast-player__shortcuts-popover:not(:popover-open)[data-open] {
+  display: block;
+  position: fixed;
+  inset: auto auto 1rem 1rem;
+}
+
+.cast-player__shortcuts-popover h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.cast-player__shortcuts-popover ul {
+  margin: 0;
   padding-left: 1.1rem;
+}
+
+.cast-player__shortcuts-popover kbd {
+  font-family: var(--_mono);
+  font-size: 0.8em;
+  background: var(--_tint);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.3rem;
 }
 
 /* ---- Share dialog -------------------------------------------------------- */
@@ -290,12 +346,33 @@ cast-audio-player audio {
   border-color: var(--_accent);
 }
 
-/* ---- Collapsible panel (transcript + chapters) --------------------------- */
+/* ---- Collapsible panels (transcript + chapters) -------------------------- */
+
+/* Default-template grouping: the two compact buttons sit side by side; when one
+   panel opens it takes the full row (via :has) so its body spans full width. */
+.cast-player__panels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 0.95rem;
+}
+
+.cast-player__panels > * {
+  flex: 0 1 auto;
+}
+
+.cast-player__panels > *:has(.cast-panel.is-open) {
+  flex: 1 1 100%;
+}
 
 .cast-panel {
-  margin-top: 0.95rem;
-  border: 1px solid var(--_line);
   border-radius: var(--_radius);
+}
+
+/* Collapsed: the panel is just its compact pill button — no card, no preview. */
+.cast-panel.is-open {
+  border: 1px solid var(--_line);
   background: var(--_surface);
   overflow: hidden;
 }
@@ -305,20 +382,40 @@ cast-audio-player audio {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  padding: 0.7rem 0.95rem;
 }
 
+.cast-panel.is-open .cast-panel__header {
+  padding: 0.7rem 0.95rem 0.55rem;
+}
+
+/* The toggle is a content-width pill when collapsed. */
 .cast-panel__toggle {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  border: 0;
+  gap: 0.45rem;
+  border: 1px solid var(--_line);
+  border-radius: var(--_pill);
   background: transparent;
   color: inherit;
   cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: 0.45rem 0.95rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cast-panel__toggle:hover {
+  background: var(--_tint);
+  border-color: var(--_accent);
+}
+
+/* Opened: the toggle becomes the panel heading inside the card. */
+.cast-panel.is-open .cast-panel__toggle {
+  border-color: transparent;
+  background: transparent;
   font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
   padding: 0.15rem 0;
 }
 
@@ -331,6 +428,8 @@ cast-audio-player audio {
   transform: rotate(90deg);
 }
 
+/* The line/chapter count shows only inside the opened header, never on the
+   collapsed button. */
 .cast-panel__count {
   font-family: var(--_mono);
   font-size: 0.72rem;
@@ -338,6 +437,10 @@ cast-audio-player audio {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--_muted);
+}
+
+.cast-panel:not(.is-open) .cast-panel__count {
+  display: none;
 }
 
 .cast-panel__tools {
@@ -353,13 +456,14 @@ cast-audio-player audio {
 }
 
 .cast-panel__body {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
 
-.cast-panel.is-open .cast-panel__body {
-  grid-template-rows: 1fr;
+/* Collapsed: hide the body entirely so no transcript/chapter text can bleed out
+   below the compact button. (A grid-rows 0fr collapse leaks ~1 line in Blink when
+   the child is an auto-overflow scroller, so hide outright.) */
+.cast-panel:not(.is-open) .cast-panel__body {
+  display: none;
 }
 
 .cast-panel__scroll {
@@ -433,43 +537,46 @@ cast-audio-player audio {
   color: var(--_muted);
 }
 
-.cast-transcript__options {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  color: var(--_muted);
-  margin: 0 0.95rem 0.6rem;
-}
-
 .cast-transcript__loading,
 .cast-transcript__empty {
   color: var(--_muted);
   padding: 0.5rem 0;
 }
 
-/* ---- Transcript cues: a monospace timecode rail + speaker-labelled text --- */
+/* ---- Transcript cues: a speaker heading per turn, with indented lines ----- */
 
 .cast-transcript__cues {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  row-gap: 0.1rem;
-  column-gap: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Speaker name: its own line above the turn's lines (django-chat style). */
+.cast-transcript__speaker {
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--_accent);
+  margin: 0.95rem 0 0.15rem;
+  padding-left: 0.6rem;
+}
+
+.cast-transcript__cues > .cast-transcript__speaker:first-child {
+  margin-top: 0;
 }
 
 .cast-transcript__cue {
   display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: baseline;
+  column-gap: 0.85rem;
   width: 100%;
   text-align: left;
   border: 0;
   border-left: 2px solid transparent;
   background: transparent;
   color: inherit;
-  padding: 0.28rem 0.4rem 0.28rem 0.6rem;
+  padding: 0.2rem 0.4rem 0.2rem 0.6rem; /* left padding indents lines under the speaker */
   border-radius: 0.45rem;
   cursor: pointer;
   font: inherit;
@@ -482,28 +589,17 @@ cast-audio-player audio {
 }
 
 .cast-transcript__time {
-  grid-column: 1;
   font-family: var(--_mono);
   font-variant-numeric: tabular-nums;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   color: var(--_accent);
   white-space: nowrap;
   padding-top: 0.18rem;
-  opacity: 0.85;
+  opacity: 0.7;
 }
 
-.cast-transcript__line {
-  grid-column: 2;
-}
-
-.cast-transcript__speaker {
-  display: inline;
-  font-weight: 700;
-  font-size: 0.82em;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--_accent);
-  margin-right: 0.45rem;
+.cast-transcript__text {
+  min-width: 0;
 }
 
 /* Current cue: accent left border + a translucent gradient underline so it
@@ -513,7 +609,7 @@ cast-audio-player audio {
   background: color-mix(in srgb, var(--_accent) 8%, transparent);
 }
 
-.cast-transcript__cue.is-current .cast-transcript__line {
+.cast-transcript__cue.is-current .cast-transcript__text {
   background-image: linear-gradient(to top, var(--_tint-strong) 0 34%, transparent 34%);
 }
 

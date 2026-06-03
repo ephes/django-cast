@@ -16,6 +16,14 @@ const PAUSE_ICON =
   '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
 const SHARE_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+const KEYBOARD_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>';
+
+const SHORTCUTS: ReadonlyArray<[string, string]> = [
+  ["Space / K", "play / pause"],
+  ["← / →", "skip 5 seconds"],
+  ["Home / End", "start / end"],
+];
 
 function timecode(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -54,6 +62,7 @@ export class CastAudioPlayerElement extends HTMLElement {
   private playButton?: HTMLButtonElement;
   private range?: HTMLInputElement;
   private output?: HTMLOutputElement;
+  private remaining?: HTMLOutputElement;
   private statusRegion?: HTMLElement;
   private controllerListeners: Array<[string, EventListener]> = [];
   private audioListeners: Array<[string, EventListener]> = [];
@@ -199,32 +208,43 @@ export class CastAudioPlayerElement extends HTMLElement {
     });
     this.range = range;
 
-    const output = el("output", "cast-player__time");
-    output.textContent = `${formatTime(0)} / ${known ? formatTime(payload.duration as number) : "--:--"}`;
-    this.output = output;
+    // Elapsed sits left of the bar; remaining (−m:ss) sits right of it.
+    const elapsed = el("output", "cast-player__time");
+    elapsed.textContent = formatTime(0);
+    this.output = elapsed;
+
+    const remaining = el("output", "cast-player__remaining");
+    remaining.textContent = known ? `-${formatTime(payload.duration as number)}` : "--:--";
+    this.remaining = remaining;
 
     const status = el("div", "cast-player__status", { role: "status", "aria-live": "polite" });
     this.statusRegion = status;
 
-    transport.append(playButton, range, output);
+    transport.append(playButton, elapsed, range, remaining);
     if (!this.disabled) {
       const share = el("button", "cast-player__share", { type: "button" });
       share.setAttribute("aria-label", "Share with current time");
       share.innerHTML = SHARE_ICON;
       share.addEventListener("click", () => this.openShare());
       transport.appendChild(share);
+
+      const { button, popover } = this.buildShortcuts();
+      transport.appendChild(button);
+      this.appendChild(transport);
+      this.appendChild(status);
+      this.appendChild(popover);
+      this.appendChild(this.buildShareDialog());
+      return;
     }
     this.appendChild(transport);
     this.appendChild(status);
+    const message = el("p", "cast-player__unavailable");
+    message.textContent = "Audio unavailable.";
+    this.appendChild(message);
+  }
 
-    if (this.disabled) {
-      const message = el("p", "cast-player__unavailable");
-      message.textContent = "Audio unavailable.";
-      this.appendChild(message);
-    } else {
-      this.appendChild(this.renderShortcutsHelp());
-      this.appendChild(this.buildShareDialog());
-    }
+  private remainingText(currentTime: number, duration: number | null): string {
+    return typeof duration === "number" ? `-${formatTime(Math.max(0, duration - currentTime))}` : "--:--";
   }
 
   // ---- share with timestamp -------------------------------------------------
@@ -350,22 +370,35 @@ export class CastAudioPlayerElement extends HTMLElement {
     }
   }
 
-  private renderShortcutsHelp(): HTMLElement {
-    const details = el("details", "cast-player__shortcuts");
-    const summary = el("summary");
-    summary.textContent = "Keyboard shortcuts";
+  // A small round button (matching share) that opens a popover listing the
+  // shortcuts — replacing the old raw <details> disclosure.
+  private buildShortcuts(): { button: HTMLButtonElement; popover: HTMLElement } {
+    const popoverId = `cast-shortcuts-${this.playerId || "player"}`;
+    const popover = el("div", "cast-player__shortcuts-popover", { id: popoverId, popover: "" });
+    const heading = el("h2");
+    heading.textContent = "Keyboard shortcuts";
     const list = el("ul");
-    for (const line of [
-      "Space or K: play / pause",
-      "Left / Right arrow: skip 5 seconds",
-      "Home / End: start / end",
-    ]) {
+    for (const [keys, description] of SHORTCUTS) {
       const item = el("li");
-      item.textContent = line;
+      const kbd = el("kbd");
+      kbd.textContent = keys;
+      item.append(kbd, document.createTextNode(` — ${description}`));
       list.appendChild(item);
     }
-    details.append(summary, list);
-    return details;
+    popover.append(heading, list);
+
+    const button = el("button", "cast-player__shortcuts-btn", { type: "button" });
+    button.setAttribute("aria-label", "Keyboard shortcuts");
+    button.setAttribute("popovertarget", popoverId);
+    button.innerHTML = KEYBOARD_ICON;
+    // The popovertarget attribute toggles natively when the API is available;
+    // fall back to a data-attribute toggle otherwise (older engines, jsdom).
+    button.addEventListener("click", () => {
+      if (typeof (popover as { togglePopover?: () => void }).togglePopover !== "function") {
+        popover.toggleAttribute("data-open");
+      }
+    });
+    return { button, popover };
   }
 
   // ---- controller subscription ---------------------------------------------
@@ -418,7 +451,10 @@ export class CastAudioPlayerElement extends HTMLElement {
       this.updateProgressFill(t, duration);
     }
     if (this.output) {
-      this.output.textContent = `${formatTime(t)} / ${typeof duration === "number" ? formatTime(duration) : "--:--"}`;
+      this.output.textContent = formatTime(t);
+    }
+    if (this.remaining) {
+      this.remaining.textContent = this.remainingText(t, duration);
     }
     this.emitPublicTimeUpdate(t, duration);
   }
@@ -444,7 +480,10 @@ export class CastAudioPlayerElement extends HTMLElement {
       this.range.setAttribute("aria-valuetext", this.valueText(controller.currentTime, duration));
       this.updateProgressFill(controller.currentTime, duration);
       if (this.output) {
-        this.output.textContent = `${formatTime(controller.currentTime)} / ${formatTime(duration)}`;
+        this.output.textContent = formatTime(controller.currentTime);
+      }
+      if (this.remaining) {
+        this.remaining.textContent = this.remainingText(controller.currentTime, duration);
       }
     }
   }
