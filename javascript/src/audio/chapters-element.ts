@@ -9,25 +9,6 @@ import { CastPlayerView } from "./view-base";
 const CHEVRON =
   '<svg class="cast-panel__chevron" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5l8 7-8 7z"/></svg>';
 
-const OPEN_STORAGE_KEY = "cast-chapters-open";
-
-function readBool(key: string, fallback: boolean): boolean {
-  try {
-    const value = window.localStorage.getItem(key);
-    return value === null ? fallback : value === "true";
-  } catch {
-    return fallback;
-  }
-}
-
-function writeBool(key: string, value: boolean): void {
-  try {
-    window.localStorage.setItem(key, value ? "true" : "false");
-  } catch {
-    /* storage unavailable */
-  }
-}
-
 export class CastChaptersElement extends CastPlayerView {
   private buttons: HTMLButtonElement[] = [];
   private currentLabel?: HTMLElement;
@@ -70,13 +51,13 @@ export class CastChaptersElement extends CastPlayerView {
     } else {
       this.body.setAttribute("inert", "");
     }
-    writeBool(OPEN_STORAGE_KEY, open);
   }
 
   private renderList(controller: AudioController): void {
-    const open = readBool(OPEN_STORAGE_KEY, false);
+    // Always start collapsed (no persisted open state): the reader clicks to open.
+    const open = false;
     const section = document.createElement("section");
-    section.className = open ? "cast-chapters cast-panel is-open" : "cast-chapters cast-panel";
+    section.className = "cast-chapters cast-panel";
     section.setAttribute("aria-label", "Chapters");
 
     const header = document.createElement("div");
@@ -84,18 +65,19 @@ export class CastChaptersElement extends CastPlayerView {
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "cast-panel__toggle";
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-expanded", "false");
     toggle.innerHTML = CHEVRON;
     const label = document.createElement("span");
     label.textContent = "Chapters";
-    const count = document.createElement("span");
-    count.className = "cast-panel__count";
-    count.textContent = `${controller.getChapters().length}`;
-    toggle.append(label, count);
+    // Count lives inside the panel body (constant-width collapsed toggle).
+    toggle.append(label);
     header.appendChild(toggle);
 
     const body = document.createElement("div");
     body.className = "cast-panel__body";
+    const count = document.createElement("p");
+    count.className = "cast-panel__count cast-chapters__count";
+    count.textContent = `${controller.getChapters().length} chapters`;
     const scroll = document.createElement("div");
     scroll.className = "cast-panel__scroll";
     const list = document.createElement("ol");
@@ -124,9 +106,9 @@ export class CastChaptersElement extends CastPlayerView {
     });
 
     scroll.appendChild(list);
-    body.appendChild(scroll);
-    // Collapsed by default (a compact pill); collapsing marks the body inert so
-    // the chapter buttons leave the tab order. The open state is persisted.
+    body.append(count, scroll);
+    // Collapsed by default (a compact pill); the body is inert until opened so
+    // the chapter buttons stay out of the tab order while collapsed.
     if (!open) {
       body.setAttribute("inert", "");
     }

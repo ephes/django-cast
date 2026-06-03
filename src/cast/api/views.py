@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 from collections import OrderedDict
 from typing import Any, cast
@@ -166,7 +168,24 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
             # Do not leak unsanitized data for a missing/mismatched context.
             raise Http404("No transcript available for this audio in the given context.")
         payload = build_player_payload(audio, post=post, request=request, inline_transcript=False)
-        return Response({"cues": payload["transcript"]["cues"]})
+        cues = payload["transcript"]["cues"]
+
+        # Cache so re-opening the transcript after navigation doesn't refetch.
+        # A strong ETag over the *sanitized* cues stays correct across transcript
+        # edits and contributor/speaker-mapping changes; Cache-Control lets the
+        # browser serve from its HTTP cache within the window (no request), and a
+        # cheap 304 covers revalidation after it. The content is already public.
+        serialized = json.dumps(cues, ensure_ascii=False, sort_keys=True)
+        etag = f'"{hashlib.sha256(serialized.encode("utf-8")).hexdigest()}"'
+        if_none_match = request.headers.get("If-None-Match", "")
+        candidates = {token.strip() for token in if_none_match.split(",") if token.strip()}
+        if etag in candidates or "*" in candidates:
+            response: Response = Response(status=status.HTTP_304_NOT_MODIFIED)
+        else:
+            response = Response({"cues": cues})
+        response["ETag"] = etag
+        response["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
+        return response
 
     @staticmethod
     def _get_owning_live_post(post_id: Any, audio: Audio) -> Post | None:

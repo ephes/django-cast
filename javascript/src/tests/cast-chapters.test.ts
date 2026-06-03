@@ -101,7 +101,9 @@ describe("cast-chapters", () => {
     toggle.click();
     expect(body.hasAttribute("inert")).toBe(false);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(window.localStorage.getItem("cast-chapters-open")).toBe("true");
+    // The count lives in the body (constant-width toggle), not on the pill.
+    expect(toggle.querySelector(".cast-panel__count")).toBeNull();
+    expect(body.querySelector(".cast-panel__count")?.textContent).toContain("chapters");
   });
 
   it("seeks on activation", () => {

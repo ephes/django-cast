@@ -422,8 +422,9 @@ cast-audio-player audio {
   color: var(--_muted);
 }
 
-.cast-panel:not(.is-open) .cast-panel__count {
-  display: none;
+.cast-chapters__count {
+  margin: 0;
+  padding: 0.7rem 0.95rem 0.2rem;
 }
 
 /* Tools (search / follow / tab-cues) live at the top of the opened body. */

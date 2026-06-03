@@ -375,6 +375,23 @@ class TestFallbackEndpoint:
         for cue in data["cues"]:
             assert set(cue.keys()) == {"start", "end", "speaker", "text"}
 
+    def test_sets_cache_control_and_etag(self, client, audio, episode):
+        create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
+        response = client.get(self._url(audio), {"post_id": episode.pk})
+        assert response.status_code == 200
+        assert "max-age" in response["Cache-Control"]
+        assert "public" in response["Cache-Control"]
+        assert response["ETag"]
+
+    def test_304_on_matching_if_none_match(self, client, audio, episode):
+        create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
+        first = client.get(self._url(audio), {"post_id": episode.pk})
+        etag = first["ETag"]
+        again = client.get(self._url(audio), {"post_id": episode.pk}, HTTP_IF_NONE_MATCH=etag)
+        assert again.status_code == 304
+        assert again.content == b""
+        assert again["ETag"] == etag
+
 
 class TestContextFlags:
     def test_podlove_mode(self, settings):

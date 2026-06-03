@@ -134,6 +134,13 @@ describe("cast-transcript rendering", () => {
     expect(audio.currentTime).toBeCloseTo(2.01);
   });
 
+  it("keeps the line count out of the toggle (constant-width pill)", () => {
+    const { transcript } = mount(makePayload());
+    const toggle = transcript.querySelector(".cast-panel__toggle") as HTMLElement;
+    expect(toggle.querySelector(".cast-panel__count")).toBeNull();
+    expect(transcript.querySelector(".cast-panel__tools .cast-panel__count")?.textContent).toContain("lines");
+  });
+
   it("is collapsed by default and toggles open", () => {
     const { transcript } = mount(makePayload());
     const section = transcript.querySelector(".cast-transcript") as HTMLElement;
@@ -371,13 +378,13 @@ describe("cast-transcript lazy fallback path", () => {
     vi.unstubAllGlobals();
   });
 
-  it("a persisted-open panel loads on connect without a click", async () => {
-    window.localStorage.setItem("cast-transcript-open", "true");
+  it("always starts collapsed and does not fetch on connect (ignores stored open state)", () => {
+    window.localStorage.setItem("cast-transcript-open", "true"); // stale pref must be ignored
     const fetchMock = okFetch();
     vi.stubGlobal("fetch", fetchMock);
     const { transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
-    await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(transcript.querySelector(".cast-panel.is-open")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 });

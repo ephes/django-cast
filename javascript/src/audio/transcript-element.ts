@@ -9,7 +9,6 @@ import { formatTime } from "./format";
 import type { Cue } from "./types";
 import { CastPlayerView } from "./view-base";
 
-const OPEN_STORAGE_KEY = "cast-transcript-open";
 const FOLLOW_STORAGE_KEY = "cast-transcript-follow";
 const TABBABLE_STORAGE_KEY = "cast-transcript-tabbable";
 
@@ -61,17 +60,15 @@ export class CastTranscriptElement extends CastPlayerView {
     if (controller.transcriptLoaded && controller.getCues().length === 0) {
       return; // loaded but empty (no cues, no pending url) -> render nothing
     }
-    this.open = readBool(OPEN_STORAGE_KEY, false);
+    // Always start collapsed — the reader clicks to open (no persisted open
+    // state), so an episode never loads with the transcript already expanded
+    // and no transcript fetch happens until an explicit open.
+    this.open = false;
     this.follow = readBool(FOLLOW_STORAGE_KEY, true);
     this.tabbable = readBool(TABBABLE_STORAGE_KEY, false);
     this.build();
     if (controller.transcriptLoaded) {
       this.renderCues(controller.getCues());
-    } else if (this.open) {
-      // Panel persisted open across navigation: load now and show a loading
-      // state. A collapsed panel stays empty until first opened (lazy).
-      this.showLoading();
-      controller.requestTranscript();
     }
     this.listen("cueschange", () => this.renderCues(controller.getCues()));
     this.listen("cuechange", () => this.setActive(controller.currentCueIndex));
@@ -106,12 +103,11 @@ export class CastTranscriptElement extends CastPlayerView {
     toggle.innerHTML = CHEVRON;
     const label = document.createElement("span");
     label.textContent = "Transcript";
-    const count = document.createElement("span");
-    count.className = "cast-panel__count";
-    toggle.append(label, count);
+    // The line count lives inside the open panel (the tools row), not on the
+    // toggle — so the collapsed pill keeps a constant width.
+    toggle.append(label);
     toggle.addEventListener("click", () => this.toggleOpen());
     this.toggleButton = toggle;
-    this.countLabel = count;
 
     header.append(toggle);
 
@@ -140,6 +136,10 @@ export class CastTranscriptElement extends CastPlayerView {
   private buildTools(): HTMLElement {
     const tools = document.createElement("div");
     tools.className = "cast-panel__tools";
+
+    const count = document.createElement("span");
+    count.className = "cast-panel__count";
+    this.countLabel = count;
 
     const search = document.createElement("input");
     search.type = "search";
@@ -194,7 +194,7 @@ export class CastTranscriptElement extends CastPlayerView {
     });
     this.tabbableButton = tab;
 
-    tools.append(search, prev, next, status, follow, tab);
+    tools.append(count, search, prev, next, status, follow, tab);
     return tools;
   }
 
@@ -229,7 +229,6 @@ export class CastTranscriptElement extends CastPlayerView {
     this.section?.classList.toggle("is-open", this.open);
     this.toggleButton?.setAttribute("aria-expanded", this.open ? "true" : "false");
     this.applyInert();
-    writeBool(OPEN_STORAGE_KEY, this.open);
     if (this.open && this.controller) {
       // Accordion: tell the sibling chapters panel to collapse.
       this.controller.dispatchEvent(new CustomEvent("castpanelopen", { detail: { kind: "transcript" } }));
