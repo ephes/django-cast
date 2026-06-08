@@ -339,16 +339,17 @@ Vite Build Setup
 JavaScript assets are built with Vite. There are two separate build
 configurations in the ``javascript/`` directory.
 
-Main Build (Gallery + Podlove Player)
---------------------------------------
+Main Build (Gallery + Audio Players)
+------------------------------------
 
 Configuration file: ``javascript/vite.config.ts``
 
 .. code-block:: text
 
    Entry points:
-     src/gallery/image-gallery-bs4.ts  →  main-<hash>.js
-     src/audio/podlove-player.ts       →  podlovePlayer-<hash>.js
+     src/gallery/image-gallery-bs4.ts  ->  main-<hash>.js
+     src/audio/podlove-player.ts       ->  podlovePlayer-<hash>.js
+     src/audio/custom-player.ts        ->  customPlayer-<hash>.js (+ CSS sidecar)
 
    Output:  javascript/dist/
    Format:  ES modules (default Vite/Rollup output)
@@ -367,6 +368,7 @@ Templates include these assets using ``django-vite`` template tags:
    {% vite_hmr_client app="cast" %}
    {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
    {% vite_asset 'src/audio/podlove-player.ts' app="cast" %}
+   {% vite_asset 'src/audio/custom-player.ts' app="cast" %}
 
 In development (``DJANGO_VITE["cast"]["dev_mode"] = True``), the template tags
 point to the Vite dev server on port 5173. In production, they resolve asset
@@ -410,12 +412,19 @@ Or from the project root using the justfile:
    just js-build-vite      # Main build + copy to static
    just js-build-comments  # Comments build
    just js-build-all       # Both builds
+   just js-bundles         # Show shipped bundle sizes
 
 .. note::
 
    ``just js-build-vite`` handles the full pipeline: builds with Vite, moves
    the manifest file, and copies the output to
    ``src/cast/static/cast/vite/``.
+
+Use ``just js-bundles`` to inspect the JavaScript and CSS bundles currently
+shipped from ``src/cast/static/cast/vite/`` plus the built comments script. The
+report shows raw and gzip KiB per entry and totals for the built JavaScript. Add
+``--include-static-js`` to also list vendored/static JavaScript files such as
+``htmx.min.js`` and the Podlove embed.
 
 Testing
 -------

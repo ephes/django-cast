@@ -168,7 +168,9 @@ never depends on share, download, or info.
 The player is built **dual-mode**: it works standalone today (on the episode
 detail page), and the same audio controller is designed to be promotable later to
 a single **persistent player** that keeps playing across page navigation. That
-persistence layer is a deliberate follow-up and is **not** part of this spec.
+persistence layer is a deliberate follow-up and is **not** part of this spec; the
+next staging proof is tracked in
+`2026-06-08-persistent-player-staging.md`.
 
 ## Problem
 
@@ -879,6 +881,8 @@ spec can promote the single controller to one persistent player by relocating
 boosting to link navigation (`hx-boost`), and driving the one global player by
 `for=` id. Keep the controller UI-agnostic, key views by id, register/clean up
 precisely, and keep the public contract stable so promotion needs no rewrite.
+The concrete python-podcast staging PRD/spec now lives in
+`2026-06-08-persistent-player-staging.md`.
 
 ## Sibling Repo Impact
 

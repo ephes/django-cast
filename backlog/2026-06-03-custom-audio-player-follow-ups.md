@@ -2,13 +2,98 @@
 
 ## Status
 
-Planned. Small follow-up backlog to the **implemented** custom audio player (see
-`2026-06-02-custom-audio-player.md`, now marked implemented). These are UX nitpicks
-and a caching decision surfaced while reviewing the player on
-`python-podcast.staging.django-cast.com` and the django-chat dev server. Kept
-separate so the main spec stays a record of what shipped.
+**Mostly implemented & deployed (2026-06-03).** Items 1–4 below are done. Only the
+final pi completion-judge run remained (interrupted for a machine reboot); both of
+its Playwright verifications had already self-passed (see "Resume after reboot").
 
-Each item below is independently shippable; none is started yet.
+### What is done
+
+- **Item 1 (stable toggle width)** — implemented. The line/chapter count moved off
+  the toggle pill into the open panel (transcript: tools row; chapters: a body
+  count line). Collapsed toggle is constant width (verified 125.5px collapsed =
+  open).
+- **Item 2 (always folded on load)** — implemented. Dropped the persisted open
+  state (`cast-transcript-open` / `cast-chapters-open`); panels always start
+  collapsed, so no transcript fetch happens until an explicit open. (follow /
+  tab-cues prefs still persist.)
+- **Item 3 (transcript caching)** — implemented as **Option 1**: the
+  `cast:api:audio_player_transcript` endpoint now sends
+  `Cache-Control: public, max-age=3600, stale-while-revalidate=86400` + a strong
+  `ETag` (sha256 of the sanitized cues) and returns **304** on `If-None-Match`.
+  (Option 2 server-side cache deferred.)
+- **Item 4 (django-chat diarized-speaker episode)** — done on the **dev server**:
+  the `django-tasks-jake-howard` episode had speakers injected into its 986 cues
+  (Will Vincent / Carlton Gibson / Jake Howard) plus three public
+  `EpisodeContributor`s, and republished. Verified: 165 speaker headings render,
+  folded-on-load. (This is dev-DB data in django-chat's `db.sqlite3` — it persists
+  across reboot; it is **not** a code change and is **not** committed.)
+
+These shipped in django-cast `develop` commit **`66961f24`** ("Player follow-ups:
+transcript caching, stable toggle width, always-folded"), reviewed clean by pi,
+`just check` 100% coverage, 126 vitest cases. Deployed to
+`python-podcast.staging.django-cast.com` (build `customPlayer-CBwmVAEC…`); axe
+reports 0 violations; cache headers confirmed live; production unchanged (Podlove).
+
+### Repo / branch state (as of reboot)
+
+- **django-cast**: `develop` @ `66961f24` (pushed) has everything. `feat/custom-player-rev4`
+  is at the earlier `e23a2887` (behind develop; can be deleted or ff'd).
+- **cast-bootstrap5**: `feat/custom-player-rev4` @ `4ca5bae` (pushed) — player
+  wiring + a11y; not merged to main.
+- **python-podcast**: `staging.py` + `deploy/vars.yml` committed earlier. **Uncommitted
+  working-tree (deploy state, intended):** `pyproject.toml` (django-cast →
+  `branch = "develop"`; cast-bootstrap5 → its feat branch) + `uv.lock`, plus the
+  a11y commits `ce9bd86`/`f99a604` already committed. Unrelated local WIP also
+  present (out of scope).
+- **ops-control**: `6cbb2b4` committed (staging settings-module switch).
+- **django-chat**: `feat/custom-player` @ `e96bdcb` (pushed). **Uncommitted
+  working-tree:** `pyproject.toml` bumped to django-cast rev `66961f24` + `uv.lock`
+  (gets always-folded on dev). The speaker episode is dev-DB data (persists).
+
+### Resume after reboot
+
+Lost on reboot (recreate as needed): the django-chat dev server (`localhost:8911`),
+any local http harness, and the **/tmp verification scripts + pi prompts** (they
+were under `/tmp/pwstaging/` — not committed).
+
+To finish the goal (run the pi completion-judge):
+1. Restart the django-chat dev server:
+   `cd ../django-chat && DJANGO_SETTINGS_MODULE=config.settings.local uv run python manage.py runserver 8911 --noreload`
+2. Re-verify python-podcast **staging** (already live, no redeploy needed):
+   - episode `https://python-podcast.staging.django-cast.com/show/data-science/` →
+     transcript folded on load, toggle width stable on open, count not on the toggle;
+   - endpoint `…/api/audios/82/player-transcript/?post_id=140` →
+     `Cache-Control` has `max-age`, `ETag` present, and a re-request with
+     `If-None-Match: <etag>` returns **304**.
+3. Re-verify **django-chat dev** `http://localhost:8911/episodes/django-tasks-jake-howard/`
+   → folded on load; open transcript → speaker headings > 0 (WILL VINCENT / CARLTON
+   GIBSON / JAKE HOWARD); cues > 0.
+4. Both verified via Playwright by a pi agent; pi judges goal completion. The single
+   deployed code change (django-cast `66961f24`) carries a "Reviewed clean by pi"
+   attestation.
+
+Self-verified PASS before the interrupt (both Playwright scripts): staging →
+`open_on_load=false, toggle_width_stable=true, count_on_toggle=false,
+cache_control="public, max-age=3600, stale-while-revalidate=86400",
+etag_present=true, if_none_match_status=304`; django-chat → `open_on_load=false,
+speaker_headings=165, first=[WILL VINCENT, CARLTON GIBSON, JAKE HOWARD], cues=986`.
+
+### Optional / not done
+
+- Commit the django-chat `pyproject`/`uv.lock` rev bump on `feat/custom-player`
+  (currently uncommitted dev state).
+- Item 3 Option 2 (server-side sanitized-cues cache) — deferred.
+- Merge the cast-bootstrap5 / django-chat feature branches + revert sibling
+  `uv.sources` to a release ref before any production rollout.
+
+---
+
+## Original follow-up backlog (items 1–4)
+
+Small follow-up backlog to the **implemented** custom audio player (see
+`2026-06-02-custom-audio-player.md`). These were UX nitpicks and a caching decision
+surfaced while reviewing the player on `python-podcast.staging.django-cast.com` and
+the django-chat dev server.
 
 ## 1. Stable toggle-button width (no resize on open)
 
@@ -115,5 +200,6 @@ verification** task, not a code change.
 
 ## Out of scope
 
-The persistent cross-navigation player (Option 4 above) remains the separate, larger
-follow-up described in the main spec; it is not part of this note.
+The persistent cross-navigation player (Option 4 above) has been promoted to the
+separate python-podcast staging PRD/spec in
+`2026-06-08-persistent-player-staging.md`; it is not part of this note.

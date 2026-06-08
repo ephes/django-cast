@@ -101,3 +101,5 @@ example/media
 .DS_Store
 # Playwright MCP artifacts
 .playwright-mcp/
+# Superpowers skill working dir (local agent artifact)
+.superpowers/
