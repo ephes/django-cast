@@ -784,6 +784,14 @@ cast-audio-player audio {
   outline-offset: 2px;
 }
 
+/* The player element is focusable (tabindex) so its keyboard shortcuts are
+   reachable; show a focus ring when reached by keyboard. */
+cast-audio-player:focus-visible {
+  outline: 3px solid var(--_focus);
+  outline-offset: 4px;
+  border-radius: var(--_radius);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cast-panel__body,
   .cast-panel__chevron,

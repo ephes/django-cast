@@ -170,6 +170,25 @@ describe("cast-audio-player transport", () => {
     expect(button.getAttribute("aria-label")).toBe("Pause");
   });
 
+  it("is focusable and the play button moves focus to it so shortcuts are reachable", () => {
+    const player = mountPlayer(makePayload({ duration: 100 }));
+    expect(player.tabIndex).toBe(0);
+    expect(player.getAttribute("aria-keyshortcuts")).toContain("Space");
+    const play = player.querySelector(".cast-player__play") as HTMLButtonElement;
+    play.click();
+    expect(document.activeElement).toBe(player);
+    // With the player focused, a player shortcut now acts on it.
+    const audio = audioOf(player);
+    audio.currentTime = 10;
+    player.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audio.currentTime).toBe(15);
+  });
+
+  it("does not make the disabled (no-sources) player focusable", () => {
+    const player = mountPlayer(makePayload({ sources: [] }));
+    expect(player.hasAttribute("tabindex")).toBe(false);
+  });
+
   it("does not intercept arrows when the range is focused", () => {
     const player = mountPlayer(makePayload({ duration: 100 }));
     const range = player.querySelector(".cast-player__seek") as HTMLInputElement;

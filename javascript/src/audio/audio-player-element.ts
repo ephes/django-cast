@@ -115,6 +115,16 @@ export class CastAudioPlayerElement extends HTMLElement {
     this.renderTransport(payload);
     this.subscribe();
     if (!this.disabled) {
+      // Make the player focusable so its keyboard shortcuts are reachable. The
+      // keydown listener is scoped to this element (so multiple players on a page
+      // do not all react to one keypress); without a tabindex the element could
+      // never hold focus, which made Space/K/arrows effectively dead. Pressing a
+      // transport control then focuses the player (see renderTransport), so after
+      // starting playback the shortcuts work without an extra Tab.
+      this.tabIndex = 0;
+      this.setAttribute("role", "group");
+      this.setAttribute("aria-label", "Audio player");
+      this.setAttribute("aria-keyshortcuts", "Space K ArrowLeft ArrowRight Home End");
       this.installKeyboardShortcuts();
       this.applyStartAt();
     }
@@ -196,7 +206,14 @@ export class CastAudioPlayerElement extends HTMLElement {
     playButton.setAttribute("aria-label", "Play");
     playButton.innerHTML = PLAY_ICON;
     playButton.disabled = this.disabled;
-    playButton.addEventListener("click", () => this.controller?.toggle());
+    playButton.addEventListener("click", () => {
+      this.controller?.toggle();
+      // Move focus to the player so the keyboard shortcuts (Space/K/arrows) act on
+      // it immediately after the user starts playback with the mouse.
+      if (!this.disabled) {
+        this.focus();
+      }
+    });
     this.playButton = playButton;
 
     const range = el("input", "cast-player__seek", { type: "range" });
