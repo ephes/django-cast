@@ -33,6 +33,14 @@
   transport_share=False %}``) for hosts that own a page-level share UI; the
   read-only ``getShareState()`` API is unaffected so that UI can still read the
   player time.
+- Custom audio player: make the transport keyboard shortcuts reachable. The
+  shortcuts (Space/K play-pause, arrow seek, Home/End) were scoped to a keydown
+  listener on the ``<cast-audio-player>`` element, which had no ``tabindex`` and so
+  could never hold focus — leaving them effectively dead. The player is now
+  focusable (``tabindex=0``, ``role="group"``, ``aria-keyshortcuts``) with a
+  focus-visible ring, and clicking the play button moves focus to the player so
+  the shortcuts work immediately after starting playback; the listener stays
+  per-element so multiple players on one page do not all react to one keypress.
 - Update bundled htmx from 2.0.8 to 2.0.10.
 - Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
   bundles currently built and shipped with django-cast.
