@@ -18,12 +18,18 @@ def cast_audio_player_mode() -> str:
 
 
 @register.inclusion_tag("cast/audio/_custom_player.html", takes_context=True)
-def cast_custom_player(context: dict[str, Any], audio: Any, post: Any) -> dict[str, Any]:
+def cast_custom_player(context: dict[str, Any], audio: Any, post: Any, transport_share: bool = True) -> dict[str, Any]:
     """Render the inlined JSON payload + the custom player elements for ``audio``.
 
     The id is computed here so it is correct (the naive
     ``payload|json_script:"..."|add:pk`` filter chain does not work — ``add``
     would apply to the rendered ``<script>`` output, not the id argument).
+
+    ``transport_share=False`` suppresses the player's built-in in-transport share
+    button (it renders ``data-share="none"``). A host that owns a page-level share
+    UI uses this so only one share entry point is visible; the player's read-only
+    ``getShareState()`` API stays available so the host UI can still read the
+    current time.
     """
     request = context.get("request")
     payload = build_player_payload(audio, post=post, request=request)
@@ -33,4 +39,5 @@ def cast_custom_player(context: dict[str, Any], audio: Any, post: Any) -> dict[s
         "player_script": json_script(payload, payload_id),
         "player_id": player_id,
         "payload_id": payload_id,
+        "transport_share": transport_share,
     }

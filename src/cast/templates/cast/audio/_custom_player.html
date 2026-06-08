@@ -3,7 +3,7 @@
 {# relocate the <cast-transcript>/<cast-chapters> elements anywhere on the detail #}
 {# page by moving them while keeping the same `for=` id. #}
 {{ player_script }}
-<cast-audio-player id="{{ player_id }}" data-payload="{{ payload_id }}"></cast-audio-player>
+<cast-audio-player id="{{ player_id }}" data-payload="{{ payload_id }}"{% if not transport_share %} data-share="none"{% endif %}></cast-audio-player>
 <div class="cast-player__panels">
   <cast-transcript for="{{ player_id }}"></cast-transcript>
   <cast-chapters for="{{ player_id }}" data-mode="list"></cast-chapters>

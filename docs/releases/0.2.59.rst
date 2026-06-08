@@ -18,4 +18,21 @@
   episode detail path; list/overview cards render no player in custom mode, feeds
   are unchanged, and the cast-vue SPA ``podlove_players`` API path is untouched.
   The ``CAST_AUDIO_PLAYER`` value is validated by the cast system checks.
+- Custom audio player transcript/share polish: diarized (speaker-labelled)
+  transcripts now show a muted time anchor only at the start of each speaker run
+  instead of a timestamp on every line — continuation lines hide the timestamp
+  (kept for alignment and click-to-seek) so a run reads as dialogue; plain
+  transcripts keep a per-cue timestamp. The lazy transcript fetch shows a spinner
+  and sets ``aria-busy`` on the scroll region while in flight. The Transcript
+  panel reveals/collapses with a restrained spring animation that is disabled
+  under ``prefers-reduced-motion``. The keyboard-navigable-cues control is demoted
+  from a primary ``Tab cues`` text pill to an icon-only secondary toggle (its
+  accessible name ``Keyboard-navigable cues`` and the ``cast-transcript-tabbable``
+  preference are unchanged). The in-transport share button can be opted out with a
+  ``data-share="none"`` attribute (``{% cast_custom_player audio post
+  transport_share=False %}``) for hosts that own a page-level share UI; the
+  read-only ``getShareState()`` API is unaffected so that UI can still read the
+  player time.
 - Update bundled htmx from 2.0.8 to 2.0.10.
+- Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
+  bundles currently built and shipped with django-cast.

@@ -348,6 +348,36 @@ class TestFallbackEndpoint:
         assert response.status_code == 200
         assert response.json() == {"cues": [{"start": 0.0, "end": 1.0, "speaker": "", "text": "hi"}]}
 
+    def test_public_read_preserves_allowed_speaker_and_strips_non_contributor(self, client, audio, episode):
+        # End-to-end through AudioPlayerTranscriptView: an allowed (visible
+        # contributor) speaker label survives the public speaker mapping +
+        # sanitization, while a non-contributor label is stripped to "" — the
+        # cue text is preserved either way (only the label is the privacy gate).
+        from cast.models import Contributor, EpisodeContributor
+
+        host = Contributor.objects.create(display_name="Live Host", slug="live-host-endpoint")
+        EpisodeContributor.objects.create(
+            episode=episode,
+            contributor=host,
+            role=EpisodeContributor.ROLE_HOST,
+            sort_order=0,
+        )
+        episode.save_revision().publish()
+        create_transcript(
+            audio=audio,
+            podlove={
+                "transcripts": [
+                    {"start_ms": 0, "end_ms": 1000, "speaker": "Live Host", "voice": "Live Host", "text": "kept"},
+                    {"start_ms": 1000, "end_ms": 2000, "speaker": "Draft Guest", "voice": "Draft Guest", "text": "x"},
+                ]
+            },
+        )
+        response = client.get(self._url(audio), {"post_id": episode.pk})
+        assert response.status_code == 200
+        cues = response.json()["cues"]
+        by_text = {cue["text"]: cue["speaker"] for cue in cues}
+        assert by_text == {"kept": "Live Host", "x": ""}
+
     def test_404_without_post_id(self, client, audio):
         assert client.get(self._url(audio)).status_code == 404
 
@@ -440,3 +470,21 @@ class TestSettingsAndChecks:
         settings.CAST_AUDIO_PLAYER = 123  # wrong type
         error_ids = [error.id for error in check_cast_setting_types()]
         assert "cast.E001" in error_ids
+
+
+@pytest.mark.django_db
+class TestCustomPlayerTag:
+    def _render(self, audio, episode, rf_request, extra=""):
+        from django.template import Context, Template
+
+        template = Template("{% load cast_audio_player %}{% cast_custom_player audio episode" + extra + " %}")
+        return template.render(Context({"audio": audio, "episode": episode, "request": rf_request}))
+
+    def test_default_renders_in_transport_share(self, audio, episode, rf_request):
+        html = self._render(audio, episode, rf_request)
+        assert "<cast-audio-player" in html
+        assert 'data-share="none"' not in html
+
+    def test_transport_share_false_opts_out(self, audio, episode, rf_request):
+        html = self._render(audio, episode, rf_request, extra=" transport_share=False")
+        assert 'data-share="none"' in html

@@ -301,6 +301,49 @@ describe("cast-audio-player share with timestamp", () => {
   });
 });
 
+describe("cast-audio-player transport-share opt-out", () => {
+  function mountWithShare(share: string | null) {
+    const payload = makePayload({ duration: 600 });
+    const dataId = `cast-player-data-${payload.audioId}`;
+    const script = document.createElement("script");
+    script.type = "application/json";
+    script.id = dataId;
+    script.textContent = JSON.stringify(payload);
+    document.body.appendChild(script);
+    const player = document.createElement("cast-audio-player");
+    player.id = "cast-player-7";
+    player.setAttribute("data-payload", dataId);
+    if (share !== null) {
+      player.setAttribute("data-share", share);
+    }
+    document.body.appendChild(player);
+    return player as HTMLElement & {
+      getShareState(): { currentTime: number; duration: number | null; audioId: number };
+    };
+  }
+
+  it('suppresses the in-transport share button and dialog when data-share="none"', () => {
+    const player = mountWithShare("none");
+    expect(player.querySelector(".cast-player__share")).toBeNull();
+    expect(player.querySelector("dialog.cast-share")).toBeNull();
+    // The other transport affordances still render.
+    expect(player.querySelector(".cast-player__play")).not.toBeNull();
+    expect(player.querySelector(".cast-player__shortcuts-btn")).not.toBeNull();
+  });
+
+  it("keeps the read-only getShareState() API working with the button suppressed", () => {
+    const player = mountWithShare("none");
+    (player.querySelector("audio") as HTMLAudioElement).currentTime = 21;
+    expect(player.getShareState()).toEqual({ currentTime: 21, duration: 600, audioId: 7 });
+  });
+
+  it("renders the in-transport share button by default (no data-share attribute)", () => {
+    const player = mountWithShare(null);
+    expect(player.querySelector(".cast-player__share")).not.toBeNull();
+    expect(player.querySelector("dialog.cast-share")).not.toBeNull();
+  });
+});
+
 describe("cast-audio-player ?t= deep link", () => {
   it("seeks to the ?t= seconds on load", () => {
     window.history.replaceState({}, "", "/?t=42");

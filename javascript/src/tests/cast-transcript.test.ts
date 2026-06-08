@@ -111,6 +111,53 @@ describe("cast-transcript rendering", () => {
     expect(Array.from(speakers).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
   });
 
+  it("labelled mode: a muted time anchor only at speaker-run starts (not every line)", () => {
+    const cues: Cue[] = [
+      { start: 0, end: 1, speaker: "Alice", text: "one" },
+      { start: 1, end: 2, speaker: "Alice", text: "two" },
+      { start: 2, end: 3, speaker: "Bob", text: "three" },
+      { start: 3, end: 4, speaker: "", text: "four" }, // empty-speaker reset = anchored
+    ];
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    const list = transcript.querySelector(".cast-transcript__cues") as HTMLElement;
+    expect(list.classList.contains("cast-transcript__cues--labelled")).toBe(true);
+    const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
+    // Run starts (time anchor) at: Alice (0), Bob (2), and the empty-speaker reset (3).
+    expect(cueButtons[0].classList.contains("is-run-start")).toBe(true);
+    expect(cueButtons[1].classList.contains("is-run-start")).toBe(false);
+    expect(cueButtons[2].classList.contains("is-run-start")).toBe(true);
+    expect(cueButtons[3].classList.contains("is-run-start")).toBe(true);
+    // The continuation cue keeps its timestamp element (CSS hides it) so it stays
+    // aligned and click-to-seek still works.
+    expect(cueButtons[1].querySelector(".cast-transcript__time")?.textContent).toBe("0:01");
+  });
+
+  it("labelled mode: a leading empty-speaker cue is still anchored (run start)", () => {
+    const cues: Cue[] = [
+      { start: 0, end: 1, speaker: "", text: "intro music" }, // before anyone speaks
+      { start: 1, end: 2, speaker: "Alice", text: "hello" },
+      { start: 2, end: 3, speaker: "Alice", text: "world" },
+    ];
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
+    expect(cueButtons[0].classList.contains("is-run-start")).toBe(true); // leading empty cue anchored
+    expect(cueButtons[1].classList.contains("is-run-start")).toBe(true); // named-speaker run start
+    expect(cueButtons[2].classList.contains("is-run-start")).toBe(false); // continuation
+  });
+
+  it("plain (unlabelled) mode keeps a per-cue timestamp and no labelled flag", () => {
+    const cues: Cue[] = [
+      { start: 0, end: 1, speaker: "", text: "one" },
+      { start: 1, end: 2, speaker: "", text: "two" },
+    ];
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    const list = transcript.querySelector(".cast-transcript__cues") as HTMLElement;
+    expect(list.classList.contains("cast-transcript__cues--labelled")).toBe(false);
+    const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
+    expect(cueButtons[0].querySelector(".cast-transcript__time")?.textContent).toBe("0:00");
+    expect(cueButtons[1].querySelector(".cast-transcript__time")?.textContent).toBe("0:01");
+  });
+
   it("renders nothing when there is no transcript (null)", () => {
     const { transcript } = mount(makePayload({ transcript: null }));
     expect(transcript.querySelector(".cast-transcript")).toBeNull();
@@ -286,12 +333,17 @@ describe("cast-transcript keyboard-navigable toggle", () => {
     return transcript.querySelector(".cast-transcript__tabpref") as HTMLButtonElement;
   }
 
-  it("is a labelled pill toggle in the tools row (not a bare checkbox)", () => {
+  it("is a demoted icon-only secondary control in the tools row (no 'Tab cues' text)", () => {
     const { transcript } = mount(makePayload());
     const toggle = tabbableToggle(transcript);
     expect(toggle.tagName).toBe("BUTTON");
     expect(toggle.getAttribute("aria-label")).toBe("Keyboard-navigable cues");
     expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(toggle.getAttribute("title")).toBeTruthy();
+    // Demoted from a primary "Tab cues" text pill to an icon-only control.
+    expect(toggle.textContent?.trim()).toBe("");
+    expect(toggle.querySelector("svg")).not.toBeNull();
+    expect(toggle.classList.contains("cast-transcript__iconpref")).toBe(true);
     expect(transcript.querySelector(".cast-panel__tools .cast-transcript__tabpref")).not.toBeNull();
   });
 
@@ -339,6 +391,22 @@ describe("cast-transcript lazy fallback path", () => {
     openPanel(transcript); // close
     openPanel(transcript); // open again
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("exposes a spinner + aria-busy while the lazy fetch is in flight, cleared on cues", async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const { transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
+    openPanel(transcript);
+    const scroll = transcript.querySelector(".cast-panel__scroll") as HTMLElement;
+    expect(scroll.getAttribute("aria-busy")).toBe("true");
+    expect(transcript.querySelector(".cast-transcript__spinner")).not.toBeNull();
+    resolveFetch({ ok: true, json: () => Promise.resolve({ cues: CUES }) });
+    await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
+    expect(scroll.hasAttribute("aria-busy")).toBe(false);
+    expect(transcript.querySelector(".cast-transcript__spinner")).toBeNull();
     vi.unstubAllGlobals();
   });
 

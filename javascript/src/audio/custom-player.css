@@ -436,23 +436,60 @@ cast-audio-player audio {
   padding: 0.7rem 0.95rem 0.1rem;
 }
 
+/* The body joins the flex flow only when open — `display:none` while collapsed
+   adds no row gap below the toggle pills. `allow-discrete` keeps the body
+   rendered through the collapse transition so the reveal can animate out before
+   the body is removed. */
 .cast-panel__body {
   order: 1;
   flex-basis: 100%;
   width: 100%;
-  overflow: hidden;
-}
-
-/* Collapsed: hide the body entirely (no card, no preview, no bleed). */
-.cast-panel:not(.is-open) .cast-panel__body {
   display: none;
+  transition: display 0.34s allow-discrete;
 }
 
-/* Opened: the body is the card, full-width below the button row. */
 .cast-panel.is-open .cast-panel__body {
+  display: block;
+}
+
+/* The reveal carries the card chrome and the restrained spring motion. The
+   grid-rows 0fr→1fr trick animates to the exact content height, so the
+   surrounding page slides instead of jumping; opacity + a small lift make the
+   panel feel attached to the toggle above. Base = collapsed so dropping
+   `is-open` animates the collapse; @starting-style supplies the collapsed
+   from-state when the body first appears so opening animates too. */
+.cast-panel__reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-0.3rem);
   border: 1px solid var(--_line);
   background: var(--_surface);
   border-radius: var(--_radius);
+  transition:
+    grid-template-rows 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease,
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cast-panel.is-open .cast-panel__reveal {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: none;
+}
+
+@starting-style {
+  .cast-panel.is-open .cast-panel__reveal {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-0.3rem);
+  }
+}
+
+/* The overflow-hidden track the grid row expands/collapses. */
+.cast-panel__clip {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cast-panel__scroll {
@@ -532,6 +569,60 @@ cast-audio-player audio {
   padding: 0.5rem 0;
 }
 
+/* Loading state: a compact spinner beside the status text. The reserved
+   min-height keeps the panel from shifting when cues replace it. */
+.cast-transcript__loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+}
+
+.cast-transcript__spinner {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  border: 2px solid var(--_track);
+  border-top-color: var(--_accent);
+  animation: cast-transcript-spin 0.7s linear infinite;
+}
+
+@keyframes cast-transcript-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Demoted keyboard-navigable-cues preference: an icon-only secondary toggle
+   (matching the share/shortcuts round buttons), not a primary text pill. */
+.cast-transcript__iconpref {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid var(--_line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--_muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.cast-transcript__iconpref:hover {
+  background: var(--_tint);
+  border-color: var(--_accent);
+  color: var(--_fg);
+}
+
+.cast-transcript__iconpref[aria-pressed="true"] {
+  background: var(--_accent);
+  color: var(--_on-accent);
+  border-color: transparent;
+}
+
 /* ---- Transcript cues: a speaker heading per turn, with indented lines ----- */
 
 .cast-transcript__cues {
@@ -589,6 +680,15 @@ cast-audio-player audio {
 
 .cast-transcript__text {
   min-width: 0;
+}
+
+/* Labelled (diarized) mode: keep the muted time anchor only at the start of a
+   speaker run. Continuation lines hide their timestamp — it stays in the grid
+   (so text stays aligned and the cue stays click-to-seek), just not painted —
+   so the run reads as dialogue rather than a log table. Plain transcripts keep
+   a timestamp on every cue. */
+.cast-transcript__cues--labelled .cast-transcript__cue:not(.is-run-start) .cast-transcript__time {
+  visibility: hidden;
 }
 
 /* Current cue: accent left border + a translucent gradient underline so it
@@ -678,8 +778,8 @@ cast-audio-player audio {
 
 :where(.cast-player__play, .cast-player__seek, .cast-player__share, .cast-panel__toggle,
   .cast-transcript__cue, .cast-transcript__nav, .cast-transcript__follow,
-  .cast-transcript__search-input, .cast-chapters__button, .cast-share__copy,
-  .cast-share__close):focus-visible {
+  .cast-transcript__iconpref, .cast-transcript__search-input, .cast-chapters__button,
+  .cast-share__copy, .cast-share__close):focus-visible {
   outline: 3px solid var(--_focus);
   outline-offset: 2px;
 }
@@ -692,6 +792,16 @@ cast-audio-player audio {
   .cast-transcript__cue,
   .cast-chapters__button {
     transition: none;
+  }
+  /* No reveal motion: show/hide is the instant display toggle on the body. */
+  .cast-panel__reveal {
+    transition: none;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: none;
+  }
+  .cast-transcript__spinner {
+    animation: none;
   }
 }
 

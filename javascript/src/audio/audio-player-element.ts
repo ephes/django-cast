@@ -156,6 +156,13 @@ export class CastAudioPlayerElement extends HTMLElement {
     return this.controller?.duration ?? null;
   }
 
+  // The in-transport share button is suppressed by `data-share="none"`. The
+  // public getShareState() API below is unaffected (a host share UI can still
+  // read the player time).
+  private shareEnabled(): boolean {
+    return this.getAttribute("data-share") !== "none";
+  }
+
   getShareState(): { currentTime: number; duration: number | null; audioId: number } {
     return {
       currentTime: this.currentTime,
@@ -222,18 +229,28 @@ export class CastAudioPlayerElement extends HTMLElement {
 
     transport.append(playButton, elapsed, range, remaining);
     if (!this.disabled) {
-      const share = el("button", "cast-player__share", { type: "button" });
-      share.setAttribute("aria-label", "Share with current time");
-      share.innerHTML = SHARE_ICON;
-      share.addEventListener("click", () => this.openShare());
-      transport.appendChild(share);
+      // The in-transport share button is opt-out via `data-share="none"` so a
+      // host that owns a richer page-level share UI (social targets, copy,
+      // Mastodon, timestamped links) can expose a single share entry point. The
+      // read-only getShareState() API stays available either way, so the host
+      // share UI can still read the player's current time.
+      const shareEnabled = this.shareEnabled();
+      if (shareEnabled) {
+        const share = el("button", "cast-player__share", { type: "button" });
+        share.setAttribute("aria-label", "Share with current time");
+        share.innerHTML = SHARE_ICON;
+        share.addEventListener("click", () => this.openShare());
+        transport.appendChild(share);
+      }
 
       const { button, popover } = this.buildShortcuts();
       transport.appendChild(button);
       this.appendChild(transport);
       this.appendChild(status);
       this.appendChild(popover);
-      this.appendChild(this.buildShareDialog());
+      if (shareEnabled) {
+        this.appendChild(this.buildShareDialog());
+      }
       return;
     }
     this.appendChild(transport);

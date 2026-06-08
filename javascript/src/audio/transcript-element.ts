@@ -32,6 +32,11 @@ function writeBool(key: string, value: boolean): void {
 const CHEVRON =
   '<svg class="cast-panel__chevron" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5l8 7-8 7z"/></svg>';
 
+// Keyboard glyph for the demoted "keyboard-navigable cues" preference: an
+// icon-only secondary control instead of a primary "Tab cues" toolbar button.
+const KEYBOARD_ICON =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>';
+
 export class CastTranscriptElement extends CastPlayerView {
   private section?: HTMLElement;
   private panelBody?: HTMLElement;
@@ -111,8 +116,18 @@ export class CastTranscriptElement extends CastPlayerView {
 
     header.append(toggle);
 
+    // The body is the flex item; a `reveal` wrapper carries the card chrome and
+    // the spring reveal/collapse motion, and an inner `clip` is the
+    // overflow-hidden track that the grid-rows animation expands (see the
+    // `.cast-panel__reveal` rules in custom-player.css). Restructuring like this
+    // keeps the collapsed panel out of the flex flow (body is display:none) so
+    // it adds no row gap, while still animating open/closed height + opacity.
     const body = document.createElement("div");
     body.className = "cast-panel__body";
+    const reveal = document.createElement("div");
+    reveal.className = "cast-panel__reveal";
+    const clip = document.createElement("div");
+    clip.className = "cast-panel__clip";
     const scroll = document.createElement("div");
     scroll.className = "cast-panel__scroll";
     const list = document.createElement("div");
@@ -120,7 +135,9 @@ export class CastTranscriptElement extends CastPlayerView {
     scroll.appendChild(list);
     // Tools (search / follow / tab-cues) live at the top of the body, not in the
     // button row, so the collapsed toggle stays a compact pill.
-    body.append(this.buildTools(), scroll);
+    clip.append(this.buildTools(), scroll);
+    reveal.appendChild(clip);
+    body.appendChild(reveal);
     this.panelBody = body;
     this.scroll = scroll;
     this.list = list;
@@ -177,12 +194,14 @@ export class CastTranscriptElement extends CastPlayerView {
     follow.addEventListener("click", () => this.toggleFollow());
     this.followButton = follow;
 
-    // Keyboard-navigable-cues preference as a styled pill toggle (was a bare
-    // checkbox bleeding out of the panel).
+    // Keyboard-navigable-cues preference, demoted to an icon-only secondary
+    // control: the old "Tab cues" text read as a primary action and did not
+    // explain itself. The accessible name + tooltip carry the meaning; the
+    // persisted `cast-transcript-tabbable` preference is unchanged.
     const tab = document.createElement("button");
     tab.type = "button";
-    tab.className = "cast-transcript__follow cast-transcript__tabpref";
-    tab.textContent = "Tab cues";
+    tab.className = "cast-transcript__iconpref cast-transcript__tabpref";
+    tab.innerHTML = KEYBOARD_ICON;
     tab.title = "Make transcript lines keyboard-focusable with Tab";
     tab.setAttribute("aria-label", "Keyboard-navigable cues");
     tab.setAttribute("aria-pressed", this.tabbable ? "true" : "false");
@@ -203,9 +222,17 @@ export class CastTranscriptElement extends CastPlayerView {
       return;
     }
     this.list.textContent = ""; // clear any prior "unavailable" message before retrying
+    // Busy semantics on the scroll region so assistive tech announces the
+    // in-flight fetch; cleared when cues (or an error) land. Reserving the row
+    // height keeps the toolbar/panel from shifting when cues replace it.
+    this.scroll?.setAttribute("aria-busy", "true");
     const loading = document.createElement("p");
     loading.className = "cast-transcript__loading";
-    loading.textContent = "Loading transcript…";
+    loading.setAttribute("role", "status");
+    const spinner = document.createElement("span");
+    spinner.className = "cast-transcript__spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    loading.append(spinner, document.createTextNode("Loading transcript…"));
     this.list.appendChild(loading);
     this.loadingEl = loading;
   }
@@ -216,6 +243,7 @@ export class CastTranscriptElement extends CastPlayerView {
     }
     this.list.textContent = "";
     this.loadingEl = undefined;
+    this.scroll?.removeAttribute("aria-busy");
     const message = document.createElement("p");
     message.className = "cast-transcript__loading";
     message.textContent = "Transcript unavailable.";
@@ -270,16 +298,29 @@ export class CastTranscriptElement extends CastPlayerView {
     this.cues = cues;
     this.list.textContent = "";
     this.loadingEl = undefined;
+    this.scroll?.removeAttribute("aria-busy");
     this.cueButtons = [];
     if (this.countLabel) {
       this.countLabel.textContent = cues.length ? `${cues.length} lines` : "";
     }
 
+    // Labelled (diarized) transcripts read like dialogue: a speaker heading per
+    // turn, and a muted time anchor only at the start of each speaker run — not a
+    // timestamp on every line. Plain transcripts keep a timestamp per cue. The
+    // continuation timestamps still exist (visually hidden via CSS) so the grid
+    // stays aligned and click-to-seek keeps working per cue.
+    const labelled = cues.some((cue) => cue.speaker.trim() !== "");
+    this.list.classList.toggle("cast-transcript__cues--labelled", labelled);
+
     let previousSpeaker = "";
     cues.forEach((cue, index) => {
-      // A speaker change starts a new "turn": the name on its own line, with the
-      // following cue text indented beneath it (django-chat-style).
-      if (cue.speaker && cue.speaker !== previousSpeaker) {
+      // A speaker change (including a reset to an empty speaker) starts a new
+      // run: a heading for a named speaker, and a time anchor on the first line.
+      // The very first cue always anchors, so a leading empty-speaker cue (e.g.
+      // intro music before anyone speaks) keeps its timestamp instead of being
+      // treated as a continuation of a non-existent prior run.
+      const runStart = index === 0 || cue.speaker !== previousSpeaker;
+      if (cue.speaker && runStart) {
         const speaker = document.createElement("div");
         speaker.className = "cast-transcript__speaker";
         speaker.textContent = cue.speaker; // textContent only
@@ -290,6 +331,9 @@ export class CastTranscriptElement extends CastPlayerView {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "cast-transcript__cue";
+      if (runStart) {
+        button.classList.add("is-run-start");
+      }
       button.tabIndex = this.tabbable ? 0 : -1;
       button.dataset.start = String(cue.start);
       button.dataset.end = String(cue.end);
