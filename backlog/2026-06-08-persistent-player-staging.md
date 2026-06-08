@@ -294,12 +294,15 @@ For the staging proof:
 
 ### Staging access
 
-Staging defaults to the **bootstrap5** theme; the persistent proof is the **`pp`
-theme** experience. It is reached by selecting `pp` (the theme switcher, which
-persists in the session), after which plain-URL enhanced navigation stays on
-`pp`. bootstrap5 (the default) keeps the shipped page-local custom player
-unchanged, so enabling the flag on staging does not change the default
-experience or any non-`pp` theme.
+The persistent proof is the **`pp` theme** experience, and on staging `pp` is
+now the **default theme**, so a normal visit to
+`python-podcast.staging.django-cast.com` shows the persistent player keeping
+audio playing across navigation (no theme switch needed). This was set via two
+**staging-DB settings** (not code, reversible): the site-level
+`TemplateBaseDirectory` and the `show` blog's `template_base_dir` were both set
+to `pp` (`manage.py shell`). Other themes remain selectable via the theme
+switcher / `?theme=bootstrap5`. Production is a separate site/DB and is
+unaffected (Podlove, persistent flag pinned `False`).
 
 ### What was proven
 
@@ -325,10 +328,17 @@ experience or any non-`pp` theme.
   (the `window` token survives) with `currentTime` advancing and
   `paused === false` at every hop; an explicit play on the other episode switches
   cleanly (switch count +1, one host, one `<audio>`); back keeps audio advancing
-  with scroll-at-top; and **axe-core reports 0 violations** with **0 console
-  errors**. This matches the axe-0 custom-player staging baseline — the
-  persistent player/navigation adds no new violations. (Bringing `/about/` into
-  the proof required the pp-shell fixes below.)
+  with scroll-at-top; `document.title` updates on enhanced navigation
+  (`Data Science` → `Python Podcast`); the index's own `<h1>` is present inside
+  `#paging-area` after the swap (no stale chrome); and **axe-core reports 0
+  violations** with **0 console errors**. This matches the axe-0 custom-player
+  staging baseline — the persistent player/navigation adds no new violations.
+  (Bringing `/about/` into the proof required the pp-shell fixes below.)
+
+  Test note: the e2e browsers launch with `--disable-audio-output` (a null audio
+  sink) so the media playback clock advances even when the host's real audio
+  device is unavailable/wedged; without it `currentTime` can stall at ~0 with
+  `paused === false`. This is a test-environment flag only.
 
 ### pp staging-shell fixes (needed for the proof on `pp`)
 
@@ -367,7 +377,26 @@ link"). Fixed in python-podcast's own `pp` templates:
   generic API — is unchanged.
 - Back/forward intentionally **re-fetches** `#paging-area` rather than using
   htmx's history snapshot, to guarantee the persistent region is never clobbered.
-  That is fine for the proof (the spec does not require restoring scroll offset).
+  `popstate` only acts on entries the manager created (`{castNav: true}`), so it
+  never competes with htmx's own history handling (e.g. list pagination). That is
+  fine for the proof (the spec does not require restoring scroll offset).
+- Enhanced navigation excludes **any** link carrying a `#` fragment (same- or
+  cross-page, e.g. `/about/#team`), so native fragment scrolling is preserved
+  rather than scrolling to top.
+
+### Review / deploy notes
+
+- Reviewed with Pi (`gpt-5.5`) over multiple rounds; all real findings were
+  fixed (theme-scoped publish-only override, `htmx:afterSettle` re-wiring,
+  e2e tests excluded from the default `pytest` run, podlove-mode asset gating,
+  `popstate` scoped to manager-owned entries, fragment-link exclusion).
+- **Accepted as out of scope for this staging proof:** the python-podcast
+  `[tool.uv.sources]` refs (`cast-bootstrap5` → `feat/custom-player-rev4`,
+  `django-cast` → `develop`) are shared by staging + production installs. They
+  predate this slice (prior custom-player work) and production behaviour is
+  unchanged (Podlove, `CAST_AUDIO_PLAYER != "custom"`, persistent flag pinned
+  `False`). A production rollout must still revert these to release/main refs —
+  tracked in `2026-06-03-custom-audio-player-follow-ups.md`.
 
 ### Tooling note
 
