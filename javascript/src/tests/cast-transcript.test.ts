@@ -181,6 +181,16 @@ describe("cast-transcript rendering", () => {
     expect(audio.currentTime).toBeCloseTo(2.01);
   });
 
+  it("starts playback on cue activation (click to listen, no second play press)", () => {
+    const { player, transcript } = mount(makePayload());
+    const audio = player.querySelector("audio") as HTMLAudioElement;
+    expect(audio.paused).toBe(true);
+    (transcript.querySelectorAll(".cast-transcript__cue")[1] as HTMLButtonElement).click();
+    expect(audio.currentTime).toBeCloseTo(2.01);
+    expect(audio.play).toHaveBeenCalled();
+    expect(audio.paused).toBe(false);
+  });
+
   it("keeps the line count out of the toggle (constant-width pill)", () => {
     const { transcript } = mount(makePayload());
     const toggle = transcript.querySelector(".cast-panel__toggle") as HTMLElement;

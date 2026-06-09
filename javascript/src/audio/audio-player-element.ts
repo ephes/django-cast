@@ -54,6 +54,58 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+// ---- episode-page-global keyboard shortcuts ---------------------------------
+// The transport shortcuts (Space/K, ←/→, Home/End) act on the active player
+// from anywhere on the page, so the reader can pause or scrub while reading the
+// transcript or show notes without first focusing the player. A single
+// document-level listener — installed once and shared by every player — routes
+// each keypress to the player the reader last engaged with; with the usual
+// single player per page that is simply that player. Keypresses are ignored
+// whenever focus is on an interactive control (form fields, buttons, links, the
+// transcript search) so typing and native button/link activation are untouched.
+const connectedPlayers = new Set<CastAudioPlayerElement>();
+let activePlayer: CastAudioPlayerElement | null = null;
+let documentKeydownInstalled = false;
+
+function resolveShortcutPlayer(target: EventTarget | null): CastAudioPlayerElement | null {
+  // A keypress originating inside a specific player acts on that player.
+  if (target instanceof Element) {
+    const owner = target.closest("cast-audio-player");
+    if (owner instanceof CastAudioPlayerElement && connectedPlayers.has(owner)) {
+      return owner;
+    }
+  }
+  if (activePlayer && connectedPlayers.has(activePlayer)) {
+    return activePlayer;
+  }
+  // Otherwise route to the only player on the page, if there is exactly one.
+  return connectedPlayers.size === 1 ? (connectedPlayers.values().next().value ?? null) : null;
+}
+
+function onDocumentKeydown(event: KeyboardEvent): void {
+  // Never claim a modified keypress: Cmd/Ctrl/Alt/Shift + arrow/Home/End/Space are
+  // browser and OS navigation shortcuts (back/forward, scroll, etc.). The bare
+  // transport keys are the only ones the player owns page-wide.
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return;
+  }
+  const target = event.target as HTMLElement | null;
+  // Let native controls keep their own keys: form fields, buttons, links, and
+  // the transcript search must never have Space/arrows/Home/End hijacked.
+  if (target && target.closest("input, button, select, textarea, a[href], [contenteditable]")) {
+    return;
+  }
+  resolveShortcutPlayer(target)?.handleShortcut(event);
+}
+
+function ensureDocumentKeydown(): void {
+  if (documentKeydownInstalled) {
+    return;
+  }
+  document.addEventListener("keydown", onDocumentKeydown);
+  documentKeydownInstalled = true;
+}
+
 export class CastAudioPlayerElement extends HTMLElement {
   controller?: AudioController;
   private playerId = "";
@@ -66,7 +118,6 @@ export class CastAudioPlayerElement extends HTMLElement {
   private statusRegion?: HTMLElement;
   private controllerListeners: Array<[string, EventListener]> = [];
   private audioListeners: Array<[string, EventListener]> = [];
-  private keydownListener?: EventListener;
   private lastPublicEmit = Number.NEGATIVE_INFINITY;
   private publicTimer: ReturnType<typeof setTimeout> | null = null;
   private shareDialog?: HTMLDialogElement;
@@ -115,17 +166,21 @@ export class CastAudioPlayerElement extends HTMLElement {
     this.renderTransport(payload);
     this.subscribe();
     if (!this.disabled) {
-      // Make the player focusable so its keyboard shortcuts are reachable. The
-      // keydown listener is scoped to this element (so multiple players on a page
-      // do not all react to one keypress); without a tabindex the element could
-      // never hold focus, which made Space/K/arrows effectively dead. Pressing a
-      // transport control then focuses the player (see renderTransport), so after
-      // starting playback the shortcuts work without an extra Tab.
+      // Keyboard shortcuts are page-global (see the document-level listener
+      // above): the reader never has to focus the player first. The element is
+      // still made focusable and labelled so it remains a discoverable, keyboard-
+      // reachable control in the tab order, and so a keypress that does originate
+      // inside it routes to it specifically.
       this.tabIndex = 0;
       this.setAttribute("role", "group");
       this.setAttribute("aria-label", "Audio player");
       this.setAttribute("aria-keyshortcuts", "Space K ArrowLeft ArrowRight Home End");
-      this.installKeyboardShortcuts();
+      connectedPlayers.add(this);
+      // Deliberately do NOT mark this player active on connect: with a single
+      // player the document handler falls back to "the only player", and with
+      // several players the global shortcuts stay inert until the reader engages
+      // one (play/scrub) — so connection order never silently decides the target.
+      ensureDocumentKeydown();
       this.applyStartAt();
     }
     // No eager transcript fetch on connect (revision 4): the transcript loads
@@ -141,9 +196,9 @@ export class CastAudioPlayerElement extends HTMLElement {
       this.audioEl?.removeEventListener(name, listener);
     }
     this.audioListeners = [];
-    if (this.keydownListener) {
-      this.removeEventListener("keydown", this.keydownListener);
-      this.keydownListener = undefined;
+    connectedPlayers.delete(this);
+    if (activePlayer === this) {
+      activePlayer = null;
     }
     if (this.publicTimer !== null) {
       clearTimeout(this.publicTimer);
@@ -207,6 +262,7 @@ export class CastAudioPlayerElement extends HTMLElement {
     playButton.innerHTML = PLAY_ICON;
     playButton.disabled = this.disabled;
     playButton.addEventListener("click", () => {
+      activePlayer = this; // engaging a player makes its shortcuts the page-global target
       this.controller?.toggle();
       // Move focus to the player so the keyboard shortcuts (Space/K/arrows) act on
       // it immediately after the user starts playback with the mouse.
@@ -227,6 +283,7 @@ export class CastAudioPlayerElement extends HTMLElement {
     range.setAttribute("aria-valuetext", known ? this.valueText(0, payload.duration) : "duration unknown");
     range.addEventListener("input", () => {
       if (this.controller) {
+        activePlayer = this; // scrubbing makes this the page-global shortcut target
         this.controller.seek(range.valueAsNumber);
       }
     });
@@ -442,7 +499,13 @@ export class CastAudioPlayerElement extends HTMLElement {
     if (!controller) {
       return;
     }
-    this.on("play", () => this.onPlayState(true));
+    this.on("play", () => {
+      // Playback starting — however it was triggered (transport button, keyboard,
+      // or a transcript-line click that calls play()) — marks this the active
+      // player, so subsequent page-global shortcuts act on what is now playing.
+      activePlayer = this;
+      this.onPlayState(true);
+    });
     this.on("pause", () => this.onPlayState(false));
     this.on("timeupdate", () => this.onTimeUpdate());
     this.on("durationchange", () => this.onDurationChange());
@@ -560,25 +623,29 @@ export class CastAudioPlayerElement extends HTMLElement {
 
   // ---- keyboard -------------------------------------------------------------
 
-  private installKeyboardShortcuts(): void {
-    const listener = ((event: KeyboardEvent) => this.onKeydown(event)) as EventListener;
-    this.addEventListener("keydown", listener);
-    this.keydownListener = listener;
-  }
-
-  private onKeydown(event: KeyboardEvent): void {
+  // Apply a transport shortcut to this player. Called by the shared
+  // document-level keydown listener (onDocumentKeydown), which has already
+  // resolved the target player and skipped keypresses aimed at interactive
+  // controls, so this only has to act on the key.
+  handleShortcut(event: KeyboardEvent): void {
     const controller = this.controller;
     if (!controller || this.disabled) {
       return;
     }
-    // Let native controls handle their own keys: the seek range owns
-    // arrows/Home/End, and Space/Enter must activate buttons (play, share,
-    // keyboard-shortcuts) and type into the share inputs. Only treat keys as
-    // player shortcuts when focus is NOT on such a control.
-    const target = event.target as HTMLElement | null;
-    if (target && target.closest("input, button, select, textarea, a[href], [contenteditable]")) {
-      return;
+    const handled =
+      event.key === " " ||
+      event.key === "k" ||
+      event.key === "K" ||
+      event.key === "ArrowLeft" ||
+      event.key === "ArrowRight" ||
+      event.key === "Home" ||
+      event.key === "End";
+    if (!handled) {
+      return; // unrecognised key — leave it for the page, do not mark engagement
     }
+    // A handled transport key is engagement: remember this as the active player so
+    // later page-global shortcuts keep targeting the one the reader is driving.
+    activePlayer = this;
     switch (event.key) {
       case " ":
       case "k":

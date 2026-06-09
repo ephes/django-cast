@@ -39,8 +39,19 @@
   could never hold focus — leaving them effectively dead. The player is now
   focusable (``tabindex=0``, ``role="group"``, ``aria-keyshortcuts``) with a
   focus-visible ring, and clicking the play button moves focus to the player so
-  the shortcuts work immediately after starting playback; the listener stays
-  per-element so multiple players on one page do not all react to one keypress.
+  the shortcuts work immediately after starting playback.
+- Custom audio player follow-ups: (1) the transport keyboard shortcuts are now
+  **page-global** — a single document-level listener routes Space/K, arrow seek,
+  and Home/End to the active (or the only) player from anywhere on the episode
+  page, so the reader can pause or scrub while reading the transcript without
+  first focusing the player; keypresses are ignored while focus is on a form
+  field, button, link, or the transcript search, so typing and native activation
+  are never hijacked. (2) Clicking a transcript line now **seeks and starts
+  playback** immediately, instead of only seeking and waiting for a separate play
+  press. (3) The current-cue transcript highlighter now tiles its underline band
+  once per line (``background-size: 100% 1lh``) so a wrapped current line is
+  underlined on every visual row, instead of painting a single partial band
+  across the bottom of the multi-line cue.
 - Update bundled htmx from 2.0.8 to 2.0.10.
 - Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
   bundles currently built and shipped with django-cast.

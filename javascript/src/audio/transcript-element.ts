@@ -347,7 +347,13 @@ export class CastTranscriptElement extends CastPlayerView {
       text.textContent = cue.text; // textContent only — never innerHTML
 
       button.append(time, text);
-      button.addEventListener("click", () => this.controller?.seekToCue(index));
+      // Click-to-listen: seek to the cue AND start playback, so clicking a line
+      // plays from there immediately without a second trip to the play button.
+      // Always play (never toggle) — a click on a line is a request to hear it.
+      button.addEventListener("click", () => {
+        this.controller?.seekToCue(index);
+        void this.controller?.play();
+      });
       this.list!.appendChild(button);
       this.cueButtons.push(button);
     });

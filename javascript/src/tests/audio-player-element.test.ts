@@ -153,7 +153,7 @@ describe("cast-audio-player transport", () => {
     expect(player.querySelector(".cast-player__unavailable")).not.toBeNull();
   });
 
-  it("keyboard shortcuts toggle and seek, scoped to the player", () => {
+  it("keyboard shortcuts toggle and seek when the player has focus", () => {
     const player = mountPlayer(makePayload({ duration: 100 }));
     const audio = audioOf(player);
     audio.currentTime = 20;
@@ -168,6 +168,81 @@ describe("cast-audio-player transport", () => {
     const button = player.querySelector(".cast-player__play") as HTMLButtonElement;
     player.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true }));
     expect(button.getAttribute("aria-label")).toBe("Pause");
+  });
+
+  it("keyboard shortcuts are page-global: a keydown on the body acts on the player", () => {
+    const player = mountPlayer(makePayload({ duration: 100 }));
+    const audio = audioOf(player);
+    const button = player.querySelector(".cast-player__play") as HTMLButtonElement;
+    // Focus is NOT on the player (it sits on the body) — the reader is scrolling
+    // the transcript. The shortcut must still act on the only/active player.
+    audio.currentTime = 30;
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audio.currentTime).toBe(35);
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    expect(button.getAttribute("aria-label")).toBe("Pause");
+  });
+
+  it("multiple players: global shortcuts stay inert until one is engaged, then route to it", () => {
+    const a = mountPlayer(makePayload({ audioId: 7, duration: 100 }), "cast-player-a");
+    const b = mountPlayer(makePayload({ audioId: 8, duration: 100 }), "cast-player-b");
+    const audioA = audioOf(a);
+    const audioB = audioOf(b);
+    audioA.currentTime = 10;
+    audioB.currentTime = 20;
+    // No player engaged yet: a body keypress is ambiguous and must move neither.
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audioA.currentTime).toBe(10);
+    expect(audioB.currentTime).toBe(20);
+    // Engaging player B (clicking its play) makes it the page-global target.
+    (b.querySelector(".cast-player__play") as HTMLButtonElement).click();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audioA.currentTime).toBe(10);
+    expect(audioB.currentTime).toBe(25);
+  });
+
+  it("multiple players: a keyboard shortcut on one player makes it the page-global target", () => {
+    const a = mountPlayer(makePayload({ audioId: 7, duration: 100 }), "cast-player-a");
+    const b = mountPlayer(makePayload({ audioId: 8, duration: 100 }), "cast-player-b");
+    const audioA = audioOf(a);
+    const audioB = audioOf(b);
+    audioA.currentTime = 10;
+    audioB.currentTime = 50;
+    // A shortcut delivered to player A specifically (focus inside A) engages it.
+    a.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audioA.currentTime).toBe(15);
+    // A later body keypress now targets A, the last engaged player — not B.
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audioA.currentTime).toBe(20);
+    expect(audioB.currentTime).toBe(50);
+  });
+
+  it("does not hijack modified shortcut keys (browser/OS navigation)", () => {
+    const player = mountPlayer(makePayload({ duration: 100 }));
+    const audio = audioOf(player);
+    audio.currentTime = 50;
+    // Cmd/Ctrl/Alt/Shift + an arrow is a browser/OS nav chord — leave it alone.
+    const event = new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.body.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(audio.currentTime).toBe(50);
+  });
+
+  it("does not hijack keys while typing in a page input outside the player", () => {
+    const player = mountPlayer(makePayload({ duration: 100 }));
+    const audio = audioOf(player);
+    audio.currentTime = 40;
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    const event = new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true });
+    input.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(audio.currentTime).toBe(40);
   });
 
   it("is focusable and the play button moves focus to it so shortcuts are reachable", () => {

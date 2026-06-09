@@ -698,8 +698,15 @@ cast-audio-player audio {
   background: color-mix(in srgb, var(--_accent) 8%, transparent);
 }
 
+/* Tile the highlighter band once per line (height = one line box, `1lh`) and
+ * repeat it down the text, so a wrapped current cue underlines every line. A
+ * single non-repeating gradient sized to the whole box would paint one 34%-tall
+ * band across the bottom of a multi-line cue (covering only the last line), the
+ * "weird partial band" this replaces. */
 .cast-transcript__cue.is-current .cast-transcript__text {
   background-image: linear-gradient(to top, var(--_tint-strong) 0 34%, transparent 34%);
+  background-repeat: repeat-y;
+  background-size: 100% 1lh;
 }
 
 .cast-transcript__cue.is-current .cast-transcript__time {
