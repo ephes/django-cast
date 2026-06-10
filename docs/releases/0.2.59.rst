@@ -54,4 +54,6 @@
   across the bottom of the multi-line cue.
 - Update bundled htmx from 2.0.8 to 2.0.10.
 - Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
-  bundles currently built and shipped with django-cast.
+  bundles currently built and shipped with django-cast. The report renders as
+  colored ``rich`` tables with friendly entry names and a gzip-size comparison
+  bar; ``--plain`` (or a missing ``rich``) falls back to plain aligned text.

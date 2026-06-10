@@ -422,9 +422,11 @@ Or from the project root using the justfile:
 
 Use ``just js-bundles`` to inspect the JavaScript and CSS bundles currently
 shipped from ``src/cast/static/cast/vite/`` plus the built comments script. The
-report shows raw and gzip KiB per entry and totals for the built JavaScript. Add
+report shows raw and gzip KiB per entry (with a bar comparing gzip sizes) and
+totals for the built JavaScript, rendered as colored tables. Add
 ``--include-static-js`` to also list vendored/static JavaScript files such as
-``htmx.min.js`` and the Podlove embed.
+``htmx.min.js`` and the Podlove embed, or ``--plain`` for uncolored aligned-text
+output (also used automatically when ``rich`` is unavailable).
 
 Testing
 -------
