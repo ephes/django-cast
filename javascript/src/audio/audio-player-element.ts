@@ -506,11 +506,15 @@ export class CastAudioPlayerElement extends HTMLElement {
       activePlayer = this;
       this.onPlayState(true);
     });
-    // A seek is engagement too. This is the only signal that marks the active
-    // player when a transcript line is clicked in a player that is ALREADY
-    // playing: play() then fires no new "play" event, but seekToCue() always
-    // seeks. Covers any seek source (transcript/chapter click, scrub, keyboard).
-    this.on("seeking", () => {
+    // A transcript- or chapter-line navigation is engagement too. It is the only
+    // signal that marks the active player when the clicked line is in a player
+    // that is ALREADY playing: play() then fires no new "play" event, but
+    // seekToCue()/seekToChapter() emit "navseek". This is deliberately NOT the
+    // generic "seeking" event — the initial ?t= deep-link uses the low-level
+    // seek(), so loading a multi-player page with a timestamp must not silently
+    // mark a player active. Scrub and keyboard seeks set activePlayer at their
+    // own (user-gesture) call sites.
+    this.on("navseek", () => {
       activePlayer = this;
     });
     this.on("pause", () => this.onPlayState(false));

@@ -156,6 +156,11 @@ export class AudioController extends EventTarget {
     const cue = this.cues[index];
     if (cue) {
       this.seek(cue.start + CUE_SEEK_EPSILON);
+      // User-initiated navigation (a transcript-line click). Distinct from the
+      // low-level seek() used by scrubbing and the initial ?t= deep-link, so
+      // consumers can treat cue/chapter clicks as engagement without reacting
+      // to programmatic seeks.
+      this.dispatch("navseek", { currentTime: this.currentTime });
     }
   }
 
@@ -163,6 +168,7 @@ export class AudioController extends EventTarget {
     const chapter = this.chapters[index];
     if (chapter) {
       this.seek(chapter.start);
+      this.dispatch("navseek", { currentTime: this.currentTime });
     }
   }
 

@@ -217,22 +217,44 @@ describe("cast-audio-player transport", () => {
     expect(audioB.currentTime).toBe(50);
   });
 
-  it("multiple players: seeking a player (e.g. a transcript click while it plays) makes it the global target", () => {
+  it("multiple players: a transcript/chapter navigation (even while playing) makes it the global target", () => {
     const a = mountPlayer(makePayload({ audioId: 7, duration: 100 }), "cast-player-a");
-    const b = mountPlayer(makePayload({ audioId: 8, duration: 100 }), "cast-player-b");
+    const b = mountPlayer(
+      makePayload({
+        audioId: 8,
+        duration: 100,
+        transcript: { cues: [{ start: 60, end: 65, speaker: "", text: "x" }] },
+      }),
+      "cast-player-b",
+    );
     const audioA = audioOf(a);
     const audioB = audioOf(b);
     // Engage A first so it is the active player.
     (a.querySelector(".cast-player__play") as HTMLButtonElement).click();
     audioA.currentTime = 10;
-    audioB.currentTime = 50;
-    // Seek B directly (what a transcript-line click does via seekToCue). Even
-    // with no "play" event — B may already be playing — the seek must hand the
+    // Navigate a cue in B (what a transcript-line click does via seekToCue).
+    // Even with no "play" event — B may already be playing — this hands the
     // page-global target to B.
-    b.controller?.seek(60);
+    b.controller?.seekToCue(0);
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-    expect(audioB.currentTime).toBe(65);
+    expect(audioB.currentTime).toBeCloseTo(65.01); // 60 + epsilon, then +5
     expect(audioA.currentTime).toBe(10);
+  });
+
+  it("multiple players: a low-level seek (the initial ?t= deep-link) does NOT mark a player active", () => {
+    const a = mountPlayer(makePayload({ audioId: 7, duration: 100 }), "cast-player-a");
+    const b = mountPlayer(makePayload({ audioId: 8, duration: 100 }), "cast-player-b");
+    const audioA = audioOf(a);
+    const audioB = audioOf(b);
+    audioA.currentTime = 10;
+    audioB.currentTime = 50;
+    // applyStartAt() seeks via the low-level seek() during page setup; that must
+    // not count as engagement, so with two players and none engaged a body
+    // keypress stays inert rather than acting on whichever player deep-linked.
+    b.controller?.seek(70);
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audioA.currentTime).toBe(10);
+    expect(audioB.currentTime).toBe(70); // only the deep-link seek, no shortcut
   });
 
   it("does not hijack modified shortcut keys (browser/OS navigation)", () => {
