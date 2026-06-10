@@ -436,6 +436,13 @@ cast-audio-player audio {
   padding: 0.7rem 0.95rem 0.1rem;
 }
 
+/* An empty or failed transcript hides the tools row (its display:flex would
+   otherwise beat the hidden attribute) — search/follow controls are
+   meaningless without cues; the body shows the status message instead. */
+.cast-panel__tools[hidden] {
+  display: none;
+}
+
 /* The body joins the flex flow only when open — `display:none` while collapsed
    adds no row gap below the toggle pills. `allow-discrete` keeps the body
    rendered through the collapse transition so the reveal can animate out before

@@ -43,6 +43,7 @@ export class CastTranscriptElement extends CastPlayerView {
   private scroll?: HTMLElement;
   private list?: HTMLElement;
   private toggleButton?: HTMLButtonElement;
+  private toolsEl?: HTMLElement;
   private countLabel?: HTMLElement;
   private searchInput?: HTMLInputElement;
   private searchStatus?: HTMLElement;
@@ -227,6 +228,7 @@ export class CastTranscriptElement extends CastPlayerView {
     this.tabbableButton = tab;
 
     tools.append(count, search, prev, next, status, follow, tab);
+    this.toolsEl = tools;
     return tools;
   }
 
@@ -251,15 +253,27 @@ export class CastTranscriptElement extends CastPlayerView {
   }
 
   private onTranscriptError(): void {
+    this.showStatusMessage("Transcript unavailable.");
+  }
+
+  // Replace the panel content with a status line (load failure, or a transcript
+  // URL that resolved to zero cues) and hide the tools row — search/follow
+  // controls are meaningless without cues, and an empty toolbar-only panel
+  // otherwise reads as broken.
+  private showStatusMessage(text: string): void {
     if (!this.list) {
       return;
     }
     this.list.textContent = "";
     this.loadingEl = undefined;
     this.scroll?.removeAttribute("aria-busy");
+    if (this.toolsEl) {
+      this.toolsEl.hidden = true;
+    }
     const message = document.createElement("p");
     message.className = "cast-transcript__loading";
-    message.textContent = "Transcript unavailable.";
+    message.setAttribute("role", "status");
+    message.textContent = text;
     this.list.appendChild(message);
   }
 
@@ -316,6 +330,19 @@ export class CastTranscriptElement extends CastPlayerView {
     this.cueButtons = [];
     if (this.countLabel) {
       this.countLabel.textContent = cues.length ? `${cues.length} lines` : "";
+    }
+    if (cues.length === 0) {
+      // A transcript URL was advertised but the lazy fetch resolved to zero
+      // cues (missing or empty stored file). Without this, the opened panel
+      // would show a dead toolbar over an empty list.
+      this.activeIndex = -1;
+      this.matchIndices = [];
+      this.matchCursor = -1;
+      this.showStatusMessage("No transcript available for this episode.");
+      return;
+    }
+    if (this.toolsEl) {
+      this.toolsEl.hidden = false; // cues arrived after an earlier empty/error state
     }
 
     // Labelled (diarized) transcripts read like dialogue: every speaker run gets

@@ -574,12 +574,33 @@ describe("cast-transcript lazy fallback path", () => {
       expect(transcript.querySelector(".cast-transcript__loading")?.textContent).toContain("unavailable"),
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The dead toolbar is hidden while the failure message shows.
+    expect((transcript.querySelector(".cast-panel__tools") as HTMLElement).hidden).toBe(true);
     // A later open retries (transcriptFailed cleared loading without marking loaded).
     fetchMock.mockImplementation(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ cues: CUES }) }));
     openPanel(transcript); // close
     openPanel(transcript); // open -> retry
     await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Cues arrived after the earlier failure: the tools row is usable again.
+    expect((transcript.querySelector(".cast-panel__tools") as HTMLElement).hidden).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a no-transcript message and hides the tools when the lazy fetch resolves to zero cues", async () => {
+    // The staging bug: a transcript URL is advertised (file reference exists)
+    // but the endpoint returns {"cues": []} (missing/empty stored file). The
+    // panel must say so instead of showing a dead toolbar over an empty list.
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ cues: [] }) }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const { transcript } = mount(makePayload({ transcript: { url: "/api/audios/5/player-transcript/" } }));
+    openPanel(transcript);
+    await vi.waitFor(() =>
+      expect(transcript.querySelector(".cast-transcript__loading")?.textContent).toContain("No transcript"),
+    );
+    expect((transcript.querySelector(".cast-panel__tools") as HTMLElement).hidden).toBe(true);
+    expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(0);
+    expect((transcript.querySelector(".cast-panel__scroll") as HTMLElement).hasAttribute("aria-busy")).toBe(false);
     vi.unstubAllGlobals();
   });
 

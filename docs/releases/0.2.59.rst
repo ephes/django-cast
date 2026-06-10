@@ -64,6 +64,12 @@
   the match being read — the Follow toggle dims while suspended, clearing the
   query re-anchors to the line being spoken, and ``Escape`` in the search field
   clears the query deterministically.
+- Custom audio player: an advertised transcript that resolves to **zero cues**
+  (for example a stored transcript file that is missing from media storage) now
+  shows "No transcript available for this episode." in the opened panel and
+  hides the search/follow toolbar, instead of rendering a dead, empty panel.
+  A failed transcript fetch hides the toolbar the same way while keeping the
+  existing retry-on-reopen behaviour.
 - Update bundled htmx from 2.0.8 to 2.0.10.
 - Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
   bundles currently built and shipped with django-cast. The report renders as
