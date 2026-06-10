@@ -506,6 +506,13 @@ export class CastAudioPlayerElement extends HTMLElement {
       activePlayer = this;
       this.onPlayState(true);
     });
+    // A seek is engagement too. This is the only signal that marks the active
+    // player when a transcript line is clicked in a player that is ALREADY
+    // playing: play() then fires no new "play" event, but seekToCue() always
+    // seeks. Covers any seek source (transcript/chapter click, scrub, keyboard).
+    this.on("seeking", () => {
+      activePlayer = this;
+    });
     this.on("pause", () => this.onPlayState(false));
     this.on("timeupdate", () => this.onTimeUpdate());
     this.on("durationchange", () => this.onDurationChange());

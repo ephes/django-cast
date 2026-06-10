@@ -217,6 +217,24 @@ describe("cast-audio-player transport", () => {
     expect(audioB.currentTime).toBe(50);
   });
 
+  it("multiple players: seeking a player (e.g. a transcript click while it plays) makes it the global target", () => {
+    const a = mountPlayer(makePayload({ audioId: 7, duration: 100 }), "cast-player-a");
+    const b = mountPlayer(makePayload({ audioId: 8, duration: 100 }), "cast-player-b");
+    const audioA = audioOf(a);
+    const audioB = audioOf(b);
+    // Engage A first so it is the active player.
+    (a.querySelector(".cast-player__play") as HTMLButtonElement).click();
+    audioA.currentTime = 10;
+    audioB.currentTime = 50;
+    // Seek B directly (what a transcript-line click does via seekToCue). Even
+    // with no "play" event — B may already be playing — the seek must hand the
+    // page-global target to B.
+    b.controller?.seek(60);
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(audioB.currentTime).toBe(65);
+    expect(audioA.currentTime).toBe(10);
+  });
+
   it("does not hijack modified shortcut keys (browser/OS navigation)", () => {
     const player = mountPlayer(makePayload({ duration: 100 }));
     const audio = audioOf(player);
