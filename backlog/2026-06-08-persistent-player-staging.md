@@ -308,6 +308,40 @@ passes with axe 0 / console 0):
   entrance remains the no-card fallback and the reduced-motion/no-VT floor is
   unchanged.
 
+## Update (2026-06-11, round 2): transcript visibility fix + dock minimize
+
+The "transcript opens as a dead empty panel" report on staging had a data root
+cause: **63 of 67 staging transcripts referenced S3 objects that did not
+exist** (stale `pp_*` file names from an old production snapshot; production
+had since renamed the files to `audio-<pk>.*`). The endpoint returned
+`{"cues": []}` with HTTP 200 and the player rendered an opened panel as a bare
+toolbar with no message. Fixed on three layers:
+
+- **django-cast (`26480124`, pushed to develop):** a transcript that lazily
+  resolves to zero cues now shows "No transcript available for this episode."
+  and hides the search/follow toolbar; a failed fetch hides the tools the same
+  way and a successful retry restores them. Covered by vitest cases and a
+  python-podcast e2e test with a real zero-cue transcript fixture. Release
+  note added to 0.2.59.
+- **Staging data repair (DB + bucket, no code):** all 189 missing objects
+  (podlove/vtt/dote × 63) were exported from production storage and re-saved
+  into staging via `FieldFile.save`, so references and objects are consistent
+  again; 0 dangling references remain and the originally reported episode
+  (DjangoCon Tag 1, audio 78) serves 964 cues. A future staging DB refresh
+  from a production snapshot must re-run this repair (or copy the media
+  alongside the DB).
+- **python-podcast dock:** new minimize/expand control — a one-row strip
+  (poster · title · play · elapsed · expand · close) that hides
+  subtitle/seek/share/shortcuts/panels via CSS only, preserving panel open
+  state across a minimize round-trip and following the dynamic space
+  reservation automatically; equalizer badge timing varied per bar.
+
+Verified on staging (17/17 goal checks incl. Tag-1 cues, minimize/restore,
+pagination-above-dock; baseline suite green with axe 0); Pi reviewed both
+diffs (CLEAN) and judged the goal ACHIEVED from the JSON results +
+screenshots. Local e2e also re-aligned the page-local scroll assertion with
+the follow-along look-ahead margins.
+
 ## Implementation Log (2026-06-08)
 
 ### What was built (all in `../python-podcast`, `pp` theme only)
