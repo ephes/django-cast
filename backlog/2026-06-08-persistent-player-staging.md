@@ -251,6 +251,34 @@ For the staging proof:
 - `../django-chat`: no change in this slice.
 - `../cast-vue`: unaffected.
 
+## Update (2026-06-09): bootstrap5 + per-episode overview play
+
+Extended the proof from `pp` to the **bootstrap5** theme (python-podcast's
+default) and made bootstrap5 the staging default, so the persistent player is the
+default visit experience at `python-podcast.staging.django-cast.com`. Also added
+**a play action per episode on the overview/list cards** (start any episode from
+the index; it loads into the persistent player and keeps playing as you
+navigate).
+
+- The manager's content swap target is now theme-declared via
+  `data-cast-swap-target` on the region (`pp` → `paging-area`, `bootstrap5` →
+  `main-content`); the manager reads it at init.
+- bootstrap5 persistent region lives in `cast/bootstrap5/base.html`
+  (`{% block modal %}`, outside `#main-content`); the list template overrides
+  `before_main`, so the region can't live there. The bootstrap5 index identity
+  (`h1` + description) is rendered inside `#main-content` in persistent mode so
+  enhanced navigation swaps it (no stale hero).
+- Episode detail AND overview cards publish via `cast/<theme>/audio.html` +
+  the `cast_player_payload` tag + the shared `cast/_persistent_play_action.html`.
+  The tag re-fetches the concrete page for lightweight repository (list) posts.
+- Enhanced navigation now also excludes any `#fragment` link; `popstate` only
+  acts on manager-created entries (no contention with htmx pagination history).
+- Real-staging Playwright passes on the default bootstrap5 theme (continuous
+  playback across index/other-episode/`/about/`/back, same audio object, clean
+  switch, title updates, scroll-top + focus, axe 0, 0 console errors). Local e2e
+  is parametrized over **pp + bootstrap5**. Staging theme defaults (site + `show`
+  blog → `bootstrap5`) are reversible staging-DB settings; production unaffected.
+
 ## Implementation Log (2026-06-08)
 
 ### What was built (all in `../python-podcast`, `pp` theme only)
