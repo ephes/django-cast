@@ -89,15 +89,20 @@ describe("cast-transcript rendering", () => {
     expect(cue.textContent).toContain("<script>alert(1)</script>");
   });
 
-  it("renders a timestamp per cue and a speaker heading per turn", () => {
+  it("renders a speaker heading per turn with initial chip, name, and run timestamp", () => {
     const { transcript } = mount(makePayload());
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLElement;
-    expect(cue.querySelector(".cast-transcript__time")?.textContent).toBe("0:00");
     // The speaker is its own block heading (not nested inside the cue button).
     expect(cue.querySelector(".cast-transcript__speaker")).toBeNull();
     const firstSpeaker = transcript.querySelector(".cast-transcript__speaker") as HTMLElement;
-    expect(firstSpeaker.textContent).toBe("Alice");
     expect(firstSpeaker.tagName).toBe("DIV");
+    expect(firstSpeaker.querySelector(".cast-transcript__speaker-name")?.textContent).toBe("Alice");
+    // The chip is decorative (the name carries the meaning for AT).
+    const chip = firstSpeaker.querySelector(".cast-transcript__speaker-chip") as HTMLElement;
+    expect(chip.textContent).toBe("A");
+    expect(chip.getAttribute("aria-hidden")).toBe("true");
+    // The run timestamp lives in the heading row, not the cue gutter.
+    expect(firstSpeaker.querySelector(".cast-transcript__speaker-time")?.textContent).toBe("0:00");
   });
 
   it("repeats the speaker label only on speaker change", () => {
@@ -107,11 +112,22 @@ describe("cast-transcript rendering", () => {
       { start: 2, end: 3, speaker: "Bob", text: "three" },
     ];
     const { transcript } = mount(makePayload({ transcript: { cues } }));
-    const speakers = transcript.querySelectorAll(".cast-transcript__speaker");
-    expect(Array.from(speakers).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
+    const names = transcript.querySelectorAll(".cast-transcript__speaker-name");
+    expect(Array.from(names).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
   });
 
-  it("labelled mode: a muted time anchor only at speaker-run starts (not every line)", () => {
+  it("treats whitespace-padded speaker names as the same speaker (no duplicate heading)", () => {
+    const cues: Cue[] = [
+      { start: 0, end: 1, speaker: "Alice", text: "one" },
+      { start: 1, end: 2, speaker: " Alice ", text: "two" },
+      { start: 2, end: 3, speaker: "Bob", text: "three" },
+    ];
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    const names = transcript.querySelectorAll(".cast-transcript__speaker-name");
+    expect(Array.from(names).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
+  });
+
+  it("labelled mode: every run start gets a heading; gutter timestamps stay in the DOM for plain-mode reuse", () => {
     const cues: Cue[] = [
       { start: 0, end: 1, speaker: "Alice", text: "one" },
       { start: 1, end: 2, speaker: "Alice", text: "two" },
@@ -122,17 +138,23 @@ describe("cast-transcript rendering", () => {
     const list = transcript.querySelector(".cast-transcript__cues") as HTMLElement;
     expect(list.classList.contains("cast-transcript__cues--labelled")).toBe(true);
     const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
-    // Run starts (time anchor) at: Alice (0), Bob (2), and the empty-speaker reset (3).
+    // Run starts at: Alice (0), Bob (2), and the empty-speaker reset (3).
     expect(cueButtons[0].classList.contains("is-run-start")).toBe(true);
     expect(cueButtons[1].classList.contains("is-run-start")).toBe(false);
     expect(cueButtons[2].classList.contains("is-run-start")).toBe(true);
     expect(cueButtons[3].classList.contains("is-run-start")).toBe(true);
-    // The continuation cue keeps its timestamp element (CSS hides it) so it stays
-    // aligned and click-to-seek still works.
+    // One heading per run; the speakerless run gets a time-only anchor heading.
+    const headings = transcript.querySelectorAll(".cast-transcript__speaker");
+    expect(headings).toHaveLength(3);
+    const anchor = headings[2] as HTMLElement;
+    expect(anchor.querySelector(".cast-transcript__speaker-name")).toBeNull();
+    expect(anchor.querySelector(".cast-transcript__speaker-time")?.textContent).toBe("0:03");
+    // The continuation cue keeps its timestamp element (CSS hides it in labelled
+    // mode) so click-to-seek still works per cue.
     expect(cueButtons[1].querySelector(".cast-transcript__time")?.textContent).toBe("0:01");
   });
 
-  it("labelled mode: a leading empty-speaker cue is still anchored (run start)", () => {
+  it("labelled mode: a leading empty-speaker cue is still anchored (run start with time-only heading)", () => {
     const cues: Cue[] = [
       { start: 0, end: 1, speaker: "", text: "intro music" }, // before anyone speaks
       { start: 1, end: 2, speaker: "Alice", text: "hello" },
@@ -143,6 +165,27 @@ describe("cast-transcript rendering", () => {
     expect(cueButtons[0].classList.contains("is-run-start")).toBe(true); // leading empty cue anchored
     expect(cueButtons[1].classList.contains("is-run-start")).toBe(true); // named-speaker run start
     expect(cueButtons[2].classList.contains("is-run-start")).toBe(false); // continuation
+    const headings = transcript.querySelectorAll(".cast-transcript__speaker");
+    expect(headings).toHaveLength(2);
+    expect(headings[0].querySelector(".cast-transcript__speaker-name")).toBeNull(); // time-only anchor
+    expect(headings[1].querySelector(".cast-transcript__speaker-name")?.textContent).toBe("Alice");
+  });
+
+  it("labelled mode: cue buttons carry a visually-hidden speaker prefix for AT focus context", () => {
+    const { transcript } = mount(makePayload());
+    const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
+    expect(cueButtons[0].querySelector(".cast-transcript__sr")?.textContent).toBe("Alice: ");
+    expect(cueButtons[1].querySelector(".cast-transcript__sr")?.textContent).toBe("Bob: ");
+  });
+
+  it("plain mode: no visually-hidden speaker prefixes (nothing to announce)", () => {
+    const cues: Cue[] = [
+      { start: 0, end: 1, speaker: "", text: "one" },
+      { start: 1, end: 2, speaker: "", text: "two" },
+    ];
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    expect(transcript.querySelectorAll(".cast-transcript__sr")).toHaveLength(0);
+    expect(transcript.querySelectorAll(".cast-transcript__speaker")).toHaveLength(0);
   });
 
   it("plain (unlabelled) mode keeps a per-cue timestamp and no labelled flag", () => {
@@ -267,6 +310,24 @@ describe("cast-transcript highlight + follow", () => {
     audio.dispatchEvent(new Event("timeupdate"));
     expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
   });
+
+  it("uses an instant jump for far targets (smooth only for nearby follow steps)", () => {
+    const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    // Far-below target: the panel viewport is 0–300, the cue sits ~5000px down.
+    const panel = transcript.querySelector(".cast-panel__scroll") as HTMLElement;
+    panel.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 300, height: 300, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
+    (cueButtons[1] as HTMLElement).getBoundingClientRect = () =>
+      ({ top: 5000, bottom: 5020, height: 20, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    const audio = player.querySelector("audio") as HTMLAudioElement;
+    audio.currentTime = 3;
+    audio.dispatchEvent(new Event("timeupdate"));
+    expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ behavior: "auto" }));
+  });
 });
 
 describe("cast-transcript search", () => {
@@ -335,6 +396,72 @@ describe("cast-transcript search", () => {
     input.value = "";
     input.dispatchEvent(new Event("input"));
     expect(transcript.querySelectorAll("mark")).toHaveLength(0);
+  });
+
+  it("suspends follow while a query is active so cuechange does not scroll away from matches", () => {
+    const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
+    const input = searchInput(transcript);
+    input.value = "world";
+    input.dispatchEvent(new Event("input"));
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const audio = player.querySelector("audio") as HTMLAudioElement;
+    audio.currentTime = 3;
+    audio.dispatchEvent(new Event("timeupdate"));
+    expect(scroll).not.toHaveBeenCalled(); // follow is on, but searching wins
+    // The follow toggle signals the suspension without losing its pressed state.
+    const follow = transcript.querySelector(".cast-transcript__follow") as HTMLButtonElement;
+    expect(follow.getAttribute("aria-pressed")).toBe("true");
+    expect(follow.classList.contains("is-suspended")).toBe(true);
+  });
+
+  it("resumes follow and re-anchors to the current cue when the query is cleared", () => {
+    const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
+    const input = searchInput(transcript);
+    input.value = "world";
+    input.dispatchEvent(new Event("input"));
+    const audio = player.querySelector("audio") as HTMLAudioElement;
+    audio.currentTime = 3;
+    audio.dispatchEvent(new Event("timeupdate"));
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+    expect(scroll).toHaveBeenCalled(); // back to the line being spoken
+    const follow = transcript.querySelector(".cast-transcript__follow") as HTMLButtonElement;
+    expect(follow.classList.contains("is-suspended")).toBe(false);
+  });
+
+  it("does not re-anchor on clear when follow is off", () => {
+    const { transcript } = mount(makePayload());
+    openPanel(transcript);
+    (transcript.querySelector(".cast-transcript__follow") as HTMLButtonElement).click(); // follow off
+    const input = searchInput(transcript);
+    input.value = "world";
+    input.dispatchEvent(new Event("input"));
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("Escape clears the query, keeps focus in the input, and resumes follow", () => {
+    const { transcript } = mount(makePayload());
+    openPanel(transcript);
+    const input = searchInput(transcript);
+    input.focus();
+    input.value = "world";
+    input.dispatchEvent(new Event("input"));
+    expect(transcript.querySelectorAll("mark").length).toBeGreaterThan(0);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(input.value).toBe("");
+    expect(transcript.querySelectorAll("mark")).toHaveLength(0);
+    expect(document.activeElement).toBe(input);
+    const follow = transcript.querySelector(".cast-transcript__follow") as HTMLButtonElement;
+    expect(follow.classList.contains("is-suspended")).toBe(false);
   });
 });
 

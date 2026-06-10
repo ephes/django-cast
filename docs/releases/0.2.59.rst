@@ -19,10 +19,14 @@
   are unchanged, and the cast-vue SPA ``podlove_players`` API path is untouched.
   The ``CAST_AUDIO_PLAYER`` value is validated by the cast system checks.
 - Custom audio player transcript/share polish: diarized (speaker-labelled)
-  transcripts now show a muted time anchor only at the start of each speaker run
-  instead of a timestamp on every line — continuation lines hide the timestamp
-  (kept for alignment and click-to-seek) so a run reads as dialogue; plain
-  transcripts keep a per-cue timestamp. The lazy transcript fetch shows a spinner
+  transcripts read as dialogue — every speaker run starts with a heading row
+  (an initial chip, the speaker name, and the run's timestamp; a speakerless
+  run such as intro music gets a time-only anchor heading) and the per-cue
+  timestamp gutter collapses (the timestamps stay in the DOM so click-to-seek
+  works per cue); plain transcripts keep a per-cue timestamp. Speaker names are
+  compared trimmed, so whitespace-padded variants never split a run, and each
+  labelled cue button carries a visually-hidden speaker prefix so screen-reader
+  focus lands with context. The lazy transcript fetch shows a spinner
   and sets ``aria-busy`` on the scroll region while in flight. The Transcript
   panel reveals/collapses with a restrained spring animation that is disabled
   under ``prefers-reduced-motion``. The keyboard-navigable-cues control is demoted
@@ -48,10 +52,18 @@
   field, button, link, or the transcript search, so typing and native activation
   are never hijacked. (2) Clicking a transcript line now **seeks and starts
   playback** immediately, instead of only seeking and waiting for a separate play
-  press. (3) The current-cue transcript highlighter now tiles its underline band
-  once per line (``background-size: 100% 1lh``) so a wrapped current line is
-  underlined on every visual row, instead of painting a single partial band
-  across the bottom of the multi-line cue.
+  press. (3) The current-cue highlight is a single quiet idiom — an accent left
+  border plus a translucent accent tint — replacing the per-line underline band,
+  which painted across the full column width (past the end of each line) and
+  read as a rendering glitch on wrapped cues. (4) Follow-along keeps look-ahead:
+  cues carry ``scroll-margin-block`` so the current line stays well clear of the
+  panel's bottom edge (a bare ``block: nearest`` pinned it there, hiding all
+  upcoming text), and far jumps (a search hit or chapter seek several panel
+  heights away) land instantly instead of smooth-scrolling for seconds.
+  (5) Searching suspends follow-along so the highlight never scrolls away from
+  the match being read — the Follow toggle dims while suspended, clearing the
+  query re-anchors to the line being spoken, and ``Escape`` in the search field
+  clears the query deterministically.
 - Update bundled htmx from 2.0.8 to 2.0.10.
 - Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
   bundles currently built and shipped with django-cast. The report renders as

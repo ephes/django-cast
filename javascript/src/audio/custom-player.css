@@ -557,6 +557,11 @@ cast-audio-player audio {
   border-color: transparent;
 }
 
+/* Follow stays pressed but is suspended while a search query is active. */
+.cast-transcript__follow.is-suspended[aria-pressed="true"] {
+  opacity: 0.55;
+}
+
 .cast-transcript__search-status {
   font-family: var(--_mono);
   font-size: 0.74rem;
@@ -630,15 +635,44 @@ cast-audio-player audio {
   flex-direction: column;
 }
 
-/* Speaker name: its own line above the turn's lines (django-chat style). */
+/* Speaker heading: one row per turn — an initial chip, the name, and the run's
+   timestamp. Speakerless runs (intro music, a speaker reset) render a time-only
+   anchor heading with the same class. */
 .cast-transcript__speaker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0 0.2rem;
+  padding-left: 0.6rem;
+}
+
+.cast-transcript__speaker-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 50%;
+  background: var(--_tint);
+  color: var(--_accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.cast-transcript__speaker-name {
   font-weight: 700;
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--_accent);
-  margin: 0.95rem 0 0.15rem;
-  padding-left: 0.6rem;
+}
+
+.cast-transcript__speaker-time {
+  font-family: var(--_mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  color: var(--_muted);
 }
 
 .cast-transcript__cues > .cast-transcript__speaker:first-child {
@@ -662,6 +696,10 @@ cast-audio-player audio {
   font: inherit;
   line-height: 1.6;
   transition: background-color 0.12s ease, border-color 0.12s ease;
+  /* Follow-along look-ahead: keep the current line well clear of the panel
+     edges so upcoming text stays readable (a bare block:nearest would pin the
+     line to the bottom edge). The end margin ≈ 30% of the 24rem panel. */
+  scroll-margin-block: 2.25rem 7rem;
 }
 
 .cast-transcript__cue:hover {
@@ -682,36 +720,38 @@ cast-audio-player audio {
   min-width: 0;
 }
 
-/* Labelled (diarized) mode: keep the muted time anchor only at the start of a
-   speaker run. Continuation lines hide their timestamp — it stays in the grid
-   (so text stays aligned and the cue stays click-to-seek), just not painted —
-   so the run reads as dialogue rather than a log table. Plain transcripts keep
-   a timestamp on every cue. */
-.cast-transcript__cues--labelled .cast-transcript__cue:not(.is-run-start) .cast-transcript__time {
-  visibility: hidden;
+/* Labelled (diarized) mode: the speaker heading carries the run's timestamp, so
+   the per-cue gutter collapses entirely — the run reads as dialogue rather than
+   a log table. The timestamp elements stay in the DOM (plain transcripts show
+   them per cue; click-to-seek works per cue either way). */
+.cast-transcript__cues--labelled .cast-transcript__cue {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-/* Current cue: accent left border + a translucent gradient underline so it
- * reads clearly on light and dark backgrounds. */
+.cast-transcript__cues--labelled .cast-transcript__time {
+  display: none;
+}
+
+/* Current cue: accent left border + a quiet translucent tint — one highlight
+ * idiom that stays visible on light and dark backgrounds. */
 .cast-transcript__cue.is-current {
   border-left-color: var(--_accent);
-  background: color-mix(in srgb, var(--_accent) 8%, transparent);
-}
-
-/* Tile the highlighter band once per line (height = one line box, `1lh`) and
- * repeat it down the text, so a wrapped current cue underlines every line. A
- * single non-repeating gradient sized to the whole box would paint one 34%-tall
- * band across the bottom of a multi-line cue (covering only the last line), the
- * "weird partial band" this replaces. */
-.cast-transcript__cue.is-current .cast-transcript__text {
-  background-image: linear-gradient(to top, var(--_tint-strong) 0 34%, transparent 34%);
-  background-repeat: repeat-y;
-  background-size: 100% 1lh;
+  background: color-mix(in srgb, var(--_accent) 12%, transparent);
 }
 
 .cast-transcript__cue.is-current .cast-transcript__time {
   opacity: 1;
   font-weight: 700;
+}
+
+/* Visually-hidden speaker prefix inside labelled cue buttons (AT focus context). */
+.cast-transcript__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .cast-transcript__text mark {
@@ -835,7 +875,8 @@ cast-audio-player:focus-visible {
     background: Highlight;
     color: HighlightText;
   }
-  .cast-transcript__cue.is-current .cast-transcript__text {
-    background-image: none;
+  /* The chip's tinted disc is stripped by forced colors; keep its shape. */
+  .cast-transcript__speaker-chip {
+    border: 1px solid currentColor;
   }
 }

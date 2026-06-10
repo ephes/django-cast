@@ -57,6 +57,9 @@ export class CastTranscriptElement extends CastPlayerView {
   private tabbable = false;
   private matchIndices: number[] = [];
   private matchCursor = -1;
+  // True while the search query is non-empty: follow-along scrolling is
+  // suspended so cuechange never scrolls away from the match being read.
+  private searchSuspended = false;
 
   protected onController(controller: AudioController): void {
     if (!controller.hasTranscript) {
@@ -164,6 +167,16 @@ export class CastTranscriptElement extends CastPlayerView {
     search.setAttribute("aria-label", "Search transcript");
     search.placeholder = "Search…";
     search.addEventListener("input", () => this.runSearch(search.value));
+    // Escape clears the query (deterministically across engines — the native
+    // type=search behavior varies) and resumes follow; focus stays in the input.
+    search.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && search.value) {
+        event.preventDefault();
+        event.stopPropagation();
+        search.value = "";
+        this.runSearch("");
+      }
+    });
     this.searchInput = search;
 
     const prev = document.createElement("button");
@@ -283,6 +296,7 @@ export class CastTranscriptElement extends CastPlayerView {
   private toggleFollow(): void {
     this.follow = !this.follow;
     this.followButton?.setAttribute("aria-pressed", this.follow ? "true" : "false");
+    this.followButton?.classList.toggle("is-suspended", this.searchSuspended && this.follow);
     writeBool(FOLLOW_STORAGE_KEY, this.follow);
     if (this.follow && this.controller) {
       this.setActive(this.controller.currentCueIndex, true);
@@ -304,29 +318,45 @@ export class CastTranscriptElement extends CastPlayerView {
       this.countLabel.textContent = cues.length ? `${cues.length} lines` : "";
     }
 
-    // Labelled (diarized) transcripts read like dialogue: a speaker heading per
-    // turn, and a muted time anchor only at the start of each speaker run — not a
-    // timestamp on every line. Plain transcripts keep a timestamp per cue. The
-    // continuation timestamps still exist (visually hidden via CSS) so the grid
-    // stays aligned and click-to-seek keeps working per cue.
+    // Labelled (diarized) transcripts read like dialogue: every speaker run gets
+    // a heading row — initial chip + name + the run's timestamp for a named
+    // speaker, a time-only anchor for a speakerless run (intro music, a speaker
+    // reset). Per-cue gutter timestamps are hidden via CSS in labelled mode (the
+    // heading carries the time); they stay in the DOM so plain transcripts —
+    // which have no headings — keep a timestamp per cue, and click-to-seek keeps
+    // working per cue either way. Speaker names are compared trimmed so
+    // whitespace-padded variants never split a run.
     const labelled = cues.some((cue) => cue.speaker.trim() !== "");
     this.list.classList.toggle("cast-transcript__cues--labelled", labelled);
 
-    let previousSpeaker = "";
+    let previousSpeaker: string | null = null;
     cues.forEach((cue, index) => {
       // A speaker change (including a reset to an empty speaker) starts a new
-      // run: a heading for a named speaker, and a time anchor on the first line.
-      // The very first cue always anchors, so a leading empty-speaker cue (e.g.
-      // intro music before anyone speaks) keeps its timestamp instead of being
+      // run. The very first cue always anchors (previousSpeaker is null), so a
+      // leading empty-speaker cue gets its own time anchor instead of being
       // treated as a continuation of a non-existent prior run.
-      const runStart = index === 0 || cue.speaker !== previousSpeaker;
-      if (cue.speaker && runStart) {
-        const speaker = document.createElement("div");
-        speaker.className = "cast-transcript__speaker";
-        speaker.textContent = cue.speaker; // textContent only
-        this.list!.appendChild(speaker);
+      const speakerName = cue.speaker.trim();
+      const runStart = previousSpeaker === null || speakerName !== previousSpeaker;
+      if (labelled && runStart) {
+        const heading = document.createElement("div");
+        heading.className = "cast-transcript__speaker";
+        if (speakerName) {
+          const chip = document.createElement("span");
+          chip.className = "cast-transcript__speaker-chip";
+          chip.setAttribute("aria-hidden", "true"); // decorative; the name carries the meaning
+          chip.textContent = (Array.from(speakerName)[0] ?? "").toUpperCase();
+          const name = document.createElement("span");
+          name.className = "cast-transcript__speaker-name";
+          name.textContent = speakerName; // textContent only
+          heading.append(chip, name);
+        }
+        const headingTime = document.createElement("span");
+        headingTime.className = "cast-transcript__speaker-time";
+        headingTime.textContent = formatTime(cue.start);
+        heading.appendChild(headingTime);
+        this.list!.appendChild(heading);
       }
-      previousSpeaker = cue.speaker;
+      previousSpeaker = speakerName;
 
       const button = document.createElement("button");
       button.type = "button";
@@ -346,6 +376,14 @@ export class CastTranscriptElement extends CastPlayerView {
       text.className = "cast-transcript__text";
       text.textContent = cue.text; // textContent only — never innerHTML
 
+      if (labelled && speakerName) {
+        // Focus context for AT: a heading div is skipped when tabbing straight
+        // to a cue button, so each labelled line announces its speaker.
+        const sr = document.createElement("span");
+        sr.className = "cast-transcript__sr";
+        sr.textContent = `${speakerName}: `;
+        button.appendChild(sr);
+      }
       button.append(time, text);
       // Click-to-listen: seek to the cue AND start playback, so clicking a line
       // plays from there immediately without a second trip to the play button.
@@ -384,7 +422,7 @@ export class CastTranscriptElement extends CastPlayerView {
       }
     }
     const current = this.cueButtons[index];
-    if (current && this.open && (this.follow || forceScroll)) {
+    if (current && this.open && (this.follow || forceScroll) && !this.searchSuspended) {
       this.scrollIntoView(current);
     }
   }
@@ -392,8 +430,20 @@ export class CastTranscriptElement extends CastPlayerView {
   private scrollIntoView(element: HTMLElement): void {
     const reduce =
       typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let behavior: ScrollBehavior = reduce ? "auto" : "smooth";
+    // A far target (search jump, chapter seek) would smooth-scroll for seconds
+    // across a long transcript — land instantly instead. Smooth stays for the
+    // neighbor-line steps of follow-along.
+    if (behavior === "smooth" && this.scroll) {
+      const panel = this.scroll.getBoundingClientRect();
+      const target = element.getBoundingClientRect();
+      const overshoot = Math.max(panel.top - target.bottom, target.top - panel.bottom);
+      if (panel.height > 0 && overshoot > panel.height * 2) {
+        behavior = "auto";
+      }
+    }
     try {
-      element.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+      element.scrollIntoView({ behavior, block: "nearest" });
     } catch {
       /* unsupported in some environments */
     }
@@ -403,6 +453,11 @@ export class CastTranscriptElement extends CastPlayerView {
 
   private runSearch(query: string): void {
     const needle = query.trim().toLowerCase();
+    const wasSuspended = this.searchSuspended;
+    // Searching suspends follow-along (the persisted preference is untouched);
+    // the follow toggle shows the suspension while staying pressed.
+    this.searchSuspended = needle !== "";
+    this.followButton?.classList.toggle("is-suspended", this.searchSuspended && this.follow);
     this.matchIndices = [];
     this.matchCursor = -1;
     this.cues.forEach((cue, index) => {
@@ -421,6 +476,10 @@ export class CastTranscriptElement extends CastPlayerView {
       // Scroll to the first match so it's visible, but keep focus in the search
       // input so the user can keep typing.
       this.gotoMatch(1, false);
+    }
+    if (wasSuspended && !this.searchSuspended && this.follow && this.controller) {
+      // Query cleared: resume follow and re-anchor to the line being spoken.
+      this.setActive(this.controller.currentCueIndex, true);
     }
   }
 
