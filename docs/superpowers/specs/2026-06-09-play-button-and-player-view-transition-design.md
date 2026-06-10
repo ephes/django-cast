@@ -205,20 +205,28 @@ no longer supply once it scrolls away. The payload already carries `title`,
 
 ## The morph
 
-> **As-built note (staging, 2026-06-10).** The shipped python-podcast staging
-> implementation simplified this section deliberately; the rest of this section is
-> the original design intent. The actual behaviour:
-> - **Forward morph is poster-only.** Only the poster carries a
->   `view-transition-name` (`cast-vt-poster`); the play glyph is *not* morphed
->   (avoids an awkward shape morph and shrinks the name-collision surface). The
->   dock's entrance on a first open is a separate `cast-vt-dock` enter animation;
->   an in-place episode switch only crossfades (no re-rise). `cast-vt-play` is
->   unused.
+> **As-built note (staging, 2026-06-10; revised 2026-06-11).** The shipped
+> python-podcast staging implementation deviates from this section deliberately;
+> the rest of this section is the original design intent. The actual behaviour:
+> - **Forward morph is card + poster (2026-06-11).** The whole pressed card
+>   carries `cast-vt-card` (the dock inner is its target on a first open, so the
+>   card visibly grows into the player) with the poster as a nested
+>   `cast-vt-poster` pair. The play glyph is *not* morphed (`cast-vt-play` is
+>   unused). Without a card source the dock falls back to the `cast-vt-dock`
+>   enter animation; an in-place episode switch only crossfades (no re-rise).
 > - **Close is a sink + teardown, not a reverse morph.** Dismissing animates the
 >   dock down (`cast-dock-sink`) and unmounts the single controller to zero live
 >   players; it does not morph the poster back into the card.
 > - Name assignment is generation-scoped and cleared on `finished`, so a rapid
->   second activation cannot leave two elements sharing `cast-vt-poster`.
+>   second activation cannot leave two elements sharing a morph name.
+> - **The Active card state shipped (2026-06-11)** as a manager-driven state
+>   mirror (`data-cast-state="playing"|"paused"`, pause glyph, equalizer badge,
+>   live elapsed/total readout, pause/resume proxy) rather than a collapsed
+>   strip; cards remain projections with no second controller.
+> - **Dock space reservation is dynamic (2026-06-11):** body padding tracks the
+>   dock's real height (`--cast-dock-height` via ResizeObserver) instead of the
+>   designed static `scroll-padding-bottom`, so the expanded transcript sheet
+>   never occludes pagination/footer.
 
 ### Forward (press play in a card)
 

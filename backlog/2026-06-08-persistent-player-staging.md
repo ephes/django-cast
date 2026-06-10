@@ -279,6 +279,35 @@ navigate).
   is parametrized over **pp + bootstrap5**. Staging theme defaults (site + `show`
   blog → `bootstrap5`) are reversible staging-DB settings; production unaffected.
 
+## Update (2026-06-11): navigation reservation + now-playing cards + card morph
+
+Deployed to staging and verified there (Playwright `tests/e2e/staging_goal_check.py`
+in python-podcast, all checks pass; Pi judged the goal achieved from the JSON
+results + screenshots; the baseline `staging_persistent_player.py` suite still
+passes with axe 0 / console 0):
+
+- **The dock no longer blocks navigation.** The fixed 8.5rem body padding could
+  not cover the expanded transcript/chapters sheet (~42vh), which occluded the
+  bottom pagination on list pages. The manager now tracks the dock's real
+  height with a ResizeObserver into `--cast-dock-height`; `body.cast-dock-open`
+  reserves `padding-bottom`/`scroll-padding-bottom` from it, so pagination and
+  footer always scroll clear of the dock. Moving the dock in-flow (between list
+  and pagination) was rejected — inside the swap boundary it cannot persist;
+  top placement stays the rejected alternative from the design spec.
+- **Play cards mirror global playback state.** Cards were redesigned as one
+  cohesive surface (poster, circular accent control, label + duration,
+  full-card hit area) and the manager now writes `data-cast-state=
+  "playing"|"paused"` onto the active episode's card: pause glyph, equalizer
+  badge over the poster, live elapsed/total readout, accent border. Clicking
+  the active card toggles pause/resume on the single live controller instead
+  of restarting. State re-applies after enhanced navigation and htmx
+  pagination swaps; cards stay projections (no controller, no second audio).
+- **The pressed card morphs into the dock.** The View Transition now names the
+  whole card (`cast-vt-card`, dock inner as target on first open) with the
+  poster as a nested pair, so the card visibly becomes the player; the rise
+  entrance remains the no-card fallback and the reduced-motion/no-VT floor is
+  unchanged.
+
 ## Implementation Log (2026-06-08)
 
 ### What was built (all in `../python-podcast`, `pp` theme only)
