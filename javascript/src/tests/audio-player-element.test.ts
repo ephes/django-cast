@@ -52,10 +52,10 @@ beforeEach(() => {
 });
 
 describe("cast-audio-player transport", () => {
-  it("uses preload=metadata and one source per format", () => {
+  it("uses preload=none and one source per format", () => {
     const player = mountPlayer(makePayload({ sources: [{ type: "audio/mp4", src: "/a.m4a" }] }));
     const audio = audioOf(player);
-    expect(audio.preload).toBe("metadata");
+    expect(audio.preload).toBe("none");
     expect(audio.querySelectorAll("source")).toHaveLength(1);
   });
 

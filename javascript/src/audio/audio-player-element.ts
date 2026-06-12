@@ -137,7 +137,13 @@ export class CastAudioPlayerElement extends HTMLElement {
     this.disabled = payload.sources.length === 0;
 
     const audio = el("audio");
-    audio.preload = "metadata";
+    // "none": the transport renders entirely from payload data (duration comes
+    // from the server, see AudioController.duration), so fetching media bytes
+    // before the visitor presses play only costs bandwidth — and the eager
+    // metadata request showed up as a flaky ERR_CONNECTION_FAILED console
+    // error in Lighthouse runs. Seeks before first play (?t= deep link,
+    // scrubbing) set the default playback start position, same as before.
+    audio.preload = "none";
     for (const source of payload.sources) {
       const sourceEl = el("source");
       sourceEl.type = source.type;
