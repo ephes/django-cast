@@ -70,6 +70,21 @@
   hides the search/follow toolbar, instead of rendering a dead, empty panel.
   A failed transcript fetch hides the toolbar the same way while keeping the
   existing retry-on-reopen behaviour.
+- Security: the public audio and transcript object endpoints now require the
+  requested object to be reachable through a live, viewable episode/post before
+  any content is served. The Podlove audio config
+  (``/api/audios/podlove/<pk>/``), the lazy player transcript
+  (``/api/audios/<pk>/player-transcript/``), the direct transcript endpoints
+  (``/transcripts/podlove/<pk>/``, ``/transcripts/podcastindex/<pk>/``,
+  ``/transcripts/vtt/<pk>/``, ``/transcripts/html/<pk>/``) and the canonical
+  episode transcript page previously served content for any object id. They now
+  return ``404`` for a bare id that no live episode references, for an
+  ``episode_id``/``post_id`` anchor that does not match the object, and for an
+  episode/post whose Wagtail view restrictions (login, password, group) the
+  request does not satisfy. Editors keep access to their own drafts (Wagtail
+  preview and unpublished episodes) through the page-edit permission, and public
+  RSS feeds are unaffected because they already anchor transcript URLs to the
+  episode. Object existence is never leaked: every denial is a ``404``.
 - Update bundled htmx from 2.0.8 to 2.0.10.
 - Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
   bundles currently built and shipped with django-cast. The report renders as

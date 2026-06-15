@@ -21,6 +21,7 @@ from wagtail.api.v2.router import WagtailAPIRouter
 from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.images.api.v2.views import ImagesAPIViewSet
 
+from ..audio_access import authorize_audio_access, page_grants_audio_access
 from ..filters import PostFilterset
 from ..forms import SelectThemeForm, VideoForm
 from ..models import (
@@ -127,12 +128,21 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
 
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
         instance = self.get_object()
-        if (episode_id := request.query_params.get("episode_id")) is not None:
-            try:
-                episode_id = int(episode_id)
-                instance.set_episode_id(episode_id)
-            except (ValueError, TypeError):
-                pass
+        post_id = kwargs.get("post_id")
+        episode_id = request.query_params.get("episode_id")
+        # Every supplied anchor must authorize for this audio. ``episode_id`` is not
+        # only an access check: it also drives the serialized episode link, so an
+        # unvalidated value could surface a draft/restricted episode of the same
+        # audio. Authorizing each anchor keeps the access gate and the rendered
+        # context consistent; a mismatched or non-public anchor is a 404.
+        anchors = [anchor for anchor in (post_id, episode_id) if anchor is not None]
+        if anchors:
+            for anchor in anchors:
+                authorize_audio_access(request, audio=instance, explicit_anchor_id=anchor)
+        else:
+            authorize_audio_access(request, audio=instance)
+        if episode_id is not None:
+            instance.set_episode_id(int(episode_id))
 
         # Retrieve post_id from kwargs and add it to context
         if not hasattr(self, "request"):
@@ -163,7 +173,7 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
         audio = self.get_object()
         post_id = kwargs.get("post_id") or request.query_params.get("post_id")
-        post = self._get_owning_live_post(post_id, audio)
+        post = self._get_authorized_post(post_id, audio, request)
         if post is None:
             # Do not leak unsanitized data for a missing/mismatched context.
             raise Http404("No transcript available for this audio in the given context.")
@@ -188,17 +198,20 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
         return response
 
     @staticmethod
-    def _get_owning_live_post(post_id: Any, audio: Audio) -> Post | None:
+    def _get_authorized_post(post_id: Any, audio: Audio, request: Request) -> Post | None:
+        """Resolve the owning post when the request may read its transcript.
+
+        Grants access when the post references the audio and is either publicly
+        viewable (live + view restrictions satisfied) or editable by the
+        requester (Wagtail preview / unpublished drafts).
+        """
         if post_id is None:
             return None
         try:
-            post = Post.objects.get(pk=int(post_id), live=True)
+            post = Post.objects.get(pk=int(post_id))
         except (Post.DoesNotExist, ValueError, TypeError):
             return None
-        specific = post.specific
-        if audio.pk in specific.media_lookup.get("audio", {}):
-            return post
-        if getattr(specific, "podcast_audio_id", None) == audio.pk:
+        if page_grants_audio_access(post.specific, audio, request):
             return post
         return None
 

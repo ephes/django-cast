@@ -67,41 +67,54 @@ A page with no restrictions and `live=True` is publicly viewable. New helper.
 Thin wrapper over the existing idiom `page.permissions_for_user(user).can_edit()`
 (already used in `views/voxhelm.py`), guarded for anonymous users.
 
-### `authorize_audio_access(request, *, audio, explicit_anchor_id, anchor_kind) -> Page | None`
+### `authorize_audio_access(request, *, audio, explicit_anchor_id=None) -> Page`
 
-The single decision function, living in `transcript_sanitization.py` next to
-`public_episode_from_request`. `anchor_kind` is `"episode"` or `"post"`. Returns the
-resolved anchor page when access is granted (callers reuse it for speaker sanitization),
-or raises `Http404`. When access is granted via the no-anchor public path it returns a
-live referencing episode if one exists.
+The single decision function, living in a new `cast/audio_access.py` module (kept separate
+from `transcript_sanitization.py` so access control and speaker-label sanitization stay
+decoupled). Returns the resolved granting page when access is granted, or raises `Http404`.
+When access is granted via the no-anchor public path it returns a live referencing episode.
+A thin `authorize_transcript_access(request, *, transcript, ...)` wraps it using
+`transcript.audio`.
 
 Referencing relationships:
 - Episodes reference audio via `Episode.podcast_audio`.
 - Posts/Episodes reference audio via `media_lookup["audio"]`.
 - Transcripts reference audio via `Transcript.audio`; callers pass `transcript.audio`.
 
-A thin `authorize_transcript_access(request, *, transcript, ...)` wraps the audio function
-using `transcript.audio`.
-
 ## Endpoint changes
 
-Each endpoint calls the authorization helper **before** opening any file. The returned
-anchor replaces the current `public_episode_from_request(...)` result so the existing
-speaker-mapping / sanitization calls keep working (now strictly anchored):
+Each endpoint calls the authorization helper **before** opening any file:
 
 - `views/transcript.py`: `podlove_transcript_json`, `podcastindex_transcript_json`,
-  `webvtt_transcript`, `html_transcript`.
-- `api/views.py`: `AudioPodloveDetailView.retrieve` (anchor via `post_id` route kwarg or
-  `episode_id`/`post_id` query param), and `AudioPlayerTranscriptView` gains the editor
-  fallback (so preview of an unpublished draft works for an authorized editor).
+  `webvtt_transcript`, `html_transcript`, plus a `request_may_view_page` gate on the
+  canonical `episode_transcript` view. These keep calling `public_episode_from_request`
+  for the speaker-sanitization episode context (now safe — see below).
+- `api/views.py`: `AudioPodloveDetailView.retrieve` authorizes **every** supplied anchor
+  (`post_id` route kwarg and/or `episode_id` query param); `AudioPlayerTranscriptView`
+  gains the editor fallback (so preview of an unpublished draft works for an authorized
+  editor).
+
+## Speaker-label aggregate fix
+
+Authorization alone is not sufficient: when no concrete episode is in the sanitization
+context (a no-anchor transcript hit, or the podlove serializer's `?episode_id=` path,
+which keys sanitization off the `post` context rather than `episode_id`), the speaker-label
+and speaker-mapping helpers fall back to aggregating over **all** live episodes that share
+the audio. That aggregate previously included view-restricted episodes, leaking their
+contributor/speaker labels into anonymous output. The aggregate now excludes any episode
+that carries a Wagtail view restriction (`_episode_is_publicly_visible` in
+`transcript_sanitization.py`) — restriction *existence* is request-independent, so a
+restricted episode is never public. The explicit per-episode path is unchanged and is only
+reached with an already-authorized episode.
 
 ## Error handling
 
 - Denied access → `Http404`.
 - Missing/absent transcript file → existing 404 responses unchanged.
-- Malformed `episode_id`/`post_id` → treated as "no valid explicit anchor"; falls through
-  to the no-anchor search (which 404s if nothing qualifies). A *present but non-matching*
-  numeric anchor is a hard 404.
+- Every supplied anchor must authorize (fail-closed): a malformed, non-existent, mismatched,
+  or non-public `episode_id`/`post_id` is a hard `404`, even when another valid anchor is
+  also present. Absent anchors fall through to the no-anchor search (404 if nothing
+  qualifies).
 
 ## Testing
 

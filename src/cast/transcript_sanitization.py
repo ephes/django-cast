@@ -24,6 +24,19 @@ def audio_transcript_diarization_disabled(audio: Any | None) -> bool:
     return getattr(audio, "transcript_diarization_mode", "") == "disabled"
 
 
+def _episode_is_publicly_visible(episode: Any) -> bool:
+    """True when a live episode carries no Wagtail view restrictions.
+
+    A view restriction (login, password, or group) means the episode is not
+    public, so its speaker labels must never enter anonymous public output via
+    the all-live-episodes aggregate fallback. Restriction *existence* is
+    independent of the request, so this is a safe request-free filter; an
+    explicitly anchored episode still flows through the authorized per-episode
+    path elsewhere.
+    """
+    return not episode.get_view_restrictions().exists()
+
+
 def public_speaker_labels_for_episode(episode: Any | None, *, audio: Any | None = None) -> set[str] | None:
     """Return public speaker labels for a live episode, or ``None`` without episode context."""
     if episode is None:
@@ -66,11 +79,13 @@ def public_speaker_labels_for_transcript(transcript: Any, *, episode: Any | None
     if episodes is None:
         return None
     try:
-        live_episodes = list(
-            episodes.filter(live=True)
+        live_episodes = [
+            episode
+            for episode in episodes.filter(live=True)
             .prefetch_related("contributor_assignments__contributor", "contributor_assignments__link")
             .all()
-        )
+            if _episode_is_publicly_visible(episode)
+        ]
     except (AttributeError, TypeError, ValueError):
         return None
     if not live_episodes:
@@ -148,11 +163,13 @@ def _public_episode_contexts_for_transcript(transcript: Any, *, episode: Any | N
     if episodes is None:
         return None
     try:
-        return list(
-            episodes.filter(live=True)
+        return [
+            episode
+            for episode in episodes.filter(live=True)
             .prefetch_related("contributor_assignments__contributor", "contributor_assignments__link")
             .all()
-        )
+            if _episode_is_publicly_visible(episode)
+        ]
     except (AttributeError, TypeError, ValueError):
         return None
 
