@@ -38,6 +38,7 @@ from ..models import (
     TranscriptVoiceReferenceCandidate,
     get_template_base_dir,
 )
+from ..audio_access import authorize_transcript_access, request_may_view_page
 from ..models.contributors import ContributorVoiceReference
 from ..models.transcript import _dote_timestamp_to_ms, convert_dote_to_podcastindex_transcript
 from ..site_lookup import get_site_specific_page_or_404
@@ -736,6 +737,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
 def podlove_transcript_json(request: HttpRequest, pk) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
+    authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if transcript.podlove:
         # Open the file and load its contents as JSON
         with transcript.podlove.open("r") as file:
@@ -753,6 +755,7 @@ def podlove_transcript_json(request: HttpRequest, pk) -> HttpResponse:
 def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podcastindex transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
+    authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if not transcript.dote:
         return HttpResponse("podcastindex JSON file not available", status=404)
     try:
@@ -776,6 +779,7 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
 def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the transcript content as WebVTT because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
+    authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if transcript.vtt:
         # Open the file and return its contents as WebVTT
         with transcript.vtt.open("r") as file:
@@ -793,6 +797,8 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
 def episode_transcript(request: HtmxHttpRequest, blog_slug: str, episode_slug: str) -> HttpResponse:
     blog = get_site_specific_page_or_404(Blog, request, slug=blog_slug)
     episode = get_object_or_404(Episode.objects.descendant_of(blog), slug=episode_slug, live=True)
+    if not request_may_view_page(episode, request):
+        raise Http404("Transcript not found")
     transcript = episode.get_transcript_or_none()
     if transcript is None:
         raise Http404("Transcript not found")
@@ -803,6 +809,7 @@ def episode_transcript(request: HtmxHttpRequest, blog_slug: str, episode_slug: s
 def html_transcript(request: HtmxHttpRequest, transcript_pk: int, post_pk: int | None = None) -> HttpResponse:
     """Return the transcript content as HTML."""
     transcript = get_object_or_404(Transcript, pk=transcript_pk)
+    authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=post_pk)
     post: Post | None = None
     if post_pk is not None:
         post = get_object_or_404(Post, pk=post_pk)
