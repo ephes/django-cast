@@ -2,9 +2,9 @@
 
 {% with heading_id="episode-contributors-heading-"|add:episode.slug %}
 <section class="episode-contributors" aria-labelledby="{{ heading_id }}">
-  <h3 class="episode-contributors__heading" id="{{ heading_id }}">
+  <h2 class="episode-contributors__heading" id="{{ heading_id }}">
     {% translate "Hosts and Guests" %}
-  </h3>
+  </h2>
   <ul class="episode-contributors__list">
     {% for assignment in episode_contributors %}
       <li class="episode-contributors__item">

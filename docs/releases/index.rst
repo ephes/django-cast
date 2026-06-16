@@ -8,6 +8,7 @@ Versions
 .. toctree::
    :maxdepth: 1
 
+   0.2.59
    0.2.58
    0.2.57
    0.2.56

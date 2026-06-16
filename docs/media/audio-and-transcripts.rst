@@ -53,6 +53,99 @@ version 5 is used.
     ``/api/audios/player_config/``. You can override the default tokens and
     fonts per theme using the ``CAST_PODLOVE_PLAYER_THEMES`` setting.
 
+.. _custom_audio_player:
+
+Custom Audio Player
+===================
+
+As an alternative to the Podlove Web Player, django-cast ships an optional
+**custom audio player**: a dependency-free vanilla-TypeScript web component that
+couples three concerns — playback transport, an interactive transcript, and
+chapter navigation. It renders immediately from a sanitized JSON payload inlined
+into the page, adapts to the host site's colors via CSS custom properties (light,
+dark, and forced-colors), and adds no runtime dependencies and no
+hover/click-to-load facade.
+
+Enabling
+--------
+
+Set ``CAST_AUDIO_PLAYER`` to choose the player:
+
+* ``"podlove"`` (default) — the Podlove Web Player, unchanged.
+* ``"custom"`` — the custom web-component player.
+
+.. code-block:: python
+
+    CAST_AUDIO_PLAYER = "custom"
+
+The custom player renders **only on the episode detail path**, at the
+StreamField ``audio`` block render location (where Podlove renders on
+server-rendered themes). List/overview cards render no audio player in custom
+mode (the deliberate "fewer players on overview" outcome), feeds are unchanged,
+and the cast-vue SPA ``podlove_players`` API path is untouched.
+
+The detail and list contexts expose two derived booleans —
+``use_podlove_player`` and ``use_custom_audio_player`` — that themes use to gate
+their asset/preconnect includes. The component is built and shipped by
+django-cast and included with the ``cast`` app:
+
+.. code-block:: django
+
+    {% vite_asset 'src/audio/custom-player.ts' app="cast" %}
+
+Inline metadata and the lazy transcript
+---------------------------------------
+
+The detail page inlines only the small player payload — audio metadata, sources,
+and chapters — as JSON (via ``json_script``). The transcript is **never inlined**.
+Instead the payload carries a transcript endpoint URL (or ``null`` when the audio
+has no transcript), and the player fetches the cues **lazily**: once, the first
+time the reader opens the Transcript panel. A collapsed transcript triggers no
+fetch, and the detail-page render never builds or sanitizes the transcript at
+all — keeping the page small and the render cheap.
+
+The transcript endpoint is ``cast:api:audio_player_transcript`` at
+``/api/audios/<pk>/player-transcript/``. It takes a ``post_id`` query parameter
+(to establish the episode/contributor context for sanitization), is public-read,
+validates that the post is live and owns the audio, and returns the normalized,
+sanitized ``{"cues": [...]}`` shape — **never** the raw Podlove file. The cue
+normalization and the public speaker-label sanitization (the same applied to the
+Podlove API output) run only in this endpoint, so non-public speaker labels and
+raw ``podlove_data`` never leak.
+
+Theming tokens
+--------------
+
+The player's structural CSS uses these CSS custom properties (with fallbacks);
+host sites theme the player by mapping them, without changing the component. In
+practice the only token most sites need to set is ``--cast-player-accent`` — the
+surface, line, highlight, and focus colours are derived from it (as translucent
+accent overlays) so highlights stay visible on both light and dark backgrounds:
+
+* ``--cast-player-accent`` (fallback ``#2d8260``) — the brand accent; drives the
+  play button, progress fill, timecodes, current-cue/chapter highlight, and
+  search marks.
+* ``--cast-player-fg`` (``CanvasText``) and ``--cast-player-bg`` (``Canvas``) —
+  text and the share-dialog background.
+* ``--cast-player-muted`` (``#6b7280``) — secondary text.
+* ``--cast-player-on-accent`` (``#fff``) — text/icon colour on accent fills.
+* ``--cast-player-progress-track`` (translucent ``currentColor``) — the unfilled
+  seek track.
+* ``--cast-player-surface`` / ``--cast-player-line`` (derived from accent) —
+  panel background and borders.
+* ``--cast-player-focus`` (``var(--cast-player-accent)``) — the focus ring.
+* ``--cast-player-mono`` — the monospace stack for timecodes.
+
+A ``@media (forced-colors: active)`` block keeps borders, the focus ring, and the
+current-cue marker legible in high-contrast mode, and a
+``@media (prefers-reduced-motion: reduce)`` block disables transitions. The
+transcript and chapter elements read their data from the controller, so a theme
+can relocate them anywhere on the detail page by moving the
+``<cast-transcript for="...">`` / ``<cast-chapters for="...">`` elements while
+keeping the same ``for=`` id. The transcript is a collapsible panel (search, a
+follow-along auto-scroll toggle, current-cue highlight, and a share-with-time
+control on the transport are built in).
+
 .. _transcript_overview:
 
 Transcripts

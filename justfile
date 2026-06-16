@@ -145,6 +145,10 @@ js-build-all:
     just js-build-vite
     just js-build-comments
 
+# Show shipped django-cast frontend bundle sizes
+js-bundles *ARGS:
+    @uv run --with rich python scripts/show_bundle_sizes.py {{ARGS}}
+
 # Check if built JS/CSS assets are up-to-date with source
 verify-assets:
     uv run python scripts/check_asset_freshness.py

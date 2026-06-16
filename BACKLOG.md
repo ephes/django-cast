@@ -11,6 +11,20 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - Use `Depends on` for blocking relationships and `Related to` for non-blocking cross-links.
 - GitHub issues are optional for public coordination, but local planning starts here.
 
+## Next
+
+- [x] Persistent player on python-podcast staging — **staging proof done (2026-06-08)**
+  - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
+    (see "Implementation Log")
+  - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
+  - Proven on `python-podcast.staging.django-cast.com` (pp theme, behind a staging-only flag): starting an
+    episode and navigating enhanced to the podcast index, another episode, and `/about/` keeps the same audio
+    object playing in the same document with currentTime advancing; an explicit play switches episodes cleanly;
+    back/forward keeps audio advancing; axe-core reports 0 violations; production is unchanged (flag pinned off).
+    All in python-podcast — django-cast/cast-bootstrap5 unchanged.
+  - Remaining (separate decision): whether to generalize into a reusable django-cast/cast-bootstrap5 API
+    (the open question in the note) or keep it python-podcast-specific.
+
 ## Ready
 
 - [ ] Repository read-model cleanup experiment
@@ -26,13 +40,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     needed, and how to keep it optional for themes.
   - Done when: there is a short implementation note with benchmark expectations, proposed endpoints or context
     contracts, accessibility constraints, and a first implementation slice.
-
-- [ ] Podlove Web Player replacement
-  - Scope: research replacing the current Podlove Web Player integration with a maintainable audio player path.
-    Candidates include [Able Player](https://github.com/ableplayer/ableplayer) and a custom HTML/CSS/Web Component
-    implementation.
-  - Done when: tradeoffs are documented for accessibility, transcript/chapter support, theming, dependencies,
-    bundle size, migration impact, and the preferred first slice.
 
 - [ ] Revisit onboarding and authoring workflows
   - Scope: review the existing `django-cast-quickstart`, `example/scripts/bootstrap_example_data.py`, and

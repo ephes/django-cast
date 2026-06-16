@@ -75,6 +75,8 @@
 
   {% vite_hmr_client app="cast" %}
   {% vite_asset 'src/gallery/image-gallery-bs4.ts' app="cast" %}
-  {% vite_asset 'src/audio/podlove-player.ts' app="cast" %}
+  {% if use_podlove_player %}
+    {% vite_asset 'src/audio/podlove-player.ts' app="cast" %}
+  {% endif %}
 
 {% endblock javascript %}

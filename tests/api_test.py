@@ -190,16 +190,18 @@ class TestBlogAudio:
 class TestPodcastAudio:
     pytestmark = pytest.mark.django_db
 
-    def test_podlove_detail_endpoint_without_authentication(self, api_client, audio):
-        """Should be accessible without authentication."""
+    def test_podlove_detail_endpoint_without_authentication(self, api_client, episode):
+        """A published episode's podlove config is accessible without authentication."""
+        audio = episode.podcast_audio
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         assert r.status_code == 200
 
-    def test_podlove_detail_endpoint_duration(self, api_client, audio):
+    def test_podlove_detail_endpoint_duration(self, api_client, episode):
         """Test whether microseconds get stripped away from duration via api - they have
         to be for podlove player to work.
         """
+        audio = episode.podcast_audio
         delta = timedelta(days=0, hours=1, minutes=10, seconds=20, microseconds=40)
         audio.duration = delta
         audio.save()
@@ -229,8 +231,9 @@ class TestPodcastAudio:
         assert "link" in podlove_data
         assert podlove_data["link"] == episode.full_url
 
-    def test_podlove_detail_endpoint_chaptermarks(self, api_client, audio, chaptermarks):
+    def test_podlove_detail_endpoint_chaptermarks(self, api_client, episode, chaptermarks):
         """Test whether chaptermarks get delivered via podlove endpoint."""
+        audio = episode.podcast_audio
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         chapters = r.json()["chapters"]
@@ -242,15 +245,51 @@ class TestPodcastAudio:
         # assert reordering
         assert chapters[-1]["title"] == "coughing"
 
-    def test_podlove_detail_retrieve_with_value_error(self, mocker):
-        class MockRequest:
-            query_params = {"episode_id": "foo"}
+    def test_podlove_detail_retrieve_sets_request_when_called_directly(self, mocker):
+        """A direct ``retrieve`` call (outside DRF dispatch) wires up request attributes."""
 
+        class MockRequest:
+            query_params: dict = {}
+
+        mocker.patch("cast.api.views.authorize_audio_access")
         mocker.patch("cast.api.views.AudioPodloveDetailView.get_object")
         mocker.patch("cast.api.views.AudioPodloveDetailView.get_serializer")
         podlove_view = AudioPodloveDetailView()
         response = podlove_view.retrieve(MockRequest())
         assert response.status_code == 200
+
+    def test_podlove_detail_malformed_episode_id_is_rejected_even_with_valid_post_anchor(self, api_client, episode):
+        """Every supplied anchor must authorize: a malformed ``episode_id`` is a 404."""
+        audio = episode.podcast_audio
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
+        r = api_client.get(f"{podlove_detail_url}?episode_id=foo", format="json")
+        assert r.status_code == 404
+
+    def test_podlove_detail_malformed_episode_id_without_anchor_returns_404(self, api_client, episode):
+        """A malformed ``episode_id`` with no other valid anchor is rejected."""
+        audio = episode.podcast_audio
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+        r = api_client.get(f"{podlove_detail_url}?episode_id=foo", format="json")
+        assert r.status_code == 404
+
+    def test_podlove_detail_episode_id_for_draft_sibling_is_rejected(self, api_client, podcast, audio, body):
+        """A valid ``episode_id`` that resolves to a non-public episode of the same audio is a 404.
+
+        Authorization must use the same anchor the serializer renders, so a draft
+        episode sharing the audio cannot be surfaced as the episode link.
+        """
+        from cast.devdata import create_episode
+
+        live_episode = create_episode(blog=podcast, podcast_audio=audio, num=10, body=body)
+        draft_episode = create_episode(blog=podcast, podcast_audio=audio, num=11, body=body)
+        draft_episode.live = False
+        draft_episode.save(update_fields=["live"])
+
+        podlove_detail_url = reverse(
+            "cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": live_episode.pk}
+        )
+        r = api_client.get(f"{podlove_detail_url}?episode_id={draft_episode.pk}", format="json")
+        assert r.status_code == 404
 
     def test_podlove_podlove_detail_endpoint_show_metadata_without_artwork(self, api_client, episode):
         """Test whether the podlove detail endpoint includes show metadata, but no artwork."""
@@ -653,8 +692,8 @@ class TestPodcastAudio:
         assert stored_data["transcripts"][0]["speaker"] == "Live Host"
         assert stored_data["transcripts"][1]["speaker"] == "Speaker 1"
 
-    def test_podlove_detail_endpoint_sanitizes_draft_only_audio(self, api_client, episode):
-        """Public player output exposes no speaker labels when the audio has no live episode anchor."""
+    def test_podlove_detail_endpoint_rejects_draft_only_audio(self, api_client, episode):
+        """The podlove config is not served when the audio has no live episode anchor."""
         episode.live = False
         episode.save(update_fields=["live"])
         audio = episode.podcast_audio
@@ -671,16 +710,11 @@ class TestPodcastAudio:
 
         response = api_client.get(podlove_detail_url, format="json")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["contributors"] == []
-        assert "speaker" not in data["transcripts"][0]
-        assert "voice" not in data["transcripts"][0]
-        assert "speaker" not in data["transcripts"][1]
-        assert "voice" not in data["transcripts"][1]
+        assert response.status_code == 404
 
-    def test_podlove_detail_endpoint_contributors_empty_without_transcript(self, api_client, audio):
+    def test_podlove_detail_endpoint_contributors_empty_without_transcript(self, api_client, episode):
         """The contributors payload is an empty list when the audio has no transcript."""
+        audio = episode.podcast_audio
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
 
         r = api_client.get(podlove_detail_url, format="json")
@@ -707,9 +741,11 @@ class TestPodcastAudio:
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
-        from cast.devdata import create_audio
+        from cast.devdata import create_audio, create_episode, create_podcast
 
-        def make_podlove_url(speaker_count):
+        blog = create_podcast()
+
+        def make_podlove_url(speaker_count, num):
             audio = create_audio()
             create_transcript(
                 audio=audio,
@@ -720,10 +756,12 @@ class TestPodcastAudio:
                     ]
                 },
             )
+            # A live episode anchors the audio so the public endpoint serves it.
+            create_episode(blog=blog, podcast_audio=audio, num=num)
             return reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
 
-        url_few = make_podlove_url(1)
-        url_many = make_podlove_url(40)
+        url_few = make_podlove_url(1, 1)
+        url_many = make_podlove_url(40, 2)
 
         # warm up lazy caches (content types, etc.) so the comparison is fair
         assert api_client.get(url_few, format="json").status_code == 200
@@ -735,7 +773,7 @@ class TestPodcastAudio:
 
         assert response_few.status_code == 200
         assert response_many.status_code == 200
-        # Without a live episode anchor, raw speaker labels are sanitized away.
+        # The live episode has no contributors, so raw speaker labels are sanitized away.
         assert response_many.json()["contributors"] == []
         # Sanitization does not perform database work per raw transcript speaker.
         assert len(queries_many.captured_queries) == len(queries_few.captured_queries)

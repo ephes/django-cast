@@ -18,6 +18,7 @@ _DYNAMIC_SETTING_DEFAULTS: dict[str, Any] = {
     "CAST_REGULAR_IMAGE_SLOT_DIMENSIONS": [(1110, 740)],
     "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS": [(1110, 740), (120, 80)],
     "CAST_REPOSITORY": "default",
+    "CAST_AUDIO_PLAYER": "podlove",
 }
 
 
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     CAST_REGULAR_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
     CAST_REPOSITORY: str
+    CAST_AUDIO_PLAYER: str
 
 
 def __getattr__(name: str) -> Any:

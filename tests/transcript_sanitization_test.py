@@ -82,7 +82,12 @@ def test_public_speaker_mapping_context_edge_cases(episode, audio):
             return self
 
         def all(self):
-            return [SimpleNamespace(visible_contributor_assignments=[SimpleNamespace(contributor_id=None)])]
+            return [
+                SimpleNamespace(
+                    visible_contributor_assignments=[SimpleNamespace(contributor_id=None)],
+                    get_view_restrictions=lambda: SimpleNamespace(exists=lambda: False),
+                )
+            ]
 
     assert public_speaker_mapping_for_transcript(SimpleNamespace(audio=SimpleNamespace())) == {}
     assert public_one_off_speaker_labels_for_transcript(SimpleNamespace(audio=SimpleNamespace())) == set()

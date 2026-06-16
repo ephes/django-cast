@@ -1,6 +1,7 @@
 {% extends "./base.html" %}
 {% load i18n %}
 {% load static %}
+{% load django_vite %}
 
 {% load wagtailcore_tags %}
 {% load wagtailimages_tags %}
@@ -64,6 +65,10 @@
 
 {% block javascript %}
   {{ block.super }}
+  {% if use_custom_audio_player %}
+    {% vite_hmr_client app="cast" %}
+    {% vite_asset 'src/audio/custom-player.ts' app="cast" %}
+  {% endif %}
   {% if comments_are_enabled %}
     <script defer type="text/javascript" src="{% static 'fluent_comments/js/ajaxcomments.js' %}"></script>
   {% endif %}
