@@ -258,14 +258,10 @@ class TestPodcastAudio:
         response = podlove_view.retrieve(MockRequest())
         assert response.status_code == 200
 
-    def test_podlove_detail_malformed_episode_id_is_rejected_even_with_valid_post_anchor(
-        self, api_client, episode
-    ):
+    def test_podlove_detail_malformed_episode_id_is_rejected_even_with_valid_post_anchor(self, api_client, episode):
         """Every supplied anchor must authorize: a malformed ``episode_id`` is a 404."""
         audio = episode.podcast_audio
-        podlove_detail_url = reverse(
-            "cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk}
-        )
+        podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk, "post_id": episode.pk})
         r = api_client.get(f"{podlove_detail_url}?episode_id=foo", format="json")
         assert r.status_code == 404
 

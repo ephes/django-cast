@@ -127,9 +127,7 @@ class TestWebVTTEndpointAuthorization:
         PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
         assert client.get(self._url(transcript, episode_id=episode.pk)).status_code == 404
 
-    def test_login_restricted_episode_served_for_logged_in_user(
-        self, client, transcript, episode, django_user_model
-    ):
+    def test_login_restricted_episode_served_for_logged_in_user(self, client, transcript, episode, django_user_model):
         PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
         django_user_model.objects.create_user("member", password="secret")
         client.login(username="member", password="secret")

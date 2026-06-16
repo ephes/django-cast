@@ -1542,11 +1542,7 @@ class TestGetTranscriptAsJson:
                     },
                 ]
             },
-            vtt=(
-                "WEBVTT\n\n"
-                "00:00:00.000 --> 00:00:01.000\n"
-                "<v Draft Guest>Draft speaker</v>\n"
-            ),
+            vtt=("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Draft Guest>Draft speaker</v>\n"),
         )
 
         podlove_response = client.get(reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.id}))
