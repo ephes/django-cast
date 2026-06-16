@@ -1,2 +1,92 @@
-0.2.60 (unreleased)
+0.2.60 (2026-06-16)
 -------------------
+
+- Added an optional custom audio player: a dependency-free vanilla-TypeScript
+  web component (transport, interactive transcript, and chapter navigation) that
+  can replace the Podlove Web Player on episode detail pages. Enable it with the
+  new ``CAST_AUDIO_PLAYER = "custom"`` setting (default ``"podlove"`` keeps the
+  existing behaviour). The detail page inlines only small player metadata and
+  chapters as JSON; the transcript is **loaded lazily** — fetched once, the first
+  time the reader opens the Transcript panel, from a public, sanitized endpoint
+  (``cast:api:audio_player_transcript`` at ``/api/audios/<pk>/player-transcript/``)
+  that returns the normalized, sanitized ``{"cues": [...]}`` shape — never the raw
+  Podlove file. Detail pages therefore never ship the transcript, and the server
+  does not build or sanitize it on every render. There is no hover/click-to-load
+  facade. The player follows the host site's colors via CSS custom properties
+  (light/dark/forced-colors) and ships with zero runtime dependencies
+  (~10 KB gzip total, versus the ~138 KB Podlove embed). It renders only on the
+  episode detail path; list/overview cards render no player in custom mode, feeds
+  are unchanged, and the cast-vue SPA ``podlove_players`` API path is untouched.
+  The ``CAST_AUDIO_PLAYER`` value is validated by the cast system checks.
+- Custom audio player transcript/share polish: diarized (speaker-labelled)
+  transcripts read as dialogue — every speaker run starts with a heading row
+  (an initial chip, the speaker name, and the run's timestamp; a speakerless
+  run such as intro music gets a time-only anchor heading) and the per-cue
+  timestamp gutter collapses (the timestamps stay in the DOM so click-to-seek
+  works per cue); plain transcripts keep a per-cue timestamp. Speaker names are
+  compared trimmed, so whitespace-padded variants never split a run, and each
+  labelled cue button carries a visually-hidden speaker prefix so screen-reader
+  focus lands with context. The lazy transcript fetch shows a spinner
+  and sets ``aria-busy`` on the scroll region while in flight. The Transcript
+  panel reveals/collapses with a restrained spring animation that is disabled
+  under ``prefers-reduced-motion``. The keyboard-navigable-cues control is demoted
+  from a primary ``Tab cues`` text pill to an icon-only secondary toggle (its
+  accessible name ``Keyboard-navigable cues`` and the ``cast-transcript-tabbable``
+  preference are unchanged). The in-transport share button can be opted out with a
+  ``data-share="none"`` attribute (``{% cast_custom_player audio post
+  transport_share=False %}``) for hosts that own a page-level share UI; the
+  read-only ``getShareState()`` API is unaffected so that UI can still read the
+  player time.
+- Custom audio player: make the transport keyboard shortcuts reachable. The
+  shortcuts (Space/K play-pause, arrow seek, Home/End) were scoped to a keydown
+  listener on the ``<cast-audio-player>`` element, which had no ``tabindex`` and so
+  could never hold focus — leaving them effectively dead. The player is now
+  focusable (``tabindex=0``, ``role="group"``, ``aria-keyshortcuts``) with a
+  focus-visible ring, and clicking the play button moves focus to the player so
+  the shortcuts work immediately after starting playback.
+- Custom audio player follow-ups: (1) the transport keyboard shortcuts are now
+  **page-global** — a single document-level listener routes Space/K, arrow seek,
+  and Home/End to the active (or the only) player from anywhere on the episode
+  page, so the reader can pause or scrub while reading the transcript without
+  first focusing the player; keypresses are ignored while focus is on a form
+  field, button, link, or the transcript search, so typing and native activation
+  are never hijacked. (2) Clicking a transcript line now **seeks and starts
+  playback** immediately, instead of only seeking and waiting for a separate play
+  press. (3) The current-cue highlight is a single quiet idiom — an accent left
+  border plus a translucent accent tint — replacing the per-line underline band,
+  which painted across the full column width (past the end of each line) and
+  read as a rendering glitch on wrapped cues. (4) Follow-along keeps look-ahead:
+  cues carry ``scroll-margin-block`` so the current line stays well clear of the
+  panel's bottom edge (a bare ``block: nearest`` pinned it there, hiding all
+  upcoming text), and far jumps (a search hit or chapter seek several panel
+  heights away) land instantly instead of smooth-scrolling for seconds.
+  (5) Searching suspends follow-along so the highlight never scrolls away from
+  the match being read — the Follow toggle dims while suspended, clearing the
+  query re-anchors to the line being spoken, and ``Escape`` in the search field
+  clears the query deterministically.
+- Custom audio player: an advertised transcript that resolves to **zero cues**
+  (for example a stored transcript file that is missing from media storage) now
+  shows "No transcript available for this episode." in the opened panel and
+  hides the search/follow toolbar, instead of rendering a dead, empty panel.
+  A failed transcript fetch hides the toolbar the same way while keeping the
+  existing retry-on-reopen behaviour.
+- Security: the public audio and transcript object endpoints now require the
+  requested object to be reachable through a live, viewable episode/post before
+  any content is served. The Podlove audio config
+  (``/api/audios/podlove/<pk>/``), the lazy player transcript
+  (``/api/audios/<pk>/player-transcript/``), the direct transcript endpoints
+  (``/transcripts/podlove/<pk>/``, ``/transcripts/podcastindex/<pk>/``,
+  ``/transcripts/vtt/<pk>/``, ``/transcripts/html/<pk>/``) and the canonical
+  episode transcript page previously served content for any object id. They now
+  return ``404`` for a bare id that no live episode references, for an
+  ``episode_id``/``post_id`` anchor that does not match the object, and for an
+  episode/post whose Wagtail view restrictions (login, password, group) the
+  request does not satisfy. Editors keep access to their own drafts (Wagtail
+  preview and unpublished episodes) through the page-edit permission, and public
+  RSS feeds are unaffected because they already anchor transcript URLs to the
+  episode. Object existence is never leaked: every denial is a ``404``.
+- Update bundled htmx from 2.0.8 to 2.0.10.
+- Added ``just js-bundles`` to report the raw and gzip sizes of the frontend
+  bundles currently built and shipped with django-cast. The report renders as
+  colored ``rich`` tables with friendly entry names and a gzip-size comparison
+  bar; ``--plain`` (or a missing ``rich``) falls back to plain aligned text.
