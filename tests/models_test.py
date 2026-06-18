@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from cast import appsettings
 from cast.devdata import create_transcript
-from cast.models import Audio, Blog, Contributor, ContributorLink, EpisodeContributor, File, Podcast
+from cast.models import Audio, Blog, Contributor, ContributorLink, EpisodeContributor, File, Podcast, Season
 from cast.models.contributors import ContributorLinkSelect
 from cast.models.pages import (
     PODLOVE_POSTER_RENDITION_SPEC,
@@ -31,7 +31,7 @@ from cast.models.transcript import (
     time_to_seconds,
 )
 from cast.models.video import Video
-from tests.factories import EpisodeFactory
+from tests.factories import EpisodeFactory, PodcastFactory
 
 
 class TestVideoModel:
@@ -202,6 +202,37 @@ class TestPodcastModel:
         podcast = Podcast(id=1)
         context = podcast.get_context(request)
         assert context["podcast"] == podcast
+
+
+class TestSeasonModel:
+    pytestmark = pytest.mark.django_db
+
+    def test_season_ordering_and_str(self, podcast):
+        second = Season.objects.create(podcast=podcast, number=2, name="Second season")
+        first = Season.objects.create(podcast=podcast, number=1)
+
+        assert list(podcast.seasons.values_list("number", flat=True)) == [1, 2]
+        assert str(first) == f"{podcast.title}: Season 1"
+        assert str(second) == f"{podcast.title}: Season 2 - Second season"
+
+    def test_season_str_without_podcast(self):
+        season = Season(number=3)
+
+        assert str(season) == "Podcast: Season 3"
+
+    def test_season_number_is_required_to_be_positive(self, podcast):
+        season = Season(podcast=podcast, number=0)
+
+        with pytest.raises(ValidationError) as error:
+            season.full_clean()
+
+        assert "number" in error.value.error_dict
+
+    def test_season_number_is_unique_per_podcast(self, podcast):
+        Season.objects.create(podcast=podcast, number=1)
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Season.objects.create(podcast=podcast, number=1)
 
 
 class TestPostModel:
@@ -1117,6 +1148,132 @@ class TestEpisodeModel:
     def test_page_type(self):
         episode = Episode()
         assert episode.page_type == "cast.Episode"
+
+    def test_publishing_metadata_is_optional(self, episode):
+        episode.episode_number = None
+        episode.episode_type = ""
+        episode.season = None
+
+        episode.full_clean()
+
+    @pytest.mark.parametrize("episode_type", ["full", "trailer", "bonus"])
+    def test_episode_type_choices_are_valid(self, episode, episode_type):
+        episode.episode_type = episode_type
+
+        episode.full_clean()
+
+    def test_episode_type_rejects_unknown_value(self, episode):
+        episode.episode_type = "preview"
+
+        with pytest.raises(ValidationError) as error:
+            episode.full_clean()
+
+        assert "episode_type" in error.value.error_dict
+
+    def test_episode_number_is_required_to_be_positive(self, episode):
+        episode.episode_number = 0
+
+        with pytest.raises(ValidationError) as error:
+            episode.full_clean()
+
+        assert "episode_number" in error.value.error_dict
+
+    def test_episode_accepts_season_from_same_podcast(self, episode):
+        season = Season.objects.create(podcast=episode.podcast, number=1, name="Launch")
+        episode.season = season
+
+        episode.full_clean()
+
+    def test_episode_rejects_season_from_different_podcast(self, episode, site):
+        other_podcast = PodcastFactory(
+            owner=episode.owner,
+            parent=site.root_page,
+            title="other podcast",
+            slug="other-podcast",
+        )
+        other_season = Season.objects.create(podcast=other_podcast, number=1)
+        episode.season = other_season
+
+        with pytest.raises(ValidationError) as error:
+            episode.full_clean()
+
+        assert "season" in error.value.error_dict
+
+    def test_parentless_episode_defers_season_podcast_validation(self, podcast):
+        season = Season.objects.create(podcast=podcast, number=1)
+        episode = Episode(title="Draft episode", slug="draft-episode", season=season)
+
+        episode.clean()
+
+    def test_blog_cache_validates_unsaved_episode_season(self, podcast, site):
+        other_podcast = PodcastFactory(
+            owner=podcast.owner,
+            parent=site.root_page,
+            title="other podcast",
+            slug="other-podcast",
+        )
+        other_season = Season.objects.create(podcast=other_podcast, number=1)
+        episode = Episode(title="Draft episode", slug="draft-episode", season=other_season)
+        episode._blog = podcast
+
+        with pytest.raises(ValidationError) as error:
+            episode.clean()
+
+        assert "season" in error.value.error_dict
+
+    def test_season_validation_defers_when_blog_lookup_fails(self, mocker, podcast):
+        season = Season.objects.create(podcast=podcast, number=1)
+        episode = Episode(title="Draft episode", slug="draft-episode", season=season)
+        mocker.patch.object(episode, "get_parent", side_effect=ValueError)
+
+        episode._validate_season_matches_podcast()
+
+    def test_season_validation_defers_when_blog_has_no_pk(self, podcast):
+        season = Season.objects.create(podcast=podcast, number=1)
+        episode = Episode(title="Draft episode", slug="draft-episode", season=season)
+        episode._blog = Blog()
+
+        episode.clean()
+
+    def test_episode_form_limits_seasons_to_parent_podcast(self, episode, site):
+        current_season = Season.objects.create(podcast=episode.podcast, number=1)
+        other_podcast = PodcastFactory(
+            owner=episode.owner,
+            parent=site.root_page,
+            title="another podcast",
+            slug="another-podcast",
+        )
+        other_season = Season.objects.create(podcast=other_podcast, number=1)
+        form_class = Episode.get_edit_handler().get_form_class()
+
+        form = form_class(instance=episode)
+
+        assert list(form.fields["season"].queryset) == [current_season]
+        assert other_season not in form.fields["season"].queryset
+
+    def test_episode_form_limits_seasons_to_add_parent_podcast(self, podcast, site):
+        current_season = Season.objects.create(podcast=podcast, number=1)
+        other_podcast = PodcastFactory(
+            owner=podcast.owner,
+            parent=site.root_page,
+            title="new other podcast",
+            slug="new-other-podcast",
+        )
+        other_season = Season.objects.create(podcast=other_podcast, number=1)
+        form_class = Episode.get_edit_handler().get_form_class()
+
+        form = form_class(instance=Episode(title="Draft episode", slug="draft-episode"), parent_page=podcast)
+
+        assert list(form.fields["season"].queryset) == [current_season]
+        assert other_season not in form.fields["season"].queryset
+
+    def test_episode_form_keeps_all_seasons_when_parent_is_unknown(self, podcast):
+        season = Season.objects.create(podcast=podcast, number=1)
+        form_class = Episode.get_edit_handler().get_form_class()
+
+        form = form_class(instance=Episode(title="Draft episode", slug="draft-episode"))
+
+        assert list(form.fields["season"].queryset) == [season]
 
     def test_get_transcript_or_none_repository_none(self):
         episode = Episode(id=1)

@@ -79,6 +79,27 @@ Specialized blog for podcasting with iTunes-specific metadata.
 - Adds podcast-specific fields for feed generation
 - ``itunes_categories_parsed`` property returns parsed categories
 
+Season
+======
+
+Reusable podcast season metadata scoped to a single ``Podcast``.
+
+.. code-block:: python
+
+    class Season(models.Model):
+        podcast = ForeignKey(Podcast, related_name="seasons")
+        number = PositiveIntegerField()
+        name = CharField(max_length=128, blank=True)
+
+**Key Features:**
+
+- Normal model scoped to one podcast and selectable from episode editing
+- ``number`` must be a positive non-zero integer
+- ``name`` is optional and capped at 128 characters for Podcasting 2.0 output
+- ``(podcast, number)`` is unique, so one podcast cannot define the same season
+  number twice
+- Ordered by podcast and season number
+
 Post
 ====
 
@@ -175,12 +196,21 @@ Specialized Post for podcast episodes with audio requirements.
         keywords = CharField(max_length=255)
         explicit = PositiveSmallIntegerField(choices=EXPLICIT_CHOICES)
         block = BooleanField(default=False)
+        episode_number = PositiveIntegerField(null=True, blank=True)
+        episode_type = CharField(choices=["full", "trailer", "bonus"], blank=True)
+        season = ForeignKey(Season, null=True, blank=True)
 
 **Key Features:**
 
 - Requires ``podcast_audio`` to be published
 - Inherits all Post functionality
 - Additional iTunes metadata fields
+- Optional publishing metadata for feeds: positive episode number, explicit
+  episode type, and season assignment
+- The selected season must belong to the parent podcast. Draft or parentless
+  episodes defer this cross-object check until the parent exists.
+- RSS GUIDs continue to use the episode UUID; episode numbers and seasons do
+  not identify feed items
 
 **Methods:**
 
@@ -572,6 +602,8 @@ Media Associations
 
 - **Post** ↔ **Audio/Video/Image/Gallery** (ManyToMany)
 - **Episode** → **Audio** (ForeignKey, required)
+- **Podcast** → **Season** (ForeignKey from Season, reusable per podcast)
+- **Episode** → **Season** (ForeignKey, optional)
 - **Audio** → **Transcript** (OneToOne)
 - **Audio** → **ChapterMark** (OneToMany)
 - **Gallery** ↔ **Image** (ManyToMany)
@@ -637,3 +669,5 @@ Specialized repositories and methods optimize feed generation:
 - Minimal queries for large feeds
 - Proper caching headers
 - Support for both RSS and podcast feeds
+- Podcast feed caches include episode number, episode type, and season
+  number/name so cached feed rendering remains query-free

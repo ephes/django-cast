@@ -102,7 +102,12 @@ class PostQuerySnapshot:
         primary post and media lookup dicts. Renditions are collected
         separately via ``Post.get_all_renditions_from_queryset``.
         """
+        from ..pages import Episode
+
         queryset = queryset.select_related("owner", "cover_image")
+        queryset_model = getattr(queryset, "model", None)
+        if isinstance(queryset_model, type) and issubclass(queryset_model, Episode):
+            queryset = queryset.select_related("podcast_audio__transcript", "season")
         queryset = queryset.prefetch_related(
             "audios",
             "images",
@@ -123,8 +128,6 @@ class PostQuerySnapshot:
         images_by_post_id: ImagesByPostID = {}
         page_url_by_id: PageUrlByID = {}
         absolute_page_url_by_id: PageUrlByID = {}
-        from ..pages import Episode
-
         episode_by_id: dict[int, Episode] = {}
         for post in queryset:
             specific_post = post.specific

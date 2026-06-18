@@ -1,2 +1,7 @@
 0.2.61 (unreleased)
 -------------------
+
+- Added optional podcast publishing metadata: reusable podcast-scoped seasons,
+  episode numbers, and explicit episode types. Podcast feeds now emit matching
+  iTunes and Podcasting 2.0 item tags when metadata is present while preserving
+  existing UUID-based RSS GUIDs and omitting episode type for blank values.

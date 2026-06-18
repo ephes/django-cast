@@ -23,8 +23,10 @@ from cast.feeds import (
     PodcastIndexElements,
     RssPodcastFeed,
     _feed_stylesheets,
+    _episode_season_data,
+    _is_positive_integer,
 )
-from cast.models import Contributor, ContributorLink, EpisodeContributor, Post
+from cast.models import Contributor, ContributorLink, Episode, EpisodeContributor, Season, Post
 
 
 def test_unknown_audio_format():
@@ -287,6 +289,136 @@ class TestGeneratedFeeds:
         assert people[0].attrib["img"].startswith("http://testserver/media/")
         assert people[1].attrib == {"role": "guest"}
         assert "Hidden Guest" not in content
+
+    def test_podcast_feed_omits_blank_publishing_metadata(self, client, episode, use_dummy_cache_backend):
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "<itunes:episode>" not in content
+        assert "<itunes:season>" not in content
+        assert "<itunes:episodeType>" not in content
+        assert "<podcast:episode>" not in content
+        assert "<podcast:season" not in content
+
+    def test_podcast_feed_includes_publishing_metadata(self, client, episode, use_dummy_cache_backend):
+        season = Season.objects.create(podcast=episode.podcast, number=2, name="Launch")
+        episode.episode_number = 7
+        episode.episode_type = Episode.EpisodeType.TRAILER
+        episode.season = season
+        episode.save(update_fields=["episode_number", "episode_type", "season"])
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert content.count("xmlns:podcast=") == 1
+        root = ElementTree.fromstring(content)
+        namespace = {
+            "itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd",
+            "podcast": "https://podcastindex.org/namespace/1.0/",
+        }
+        item = root.find("./channel/item")
+        assert item is not None
+        assert item.findtext("itunes:episode", namespaces=namespace) == "7"
+        assert item.findtext("itunes:season", namespaces=namespace) == "2"
+        assert item.findtext("itunes:episodeType", namespaces=namespace) == "trailer"
+        assert item.findtext("podcast:episode", namespaces=namespace) == "7"
+        podcast_season = item.find("podcast:season", namespace)
+        assert podcast_season is not None
+        assert podcast_season.text == "2"
+        assert podcast_season.attrib == {"name": "Launch"}
+        guid = item.find("guid")
+        assert guid is not None
+        assert guid.text == str(episode.uuid)
+        assert guid.attrib == {"isPermaLink": "false"}
+
+    def test_podcast_feed_includes_unnamed_season_without_name_attribute(
+        self, client, episode, use_dummy_cache_backend
+    ):
+        season = Season.objects.create(podcast=episode.podcast, number=1)
+        episode.season = season
+        episode.save(update_fields=["season"])
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        root = ElementTree.fromstring(response.content.decode("utf-8"))
+        namespace = {"podcast": "https://podcastindex.org/namespace/1.0/"}
+        podcast_season = root.find("./channel/item/podcast:season", namespace)
+        assert podcast_season is not None
+        assert podcast_season.text == "1"
+        assert podcast_season.attrib == {}
+
+    @pytest.mark.parametrize("episode_type", ["full", "trailer", "bonus"])
+    def test_podcast_feed_includes_explicit_episode_type(self, client, episode, use_dummy_cache_backend, episode_type):
+        episode.episode_type = episode_type
+        episode.save(update_fields=["episode_type"])
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert f"<itunes:episodeType>{episode_type}</itunes:episodeType>" in content
+
+    def test_podcast_feed_suppresses_invalid_stored_numbers(self, client, episode, use_dummy_cache_backend):
+        season = Season.objects.create(podcast=episode.podcast, number=1, name="Launch")
+        episode.season = season
+        episode.save(update_fields=["season"])
+        Episode.objects.filter(pk=episode.pk).update(episode_number=0, episode_type="preview")
+        Season.objects.filter(pk=season.pk).update(number=0)
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert "<itunes:episode>" not in content
+        assert "<itunes:season>" not in content
+        assert "<itunes:episodeType>" not in content
+        assert "<podcast:episode>" not in content
+        assert "<podcast:season" not in content
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (1, True),
+        (0, False),
+        (-1, False),
+        (True, False),
+        ("1", False),
+        (None, False),
+    ],
+)
+def test_is_positive_integer(value, expected):
+    assert _is_positive_integer(value) is expected
+
+
+def test_episode_season_data():
+    assert _episode_season_data(SimpleNamespace(season=None)) == (None, "")
+    assert _episode_season_data(SimpleNamespace(season=SimpleNamespace(number=0, name="Invalid"))) == (None, "")
+    assert _episode_season_data(SimpleNamespace(season=SimpleNamespace(number=1, name="Launch"))) == (1, "Launch")
 
 
 def test_itunes_elements_add_root_elements_index_error(mocker):

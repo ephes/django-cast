@@ -238,7 +238,7 @@ class FeedContext:
             post_queryset = (
                 Episode.objects.live()
                 .descendant_of(blog)
-                .select_related("podcast_audio__transcript")
+                .select_related("podcast_audio__transcript", "season")
                 .filter(podcast_audio__isnull=False)
                 .order_by("-visible_date")
             )
@@ -267,7 +267,7 @@ class FeedContext:
             blog._last_build_date = last_build_date
         template_base_dir = data["template_base_dir"]
         post_by_id = {}
-        podcast_fields = ["podcast_audio", "block", "keywords", "explicit"]
+        podcast_fields = ["podcast_audio", "block", "keywords", "explicit", "episode_number", "episode_type", "season"]
         for post_pk, post_data in data["post_by_id"].items():
             is_podcast = any(field in post_data for field in podcast_fields)
             if is_podcast:

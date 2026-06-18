@@ -72,6 +72,13 @@ Tags (from ``django-taggit``) are registered as a Wagtail snippet, providing
 a CRUD interface for managing tags directly in the Wagtail admin under
 the Snippets menu.
 
+Season Management
+-----------------
+
+Podcast seasons are regular Django models scoped to a single podcast. They are
+available in the Django admin for basic CRUD and can be selected from episode
+editing when assigning podcast publishing metadata.
+
 Editor Integration
 -------------------
 

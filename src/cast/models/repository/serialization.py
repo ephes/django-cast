@@ -6,7 +6,7 @@ from wagtail.images.models import Rendition
 from .types import RenditionsForPosts, SerializedRenditions
 
 if TYPE_CHECKING:
-    from cast.models import Blog, Contributor, ContributorLink, EpisodeContributor
+    from cast.models import Blog, Contributor, ContributorLink, EpisodeContributor, Season
 
 
 def serialize_audio(audio) -> dict:
@@ -142,6 +142,23 @@ def deserialize_episode_contributor(data: dict[str, Any]) -> "EpisodeContributor
     return EpisodeContributor(**assignment_data)
 
 
+def serialize_season(season: "Season") -> dict[str, Any]:
+    """Serialize a podcast season for feed cache data."""
+    return {
+        "id": season.pk,
+        "podcast_id": season.podcast_id,
+        "number": season.number,
+        "name": season.name,
+    }
+
+
+def deserialize_season(data: dict[str, Any]) -> "Season":
+    """Reconstruct a podcast season from serialized feed cache data."""
+    from .. import Season
+
+    return Season(**data)
+
+
 def serialize_video(video) -> dict:
     """Serialize a Video model instance to a plain dict for caching."""
     data = {
@@ -253,7 +270,11 @@ def serialize_episode(post):
         "keywords": post.keywords,
         "explicit": post.explicit,
         "block": post.block,
+        "episode_number": post.episode_number,
+        "episode_type": post.episode_type,
     }
+    if post.season is not None:
+        data["season"] = serialize_season(post.season)
     data["contributor_assignments"] = [
         serialize_episode_contributor(assignment) for assignment in post.visible_contributor_assignments
     ]
@@ -267,6 +288,8 @@ def deserialize_episode(data: dict[str, Any]):
     episode_data = data.copy()
     if "podcast_audio" in episode_data:
         episode_data["podcast_audio"] = deserialize_audio(episode_data["podcast_audio"])
+    if (season_data := episode_data.get("season")) is not None:
+        episode_data["season"] = deserialize_season(season_data)
     assignments_data = episode_data.pop("contributor_assignments", [])
     episode = Episode(**episode_data)
     episode._visible_contributor_assignments = [

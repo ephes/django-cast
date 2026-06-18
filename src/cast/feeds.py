@@ -33,6 +33,24 @@ else:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
+def _is_positive_integer(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _episode_season_data(post: Post) -> tuple[int | None, str]:
+    season = getattr(post, "season", None)
+    if season is None:
+        return None, ""
+    season_number = getattr(season, "number", None)
+    if not _is_positive_integer(season_number):
+        return None, ""
+    return season_number, getattr(season, "name", "")
+
+
+def _is_episode_type(value: object) -> bool:
+    return value in {"full", "trailer", "bonus"}
+
+
 class RepositoryMixin:
     is_podcast: bool = False
     request: HtmxHttpRequest
@@ -60,7 +78,7 @@ class RepositoryMixin:
                 post_queryset = (
                     Episode.objects.live()
                     .descendant_of(blog)
-                    .select_related("podcast_audio__transcript")
+                    .select_related("podcast_audio__transcript", "season")
                     .filter(podcast_audio__isnull=False)
                     .order_by("-visible_date")
                 )
@@ -249,6 +267,13 @@ class ITunesElements:
 
         post = item["post"]
         haqe("guid", str(post.uuid), attrs={"isPermaLink": "false"})
+        if _is_positive_integer(episode_number := getattr(post, "episode_number", None)):
+            haqe("itunes:episode", str(episode_number))
+        if (season_number := _episode_season_data(post)[0]) is not None:
+            haqe("itunes:season", str(season_number))
+        episode_type = getattr(post, "episode_type", "")
+        if _is_episode_type(episode_type):
+            haqe("itunes:episodeType", episode_type)
         # Maybe add license later
         # year = timezone.now().year
         # haqe("copyright", "{0} {1}".format("insert license", year))
@@ -303,6 +328,12 @@ class PodcastIndexElements:
             podcastindex_transcript_url := episode.get_podcastindex_transcript_url(self.request, repository)
         ) is not None:
             haqe("podcast:transcript", attrs={"type": "application/json", "url": podcastindex_transcript_url})
+        if _is_positive_integer(episode_number := getattr(episode, "episode_number", None)):
+            haqe("podcast:episode", str(episode_number))
+        season_number, season_name = _episode_season_data(episode)
+        if season_number is not None:
+            attrs = {"name": season_name} if season_name else None
+            haqe("podcast:season", str(season_number), attrs=attrs)
         for assignment in episode.visible_contributor_assignments:
             haqe(
                 "podcast:person",

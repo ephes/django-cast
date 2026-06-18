@@ -35,6 +35,7 @@ from cast.models import (
     EpisodeContributor,
     Podcast,
     Post,
+    Season,
     Transcript,
     Video,
 )
@@ -52,6 +53,7 @@ from cast.models.repository import (
     deserialize_episode,
     deserialize_image,
     deserialize_post,
+    deserialize_season,
     deserialize_transcript,
     deserialize_video,
     deserialize_blog,
@@ -65,6 +67,7 @@ from cast.models.repository import (
     serialize_image,
     serialize_post,
     serialize_renditions,
+    serialize_season,
     serialize_transcript,
     serialize_video,
 )
@@ -753,7 +756,12 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
     # Given a post with media in a blog
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=6, podcast=True)
-    post = blog.unfiltered_published_posts.first()
+    post = Episode.objects.live().descendant_of(blog).order_by("-visible_date").first()
+    season = Season.objects.create(podcast=blog, number=2, name="Launch")
+    post.episode_number = 7
+    post.episode_type = Episode.EpisodeType.BONUS
+    post.season = season
+    post.save(update_fields=["episode_number", "episode_type", "season"])
     author_name = post.owner.username.capitalize()
     post_detail_url = post.get_url()
     request = rf.get(blog.get_url())
@@ -783,6 +791,11 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
     assert 'class="block-video"' in html
     assert 'class="block-audio"' in html
     assert "podcast:transcript" in html
+    assert "<itunes:episode>7</itunes:episode>" in html
+    assert "<itunes:season>2</itunes:season>" in html
+    assert "<itunes:episodeType>bonus</itunes:episodeType>" in html
+    assert "<podcast:episode>7</podcast:episode>" in html
+    assert '<podcast:season name="Launch">2</podcast:season>' in html
     assert author_name in html
     assert post_detail_url in html
     # And the database should not be hit
@@ -1155,6 +1168,38 @@ def test_serialize_episode_contributor_without_avatar_rendition(episode):
     assert "avatar_rendition_url" not in data["contributor"]
     assert rebuilt.contributor.get_avatar_rendition_url() == ""
     assert rebuilt.href == ""
+
+
+@pytest.mark.django_db
+def test_serialize_season_roundtrip(episode):
+    season = Season.objects.create(podcast=episode.podcast, number=3, name="Named season")
+
+    data = serialize_season(season)
+    rebuilt = deserialize_season(data)
+
+    assert "pk" not in data
+    assert rebuilt.pk == season.pk
+    assert rebuilt.podcast_id == episode.podcast.pk
+    assert rebuilt.number == 3
+    assert rebuilt.name == "Named season"
+
+
+@pytest.mark.django_db
+def test_serialize_episode_roundtrip_with_publishing_metadata(episode):
+    season = Season.objects.create(podcast=episode.podcast, number=1, name="Launch")
+    episode.episode_number = 42
+    episode.episode_type = Episode.EpisodeType.FULL
+    episode.season = season
+
+    data = serialize_episode(episode)
+    rebuilt = deserialize_episode(data)
+
+    assert rebuilt.episode_number == 42
+    assert rebuilt.episode_type == Episode.EpisodeType.FULL
+    assert rebuilt.season is not None
+    assert rebuilt.season.number == 1
+    assert rebuilt.season.name == "Launch"
+    assert serialize_episode(rebuilt) == data
 
 
 def test_get_facet_choices():

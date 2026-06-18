@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, cast
 
 import django.forms.forms
+from django.core.validators import MinValueValidator
 from django.core.paginator import InvalidPage, Page as DjangoPage, Paginator
 from django.db import models
 from django.http import Http404
@@ -33,6 +34,40 @@ logger = logging.getLogger(__name__)
 
 
 ContextDict = dict[str, Any]
+
+
+class Season(models.Model):
+    """Reusable podcast season metadata scoped to one podcast."""
+
+    podcast: models.ForeignKey = models.ForeignKey(
+        "cast.Podcast",
+        on_delete=models.CASCADE,
+        related_name="seasons",
+        help_text=_("Podcast this season belongs to."),
+    )
+    number: models.PositiveIntegerField = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        help_text=_("Positive season number used in podcast feeds."),
+    )
+    name: models.CharField = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text=_("Optional season name for Podcasting 2.0 feeds."),
+    )
+
+    class Meta:
+        ordering = ["podcast_id", "number"]
+        constraints = [
+            models.UniqueConstraint(fields=["podcast", "number"], name="unique_podcast_season_number"),
+        ]
+
+    def __str__(self) -> str:
+        podcast_title = self.podcast.title if self.podcast_id is not None else _("Podcast")
+        label = _("Season %(number)s") % {"number": self.number}
+        if self.name:
+            return f"{podcast_title}: {label} - {self.name}"
+        return f"{podcast_title}: {label}"
 
 
 class Blog(Page):
