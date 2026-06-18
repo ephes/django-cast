@@ -57,6 +57,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on
     stable feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
 
+- [ ] Podcast publishing metadata
+  - PRD: [backlog/2026-06-18-podcast-publishing-metadata.md](backlog/2026-06-18-podcast-publishing-metadata.md)
+  - Related to: Podcast feed import and podcast contributor follow-up options.
+  - Scope: add optional standards-aware episode number, episode type, and season metadata for podcast episodes,
+    including a reusable season model and feed output for valid iTunes and Podcasting 2.0 tags.
+  - Done when: the model shape, feed behavior, Wagtail editing UI, validation rules, and consumer backfill guidance
+    are implemented and documented without changing existing feed GUIDs.
+
 - [ ] Programmatic content editing API
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
     and revise posts or episodes programmatically.
