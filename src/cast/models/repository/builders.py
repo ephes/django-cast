@@ -18,11 +18,23 @@ from .serialization import (
     serialize_video,
 )
 from .snapshot import PostQuerySnapshot
-from .types import Choice, HasChoices
+from .types import (
+    AudioById,
+    AudiosByPostID,
+    Choice,
+    HasChoices,
+    ImageById,
+    ImagesByPostID,
+    MediaLookup,
+    VideoById,
+    VideosByPostID,
+)
 
 if TYPE_CHECKING:
     from cast.models import Blog, Post
     from cast.views import HtmxHttpRequest
+
+    from .types import CachableBlogData
 
 
 def _blog_url_from_referer(request: HttpRequest, base_blog_url: str) -> str:
@@ -43,6 +55,33 @@ def _blog_url_from_referer(request: HttpRequest, base_blog_url: str) -> str:
     if parsed.path.rstrip("/") == base_blog_url.rstrip("/") and parsed.query:
         return f"{base_blog_url}?{parsed.query}"
     return base_blog_url
+
+
+def build_media_lookup(
+    post_pk: int,
+    *,
+    images_by_post_id: ImagesByPostID,
+    videos_by_post_id: VideosByPostID,
+    audios_by_post_id: AudiosByPostID,
+    images: ImageById,
+    videos: VideoById,
+    audios: AudioById,
+) -> MediaLookup:
+    """Rebuild a post's ``media_lookup`` from the snapshot's per-post id sets.
+
+    Centralizes the audio/video/image lookup-rebuild loop shared by the feed and
+    blog-index repositories (live models and cachable-data paths). Returns a fresh
+    mapping keyed by ``"image"`` / ``"video"`` / ``"audio"``; keys are present only
+    when the post has media of that kind, preserving the previous behavior.
+    """
+    media_lookup: MediaLookup = {}
+    for image_pk in images_by_post_id.get(post_pk, ()):
+        media_lookup.setdefault("image", {})[image_pk] = images[image_pk]
+    for video_pk in videos_by_post_id.get(post_pk, ()):
+        media_lookup.setdefault("video", {})[video_pk] = videos[video_pk]
+    for audio_pk in audios_by_post_id.get(post_pk, ()):
+        media_lookup.setdefault("audio", {})[audio_pk] = audios[audio_pk]
+    return media_lookup
 
 
 def apply_cover_fallback(
@@ -170,7 +209,7 @@ def data_for_blog_cachable(
     blog: "Blog",
     is_paginated: bool = True,  # feed is not paginated
     post_queryset: QuerySet["Post"] | None = None,  # queryset is build from filterset / get_params if None
-) -> dict:
+) -> "CachableBlogData":
     """
     Fetch all the data of a blog in a cachable (dict) format.
     """
@@ -206,4 +245,6 @@ def data_for_blog_cachable(
     if visible_dates:
         data["last_build_date"] = max(visible_dates)
 
-    return data
+    # The dict is assembled incrementally above; this cast names the completed
+    # cache boundary so consumers (``create_from_cachable_data``) type-check.
+    return cast("CachableBlogData", data)

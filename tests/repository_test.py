@@ -1449,6 +1449,45 @@ def test_apply_cover_fallback_uses_blog_cover():
     assert cover_alt == "Blog alt text"
 
 
+def test_build_media_lookup_groups_media_by_kind():
+    from cast.models.repository.builders import build_media_lookup
+
+    images = {10: "image-10", 11: "image-11"}
+    videos = {20: "video-20"}
+    audios = {30: "audio-30"}
+    media_lookup = build_media_lookup(
+        1,
+        images_by_post_id={1: {10, 11}},
+        videos_by_post_id={1: {20}},
+        audios_by_post_id={1: {30}},
+        images=images,
+        videos=videos,
+        audios=audios,
+    )
+    assert media_lookup == {
+        "image": {10: "image-10", 11: "image-11"},
+        "video": {20: "video-20"},
+        "audio": {30: "audio-30"},
+    }
+
+
+def test_build_media_lookup_omits_empty_kinds_for_post_without_media():
+    from cast.models.repository.builders import build_media_lookup
+
+    # A post with no media of any kind must yield an empty mapping (no empty
+    # "image"/"video"/"audio" sub-dicts), matching the previous inline behavior.
+    media_lookup = build_media_lookup(
+        99,
+        images_by_post_id={},
+        videos_by_post_id={},
+        audios_by_post_id={},
+        images={},
+        videos={},
+        audios={},
+    )
+    assert media_lookup == {}
+
+
 @pytest.mark.django_db
 def test_data_for_blog_cachable_includes_blog_cover_image(rf, blog, image):
     blog.cover_image = image
