@@ -13,25 +13,11 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [x] Persistent player on python-podcast staging — **staging proof done (2026-06-08)**
-  - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
-    (see "Implementation Log")
-  - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
-  - Proven on `python-podcast.staging.django-cast.com` (pp theme, behind a staging-only flag): starting an
-    episode and navigating enhanced to the podcast index, another episode, and `/about/` keeps the same audio
-    object playing in the same document with currentTime advancing; an explicit play switches episodes cleanly;
-    back/forward keeps audio advancing; axe-core reports 0 violations; production is unchanged (flag pinned off).
-    All in python-podcast — django-cast/cast-bootstrap5 unchanged.
-  - Remaining (separate decision): whether to generalize into a reusable django-cast/cast-bootstrap5 API
-    (the open question in the note) or keep it python-podcast-specific.
+No next item selected.
 
 ## Ready
 
-- [ ] Repository read-model cleanup experiment
-  - Notes: [backlog/2026-04-18-repository-readmodels.md](backlog/2026-04-18-repository-readmodels.md)
-  - Scope: try local typed read shapes around the repository layer before considering `django-mantle`.
-  - Done when: a narrow branch proves whether typed read shapes clarify repository logic without changing
-    template contracts or query counts.
+No ready implementation items.
 
 ## Research / Shaping
 
@@ -50,24 +36,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the current workflows are documented in one place, gaps are listed, and follow-up items are split
     into concrete implementation tasks.
 
-- [ ] Podcast feed import
-  - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
-  - Related to: Revisit onboarding and authoring workflows.
-  - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
-  - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on
-    stable feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
-
-- [ ] Podcast publishing metadata
+- [ ] Podcast publishing metadata follow-ups
   - PRD: [backlog/2026-06-18-podcast-publishing-metadata.md](backlog/2026-06-18-podcast-publishing-metadata.md)
   - Status: first implementation slice landed for optional episode number, episode type, podcast-scoped seasons,
     Wagtail editing, feed tags, validation, repository/cache serialization, docs, and release notes. The automatic
-    podcast episode numbering follow-up also landed for opt-in podcast-scoped first-publish assignment. Keep active for
-    remaining deferred follow-up slices in the PRD.
+    podcast episode numbering follow-up also landed for opt-in podcast-scoped first-publish assignment.
   - Related to: Podcast feed import and podcast contributor follow-up options.
-  - Scope: add optional standards-aware episode number, episode type, and season metadata for podcast episodes,
-    including a reusable season model and feed output for valid iTunes and Podcasting 2.0 tags.
-  - Done when: the model shape, feed behavior, Wagtail editing UI, validation rules, and consumer backfill guidance
-    are implemented and documented without changing existing feed GUIDs.
+  - Scope: decide the remaining deferred questions in the PRD: season editing shape, duplicate number policy, legacy
+    import values, and possible channel-level `itunes:type` support.
+  - Done when: the remaining PRD questions are either split into concrete implementation items or explicitly deferred.
 
 - [ ] Programmatic content editing API
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
@@ -118,6 +95,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
     existing feed compatibility.
 
+- [ ] Podcast feed import
+  - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
+  - Status: deferred for now.
+  - Related to: Revisit onboarding and authoring workflows.
+  - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
+  - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on stable
+    feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
+
 - [ ] Tags/categories and faceted navigation completion
   - Scope: decide whether tags, categories, or both should remain public organization primitives and finish the beta
     faceted navigation behavior.
@@ -128,6 +113,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: make currently soft-required theme templates strictly required after the deprecation period.
   - Done when: theme discovery enforces the final required template set and the theme docs/release notes explain the
     migration path.
+
+- [ ] Persistent player generic rollout decision
+  - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
+  - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
+  - Scope: decide whether the python-podcast staging proof should become a reusable django-cast/cast-bootstrap5 API,
+    remain python-podcast-specific, or be closed as a staging-only experiment.
+  - Done when: the generic theme contract/API work is split into concrete implementation items or explicitly deferred.
 
 - [ ] Podcast contributor follow-up options
   - Notes: [backlog/2026-05-12-podcast-episode-contributors.md](backlog/2026-05-12-podcast-episode-contributors.md)

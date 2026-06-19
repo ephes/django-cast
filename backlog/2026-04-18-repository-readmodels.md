@@ -1,5 +1,8 @@
 # Repository Read-Model Cleanup Experiment
 
+Status: implemented and merged into `develop` in `0b44f6be`. Kept as historical
+context for the local typed-shape decision; no active backlog item remains.
+
 ## Summary
 
 Do not add `django-mantle` to django-cast yet. The useful idea is narrower:
@@ -11,7 +14,7 @@ that Mantle does not provide directly: `Page.specific`, `StreamField`, image
 renditions, rich-text link priming, request/site-aware URLs, theme compatibility,
 and aggregate lookup maps.
 
-## Recommended First Slice
+## Original Recommended First Slice
 
 Create an experiment branch such as:
 
@@ -49,8 +52,9 @@ query-backed projections that the current repository layer does not provide.
 
 ## Experiment Findings (2026-06-16)
 
-Run on branch `experiment/repository-readmodels`, uncommitted. Baseline before the
-slice: `tests/repository_test.py` 73 passed, `mypy src/cast/models/repository/` clean.
+Run first on branch `experiment/repository-readmodels`, then merged into
+`develop`. Baseline before the slice: `tests/repository_test.py` 73 passed,
+`mypy src/cast/models/repository/` clean.
 
 ### What was implemented (narrow slice)
 

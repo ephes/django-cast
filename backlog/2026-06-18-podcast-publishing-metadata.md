@@ -1,7 +1,10 @@
 # Podcast Publishing Metadata
 
 Date: 2026-06-18
-Status: PRD / shaping note; first metadata slice and automatic numbering follow-up implemented
+Status: first metadata slice and automatic numbering follow-up implemented.
+Remaining active work is limited to deferred follow-up questions: season editing
+shape, duplicate number policy, legacy import values, and possible channel-level
+`itunes:type` support.
 
 ## Summary
 

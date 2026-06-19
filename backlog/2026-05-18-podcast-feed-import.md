@@ -1,5 +1,9 @@
 # Podcast Feed Import
 
+Status: deferred for now. When this resumes, the first decision is where source
+feed identity, feed item identifiers, enclosure URLs, and media handling policy
+are stored so duplicate detection can be implemented safely.
+
 ## Summary
 
 Add a podcast import workflow that can read a public podcast RSS feed and create
@@ -32,7 +36,21 @@ site.
 - Podcast contributor follow-up options, if feeds include people metadata that
   maps to django-cast contributors.
 
-## First Slice
+## Next Shaping Slice
+
+Before implementation, settle the import provenance and media policy:
+
+- where to store the source feed URL for an imported podcast;
+- where to store stable feed item identifiers such as GUIDs or canonical links;
+- whether enclosure URLs are stored as provenance, linked directly, downloaded
+  into django-cast storage, or handled by an explicit command option;
+- what duplicate detection checks on repeat imports;
+- what dry-run output must show before any database or storage writes happen.
+
+This slice is done when the decisions above are recorded here and the management
+command implementation can move to `Ready`.
+
+## First Implementation Slice
 
 Design a management-command based import workflow, for example:
 
