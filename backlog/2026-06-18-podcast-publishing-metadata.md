@@ -1,7 +1,7 @@
 # Podcast Publishing Metadata
 
 Date: 2026-06-18
-Status: PRD / shaping note
+Status: PRD / shaping note; first metadata slice and automatic numbering follow-up implemented
 
 ## Summary
 
@@ -245,19 +245,23 @@ until the parent exists.
 
 Manual metadata fields are enough for the first upstream slice.
 
-If automatic assignment is added later:
+Automatic assignment was added in a follow-up implementation:
 
-- do not consume a number when an editor only creates a draft;
-- assign only on first publish when the number is blank;
-- never change an existing number automatically after first publish;
-- serialize assignment with a real lock/counter/sequence, not an unlocked
-  `max(number) + 1` query;
-- cover Wagtail editor publish, scheduled publish, and bulk publish paths;
-- decide explicitly whether trailers and bonus episodes consume the main
-  full-episode sequence.
+- automatic numbering is disabled by default and enabled per `Podcast`;
+- draft saves and future scheduling approvals do not consume a number;
+- blank/full episodes consume the podcast-scoped sequence on first real publish
+  when `episode_number` is blank;
+- trailer and bonus episodes do not consume numbers in the first automatic
+  numbering slice;
+- existing non-empty numbers remain authoritative;
+- assignment locks the podcast counter row and skips already-used manual numbers
+  under the same podcast;
+- assigned numbers are written into Wagtail revision content as well as the live
+  object being saved.
 
-This is deliberately a follow-up policy layer, not a prerequisite for adding
-standard metadata fields.
+This remains a policy layer separate from the base metadata fields. Feed import,
+renumbering, season-scoped numbering, and channel-level `itunes:type` remain out
+of scope and tracked separately when needed.
 
 ## Backwards Compatibility
 

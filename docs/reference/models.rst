@@ -72,12 +72,17 @@ Specialized blog for podcasting with iTunes-specific metadata.
         itunes_categories = CharField()  # JSON field
         keywords = CharField(max_length=255)
         explicit = PositiveSmallIntegerField(choices=EXPLICIT_CHOICES)
+        automatic_episode_numbering_enabled = BooleanField(default=False)
+        next_episode_number = PositiveIntegerField(default=1)
 
 **Additional Features:**
 
 - Inherits all Blog functionality
 - Adds podcast-specific fields for feed generation
 - ``itunes_categories_parsed`` property returns parsed categories
+- Automatic episode numbering is opt-in per podcast. When enabled,
+  ``next_episode_number`` is locked and advanced during first publish of blank
+  full episodes, while manual episode numbers remain authoritative.
 
 Season
 ======
@@ -207,6 +212,9 @@ Specialized Post for podcast episodes with audio requirements.
 - Additional iTunes metadata fields
 - Optional publishing metadata for feeds: positive episode number, explicit
   episode type, and season assignment
+- Blank ``episode_type`` is equivalent to ``full``. Automatic numbering consumes
+  numbers for blank/full episodes only; trailer and bonus episodes do not consume
+  the podcast sequence in the first implementation.
 - The selected season must belong to the parent podcast. Draft or parentless
   episodes defer this cross-object check until the parent exists.
 - RSS GUIDs continue to use the episode UUID; episode numbers and seasons do

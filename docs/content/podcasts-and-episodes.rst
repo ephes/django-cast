@@ -20,6 +20,27 @@ Itunes Artwork
 --------------
 The image that will be used in the podcast feed as the iTunes artwork.
 
+Automatic Episode Numbering
+---------------------------
+
+Automatic episode numbering is disabled by default for every podcast. To enable
+it, edit the podcast page in Wagtail and turn on **Automatic episode numbering**
+in the podcast settings panel. The **Next episode number** field controls the
+next podcast-scoped number django-cast will try to assign.
+
+When enabled, django-cast assigns a number only when a blank full episode is
+first really published. Saving a draft does not consume a number, and scheduling
+a future publish does not consume a number until Wagtail actually publishes the
+episode. Blank episode type is treated as full for this policy. Trailer and
+bonus episodes do not consume numbers in this first implementation.
+
+Editors can still set episode numbers manually. Automatic assignment never
+rewrites a non-empty episode number, and it skips numbers that are already used
+by another episode under the same podcast. This can leave gaps in the sequence;
+avoiding duplicate public numbers is more important than strict contiguity.
+Episode numbers remain publishing metadata only. RSS GUIDs, slugs, and URLs are
+not derived from episode numbers.
+
 .. _episode_overview:
 
 Episodes
@@ -62,6 +83,22 @@ Keywords
 --------
 
 Keywords are set in the podcast feed as the iTunes keywords tag.
+
+Podcast Publishing Metadata
+---------------------------
+
+Episodes can carry optional podcast publishing metadata:
+
+- ``episode_number``: a positive episode number for iTunes and Podcasting 2.0
+  feed metadata.
+- ``episode_type``: one of ``full``, ``trailer``, or ``bonus``. Leaving it blank
+  omits the feed tag and is equivalent to ``full``.
+- ``season``: a reusable podcast-scoped season with a positive season number
+  and optional name.
+
+Podcast clients identify feed items by GUID. Episode numbers, types, and
+seasons are metadata for podcast directories and apps; changing them does not
+change feed identity.
 
 Contributors
 ------------

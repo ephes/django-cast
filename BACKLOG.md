@@ -60,8 +60,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Podcast publishing metadata
   - PRD: [backlog/2026-06-18-podcast-publishing-metadata.md](backlog/2026-06-18-podcast-publishing-metadata.md)
   - Status: first implementation slice landed for optional episode number, episode type, podcast-scoped seasons,
-    Wagtail editing, feed tags, validation, repository/cache serialization, docs, and release notes. Keep active for
-    deferred follow-up slices in the PRD.
+    Wagtail editing, feed tags, validation, repository/cache serialization, docs, and release notes. The automatic
+    podcast episode numbering follow-up also landed for opt-in podcast-scoped first-publish assignment. Keep active for
+    remaining deferred follow-up slices in the PRD.
   - Related to: Podcast feed import and podcast contributor follow-up options.
   - Scope: add optional standards-aware episode number, episode type, and season metadata for podcast episodes,
     including a reusable season model and feed output for valid iTunes and Podcasting 2.0 tags.

@@ -5,3 +5,7 @@
   episode numbers, and explicit episode types. Podcast feeds now emit matching
   iTunes and Podcasting 2.0 item tags when metadata is present while preserving
   existing UUID-based RSS GUIDs and omitting episode type for blank values.
+- Added opt-in automatic podcast episode numbering per podcast. Blank full
+  episodes can now receive the next podcast-scoped number on first real publish;
+  draft saves and future scheduling approvals do not consume numbers, manual
+  numbers stay authoritative, and RSS GUIDs remain UUID-based.

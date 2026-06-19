@@ -79,6 +79,16 @@ Podcast seasons are regular Django models scoped to a single podcast. They are
 available in the Django admin for basic CRUD and can be selected from episode
 editing when assigning podcast publishing metadata.
 
+Podcast Numbering Controls
+--------------------------
+
+Podcast pages expose automatic episode numbering controls in Wagtail's podcast
+settings panel and in the Django admin. The behavior is disabled by default.
+When enabled, django-cast assigns ``next_episode_number`` to blank full episodes
+on first real publish, skips manually used numbers under the same podcast, and
+then advances the counter. Draft saves and future scheduling approvals do not
+consume numbers.
+
 Editor Integration
 -------------------
 

@@ -42,7 +42,14 @@ class BlogModelAdmin(AdminUserMixin, ModelAdmin):
 @admin.register(Podcast)
 class PodcastModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("title", "owner")
-    fields = ("itunes_artwork", "itunes_categories", "explicit", "keywords")
+    fields = (
+        "itunes_artwork",
+        "itunes_categories",
+        "explicit",
+        "keywords",
+        "automatic_episode_numbering_enabled",
+        "next_episode_number",
+    )
 
 
 @admin.register(Season)

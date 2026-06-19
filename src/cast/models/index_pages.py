@@ -400,6 +400,15 @@ class Podcast(Blog):
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
+    automatic_episode_numbering_enabled: models.BooleanField = models.BooleanField(
+        default=False,
+        help_text=_("Assign the next podcast-scoped number to blank full episodes on their first publish."),
+    )
+    next_episode_number: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        help_text=_("Next number to try when automatic episode numbering is enabled."),
+    )
 
     content_panels = Page.content_panels + [
         FieldPanel("subtitle", classname="collapsed"),
@@ -416,6 +425,8 @@ class Podcast(Blog):
                 FieldPanel("itunes_categories"),
                 FieldPanel("keywords"),
                 FieldPanel("explicit"),
+                FieldPanel("automatic_episode_numbering_enabled"),
+                FieldPanel("next_episode_number"),
             ],
             heading=_("Podcast Settings"),
             classname="collapsed",
