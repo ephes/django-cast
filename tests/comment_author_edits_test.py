@@ -359,6 +359,29 @@ class TestEditEndpoint:
         )
         assert author_edits.edited_pks_for([comment.pk]) == {str(comment.pk)}
 
+    def test_lock_does_not_outer_join_nullable_user_fk(self, client, comment, feature_on):
+        # Postgres rejects ``FOR UPDATE`` over the nullable side of an outer join,
+        # so the locked comment load must drop the manager's select_related("user").
+        # SQLite ignores FOR UPDATE, so this query-shape check is the regression guard.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from django.urls import reverse
+
+        seed_ownership(client, comment)
+        with CaptureQueriesContext(connection) as ctx:
+            r = client.post(
+                reverse("comments-edit-comment-ajax"),
+                {"comment_id": str(comment.pk), "comment": "edited"},
+                **AJAX,
+            )
+        assert r.status_code == 200
+        offending = [
+            q["sql"]
+            for q in ctx.captured_queries
+            if "comment" in q["sql"].lower() and "auth_user" in q["sql"].lower() and " join " in q["sql"].lower()
+        ]
+        assert offending == [], offending
+
     def test_non_ajax_request_rejected(self, client, comment, feature_on):
         from django.urls import reverse
 

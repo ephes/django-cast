@@ -110,7 +110,10 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
         comment_model = django_comments.get_model()
         with transaction.atomic(using=using):
             try:
-                parent = comment_model.objects.using(using).select_for_update().get(pk=parent_id)
+                # select_related(None) drops the manager's join to the nullable
+                # ``user`` FK: Postgres rejects ``FOR UPDATE`` over the nullable
+                # side of an outer join. We only need to lock the comment row.
+                parent = comment_model.objects.using(using).select_related(None).select_for_update().get(pk=parent_id)
             except comment_model.DoesNotExist:
                 return CommentPostBadRequest("The parent comment no longer exists.")
             if not parent.is_public or parent.is_removed:
@@ -227,7 +230,10 @@ def _load_locked_actionable(
     a denial response. Ownership was already established in the preamble and is
     request-stable, so it is not re-checked here."""
     try:
-        comment = model.objects.using(using).select_for_update().get(pk=comment_id)
+        # select_related(None) drops the manager's join to the nullable ``user``
+        # FK so ``FOR UPDATE`` is valid on Postgres (it rejects locking the
+        # nullable side of an outer join); we only need to lock the comment row.
+        comment = model.objects.using(using).select_related(None).select_for_update().get(pk=comment_id)
     except (model.DoesNotExist, ValueError, TypeError, ValidationError):
         return _generic_denial()
     if not author_edits.comment_is_actionable(comment):
