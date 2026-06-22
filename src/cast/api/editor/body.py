@@ -10,25 +10,44 @@ from wagtail.images.permissions import permission_policy as image_permission_pol
 
 from .errors import EditorValidationError
 
-SUPPORTED_OVERVIEW_BLOCKS = frozenset({"heading", "paragraph", "code", "image", "gallery"})
+SUPPORTED_OVERVIEW_BLOCKS = frozenset({"heading", "paragraph", "code", "image", "gallery", "audio"})
 
 # A single shared RichTextBlock used to validate/normalize paragraph HTML through
 # the same path Wagtail uses on admin save.
 _PARAGRAPH_BLOCK = RichTextBlock()
 
 
-def image_choosable_by(image_id: Any, user: Any) -> bool:
-    """True if the image exists and the user may choose it (Wagtail collection ``choose`` permission).
+def _choosable(obj_id: Any, user: Any, *, queryset: Any, policy: Any) -> bool:
+    """True if ``obj_id`` exists in ``queryset`` and ``user`` may ``choose`` it.
 
     Existence and visibility are deliberately collapsed into one boolean so callers report a single
-    ``not_found`` and never leak the existence of images the caller cannot access.
+    ``not_found`` and never leak the existence of media the caller cannot access.
     """
-    if not isinstance(image_id, int) or isinstance(image_id, bool):
+    if not isinstance(obj_id, int) or isinstance(obj_id, bool):
         return False
-    image = get_image_model().objects.filter(pk=image_id).first()
-    if image is None:
+    obj = queryset.filter(pk=obj_id).first()
+    if obj is None:
         return False
-    return image_permission_policy.user_has_permission_for_instance(user, "choose", image)
+    return policy.user_has_permission_for_instance(user, "choose", obj)
+
+
+def image_choosable_by(image_id: Any, user: Any) -> bool:
+    """True if the image exists and the caller may choose it (Wagtail image ``choose`` permission)."""
+    return _choosable(image_id, user, queryset=get_image_model().objects, policy=image_permission_policy)
+
+
+def audio_choosable_by(audio_id: Any, user: Any) -> bool:
+    """True if the cast audio exists and the caller may choose it.
+
+    Audio has no dedicated ``choose_audio`` permission, so this uses the same collection-ownership
+    policy the audio chooser is built on: superusers and users with audio collection permissions pass.
+    """
+    from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
+
+    from ...models import Audio
+
+    policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
+    return _choosable(audio_id, user, queryset=Audio.objects, policy=policy)
 
 
 def author_blocks_to_overview(blocks: list[dict], *, user: Any, path_prefix: str = "overview") -> list[dict]:
@@ -105,7 +124,7 @@ def author_blocks_to_overview(blocks: list[dict], *, user: Any, path_prefix: str
                 continue
             result.append({"type": "image", "value": image_id})
 
-        else:  # block_type == "gallery" (the only remaining supported type)
+        elif block_type == "gallery":
             if not isinstance(value, list) or not value:
                 errors[f"{base}.value"] = [
                     {"code": "invalid", "message": "Gallery value must be a non-empty list of image refs."}
@@ -126,6 +145,15 @@ def author_blocks_to_overview(blocks: list[dict], *, user: Any, path_prefix: str
                 continue
             result.append({"type": "gallery", "value": {"layout": "default", "gallery": items}})
 
+        else:  # block_type == "audio" (the only remaining supported type)
+            audio_id = value.get("id") if isinstance(value, dict) else None
+            if not audio_choosable_by(audio_id, user):
+                errors[f"{base}.value.id"] = [
+                    {"code": "not_found", "message": f"Audio {audio_id} does not exist or is not accessible."}
+                ]
+                continue
+            result.append({"type": "audio", "value": audio_id})
+
     if errors:
         raise EditorValidationError(errors)
     return result
@@ -143,6 +171,8 @@ def overview_to_author_blocks(overview_value: list[dict]) -> list[dict]:
             author.append({"type": "code", "value": {"language": value["language"], "source": value["source"]}})
         elif block_type == "image":
             author.append({"type": "image", "value": {"id": value}})
+        elif block_type == "audio":
+            author.append({"type": "audio", "value": {"id": value}})
         elif block_type == "gallery":
             items = value.get("gallery", []) if isinstance(value, dict) else []
             author.append({"type": "gallery", "value": [{"id": item["value"]} for item in items]})

@@ -151,7 +151,7 @@ class TestAuthorBlocksToOverview:
     pytestmark = pytest.mark.django_db
 
     def test_supported_block_set(self):
-        assert SUPPORTED_OVERVIEW_BLOCKS == frozenset({"heading", "paragraph", "code", "image", "gallery"})
+        assert SUPPORTED_OVERVIEW_BLOCKS == frozenset({"heading", "paragraph", "code", "image", "gallery", "audio"})
 
     def test_heading_paragraph_code_pass_through(self, superuser):
         result = author_blocks_to_overview(
@@ -188,6 +188,20 @@ class TestAuthorBlocksToOverview:
         # real image id must be rejected exactly like a missing one (no enumeration).
         with pytest.raises(EditorValidationError) as excinfo:
             author_blocks_to_overview([{"type": "image", "value": {"id": image.id}}], user=admin_user)
+        assert excinfo.value.error_map["overview.0.value.id"][0]["code"] == "not_found"
+
+    def test_audio_block_resolves_to_pk(self, audio, superuser):
+        result = author_blocks_to_overview([{"type": "audio", "value": {"id": audio.id}}], user=superuser)
+        assert result == [{"type": "audio", "value": audio.id}]
+
+    def test_audio_not_choosable_by_caller_reports_not_found(self, audio, admin_user):
+        with pytest.raises(EditorValidationError) as excinfo:
+            author_blocks_to_overview([{"type": "audio", "value": {"id": audio.id}}], user=admin_user)
+        assert excinfo.value.error_map["overview.0.value.id"][0]["code"] == "not_found"
+
+    def test_audio_value_not_dict_rejected(self, superuser):
+        with pytest.raises(EditorValidationError) as excinfo:
+            author_blocks_to_overview([{"type": "audio", "value": 123}], user=superuser)
         assert excinfo.value.error_map["overview.0.value.id"][0]["code"] == "not_found"
 
     def test_unsupported_type_reports_path(self, superuser):
@@ -269,13 +283,14 @@ class TestAuthorBlocksToOverview:
 class TestOverviewToAuthorBlocks:
     pytestmark = pytest.mark.django_db
 
-    def test_round_trip(self, image, superuser):
+    def test_round_trip(self, image, audio, superuser):
         author = [
             {"type": "heading", "value": "Notes"},
             {"type": "paragraph", "value": "<p>Shipped.</p>"},
             {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
             {"type": "image", "value": {"id": image.id}},
             {"type": "gallery", "value": [{"id": image.id}]},
+            {"type": "audio", "value": {"id": audio.id}},
         ]
         internal = author_blocks_to_overview(author, user=superuser)
         assert overview_to_author_blocks(internal) == author
@@ -460,6 +475,20 @@ class TestEditorPostCreate:
         assert response.status_code == 201, response.content
         post = Post.objects.get(id=response.json()["id"])
         assert list(post.tags.values_list("name", flat=True)) == []
+
+    def test_create_with_audio_block(self, api_client, blog, superuser, audio):
+        api_client.force_authenticate(user=superuser)
+        url = reverse("cast:api:editor_post_create")
+        payload = self._payload(
+            blog,
+            slug="weeknotes-audio",
+            overview=[{"type": "heading", "value": "Audio"}, {"type": "audio", "value": {"id": audio.id}}],
+        )
+        response = api_client.post(url, payload, format="json")
+        assert response.status_code == 201, response.content
+        post = Post.objects.get(id=response.json()["id"])
+        overview = post.body[0].value.raw_data
+        assert any(b["type"] == "audio" and b["value"] == audio.id for b in overview)
 
     def test_cover_image_not_choosable_is_rejected(self, api_client, blog, admin_user, image):
         # admin_user can add the post but cannot choose the image.

@@ -392,8 +392,13 @@ Overview block types accepted in this slice:
         {"type": "code",      "value": {"language": "python",
                                         "source": "print('hi')"}},
         {"type": "image",     "value": {"id": 456}},
-        {"type": "gallery",   "value": [{"id": 456}, {"id": 789}]}
+        {"type": "gallery",   "value": [{"id": 456}, {"id": 789}]},
+        {"type": "audio",     "value": {"id": 42}}
     ]
+
+Like images, a referenced ``audio`` must be accessible to the caller (the audio
+collection ``choose`` permission); missing and inaccessible audio are both
+reported as ``not_found``.
 
 Full create request example:
 

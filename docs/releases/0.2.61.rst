@@ -25,5 +25,5 @@
   The API stays authentication-mechanism agnostic — it requires an authenticated
   user and authorizes every action with Wagtail page permissions — and never
   publishes: pages are created as drafts via Wagtail revisions. Body blocks
-  supported in this slice: heading, paragraph, code, image, and gallery
-  (referencing existing images).
+  supported in this slice: heading, paragraph, code, image, gallery, and audio
+  (media blocks reference existing images/audio the caller may choose).
