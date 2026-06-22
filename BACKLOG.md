@@ -47,6 +47,8 @@ No ready implementation items.
   - Done when: the remaining PRD questions are either split into concrete implementation items or explicitly deferred.
 
 - [ ] Programmatic content editing API
+  - PRD: [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+  - Status: first PRD drafted; implementation not started.
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
     and revise posts or episodes programmatically.
   - Notes: target use cases include agents turning assorted Markdown notes on disk into weeknotes, updating draft
@@ -72,6 +74,20 @@ No ready implementation items.
   - Done when: there is a small prototype or design note showing how the app would authenticate, list content,
     edit drafts, preview posts, sync changes, and handle conflicts.
 
+- [ ] Anonymous comment self-editing and deletion
+  - PRD: [backlog/2026-06-21-anonymous-comment-self-editing.md](backlog/2026-06-21-anonymous-comment-self-editing.md)
+  - Status: implemented and tested (reviewed clean) — backend, browser frontend (templates + AJAX JS), and user
+    docs/release notes all landed. Deferred second slice: persistent edit-count cap and configurable hard time-window.
+  - Scope: let commenters edit or delete their own comment for the lifetime of the browser session that created it, with
+    ownership proven only by server-side session state and no new authentication.
+  - Notes: ownership is uniform for anonymous and authenticated authors; edit/delete are frozen once a comment is
+    answered or no longer public; edits re-run the spam/moderation pipeline via `comment_will_be_posted`; deletes
+    soft-delete (staff-restorable in Django admin) and are excluded from spam training; one small `CommentAuthorMeta`
+    model holds the persistent boolean "edited" marker and `deleted_at`; requires a server-side session backend; opt-in
+    via `CAST_COMMENTS_ALLOW_AUTHOR_EDITS`.
+  - Done when: the first implementation slice in the PRD is built and tested, or split into concrete implementation
+    items.
+
 ## Later
 
 - [ ] Optimize public transcript speaker sanitization copies
@@ -94,6 +110,21 @@ No ready implementation items.
     feed responses.
   - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
     existing feed compatibility.
+
+- [ ] Chapter marks in podcast feeds
+  - Related to: Paged feeds, Podcast feed import, and the custom audio player.
+  - Scope: expose existing `ChapterMark` data in the podcast RSS/Atom feeds using both Podlove Simple Chapters
+    (`<psc:chapters>` with inline `<psc:chapter start=… title=…/>` elements, `xmlns:psc="http://podlove.org/simple-chapters"`)
+    and Podcasting 2.0 chapters (`<podcast:chapters>` referencing an external `application/json+chapters` document in the
+    existing `xmlns:podcast` namespace).
+  - Notes: chapter data already exists per episode (`ChapterMark`, parsed from audio files and shown in the player) but is
+    not written to the feed yet; feed namespaces/elements live in `src/cast/feeds.py` (`ITunesElements`,
+    `PodcastIndexElements`). Open question for the PC2.0 form: where to serve the chapters JSON file from (new view/URL,
+    similar to the existing transcript URLs) versus only emitting inline Podlove chapters. Keep emission conditional so
+    episodes without chapter marks produce no extra elements.
+  - Done when: feeds emit Podlove Simple Chapters inline and a `podcast:chapters` reference (with the JSON document served
+    from a stable URL), namespaces are declared, behavior is documented, and tests cover episodes with and without chapter
+    marks plus existing-feed compatibility.
 
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
