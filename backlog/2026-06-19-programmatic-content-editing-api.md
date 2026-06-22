@@ -2,7 +2,9 @@
 
 Date: 2026-06-19
 
-Status: Draft PRD; implementation not started.
+Status: Draft PRD; implementation not started. Core design decisions resolved (2026-06-22): the API is
+authentication-mechanism agnostic; the first slice authenticates with Django session auth and authorizes with Wagtail
+page permissions; the body contract is a structured block list, not Markdown.
 
 ## Summary
 
@@ -48,13 +50,16 @@ future import/upload workflows, even if those are not all implemented in the fir
 - Provide a DRF-backed write API for trusted clients to create draft posts under any editable django-cast `Blog`.
 - Design the endpoint shape so the same permission, revision, body, and media rules can later support `Episode`
   pages under any editable django-cast `Podcast`.
-- Accept author-friendly body input instead of requiring clients to construct raw Wagtail StreamField internals.
+- Accept a structured, lossless body block list instead of requiring clients to construct raw Wagtail StreamField
+  internals (block IDs, storage format), and without forcing a Markdown parser into the request path.
 - Preserve Wagtail draft/live semantics by creating revisions first and publishing only through an explicit publish
   action.
 - Return structured validation errors that agents can use to repair failed requests.
 - Support conflict detection for updates so agents cannot silently overwrite newer human edits.
 - Keep the API independent of any one consumer site, theme, or blog instance.
-- Authenticate with django-indieweb's IndieAuth scoped tokens rather than coarse, non-expiring credentials.
+- Keep django-cast independent of any single authentication mechanism: the API depends only on an authenticated
+  `request.user` and Wagtail page permissions, so sites can plug in session auth, DRF tokens, or IndieAuth scoped
+  tokens without changing endpoint code.
 
 ## Non-Goals
 
@@ -120,7 +125,7 @@ it, since the create response already returns the preview, edit, and API URLs pl
 
 ## Create Post Request
 
-The first implementation should prefer Markdown plus structured metadata:
+The first implementation accepts a structured `overview` block list plus structured metadata:
 
 ```json
 {
@@ -136,17 +141,18 @@ The first implementation should prefer Markdown plus structured metadata:
   },
   "tags": ["weeknotes"],
   "categories": [],
-  "overview_markdown": "## Notes\n\n- Shipped the first draft.\n\n```python\nprint(\"hello\")\n```",
-  "media": [
-    {
-      "kind": "gallery",
-      "placement": "append",
-      "images": [{"id": 456}, {"id": 789}]
-    }
+  "overview": [
+    {"type": "heading", "value": "Notes"},
+    {"type": "paragraph", "value": "<p>Shipped the first draft.</p>"},
+    {"type": "code", "value": {"language": "python", "source": "print(\"hello\")"}},
+    {"type": "gallery", "value": [{"id": 456}, {"id": 789}]}
   ],
   "publish": false
 }
 ```
+
+Image and gallery placement is expressed inline as `image`/`gallery` blocks within the `overview` list, so block order
+is explicit rather than inferred from a separate `media` instruction stream.
 
 Response:
 
@@ -168,32 +174,48 @@ Response:
 
 ## Body Serialization
 
-Clients should not need to know Wagtail's full StreamField storage format. The API should expose two body input tiers.
+`Post.body` is a Wagtail StreamField with `overview` and `detail` sections; each section is an ordered list of typed
+blocks (`heading`, `paragraph`, `code`, `image`, `gallery`, `embed`, `video`, `audio` — see
+`src/cast/post_body_blocks.py`). The `paragraph` block is a `RichTextBlock` whose value is stored as HTML. The API
+contract should map directly onto that block-list shape rather than onto a prose format, for two reasons:
 
-Tier 1, first slice:
+- The primary client is an agent, which natively emits structured JSON. A structured block list is lossless and
+  unambiguous; a prose format like Markdown forces the server to *guess* the mapping (is `## X` a `heading` block or
+  rich text inside a `paragraph`? how do nested lists/blockquotes flatten into paragraph HTML?).
+- Safe `PATCH`/round-trip editing needs the structured representation anyway — rendered HTML cannot be reliably diffed
+  and patched. Building the structured contract first avoids a throwaway Markdown-only path.
 
-- `overview_markdown` converts Markdown into the `overview` section of `Post.body`.
-- Paragraph/rich text output must preserve headings, lists, blockquotes, horizontal rules, links, and inline code.
-- Fenced code blocks convert to django-cast code blocks with `{ "language": "...", "source": "..." }`.
-- Image and gallery placement can be supplied through structured `media` instructions that reference existing image IDs.
+Tier 1, first slice — structured block list:
 
-Tier 2, later:
+- The request supplies the `overview` section as an ordered list of `{ "type": ..., "value": ... }` blocks using
+  django-cast's existing block names. Example: `{"type": "heading", "value": "Notes"}`,
+  `{"type": "paragraph", "value": "<p>Shipped the first draft.</p>"}`,
+  `{"type": "code", "value": {"language": "python", "source": "print('hi')"}}`.
+- The server owns conversion to Wagtail StreamField values and block IDs; clients never construct raw StreamField
+  internals.
+- `paragraph` values are rich-text HTML, validated/sanitized through the same path Wagtail uses on admin save.
+- Image and gallery blocks reference existing image IDs (see Media Handling).
+- A read endpoint returns the same normalized block list (plus rendered values where useful) so agents can patch
+  existing drafts safely.
 
-- `body_blocks` accepts a normalized django-cast authoring format with block types such as `paragraph`, `heading`,
-  `code`, `image`, `gallery`, `embed`, `video`, `audio`, `overview`, and `detail`.
-- The server still owns conversion to Wagtail StreamField values and block IDs.
-- A read endpoint can return both rendered values and normalized source so agents can patch existing drafts safely.
+The initial post implementation writes only the `overview` section. The block-list contract must not block a later
+extension that lets clients explicitly address both `overview` and `detail`.
 
-The initial post implementation can write only the `overview` section. It should not block a later extension that lets
-clients explicitly address `overview` and `detail`.
+Tier 2, later — optional Markdown convenience:
+
+- An optional `overview_markdown` input may be added later as a convenience for human-driven or Markdown-native
+  clients. It would be converted server-side into the same block list, behind an optional dependency so the Markdown
+  parser is not forced onto all installs.
+- This is explicitly *not* part of the first slice; the structured block list is the canonical contract.
 
 ## Media Handling
 
 First slice:
 
-- Cover images, image blocks, and gallery blocks may reference existing Wagtail image IDs.
+- Cover images, and inline `image`/`gallery` blocks in the `overview` list, may reference existing Wagtail image IDs.
 - The API validates that referenced images exist and are visible to the caller.
-- The response includes structured errors for missing images or invalid placements.
+- The response includes structured errors for missing images or invalid block values, using the block's path in the
+  `overview` list (for example `overview.3.value.1.id`).
 
 Later slices:
 
@@ -217,14 +239,30 @@ useful for discovery, but aggregate facets are not enough for safe round-trippin
 
 ## Authentication And Permissions
 
-Authentication reuses django-indieweb's IndieAuth instead of DRF's default token. A client obtains a token through the
-IndieAuth authorization-code flow: the user authenticates with their normal Django login in a browser, consents to a set
-of scopes, and the tool receives a **scoped, expiring, revocable** token (with PKCE and a client allowlist). This matches
-the "open a browser window to authenticate" model directly and avoids DRF `TokenAuthentication`'s single, unscoped,
-non-expiring bearer credential. Scopes map to actions (for example create/update/publish), so a drafting agent need not
-hold publish rights. Session authentication may additionally be accepted for same-origin browser tools, but it is not the
-primary mechanism for headless agents. See Alternatives Considered for why the default DRF token was rejected as the
-foundation.
+**django-cast stays authentication-mechanism agnostic.** The editor API depends only on two things from a request: an
+authenticated `request.user`, and that user passing the Wagtail page-permission check for the requested action. *How*
+the user authenticated is a pluggable DRF concern (`authentication_classes` / `DEFAULT_AUTHENTICATION_CLASSES`), not
+something the endpoint code hardcodes. This keeps the clean boundary:
+
+- **django-cast owns authorization** — Wagtail page permissions per action. These already exist and are independent of
+  any auth mechanism.
+- **The site/deployment owns authentication** — it chooses the authentication class(es). django-cast ships sane
+  defaults and never imports a specific auth provider.
+
+First slice: authenticate with Django **session authentication** plus Wagtail page permissions. This is the smallest
+path to a working create endpoint and requires no new auth subsystem.
+
+Later, a site that wants scoped, expiring, revocable tokens for headless agents can add **django-indieweb's IndieAuth**
+(authorization-code flow with PKCE and a client allowlist) purely as an additional authentication class in its settings,
+with **no editor-API code changes**. DRF `TokenAuthentication` is another drop-in option for a trusted single-user slice
+(see Alternatives Considered for its trade-offs).
+
+**Scopes (the one nuance).** Scoped-token schemes like IndieAuth carry per-action scopes (for example create / update /
+publish), so a drafting agent need not hold publish rights. To keep django-cast auth-agnostic, scope enforcement lives
+in a small, generic permission class that reads `request.auth` scopes against an action→required-scope mapping — it does
+not know or import IndieAuth. Under session auth `request.auth` is `None` and authorization falls back to pure Wagtail
+permissions. django-cast therefore exposes the action→scope mapping that any scoped-token backend can satisfy, without
+depending on one.
 
 Every write must check Wagtail permissions for the selected parent or page:
 
@@ -259,7 +297,9 @@ Example update:
 {
   "base_revision_id": 6543,
   "title": "Weeknotes 2026-25",
-  "overview_markdown": "Updated draft text."
+  "overview": [
+    {"type": "paragraph", "value": "<p>Updated draft text.</p>"}
+  ]
 }
 ```
 
@@ -285,7 +325,7 @@ Validation errors should be stable and machine-readable:
   "errors": {
     "title": [{"code": "required", "message": "This field is required."}],
     "parent": [{"code": "permission_denied", "message": "You cannot add posts under this page."}],
-    "media.0.images.1.id": [{"code": "not_found", "message": "Image 789 does not exist."}]
+    "overview.3.value.1.id": [{"code": "not_found", "message": "Image 789 does not exist."}]
   }
 }
 ```
@@ -296,25 +336,29 @@ The API should prefer precise field paths over broad failure messages so an agen
 
 Implement the smallest useful workflow for assisted post authoring:
 
-1. Add IndieAuth-authenticated `POST /api/editor/posts/` draft creation for `Post` pages under caller-selected `Blog`
-   parents.
-2. Accept title, slug, visible date, tags, optional categories, optional cover image ID, `overview_markdown`, and optional
-   image/gallery references to existing images.
-3. Convert Markdown to the `overview` StreamField section, including rich text paragraphs and fenced code blocks.
+1. Add session-authenticated `POST /api/editor/posts/` draft creation for `Post` pages under caller-selected `Blog`
+   parents, authorized by Wagtail add-child permission, with the API kept authentication-mechanism agnostic.
+2. Accept title, slug, visible date, tags, optional categories, optional cover image ID, a structured `overview` block
+   list, and inline `image`/`gallery` blocks referencing existing images.
+3. Convert the `overview` block list into the `overview` StreamField section, owning Wagtail StreamField values and
+   block IDs server-side (paragraph rich-text HTML validated through Wagtail's normal save path).
 4. Save a Wagtail draft revision and return page ID, latest revision ID, preview URL, edit URL, and API URL.
-5. Add read support for editable post metadata needed by clients to show or revise the generated draft.
+5. Add read support for editable post metadata and the normalized `overview` block list needed by clients to show or
+   revise the generated draft.
 6. Document that publish remains a separate follow-up unless it is implemented in the same change.
 
 ## Test Scenarios
 
 - Authenticated editor can create a draft post under an editable blog and receives preview/edit URLs.
 - Anonymous users and authenticated users without add permission cannot create posts.
-- A token whose scopes omit publish can create and update drafts but cannot publish.
+- The API enforces authorization through Wagtail page permissions regardless of which authentication class set
+  `request.user`, and a scoped token lacking the publish action cannot publish while a session-authenticated editor
+  with publish permission can.
 - The same API works with two different blog parents and never assumes a site-specific blog.
 - Tags are created or resolved consistently with Wagtail/admin behavior.
 - Existing cover image, image block, and gallery image IDs are accepted and missing image IDs return structured errors.
-- Markdown headings, lists, blockquotes, horizontal rules, links, inline code, and fenced code blocks round-trip into
-  django-cast body blocks.
+- A structured `overview` block list of heading, paragraph (rich-text HTML), and code blocks round-trips losslessly
+  into and back out of django-cast body blocks.
 - Draft creation does not publish the page by default.
 - Updating with a stale `base_revision_id` returns `409 Conflict`.
 - Publishing, once added, uses Wagtail revision publishing and respects publish permissions.
@@ -338,9 +382,9 @@ create/update/delete/source machinery. This was rejected as the *agent-authoring
 - **Coarse errors.** The agent-repair contract needs field-precise validation paths (for example
   `media.0.images.1.id`); Micropub errors are request-level (`invalid_request`, `forbidden`).
 
-What *is* reused from django-indieweb is its IndieAuth authentication (see Authentication And Permissions). A thin
-Micropub handler may still be added later as an additional surface purely for standard Micropub clients, separate from
-the agent-authoring API.
+django-indieweb's IndieAuth remains available as one pluggable authentication class a site can add later (see
+Authentication And Permissions), but it is not a foundation the API depends on. A thin Micropub handler may still be
+added later as an additional surface purely for standard Micropub clients, separate from the agent-authoring API.
 
 ### Driving the Wagtail admin via Playwright
 
@@ -356,18 +400,24 @@ robustness, not philosophy.
 ### DRF default token authentication
 
 DRF `TokenAuthentication` is convenient, but its default token is unscoped (full account access), non-expiring, and
-revocable only by hand. It is acceptable only for a trusted single-user local slice over HTTPS, and was rejected as the
-security foundation in favor of IndieAuth scoped tokens.
+revocable only by hand. Because the API is authentication-mechanism agnostic, the token is not rejected outright — it is
+a valid drop-in authentication class for a trusted single-user slice over HTTPS — but it is not recommended as the
+production default for headless agents, where a scoped, expiring, revocable scheme such as IndieAuth is preferable.
 
 ## Open Questions
 
-- Authentication is decided: IndieAuth scoped tokens (see Authentication And Permissions). Residual question: should the
-  first slice also accept session authentication for same-origin browser tools, or IndieAuth tokens only?
-- What scope granularity should IndieAuth expose for this API (for example a single content scope versus separate
-  create/update/publish scopes)?
-- Should Markdown conversion live in django-cast directly, or behind a small optional dependency?
-- Should normalized `body_blocks` be implemented alongside Markdown in the first slice, or deferred until update support
-  needs more precise patching?
+Resolved (2026-06-22):
+
+- **Authentication for the first slice** — session authentication; the API stays authentication-mechanism agnostic and
+  IndieAuth/token auth are later config-only additions (see Authentication And Permissions).
+- **Body contract** — a structured `overview` block list is the canonical first-slice contract; there is no Markdown
+  parser in the request path (see Body Serialization).
+- **Markdown** — demoted to an optional later convenience behind an optional dependency, not part of the first slice.
+
+Still open:
+
+- What action→required-scope mapping should django-cast expose for scoped-token backends (a single content scope versus
+  separate create/update/publish scopes)?
 - What is the right endpoint namespace: `editor`, `content`, or a Wagtail-compatible extension?
 - Should publish-by-request be allowed in the create endpoint for callers with publish permission, or only through a
   separate publish endpoint?
