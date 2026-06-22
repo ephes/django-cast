@@ -16,6 +16,48 @@ CAST_COMMENTS_ENABLED
 
 Whether or not to enable comments on the site. Defaults to ``False``.
 
+.. _cast_comments_allow_author_edits:
+
+CAST_COMMENTS_ALLOW_AUTHOR_EDITS
+================================
+
+Whether to let an anonymous author edit or delete their own comment from the
+same browser. Defaults to ``False`` (opt-in). Set to the literal ``True`` to
+enable it — a string such as ``"False"`` does not turn it on.
+
+Requires a **server-side session backend**: the ``signed_cookies``
+``SESSION_ENGINE`` is rejected by the cast system checks (``cast.E006``),
+because comment ownership is tracked in the session and a client-carried list
+cannot be revoked. See :ref:`comments_author_edits` for the full behaviour and
+privacy notes.
+
+CAST_COMMENTS_OWNED_IDS_CAP
+===========================
+
+The maximum number of owned comment ids tracked in a single session. Older
+entries are dropped once the cap is reached. Defaults to ``200``; ``0`` means
+**no cap** (every id is kept). Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled.
+
+CAST_COMMENTS_EDIT_RATE_LIMIT
+=============================
+
+The maximum number of author edit/delete actions allowed per session within
+``CAST_COMMENTS_EDIT_RATE_WINDOW`` seconds. Defaults to ``30``; ``0``
+**disables** rate limiting. Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled.
+
+CAST_COMMENTS_EDIT_RATE_WINDOW
+==============================
+
+The length, in seconds, of the rate-limit window used by
+``CAST_COMMENTS_EDIT_RATE_LIMIT``. Defaults to ``60`` and must be a positive
+integer. Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled.
+
 **********
 Pagination
 **********

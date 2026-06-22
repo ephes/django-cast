@@ -4,11 +4,19 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("ajaxcomments", () => {
   beforeEach(() => {
+    // Each test re-imports the IIFE, which registers fresh document-level click
+    // listeners. Swap in a clean <body> so listeners from previous imports don't
+    // accumulate and fire duplicate handlers against the same mocked Response.
+    document.body.replaceWith(document.createElement("body"));
     // JSDOM doesn't implement scrollTo; the script calls it via setTimeout.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).scrollTo = vi.fn();
+    // Provide a real function so tests can `vi.spyOn(window, "fetch")`; the
+    // submit-path tests overwrite this directly with their own mock.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (globalThis as any).fetch = undefined;
+    (globalThis as any).fetch = (() => {
+      throw new Error("fetch not mocked");
+    }) as typeof fetch;
   });
 
   afterEach(() => {
@@ -104,5 +112,63 @@ describe("ajaxcomments", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.querySelector(".comment-preview-area")).not.toBeNull();
+  });
+
+  // delete: confirm -> POST to data-delete-action -> remove #c{id}
+  it("deletes a comment on confirm", async () => {
+    document.body.innerHTML = `
+      <form class="js-comments-form" data-object-id="7">
+        <input type="hidden" name="csrfmiddlewaretoken" value="tok" />
+      </form>
+      <div class="comments" data-object-id="7">
+        <div id="c5" class="comment-item">
+          <div class="comment-text">hi</div>
+          <a class="comment-delete-link" data-comment-id="5" data-delete-action="/comments/delete/ajax/">delete</a>
+        </div>
+      </div>`;
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ success: true, action: "delete", comment_id: "5" }), { status: 200 }),
+    );
+    vi.resetModules();
+    await import("../comments/ajaxcomments"); // re-runs the IIFE/init() against the DOM above
+    document.querySelector(".comment-delete-link")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flush();
+    expect(fetchMock).toHaveBeenCalledWith("/comments/delete/ajax/", expect.objectContaining({ method: "POST" }));
+    expect(document.getElementById("c5")).toBeNull();
+  });
+
+  // edit: open inline editor, submit -> POST to data-edit-action -> swap #c{id} with returned html
+  it("edits a comment inline and swaps in the returned html", async () => {
+    document.body.innerHTML = `
+      <form class="js-comments-form" data-object-id="7">
+        <input type="hidden" name="csrfmiddlewaretoken" value="tok" />
+      </form>
+      <div class="comments" data-object-id="7">
+        <div id="c5" class="comment-item">
+          <div class="comment-text">old</div>
+          <textarea class="comment-raw" hidden>old</textarea>
+          <a class="comment-edit-link" data-comment-id="5" data-edit-action="/comments/edit/ajax/">edit</a>
+        </div>
+      </div>`;
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: true, action: "edit", comment_id: "5", is_public: true, edited: true,
+          html: '<div id="c5" class="comment-item"><div class="comment-text">new</div></div>' }),
+        { status: 200 },
+      ),
+    );
+    vi.resetModules();
+    await import("../comments/ajaxcomments"); // re-runs the IIFE/init() against the DOM above
+    document.querySelector(".comment-edit-link")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const textarea = document.querySelector("#c5 .comment-edit-form textarea") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("old");
+    textarea.value = "new";
+    document.querySelector("#c5 .comment-edit-save")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flush();
+    const body = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData;
+    expect(body.get("comment")).toBe("new");
+    expect(body.get("comment_id")).toBe("5");
+    expect(document.querySelector("#c5 .comment-text")!.textContent).toBe("new");
   });
 });

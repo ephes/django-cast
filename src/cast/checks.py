@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from django.apps import AppConfig
+from django.apps import AppConfig, apps
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
@@ -18,6 +18,7 @@ SOURCE_EXTENSIONS = frozenset({".ts", ".tsx", ".js", ".jsx", ".vue", ".css", ".s
 
 CAST_SETTING_TYPES: tuple[tuple[str, type], ...] = (
     ("CAST_COMMENTS_ENABLED", bool),
+    ("CAST_COMMENTS_ALLOW_AUTHOR_EDITS", bool),
     ("CAST_CUSTOM_THEMES", list),
     ("CAST_FOLLOW_LINKS", dict),
     ("CAST_FILTERSET_FACETS", list),
@@ -182,6 +183,105 @@ def check_cast_comments_ordering(
             id="cast.E002",
         )
     ]
+
+
+@register("cast")
+def check_cast_comments_author_edits_session_backend(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Anonymous comment self-editing requires a server-side session backend.
+
+    The owned-comment-ids list lives in the session; under ``signed_cookies`` it
+    would travel in the client cookie (readable, non-revocable). The feature is
+    optional, so this is a hard requirement with no opt-out.
+    """
+    from cast.comments import appsettings as comment_appsettings
+    from cast.comments import author_edits
+
+    if comment_appsettings.ALLOW_AUTHOR_EDITS and author_edits.uses_signed_cookie_sessions():
+        return [
+            Error(
+                "CAST_COMMENTS_ALLOW_AUTHOR_EDITS requires a server-side session backend; "
+                "the 'signed_cookies' SESSION_ENGINE is not allowed.",
+                hint="Use a server-side SESSION_ENGINE such as 'django.contrib.sessions.backends.db'.",
+                id="cast.E006",
+            )
+        ]
+    return []
+
+
+@register("cast")
+def check_cast_comments_author_edits_tunables(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Validate the numeric author-edit tunables are non-negative integers.
+
+    These are coerced with ``int()`` at runtime, so a non-integer value would
+    otherwise surface as an opaque runtime error, and a negative value would give
+    surprising list-slicing/timeout behaviour.
+    """
+    errors: list[Error] = []
+    # ``OWNED_IDS_CAP`` 0 means "no cap" and ``EDIT_RATE_LIMIT`` 0 means "disabled",
+    # so both allow 0; the rate window must be a positive number of seconds.
+    for name, minimum in (
+        ("CAST_COMMENTS_OWNED_IDS_CAP", 0),
+        ("CAST_COMMENTS_EDIT_RATE_LIMIT", 0),
+        ("CAST_COMMENTS_EDIT_RATE_WINDOW", 1),
+    ):
+        value = getattr(settings, name, None)
+        if value is None:
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+            errors.append(
+                Error(
+                    f"{name} must be an integer >= {minimum}.",
+                    id="cast.E007",
+                )
+            )
+    return errors
+
+
+@register("cast")
+def check_cast_comments_author_edits_requires_sessions(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Anonymous comment self-editing relies on ``request.session``.
+
+    Without the sessions app and middleware the ownership-recording and
+    edit/delete paths would raise at runtime, so require both when the feature is
+    enabled.
+    """
+    from cast.comments import appsettings as comment_appsettings
+
+    if not comment_appsettings.ALLOW_AUTHOR_EDITS:
+        return []
+    errors: list[Error] = []
+    # ``apps.is_installed`` resolves the app by name, so it accepts both the
+    # plain ``"django.contrib.sessions"`` string and the ``SessionsConfig``
+    # AppConfig path in INSTALLED_APPS.
+    if not apps.is_installed("django.contrib.sessions"):
+        errors.append(
+            Error(
+                "CAST_COMMENTS_ALLOW_AUTHOR_EDITS requires 'django.contrib.sessions' in INSTALLED_APPS.",
+                id="cast.E008",
+            )
+        )
+    middleware = getattr(settings, "MIDDLEWARE", [])
+    if not any(str(m).endswith("SessionMiddleware") for m in middleware):
+        errors.append(
+            Error(
+                "CAST_COMMENTS_ALLOW_AUTHOR_EDITS requires a session middleware (e.g. "
+                "'django.contrib.sessions.middleware.SessionMiddleware') in MIDDLEWARE.",
+                id="cast.E008",
+            )
+        )
+    return errors
 
 
 @register("cast")

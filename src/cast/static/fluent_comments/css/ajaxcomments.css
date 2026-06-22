@@ -45,3 +45,40 @@ li.comment-wrapper {
   display: none;
 }
 
+/* ---- author self-edit/delete affordances ---- */
+
+.comment-author-actions {
+  margin-left: 0.5em;
+  font-size: 0.85em;
+}
+
+.comment-author-actions a {
+  margin-left: 0.5em;
+}
+
+.comment-edited-flag {
+  margin-left: 0.4em;
+  color: #888;
+  font-size: 0.85em;
+}
+
+.comment-edit-form {
+  margin: 0.5em 0;
+}
+
+.comment-edit-form .comment-edit-textarea {
+  width: 100%;
+  min-height: 4em;
+}
+
+.comment-edit-note {
+  color: #888;
+  font-size: 0.8em;
+  margin: 0.25em 0;
+}
+
+.comment-edit-status {
+  color: #a00;
+  font-size: 0.85em;
+}
+

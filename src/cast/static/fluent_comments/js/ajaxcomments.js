@@ -127,7 +127,7 @@ var __async = (__this, __arguments, generator) => {
       const parentId = data.parent_id;
       let parent;
       if (parentId) {
-        const parentComment = document.getElementById(`c${parseInt(parentId, 10)}`);
+        const parentComment = document.getElementById(`c${parentId}`);
         parent = parentComment ? parentComment.closest("li.comment-wrapper") : null;
       } else {
         parent = getCommentsDiv(objectId);
@@ -308,6 +308,93 @@ var __async = (__this, __arguments, generator) => {
       resetForm(form);
       removeThreadedPreview();
     };
+    const getCsrfToken = () => {
+      const input = document.querySelector(
+        'form.js-comments-form input[name="csrfmiddlewaretoken"]'
+      );
+      if (input == null ? void 0 : input.value) return input.value;
+      const m = /(?:^|;\s*)csrftoken=([^;]+)/.exec(document.cookie || "");
+      return m ? decodeURIComponent(m[1]) : "";
+    };
+    const postAction = (url, fields) => __async(null, null, function* () {
+      const formData = new FormData();
+      Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
+      formData.append("csrfmiddlewaretoken", getCsrfToken());
+      const response = yield fetch(url, {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": getCsrfToken() }
+      });
+      if (!response.ok) return null;
+      return yield response.json();
+    });
+    const removeCommentNode = (commentId) => {
+      const node = document.getElementById(`c${commentId}`);
+      if (!node) return;
+      const wrapper = node.closest("li.comment-wrapper");
+      (wrapper || node).remove();
+    };
+    const onDeleteClick = (event) => __async(null, null, function* () {
+      var _a, _b;
+      const a = (_b = (_a = event.target) == null ? void 0 : _a.closest) == null ? void 0 : _b.call(_a, ".comment-delete-link");
+      if (!a) return;
+      event.preventDefault();
+      const commentId = a.getAttribute("data-comment-id");
+      const url = a.getAttribute("data-delete-action");
+      if (!commentId || !url) return;
+      if (!window.confirm("Delete this comment?")) return;
+      const data = yield postAction(url, { comment_id: commentId });
+      if (data == null ? void 0 : data.success) removeCommentNode(commentId);
+    });
+    const openInlineEditor = (a) => {
+      var _a, _b, _c;
+      const commentId = a.getAttribute("data-comment-id");
+      const url = a.getAttribute("data-edit-action");
+      const item = document.getElementById(`c${commentId}`);
+      if (!commentId || !url || !item) return;
+      if (item.querySelector(".comment-edit-form")) return;
+      const textEl = item.querySelector(".comment-text");
+      const raw = (_c = (_a = item.querySelector(".comment-raw")) == null ? void 0 : _a.value) != null ? _c : (_b = textEl == null ? void 0 : textEl.textContent) != null ? _b : "";
+      const form = document.createElement("div");
+      form.className = "comment-edit-form";
+      form.innerHTML = `<textarea class="comment-edit-textarea"></textarea><p class="comment-edit-note">Editable from this browser until someone replies or your session expires.</p><button type="button" class="comment-edit-save">Save</button><button type="button" class="comment-edit-cancel">Cancel</button><span class="comment-edit-status" hidden></span>`;
+      form.querySelector(".comment-edit-textarea").value = raw;
+      if (textEl) textEl.style.display = "none";
+      item.insertBefore(form, textEl ? textEl.nextSibling : null);
+      form.querySelector(".comment-edit-cancel").addEventListener("click", () => {
+        if (textEl) textEl.style.display = "";
+        form.remove();
+      });
+      form.querySelector(".comment-edit-save").addEventListener("click", () => __async(null, null, function* () {
+        const value = form.querySelector(".comment-edit-textarea").value;
+        const data = yield postAction(url, { comment_id: commentId, comment: value });
+        if (!(data == null ? void 0 : data.success) || !data.html) {
+          const status = form.querySelector(".comment-edit-status");
+          status.hidden = false;
+          status.textContent = "Could not save your edit.";
+          return;
+        }
+        const replacement = document.createElement("div");
+        replacement.innerHTML = data.html.trim();
+        const fresh = replacement.firstElementChild;
+        if (fresh) item.replaceWith(fresh);
+        if (data.is_public === false) {
+          const moderated = document.getElementById(`c${commentId}`) || fresh;
+          moderated == null ? void 0 : moderated.insertAdjacentHTML(
+            "beforeend",
+            `<p class="comment-edit-status">Your edit is awaiting moderation.</p>`
+          );
+        }
+      }));
+    };
+    const onEditClick = (event) => {
+      var _a, _b;
+      const a = (_b = (_a = event.target) == null ? void 0 : _a.closest) == null ? void 0 : _b.call(_a, ".comment-edit-link");
+      if (!a) return;
+      event.preventDefault();
+      openInlineEditor(a);
+    };
     const init = () => {
       var _a;
       wrapForms();
@@ -315,6 +402,8 @@ var __async = (__this, __arguments, generator) => {
       document.addEventListener("submit", onDocumentSubmit, true);
       document.body.addEventListener("click", showThreadedReplyForm);
       document.body.addEventListener("click", cancelThreadedReplyForm);
+      document.body.addEventListener("click", onEditClick);
+      document.body.addEventListener("click", onDeleteClick);
       if ((_a = window.location.hash) == null ? void 0 : _a.startsWith("#c")) {
         const id = parseInt(window.location.hash.slice(2), 10);
         if (!Number.isNaN(id)) setTimeout(() => scrollToComment(id), 100);

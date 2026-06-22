@@ -9,3 +9,11 @@
   episodes can now receive the next podcast-scoped number on first real publish;
   draft saves and future scheduling approvals do not consume numbers, manual
   numbers stay authoritative, and RSS GUIDs remain UUID-based.
+- Added opt-in anonymous comment self-editing and deletion. With
+  ``CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True`` and a server-side session backend,
+  an author can edit or delete their own comment from the same browser until
+  someone replies or the session expires. Edits are re-moderated (and flagged
+  ``(edited)``) and deletion is a soft delete that staff can restore from the
+  Django admin. Enabling the feature sets a functional session cookie for
+  previously cookieless commenters. See
+  :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>`.
