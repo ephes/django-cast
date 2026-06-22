@@ -17,3 +17,13 @@
   Django admin. Enabling the feature sets a functional session cookie for
   previously cookieless commenters. See
   :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>`.
+- Added a session-authenticated programmatic content editing API
+  (``/api/editor/``). Trusted clients can list the blogs and podcasts they may
+  add to (``GET /api/editor/parents/``), create a draft ``Post`` from a
+  structured ``overview`` block list (``POST /api/editor/posts/``), and read the
+  draft back with normalized authoring source (``GET /api/editor/posts/{id}/``).
+  The API stays authentication-mechanism agnostic — it requires an authenticated
+  user and authorizes every action with Wagtail page permissions — and never
+  publishes: pages are created as drafts via Wagtail revisions. Body blocks
+  supported in this slice: heading, paragraph, code, image, and gallery
+  (referencing existing images).

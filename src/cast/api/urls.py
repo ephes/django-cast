@@ -3,11 +3,16 @@ from typing import Any
 from django.urls import include, path, re_path
 
 from . import views
+from .editor import views as editor_views
 
 app_name = "api"
 
 urlpatterns: list[Any] = [
     path("", views.api_root, name="root"),
+    # content editing API (editor)
+    path("editor/parents/", editor_views.ParentsListView.as_view(), name="editor_parents"),
+    path("editor/posts/", editor_views.PostCreateView.as_view(), name="editor_post_create"),
+    path("editor/posts/<int:pk>/", editor_views.PostDetailView.as_view(), name="editor_post_detail"),
     # video
     path("videos/", views.VideoListView.as_view(), name="video_list"),
     re_path(r"^videos/(?P<pk>\d+)/?$", views.VideoDetailView.as_view(), name="video_detail"),

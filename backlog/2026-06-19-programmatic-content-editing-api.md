@@ -2,9 +2,11 @@
 
 Date: 2026-06-19
 
-Status: Draft PRD; implementation not started. Core design decisions resolved (2026-06-22): the API is
-authentication-mechanism agnostic; the first slice authenticates with Django session auth and authorizes with Wagtail
-page permissions; the body contract is a structured block list, not Markdown.
+Status: Slice 1 implemented (2026-06-22): `GET /api/editor/parents/`, `POST /api/editor/posts/`, and
+`GET /api/editor/posts/{id}/` are shipped. The API is authentication-mechanism agnostic, authenticates with Django
+session auth in the first slice, and authorizes with Wagtail page permissions. The body contract is a structured block
+list (heading, paragraph, code, image, gallery). Remaining follow-ups: publish action, PATCH + conflict detection
+(`409`), Markdown convenience input, scoped-token (IndieAuth) auth, and embed/video/audio blocks.
 
 ## Summary
 

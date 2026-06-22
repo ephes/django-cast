@@ -321,6 +321,171 @@ Returns comment data for training the Naive Bayes spam classifier.
 This endpoint is restricted to staff users. Anonymous and authenticated
 non-staff users receive ``403 Forbidden``.
 
+Content Editing (Editor API)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The editor API lives under ``/api/editor/`` and is intended for trusted
+clients — scripts, agents, or headless tools — that need to create draft
+content without direct database access. It is authentication-mechanism
+agnostic: any DRF authentication class that populates ``request.user`` works.
+The first slice ships with Django session authentication. Authorization is
+handled entirely by Wagtail page permissions, not by ``is_staff``.
+
+**List editable parents**::
+
+    GET /api/editor/parents/
+
+Returns the ``Blog`` and ``Podcast`` pages the authenticated user has
+add-child permission for.  Requires authentication; unauthenticated requests are
+rejected (``403 Forbidden`` under the default session authentication, ``401`` for
+authentication schemes that supply a ``WWW-Authenticate`` challenge).
+
+Example response:
+
+.. code-block:: json
+
+    [
+        {"id": 4, "title": "My Blog", "type": "cast.Blog",
+         "api_url": "/api/editor/posts/"},
+        {"id": 7, "title": "My Podcast", "type": "cast.Podcast",
+         "api_url": "/api/editor/posts/"}
+    ]
+
+**Create a draft post**::
+
+    POST /api/editor/posts/
+    Content-Type: application/json
+
+Creates a draft ``Post`` under the chosen parent page.  The page is saved as a
+Wagtail revision and is never published.  Passing ``"publish": true`` is rejected.
+(Episode creation mirrors this shape and is a planned follow-up; it is not part of
+this slice.)
+
+Referenced images — the ``cover_image`` and any inline ``image``/``gallery``
+blocks — must be **choosable by the caller**: the API checks the caller's Wagtail
+image ``choose`` permission, so a client cannot attach images it could not select
+in the Wagtail admin.  An image that does not exist *or* is not accessible to the
+caller is reported the same way (``not_found``) so the API never leaks the
+existence of images outside the caller's collections.  ``paragraph`` HTML is
+validated through Wagtail's rich-text block, the same path the admin uses on save.
+
+Request fields:
+
+- ``parent`` (required): ``{"id": <page id>}`` — must be a ``Blog`` or
+  ``Podcast`` the caller may add to.
+- ``title`` (required): page title.
+- ``slug`` (optional): URL slug; auto-derived from ``title`` if omitted.
+- ``visible_date`` (optional): ISO 8601 datetime string.
+- ``cover_image`` (optional): ``{"id": <image id>, "alt_text": "…"}``.
+- ``tags`` (optional): list of tag name strings.
+- ``categories`` (optional): list of ``PostCategory`` IDs.
+- ``overview`` (required): ordered list of body blocks (see below).
+- ``publish`` (optional): must be ``false`` or absent.
+
+Overview block types accepted in this slice:
+
+.. code-block:: json
+
+    [
+        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<p>Rich-text HTML.</p>"},
+        {"type": "code",      "value": {"language": "python",
+                                        "source": "print('hi')"}},
+        {"type": "image",     "value": {"id": 456}},
+        {"type": "gallery",   "value": [{"id": 456}, {"id": 789}]}
+    ]
+
+Full create request example:
+
+.. code-block:: json
+
+    {
+      "parent": {"id": 123},
+      "title": "Weeknotes 2026-25",
+      "slug": "weeknotes-2026-25",
+      "visible_date": "2026-06-19T18:00:00+02:00",
+      "cover_image": {"id": 456, "alt_text": "Notebook and laptop on a desk"},
+      "tags": ["weeknotes"],
+      "categories": [],
+      "overview": [
+        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<p>Shipped the first draft.</p>"},
+        {"type": "code",      "value": {"language": "python",
+                                        "source": "print(\"hello\")"}},
+        {"type": "gallery",   "value": [{"id": 456}, {"id": 789}]}
+      ],
+      "publish": false
+    }
+
+Success response (``201 Created``):
+
+.. code-block:: json
+
+    {
+      "id": 987,
+      "type": "cast.Post",
+      "title": "Weeknotes 2026-25",
+      "slug": "weeknotes-2026-25",
+      "parent": {"id": 123},
+      "latest_revision_id": 6543,
+      "live": false,
+      "status": "draft",
+      "preview_url": "/admin/pages/987/view_draft/",
+      "edit_url": "/admin/pages/987/edit/",
+      "api_url": "/api/editor/posts/987/"
+    }
+
+**Read a draft post**::
+
+    GET /api/editor/posts/{id}/
+
+Returns editable metadata, the normalized ``overview`` block list (same
+structure as the create request), revision metadata, and admin URLs for an
+existing draft.  Requires the caller to have edit permission for the page.
+Use this endpoint — not the public Wagtail pages API — to read back a draft:
+the Wagtail pages API returns only live pages and does not expose authoring
+source or revision IDs.
+
+**Error envelopes**
+
+Validation errors (``400 Bad Request``):
+
+.. code-block:: json
+
+    {
+      "code": "validation_error",
+      "errors": {
+        "title": [{"code": "required", "message": "This field is required."}],
+        "overview.3.value.1.id": [
+          {"code": "not_found", "message": "Image 789 does not exist."}
+        ]
+      }
+    }
+
+Field paths in ``errors`` follow dot notation into the request body so that
+clients can locate and repair individual fields without guessing.
+
+Permission errors (``403 Forbidden``):
+
+.. code-block:: json
+
+    {"code": "permission_denied", "detail": "…"}
+
+**Draft-only and Wagtail permissions**
+
+The editor API never publishes.  Every create request saves a Wagtail draft
+revision, so ``live`` is always ``false`` in the response and the page does not
+appear in the public Wagtail pages API.  Publishing is a separate follow-up
+action not yet implemented.
+
+Authorization uses standard Wagtail page permissions:
+
+- ``GET /api/editor/parents/`` — lists pages where the caller has
+  add-child permission.
+- ``POST /api/editor/posts/`` — requires add-child permission on the
+  selected parent.
+- ``GET /api/editor/posts/{id}/`` — requires edit permission for the page.
+
 Pagination
 ----------
 
