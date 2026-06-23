@@ -41,10 +41,9 @@ Media Management
 
 **Videos**
 
-List and create videos::
+List videos::
 
     GET /api/videos/
-    POST /api/videos/
 
 Retrieve or delete a video::
 
@@ -67,10 +66,9 @@ Example response::
 
 **Audio**
 
-List and create audio files::
+List audio files::
 
     GET /api/audios/
-    POST /api/audios/
 
 Retrieve or delete audio::
 
@@ -571,7 +569,7 @@ Response format::
 File Uploads
 ------------
 
-File upload endpoints accept ``multipart/form-data``:
+The file upload endpoint accepts ``multipart/form-data``:
 
 .. code-block:: javascript
 
@@ -584,8 +582,10 @@ File upload endpoints accept ``multipart/form-data``:
         credentials: 'include'  // Include session cookie
     });
 
-For ``POST /api/audios/``, send audio format fields such as ``m4a``, ``mp3``,
-``oga``, or ``opus`` (plus optional metadata like ``title``/``subtitle``).
+Unsupported media extensions, content types, container signatures, or files
+over the configured upload size limit are rejected with ``400 Bad Request`` and
+field-level JSON errors. Audio uploads are handled by the Wagtail admin and
+chooser views rather than a public DRF upload endpoint.
 
 Error Handling
 --------------
@@ -680,5 +680,5 @@ Security Notes
 
 - All media endpoints filter by authenticated user
 - CSRF protection is enabled for state-changing operations
-- File uploads are validated for type and size
+- Media uploads are validated for type and size before metadata extraction
 - Images API includes null byte protection

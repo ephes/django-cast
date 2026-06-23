@@ -44,3 +44,7 @@
   existing default-storage files into private storage. Voxhelm known-speaker
   handoff now skips uploaded clips on no-URL private storage instead of exposing
   or crashing on direct storage URLs; source-range references continue to work.
+- Audio and video uploads are now rejected before ffprobe/ffmpeg when their
+  extension, content type, container signature, or configured size limit is not
+  supported. New ``CAST_AUDIO_UPLOAD_MAX_BYTES`` and
+  ``CAST_VIDEO_UPLOAD_MAX_BYTES`` settings control the size limits.

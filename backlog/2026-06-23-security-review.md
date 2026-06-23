@@ -36,7 +36,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-010 | Medium | Editor API admin gate | Fixed |
 | SEC-2026-017 | Medium | Raw transcript artifact storage | Fixed |
 | SEC-2026-011 | Medium | Private voice-reference storage | Fixed |
-| SEC-2026-012 | Medium | Audio/video upload validation | Open |
+| SEC-2026-012 | Medium | Audio/video upload validation | Fixed |
 | SEC-2026-013 | Medium | Media stale deletion scope | Open |
 | SEC-2026-014 | Low | Media replacement durability | Open |
 | SEC-2026-015 | Low | JavaScript dependency audit | Open |
@@ -439,7 +439,7 @@ Resolution:
 
 ### SEC-2026-012: Audio/video uploads lack server-side media validation before ffmpeg/ffprobe
 
-Status: Open
+Status: Fixed
 
 References:
 
@@ -469,6 +469,16 @@ Done when:
 - Unsupported formats and oversized files are rejected before ffmpeg/ffprobe work.
 - Valid supported media still uploads and extracts metadata.
 - Tests cover invalid extension, invalid magic bytes, and oversized upload paths.
+
+Resolution:
+
+- Audio and video forms now validate extension, reported content type, container magic/header bytes, and configurable
+  size limits before saving files.
+- Direct ``Audio.save()`` and ``Video.save()`` calls validate uncommitted uploads before duration or poster metadata
+  extraction can invoke ffprobe/ffmpeg.
+- Added ``CAST_AUDIO_UPLOAD_MAX_BYTES`` and ``CAST_VIDEO_UPLOAD_MAX_BYTES`` settings with documented defaults.
+- Regression tests cover invalid extension, invalid magic bytes, oversized uploads, direct model saves, and the video
+  upload API path.
 
 ### SEC-2026-013: `media_stale --delete` can delete managed private files or unrelated storage keys
 

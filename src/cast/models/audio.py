@@ -18,6 +18,8 @@ from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
+from ..media_validation import validate_audio_upload
+
 if TYPE_CHECKING:
     from .pages import Episode
 
@@ -322,6 +324,10 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         generate_duration = kwargs.pop("duration", True)
         cache_file_sizes = kwargs.pop("cache_file_sizes", True)
         using = kwargs.get("using")
+        if generate_duration:
+            for audio_format, field in self.uploaded_audio_files:
+                if not getattr(field, "_committed", True):
+                    validate_audio_upload(field.file, audio_format=audio_format)
         # Keep metadata enrichment and persistence all-or-nothing to avoid
         # partially updated rows when duration/filesize caching fails.
         with transaction.atomic(using=using):

@@ -444,6 +444,22 @@ when configured. If that dedicated alias is omitted, they fall back to
 ``cast_private_media`` or the same non-public local private-media fallback.
 
 
+CAST_AUDIO_UPLOAD_MAX_BYTES
+===========================
+
+Maximum accepted size, in bytes, for each uploaded audio file before
+django-cast validates the file container or runs ffprobe. Defaults to
+``536870912`` (512 MiB).
+
+
+CAST_VIDEO_UPLOAD_MAX_BYTES
+===========================
+
+Maximum accepted size, in bytes, for each uploaded video file before
+django-cast validates the file container or runs ffmpeg/ffprobe. Defaults to
+``2147483648`` (2 GiB).
+
+
 ******************
 Faceted Navigation
 ******************

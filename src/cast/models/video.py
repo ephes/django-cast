@@ -15,6 +15,8 @@ from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
+from ..media_validation import validate_video_upload
+
 logger = logging.getLogger(__name__)
 
 
@@ -179,6 +181,8 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     def save(self, *args, **kwargs) -> Optional["Video"]:  # type: ignore[override]
         generate_poster = kwargs.pop("poster", True)
+        if generate_poster and not getattr(self.original, "_committed", True):
+            validate_video_upload(self.original.file)
         # need to save original first - django file handling is driving me nuts
         result = super().save(*args, **kwargs)
         if generate_poster:
