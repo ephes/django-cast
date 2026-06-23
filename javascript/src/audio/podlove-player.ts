@@ -16,6 +16,7 @@ const LOAD_BUTTON_TEXT = "Load player";
 const LOAD_BUTTON_LOADING_TEXT = "Loading player...";
 const LOAD_BUTTON_RETRY_TEXT = "Try again";
 const LOAD_ERROR_TEXT = "Unable to load the audio player. Please try again.";
+const MISSING_EMBED_ERROR_TEXT = "Unable to load the audio player because no Podlove embed script is configured.";
 
 const EMBED_SCRIPT_ATTR = "data-podlove-embed";
 const EMBED_SCRIPT_LOADED_ATTR = "data-podlove-embed-loaded";
@@ -439,7 +440,7 @@ class PodlovePlayerElement extends HTMLElement {
 
     const configUrl = appendDarkColorScheme(this.getAttribute('data-config') || '/api/audios/player_config/');
     const podloveTemplate = this.getAttribute('data-template');
-    let embedUrl = this.getAttribute('data-embed') || 'https://cdn.podlove.org/web-player/5.x/embed.js';
+    let embedUrl = this.getAttribute('data-embed');
 
     // If host is localhost use local embed url
     const { hostname, port } = window.location;
@@ -448,6 +449,11 @@ class PodlovePlayerElement extends HTMLElement {
     if (typeof podlovePlayer === "function") {
       podlovePlayer(playerDiv, url, configUrl);
       this.finalizeLoad(container);
+      return;
+    }
+
+    if (!embedUrl) {
+      this.handleLoadError(MISSING_EMBED_ERROR_TEXT);
       return;
     }
 
@@ -513,9 +519,10 @@ class PodlovePlayerElement extends HTMLElement {
     }
   }
 
-  handleLoadError() {
+  handleLoadError(message: string = LOAD_ERROR_TEXT) {
     this.isInitialized = false;
     if (this.errorMessage) {
+      this.errorMessage.textContent = message;
       this.errorMessage.hidden = false;
     }
     if (this.loadButton) {

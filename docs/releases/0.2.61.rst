@@ -51,3 +51,9 @@
 - ``media_stale --delete`` now only reports and deletes files under known
   django-cast/Wagtail-managed media prefixes, and its referenced-file scan
   includes private transcript speaker sidecars and contributor voice clips.
+- The Podlove player web component no longer falls back to a mutable third-party
+  CDN script when ``data-embed`` is missing. Themes must provide a first-party
+  embed script URL; missing configuration now fails closed in the player UI.
+- Updated the JavaScript toolchain to Vite 8, removing the vulnerable esbuild
+  dev-server dependency reported by ``npm audit``. Frontend builds now require
+  Node.js 20.19+ or 22.12+.

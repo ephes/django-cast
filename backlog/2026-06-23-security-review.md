@@ -39,8 +39,8 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-012 | Medium | Audio/video upload validation | Fixed |
 | SEC-2026-013 | Medium | Media stale deletion scope | Fixed |
 | SEC-2026-014 | Low | Media replacement durability | Open |
-| SEC-2026-015 | Low | JavaScript dependency audit | Open |
-| SEC-2026-016 | Low | Podlove remote script fallback | Open |
+| SEC-2026-015 | Low | JavaScript dependency audit | Fixed |
+| SEC-2026-016 | Low | Podlove remote script fallback | Fixed |
 
 ## High Priority
 
@@ -547,11 +547,11 @@ Done when:
 
 ### SEC-2026-015: JavaScript dependency audit reports vulnerable esbuild dev server
 
-Status: Open
+Status: Fixed
 
 References:
 
-- `javascript/package-lock.json:1345`
+- `javascript/package-lock.json`
 - `npm audit --json`
 - Advisory: `https://github.com/advisories/GHSA-g7r4-m6w7-qqqr`
 
@@ -572,9 +572,15 @@ Done when:
 - `npm audit` no longer reports this advisory.
 - JavaScript build and tests pass.
 
+Resolution:
+
+- Bumped the JavaScript workspace to Vite 8, removing the vulnerable esbuild dependency from the lockfile.
+- Verified with `npm --prefix javascript audit`, `npm --prefix javascript test`, and
+  `npm --prefix javascript run build:all`.
+
 ### SEC-2026-016: Podlove component falls back to a mutable remote script URL
 
-Status: Open
+Status: Fixed
 
 References:
 
@@ -598,6 +604,12 @@ Done when:
 
 - Omitting `data-embed` does not silently load third-party JavaScript.
 - Existing first-party static configuration continues to work.
+
+Resolution:
+
+- Removed the implicit `https://cdn.podlove.org/web-player/5.x/embed.js` fallback.
+- Missing `data-embed` now fails closed with the existing player error UI and no script injection.
+- Added a frontend regression test for the missing-embed path.
 
 ## Reviewed And Not Currently Tracked As Findings
 

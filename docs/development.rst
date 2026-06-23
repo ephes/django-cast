@@ -21,7 +21,7 @@ Prerequisites
 Before you begin, ensure you have the following installed:
 
 - Python 3.11 or higher
-- Node.js 18 or higher
+- Node.js 20.19 or higher (or Node.js 22.12 or higher)
 - `uv <https://github.com/astral-sh/uv>`_ for Python package management
 - `just <https://github.com/casey/just>`_ command runner
 - Git

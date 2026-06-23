@@ -419,6 +419,7 @@ describe('PodlovePlayerElement', () => {
     const appendSpy = vi.spyOn(document.head, 'appendChild');
     const element = document.createElement('podlove-player');
     element.setAttribute('data-url', '/api/audios/podlove/63/post/75/');
+    element.setAttribute('data-embed', '/static/cast/js/web-player/embed.5.js');
     document.body.appendChild(element);
 
     const observerInstance = element.observer as IntersectionObserverMock;
@@ -440,6 +441,31 @@ describe('PodlovePlayerElement', () => {
     expect(element.style.minHeight).toBe('');
 
     appendSpy.mockRestore();
+    global.podlovePlayer = originalPodlovePlayer;
+  });
+
+  it('should fail closed when no embed script is configured', async () => {
+    const originalPodlovePlayer = global.podlovePlayer;
+    global.podlovePlayer = undefined;
+
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/api/audios/podlove/63/post/75/');
+    document.body.appendChild(element);
+
+    const observerInstance = element.observer as IntersectionObserverMock;
+    observerInstance.trigger([
+      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const script = document.querySelector('script[data-podlove-embed]');
+    const errorMessage = element.querySelector('.podlove-player-error') as HTMLElement | null;
+    expect(script).toBeNull();
+    expect(errorMessage).not.toBeNull();
+    expect(errorMessage?.hidden).toBe(false);
+    expect(errorMessage?.textContent).toContain('no Podlove embed script is configured');
+
     global.podlovePlayer = originalPodlovePlayer;
   });
 });
