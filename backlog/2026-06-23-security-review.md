@@ -30,7 +30,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-004 | High | Twitter card player | Fixed |
 | SEC-2026-005 | Medium | Player transcript cache headers | Fixed |
 | SEC-2026-006 | Medium | Closed comments | Fixed |
-| SEC-2026-007 | Medium | Faceted navigation XSS | Open |
+| SEC-2026-007 | Medium | Faceted navigation XSS | Fixed |
 | SEC-2026-008 | Medium | Gallery image enumeration | Open |
 | SEC-2026-009 | Medium | Voxhelm draft audio authorization | Open |
 | SEC-2026-010 | Medium | Editor API admin gate | Open |
@@ -229,7 +229,7 @@ Done when:
 
 ### SEC-2026-007: Stored XSS in public facet labels
 
-Status: Open
+Status: Fixed
 
 References:
 
