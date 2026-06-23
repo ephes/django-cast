@@ -1,4 +1,5 @@
 import pytest
+from wagtail.models import PageViewRestriction
 
 from cast import appsettings
 from cast.models.index_pages import Blog
@@ -23,6 +24,15 @@ class TestBlogIndex:
         assert r.status_code == 200
 
         assert unpublished_post not in r.context["posts"]
+
+    def test_restricted_post_not_in_blog_index(self, client, post):
+        PageViewRestriction.objects.create(page=post, restriction_type=PageViewRestriction.LOGIN)
+
+        r = client.get(post.blog.get_url())
+
+        assert r.status_code == 200
+        assert post not in r.context["posts"]
+        assert post.title not in r.content.decode("utf-8")
 
     def test_post_overview_content_in_blog_index_but_not_detail(self, client, post):
         blog_url = post.blog.get_url()

@@ -237,6 +237,7 @@ class FeedContext:
 
             post_queryset = (
                 Episode.objects.live()
+                .public()
                 .descendant_of(blog)
                 .select_related("podcast_audio__transcript", "season")
                 .filter(podcast_audio__isnull=False)
@@ -245,7 +246,7 @@ class FeedContext:
         else:
             from ..pages import Post
 
-            post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
+            post_queryset = Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
         data = data_for_blog_cachable(request=request, blog=blog, post_queryset=post_queryset, is_paginated=False)
         data["blog_url"] = blog.get_url(request=request)
         return data

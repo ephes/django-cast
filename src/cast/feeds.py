@@ -77,13 +77,14 @@ class RepositoryMixin:
 
                 post_queryset = (
                     Episode.objects.live()
+                    .public()
                     .descendant_of(blog)
                     .select_related("podcast_audio__transcript", "season")
                     .filter(podcast_audio__isnull=False)
                     .order_by("-visible_date")
                 )
             else:
-                post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
+                post_queryset = Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
             return FeedContext.create_from_django_models(
                 request=request,
                 blog=blog,

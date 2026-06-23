@@ -8,6 +8,7 @@ import pytest
 import pytz
 from django.http import Http404
 from django.urls import reverse
+from wagtail.models import PageViewRestriction
 
 import django
 
@@ -96,6 +97,22 @@ class TestGeneratedFeeds:
         assert "xml" in content
         assert post.title in content
 
+    @pytest.mark.parametrize("repository", ["default", "django"])
+    def test_get_latest_entries_feed_excludes_restricted_posts(
+        self, client, post, use_dummy_cache_backend, repository
+    ):
+        previous_repository = appsettings.CAST_REPOSITORY
+        appsettings.CAST_REPOSITORY = repository
+        PageViewRestriction.objects.create(page=post, restriction_type=PageViewRestriction.LOGIN)
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+        try:
+            response = client.get(feed_url)
+        finally:
+            appsettings.CAST_REPOSITORY = previous_repository
+
+        assert response.status_code == 200
+        assert post.title not in response.content.decode("utf-8")
+
     def test_get_latest_entries_feed_escapes_special_chars_in_title(self, client, post, use_dummy_cache_backend):
         post.title = "A & B < C"
         post.save()
@@ -161,6 +178,27 @@ class TestGeneratedFeeds:
         content = r.content.decode("utf-8")
         assert "feed" in content
         assert episode.title in content
+
+    @pytest.mark.parametrize("repository", ["default", "django"])
+    def test_get_podcast_feed_excludes_restricted_episodes(
+        self, client, episode, use_dummy_cache_backend, repository
+    ):
+        previous_repository = appsettings.CAST_REPOSITORY
+        appsettings.CAST_REPOSITORY = repository
+        PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.blog.slug, "audio_format": "m4a"},
+        )
+        try:
+            response = client.get(feed_url)
+        finally:
+            appsettings.CAST_REPOSITORY = previous_repository
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert episode.title not in content
+        assert episode.podcast_audio.m4a.url not in content
 
     def test_podcast_feed_rss_uses_subtitle(self, client, episode, use_dummy_cache_backend):
         feed_url = reverse(

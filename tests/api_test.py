@@ -6,6 +6,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.request import Request
+from wagtail.models import PageViewRestriction
 
 from cast import modal_facet_counts
 from cast.api.serializers import AudioPodloveSerializer
@@ -1094,6 +1095,34 @@ def test_facet_counts_detail_mode_modal_schema(api_client, blog, post):
         assert isinstance(group["options"], list)
         for option in group["options"]:
             assert set(option.keys()) == {"slug", "name", "count"}
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_excludes_restricted_post_facets(api_client, blog, post):
+    post.tags.add("secret")
+    post.save()
+    PageViewRestriction.objects.create(page=post, restriction_type=PageViewRestriction.LOGIN)
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    response = api_client.get(url, format="json")
+
+    assert response.status_code == 200
+    assert response.json()["facet_counts"]["tag_facets"] == []
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_modal_excludes_restricted_post_facets(api_client, blog, post):
+    post.tags.add("secret")
+    post.save()
+    PageViewRestriction.objects.create(page=post, restriction_type=PageViewRestriction.LOGIN)
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    response = api_client.get(f"{url}?mode=modal", format="json")
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["result_count"] == 0
+    assert result["groups"]["tag_facets"]["options"] == []
 
 
 @pytest.mark.django_db

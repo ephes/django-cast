@@ -24,10 +24,10 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 
 | ID | Severity | Area | Status |
 | --- | --- | --- | --- |
-| SEC-2026-001 | High | Restricted content | Open |
+| SEC-2026-001 | High | Restricted content | Fixed |
 | SEC-2026-002 | High | Wagtail media admin | Open |
 | SEC-2026-003 | High | Voxhelm artifact downloads | Open |
-| SEC-2026-004 | High | Twitter card player | Open |
+| SEC-2026-004 | High | Twitter card player | Fixed |
 | SEC-2026-005 | Medium | Player transcript cache headers | Open |
 | SEC-2026-006 | Medium | Closed comments | Open |
 | SEC-2026-007 | Medium | Faceted navigation XSS | Open |
@@ -46,7 +46,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 
 ### SEC-2026-001: Restricted child pages leak through public lists, feeds, and facets
 
-Status: Open
+Status: Fixed
 
 References:
 
@@ -141,7 +141,7 @@ Done when:
 
 ### SEC-2026-004: Twitter card player can expose draft or restricted episodes
 
-Status: Open
+Status: Fixed
 
 References:
 

@@ -226,13 +226,17 @@ class PlayerConfig(generics.RetrieveAPIView):
 
 class FacetCountListView(generics.ListAPIView):
     serializer_class = SimpleBlogSerializer
-    queryset = Blog.objects.all().live().order_by("-first_published_at")
     pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self) -> QuerySet[Blog]:
+        return Blog.objects.all().live().public().order_by("-first_published_at")
 
 
 class FacetCountsDetailView(generics.RetrieveAPIView):
-    queryset = Blog.objects.all().live()
     serializer_class = FacetCountSerializer
+
+    def get_queryset(self) -> QuerySet[Blog]:
+        return Blog.objects.all().live().public()
 
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
         if request.query_params.get("mode") == "modal":

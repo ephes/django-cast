@@ -183,7 +183,7 @@ class Blog(Page):
         cached = getattr(self, "_last_build_date", None)
         if cached is not None:
             return cached
-        return Post.objects.live().descendant_of(self).order_by("-visible_date")[0].visible_date
+        return Post.objects.live().public().descendant_of(self).order_by("-visible_date")[0].visible_date
 
     @property
     def author_name(self) -> str:
@@ -196,7 +196,7 @@ class Blog(Page):
         if self.pk is None:
             # this blog is not saved to database yet, therefore it has no posts
             return Post.objects.none()
-        return Post.objects.live().descendant_of(self).order_by("-visible_date")
+        return Post.objects.live().public().descendant_of(self).order_by("-visible_date")
 
     def get_filterset(self, get_params: QueryDict) -> PostFilterset:
         return PostFilterset(data=get_params, queryset=self.unfiltered_published_posts)
