@@ -6,7 +6,7 @@ from typing import Any, Callable
 from django.urls import reverse
 from django.utils.text import slugify
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,16 +24,23 @@ from .errors import (
 from .serializers import ParentSerializer, PostCreateSerializer, PostUpdateSerializer
 
 
+class HasWagtailAdminAccess(BasePermission):
+    message = "You do not have access to the Wagtail admin."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        return bool(request.user and request.user.has_perm("wagtailadmin.access_admin"))
+
+
 class EditorAPIView(APIView):
     """Base view for the content editing API; renders structured error envelopes."""
+
+    permission_classes = (IsAuthenticated, HasWagtailAdminAccess)
 
     def get_exception_handler(self) -> Callable[..., Any]:
         return editor_exception_handler
 
 
 class ParentsListView(EditorAPIView):
-    permission_classes = (IsAuthenticated,)
-
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         user = request.user
         api_url = reverse("cast:api:editor_post_create")
@@ -157,8 +164,6 @@ class PostEditorMixin:
 
 
 class PostCreateView(PostEditorMixin, EditorAPIView):
-    permission_classes = (IsAuthenticated,)
-
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = PostCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -211,8 +216,6 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
 
 
 class PostDetailView(PostEditorMixin, EditorAPIView):
-    permission_classes = (IsAuthenticated,)
-
     def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         post = self._get_post(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(post))

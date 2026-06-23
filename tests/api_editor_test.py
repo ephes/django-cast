@@ -1,8 +1,10 @@
 import json
 
 import pytest
+from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 from rest_framework import status
+from wagtail.models import GroupPagePermission, Page
 
 from cast.api.editor.body import SUPPORTED_OVERVIEW_BLOCKS, author_blocks_to_overview, overview_to_author_blocks
 from cast.api.editor.errors import (
@@ -15,6 +17,23 @@ from cast.models import Post
 from cast.models.snippets import PostCategory
 
 from tests.factories import BlogFactory, UserFactory
+
+
+def grant_wagtail_admin_access(user) -> None:
+    permission = Permission.objects.get(codename="access_admin", content_type__app_label="wagtailadmin")
+    user.user_permissions.add(permission)
+
+
+def page_permission_user(*, codenames: tuple[str, ...]) -> object:
+    user = UserFactory(is_staff=True)
+    group = Group.objects.create(name=f"Page permissions {user.pk}")
+    root_page = Page.get_first_root_node()
+    assert root_page is not None
+    for codename in codenames:
+        permission = Permission.objects.get(codename=codename, content_type__app_label="wagtailcore")
+        GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
+    user.groups.add(group)
+    return user
 
 
 @pytest.fixture(autouse=True)
@@ -128,12 +147,22 @@ class TestEditorParents:
         response = api_client.get(url, format="json")
         assert response.status_code in (401, 403)
 
+    def test_requires_wagtail_admin_access_even_with_page_permissions(self, api_client):
+        user = page_permission_user(codenames=("add_page",))
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_parents")
+
+        response = api_client.get(url, format="json")
+
+        assert response.status_code == 403
+
     def test_lists_only_addable_blogs(self, api_client, site):
         owner = UserFactory()
         owner._password = "password"
         blog = BlogFactory(owner=owner, title="Owned blog", slug="owned-blog", parent=site.root_page)
         # A second user with no page permissions must not see the blog.
         other = UserFactory()
+        grant_wagtail_admin_access(other)
         api_client.force_authenticate(user=other)
         url = reverse("cast:api:editor_parents")
         empty = api_client.get(url, format="json").json()
@@ -345,6 +374,15 @@ class TestEditorPostCreate:
         response = api_client.post(url, self._payload(blog), format="json")
         assert response.status_code in (401, 403)
 
+    def test_requires_wagtail_admin_access_even_with_add_permission(self, api_client, blog):
+        user = page_permission_user(codenames=("add_page",))
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_post_create")
+
+        response = api_client.post(url, self._payload(blog), format="json")
+
+        assert response.status_code == 403
+
     def test_creates_unpublished_draft(self, api_client, blog, admin_user):
         api_client.force_authenticate(user=admin_user)
         url = reverse("cast:api:editor_post_create")
@@ -375,6 +413,7 @@ class TestEditorPostCreate:
 
     def test_rejects_caller_without_add_permission(self, api_client, blog):
         stranger = UserFactory()
+        grant_wagtail_admin_access(stranger)
         api_client.force_authenticate(user=stranger)
         url = reverse("cast:api:editor_post_create")
         response = api_client.post(url, self._payload(blog), format="json")
@@ -550,9 +589,20 @@ class TestEditorPostDetail:
     def test_rejects_caller_without_edit_permission(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
         stranger = UserFactory()
+        grant_wagtail_admin_access(stranger)
         api_client.force_authenticate(user=stranger)
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
         response = api_client.get(url, format="json")
+        assert response.status_code == 403
+
+    def test_detail_requires_wagtail_admin_access_even_with_change_permission(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        user = page_permission_user(codenames=("change_page",))
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.get(url, format="json")
+
         assert response.status_code == 403
 
     def test_detail_without_overview_block_returns_empty_overview(self, api_client, blog, admin_user):
@@ -804,6 +854,7 @@ class TestEditorPostUpdate:
     def test_patch_from_user_without_edit_permission_is_rejected(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
         stranger = UserFactory()
+        grant_wagtail_admin_access(stranger)
         api_client.force_authenticate(user=stranger)
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
         response = api_client.patch(

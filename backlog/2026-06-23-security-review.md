@@ -33,7 +33,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-007 | Medium | Faceted navigation XSS | Fixed |
 | SEC-2026-008 | Medium | Gallery image enumeration | Fixed |
 | SEC-2026-009 | Medium | Voxhelm draft audio authorization | Open |
-| SEC-2026-010 | Medium | Editor API admin gate | Open |
+| SEC-2026-010 | Medium | Editor API admin gate | Fixed |
 | SEC-2026-017 | Medium | Raw transcript artifact storage | Open |
 | SEC-2026-011 | Medium | Private voice-reference storage | Open |
 | SEC-2026-012 | Medium | Audio/video upload validation | Open |
@@ -312,7 +312,7 @@ Done when:
 
 ### SEC-2026-010: Editor API lacks an explicit Wagtail admin-access gate
 
-Status: Open
+Status: Fixed
 
 References:
 
