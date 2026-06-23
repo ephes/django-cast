@@ -56,9 +56,11 @@ def remove_stale_media_files():
 
     # clean up before tests start (handles leftovers from interrupted runs)
     shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+    shutil.rmtree(settings.CAST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
     yield
     # clean up after tests end
     shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+    shutil.rmtree(settings.CAST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
 
 
 @pytest.fixture(scope="session", autouse=True)

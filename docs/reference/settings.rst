@@ -424,7 +424,18 @@ like this:
               "location": ROOT_DIR.path("backups").path("media"),
           },
       },
+      "cast_private_media": {
+          "BACKEND": "django.core.files.storage.FileSystemStorage",
+          "OPTIONS": {
+              "location": ROOT_DIR.path("private").path("media"),
+              "base_url": None,
+          },
+      },
     }
+
+``cast_private_media`` stores raw transcript artifacts outside public media.
+If omitted, django-cast falls back to ``CAST_PRIVATE_MEDIA_ROOT`` or a local
+``cast-private-media`` directory next to ``MEDIA_ROOT``.
 
 
 ******************

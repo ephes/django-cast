@@ -163,7 +163,18 @@ Configure separate storage backends through Django's ``STORAGES`` setting:
                 "location": "/backup/media",
             },
         },
+        "cast_private_media": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "OPTIONS": {
+                "location": "/srv/django-cast/private-media",
+                "base_url": None,
+            },
+        },
     }
+
+The ``cast_private_media`` storage is used for raw transcript artifacts. It
+must not be served directly by your web server or CDN; public transcript
+formats are exposed through django-cast's authorizing and sanitizing views.
 
 Image Renditions
 ----------------

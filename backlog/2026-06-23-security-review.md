@@ -34,7 +34,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-008 | Medium | Gallery image enumeration | Fixed |
 | SEC-2026-009 | Medium | Voxhelm draft audio authorization | Fixed |
 | SEC-2026-010 | Medium | Editor API admin gate | Fixed |
-| SEC-2026-017 | Medium | Raw transcript artifact storage | Open |
+| SEC-2026-017 | Medium | Raw transcript artifact storage | Fixed |
 | SEC-2026-011 | Medium | Private voice-reference storage | Open |
 | SEC-2026-012 | Medium | Audio/video upload validation | Open |
 | SEC-2026-013 | Medium | Media stale deletion scope | Open |
@@ -355,7 +355,7 @@ Done when:
 
 ### SEC-2026-017: Raw transcript artifacts can bypass authorization and sanitization on public media storage
 
-Status: Open
+Status: Fixed
 
 References:
 
@@ -386,6 +386,15 @@ Done when:
 - Anonymous users cannot fetch raw transcript artifacts for restricted or draft episodes through direct media URLs.
 - Public transcript endpoints still serve sanitized transcript formats for authorized public content.
 - Tests cover restricted transcript direct-file behavior and sanitized endpoint behavior.
+
+Resolution:
+
+- Raw Podlove, DOTe, and WebVTT transcript artifacts now use private storage through the ``cast_private_media`` alias
+  or a non-public local fallback outside ``MEDIA_ROOT``.
+- A migration copies existing raw transcript artifacts from default storage into private storage before switching the
+  model fields.
+- Transcript admin forms render existing private filenames without direct storage links.
+- Regression tests cover private storage URL denial and authorized sanitized public transcript output.
 
 ### SEC-2026-011: Private voice-reference and speaker sidecar files can fall back to public default storage
 

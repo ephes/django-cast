@@ -223,6 +223,18 @@ class AudioForm(BaseCollectionMemberForm):
         return audio
 
 
+class PrivateClearableFileInput(forms.ClearableFileInput):
+    template_name = "cast/widgets/private_clearable_file_input.html"
+
+    def is_initial(self, value):
+        return bool(value and getattr(value, "name", ""))
+
+    def format_value(self, value):
+        if self.is_initial(value):
+            return value.name
+        return None
+
+
 class TranscriptForm(BaseCollectionMemberForm):
     """Form for creating and editing Transcript objects in the Wagtail admin.
 
@@ -237,9 +249,9 @@ class TranscriptForm(BaseCollectionMemberForm):
         model = Transcript
         fields = list(Transcript.admin_form_fields) + ["collection"]
         widgets = {
-            "podlove": forms.ClearableFileInput,
-            "vtt": forms.ClearableFileInput,
-            "dote": forms.ClearableFileInput,
+            "podlove": PrivateClearableFileInput,
+            "vtt": PrivateClearableFileInput,
+            "dote": PrivateClearableFileInput,
         }
 
     def clean_podlove(self):

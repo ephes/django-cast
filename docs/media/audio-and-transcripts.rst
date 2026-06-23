@@ -168,6 +168,14 @@ feed:
 * `vtt` - WebVTT, a subtitle format in plain text
 * `dote` - DOTE, a json transcript format
 
+Raw transcript artifacts are private storage objects. Public JSON, WebVTT,
+PodcastIndex, and HTML transcript responses are served through django-cast
+views that authorize the related episode/audio and sanitize public speaker
+labels. Configure a protected backend under the ``"cast_private_media"``
+``STORAGES`` alias for shared production storage; without that alias,
+django-cast stores transcript artifacts on a local filesystem path outside
+``MEDIA_ROOT`` and does not expose direct file URLs.
+
 Voxhelm Integration
 -------------------
 

@@ -34,3 +34,7 @@
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and
   ``choose_transcript`` permissions control chooser access.
+- Moved raw transcript artifacts (Podlove JSON, DOTe JSON, and WebVTT) to
+  private storage. Configure ``STORAGES["cast_private_media"]`` for production;
+  public transcript URLs continue to use the existing authorized and sanitized
+  views.

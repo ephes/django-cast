@@ -16,6 +16,7 @@ from wagtail.search import index
 from cast.file_replacement import StagedFileReplacementGroup
 
 from . import Audio
+from ..private_storage import get_private_media_storage
 from .contributors import Contributor, get_voice_reference_storage
 
 
@@ -173,6 +174,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     audio = models.OneToOneField(Audio, on_delete=models.CASCADE, related_name="transcript")
     podlove = models.FileField(
         upload_to="cast_transcript/",
+        storage=get_private_media_storage,
         null=True,
         blank=True,
         verbose_name="Podlove Transcript",
@@ -180,6 +182,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     )
     vtt = models.FileField(
         upload_to="cast_transcript/",
+        storage=get_private_media_storage,
         null=True,
         blank=True,
         verbose_name="WebVTT Transcript",
@@ -187,6 +190,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     )
     dote = models.FileField(
         upload_to="cast_transcript/",
+        storage=get_private_media_storage,
         null=True,
         blank=True,
         verbose_name="DOTe Transcript",
