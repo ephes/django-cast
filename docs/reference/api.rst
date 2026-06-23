@@ -328,8 +328,8 @@ The editor API lives under ``/api/editor/`` and is intended for trusted
 clients — scripts, agents, or headless tools — that need to create draft
 content without direct database access. It is authentication-mechanism
 agnostic: any DRF authentication class that populates ``request.user`` works.
-The first slice ships with Django session authentication. Authorization is
-handled entirely by Wagtail page permissions, not by ``is_staff``.
+Django-cast ships session authentication by default. Authorization is handled
+entirely by Wagtail page permissions, not by ``is_staff``.
 
 **List editable parents**::
 
@@ -451,6 +451,53 @@ Use this endpoint — not the public Wagtail pages API — to read back a draft:
 the Wagtail pages API returns only live pages and does not expose authoring
 source or revision IDs.
 
+**Update a draft post**::
+
+    PATCH /api/editor/posts/{id}/
+    Content-Type: application/json
+
+Creates a new Wagtail draft revision for an existing ``Post``.  The request
+must include the ``latest_revision_id`` returned by ``GET`` or the previous
+write response as ``base_revision_id``.  Omitted fields are left unchanged; a
+provided ``overview`` replaces the whole overview section.  At least one
+mutable field besides ``base_revision_id`` is required.
+
+Update fields:
+
+- ``base_revision_id`` (required): optimistic concurrency token.
+- ``title`` (optional): page title.
+- ``slug`` (optional): URL slug; must remain unique under the same parent.
+- ``visible_date`` (optional): ISO 8601 datetime string.
+- ``cover_image`` (optional): ``{"id": <image id>, "alt_text": "…"}``, or
+  ``null`` to clear the draft cover image.
+- ``tags`` (optional): full replacement list of tag name strings.
+- ``categories`` (optional): full replacement list of ``PostCategory`` IDs.
+- ``overview`` (optional): full replacement ordered list of body blocks.
+
+Example update request:
+
+.. code-block:: json
+
+    {
+      "base_revision_id": 6543,
+      "title": "Updated draft title",
+      "overview": [
+        {"type": "paragraph", "value": "<p>Updated draft text.</p>"}
+      ]
+    }
+
+A stale base revision returns ``409 Conflict``:
+
+.. code-block:: json
+
+    {
+      "code": "revision_conflict",
+      "detail": "The page has a newer revision than the submitted base revision.",
+      "current_revision_id": 6550,
+      "submitted_base_revision_id": 6543,
+      "edit_url": "/admin/pages/987/edit/"
+    }
+
 **Error envelopes**
 
 Validation errors (``400 Bad Request``):
@@ -476,12 +523,19 @@ Permission errors (``403 Forbidden``):
 
     {"code": "permission_denied", "detail": "…"}
 
+Missing posts (``404 Not Found``):
+
+.. code-block:: json
+
+    {"code": "not_found", "detail": "Post not found."}
+
 **Draft-only and Wagtail permissions**
 
-The editor API never publishes.  Every create request saves a Wagtail draft
-revision, so ``live`` is always ``false`` in the response and the page does not
-appear in the public Wagtail pages API.  Publishing is a separate follow-up
-action not yet implemented.
+The editor API never publishes.  Create requests save Wagtail draft revisions,
+so newly-created pages are returned with ``live: false`` and do not appear in
+the public Wagtail pages API.  Updating an already-live page creates an
+unpublished draft revision and returns ``status: "draft"`` while ``live`` stays
+``true``.  Publishing is a separate follow-up action not yet implemented.
 
 Authorization uses standard Wagtail page permissions:
 
@@ -490,6 +544,7 @@ Authorization uses standard Wagtail page permissions:
 - ``POST /api/editor/posts/`` — requires add-child permission on the
   selected parent.
 - ``GET /api/editor/posts/{id}/`` — requires edit permission for the page.
+- ``PATCH /api/editor/posts/{id}/`` — requires edit permission for the page.
 
 Pagination
 ----------

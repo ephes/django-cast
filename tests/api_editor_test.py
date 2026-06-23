@@ -6,6 +6,7 @@ from rest_framework import status
 
 from cast.api.editor.body import SUPPORTED_OVERVIEW_BLOCKS, author_blocks_to_overview, overview_to_author_blocks
 from cast.api.editor.errors import (
+    EditorNotFound,
     EditorPermissionDenied,
     EditorValidationError,
     editor_exception_handler,
@@ -59,6 +60,12 @@ class TestEditorExceptionHandler:
             "parent_id": 123,
         }
 
+    def test_not_found_renders_envelope(self):
+        exc = EditorNotFound("Post not found.")
+        response = editor_exception_handler(exc, {})
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        assert response.data == {"code": "not_found", "detail": "Post not found."}
+
     def test_drf_validation_error_mapped_to_envelope(self):
         from rest_framework.exceptions import ErrorDetail, ValidationError
 
@@ -94,6 +101,14 @@ class TestEditorExceptionHandler:
         exc = ValidationError({"items": [{"sub": ["bad"]}]})
         response = editor_exception_handler(exc, {})
         assert response.data["errors"]["items.0.sub"][0]["message"] == "bad"
+
+    def test_drf_mixed_list_errors_keep_original_nested_indexes(self):
+        from rest_framework.exceptions import ValidationError
+
+        exc = ValidationError({"items": ["bad list", {"sub": ["bad item"]}]})
+        response = editor_exception_handler(exc, {})
+        assert response.data["errors"]["items"][0]["message"] == "bad list"
+        assert response.data["errors"]["items.1.sub"][0]["message"] == "bad item"
 
     def test_drf_scalar_field_value_is_flattened(self):
         from rest_framework.exceptions import ErrorDetail, ValidationError
@@ -562,6 +577,7 @@ class TestEditorPostDetail:
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": 999999})
         response = api_client.get(url, format="json")
         assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Post not found."}
 
     def test_cover_image_round_trip(self, api_client, blog, superuser, image):
         # The author must be able to choose the cover image; a superuser can.
@@ -586,3 +602,268 @@ class TestEditorPostDetail:
         assert response.status_code == 200
         data = response.json()
         assert data["cover_image"] == {"id": image.id, "alt_text": "Desk photo"}
+
+
+class TestEditorPostUpdate:
+    pytestmark = pytest.mark.django_db
+
+    def _create(self, api_client, blog, user, **overrides):
+        api_client.force_authenticate(user=user)
+        create_url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "Editable draft",
+            "slug": "editable-draft",
+            "tags": ["weeknotes"],
+            "overview": [
+                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<p>Original text.</p>"},
+            ],
+        }
+        payload.update(overrides)
+        response = api_client.post(create_url, payload, format="json")
+        assert response.status_code == 201, response.content
+        return response.json()
+
+    def test_requires_authentication(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        api_client.force_authenticate(user=None)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(url, {"base_revision_id": created["latest_revision_id"], "title": "Nope"})
+        assert response.status_code in (401, 403)
+
+    def test_missing_base_revision_is_validation_error(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(url, {"title": "No base"}, format="json")
+        assert response.status_code == 400
+        body = response.json()
+        assert body["code"] == "validation_error"
+        assert "base_revision_id" in body["errors"]
+
+    def test_patch_without_any_update_field_is_validation_error(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(url, {"base_revision_id": created["latest_revision_id"]}, format="json")
+        assert response.status_code == 400
+        assert response.json()["errors"]["non_field_errors"][0]["code"] == "required"
+
+    def test_stale_base_revision_returns_conflict_without_overwrite(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        post = Post.objects.get(id=created["id"]).specific
+        human_draft = post.get_latest_revision_as_object()
+        human_draft.title = "Human draft"
+        human_revision = human_draft.save_revision(user=admin_user)
+
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "Agent draft"},
+            format="json",
+        )
+
+        assert response.status_code == 409
+        body = response.json()
+        assert body["code"] == "revision_conflict"
+        assert body["detail"] == "The page has a newer revision than the submitted base revision."
+        assert body["current_revision_id"] == human_revision.id
+        assert body["submitted_base_revision_id"] == created["latest_revision_id"]
+        assert body["edit_url"].endswith(f"/pages/{created['id']}/edit/")
+        detail = api_client.get(url, format="json").json()
+        assert detail["title"] == "Human draft"
+        assert detail["latest_revision_id"] == human_revision.id
+
+    def test_patch_updates_only_sent_fields(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "Retitled draft"},
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["latest_revision_id"] != created["latest_revision_id"]
+        assert data["title"] == "Retitled draft"
+        assert data["slug"] == "editable-draft"
+        assert data["tags"] == ["weeknotes"]
+        assert data["overview"] == [
+            {"type": "heading", "value": "Notes"},
+            {"type": "paragraph", "value": "<p>Original text.</p>"},
+        ]
+        assert data["live"] is False
+
+    def test_patch_saves_new_revision_and_round_trips(self, api_client, blog, superuser, image):
+        category = PostCategory.objects.create(name="Updated", slug="updated")
+        created = self._create(api_client, blog, superuser, slug="all-fields")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        overview = [
+            {"type": "paragraph", "value": "<p>Updated draft text.</p>"},
+            {"type": "image", "value": {"id": image.id}},
+        ]
+
+        response = api_client.patch(
+            url,
+            {
+                "base_revision_id": created["latest_revision_id"],
+                "title": "Updated draft",
+                "slug": "updated-draft",
+                "visible_date": "2026-06-23T08:15:00+02:00",
+                "tags": ["weeknotes", "updated"],
+                "categories": [category.id],
+                "cover_image": {"id": image.id, "alt_text": "Updated alt"},
+                "overview": overview,
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["latest_revision_id"] != created["latest_revision_id"]
+        assert data["title"] == "Updated draft"
+        assert data["slug"] == "updated-draft"
+        assert data["tags"] == ["weeknotes", "updated"]
+        assert data["categories"] == [category.id]
+        assert data["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
+        assert data["overview"] == overview
+        assert data["visible_date"].startswith("2026-06-23T")
+        assert data["live"] is False
+        assert data["status"] == "draft"
+
+        detail = api_client.get(url, format="json").json()
+        assert detail["latest_revision_id"] == data["latest_revision_id"]
+        assert detail["title"] == "Updated draft"
+        assert detail["tags"] == ["weeknotes", "updated"]
+        assert detail["categories"] == [category.id]
+        assert detail["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
+        assert detail["overview"] == overview
+
+        revision_post = Post.objects.get(id=created["id"]).get_latest_revision().as_object()
+        assert [tag.name for tag in revision_post.tags.all()] == ["weeknotes", "updated"]
+        assert [saved_category.pk for saved_category in revision_post.categories.all()] == [category.id]
+        assert revision_post.cover_image_id == image.id
+
+        stored_post = Post.objects.get(id=created["id"])
+        assert stored_post.title == "Editable draft"
+        assert stored_post.slug == "all-fields"
+        assert stored_post.cover_image_id is None
+
+    def test_patch_chains_returned_revision_id(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user, slug="chainable")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        first = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "First update"},
+            format="json",
+        ).json()
+
+        second = api_client.patch(
+            url,
+            {"base_revision_id": first["latest_revision_id"], "title": "Second update"},
+            format="json",
+        )
+
+        assert second.status_code == 200, second.content
+        data = second.json()
+        assert data["title"] == "Second update"
+        assert data["latest_revision_id"] != first["latest_revision_id"]
+
+    def test_patch_live_page_reports_unpublished_draft_status(self, api_client, blog, admin_user):
+        from tests.factories import PostFactory
+
+        post = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="Live page",
+            slug="live-page",
+            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live"}]}]),
+        )
+        revision = post.save_revision(user=admin_user, changed=False)
+        post.refresh_from_db()
+        assert post.live is True
+        assert post.has_unpublished_changes is False
+
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": post.id})
+        response = api_client.patch(
+            url,
+            {"base_revision_id": revision.id, "title": "Draft over live"},
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["live"] is True
+        assert data["status"] == "draft"
+        assert data["title"] == "Draft over live"
+        post.refresh_from_db()
+        assert post.has_unpublished_changes is True
+
+    def test_patch_from_user_without_edit_permission_is_rejected(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        stranger = UserFactory()
+        api_client.force_authenticate(user=stranger)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "No permission"},
+            format="json",
+        )
+        assert response.status_code == 403
+        assert response.json()["code"] == "permission_denied"
+
+    def test_patch_can_clear_cover_image(self, api_client, blog, superuser, image):
+        created = self._create(
+            api_client,
+            blog,
+            superuser,
+            slug="clear-cover",
+            cover_image={"id": image.id, "alt_text": "Desk photo"},
+        )
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "cover_image": None},
+            format="json",
+        )
+        assert response.status_code == 200, response.content
+        assert response.json()["cover_image"] is None
+
+    def test_patch_rejects_unknown_category(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user, slug="bad-category")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "categories": [999999]},
+            format="json",
+        )
+        assert response.status_code == 400
+        assert "categories" in response.json()["errors"]
+
+    def test_patch_adds_overview_to_detail_only_body(self, api_client, blog, admin_user):
+        from tests.factories import PostFactory
+
+        post = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="Detail only patch",
+            slug="detail-only-patch",
+            body=json.dumps([{"type": "detail", "value": [{"type": "heading", "value": "Detail"}]}]),
+        )
+        revision = post.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": post.id})
+        overview = [{"type": "heading", "value": "New overview"}]
+
+        response = api_client.patch(
+            url,
+            {"base_revision_id": revision.id, "overview": overview},
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["overview"] == overview
+        draft = Post.objects.get(id=post.id).get_latest_revision_as_object()
+        assert [block.block_type for block in draft.body] == ["overview", "detail"]

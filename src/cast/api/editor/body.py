@@ -17,23 +17,40 @@ SUPPORTED_OVERVIEW_BLOCKS = frozenset({"heading", "paragraph", "code", "image", 
 _PARAGRAPH_BLOCK = RichTextBlock()
 
 
-def _choosable(obj_id: Any, user: Any, *, queryset: Any, policy: Any) -> bool:
-    """True if ``obj_id`` exists in ``queryset`` and ``user`` may ``choose`` it.
+def get_choosable_object(obj_id: Any, user: Any, *, queryset: Any, policy: Any) -> Any | None:
+    """Return an object when ``user`` may ``choose`` it, otherwise ``None``.
 
-    Existence and visibility are deliberately collapsed into one boolean so callers report a single
+    Existence and visibility are deliberately collapsed into ``None`` so callers report a single
     ``not_found`` and never leak the existence of media the caller cannot access.
     """
     if not isinstance(obj_id, int) or isinstance(obj_id, bool):
-        return False
+        return None
     obj = queryset.filter(pk=obj_id).first()
     if obj is None:
-        return False
-    return policy.user_has_permission_for_instance(user, "choose", obj)
+        return None
+    if not policy.user_has_permission_for_instance(user, "choose", obj):
+        return None
+    return obj
+
+
+def get_choosable_image(image_id: Any, user: Any) -> Any | None:
+    """Return the image when it exists and the caller may choose it."""
+    return get_choosable_object(image_id, user, queryset=get_image_model().objects, policy=image_permission_policy)
 
 
 def image_choosable_by(image_id: Any, user: Any) -> bool:
     """True if the image exists and the caller may choose it (Wagtail image ``choose`` permission)."""
-    return _choosable(image_id, user, queryset=get_image_model().objects, policy=image_permission_policy)
+    return get_choosable_image(image_id, user) is not None
+
+
+def get_choosable_audio(audio_id: Any, user: Any) -> Any | None:
+    """Return the audio when it exists and the caller may choose it."""
+    from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
+
+    from ...models import Audio
+
+    policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
+    return get_choosable_object(audio_id, user, queryset=Audio.objects, policy=policy)
 
 
 def audio_choosable_by(audio_id: Any, user: Any) -> bool:
@@ -42,12 +59,7 @@ def audio_choosable_by(audio_id: Any, user: Any) -> bool:
     Audio has no dedicated ``choose_audio`` permission, so this uses the same collection-ownership
     policy the audio chooser is built on: superusers and users with audio collection permissions pass.
     """
-    from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
-
-    from ...models import Audio
-
-    policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
-    return _choosable(audio_id, user, queryset=Audio.objects, policy=policy)
+    return get_choosable_audio(audio_id, user) is not None
 
 
 def author_blocks_to_overview(blocks: list[dict], *, user: Any, path_prefix: str = "overview") -> list[dict]:

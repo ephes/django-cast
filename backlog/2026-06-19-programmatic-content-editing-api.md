@@ -5,8 +5,15 @@ Date: 2026-06-19
 Status: Slice 1 implemented (2026-06-22): `GET /api/editor/parents/`, `POST /api/editor/posts/`, and
 `GET /api/editor/posts/{id}/` are shipped. The API is authentication-mechanism agnostic, authenticates with Django
 session auth in the first slice, and authorizes with Wagtail page permissions. The body contract is a structured block
-list (heading, paragraph, code, image, gallery). Remaining follow-ups: publish action, PATCH + conflict detection
-(`409`), Markdown convenience input, scoped-token (IndieAuth) auth, and embed/video/audio blocks.
+list (heading, paragraph, code, image, gallery, audio).
+
+Slice 2 implemented (2026-06-23): **updating drafts** via `PATCH /api/editor/posts/{id}/` with revision-based conflict
+detection (`409`). `PATCH` requires `base_revision_id`, saves a new Wagtail draft revision, leaves omitted fields
+untouched, replaces the whole `overview` section when supplied, and supports explicit `cover_image: null` to clear the
+draft cover image.
+
+Remaining follow-ups beyond slice 2: publish action, Markdown convenience input, scoped-token (IndieAuth) auth, and
+embed/video blocks.
 
 ## Summary
 
@@ -349,6 +356,41 @@ Implement the smallest useful workflow for assisted post authoring:
    revise the generated draft.
 6. Document that publish remains a separate follow-up unless it is implemented in the same change.
 
+## Second Implementation Slice
+
+Status: Implemented 2026-06-23.
+
+Let a client safely revise a draft it (or a human) created, by saving a new Wagtail revision on top of the latest one,
+with conflict detection so it never silently overwrites a newer human edit. This slice deliberately reuses slice 1's
+conversion module, structured error envelope, media `choose`-permission checks, and the read endpoint's normalized
+output: the canonical client loop is **GET the draft → edit the returned `overview` block list → PATCH with the returned
+`latest_revision_id` as the base**.
+
+1. Add `PATCH /api/editor/posts/{id}/` on the existing detail view, authorized by Wagtail `can_edit` on the *specific*
+   page (same authorization model as the read endpoint), and kept authentication-mechanism agnostic.
+2. Require a base-revision token. Accept `base_revision_id` in the JSON body (an `If-Match`/ETag header carrying the
+   same id may be added later as an equivalent). Before applying any change, compare it to the page's current
+   `latest_revision_id`; if they differ, return `409 Conflict` with code `revision_conflict` and the metadata in
+   "Conflict Detection" (`current_revision_id`, `submitted_base_revision_id`, the site's admin edit URL). A request
+   without a base-revision token is a `validation_error`, not a silent overwrite.
+3. Partial-update semantics: accept the same fields as create (`title`, `slug`, `visible_date`, `tags`, `categories`,
+   `cover_image`, `overview`), all optional; only provided fields change, omitted fields are left untouched. A provided
+   `overview` **replaces the whole `overview` section** — this stays lossless because the read endpoint round-trips the
+   full block list, and block-level patching is deferred. Re-validate every provided field with slice 1's converters
+   and the same field-precise error envelope.
+4. Apply the changes in memory, then `save_revision(user=...)` — never mutate the live/published row directly. The
+   update creates a new draft revision; it must not publish. A `slug` change is re-checked for sibling uniqueness, as
+   on create.
+5. Resolve the slice-1 live-row-vs-revision drift here: tags, categories, and cover image must be carried by the
+   revision content (Wagtail's source of truth), not written to the live row ahead of publish, so a draft's revisions
+   and live state cannot diverge. Revisit slice 1's create path for the same correctness if needed.
+6. Return the same shape as create/read, with the **new** `latest_revision_id`, so the client can immediately chain
+   another edit using it as the next base revision.
+
+While implementing, also fold in the small reuse cleanup deferred from slice 1: extract the shared
+existence-plus-`choose` media check (`get_choosable_image` / the audio equivalent) into one helper now that create and
+update both resolve referenced media.
+
 ## Test Scenarios
 
 - Authenticated editor can create a draft post under an editable blog and receives preview/edit URLs.
@@ -362,7 +404,14 @@ Implement the smallest useful workflow for assisted post authoring:
 - A structured `overview` block list of heading, paragraph (rich-text HTML), and code blocks round-trips losslessly
   into and back out of django-cast body blocks.
 - Draft creation does not publish the page by default.
-- Updating with a stale `base_revision_id` returns `409 Conflict`.
+- Updating with a stale `base_revision_id` returns `409 Conflict` and does not change the page.
+- A `PATCH` with a matching `base_revision_id` saves a new draft revision, returns the new `latest_revision_id`, and
+  leaves the page unpublished (`live` stays `false`).
+- A `PATCH` updates only the fields it sends; omitted fields (title, tags, cover image, overview) are left unchanged.
+- A provided `overview` on update round-trips losslessly through the read endpoint, and an updated draft can be edited
+  again by chaining the returned `latest_revision_id`.
+- A `PATCH` from a user without edit permission on the page is rejected, regardless of authentication class.
+- A `PATCH` missing any base-revision token returns a `validation_error` (never a silent overwrite).
 - Publishing, once added, uses Wagtail revision publishing and respects publish permissions.
 - Episode endpoints, once added, enforce episode-specific validation such as required podcast audio on publish.
 
@@ -424,3 +473,11 @@ Still open:
 - Should publish-by-request be allowed in the create endpoint for callers with publish permission, or only through a
   separate publish endpoint?
 - How should remote image import be constrained so it is useful for agents but safe for production sites?
+
+Resolved by update slice (2026-06-23):
+
+- The first update slice accepts `base_revision_id` in the JSON body; `If-Match`/ETag support remains a later
+  compatibility option.
+- `PATCH` clears collection fields by sending an explicit empty list and clears the cover image by sending
+  `cover_image: null`; omitted fields are left unchanged.
+- Update remains `overview`-only, matching slice 1. Addressing `detail` explicitly remains a later extension.

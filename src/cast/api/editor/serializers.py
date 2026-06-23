@@ -29,3 +29,14 @@ class PostCreateSerializer(serializers.Serializer):
     categories = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
     overview = serializers.ListField()  # required: the structured overview block list
     publish = serializers.BooleanField(required=False, default=False)
+
+
+class PostUpdateSerializer(serializers.Serializer):
+    base_revision_id = serializers.IntegerField()
+    title = serializers.CharField(required=False)
+    slug = serializers.SlugField(required=False)
+    visible_date = serializers.DateTimeField(required=False)
+    cover_image = CoverImageSerializer(required=False, allow_null=True)
+    tags = serializers.ListField(child=serializers.CharField(), required=False)
+    categories = serializers.ListField(child=serializers.IntegerField(), required=False)
+    overview = serializers.ListField(required=False)

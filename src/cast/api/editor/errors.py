@@ -30,6 +30,28 @@ class EditorPermissionDenied(APIException):
         super().__init__(detail=detail)
 
 
+class EditorNotFound(APIException):
+    """Resource lookup failure rendered as an editor error envelope."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+
+    def __init__(self, detail: str) -> None:
+        self.detail_text = detail
+        super().__init__(detail=detail)
+
+
+class EditorRevisionConflict(APIException):
+    """Revision token mismatch for draft updates."""
+
+    status_code = status.HTTP_409_CONFLICT
+
+    def __init__(self, *, current_revision_id: int | None, submitted_base_revision_id: int, edit_url: str) -> None:
+        self.current_revision_id = current_revision_id
+        self.submitted_base_revision_id = submitted_base_revision_id
+        self.edit_url = edit_url
+        super().__init__(detail="revision_conflict")
+
+
 def _flatten_drf_errors(detail: Any, prefix: str = "") -> dict[str, list[dict[str, str]]]:
     """Flatten a DRF ValidationError detail into {dotted.path: [{code, message}]}."""
     flat: dict[str, list[dict[str, str]]] = {}
@@ -39,17 +61,14 @@ def _flatten_drf_errors(detail: Any, prefix: str = "") -> dict[str, list[dict[st
             for sub_path, items in _flatten_drf_errors(value, path).items():
                 flat.setdefault(sub_path, []).extend(items)
     elif isinstance(detail, list):
-        leaves = [d for d in detail if not isinstance(d, (dict, list))]
-        nested = [d for d in detail if isinstance(d, (dict, list))]
-        if leaves:
-            leaf_key = prefix if prefix else "non_field_errors"
-            flat.setdefault(leaf_key, []).extend(
-                {"code": getattr(d, "code", "invalid"), "message": str(d)} for d in leaves
-            )
-        for index, item in enumerate(nested):
-            child_path = f"{prefix}.{index}" if prefix else str(index)
-            for sub_path, items in _flatten_drf_errors(item, child_path).items():
-                flat.setdefault(sub_path, []).extend(items)
+        leaf_key = prefix if prefix else "non_field_errors"
+        for index, item in enumerate(detail):
+            if isinstance(item, (dict, list)):
+                child_path = f"{prefix}.{index}" if prefix else str(index)
+                for sub_path, items in _flatten_drf_errors(item, child_path).items():
+                    flat.setdefault(sub_path, []).extend(items)
+            else:
+                flat.setdefault(leaf_key, []).append({"code": getattr(item, "code", "invalid"), "message": str(item)})
     else:
         flat.setdefault(prefix, []).append({"code": getattr(detail, "code", "invalid"), "message": str(detail)})
     return flat
@@ -64,6 +83,22 @@ def editor_exception_handler(exc: Exception, context: dict[str, Any]) -> Respons
     if isinstance(exc, EditorPermissionDenied):
         return Response(
             {"code": "permission_denied", "detail": exc.detail_text, "parent_id": exc.parent_id},
+            status=exc.status_code,
+        )
+    if isinstance(exc, EditorNotFound):
+        return Response(
+            {"code": "not_found", "detail": exc.detail_text},
+            status=exc.status_code,
+        )
+    if isinstance(exc, EditorRevisionConflict):
+        return Response(
+            {
+                "code": "revision_conflict",
+                "detail": "The page has a newer revision than the submitted base revision.",
+                "current_revision_id": exc.current_revision_id,
+                "submitted_base_revision_id": exc.submitted_base_revision_id,
+                "edit_url": exc.edit_url,
+            },
             status=exc.status_code,
         )
     if isinstance(exc, DRFValidationError):

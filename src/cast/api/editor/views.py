@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from django.http import Http404
 from django.urls import reverse
 from django.utils.text import slugify
 from rest_framework import status
@@ -11,14 +10,18 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from wagtail.images import get_image_model
-from wagtail.images.permissions import permission_policy as image_permission_policy
 
 from ...models import Blog, Post
 from ...models.snippets import PostCategory
-from .body import author_blocks_to_overview, overview_to_author_blocks
-from .errors import EditorPermissionDenied, EditorValidationError, editor_exception_handler
-from .serializers import ParentSerializer, PostCreateSerializer
+from .body import author_blocks_to_overview, get_choosable_image, overview_to_author_blocks
+from .errors import (
+    EditorNotFound,
+    EditorPermissionDenied,
+    EditorRevisionConflict,
+    EditorValidationError,
+    editor_exception_handler,
+)
+from .serializers import ParentSerializer, PostCreateSerializer, PostUpdateSerializer
 
 
 class EditorAPIView(APIView):
@@ -51,7 +54,109 @@ class ParentsListView(EditorAPIView):
         return Response(ParentSerializer(parents, many=True).data)
 
 
-class PostCreateView(EditorAPIView):
+class PostEditorMixin:
+    def _get_parent(self, parent_id: int):
+        blog = Blog.objects.filter(pk=parent_id).first()
+        if blog is None:
+            raise EditorValidationError(
+                {"parent": [{"code": "not_found", "message": f"Parent {parent_id} does not exist."}]}
+            )
+        return blog.specific
+
+    def _get_post(self, pk: int, user: Any, *, denied_message: str):
+        post = Post.objects.filter(pk=pk).first()
+        if post is None:
+            raise EditorNotFound("Post not found.")
+        post = post.specific
+        if not post.permissions_for_user(user).can_edit():
+            raise EditorPermissionDenied(denied_message, parent_id=None)
+        return post
+
+    def _check_unique_slug(self, parent: Any, slug: str, *, exclude_id: int | None = None) -> None:
+        from wagtail.models import Page
+
+        siblings = Page.objects.child_of(parent).filter(slug=slug)
+        if exclude_id is not None:
+            siblings = siblings.exclude(pk=exclude_id)
+        if siblings.exists():
+            raise EditorValidationError(
+                {"slug": [{"code": "duplicate", "message": f"Slug {slug!r} is already used here."}]}
+            )
+
+    def _resolve_cover_image(self, cover: dict[str, Any] | None, user: Any):
+        if not cover:
+            return None, ""
+        image = get_choosable_image(cover["id"], user)
+        if image is None:
+            # Collapse missing and not-accessible into one error so we never leak
+            # the existence of images the caller cannot choose.
+            raise EditorValidationError(
+                {
+                    "cover_image.id": [
+                        {"code": "not_found", "message": f"Image {cover['id']} does not exist or is not accessible."}
+                    ]
+                }
+            )
+        return image, cover.get("alt_text", "")
+
+    def _resolve_categories(self, ids: list[int]):
+        if not ids:
+            return []
+        found_by_id = {category.pk: category for category in PostCategory.objects.filter(pk__in=ids)}
+        if len(found_by_id) != len(set(ids)):
+            missing = sorted(set(ids) - set(found_by_id))
+            raise EditorValidationError(
+                {"categories": [{"code": "not_found", "message": f"Unknown category ids: {missing}."}]}
+            )
+        return [found_by_id[category_id] for category_id in ids]
+
+    def _overview_value(self, post: Post) -> list[dict]:
+        for block in post.body:
+            if block.block_type == "overview":
+                return list(block.value.raw_data)
+        return []
+
+    def _body_sections_with_overview(self, post: Post, overview_value: list[dict]) -> str:
+        sections = []
+        replaced = False
+        for section in post.body.raw_data:
+            section_data = dict(section)
+            if section_data["type"] == "overview":
+                section_data["value"] = overview_value
+                replaced = True
+            sections.append(section_data)
+        if not replaced:
+            sections.insert(0, {"type": "overview", "value": overview_value})
+        return json.dumps(sections)
+
+    def _serialize(self, post: Post, *, content_post: Post | None = None, revision: Any | None = None) -> dict:
+        content_post = content_post or post.get_latest_revision_as_object()
+        latest_revision_id = revision.id if revision is not None else post.latest_revision_id
+        cover = None
+        if content_post.cover_image_id is not None:
+            cover = {"id": content_post.cover_image_id, "alt_text": content_post.cover_alt_text}
+
+        return {
+            "id": post.id,
+            "type": content_post._meta.label,
+            "title": content_post.title,
+            "slug": content_post.slug,
+            "parent": {"id": post.get_parent().id},
+            "visible_date": content_post.visible_date,
+            "tags": [tag.name for tag in content_post.tags.all()],
+            "categories": [category.pk for category in content_post.categories.all()],
+            "cover_image": cover,
+            "overview": overview_to_author_blocks(self._overview_value(content_post)),
+            "latest_revision_id": latest_revision_id,
+            "live": post.live,
+            "status": "live" if post.live and not post.has_unpublished_changes else "draft",
+            "preview_url": reverse("wagtailadmin_pages:view_draft", args=[post.id]),
+            "edit_url": reverse("wagtailadmin_pages:edit", args=[post.id]),
+            "api_url": reverse("cast:api:editor_post_detail", kwargs={"pk": post.id}),
+        }
+
+
+class PostCreateView(PostEditorMixin, EditorAPIView):
     permission_classes = (IsAuthenticated,)
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -98,111 +203,59 @@ class PostCreateView(EditorAPIView):
             post.categories.set(categories)
         if data["tags"] or categories:
             # ClusterTaggableManager / ParentalManyToManyField accumulate changes
-            # in memory; flush them to the DB before saving the revision.
+            # in memory; flush them so the created page row and first revision agree.
             post.save()
         revision = post.save_revision(user=user)
 
-        return Response(self._serialize(post, parent, revision), status=status.HTTP_201_CREATED)
-
-    # --- helpers -------------------------------------------------------
-
-    def _get_parent(self, parent_id: int):
-        blog = Blog.objects.filter(pk=parent_id).first()
-        if blog is None:
-            raise EditorValidationError(
-                {"parent": [{"code": "not_found", "message": f"Parent {parent_id} does not exist."}]}
-            )
-        return blog.specific
-
-    def _check_unique_slug(self, parent, slug: str) -> None:
-        from wagtail.models import Page
-
-        if Page.objects.child_of(parent).filter(slug=slug).exists():
-            raise EditorValidationError(
-                {"slug": [{"code": "duplicate", "message": f"Slug {slug!r} is already used here."}]}
-            )
-
-    def _resolve_cover_image(self, cover, user):
-        if not cover:
-            return None, ""
-        image = get_image_model().objects.filter(pk=cover["id"]).first()
-        if image is None or not image_permission_policy.user_has_permission_for_instance(user, "choose", image):
-            # Collapse missing and not-accessible into one error so we never leak
-            # the existence of images the caller cannot choose.
-            raise EditorValidationError(
-                {
-                    "cover_image.id": [
-                        {"code": "not_found", "message": f"Image {cover['id']} does not exist or is not accessible."}
-                    ]
-                }
-            )
-        return image, cover.get("alt_text", "")
-
-    def _resolve_categories(self, ids):
-        if not ids:
-            return []
-        found = list(PostCategory.objects.filter(pk__in=ids))
-        if len(found) != len(set(ids)):
-            missing = sorted(set(ids) - {c.pk for c in found})
-            raise EditorValidationError(
-                {"categories": [{"code": "not_found", "message": f"Unknown category ids: {missing}."}]}
-            )
-        return found
-
-    def _serialize(self, post, parent, revision) -> dict:
-        return {
-            "id": post.id,
-            "type": post._meta.label,
-            "title": post.title,
-            "slug": post.slug,
-            "parent": {"id": parent.id},
-            "latest_revision_id": revision.id,
-            "live": post.live,
-            "status": "draft",
-            "preview_url": reverse("wagtailadmin_pages:view_draft", args=[post.id]),
-            "edit_url": reverse("wagtailadmin_pages:edit", args=[post.id]),
-            "api_url": reverse("cast:api:editor_post_detail", kwargs={"pk": post.id}),
-        }
+        return Response(self._serialize(post, content_post=post, revision=revision), status=status.HTTP_201_CREATED)
 
 
-class PostDetailView(EditorAPIView):
+class PostDetailView(PostEditorMixin, EditorAPIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
-        post = Post.objects.filter(pk=pk).first()
-        if post is None:
-            raise Http404("Post not found.")
-        post = post.specific
-        if not post.permissions_for_user(request.user).can_edit():
-            raise EditorPermissionDenied("You cannot view this draft.", parent_id=None)
+        post = self._get_post(pk, request.user, denied_message="You cannot view this draft.")
+        return Response(self._serialize(post))
 
-        overview_value = []
-        for block in post.body:
-            if block.block_type == "overview":
-                overview_value = block.value.raw_data
-                break
+    def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
+        serializer = PostUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = request.user
+        if not (set(data) - {"base_revision_id"}):
+            raise EditorValidationError(
+                {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
+            )
 
-        cover = None
-        if post.cover_image_id is not None:
-            cover = {"id": post.cover_image_id, "alt_text": post.cover_alt_text}
+        post = self._get_post(pk, user, denied_message="You cannot edit this draft.")
+        current_revision_id = post.latest_revision_id
+        submitted_base_revision_id = data["base_revision_id"]
+        edit_url = reverse("wagtailadmin_pages:edit", args=[post.id])
+        if current_revision_id != submitted_base_revision_id:
+            raise EditorRevisionConflict(
+                current_revision_id=current_revision_id,
+                submitted_base_revision_id=submitted_base_revision_id,
+                edit_url=edit_url,
+            )
 
-        return Response(
-            {
-                "id": post.id,
-                "type": post._meta.label,
-                "title": post.title,
-                "slug": post.slug,
-                "parent": {"id": post.get_parent().id},
-                "visible_date": post.visible_date,
-                "tags": list(post.tags.values_list("name", flat=True)),
-                "categories": list(post.categories.values_list("pk", flat=True)),
-                "cover_image": cover,
-                "overview": overview_to_author_blocks(overview_value),
-                "latest_revision_id": post.latest_revision_id,
-                "live": post.live,
-                "status": "live" if post.live else "draft",
-                "preview_url": reverse("wagtailadmin_pages:view_draft", args=[post.id]),
-                "edit_url": reverse("wagtailadmin_pages:edit", args=[post.id]),
-                "api_url": reverse("cast:api:editor_post_detail", kwargs={"pk": post.id}),
-            }
-        )
+        draft = post.get_latest_revision().as_object()
+        if "title" in data:
+            draft.title = data["title"]
+        if "slug" in data:
+            self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
+            draft.slug = data["slug"]
+        if "visible_date" in data:
+            draft.visible_date = data["visible_date"]
+        if "cover_image" in data:
+            draft.cover_image, draft.cover_alt_text = self._resolve_cover_image(data["cover_image"], user)
+        if "tags" in data:
+            draft.tags.set(data["tags"])
+        if "categories" in data:
+            draft.categories.set(self._resolve_categories(data["categories"]))
+        if "overview" in data:
+            overview_value = author_blocks_to_overview(data["overview"], user=user)
+            draft.body = self._body_sections_with_overview(draft, overview_value)
+
+        revision = draft.save_revision(user=user)
+        post.refresh_from_db()
+        return Response(self._serialize(post, content_post=draft, revision=revision))

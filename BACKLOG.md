@@ -48,7 +48,8 @@ No ready implementation items.
 
 - [ ] Programmatic content editing API
   - PRD: [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-  - Status: first PRD drafted; implementation not started.
+  - Status: first two slices landed: parent listing, draft post create/read, and revision-conflict draft updates.
+    Remaining follow-ups are publish action, Markdown convenience input, scoped-token auth, and more block types.
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
     and revise posts or episodes programmatically.
   - Notes: target use cases include agents turning assorted Markdown notes on disk into weeknotes, updating draft
