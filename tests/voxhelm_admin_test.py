@@ -261,6 +261,29 @@ def test_generate_episode_transcript_uses_draft_contributor_assignments(admin_cl
 
 
 @pytest.mark.django_db
+def test_generate_episode_transcript_authorizes_exact_draft_audio(admin_client, episode, mocker):
+    live_audio = episode.podcast_audio
+    assert live_audio is not None
+    draft_audio = Audio.objects.create(user=episode.owner, title="Draft-only audio")
+    episode.podcast_audio = draft_audio
+    episode.save_revision()
+    episode.refresh_from_db()
+    assert episode.podcast_audio == live_audio
+
+    def can_change_audio(*, request, audio):
+        return audio == live_audio
+
+    mocker.patch("cast.views.voxhelm.user_can_generate_transcript_for_audio", side_effect=can_change_audio)
+    enqueue = mocker.patch("cast.views.voxhelm.enqueue_audio_transcript_generation")
+
+    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)))
+
+    assert response.status_code == 302
+    assert response.url == reverse("wagtailadmin_home")
+    enqueue.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_generate_audio_transcript_from_wagtail_admin(admin_client, episode, mocker):
     audio = episode.podcast_audio
     assert audio is not None
