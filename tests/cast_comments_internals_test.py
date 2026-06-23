@@ -533,6 +533,21 @@ def test_post_comment_rejects_closed_comments(client, post, comments_enabled):
 
 
 @pytest.mark.django_db
+def test_post_comment_get_delegates_to_stock_view(client):
+    response = client.get(reverse("comments-post-comment"))
+
+    assert response.status_code == 405
+
+
+@pytest.mark.django_db
+def test_post_comment_invalid_target_returns_bad_request(client):
+    response = client.post(reverse("comments-post-comment"), {"content_type": "cast.post", "object_pk": "bad"})
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_post_comment_ajax_preview_success(client, post, comments_enabled):
     ajax_url = reverse("comments-post-comment-ajax")
     timestamp, security_hash = _security_data_from_form(post)

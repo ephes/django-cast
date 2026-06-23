@@ -180,9 +180,7 @@ class TestGeneratedFeeds:
         assert episode.title in content
 
     @pytest.mark.parametrize("repository", ["default", "django"])
-    def test_get_podcast_feed_excludes_restricted_episodes(
-        self, client, episode, use_dummy_cache_backend, repository
-    ):
+    def test_get_podcast_feed_excludes_restricted_episodes(self, client, episode, use_dummy_cache_backend, repository):
         previous_repository = appsettings.CAST_REPOSITORY
         appsettings.CAST_REPOSITORY = repository
         PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)

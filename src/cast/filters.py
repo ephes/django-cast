@@ -101,10 +101,7 @@ class CountFacetWidget(Widget):
 
     @staticmethod
     def option_string() -> str:
-        return (
-            '<div class="cast-date-facet-item"><a{attrs} href="?{query_string}">{label}</a>'
-            "{hidden_input}</div>"
-        )
+        return '<div class="cast-date-facet-item"><a{attrs} href="?{query_string}">{label}</a>{hidden_input}</div>'
 
 
 def parse_date_facets(value: str) -> datetime:

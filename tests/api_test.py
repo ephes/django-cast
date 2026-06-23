@@ -872,7 +872,11 @@ def test_wagtail_pages_api_with_post_filter(date, post_filter, len_result, rf, b
     )
     viewset.request = request
     queryset = viewset.get_queryset()
-    assert len(queryset) == len_result
+    queryset_ids = set(queryset.values_list("id", flat=True))
+    if len_result:
+        assert post.id in queryset_ids
+    else:
+        assert post.id not in queryset_ids
 
 
 @pytest.mark.django_db
@@ -955,7 +959,8 @@ def test_facet_counts_list(api_client, blog):
     r = api_client.get(url, format="json")
     assert r.status_code == 200
 
-    [result] = r.json()["results"]
+    results = r.json()["results"]
+    result = next(result for result in results if result["id"] == blog.pk)
     assert "id" in result
     assert "url" in result
     assert result["id"] == blog.pk

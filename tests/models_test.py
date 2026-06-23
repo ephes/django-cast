@@ -159,6 +159,14 @@ class TestBlogModel:
     def test_comment_post_url(self, blog):
         assert blog.comment_post_url == reverse("comments-post-comment-ajax")
 
+    def test_comments_security_data_for_open_comments(self, post, comments_enabled):
+        security_data = post.comments_security_data
+
+        assert security_data["content_type"] == "cast.post"
+        assert security_data["object_pk"] == str(post.pk)
+        assert "timestamp" in security_data
+        assert "security_hash" in security_data
+
     def test_has_selectable_themes(self, blog, simple_request):
         assert blog.get_context(simple_request)["has_selectable_themes"]
 

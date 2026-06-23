@@ -8,7 +8,7 @@ PRIVATE_MEDIA_STORAGE_ALIAS = "cast_private_media"
 
 
 class PrivateFileSystemStorage(FileSystemStorage):
-    def url(self, name: str) -> str:
+    def url(self, name: str | None) -> str:
         raise ValueError("This private file is not accessible via a URL.")
 
 

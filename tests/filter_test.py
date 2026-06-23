@@ -50,7 +50,7 @@ def test_selected_count_facet_is_in_hidden_input():
 
 def test_count_facet_widget_escapes_label_and_hidden_value():
     cfw = CountFacetWidget()
-    cfw.data = QueryDict('tag_facets=bad%22%20onclick%3D%22alert(1)')
+    cfw.data = QueryDict("tag_facets=bad%22%20onclick%3D%22alert(1)")
     option = cfw.render_option(
         "tag_facets",
         {'bad" onclick="alert(1)'},

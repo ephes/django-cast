@@ -35,6 +35,7 @@ from cast.voxhelm import (
     get_transcript_generation_status_context,
     normalize_api_base,
     open_url,
+    read_response_bytes,
     require_setting,
     require_artifact_path,
     replace_file,
@@ -440,6 +441,10 @@ def test_count_episode_diarization_speakers_handles_missing_and_sparse_assignmen
     )
 
 
+def test_read_response_bytes_without_limit_reads_all():
+    assert read_response_bytes(FakeResponse(b"payload")) == b"payload"
+
+
 def test_resolve_diarization_speaker_count_without_episode_manager():
     assert resolve_diarization_speaker_count(SimpleNamespace()) is None
 
@@ -563,6 +568,24 @@ def test_client_build_url_variants_and_get_job(mocker):
     assert client.build_url("/v1/jobs/job-1") == "https://voxhelm.example/v1/jobs/job-1"
     assert client.get_job("job-1") == {"id": "job-1"}
     request_json.assert_called_once_with(method="GET", path="jobs/job-1")
+
+
+def test_client_request_bytes_omits_auth_for_cross_origin_url(mocker):
+    requests = []
+
+    def fake_open_url(request, *, timeout, follow_redirects=True):
+        requests.append(request)
+        return FakeResponse(b"{}")
+
+    mocker.patch("cast.voxhelm.open_url", side_effect=fake_open_url)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    assert client.request_bytes(method="POST", path="https://api.other.example/jobs", payload={"ok": True}) == b"{}"
+
+    request = requests[0]
+    assert request.get_header("Authorization") is None
+    assert request.get_header("Content-type") == "application/json"
+    assert json.loads(request.data.decode("utf-8")) == {"ok": True}
 
 
 def test_client_download_artifact_rejects_cross_origin_absolute_url(mocker):

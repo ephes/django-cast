@@ -6,9 +6,10 @@ from copy import deepcopy
 from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, cast
 
 from django.contrib.auth import get_user_model
+from django.core.files.storage import Storage
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -30,10 +31,12 @@ class AudioQuerySet(SearchableQuerySetMixin, models.QuerySet):
     pass
 
 
-@runtime_checkable
 class FileField(Protocol):
     """Just to make mypy happy about field.url and field.path"""
 
+    file: object
+    name: str
+    storage: Storage
     url: str
     path: str
 
@@ -114,7 +117,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         permissions = (("choose_audio", "Can choose audio"),)
 
     @property
-    def uploaded_audio_files(self) -> Iterable[tuple[str, models.FileField]]:
+    def uploaded_audio_files(self) -> Iterable[tuple[str, FileField]]:
         for name in self.audio_formats:
             field = getattr(self, name)
             if field.name is not None and len(field.name) > 0:
@@ -179,13 +182,11 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     def create_duration(self) -> None:
         for name, field in self.uploaded_audio_files:
             try:
-                # For mypy this has to be a direct isinstance check
-                # In production it raises a NotImplementedError, very weird,
-                # very ugly, dunno how to fix it
-                if isinstance(field, FileField):
-                    audio_url = field.url
+                if hasattr(field, "url") and hasattr(field, "path"):
+                    file_field = cast(FileField, field)
+                    audio_url = file_field.url
                     if not audio_url.startswith("http"):
-                        audio_url = field.path
+                        audio_url = file_field.path
                     self.duration = self._get_audio_duration(audio_url)
                     break
             except NotImplementedError:  # pragma: no cover

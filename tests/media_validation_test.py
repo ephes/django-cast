@@ -4,6 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from cast.forms import AudioForm, VideoForm
+from cast.media_validation import validate_audio_upload, validate_video_upload
 from cast.models import Audio, Video
 
 
@@ -19,6 +20,53 @@ MP3_HEADER = b"ID3\x04\x00\x00\x00\x00\x00\x15"
 
 def upload(name: str, content: bytes, content_type: str) -> SimpleUploadedFile:
     return SimpleUploadedFile(name=name, content=content, content_type=content_type)
+
+
+def test_validate_upload_helpers_accept_none():
+    validate_audio_upload(None, audio_format="m4a")
+    validate_video_upload(None)
+
+
+def test_validate_audio_upload_accepts_seekable_file_without_size():
+    class SeekableUpload:
+        name = "clip.m4a"
+        content_type = "audio/mp4"
+
+        def __init__(self):
+            self.content = bytearray(MP4_HEADER)
+            self.position = 0
+
+        def read(self, size=-1):
+            if size < 0:
+                size = len(self.content) - self.position
+            end = min(self.position + size, len(self.content))
+            chunk = bytes(self.content[self.position : end])
+            self.position = end
+            return chunk
+
+        def seek(self, offset, whence=0):
+            if whence == 0:
+                self.position = offset
+            elif whence == 2:
+                self.position = len(self.content) + offset
+            else:
+                self.position += offset
+
+        def tell(self):
+            return self.position
+
+    validate_audio_upload(SeekableUpload(), audio_format="m4a")
+
+
+def test_validate_audio_upload_accepts_stream_without_tell():
+    class NoTellUpload:
+        name = "clip.m4a"
+        content_type = "audio/mp4"
+
+        def read(self, size=-1):
+            return MP4_HEADER if size < 0 else MP4_HEADER[:size]
+
+    validate_audio_upload(NoTellUpload(), audio_format="m4a")
 
 
 def test_audio_form_accepts_valid_m4a_upload():

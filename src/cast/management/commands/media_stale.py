@@ -59,7 +59,7 @@ class Command(BaseCommand):
             file_fields = [field for field in model._meta.get_fields() if isinstance(field, models.FileField)]
             if not file_fields:
                 continue
-            for instance in model.objects.all().iterator():
+            for instance in model._default_manager.all().iterator():
                 for field in file_fields:
                     field_file = getattr(instance, field.name)
                     if field_file and field_file.name:

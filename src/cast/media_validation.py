@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Callable
+from typing import Any, Callable
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -70,7 +70,7 @@ VIDEO_UPLOAD_SPEC = MediaUploadSpec(
 )
 
 
-def validate_audio_upload(uploaded_file: BinaryIO | None, *, audio_format: str) -> None:
+def validate_audio_upload(uploaded_file: Any | None, *, audio_format: str) -> None:
     if uploaded_file is None:
         return
     spec = AUDIO_UPLOAD_SPECS[audio_format]
@@ -82,7 +82,7 @@ def validate_audio_upload(uploaded_file: BinaryIO | None, *, audio_format: str) 
     )
 
 
-def validate_video_upload(uploaded_file: BinaryIO | None) -> None:
+def validate_video_upload(uploaded_file: Any | None) -> None:
     if uploaded_file is None:
         return
     validate_media_upload(
@@ -94,7 +94,7 @@ def validate_video_upload(uploaded_file: BinaryIO | None) -> None:
 
 
 def validate_media_upload(
-    uploaded_file: BinaryIO,
+    uploaded_file: Any,
     *,
     spec: MediaUploadSpec,
     max_bytes: int,
@@ -134,7 +134,7 @@ def validate_media_upload(
         )
 
 
-def _read_header(uploaded_file: BinaryIO, size: int = 64) -> bytes:
+def _read_header(uploaded_file: Any, size: int = 64) -> bytes:
     position = _safe_tell(uploaded_file)
     if position is not None:
         uploaded_file.seek(0)
@@ -144,7 +144,7 @@ def _read_header(uploaded_file: BinaryIO, size: int = 64) -> bytes:
     return header
 
 
-def _get_uploaded_file_size(uploaded_file: BinaryIO) -> int | None:
+def _get_uploaded_file_size(uploaded_file: Any) -> int | None:
     size = getattr(uploaded_file, "size", None)
     if isinstance(size, int):
         return size
@@ -159,7 +159,7 @@ def _get_uploaded_file_size(uploaded_file: BinaryIO) -> int | None:
         uploaded_file.seek(position)
 
 
-def _safe_tell(uploaded_file: BinaryIO) -> int | None:
+def _safe_tell(uploaded_file: Any) -> int | None:
     try:
         return uploaded_file.tell()
     except (AttributeError, OSError):

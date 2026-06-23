@@ -238,9 +238,10 @@ class TestAuthorBlocksToOverview:
         result = author_blocks_to_overview([{"type": "audio", "value": {"id": audio.id}}], user=superuser)
         assert result == [{"type": "audio", "value": audio.id}]
 
-    def test_audio_not_choosable_by_caller_reports_not_found(self, audio, admin_user):
+    def test_audio_not_choosable_by_caller_reports_not_found(self, audio):
+        caller = UserFactory()
         with pytest.raises(EditorValidationError) as excinfo:
-            author_blocks_to_overview([{"type": "audio", "value": {"id": audio.id}}], user=admin_user)
+            author_blocks_to_overview([{"type": "audio", "value": {"id": audio.id}}], user=caller)
         assert excinfo.value.error_map["overview.0.value.id"][0]["code"] == "not_found"
 
     def test_audio_value_not_dict_rejected(self, superuser):
