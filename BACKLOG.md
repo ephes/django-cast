@@ -17,7 +17,12 @@ No next item selected.
 
 ## Ready
 
-No ready implementation items.
+- [ ] Security review follow-ups
+  - Issues: [backlog/2026-06-23-security-review.md](backlog/2026-06-23-security-review.md)
+  - Scope: triage and fix the findings from the June 2026 deep security review, prioritizing restricted-content
+    leaks, media-admin authorization, Voxhelm artifact downloads, and stored XSS.
+  - Done when: high/medium findings are fixed or explicitly accepted/deferred with tests and docs as needed, low
+    findings are triaged, and the issue document is closed out.
 
 ## Research / Shaping
 
