@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import CommandError, call_command
@@ -13,6 +14,8 @@ from django.core.management import CommandError, call_command
 from cast.devdata import create_transcript
 from cast.management.commands.media_backup import Command as MediaBackupCommand
 from cast.management.commands.media_stale import Command as MediaStaleCommand
+from cast.models import Contributor
+from cast.models.contributors import ContributorVoiceReference
 from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
 
 from .factories import BlogFactory
@@ -281,12 +284,20 @@ def test_media_stale_get_models_paths_includes_all_managed_media(audio, video, f
         vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello\n",
         dote={"lines": []},
     )
+    transcript.speakers.save("test.speakers.json", ContentFile(b'{"segments": []}'), save=True)
+    contributor = Contributor.objects.create(display_name="Johannes", slug="johannes-stale")
+    voice_reference = ContributorVoiceReference.objects.create(
+        contributor=contributor,
+        clip=ContentFile(b"RIFF....WAVEfmt ", name="voice.wav"),
+    )
     paths = MediaStaleCommand().get_models_paths()
 
     assert audio.m4a.name in paths
     assert transcript.podlove.name in paths
     assert transcript.vtt.name in paths
     assert transcript.dote.name in paths
+    assert transcript.speakers.name in paths
+    assert voice_reference.clip.name in paths
     assert video.original.name in paths
     assert file_instance.original.name in paths
 
@@ -301,24 +312,31 @@ def test_media_stale_get_image_paths_includes_renditions(image):
     assert rendition.file.name in paths
 
 
-def test_media_stale_handle_reports_and_deletes_stale_files(mocker, capsys):
-    production = StubWalkStorage({"keep.jpg": b"keep", "stale.jpg": b"stale"})
+def test_media_stale_handle_reports_and_deletes_managed_stale_files(mocker, capsys):
+    production = StubWalkStorage(
+        {
+            "cast_audio/keep.mp3": b"keep",
+            "cast_audio/stale.mp3": b"stale",
+            "unrelated/stale.jpg": b"outside",
+        }
+    )
     mocker.patch(
         "cast.management.commands.media_stale.get_production_and_backup_storage",
         return_value=(production, object()),
     )
-    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value={"keep.jpg"})
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value={"cast_audio/keep.mp3"})
 
     call_command("media_stale", delete=True)
 
-    assert production.deleted == ["stale.jpg"]
+    assert production.deleted == ["cast_audio/stale.mp3"]
     text = capsys.readouterr().out
     assert "stale production" in text
-    assert "stale.jpg" in text
+    assert "cast_audio/stale.mp3" in text
+    assert "unrelated/stale.jpg" not in text
 
 
 def test_media_stale_handle_without_delete_keeps_stale_files(mocker):
-    production = StubWalkStorage({"stale.jpg": b"stale"})
+    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
     mocker.patch(
         "cast.management.commands.media_stale.get_production_and_backup_storage",
         return_value=(production, object()),
@@ -328,6 +346,20 @@ def test_media_stale_handle_without_delete_keeps_stale_files(mocker):
     call_command("media_stale")
 
     assert production.deleted == []
+
+
+def test_media_stale_handle_ignores_unmanaged_files(mocker, capsys):
+    production = StubWalkStorage({"unrelated/stale.jpg": b"stale"})
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == []
+    assert "unrelated/stale.jpg" not in capsys.readouterr().out
 
 
 def test_media_stale_parser_registers_delete_flag():

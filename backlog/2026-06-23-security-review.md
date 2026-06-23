@@ -37,7 +37,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-017 | Medium | Raw transcript artifact storage | Fixed |
 | SEC-2026-011 | Medium | Private voice-reference storage | Fixed |
 | SEC-2026-012 | Medium | Audio/video upload validation | Fixed |
-| SEC-2026-013 | Medium | Media stale deletion scope | Open |
+| SEC-2026-013 | Medium | Media stale deletion scope | Fixed |
 | SEC-2026-014 | Low | Media replacement durability | Open |
 | SEC-2026-015 | Low | JavaScript dependency audit | Open |
 | SEC-2026-016 | Low | Podlove remote script fallback | Open |
@@ -482,7 +482,7 @@ Resolution:
 
 ### SEC-2026-013: `media_stale --delete` can delete managed private files or unrelated storage keys
 
-Status: Open
+Status: Fixed
 
 References:
 
@@ -509,6 +509,15 @@ Done when:
 - Known private file fields are retained by stale-media detection.
 - Unrelated same-bucket/prefix keys are not considered deletable by default.
 - Tests cover dry-run and delete behavior for modeled, unmodeled, and unrelated files.
+
+Resolution:
+
+- ``media_stale`` now discovers django-cast ``FileField``/``ImageField`` references systematically, including
+  private transcript speaker sidecars and contributor voice-reference clips.
+- Stale reporting and deletion are restricted to known django-cast/Wagtail-managed media prefixes; unrelated storage
+  keys outside those prefixes are ignored by default.
+- Regression tests cover referenced private fields, managed stale deletes, dry-run behavior, and unmanaged keys that
+  must not be reported or deleted.
 
 ## Low Priority
 

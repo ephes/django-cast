@@ -48,3 +48,6 @@
   extension, content type, container signature, or configured size limit is not
   supported. New ``CAST_AUDIO_UPLOAD_MAX_BYTES`` and
   ``CAST_VIDEO_UPLOAD_MAX_BYTES`` settings control the size limits.
+- ``media_stale --delete`` now only reports and deletes files under known
+  django-cast/Wagtail-managed media prefixes, and its referenced-file scan
+  includes private transcript speaker sidecars and contributor voice clips.

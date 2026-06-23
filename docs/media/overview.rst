@@ -314,7 +314,7 @@ Media Maintenance
 Find orphaned media files::
 
     python manage.py media_stale
-    python manage.py media_stale --delete  # Remove orphaned files
+    python manage.py media_stale --delete  # Remove orphaned managed media files
 
 Backup and Restore
 ~~~~~~~~~~~~~~~~~~
