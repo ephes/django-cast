@@ -67,6 +67,31 @@ class TestPageViewablePredicate:
 
 
 @pytest.mark.django_db
+class TestPageUnrestrictedPublicPredicate:
+    def test_live_unrestricted_page_is_unrestricted_public(self, episode):
+        from cast.audio_access import page_is_unrestricted_public
+
+        assert page_is_unrestricted_public(episode) is True
+
+    def test_none_page_is_not_unrestricted_public(self):
+        from cast.audio_access import page_is_unrestricted_public
+
+        assert page_is_unrestricted_public(None) is False
+
+    def test_non_live_page_is_not_unrestricted_public(self, episode):
+        from cast.audio_access import page_is_unrestricted_public
+
+        episode.live = False
+        assert page_is_unrestricted_public(episode) is False
+
+    def test_restricted_page_is_not_unrestricted_public(self, episode):
+        from cast.audio_access import page_is_unrestricted_public
+
+        PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
+        assert page_is_unrestricted_public(episode) is False
+
+
+@pytest.mark.django_db
 class TestUserCanEditPagePredicate:
     def test_anonymous_cannot_edit(self, episode):
         from cast.audio_access import user_can_edit_page
@@ -335,3 +360,28 @@ class TestPlayerTranscriptEditorFallback:
         episode.save()
         create_transcript(audio=audio, podlove=PODLOVE_DATA)
         assert admin_client.get(self._url(audio, post_id=episode.pk)).status_code == 200
+
+    def test_draft_episode_editor_response_is_private(self, admin_client, audio, episode):
+        episode.live = False
+        episode.save()
+        create_transcript(audio=audio, podlove=PODLOVE_DATA)
+
+        response = admin_client.get(self._url(audio, post_id=episode.pk))
+
+        assert response.status_code == 200
+        assert response["Cache-Control"] == "private, no-store"
+        assert "Cookie" in response["Vary"]
+        assert "Authorization" in response["Vary"]
+
+    def test_restricted_episode_member_response_is_private(self, client, audio, episode, django_user_model):
+        PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
+        create_transcript(audio=audio, podlove=PODLOVE_DATA)
+        django_user_model.objects.create_user("member", password="secret")
+        client.login(username="member", password="secret")
+
+        response = client.get(self._url(audio, post_id=episode.pk))
+
+        assert response.status_code == 200
+        assert response["Cache-Control"] == "private, no-store"
+        assert "Cookie" in response["Vary"]
+        assert "Authorization" in response["Vary"]
