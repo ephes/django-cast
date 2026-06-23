@@ -7,6 +7,7 @@ from django.template import Context, Template
 from django.template.exceptions import TemplateSyntaxError
 from django.urls import reverse
 from django_comments import get_form_target
+from django_comments import get_model as get_comments_model
 from django_comments import signals
 from django_comments.forms import CommentForm
 
@@ -361,6 +362,20 @@ def _security_data_from_form(post):
     return str(form["timestamp"].value()), str(form["security_hash"].value())
 
 
+def _valid_comment_payload(post):
+    timestamp, security_hash = _security_data_from_form(post)
+    return {
+        "content_type": "cast.post",
+        "object_pk": str(post.pk),
+        "comment": "Hello",
+        "name": "Name",
+        "email": "a@example.com",
+        "title": "Title",
+        "timestamp": timestamp,
+        "security_hash": security_hash,
+    }
+
+
 @pytest.mark.django_db
 def test_post_comment_ajax_requires_ajax_header(client):
     ajax_url = reverse("comments-post-comment-ajax")
@@ -478,28 +493,47 @@ def test_post_comment_ajax_validation_error_branch(client, mocker, post):
 
 
 @pytest.mark.django_db
-def test_post_comment_ajax_security_errors_return_bad_request(client, post):
+def test_post_comment_ajax_security_errors_return_bad_request(client, post, comments_enabled):
     ajax_url = reverse("comments-post-comment-ajax")
-    timestamp, security_hash = _security_data_from_form(post)
+    data = _valid_comment_payload(post)
+    data["security_hash"] += "broken"
     r = client.post(
         ajax_url,
-        {
-            "content_type": "cast.post",
-            "object_pk": str(post.pk),
-            "comment": "Hello",
-            "name": "Name",
-            "email": "a@example.com",
-            "title": "Title",
-            "timestamp": timestamp,
-            "security_hash": security_hash + "broken",
-        },
+        data,
         HTTP_X_REQUESTED_WITH="XMLHttpRequest",
     )
     assert r.status_code == 400
 
 
 @pytest.mark.django_db
-def test_post_comment_ajax_preview_success(client, post):
+def test_post_comment_ajax_rejects_closed_comments(client, post, comments_enabled):
+    ajax_url = reverse("comments-post-comment-ajax")
+    post.comments_enabled = False
+    post.save()
+
+    response = client.post(
+        ajax_url,
+        _valid_comment_payload(post),
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_post_comment_rejects_closed_comments(client, post, comments_enabled):
+    post.comments_enabled = False
+    post.save()
+
+    response = client.post(reverse("comments-post-comment"), _valid_comment_payload(post))
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_post_comment_ajax_preview_success(client, post, comments_enabled):
     ajax_url = reverse("comments-post-comment-ajax")
     timestamp, security_hash = _security_data_from_form(post)
     r = client.post(
@@ -525,7 +559,7 @@ def test_post_comment_ajax_preview_success(client, post):
 
 
 @pytest.mark.django_db
-def test_post_comment_ajax_returns_form_errors(client, post):
+def test_post_comment_ajax_returns_form_errors(client, post, comments_enabled):
     ajax_url = reverse("comments-post-comment-ajax")
     timestamp, security_hash = _security_data_from_form(post)
     r = client.post(
@@ -549,7 +583,7 @@ def test_post_comment_ajax_returns_form_errors(client, post):
 
 
 @pytest.mark.django_db
-def test_post_comment_ajax_comment_will_be_posted_can_kill_comment(client, post):
+def test_post_comment_ajax_comment_will_be_posted_can_kill_comment(client, post, comments_enabled):
     ajax_url = reverse("comments-post-comment-ajax")
     timestamp, security_hash = _security_data_from_form(post)
 
@@ -579,7 +613,7 @@ def test_post_comment_ajax_comment_will_be_posted_can_kill_comment(client, post)
 
 
 @pytest.mark.django_db
-def test_post_comment_ajax_authenticated_user_auto_fills_name_and_email(client, post, user):
+def test_post_comment_ajax_authenticated_user_auto_fills_name_and_email(client, post, user, comments_enabled):
     from django_comments import get_model as get_comments_model
 
     ajax_url = reverse("comments-post-comment-ajax")
@@ -614,7 +648,7 @@ def test_post_comment_ajax_authenticated_user_auto_fills_name_and_email(client, 
 
 
 @pytest.mark.django_db
-def test_post_comment_ajax_authenticated_user_keeps_given_name_and_email(client, post, user):
+def test_post_comment_ajax_authenticated_user_keeps_given_name_and_email(client, post, user, comments_enabled):
     from django_comments import get_model as get_comments_model
 
     ajax_url = reverse("comments-post-comment-ajax")

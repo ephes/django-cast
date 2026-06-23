@@ -369,8 +369,11 @@ class Post(Page):
 
     @property
     def comments_security_data(self) -> dict[str, str | int]:
+        from cast.comments.utils import comments_are_open
         from django_comments.forms import CommentSecurityForm
 
+        if not comments_are_open(self):
+            return {}
         form = CommentSecurityForm(self)
         return form.generate_security_data()
 

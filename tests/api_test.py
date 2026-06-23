@@ -1379,6 +1379,18 @@ def test_get_comments_via_post_detail(api_client, post, comment):
 
 
 @pytest.mark.django_db
+def test_page_detail_omits_comment_security_data_when_comments_closed(api_client, post, comments_enabled):
+    post.comments_enabled = False
+    post.save()
+    url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
+
+    response = api_client.get(url, format="json")
+
+    assert response.status_code == 200
+    assert response.json()["comments_security_data"] == {}
+
+
+@pytest.mark.django_db
 def test_wagtail_api_page_detail_includes_cover_image_poster_url(api_client, post, image, mocker):
     mock_rendition = mocker.MagicMock(url="/media/podlove.jpg")
     mocker.patch("wagtail.images.models.Image.get_rendition", return_value=mock_rendition)

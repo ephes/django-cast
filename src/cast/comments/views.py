@@ -23,7 +23,7 @@ from django_comments.forms import COMMENT_MAX_LENGTH
 from django_comments.views.comments import CommentPostBadRequest
 
 from . import appsettings, author_edits
-from .utils import get_comment_context_data, get_comment_template_name
+from .utils import comments_are_open, get_comment_context_data, get_comment_template_name
 
 if TYPE_CHECKING:
     from django.forms.boundfield import BoundField
@@ -46,34 +46,11 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
         if not data.get("email", ""):
             data["email"] = request.user.email
 
-    ctype = data.get("content_type")
-    object_pk = data.get("object_pk")
-    if ctype is None or object_pk is None:
-        return CommentPostBadRequest("Missing content_type or object_pk field.")
-
-    try:
-        app_label, dot, model_name = ctype.partition(".")
-        if dot:
-            model = apps.get_model(app_label, model_name)
-        else:
-            model = apps.get_model(app_label)
-        target = model._default_manager.using(using).get(pk=object_pk)
-    except ValueError:
-        return CommentPostBadRequest(f"Invalid object_pk value: {escape(object_pk)}")
-    except (TypeError, LookupError):
-        return CommentPostBadRequest(f"Invalid content_type value: {escape(ctype)}")
-    except AttributeError:
-        return CommentPostBadRequest(f"The given content-type {escape(ctype)} does not resolve to a valid model.")
-    except ObjectDoesNotExist:
-        return CommentPostBadRequest(
-            f"No object matching content-type {escape(ctype)} and object PK {escape(object_pk)} exists."
-        )
-    except (ValueError, ValidationError) as exc:
-        return CommentPostBadRequest(
-            "Attempting to get content-type {!r} and object PK {!r} exists raised {}".format(
-                escape(ctype), escape(object_pk), exc.__class__.__name__
-            )
-        )
+    target, error = _resolve_comment_target(data, using)
+    if error is not None:
+        return error
+    if not comments_are_open(target):
+        return CommentPostBadRequest("Comments are closed for this object.")
 
     is_preview = "preview" in data
     form = django_comments.get_form()(target, data=data, is_preview=is_preview)
@@ -83,9 +60,9 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
 
     if is_preview:
         comment = form.get_comment_object() if not form.errors else None
-        return _ajax_result(request, form, "preview", comment, object_id=object_pk)
+        return _ajax_result(request, form, "preview", comment, object_id=data.get("object_pk"))
     if form.errors:
-        return _ajax_result(request, form, "post", object_id=object_pk)
+        return _ajax_result(request, form, "post", object_id=data.get("object_pk"))
 
     comment = form.get_comment_object()
     comment.ip_address = request.META.get("REMOTE_ADDR", None)
@@ -126,7 +103,41 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
     # receivers do not run for a transaction that could still roll back. The
     # comment_was_posted receiver records session ownership for all post paths.
     signals.comment_was_posted.send(sender=comment.__class__, comment=comment, request=request)
-    return _ajax_result(request, form, "post", comment, object_id=object_pk)
+    return _ajax_result(request, form, "post", comment, object_id=data.get("object_pk"))
+
+
+def _resolve_comment_target(data, using: str | None = None) -> tuple[object | None, HttpResponse | None]:
+    ctype = data.get("content_type")
+    object_pk = data.get("object_pk")
+    if ctype is None or object_pk is None:
+        return None, CommentPostBadRequest("Missing content_type or object_pk field.")
+
+    try:
+        app_label, dot, model_name = ctype.partition(".")
+        if dot:
+            model = apps.get_model(app_label, model_name)
+        else:
+            model = apps.get_model(app_label)
+        target = model._default_manager.using(using).get(pk=object_pk)
+    except ValueError:
+        return None, CommentPostBadRequest(f"Invalid object_pk value: {escape(object_pk)}")
+    except (TypeError, LookupError):
+        return None, CommentPostBadRequest(f"Invalid content_type value: {escape(ctype)}")
+    except AttributeError:
+        return None, CommentPostBadRequest(
+            f"The given content-type {escape(ctype)} does not resolve to a valid model."
+        )
+    except ObjectDoesNotExist:
+        return None, CommentPostBadRequest(
+            f"No object matching content-type {escape(ctype)} and object PK {escape(object_pk)} exists."
+        )
+    except (ValueError, ValidationError) as exc:
+        return None, CommentPostBadRequest(
+            "Attempting to get content-type {!r} and object PK {!r} exists raised {}".format(
+                escape(ctype), escape(object_pk), exc.__class__.__name__
+            )
+        )
+    return target, None
 
 
 def _ajax_result(
@@ -281,8 +292,14 @@ def post_comment(request: HttpRequest, next: str | None = None, using: str | Non
     """
     from django_comments.views.comments import post_comment as stock_post_comment
 
-    if author_edits.author_edits_enabled() and request.POST.get("parent"):
-        return CommentPostBadRequest("Replies must be posted through the reply form.")
+    if request.method == "POST":
+        if author_edits.author_edits_enabled() and request.POST.get("parent"):
+            return CommentPostBadRequest("Replies must be posted through the reply form.")
+        target, error = _resolve_comment_target(request.POST, using)
+        if error is not None:
+            return error
+        if not comments_are_open(target):
+            return CommentPostBadRequest("Comments are closed for this object.")
     return stock_post_comment(request, next=next, using=using)
 
 

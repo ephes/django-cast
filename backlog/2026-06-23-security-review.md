@@ -29,7 +29,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-003 | High | Voxhelm artifact downloads | Open |
 | SEC-2026-004 | High | Twitter card player | Fixed |
 | SEC-2026-005 | Medium | Player transcript cache headers | Fixed |
-| SEC-2026-006 | Medium | Closed comments | Open |
+| SEC-2026-006 | Medium | Closed comments | Fixed |
 | SEC-2026-007 | Medium | Faceted navigation XSS | Open |
 | SEC-2026-008 | Medium | Gallery image enumeration | Open |
 | SEC-2026-009 | Medium | Voxhelm draft audio authorization | Open |
@@ -199,7 +199,7 @@ Done when:
 
 ### SEC-2026-006: Closed comments can still be posted through the API path
 
-Status: Open
+Status: Fixed
 
 References:
 
