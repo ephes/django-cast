@@ -3,6 +3,7 @@ import json
 from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.error import URLError
+from urllib.request import Request
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -15,6 +16,7 @@ from cast.models import Audio, Contributor, EpisodeContributor, TranscriptGenera
 from cast.voxhelm_tasks import complete_transcript_generation
 from tests.factories import EpisodeFactory
 from cast.voxhelm import (
+    NoRedirectHandler,
     TranscriptGenerationResult,
     TranscriptSubmission,
     VoxhelmClient,
@@ -32,6 +34,7 @@ from cast.voxhelm import (
     get_transcript_generation,
     get_transcript_generation_status_context,
     normalize_api_base,
+    open_url,
     require_setting,
     require_artifact_path,
     replace_file,
@@ -41,6 +44,7 @@ from cast.voxhelm import (
     resolve_diarization_speaker_count,
     strip_diarized_task_ref,
     transcript_complete,
+    validate_transcript_artifacts,
 )
 
 
@@ -51,6 +55,13 @@ class FakeResponse(io.BytesIO):
     def __exit__(self, exc_type, exc, tb):
         self.close()
         return False
+
+
+VALID_PODLOVE_ARTIFACT = b'{"transcripts": [{"text": "done"}]}'
+VALID_DOTE_ARTIFACT = (
+    b'{"lines": [{"startTime": "00:00:00,000", "endTime": "00:00:00,100", "speakerDesignation": "", "text": "done"}]}'
+)
+VALID_VTT_ARTIFACT = b"WEBVTT\n\n00:00:00.000 --> 00:00:00.100\ndone\n"
 
 
 def test_normalize_api_base():
@@ -261,6 +272,41 @@ def test_require_artifact_path_errors_when_missing():
         require_artifact_path({"result": {"artifacts": {}}}, "json")
 
 
+def test_validate_transcript_artifacts_accepts_valid_artifacts():
+    validate_transcript_artifacts(
+        podlove=VALID_PODLOVE_ARTIFACT,
+        dote=VALID_DOTE_ARTIFACT,
+        vtt=VALID_VTT_ARTIFACT,
+        speakers=b'{"segments": []}',
+    )
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "message"),
+    [
+        ({"podlove": b"\xff"}, "podlove artifact was not valid UTF-8 JSON"),
+        ({"podlove": b"[]"}, "podlove artifact must be a JSON object"),
+        ({"podlove": b'{"transcripts": {}}'}, "podlove artifact must include a 'transcripts' list"),
+        ({"dote": b'{"lines": ["bad"]}'}, "dote artifact lines must be JSON objects"),
+        ({"dote": b'{"lines": [{"text": "done"}]}'}, "dote artifact lines must include keys"),
+        ({"vtt": b"\xff"}, "vtt artifact was not valid UTF-8 text"),
+        ({"vtt": b"not vtt"}, "vtt artifact must start with the WEBVTT header"),
+        ({"speakers": b"[]"}, "speakers artifact must be a JSON object"),
+    ],
+)
+def test_validate_transcript_artifacts_rejects_malformed_artifacts(artifacts, message):
+    artifact_kwargs = {
+        "podlove": VALID_PODLOVE_ARTIFACT,
+        "dote": VALID_DOTE_ARTIFACT,
+        "vtt": VALID_VTT_ARTIFACT,
+        "speakers": None,
+    }
+    artifact_kwargs.update(artifacts)
+
+    with pytest.raises(VoxhelmError, match=message):
+        validate_transcript_artifacts(**artifact_kwargs)
+
+
 def test_build_failure_message_prefers_error_message():
     assert build_failure_message({"id": "job-1", "state": "failed", "error": {"message": "boom"}}) == "boom"
     assert "canceled" in build_failure_message({"id": "job-2", "state": "canceled"})
@@ -401,13 +447,13 @@ def test_resolve_diarization_speaker_count_without_episode_manager():
 def test_client_submit_job_and_download_artifact(mocker):
     requests = []
 
-    def fake_urlopen(request, timeout):
-        requests.append((request, timeout))
+    def fake_open_url(request, *, timeout, follow_redirects=True):
+        requests.append((request, timeout, follow_redirects))
         if request.full_url.endswith("/v1/jobs"):
             return FakeResponse(b'{"id": "job-1", "state": "queued"}')
         return FakeResponse(b"artifact-bytes")
 
-    mocker.patch("cast.voxhelm.urlopen", side_effect=fake_urlopen)
+    mocker.patch("cast.voxhelm.open_url", side_effect=fake_open_url)
     client = VoxhelmClient(
         api_base="https://voxhelm.example",
         api_key="secret",
@@ -427,6 +473,8 @@ def test_client_submit_job_and_download_artifact(mocker):
     request_obj = requests[0][0]
     assert requests[0][1] == 0.75
     assert requests[1][1] == 0.75
+    assert requests[0][2] is False
+    assert requests[1][2] is False
     assert request_obj.full_url == "https://voxhelm.example/v1/jobs"
     assert request_obj.headers["Authorization"] == "Bearer secret"
     assert json.loads(request_obj.data.decode("utf-8")) == {
@@ -517,28 +565,118 @@ def test_client_build_url_variants_and_get_job(mocker):
     request_json.assert_called_once_with(method="GET", path="jobs/job-1")
 
 
-def test_client_request_bytes_skips_auth_for_third_party_artifacts(mocker):
-    requests = []
-
-    def fake_urlopen(request, timeout):
-        requests.append((request, timeout))
-        return FakeResponse(b"artifact-bytes")
-
-    mocker.patch("cast.voxhelm.urlopen", side_effect=fake_urlopen)
+def test_client_download_artifact_rejects_cross_origin_absolute_url(mocker):
+    open_url_mock = mocker.patch("cast.voxhelm.open_url")
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
-    artifact = client.download_artifact("https://cdn.example.com/transcripts/job-1.vtt")
+    with pytest.raises(VoxhelmError, match="configured Voxhelm origin"):
+        client.download_artifact("https://cdn.example.com/transcripts/job-1.vtt")
+
+    open_url_mock.assert_not_called()
+
+
+def test_client_download_artifact_allows_same_origin_absolute_url(mocker):
+    requests = []
+
+    def fake_open_url(request, *, timeout, follow_redirects=True):
+        requests.append((request, timeout, follow_redirects))
+        return FakeResponse(b"artifact-bytes")
+
+    mocker.patch("cast.voxhelm.open_url", side_effect=fake_open_url)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    artifact = client.download_artifact("https://voxhelm.example/v1/jobs/job-1/artifacts/transcript.vtt")
 
     assert artifact == b"artifact-bytes"
-    assert requests[0][0].headers.get("Authorization") is None
+    assert requests[0][0].headers["Authorization"] == "Bearer secret"
+    assert requests[0][2] is False
+
+
+def test_client_download_artifact_rejects_oversized_response(mocker):
+    mocker.patch("cast.voxhelm.MAX_VOXHELM_ARTIFACT_BYTES", 4)
+    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b"12345"))
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="maximum size"):
+        client.download_artifact("/v1/jobs/job-1/artifacts/transcript.vtt")
+
+
+def test_client_download_artifact_allows_response_at_size_limit(mocker):
+    mocker.patch("cast.voxhelm.MAX_VOXHELM_ARTIFACT_BYTES", 4)
+    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b"1234"))
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    assert client.download_artifact("/v1/jobs/job-1/artifacts/transcript.vtt") == b"1234"
+
+
+def test_client_download_artifact_rejects_redirect_response(mocker):
+    error = HTTPError(
+        url="https://voxhelm.example/v1/jobs/job-1/artifacts/transcript.vtt",
+        code=302,
+        msg="Found",
+        hdrs=None,
+        fp=io.BytesIO(b"redirect"),
+    )
+    open_url_mock = mocker.patch("cast.voxhelm.open_url", side_effect=error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="302: redirect"):
+        client.download_artifact("/v1/jobs/job-1/artifacts/transcript.vtt")
+
+    assert open_url_mock.call_args.kwargs["follow_redirects"] is False
+
+
+def test_open_url_without_redirects_uses_no_redirect_opener(mocker):
+    opener = mocker.Mock()
+    opener.open.return_value = FakeResponse(b"ok")
+    build_opener = mocker.patch("cast.voxhelm.build_opener", return_value=opener)
+    request = Request("https://voxhelm.example/v1/jobs")
+
+    response = open_url(request, timeout=1.0, follow_redirects=False)
+
+    assert response.read() == b"ok"
+    assert build_opener.call_args.args == (NoRedirectHandler,)
+    opener.open.assert_called_once_with(request, timeout=1.0)
+
+
+def test_no_redirect_handler_blocks_redirect():
+    handler = NoRedirectHandler()
+
+    assert handler.redirect_request(None, None, 302, "Found", {}, "https://voxhelm.example/next") is None
 
 
 def test_client_request_json_requires_object_response(mocker):
-    mocker.patch("cast.voxhelm.urlopen", return_value=FakeResponse(b'["not-an-object"]'))
+    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b'["not-an-object"]'))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="non-object"):
         client.request_json(method="GET", path="jobs/job-1")
+
+
+def test_client_request_json_rejects_oversized_response(mocker):
+    mocker.patch("cast.voxhelm.MAX_VOXHELM_API_RESPONSE_BYTES", 4)
+    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b'{"id": "job-1"}'))
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="maximum size"):
+        client.request_json(method="GET", path="jobs/job-1")
+
+
+def test_client_request_json_rejects_redirect_response(mocker):
+    error = HTTPError(
+        url="https://voxhelm.example/v1/jobs/job-1",
+        code=302,
+        msg="Found",
+        hdrs=None,
+        fp=io.BytesIO(b"redirect"),
+    )
+    open_url_mock = mocker.patch("cast.voxhelm.open_url", side_effect=error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="302: redirect"):
+        client.request_json(method="GET", path="jobs/job-1")
+
+    assert open_url_mock.call_args.kwargs["follow_redirects"] is False
 
 
 def test_client_http_error_includes_body(mocker):
@@ -553,6 +691,37 @@ def test_client_http_error_includes_body(mocker):
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="502: upstream broke"):
+        client.request_bytes(method="GET", path="jobs/job-1")
+
+
+def test_client_http_error_body_is_bounded(mocker):
+    mocker.patch("cast.voxhelm.MAX_VOXHELM_ERROR_BYTES", 4)
+    error = HTTPError(
+        url="https://voxhelm.example/v1/jobs",
+        code=500,
+        msg="Server Error",
+        hdrs=None,
+        fp=io.BytesIO(b"abcdef"),
+    )
+    mocker.patch("cast.voxhelm.urlopen", side_effect=error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match=r"500: abcd \[truncated\]"):
+        client.request_bytes(method="GET", path="jobs/job-1")
+
+
+def test_client_http_error_falls_back_to_reason_when_body_is_empty(mocker):
+    error = HTTPError(
+        url="https://voxhelm.example/v1/jobs",
+        code=503,
+        msg="Service Unavailable",
+        hdrs=None,
+        fp=io.BytesIO(b""),
+    )
+    mocker.patch("cast.voxhelm.urlopen", side_effect=error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="503: Service Unavailable"):
         client.request_bytes(method="GET", path="jobs/job-1")
 
 
@@ -1590,6 +1759,50 @@ def test_generate_for_audio_updates_existing_transcript(settings, user, m4a_audi
 
 
 @pytest.mark.django_db
+def test_generate_for_audio_saves_optional_speakers_artifact(settings, user, m4a_audio):
+    settings.MEDIA_URL = "https://media.example.com/"
+    audio = Audio(user=user, m4a=m4a_audio, title="episode")
+    audio.save(duration=False, cache_file_sizes=False)
+
+    class StubClient:
+        def submit_transcription_job(
+            self, *, source_url, task_ref, context, speaker_count=None, diarization_enabled=None
+        ):
+            del source_url, task_ref, context, speaker_count, diarization_enabled
+            return {
+                "id": "job-speakers",
+                "state": "succeeded",
+                "result": {
+                    "artifacts": {
+                        "podlove": "/podlove",
+                        "dote": "/dote",
+                        "vtt": "/vtt",
+                        "speakers": "/speakers",
+                    }
+                },
+            }
+
+        def wait_for_job(self, job_id):
+            raise AssertionError(f"wait_for_job should not run for terminal jobs: {job_id}")
+
+        def download_artifact(self, artifact_path):
+            if artifact_path == "/podlove":
+                return VALID_PODLOVE_ARTIFACT
+            if artifact_path == "/dote":
+                return VALID_DOTE_ARTIFACT
+            if artifact_path == "/vtt":
+                return VALID_VTT_ARTIFACT
+            if artifact_path == "/speakers":
+                return b'{"segments": []}'
+            raise AssertionError(f"unexpected artifact: {artifact_path}")
+
+    result = VoxhelmTranscriptService(client=StubClient()).generate_for_audio(audio)
+
+    result.transcript.refresh_from_db()
+    assert result.transcript.speakers_data == {"segments": []}
+
+
+@pytest.mark.django_db
 def test_save_artifacts_keeps_existing_files_when_later_artifact_write_fails(settings, user, m4a_audio, mocker):
     settings.MEDIA_URL = "https://media.example.com/"
     audio = Audio(user=user, m4a=m4a_audio, title="episode")
@@ -1620,7 +1833,7 @@ def test_save_artifacts_keeps_existing_files_when_later_artifact_write_fails(set
             transcript=existing,
             audio=audio,
             podlove=b'{"transcripts": [{"text": "new podlove"}]}',
-            dote=b'{"lines": [{"text": "new dote"}]}',
+            dote=VALID_DOTE_ARTIFACT,
             vtt=b"WEBVTT\n\nnew vtt\n",
         )
 
@@ -1684,7 +1897,7 @@ def test_complete_audio_job_ignores_mismatched_initial_payload(settings, user, m
             if artifact_path == "/podlove":
                 return b'{"version": 1, "transcripts": [{"text": "done"}]}'
             if artifact_path == "/dote":
-                return b'{"lines": [{"text": "done"}]}'
+                return VALID_DOTE_ARTIFACT
             if artifact_path == "/vtt":
                 return b"WEBVTT\n"
             raise AssertionError(f"unexpected artifact: {artifact_path}")

@@ -26,7 +26,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | --- | --- | --- | --- |
 | SEC-2026-001 | High | Restricted content | Fixed |
 | SEC-2026-002 | High | Wagtail media admin | Open |
-| SEC-2026-003 | High | Voxhelm artifact downloads | Open |
+| SEC-2026-003 | High | Voxhelm artifact downloads | Fixed |
 | SEC-2026-004 | High | Twitter card player | Fixed |
 | SEC-2026-005 | Medium | Player transcript cache headers | Fixed |
 | SEC-2026-006 | Medium | Closed comments | Fixed |
@@ -80,7 +80,7 @@ Done when:
 
 ### SEC-2026-002: Custom Wagtail media and transcript admin views miss object-level permissions
 
-Status: Open
+Status: Fixed
 
 References:
 
@@ -138,6 +138,14 @@ Done when:
 - Absolute artifact URLs cannot reach private/internal network targets.
 - Oversized artifact responses fail before consuming unbounded memory or storage.
 - Tests cover absolute URL rejection, redirect rejection, and size-limit behavior.
+
+Resolution:
+
+- Artifact downloads now require relative paths or absolute URLs on the configured Voxhelm origin.
+- Artifact downloads disable redirects and enforce a 10 MiB response cap.
+- Voxhelm API JSON requests also disable redirects, and API JSON responses plus HTTP error detail reads are capped.
+- Downloaded podlove, DOTe, WebVTT, and optional speaker artifacts are structurally validated before staging.
+- Regression tests cover cross-origin rejection, redirect rejection, response size limits, and malformed artifacts.
 
 ### SEC-2026-004: Twitter card player can expose draft or restricted episodes
 
