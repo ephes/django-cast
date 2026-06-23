@@ -38,3 +38,9 @@
   private storage. Configure ``STORAGES["cast_private_media"]`` for production;
   public transcript URLs continue to use the existing authorized and sanitized
   views.
+- Voice-reference clips and known-speaker sidecar files no longer fall back to
+  default public media storage when ``STORAGES["cast_voice_references"]`` is
+  omitted. They now use the private media backend, and a migration copies
+  existing default-storage files into private storage. Voxhelm known-speaker
+  handoff now skips uploaded clips on no-URL private storage instead of exposing
+  or crashing on direct storage URLs; source-range references continue to work.

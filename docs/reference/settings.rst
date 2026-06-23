@@ -190,8 +190,9 @@ Whether to send approved contributor voice references to Voxhelm as
 known-speaker reference material for diarized transcript jobs. Defaults to
 ``False``. When enabled, a diarized job for an episode also sends the approved
 voice references of that episode's expected contributors (source ranges into
-existing audio or uploaded clips), never public profile URLs. Hidden
-contributors are excluded unless a reference explicitly opts in.
+existing audio, or uploaded clips only when protected storage provides an
+absolute temporary URL), never public profile URLs. Hidden contributors are
+excluded unless a reference explicitly opts in.
 
 This can be set as a Django setting or environment variable, using the same
 boolean strings as ``CAST_VOXHELM_DIARIZATION_ENABLED``. The Wagtail admin
@@ -436,6 +437,11 @@ like this:
 ``cast_private_media`` stores raw transcript artifacts outside public media.
 If omitted, django-cast falls back to ``CAST_PRIVATE_MEDIA_ROOT`` or a local
 ``cast-private-media`` directory next to ``MEDIA_ROOT``.
+
+Uploaded contributor voice-reference clips and the private
+``Transcript.speakers`` known-speaker sidecar use ``STORAGES["cast_voice_references"]``
+when configured. If that dedicated alias is omitted, they fall back to
+``cast_private_media`` or the same non-public local private-media fallback.
 
 
 ******************

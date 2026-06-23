@@ -367,9 +367,10 @@ def build_known_speaker_references(episode: Any) -> list[dict[str, Any]]:
 
     Only approved, usable references for the episode's expected contributors are
     included. Hidden contributors are excluded unless a reference explicitly
-    opted into hidden-contributor use. References resolve to absolute reference
-    audio URLs (source ranges into existing audio, or uploaded clips); any
-    reference without a resolvable URL is skipped.
+    opted into hidden-contributor use. Source ranges resolve to absolute audio
+    URLs. Uploaded clips are included only when their protected storage backend
+    provides an absolute URL, for example a short-lived signed URL; no-URL
+    private clips are skipped.
     """
     if episode is None:
         return []
@@ -423,7 +424,10 @@ def build_known_speaker_reference_entry(reference: Any) -> dict[str, Any] | None
             "end": float(reference.end_seconds),
         }
     if reference.clip:
-        url = getattr(reference.clip, "url", "")
+        try:
+            url = reference.clip.url
+        except ValueError:
+            return None
         if isinstance(url, str) and url.startswith(("http://", "https://")):
             return {"kind": "clip_artifact", "audio": {"kind": "url", "url": url}}
     return None

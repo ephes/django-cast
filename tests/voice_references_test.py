@@ -4,12 +4,15 @@ Voice references are private, admin-only editorial data. They must never appear
 in public contributor APIs, feeds, theme context, or repository serialization.
 """
 
+from pathlib import Path
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
-from django.core.files.storage import InMemoryStorage, default_storage
+from django.core.files.storage import FileSystemStorage, InMemoryStorage, default_storage
 from django.test import override_settings
 
+from cast.devdata import create_transcript
 from cast.models import Contributor
 from cast.models.contributors import (
     ContributorVoiceReference,
@@ -191,8 +194,22 @@ class TestVoiceReferenceQuerySet:
 
 @pytest.mark.django_db
 class TestVoiceReferenceStorage:
-    def test_defaults_to_default_storage_when_unconfigured(self):
-        assert get_voice_reference_storage() is default_storage
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        }
+    )
+    def test_falls_back_to_private_media_storage_when_unconfigured(self, settings, tmp_path):
+        settings.CAST_PRIVATE_MEDIA_ROOT = str(tmp_path / "private")
+
+        storage = get_voice_reference_storage()
+
+        assert isinstance(storage, FileSystemStorage)
+        assert storage is not default_storage
+        assert storage.location == str(tmp_path / "private")
+        with pytest.raises(ValueError, match="not accessible via a URL"):
+            storage.url("cast_voice_references/voice.wav")
 
     @override_settings(
         STORAGES={
@@ -203,6 +220,30 @@ class TestVoiceReferenceStorage:
     )
     def test_uses_configured_private_storage_alias(self):
         assert isinstance(get_voice_reference_storage(), InMemoryStorage)
+
+    def test_voice_reference_clip_is_saved_to_private_storage(self, tmp_path, settings):
+        settings.CAST_PRIVATE_MEDIA_ROOT = str(tmp_path / "private")
+        contributor = Contributor.objects.create(display_name="Johannes", slug="johannes-storage")
+
+        reference = ContributorVoiceReference.objects.create(contributor=contributor, clip=make_clip())
+
+        private_root = Path(reference.clip.storage.location)
+        assert Path(reference.clip.path).is_relative_to(private_root)
+        assert not default_storage.exists(reference.clip.name)
+        with pytest.raises(ValueError, match="not accessible via a URL"):
+            reference.clip.url
+
+    def test_transcript_speakers_sidecar_is_saved_to_private_storage(self, tmp_path, settings, audio):
+        settings.CAST_PRIVATE_MEDIA_ROOT = str(tmp_path / "private")
+        transcript = create_transcript(audio=audio)
+
+        transcript.speakers.save("test.speakers.json", ContentFile(b'{"segments": []}'), save=True)
+
+        private_root = Path(transcript.speakers.storage.location)
+        assert Path(transcript.speakers.path).is_relative_to(private_root)
+        assert not default_storage.exists(transcript.speakers.name)
+        with pytest.raises(ValueError, match="not accessible via a URL"):
+            transcript.speakers.url
 
 
 @pytest.mark.django_db
@@ -249,3 +290,15 @@ class TestVoiceReferenceAdmin:
         response = admin_client.get(url)
         assert response.status_code == 200
         assert b"voice_references" in response.content
+
+    def test_contributor_edit_form_renders_private_clip_without_storage_url(self, admin_client):
+        from django.urls import reverse
+
+        contributor = Contributor.objects.create(display_name="Private Clip", slug="private-clip")
+        ContributorVoiceReference.objects.create(contributor=contributor, clip=make_clip())
+        url = reverse("wagtailsnippets_cast_contributor:edit", args=(contributor.pk,))
+
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert b"cast_voice_references/voice" in response.content

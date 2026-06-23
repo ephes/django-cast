@@ -19,6 +19,7 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
+from .form_widgets import PrivateClearableFileInput
 from .models import (
     Audio,
     ChapterMark,
@@ -221,18 +222,6 @@ class AudioForm(BaseCollectionMemberForm):
         if commit:
             self.save_chaptermarks(audio)
         return audio
-
-
-class PrivateClearableFileInput(forms.ClearableFileInput):
-    template_name = "cast/widgets/private_clearable_file_input.html"
-
-    def is_initial(self, value):
-        return bool(value and getattr(value, "name", ""))
-
-    def format_value(self, value):
-        if self.is_initial(value):
-            return value.name
-        return None
 
 
 class TranscriptForm(BaseCollectionMemberForm):
