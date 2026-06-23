@@ -31,7 +31,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-005 | Medium | Player transcript cache headers | Fixed |
 | SEC-2026-006 | Medium | Closed comments | Fixed |
 | SEC-2026-007 | Medium | Faceted navigation XSS | Fixed |
-| SEC-2026-008 | Medium | Gallery image enumeration | Open |
+| SEC-2026-008 | Medium | Gallery image enumeration | Fixed |
 | SEC-2026-009 | Medium | Voxhelm draft audio authorization | Open |
 | SEC-2026-010 | Medium | Editor API admin gate | Open |
 | SEC-2026-017 | Medium | Raw transcript artifact storage | Open |
@@ -258,7 +258,7 @@ Done when:
 
 ### SEC-2026-008: Gallery modal can enumerate arbitrary Wagtail image IDs
 
-Status: Open
+Status: Fixed
 
 References:
 

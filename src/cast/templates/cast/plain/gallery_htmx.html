@@ -5,7 +5,7 @@
         <a
           class="cast-gallery-link"
           href="{{ image.modal.src.jpeg }}"
-          data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}"
+          data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}&gallery_token={{ gallery_token|urlencode }}"
           data-hx-trigger="click"
           data-hx-target="#imageGalleryModal-{{ block.id }}"
           data-hx-swap="innerHTML"

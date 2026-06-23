@@ -36,7 +36,7 @@
       <a
         class="cast-gallery-modal-prev"
         href="{{ prev_image.modal.src.jpeg }}"
-        data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ prev_image.gallery_index }}&block_id={{ block_id }}"
+        data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ prev_image.gallery_index }}&block_id={{ block_id }}&gallery_token={{ gallery_token|urlencode }}"
         data-hx-trigger="click, keyup[key=='ArrowLeft'] from:#imageGalleryModal-{{ block_id }}"
         data-hx-target="#imageGalleryModal-{{ block_id }}"
         data-hx-swap="innerHTML"
@@ -50,7 +50,7 @@
       <a
         class="cast-gallery-modal-next"
         href="{{ next_image.modal.src.jpeg }}"
-        data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ next_image.gallery_index }}&block_id={{ block_id }}"
+        data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ next_image.gallery_index }}&block_id={{ block_id }}&gallery_token={{ gallery_token|urlencode }}"
         data-hx-trigger="click, keyup[key=='ArrowRight'] from:#imageGalleryModal-{{ block_id }}"
         data-hx-target="#imageGalleryModal-{{ block_id }}"
         data-hx-swap="innerHTML"
