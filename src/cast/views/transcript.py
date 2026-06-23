@@ -1,7 +1,7 @@
 import json
 from typing import Any, TypedDict, cast
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,6 +12,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.decorators.vary import vary_on_headers
 from wagtail.admin import messages
 from wagtail.admin.modal_workflow import render_modal_workflow
+from wagtail.permission_policies.collections import CollectionPermissionPolicy
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
@@ -57,6 +58,7 @@ from .wagtail_pagination import paginate, pagination_template
 
 
 TRANSCRIPT_FALLBACK_THEME = "plain"
+transcript_permission_policy = CollectionPermissionPolicy(Transcript)
 
 
 class SpeakerMappingContext(TypedDict):
@@ -142,7 +144,12 @@ def _render_transcript_html(
 
 @vary_on_headers("X-Requested-With")
 def index(request: HttpRequest) -> HttpResponse:
-    transcripts = Transcript.objects.all()
+    user_can_add = transcript_permission_policy.user_has_permission(request.user, "add")
+    transcripts = transcript_permission_policy.instances_user_has_any_permission_for(
+        request.user, ["change", "delete"]
+    )
+    if not user_can_add and not transcripts.exists():
+        raise PermissionDenied
 
     # Search
     query_string = None
@@ -177,7 +184,7 @@ def index(request: HttpRequest) -> HttpResponse:
                 "query_string": query_string,
                 "is_searching": bool(query_string),
                 "search_form": form,
-                "user_can_add": True,
+                "user_can_add": user_can_add,
                 "collections": None,
                 "current_collection": None,
             },
@@ -185,6 +192,8 @@ def index(request: HttpRequest) -> HttpResponse:
 
 
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
+    if not transcript_permission_policy.user_has_permission(request.user, "add"):
+        raise PermissionDenied
     if request.POST:
         transcript = Transcript()
         form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
@@ -456,7 +465,10 @@ def get_transcript_audio_sources(transcript: Transcript) -> list[AudioSource]:
 
 
 def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
-    transcript = get_object_or_404(Transcript, id=transcript_id)
+    transcript = get_object_or_404(
+        transcript_permission_policy.instances_user_has_permission_for(request.user, "change"),
+        id=transcript_id,
+    )
     speaker_mapping_context = get_speaker_mapping_context(transcript)
     known_speaker_review_form: KnownSpeakerSegmentReviewForm | None = None
 
@@ -597,13 +609,18 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
             "known_speaker_review": transcript.known_speaker_review_summary(),
             "known_speaker_review_form": known_speaker_review_form,
             "known_speaker_review_rows": known_speaker_review_rows,
-            "user_can_delete": True,
+            "user_can_delete": transcript_permission_policy.user_has_permission_for_instance(
+                request.user, "delete", transcript
+            ),
         },
     )
 
 
 def delete(request: HttpRequest, transcript_id: int) -> HttpResponse:
-    transcript = get_object_or_404(Transcript, id=transcript_id)
+    transcript = get_object_or_404(
+        transcript_permission_policy.instances_user_has_permission_for(request.user, "delete"),
+        id=transcript_id,
+    )
 
     if request.POST:
         transcript.delete()
@@ -614,7 +631,9 @@ def delete(request: HttpRequest, transcript_id: int) -> HttpResponse:
 
 
 def chooser(request: HttpRequest) -> HttpResponse:
-    transcripts = Transcript.objects.all()
+    if not transcript_permission_policy.user_has_permission(request.user, "choose"):
+        raise PermissionDenied
+    transcripts = transcript_permission_policy.instances_user_has_permission_for(request.user, "choose")
 
     upload_form = TranscriptForm(prefix="media-chooser-upload", user=request.user)
 
@@ -676,7 +695,10 @@ def get_transcript_data(transcript: Transcript) -> dict[str, Any]:
 
 
 def chosen(request, transcript_id: int) -> HttpResponse:
-    transcript = get_object_or_404(Transcript, id=transcript_id)
+    transcript = get_object_or_404(
+        transcript_permission_policy.instances_user_has_permission_for(request.user, "choose"),
+        id=transcript_id,
+    )
 
     return render_modal_workflow(
         request,
@@ -688,6 +710,10 @@ def chosen(request, transcript_id: int) -> HttpResponse:
 
 
 def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
+    if not transcript_permission_policy.user_has_permission(
+        request.user, "add"
+    ) or not transcript_permission_policy.user_has_permission(request.user, "choose"):
+        raise PermissionDenied
     if request.method == "POST":
         transcript = Transcript()
         form = TranscriptForm(
@@ -711,7 +737,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
         else:
             messages.error(request, _("The transcript could not be saved due to errors."))
 
-    transcripts = Transcript.objects.all()
+    transcripts = transcript_permission_policy.instances_user_has_permission_for(request.user, "choose")
 
     search_form = NonEmptySearchForm()
 

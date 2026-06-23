@@ -25,7 +25,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | ID | Severity | Area | Status |
 | --- | --- | --- | --- |
 | SEC-2026-001 | High | Restricted content | Fixed |
-| SEC-2026-002 | High | Wagtail media admin | Open |
+| SEC-2026-002 | High | Wagtail media admin | Fixed |
 | SEC-2026-003 | High | Voxhelm artifact downloads | Fixed |
 | SEC-2026-004 | High | Twitter card player | Fixed |
 | SEC-2026-005 | Medium | Player transcript cache headers | Fixed |
@@ -109,9 +109,16 @@ Done when:
 - Superusers and properly authorized editors retain the expected workflows.
 - Tests cover index, chooser, add, edit, and delete views for a restricted user.
 
+Resolution:
+
+- Audio, video, and transcript models now expose explicit chooser permissions for collection assignments.
+- Admin index, chooser, chosen, edit, delete, add, and chooser-upload endpoints use Wagtail collection permission
+  policies instead of unrestricted model querysets.
+- Regression tests cover allowed and forbidden collections for all three media types.
+
 ### SEC-2026-003: Voxhelm artifact URLs allow SSRF and unbounded downloads
 
-Status: Open
+Status: Fixed
 
 References:
 

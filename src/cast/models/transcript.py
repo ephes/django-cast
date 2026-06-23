@@ -209,6 +209,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
 
     class Meta:
         ordering = ("-id",)
+        permissions = (("choose_transcript", "Can choose transcript"),)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         update_fields = kwargs.get("update_fields")

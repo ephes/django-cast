@@ -30,3 +30,7 @@
   pages are saved as drafts via Wagtail revisions. Body blocks supported in this
   slice: heading, paragraph, code, image, gallery, and audio (media blocks
   reference existing images/audio the caller may choose).
+- Tightened Wagtail admin permissions for custom audio, video, and transcript
+  views. Index, chooser, edit, and delete endpoints now use collection-scoped
+  permission policies, and new ``choose_audio``, ``choose_video``, and
+  ``choose_transcript`` permissions control chooser access.

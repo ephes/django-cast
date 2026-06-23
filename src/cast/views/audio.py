@@ -1,5 +1,6 @@
 from typing import Any
 
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,6 +11,7 @@ from modelsearch.backends.base import BaseSearchResults
 from wagtail.admin import messages
 from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.admin.models import popular_tags_for_model
+from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
@@ -20,11 +22,18 @@ from . import AuthenticatedHttpRequest
 from .voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_audio
 from .wagtail_pagination import paginate, pagination_template
 
+audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
+
 
 @vary_on_headers("X-Requested-With")
 def index(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
-    base_audios = Audio.objects.all().order_by(ordering)
+    user_can_add = audio_permission_policy.user_has_permission(request.user, "add")
+    base_audios = audio_permission_policy.instances_user_has_any_permission_for(
+        request.user, ["change", "delete"]
+    ).order_by(ordering)
+    if not user_can_add and not base_audios.exists():
+        raise PermissionDenied
     audios: models.QuerySet | BaseSearchResults = base_audios
 
     # Search
@@ -64,7 +73,7 @@ def index(request: HttpRequest) -> HttpResponse:
                 "is_searching": bool(query_string),
                 "search_form": form,
                 "popular_tags": popular_tags_for_model(Audio),
-                "user_can_add": True,
+                "user_can_add": user_can_add,
                 "collections": None,
                 "current_collection": None,
             },
@@ -72,6 +81,8 @@ def index(request: HttpRequest) -> HttpResponse:
 
 
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
+    if not audio_permission_policy.user_has_permission(request.user, "add"):
+        raise PermissionDenied
     if request.POST:
         audio = Audio(user=request.user)
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user)
@@ -112,7 +123,10 @@ def delete_old_audio_files(audio: Audio, changed_audio_files: set[str]) -> None:
 
 
 def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
-    audio = get_object_or_404(Audio, id=audio_id)
+    audio = get_object_or_404(
+        audio_permission_policy.instances_user_has_permission_for(request.user, "change"),
+        id=audio_id,
+    )
 
     if request.method == "POST":
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user)
@@ -164,7 +178,7 @@ def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
             "filesize": filesize,
             "form": form,
             "generate_transcript_url": reverse("cast-voxhelm:generate_audio", args=(audio.pk,)),
-            "user_can_delete": True,
+            "user_can_delete": audio_permission_policy.user_has_permission_for_instance(request.user, "delete", audio),
             "user_can_generate_transcript": user_can_generate_transcript_for_audio(request=request, audio=audio),
             **get_audio_transcript_status_context(audio=audio),
         },
@@ -172,7 +186,10 @@ def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
 
 
 def delete(request: HttpRequest, audio_id: int) -> HttpResponse:
-    audio = get_object_or_404(Audio, id=audio_id)
+    audio = get_object_or_404(
+        audio_permission_policy.instances_user_has_permission_for(request.user, "delete"),
+        id=audio_id,
+    )
 
     if request.POST:
         audio.delete()
@@ -183,8 +200,10 @@ def delete(request: HttpRequest, audio_id: int) -> HttpResponse:
 
 
 def chooser(request: HttpRequest) -> HttpResponse:
+    if not audio_permission_policy.user_has_permission(request.user, "choose"):
+        raise PermissionDenied
     ordering = "-created"
-    base_audios = Audio.objects.all().order_by(ordering)
+    base_audios = audio_permission_policy.instances_user_has_permission_for(request.user, "choose").order_by(ordering)
     audios: models.QuerySet | BaseSearchResults = base_audios
 
     upload_form = AudioForm(prefix="media-chooser-upload", user=request.user)
@@ -248,7 +267,10 @@ def get_audio_data(audio: Audio) -> dict[str, Any]:
 
 
 def chosen(request, audio_id: int) -> HttpResponse:
-    audio = get_object_or_404(Audio, id=audio_id)
+    audio = get_object_or_404(
+        audio_permission_policy.instances_user_has_permission_for(request.user, "choose"),
+        id=audio_id,
+    )
 
     return render_modal_workflow(
         request,
@@ -260,6 +282,10 @@ def chosen(request, audio_id: int) -> HttpResponse:
 
 
 def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
+    if not audio_permission_policy.user_has_permission(
+        request.user, "add"
+    ) or not audio_permission_policy.user_has_permission(request.user, "choose"):
+        raise PermissionDenied
     if request.method == "POST":
         audio = Audio(user=request.user)
         form = AudioForm(request.POST, request.FILES, instance=audio, user=request.user, prefix="media-chooser-upload")
@@ -282,7 +308,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
             messages.error(request, _("The audio could not be saved due to errors."))
 
     ordering = "-created"
-    audios = Audio.objects.all().order_by(ordering)
+    audios = audio_permission_policy.instances_user_has_permission_for(request.user, "choose").order_by(ordering)
 
     search_form = NonEmptySearchForm()
 

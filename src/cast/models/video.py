@@ -85,6 +85,9 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         index.FilterField("user"),
     ]
 
+    class Meta:
+        permissions = (("choose_video", "Can choose video"),)
+
     @property
     def filename(self) -> str:
         return Path(self.original.name or "").name

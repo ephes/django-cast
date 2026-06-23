@@ -327,12 +327,15 @@ def admin_user(db):
     for codename in (
         "add_audio",
         "change_audio",
+        "choose_audio",
         "delete_audio",
         "add_video",
         "change_video",
+        "choose_video",
         "delete_video",
         "add_transcript",
         "change_transcript",
+        "choose_transcript",
         "delete_transcript",
     ):
         permission = Permission.objects.get(codename=codename, content_type__app_label="cast")

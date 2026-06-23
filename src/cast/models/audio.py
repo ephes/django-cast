@@ -109,6 +109,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
 
     class Meta:
         ordering = ("-created",)
+        permissions = (("choose_audio", "Can choose audio"),)
 
     @property
     def uploaded_audio_files(self) -> Iterable[tuple[str, models.FileField]]:
