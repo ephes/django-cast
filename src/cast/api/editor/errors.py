@@ -4,6 +4,7 @@ from typing import Any
 
 from rest_framework import status
 from rest_framework.exceptions import APIException
+from rest_framework.exceptions import NotFound as DRFNotFound
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
@@ -37,6 +38,16 @@ class EditorNotFound(APIException):
 
     def __init__(self, detail: str) -> None:
         self.detail_text = detail
+        super().__init__(detail=detail)
+
+
+class EditorFlatError(APIException):
+    """Whole-request editor failure rendered as ``{"code": ..., "detail": ...}``."""
+
+    def __init__(self, code: str, detail: str, *, status_code: int) -> None:
+        self.code_text = code
+        self.detail_text = detail
+        self.status_code = status_code
         super().__init__(detail=detail)
 
 
@@ -81,15 +92,19 @@ def editor_exception_handler(exc: Exception, context: dict[str, Any]) -> Respons
             status=exc.status_code,
         )
     if isinstance(exc, EditorPermissionDenied):
-        return Response(
-            {"code": "permission_denied", "detail": exc.detail_text, "parent_id": exc.parent_id},
-            status=exc.status_code,
-        )
+        data: dict[str, Any] = {"code": "permission_denied", "detail": exc.detail_text}
+        if exc.parent_id is not None:
+            data["parent_id"] = exc.parent_id
+        return Response(data, status=exc.status_code)
     if isinstance(exc, EditorNotFound):
         return Response(
             {"code": "not_found", "detail": exc.detail_text},
             status=exc.status_code,
         )
+    if isinstance(exc, EditorFlatError):
+        return Response({"code": exc.code_text, "detail": exc.detail_text}, status=exc.status_code)
+    if isinstance(exc, DRFNotFound):
+        return Response({"code": "not_found", "detail": str(exc.detail)}, status=status.HTTP_404_NOT_FOUND)
     if isinstance(exc, EditorRevisionConflict):
         return Response(
             {

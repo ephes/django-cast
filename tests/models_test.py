@@ -338,17 +338,29 @@ class TestPostModel:
         post = Post()
         assert post._media_ids_from_body([block]) == {}
 
-    def test_media_ids_from_body_is_int(self):
+    def test_media_ids_from_body_is_int(self, audio):
         class AudioBlock:
             block_type = "audio"
-            value = 1
+            value = audio.id
 
         class ContentBlock:
             value = [AudioBlock()]
 
         block = ContentBlock()
         post = Post()
-        assert post._media_ids_from_body([block]) == {"audio": {1}}
+        assert post._media_ids_from_body([block]) == {"audio": {audio.id}}
+
+    def test_media_ids_from_body_skips_missing_int(self):
+        class AudioBlock:
+            block_type = "audio"
+            value = 999_992
+
+        class ContentBlock:
+            value = [AudioBlock()]
+
+        block = ContentBlock()
+        post = Post()
+        assert post._media_ids_from_body([block]) == {}
 
     def test_media_ids_from_body_is_invalid(self):
         class AudioBlock:

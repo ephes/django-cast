@@ -13,7 +13,12 @@ from rest_framework.views import APIView
 
 from ...models import Blog, Post
 from ...models.snippets import PostCategory
-from .body import author_blocks_to_overview, get_choosable_image, overview_to_author_blocks
+from .body import (
+    author_blocks_to_overview,
+    author_blocks_to_section,
+    get_choosable_image,
+    section_to_author_blocks,
+)
 from .errors import (
     EditorNotFound,
     EditorPermissionDenied,
@@ -28,7 +33,9 @@ class HasWagtailAdminAccess(BasePermission):
     message = "You do not have access to the Wagtail admin."
 
     def has_permission(self, request: Request, view: APIView) -> bool:
-        return bool(request.user and request.user.has_perm("wagtailadmin.access_admin"))
+        if request.user and request.user.has_perm("wagtailadmin.access_admin"):
+            return True
+        raise EditorPermissionDenied(self.message, parent_id=None)
 
 
 class EditorAPIView(APIView):
@@ -62,6 +69,8 @@ class ParentsListView(EditorAPIView):
 
 
 class PostEditorMixin:
+    body_section_order = ("overview", "detail")
+
     def _get_parent(self, parent_id: int):
         blog = Blog.objects.filter(pk=parent_id).first()
         if blog is None:
@@ -117,26 +126,41 @@ class PostEditorMixin:
             )
         return [found_by_id[category_id] for category_id in ids]
 
-    def _overview_value(self, post: Post) -> list[dict]:
-        for block in post.body:
-            if block.block_type == "overview":
-                return list(block.value.raw_data)
+    def _section_value(self, post: Post, section_type: str) -> list[dict]:
+        for block in post.body.raw_data:
+            if block.get("type") == section_type:
+                value = block.get("value")
+                if isinstance(value, list):
+                    return value
         return []
 
-    def _body_sections_with_overview(self, post: Post, overview_value: list[dict]) -> str:
+    def _body_sections_with_replacements(self, post: Post, replacements: dict[str, list[dict]]) -> str:
         sections = []
-        replaced = False
+        remaining = dict(replacements)
         for section in post.body.raw_data:
             section_data = dict(section)
-            if section_data["type"] == "overview":
-                section_data["value"] = overview_value
-                replaced = True
+            section_type = section_data["type"]
+            if section_type in replacements:
+                section_data["value"] = replacements[section_type]
+                remaining.pop(section_type, None)
             sections.append(section_data)
-        if not replaced:
-            sections.insert(0, {"type": "overview", "value": overview_value})
+        section_order = {section_type: index for index, section_type in enumerate(self.body_section_order)}
+        for section_type, value in sorted(remaining.items(), key=lambda item: section_order[item[0]]):
+            new_section = {"type": section_type, "value": value}
+            current_order = section_order[section_type]
+            insert_index = 0
+            for index, section in enumerate(sections):
+                existing_order = section_order.get(section["type"])
+                if existing_order is not None and existing_order > current_order:
+                    insert_index = index
+                    break
+                insert_index = index + 1
+            sections.insert(insert_index, new_section)
         return json.dumps(sections)
 
-    def _serialize(self, post: Post, *, content_post: Post | None = None, revision: Any | None = None) -> dict:
+    def _serialize(
+        self, post: Post, *, user: Any, content_post: Post | None = None, revision: Any | None = None
+    ) -> dict:
         content_post = content_post or post.get_latest_revision_as_object()
         latest_revision_id = revision.id if revision is not None else post.latest_revision_id
         cover = None
@@ -153,7 +177,12 @@ class PostEditorMixin:
             "tags": [tag.name for tag in content_post.tags.all()],
             "categories": [category.pk for category in content_post.categories.all()],
             "cover_image": cover,
-            "overview": overview_to_author_blocks(self._overview_value(content_post)),
+            "overview": section_to_author_blocks(
+                self._section_value(content_post, "overview"), path_prefix="overview", user=user
+            ),
+            "detail": section_to_author_blocks(
+                self._section_value(content_post, "detail"), path_prefix="detail", user=user
+            ),
             "latest_revision_id": latest_revision_id,
             "live": post.live,
             "status": "live" if post.live and not post.has_unpublished_changes else "draft",
@@ -186,6 +215,11 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
         overview_value = author_blocks_to_overview(data["overview"], user=user)
+        body_sections = [{"type": "overview", "value": overview_value}]
+        if "detail" in data:
+            body_sections.append(
+                {"type": "detail", "value": author_blocks_to_section(data["detail"], user=user, path_prefix="detail")}
+            )
 
         # Assign body as a JSON string (the proven pattern in tests/conftest.py);
         # the StreamField parses it on access. ``overview_value`` is the list of
@@ -197,7 +231,7 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
             live=False,
             cover_image=cover_image,
             cover_alt_text=cover_alt_text,
-            body=json.dumps([{"type": "overview", "value": overview_value}]),
+            body=json.dumps(body_sections),
         )
         if data.get("visible_date") is not None:
             post.visible_date = data["visible_date"]
@@ -212,20 +246,27 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
             post.save()
         revision = post.save_revision(user=user)
 
-        return Response(self._serialize(post, content_post=post, revision=revision), status=status.HTTP_201_CREATED)
+        return Response(
+            self._serialize(post, user=user, content_post=post, revision=revision),
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PostDetailView(PostEditorMixin, EditorAPIView):
     def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         post = self._get_post(pk, request.user, denied_message="You cannot view this draft.")
-        return Response(self._serialize(post))
+        return Response(self._serialize(post, user=request.user))
 
     def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         serializer = PostUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         user = request.user
-        if not (set(data) - {"base_revision_id"}):
+        if data.get("publish"):
+            raise EditorValidationError(
+                {"publish": [{"code": "unsupported", "message": "Publishing is not available in this API version."}]}
+            )
+        if not (set(data) - {"base_revision_id", "publish"}):
             raise EditorValidationError(
                 {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
             )
@@ -255,10 +296,18 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
             draft.tags.set(data["tags"])
         if "categories" in data:
             draft.categories.set(self._resolve_categories(data["categories"]))
+        body_replacements = {}
         if "overview" in data:
-            overview_value = author_blocks_to_overview(data["overview"], user=user)
-            draft.body = self._body_sections_with_overview(draft, overview_value)
+            body_replacements["overview"] = author_blocks_to_overview(
+                data["overview"], user=user, existing_section=self._section_value(draft, "overview")
+            )
+        if "detail" in data:
+            body_replacements["detail"] = author_blocks_to_section(
+                data["detail"], user=user, path_prefix="detail", existing_section=self._section_value(draft, "detail")
+            )
+        if body_replacements:
+            draft.body = self._body_sections_with_replacements(draft, body_replacements)
 
         revision = draft.save_revision(user=user)
         post.refresh_from_db()
-        return Response(self._serialize(post, content_post=draft, revision=revision))
+        return Response(self._serialize(post, user=user, content_post=draft, revision=revision))

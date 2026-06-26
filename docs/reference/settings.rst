@@ -460,6 +460,26 @@ django-cast validates the file container or runs ffmpeg/ffprobe. Defaults to
 ``2147483648`` (2 GiB).
 
 
+CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
+=====================================
+
+Time-to-live, in seconds, for the editor API's per-user audio/video upload
+lock. Defaults to ``7200`` (2 hours). The lock is stored in Django's default
+cache and is owner-token protected so one request does not release a successor
+lock. Multi-worker deployments need a shared cache backend, such as Redis or
+Memcached; Django's ``LocMemCache`` only coordinates within one process.
+
+
+CAST_EDITOR_MEDIA_PROBE_SECONDS
+===============================
+
+Cumulative synchronous ffprobe/ffmpeg budget, in seconds, for one editor API
+audio or video upload after the file has been received. Defaults to ``10``.
+Required audio duration probing failures are returned as ``probe_timeout`` or
+``probe_failed``; optional audio chapter extraction and video poster generation
+degrade without failing the upload.
+
+
 ******************
 Faceted Navigation
 ******************

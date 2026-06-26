@@ -28,6 +28,7 @@ class PostCreateSerializer(serializers.Serializer):
     tags = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     categories = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
     overview = serializers.ListField()  # required: the structured overview block list
+    detail = serializers.ListField(required=False)
     publish = serializers.BooleanField(required=False, default=False)
 
 
@@ -40,3 +41,5 @@ class PostUpdateSerializer(serializers.Serializer):
     tags = serializers.ListField(child=serializers.CharField(), required=False)
     categories = serializers.ListField(child=serializers.IntegerField(), required=False)
     overview = serializers.ListField(required=False)
+    detail = serializers.ListField(required=False)
+    publish = serializers.BooleanField(required=False)

@@ -457,7 +457,7 @@ class Post(Page):
                     images = block.value.get("gallery", [])
                     image_ids = []
                     for image in images:
-                        if isinstance(image, dict):
+                        if isinstance(image, dict) and "value" in image:
                             image_ids.append(image["value"])
                         elif isinstance(image, Image):
                             image_ids.append(image.pk)
@@ -471,7 +471,9 @@ class Post(Page):
                         if hasattr(media_model, "id"):
                             from_body.setdefault(block.block_type, set()).add(media_model.id)
                         elif isinstance(media_model, int):
-                            from_body.setdefault(block.block_type, set()).add(media_model)
+                            media_model_class = self.media_model_lookup[block.block_type]
+                            if media_model_class._default_manager.filter(pk=media_model).exists():
+                                from_body.setdefault(block.block_type, set()).add(media_model)
                         else:
                             raise ValueError(f"media model {media_model} is not an instance of int or a model")
         return from_body

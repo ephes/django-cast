@@ -28,8 +28,14 @@
   authentication-mechanism agnostic — it requires an authenticated user and
   authorizes every action with Wagtail page permissions — and never publishes:
   pages are saved as drafts via Wagtail revisions. Body blocks supported in this
-  slice: heading, paragraph, code, image, gallery, and audio (media blocks
-  reference existing images/audio the caller may choose).
+  slice: heading, paragraph, code, image, gallery, audio, and video (media
+  blocks reference media the caller may choose). The editor API now also supports
+  the ``detail`` body section, editor media list/upload endpoints for images,
+  audio, and video, and upload collection discovery at
+  ``/api/editor/media/collections/``. Audio/video editor uploads share a
+  one-in-flight per-user lock, and editor audio probing is capped by a
+  request-path budget so slow files fail with ``probe_timeout`` instead of
+  hanging the request.
 - Tightened Wagtail admin permissions for custom audio, video, and transcript
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and
@@ -48,6 +54,18 @@
   extension, content type, container signature, or configured size limit is not
   supported. New ``CAST_AUDIO_UPLOAD_MAX_BYTES`` and
   ``CAST_VIDEO_UPLOAD_MAX_BYTES`` settings control the size limits.
+- The editor media upload lock now uses owner tokens, defaults to a 2-hour TTL,
+  and can be tuned with ``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS``. Multi-worker
+  deployments should use a shared Django cache backend for process-wide upload
+  throttling; a worker crash can leave the per-user lock in place until the TTL
+  expires.
+- Editor media probing can be tuned with ``CAST_EDITOR_MEDIA_PROBE_SECONDS``.
+  Required audio probe failures now return ``probe_failed``/HTTP 422 with
+  cleanup instead of escaping as server errors. Optional chapter extraction
+  during audio saves is now best-effort in both the editor API and Wagtail
+  admin: failed or timed-out chapter probes are logged and the audio is saved
+  without auto-imported chapter marks, while malformed individual chapter
+  entries are skipped and valid entries are kept.
 - ``media_stale --delete`` now only reports and deletes files under known
   django-cast/Wagtail-managed media prefixes, and its referenced-file scan
   includes private transcript speaker sidecars and contributor voice clips.

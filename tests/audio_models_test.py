@@ -36,6 +36,19 @@ class TestAudioModel:
     def test_audio_get_all_paths(self, audio):
         assert "cast_audio/test.m4a" in audio.get_all_paths()
 
+    def test_clean_ffprobe_chaptermarks_skips_malformed_items(self):
+        assert Audio.clean_ffprobe_chaptermarks([]) == []
+        assert Audio.clean_ffprobe_chaptermarks({"chapters": "not-a-list"}) == []
+        assert Audio.clean_ffprobe_chaptermarks(
+            {
+                "chapters": [
+                    "not-a-dict",
+                    {"start_time": "1.000000", "tags": {}},
+                    {"start_time": "2.000000", "tags": {"title": "Chapter"}},
+                ]
+            }
+        ) == [{"start": "2.000000", "title": "Chapter"}]
+
     def test_audio_duration(self, audio):
         duration = audio._get_audio_duration(audio.m4a.path)
         assert duration in (timedelta(microseconds=746667), timedelta(microseconds=700000))

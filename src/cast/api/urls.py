@@ -3,6 +3,7 @@ from typing import Any
 from django.urls import include, path, re_path
 
 from . import views
+from .editor import media as editor_media
 from .editor import views as editor_views
 
 app_name = "api"
@@ -13,6 +14,12 @@ urlpatterns: list[Any] = [
     path("editor/parents/", editor_views.ParentsListView.as_view(), name="editor_parents"),
     path("editor/posts/", editor_views.PostCreateView.as_view(), name="editor_post_create"),
     path("editor/posts/<int:pk>/", editor_views.PostDetailView.as_view(), name="editor_post_detail"),
+    path("editor/media/images/", editor_media.EditorImageListCreateView.as_view(), name="editor_media_images"),
+    path("editor/media/audios/", editor_media.EditorAudioListCreateView.as_view(), name="editor_media_audios"),
+    path("editor/media/videos/", editor_media.EditorVideoListCreateView.as_view(), name="editor_media_videos"),
+    path(
+        "editor/media/collections/", editor_media.EditorMediaCollectionsView.as_view(), name="editor_media_collections"
+    ),
     # video
     path("videos/", views.VideoListView.as_view(), name="video_list"),
     re_path(r"^videos/(?P<pk>\d+)/?$", views.VideoDetailView.as_view(), name="video_detail"),

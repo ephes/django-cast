@@ -19,6 +19,8 @@ No next item selected.
 
 - [ ] Security review follow-ups
   - Issues: [backlog/2026-06-23-security-review.md](backlog/2026-06-23-security-review.md)
+  - Status: active follow-up work has landed for low findings and stale-media deletion scope; confirm the issue note before
+    closing high/medium findings or splitting remaining accepted/deferred items.
   - Scope: triage and fix the findings from the June 2026 deep security review, prioritizing restricted-content
     leaks, media-admin authorization, Voxhelm artifact downloads, and stored XSS.
   - Done when: high/medium findings are fixed or explicitly accepted/deferred with tests and docs as needed, low
@@ -53,15 +55,18 @@ No next item selected.
 
 - [ ] Programmatic content editing API
   - PRD: [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-  - Status: first two slices landed: parent listing, draft post create/read, and revision-conflict draft updates.
-    Remaining follow-ups are publish action, Markdown convenience input, scoped-token auth, and more block types.
+  - Implemented slice plan:
+    [docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md](docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md)
+  - Status: slices landed for parent listing, draft post create/read/update, existing image/audio body references,
+    editor media list/upload and upload-collection discovery endpoints for images, audio, and video, `detail` section
+    create/read/update support, and `video` as an API-supported body block. Remaining later follow-ups are publish
+    action, episode endpoints, scoped-token auth, remote media import, rendered-preview endpoints, media replacement
+    workflows, optional `If-Match`/ETag support, Markdown convenience input, and `embed` blocks.
   - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
     and revise posts or episodes programmatically.
   - Notes: target use cases include agents turning assorted Markdown notes on disk into weeknotes, updating draft
     posts after review, and modifying existing content without direct database access.
-  - Done when: there is a proposed API shape covering authentication, permissions, draft vs live revisions,
-    StreamField/body serialization, media attachment handling, conflict detection, validation errors, and a first
-    implementation slice plan with test scenarios for create/update/publish workflows.
+  - Done when: the remaining follow-ups are split into concrete implementation plans or explicitly deferred.
 
 - [ ] Local authoring and sync workflow
   - Scope: research whether django-cast should support a local-first editing workflow where content can be pulled
@@ -91,8 +96,8 @@ No next item selected.
     soft-delete (staff-restorable in Django admin) and are excluded from spam training; one small `CommentAuthorMeta`
     model holds the persistent boolean "edited" marker and `deleted_at`; requires a server-side session backend; opt-in
     via `CAST_COMMENTS_ALLOW_AUTHOR_EDITS`.
-  - Done when: the first implementation slice in the PRD is built and tested, or split into concrete implementation
-    items.
+  - Done when: the deferred persistent edit-count cap and configurable hard time-window are either implemented or split
+    into concrete follow-up items.
 
 ## Later
 

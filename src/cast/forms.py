@@ -6,6 +6,8 @@ a search form that rejects empty queries.
 """
 
 import json
+import logging
+import subprocess
 from datetime import datetime, time
 from typing import Any, cast
 
@@ -39,6 +41,8 @@ from .models.transcript import (
     KNOWN_SPEAKER_DECISION_REJECT,
     KNOWN_SPEAKER_EDITOR_DECISION_FIELD,
 )
+
+logger = logging.getLogger(__name__)
 
 
 SPEAKER_MAPPING_ACTION = "map-speakers"
@@ -227,7 +231,11 @@ class AudioForm(BaseCollectionMemberForm):
                     changed_audio_formats.append(audio_format)
             if len(changed_audio_formats) == 0:
                 return []
-            chaptermark_data = audio.get_chaptermark_data_from_file(changed_audio_formats[0])
+            try:
+                chaptermark_data = audio.get_chaptermark_data_from_file(changed_audio_formats[0])
+            except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, ValueError, KeyError):
+                logger.warning("Skipping audio chapter extraction after probe failure", exc_info=True)
+                return []
             for data in chaptermark_data:
                 form = FFProbeChapterMarkForm(data)
                 if form.is_valid():
