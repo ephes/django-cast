@@ -353,9 +353,9 @@ Done when:
 - The intended actor model is documented.
 - Tests prove non-admin authenticated users are allowed or denied according to that model.
 
-### SEC-2026-017: Raw transcript artifacts can bypass authorization and sanitization on public media storage
+### SEC-2026-017: Private episode transcripts need a separate protected-publication design
 
-Status: Fixed
+Status: Reopened / deferred
 
 References:
 
@@ -367,34 +367,37 @@ References:
 Exploit scenario:
 
 Transcript endpoint views authorize access through `authorize_transcript_access` and sanitize public speaker labels
-before returning transcript JSON, VTT, HTML, or DOTe payloads. The underlying `podlove`, `vtt`, and `dote` files are
-stored with the default media storage while only the `speakers` sidecar explicitly uses private voice-reference storage.
-If default media is public, a leaked or predictable raw transcript file URL can bypass both page-access checks and
-speaker-label sanitization. This is especially relevant for episodes that were public and later restricted, CDN/proxy
-logs, manually uploaded transcript filenames, or any deployment where media URLs are exposed outside the authorizing
-views.
+before returning transcript JSON, VTT, HTML, or DOTe payloads. Today django-cast only supports public episode
+transcripts in production use: the stored Podlove, WebVTT, and DOTe files are publishable output for public transcript
+pages, feeds, podcast clients, and the custom player. A private-episode feature would need a separate publication model
+so private transcript artifacts cannot be served from a public bucket or CDN.
 
 Fix direction:
 
-- Store raw transcript artifacts on private storage and serve them only through authorizing/sanitizing views.
-- If direct storage access remains supported, document that transcript files must not be publicly served.
-- Consider a migration/management command to move existing transcript artifacts to private storage.
-- Preserve public endpoint URLs so external consumers keep using the controlled views.
+- Keep public transcript artifacts on an explicit public transcript storage alias.
+- Keep known-speaker suggestions, uncertainty metadata, raw diarization labels, and contributor voice references on
+  private storage.
+- If django-cast adds private episodes or private transcripts later, introduce a distinct protected artifact workflow
+  instead of reusing the public Podlove/WebVTT/DOTe storage contract.
+- Preserve public endpoint URLs so existing external consumers keep using the controlled views.
 
 Done when:
 
-- Anonymous users cannot fetch raw transcript artifacts for restricted or draft episodes through direct media URLs.
+- A private-episode/private-transcript design exists before any private transcript feature ships.
+- Anonymous users cannot fetch private transcript artifacts for restricted or draft episodes through direct media URLs.
 - Public transcript endpoints still serve sanitized transcript formats for authorized public content.
-- Tests cover restricted transcript direct-file behavior and sanitized endpoint behavior.
+- Tests cover restricted transcript direct-file behavior and sanitized endpoint behavior if private transcripts are
+  introduced.
 
 Resolution:
 
-- Raw Podlove, DOTe, and WebVTT transcript artifacts now use private storage through the ``cast_private_media`` alias
-  or a non-public local fallback outside ``MEDIA_ROOT``.
-- A migration copies existing raw transcript artifacts from default storage into private storage before switching the
-  model fields.
-- Transcript admin forms render existing private filenames without direct storage links.
-- Regression tests cover private storage URL denial and authorized sanitized public transcript output.
+- The attempted private-storage fix was superseded by the public transcript storage split after it caused production
+  data-loss risk for existing public S3 transcript artifacts.
+- Public Podlove, DOTe, and WebVTT transcript artifacts now use ``STORAGES["cast_public_transcripts"]`` when configured,
+  fall back to an explicitly configured ``cast_private_media`` alias for compatibility, and otherwise stay on default
+  storage.
+- Known-speaker sidecars and contributor voice-reference clips remain private through ``cast_voice_references`` /
+  ``cast_private_media``.
 
 ### SEC-2026-011: Private voice-reference and speaker sidecar files can fall back to public default storage
 

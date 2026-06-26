@@ -170,11 +170,16 @@ Configure separate storage backends through Django's ``STORAGES`` setting:
                 "base_url": None,
             },
         },
+        "cast_public_transcripts": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
     }
 
-The ``cast_private_media`` storage is used for raw transcript artifacts. It
-must not be served directly by your web server or CDN; public transcript
-formats are exposed through django-cast's authorizing and sanitizing views.
+The ``cast_public_transcripts`` storage is used for public Podlove, WebVTT, and DOTe
+transcript artifacts. The ``cast_private_media`` storage is reserved for
+private django-cast artifacts; known-speaker sidecars and contributor voice
+references use ``cast_voice_references`` when configured, falling back to
+``cast_private_media``.
 
 Image Renditions
 ----------------

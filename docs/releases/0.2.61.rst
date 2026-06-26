@@ -40,10 +40,13 @@
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and
   ``choose_transcript`` permissions control chooser access.
-- Moved raw transcript artifacts (Podlove JSON, DOTe JSON, and WebVTT) to
-  private storage. Configure ``STORAGES["cast_private_media"]`` for production;
-  public transcript URLs continue to use the existing authorized and sanitized
-  views.
+- Added a dedicated ``STORAGES["cast_public_transcripts"]`` alias for public transcript
+  artifacts (Podlove JSON, DOTe JSON, and WebVTT). Those files are publishable
+  transcript output and no longer need ``cast_private_media``. For compatibility,
+  django-cast still reads/writes them through an explicitly configured
+  ``cast_private_media`` alias when ``cast_public_transcripts`` is omitted; otherwise
+  they stay on default storage. Public transcript URLs continue to use the
+  existing authorized and sanitized views.
 - Voice-reference clips and known-speaker sidecar files no longer fall back to
   default public media storage when ``STORAGES["cast_voice_references"]`` is
   omitted. They now use the private media backend, and a migration copies

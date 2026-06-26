@@ -432,11 +432,23 @@ like this:
               "base_url": None,
           },
       },
+      "cast_public_transcripts": {
+          "BACKEND": "config.settings.local.CustomS3Boto3Storage",
+      },
     }
 
-``cast_private_media`` stores raw transcript artifacts outside public media.
-If omitted, django-cast falls back to ``CAST_PRIVATE_MEDIA_ROOT`` or a local
-``cast-private-media`` directory next to ``MEDIA_ROOT``.
+``cast_public_transcripts`` stores public transcript artifacts
+(``Transcript.podlove``, ``Transcript.vtt``, and ``Transcript.dote``). These
+files are publishable output used by public transcript pages, feeds, podcast
+clients, and the custom audio player. If the alias is omitted, django-cast uses
+``cast_private_media`` when that alias is explicitly configured, preserving
+sites that already adapted to the temporary private-storage behavior. If both
+aliases are omitted, transcript artifacts use Django's default storage, matching
+the original public-media behavior.
+
+``cast_private_media`` stores private django-cast artifacts outside public
+media. If omitted, django-cast falls back to ``CAST_PRIVATE_MEDIA_ROOT`` or a
+local ``cast-private-media`` directory next to ``MEDIA_ROOT``.
 
 Uploaded contributor voice-reference clips and the private
 ``Transcript.speakers`` known-speaker sidecar use ``STORAGES["cast_voice_references"]``

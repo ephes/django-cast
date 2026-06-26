@@ -22,7 +22,6 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
-from .form_widgets import PrivateClearableFileInput
 from .media_validation import validate_audio_upload, validate_video_upload
 from .models import (
     Audio,
@@ -274,9 +273,9 @@ class TranscriptForm(BaseCollectionMemberForm):
         model = Transcript
         fields = list(Transcript.admin_form_fields) + ["collection"]
         widgets = {
-            "podlove": PrivateClearableFileInput,
-            "vtt": PrivateClearableFileInput,
-            "dote": PrivateClearableFileInput,
+            "podlove": forms.ClearableFileInput,
+            "vtt": forms.ClearableFileInput,
+            "dote": forms.ClearableFileInput,
         }
 
     def clean_podlove(self):
