@@ -72,6 +72,11 @@
 - ``media_stale --delete`` now only reports and deletes files under known
   django-cast/Wagtail-managed media prefixes, and its referenced-file scan
   includes private transcript speaker sidecars and contributor voice clips.
+- ``media_replace --yes`` now stages replacements before writing the requested
+  production key and no longer deletes an existing production object before the
+  replacement save succeeds. If a storage backend would auto-save an existing
+  target as a different name, the generated file is removed and the original is
+  left untouched.
 - The Podlove player web component no longer falls back to a mutable third-party
   CDN script when ``data-embed`` is missing. Themes must provide a first-party
   embed script URL; missing configuration now fails closed in the player UI.

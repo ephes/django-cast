@@ -183,8 +183,12 @@ Options:
 
 The command prints summary counters in the form
 ``planned=<n> replaced=<n> skipped=<n> errors=<n>``. Missing local files are
-reported as skipped. If a production delete succeeds but a later save fails,
-the command also prints a warning about the data-loss risk for that path.
+reported as skipped. Replacement files are staged to a temporary production
+key before the target path is written. For existing production files, the
+command only reports success when the storage backend saves back to the exact
+requested path; if the backend auto-generates a different name, the generated
+file is removed, the original path is left untouched, and the path is reported
+as an error.
 
 media_sizes
 -----------

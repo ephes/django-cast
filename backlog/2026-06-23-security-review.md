@@ -2,7 +2,7 @@
 
 Date: 2026-06-23
 
-Status: Open issue tracker for findings from a read-only deep security review. Findings came from a local Codex
+Status: Closed issue tracker for findings from a read-only deep security review. Findings came from a local Codex
 review, four focused subagent reviews, npm audit, and Claude Code read-only cross-checks. This file should stay open
 until every tracked issue is fixed, explicitly accepted, or moved to a more specific backlog item.
 
@@ -38,7 +38,7 @@ until every tracked issue is fixed, explicitly accepted, or moved to a more spec
 | SEC-2026-011 | Medium | Private voice-reference storage | Fixed |
 | SEC-2026-012 | Medium | Audio/video upload validation | Fixed |
 | SEC-2026-013 | Medium | Media stale deletion scope | Fixed |
-| SEC-2026-014 | Low | Media replacement durability | Open |
+| SEC-2026-014 | Low | Media replacement durability | Fixed |
 | SEC-2026-015 | Low | JavaScript dependency audit | Fixed |
 | SEC-2026-016 | Low | Podlove remote script fallback | Fixed |
 
@@ -355,7 +355,7 @@ Done when:
 
 ### SEC-2026-017: Private episode transcripts need a separate protected-publication design
 
-Status: Reopened / deferred
+Status: Fixed for current public transcript storage scope; future private-transcript design deferred.
 
 References:
 
@@ -526,11 +526,11 @@ Resolution:
 
 ### SEC-2026-014: `media_replace --yes` deletes the production object before replacement save succeeds
 
-Status: Open
+Status: Fixed
 
 References:
 
-- `src/cast/management/commands/media_replace.py:52`
+- `src/cast/management/commands/media_replace.py`
 
 Exploit scenario:
 
@@ -547,6 +547,15 @@ Done when:
 
 - Simulated storage failures do not delete the original media object.
 - Successful replacement keeps current behavior for callers.
+
+Resolution:
+
+- ``media_replace`` now stages local replacement bytes to a temporary production key before writing the requested
+  path.
+- Existing production targets are not deleted before replacement. The command only counts an existing-target
+  replacement as successful when the storage backend saves to the exact requested path.
+- If the storage backend auto-generates a different target name, the generated object is removed, the original remains
+  untouched, and the path is reported as an error.
 
 ### SEC-2026-015: JavaScript dependency audit reports vulnerable esbuild dev server
 
@@ -633,9 +642,9 @@ Resolution:
 
 ## Closure Checklist
 
-- [ ] High-priority findings fixed or explicitly accepted with documented rationale.
-- [ ] Medium-priority findings fixed, split into implementation tasks, or explicitly deferred.
-- [ ] Low-priority findings triaged into maintenance work.
-- [ ] Regression tests added for every fixed behavior change.
-- [ ] Documentation and release notes updated for behavior, settings, or workflow changes.
-- [ ] `just check` passes for implementation changes.
+- [x] High-priority findings fixed or explicitly accepted with documented rationale.
+- [x] Medium-priority findings fixed, split into implementation tasks, or explicitly deferred.
+- [x] Low-priority findings triaged into maintenance work.
+- [x] Regression tests added for every fixed behavior change.
+- [x] Documentation and release notes updated for behavior, settings, or workflow changes.
+- [x] `just check` passes for implementation changes.

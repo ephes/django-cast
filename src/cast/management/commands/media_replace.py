@@ -1,7 +1,13 @@
+from uuid import uuid4
+
 from django.core.files.storage import FileSystemStorage
 from django.core.management.base import BaseCommand, CommandError
 
 from .storage_backend import get_production_and_backup_storage
+
+
+def temporary_replacement_path(path: str) -> str:
+    return f"{path}.django-cast-replace-{uuid4().hex}.tmp"
 
 
 class Command(BaseCommand):
@@ -47,13 +53,27 @@ class Command(BaseCommand):
                 if not confirmed:
                     self.stdout.write(f"planned replace: {path}")
                     continue
-                had_existing_target = False
+                staged_name = ""
+                saved_name = ""
                 try:
-                    if production.exists(path):
-                        had_existing_target = True
-                        production.delete(path)
                     with fs_storage.open(path, "rb") as in_f:
-                        saved_name = production.save(path, in_f)
+                        staged_name = production.save(temporary_replacement_path(path), in_f)
+                    if not production.exists(staged_name):
+                        raise RuntimeError(f"staged replacement {staged_name} was not saved")
+                    target_exists = production.exists(path)
+                    with production.open(staged_name, "rb") as staged_f:
+                        saved_name = production.save(path, staged_f)
+                    if target_exists and saved_name != path:
+                        if production.exists(saved_name):
+                            try:
+                                production.delete(saved_name)
+                            except Exception as exc:
+                                self.stderr.write(
+                                    f"warning: could not remove generated replacement {saved_name}: {exc}"
+                                )
+                        raise RuntimeError(
+                            f"storage saved replacement as {saved_name}; original {path} was not replaced"
+                        )
                     if saved_name != path:
                         self.stderr.write(f"warning: {path} saved as {saved_name}")
                     replaced += 1
@@ -61,10 +81,13 @@ class Command(BaseCommand):
                 except Exception as exc:
                     errors += 1
                     self.stderr.write(f"error replacing {path}: {exc}")
-                    if had_existing_target:
-                        self.stderr.write(
-                            f"warning: {path} existed in production and may have been deleted before save failed"
-                        )
+                finally:
+                    if staged_name:
+                        try:
+                            if production.exists(staged_name):
+                                production.delete(staged_name)
+                        except Exception as exc:
+                            self.stderr.write(f"warning: could not remove staged replacement {staged_name}: {exc}")
             else:
                 skipped += 1
                 self.stdout.write(f"skipped (not found locally): {path}")

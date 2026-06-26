@@ -103,6 +103,10 @@ class StubProductionStorage:
     def add(self, path: str, content: bytes) -> None:
         self._files[path] = content
 
+    @contextmanager
+    def open(self, name: str, _mode: str) -> Iterator[BytesIO]:
+        yield BytesIO(self._files[name])
+
 
 class StubLocalStorage:
     def __init__(self, files: dict[str, bytes]) -> None:
@@ -218,8 +222,9 @@ def test_media_replace_yes_replaces_and_logs_summary(mocker):
 
     call_command("media_replace", "foo.jpg", yes=True, stdout=output)
 
-    assert production.deleted == ["foo.jpg"]
-    assert production.saved == ["foo.jpg"]
+    assert "foo.jpg" not in production.deleted
+    assert production.saved[-1] == "foo.jpg"
+    assert production._files["foo.jpg"] == b"new"
     text = output.getvalue()
     assert "replaced: foo.jpg" in text
     assert "planned=1 replaced=1 skipped=0 errors=0" in text
@@ -255,8 +260,8 @@ def test_media_replace_yes_saves_when_target_is_missing_in_production(mocker):
 
     call_command("media_replace", "foo.jpg", yes=True, stdout=output)
 
-    assert production.deleted == []
-    assert production.saved == ["foo.jpg"]
+    assert production.saved[-1] == "foo.jpg"
+    assert production._files["foo.jpg"] == b"new"
 
 
 def test_media_replace_without_yes_and_only_missing_paths_does_not_error(mocker):
@@ -508,7 +513,25 @@ def test_media_replace_logs_error_and_summary_when_save_fails(mocker):
     assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
 
 
-def test_media_replace_logs_data_loss_risk_when_existing_file_delete_then_save_fails(mocker):
+def test_media_replace_errors_when_staged_replacement_is_missing(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    production = StubProductionStorage()
+    local = StubLocalStorage({"foo.jpg": b"new"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    mocker.patch.object(production, "save", return_value="missing-stage.tmp")
+
+    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+
+    assert "error replacing foo.jpg: staged replacement missing-stage.tmp was not saved" in error_output.getvalue()
+    assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
+
+
+def test_media_replace_keeps_existing_file_when_final_save_fails(mocker):
     output = StringIO()
     error_output = StringIO()
     production = StubProductionStorage()
@@ -519,16 +542,114 @@ def test_media_replace_logs_data_loss_risk_when_existing_file_delete_then_save_f
         return_value=(production, object()),
     )
     mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
-    mocker.patch.object(production, "save", side_effect=RuntimeError("boom"))
+    original_save = production.save
+
+    def fail_final_save(path, content):
+        if path == "foo.jpg":
+            raise RuntimeError("boom")
+        return original_save(path, content)
+
+    mocker.patch.object(production, "save", side_effect=fail_final_save)
 
     call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
-    assert production.deleted == ["foo.jpg"]
+    assert production._files["foo.jpg"] == b"old"
+    assert "foo.jpg" not in production.deleted
     assert "error replacing foo.jpg: boom" in error_output.getvalue()
-    assert "may have been deleted before save failed" in error_output.getvalue()
 
 
-def test_media_replace_warns_when_storage_returns_different_saved_name(mocker):
+def test_media_replace_errors_when_existing_target_would_be_saved_under_different_name(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    production = StubProductionStorage()
+    production.add("foo.jpg", b"old")
+    local = StubLocalStorage({"foo.jpg": b"new"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    original_save = production.save
+
+    def save_with_generated_name(path, content):
+        if path == "foo.jpg":
+            return original_save("foo_1.jpg", content)
+        return original_save(path, content)
+
+    mocker.patch.object(production, "save", side_effect=save_with_generated_name)
+
+    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+
+    assert production._files["foo.jpg"] == b"old"
+    assert "foo_1.jpg" not in production._files
+    assert "storage saved replacement as foo_1.jpg; original foo.jpg was not replaced" in error_output.getvalue()
+    assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
+
+
+def test_media_replace_warns_when_generated_replacement_cleanup_fails(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    production = StubProductionStorage()
+    production.add("foo.jpg", b"old")
+    local = StubLocalStorage({"foo.jpg": b"new"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    original_save = production.save
+    original_delete = production.delete
+
+    def save_with_generated_name(path, content):
+        if path == "foo.jpg":
+            return original_save("foo_1.jpg", content)
+        return original_save(path, content)
+
+    def fail_generated_delete(path):
+        if path == "foo_1.jpg":
+            raise RuntimeError("cleanup failed")
+        original_delete(path)
+
+    mocker.patch.object(production, "save", side_effect=save_with_generated_name)
+    mocker.patch.object(production, "delete", side_effect=fail_generated_delete)
+
+    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+
+    assert production._files["foo.jpg"] == b"old"
+    assert "foo_1.jpg" in production._files
+    assert "warning: could not remove generated replacement foo_1.jpg: cleanup failed" in error_output.getvalue()
+    assert "storage saved replacement as foo_1.jpg; original foo.jpg was not replaced" in error_output.getvalue()
+    assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
+
+
+def test_media_replace_errors_when_existing_target_generated_name_is_missing(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    production = StubProductionStorage()
+    production.add("foo.jpg", b"old")
+    local = StubLocalStorage({"foo.jpg": b"new"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    original_save = production.save
+
+    def save_with_missing_generated_name(path, content):
+        if path == "foo.jpg":
+            return "foo_1.jpg"
+        return original_save(path, content)
+
+    mocker.patch.object(production, "save", side_effect=save_with_missing_generated_name)
+
+    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+
+    assert production._files["foo.jpg"] == b"old"
+    assert "storage saved replacement as foo_1.jpg; original foo.jpg was not replaced" in error_output.getvalue()
+    assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
+
+
+def test_media_replace_warns_when_missing_target_is_saved_under_different_name(mocker):
     output = StringIO()
     error_output = StringIO()
     production = StubProductionStorage()
@@ -538,11 +659,45 @@ def test_media_replace_warns_when_storage_returns_different_saved_name(mocker):
         return_value=(production, object()),
     )
     mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
-    mocker.patch.object(production, "save", return_value="foo_1.jpg")
+    original_save = production.save
+
+    def save_with_generated_name(path, content):
+        if path == "foo.jpg":
+            return original_save("foo_1.jpg", content)
+        return original_save(path, content)
+
+    mocker.patch.object(production, "save", side_effect=save_with_generated_name)
 
     call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert "warning: foo.jpg saved as foo_1.jpg" in error_output.getvalue()
+    assert "planned=1 replaced=1 skipped=0 errors=0" in output.getvalue()
+
+
+def test_media_replace_warns_when_staged_replacement_cleanup_fails(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    production = StubProductionStorage()
+    local = StubLocalStorage({"foo.jpg": b"new"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    original_delete = production.delete
+
+    def fail_staged_delete(path):
+        if ".django-cast-replace-" in path:
+            raise RuntimeError("cleanup failed")
+        original_delete(path)
+
+    mocker.patch.object(production, "delete", side_effect=fail_staged_delete)
+
+    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+
+    assert "replaced: foo.jpg" in output.getvalue()
+    assert "warning: could not remove staged replacement" in error_output.getvalue()
+    assert "cleanup failed" in error_output.getvalue()
 
 
 def test_recalc_video_posters_continues_after_error_and_reports_summary(mocker):
