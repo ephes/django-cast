@@ -13,7 +13,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-No next item selected.
+- [ ] Content editing API post publish action
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+  - Depends on: the implemented draft post create/read/update API.
+  - Scope: add the explicit `POST /api/editor/posts/{id}/publish/` action for post drafts, publishing through Wagtail's
+    revision path instead of overloading create/update payloads.
+  - Notes: keep `publish: true` rejected on create/update in this API version; the action must require Wagtail publish
+    permission, publish the intended latest draft revision, and return published revision/status/live URL metadata.
+  - Done when: permission, missing/stale revision, already-live/no-draft, success, docs, and release notes are covered.
 
 ## Ready
 
@@ -36,7 +44,7 @@ No ready item selected.
   - Done when: the current workflows are documented in one place, gaps are listed, and follow-up items are split
     into concrete implementation tasks.
 
-- [ ] Podcast publishing metadata follow-ups
+- [ ] Podcast publishing metadata follow-up triage
   - PRD: [backlog/2026-06-18-podcast-publishing-metadata.md](backlog/2026-06-18-podcast-publishing-metadata.md)
   - Status: first implementation slice landed for optional episode number, episode type, podcast-scoped seasons,
     Wagtail editing, feed tags, validation, repository/cache serialization, docs, and release notes. The automatic
@@ -44,22 +52,26 @@ No ready item selected.
   - Related to: Podcast feed import and podcast contributor follow-up options.
   - Scope: decide the remaining deferred questions in the PRD: season editing shape, duplicate number policy, legacy
     import values, and possible channel-level `itunes:type` support.
-  - Done when: the remaining PRD questions are either split into concrete implementation items or explicitly deferred.
+  - Done when: the remaining PRD questions are either split into concrete implementation items under
+    `Next`/`Ready`/`Later` or explicitly deferred in the PRD.
 
-- [ ] Programmatic content editing API
-  - PRD: [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+- [ ] Programmatic content editing API follow-up triage
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
   - Implemented slice plan:
     [docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md](docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md)
   - Status: slices landed for parent listing, draft post create/read/update, existing image/audio body references,
     editor media list/upload and upload-collection discovery endpoints for images, audio, and video, `detail` section
-    create/read/update support, and `video` as an API-supported body block. Remaining later follow-ups are publish
-    action, episode endpoints, scoped-token auth, remote media import, rendered-preview endpoints, media replacement
-    workflows, optional `If-Match`/ETag support, Markdown convenience input, and `embed` blocks.
-  - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
-    and revise posts or episodes programmatically.
+    create/read/update support, and `video` as an API-supported body block. After the selected post publish action,
+    the remaining later follow-ups are episode endpoints, scoped-token auth, remote media import, rendered-preview
+    endpoints, media replacement workflows, optional `If-Match`/ETag support, Markdown convenience input, and `embed`
+    blocks.
+  - Scope: after the post publish action is complete, split the remaining follow-ups into concrete implementation or
+    shaping items instead of keeping one broad API bucket.
   - Notes: target use cases include agents turning assorted Markdown notes on disk into weeknotes, updating draft
     posts after review, and modifying existing content without direct database access.
-  - Done when: the remaining follow-ups are split into concrete implementation plans or explicitly deferred.
+  - Done when: each remaining follow-up is either represented by a concrete backlog item with scope/done-when criteria
+    or explicitly deferred in the PRD.
 
 - [ ] Local authoring and sync workflow
   - Scope: research whether django-cast should support a local-first editing workflow where content can be pulled
@@ -78,19 +90,14 @@ No ready item selected.
   - Done when: there is a small prototype or design note showing how the app would authenticate, list content,
     edit drafts, preview posts, sync changes, and handle conflicts.
 
-- [ ] Anonymous comment self-editing and deletion
+- [ ] Anonymous comment author edit hard limits
   - PRD: [backlog/2026-06-21-anonymous-comment-self-editing.md](backlog/2026-06-21-anonymous-comment-self-editing.md)
   - Status: implemented and tested (reviewed clean) — backend, browser frontend (templates + AJAX JS), and user
-    docs/release notes all landed. Deferred second slice: persistent edit-count cap and configurable hard time-window.
-  - Scope: let commenters edit or delete their own comment for the lifetime of the browser session that created it, with
-    ownership proven only by server-side session state and no new authentication.
-  - Notes: ownership is uniform for anonymous and authenticated authors; edit/delete are frozen once a comment is
-    answered or no longer public; edits re-run the spam/moderation pipeline via `comment_will_be_posted`; deletes
-    soft-delete (staff-restorable in Django admin) and are excluded from spam training; one small `CommentAuthorMeta`
-    model holds the persistent boolean "edited" marker and `deleted_at`; requires a server-side session backend; opt-in
-    via `CAST_COMMENTS_ALLOW_AUTHOR_EDITS`.
-  - Done when: the deferred persistent edit-count cap and configurable hard time-window are either implemented or split
-    into concrete follow-up items.
+    docs/release notes all landed.
+  - Scope: decide whether to add the deferred persistent edit-count cap, configurable hard time-window, both, or
+    neither for the already shipped session-bound author edit/delete feature.
+  - Done when: the decision is recorded and any accepted limit has settings, validation/checks, tests, docs, and
+    release notes.
 
 ## Later
 
