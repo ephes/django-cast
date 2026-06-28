@@ -27,7 +27,7 @@ from cast.api.editor.errors import (
 from cast.models import Audio, Post, Video
 from cast.models.snippets import PostCategory
 
-from tests.factories import BlogFactory, UserFactory
+from tests.factories import BlogFactory, PostFactory, UserFactory
 
 
 def grant_wagtail_admin_access(user) -> None:
@@ -1097,6 +1097,169 @@ class TestEditorPostUpdate:
         assert response.json()["detail"] == detail
         draft = Post.objects.get(id=post.id).get_latest_revision_as_object()
         assert [block.block_type for block in draft.body] == ["overview", "detail"]
+
+
+class TestEditorPostPublish:
+    pytestmark = pytest.mark.django_db
+
+    def _create_draft(self, api_client, blog, user, **overrides):
+        api_client.force_authenticate(user=user)
+        create_url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "Publishable draft",
+            "slug": "publishable-draft",
+            "tags": ["weeknotes"],
+            "overview": [
+                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<p>Ready to publish.</p>"},
+            ],
+        }
+        payload.update(overrides)
+        response = api_client.post(create_url, payload, format="json")
+        assert response.status_code == 201, response.content
+        return response.json()
+
+    def test_requires_authentication(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        api_client.force_authenticate(user=None)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code in (401, 403)
+
+    def test_requires_wagtail_admin_access_even_with_publish_permission(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        user = page_permission_user(codenames=("change_page", "publish_page"))
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 403
+        assert response.json() == {
+            "code": "permission_denied",
+            "detail": "You do not have access to the Wagtail admin.",
+        }
+
+    def test_rejects_caller_without_publish_permission(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        user = page_permission_user(codenames=("change_page",))
+        grant_wagtail_admin_access(user)
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 403
+        assert response.json() == {"code": "permission_denied", "detail": "You cannot publish this post."}
+
+    def test_missing_post_returns_404(self, api_client, admin_user):
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": 999999})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Post not found."}
+
+    def test_publishes_draft_post_revision(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        post = Post.objects.get(pk=created["id"])
+        assert post.live is True
+        assert post.has_unpublished_changes is False
+        assert post.live_revision_id == created["latest_revision_id"]
+        assert data["published_revision_id"] == created["latest_revision_id"]
+        assert data["latest_revision_id"] == created["latest_revision_id"]
+        assert data["live"] is True
+        assert data["status"] == "live"
+        assert data["edit_url"].endswith(f"/pages/{post.id}/edit/")
+        assert data["preview_url"].endswith(f"/pages/{post.id}/view_draft/")
+        assert data["api_url"].endswith(f"/editor/posts/{post.id}/")
+        assert data["public_url"] is not None
+        assert "publishable-draft" in data["public_url"]
+
+    def test_live_page_with_unpublished_draft_publishes_latest_revision(self, api_client, blog, admin_user):
+        post = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="Live title",
+            slug="live-with-draft",
+            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live"}]}]),
+        )
+        post.save_revision(user=admin_user, changed=False)
+        post.refresh_from_db()
+        assert post.live is True
+        assert post.has_unpublished_changes is False
+
+        draft = post.get_latest_revision_as_object()
+        draft.title = "Updated draft title"
+        draft.body = json.dumps(
+            [{"type": "overview", "value": [{"type": "paragraph", "value": "<p>Published draft.</p>"}]}]
+        )
+        draft_revision = draft.save_revision(user=admin_user)
+        post.refresh_from_db()
+        assert post.live is True
+        assert post.has_unpublished_changes is True
+
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": post.id})
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        post.refresh_from_db()
+        assert post.title == "Updated draft title"
+        assert post.live_revision_id == draft_revision.id
+        assert post.has_unpublished_changes is False
+        assert data["title"] == "Updated draft title"
+        assert data["overview"] == [{"type": "paragraph", "value": "<p>Published draft.</p>"}]
+        assert data["published_revision_id"] == draft_revision.id
+        assert data["status"] == "live"
+
+    def test_live_page_without_unpublished_draft_is_rejected(self, api_client, blog, admin_user):
+        post = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="Already live",
+            slug="already-live",
+            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live"}]}]),
+        )
+        post.save_revision(user=admin_user, changed=False)
+        post.refresh_from_db()
+        assert post.live is True
+        assert post.has_unpublished_changes is False
+
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": post.id})
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "code": "no_unpublished_draft",
+            "detail": "This post is already live and has no unpublished draft revision.",
+        }
+
+    def test_draft_without_revision_is_rejected(self, api_client, blog, admin_user):
+        post = Post(title="No revision", slug="no-revision", owner=blog.owner, live=False, body=json.dumps([]))
+        blog.add_child(instance=post)
+
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": post.id})
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "code": "no_revision",
+            "detail": "This post has no draft revision to publish.",
+        }
 
 
 class TestEditorDetailSection:

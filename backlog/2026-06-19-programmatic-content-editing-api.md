@@ -23,18 +23,23 @@ as an author-facing body block. The cumulative editor block set is now `heading`
 metadata, while video poster probing remains optional display enrichment. Audio/video editor uploads also use a per-user
 one-in-flight lock with owner-token release semantics.
 
-Remaining follow-ups beyond slice 3: publish action, episode endpoints, scoped-token (IndieAuth) auth/scope support,
-remote media import, rendered-preview endpoints, media replacement workflows, optional `If-Match`/ETag conflict tokens,
-optional Markdown convenience input, and `embed` blocks.
+Slice 4 implemented (2026-06-28): **post publish action**. The slice added
+`POST /api/editor/posts/{id}/publish/` for draft `Post` pages. The action requires Wagtail admin access plus page publish
+permission, publishes the latest draft revision through Wagtail's revision publishing path, returns published revision
+and public URL metadata, and keeps `publish: true` rejected on create/update.
+
+Remaining follow-ups beyond slice 4: episode endpoints, scoped-token (IndieAuth) auth/scope support, remote media import,
+rendered-preview endpoints, media replacement workflows, optional `If-Match`/ETag conflict tokens, optional Markdown
+convenience input, and `embed` blocks.
 
 ## Summary
 
 django-cast should provide a trusted, authenticated content editing API that lets external tools and agents create,
-update, hand off admin preview URLs, publish through a later action, and revise posts or episodes without direct database
-access or production shell access.
+update, hand off admin preview URLs, publish posts through an explicit action, and revise posts or episodes without
+direct database access or production shell access.
 For the currently planned media/detail slice, preview means returning an admin-session `preview_url`; rendered preview
-responses for token-only/non-admin clients remain deferred. Publishing remains a later explicit action, not part of the
-media/detail slice.
+responses for token-only/non-admin clients remain deferred. Publishing is handled by a separate explicit post action, not
+by create/update payloads.
 
 The first target workflow is assisted authoring: a local or hosted agent receives a directory of recent notes,
 reviews existing archive content through the public/read API, drafts a new post from those inputs, attaches existing
@@ -119,7 +124,7 @@ cast API rather than in a consumer site:
 - `PATCH /api/editor/posts/{id}/`
   - Update a draft by creating a new revision. Requires conflict metadata.
 - `POST /api/editor/posts/{id}/publish/`
-  - Publish an existing revision. This can be deferred until after the draft-create slice.
+  - Publish the latest draft revision through Wagtail's revision publishing path.
 - `GET /api/editor/media/images/`
   - List Wagtail images the caller may `choose`; listing is scoped by choose permission, not upload/add permission.
     Responses use the shared pagination envelope and support the planned `q`, repeatable `tag`, and deterministic
@@ -290,14 +295,13 @@ independently and leaves omitted sections untouched.
 
 This slice should enforce `publish` as an explicit guard for this API version after the compatibility preflight is
 complete: `false` or an omitted field is accepted, while `true` is rejected with the editor `validation_error` envelope
-on the `publish` field using code `unsupported` until a separate publish action exists. Interpret this after normal
-BooleanField coercion: values that coerce to `true` take the `unsupported` path, values that coerce to `false` are
-  accepted, and values that cannot be coerced are normal field validation errors. The current shipped endpoints do not
-  publish from `publish: true`; if implementation discovers a compatible deployment that did, treat the guard as
-  compatibility-impacting and do not ship it until the API reference and release notes call out the change. Malformed
-  `publish` values fail normal field validation before the empty-update
-  guard, so `{base_revision_id, publish: "not-a-bool"}` returns a `publish` field error rather than
-  `non_field_errors`/`required`.
+on the `publish` field using code `unsupported`; the separate publish action is the only publish path in this API
+version. Interpret this after normal BooleanField coercion: values that coerce to `true` take the `unsupported` path,
+values that coerce to `false` are accepted, and values that cannot be coerced are normal field validation errors. The
+current shipped endpoints do not publish from `publish: true`; if implementation discovers a compatible deployment that
+did, treat the guard as compatibility-impacting and do not ship it until the API reference and release notes call out the
+change. Malformed `publish` values fail normal field validation before the empty-update guard, so
+`{base_revision_id, publish: "not-a-bool"}` returns a `publish` field error rather than `non_field_errors`/`required`.
 If `overview` remains required on create, clients that only want to populate `detail` must still send `"overview": []`.
 An empty `overview` list is valid when `overview` is supplied. If preflight finds `overview` is already optional, keep
   that optional create behavior instead. Preflight and tests must verify that a detail-only draft with `overview: []`
@@ -338,8 +342,8 @@ truthiness, so `[]` is never treated as omitted.
 
 Media placement is expressed inline as `image`/`gallery`/`audio`/`video` blocks within each section list, so block order
 is explicit rather than inferred from a separate `media` instruction stream.
-`publish: false` is accepted for explicitness but is inert in this API version; clients may omit it, and only a future
-publish action will change publish state.
+`publish: false` is accepted for explicitness but is inert in this API version; clients may omit it. Publish state changes
+only through the explicit publish action.
 
 Target response after this media/detail slice:
 
@@ -786,12 +790,12 @@ The API must not rely on `is_staff` alone, and it must not assume a single blog 
 
 Creates and updates should save draft revisions by default. A request field such as `"publish": false` may be accepted
 for explicitness, but publishing should not be the default behavior. In this API version, `"publish": true` is rejected
-on both create and update with the `validation_error` envelope and code `unsupported` at field path `publish` until a
-separate publish action exists.
+on both create and update with the `validation_error` envelope and code `unsupported` at field path `publish`; clients
+must use the separate post publish action.
 
-When publish support is implemented, it should publish a selected revision through Wagtail's revision publishing path
-instead of mutating live page fields directly. That keeps Wagtail history intact and lets django-cast hooks such as
-podcast episode numbering run consistently for programmatic publishes and admin publishes.
+The post publish action publishes the latest draft revision through Wagtail's revision publishing path instead of
+mutating live page fields directly. That keeps Wagtail history intact and lets django-cast hooks such as podcast episode
+numbering run consistently for programmatic publishes and admin publishes.
 
 Publish response metadata should include the published revision ID, live URL, and any model-specific side effects that
 the client may need to display.
@@ -954,11 +958,11 @@ update both resolve referenced media.
 
 ## Third Implementation Slice
 
-Status: Planned 2026-06-25.
+Status: Implemented 2026-06-25.
 
 Let a client create and revise complete post bodies with uploaded or existing media, without requiring a prior manual
-Wagtail admin media upload. This slice deliberately keeps publishing, episode pages, remote import, scoped-token auth,
-Markdown input, and rendered-preview endpoints out of scope.
+Wagtail admin media upload. This slice deliberately kept publishing, episode pages, remote import, scoped-token auth,
+Markdown input, and rendered-preview endpoints out of scope; publishing landed later as the explicit post publish action.
 
 1. Add editor media list/upload endpoints for Wagtail images, django-cast audio, and django-cast video:
    `GET/POST /api/editor/media/images/`, `GET/POST /api/editor/media/audios/`, and
@@ -1059,7 +1063,7 @@ Markdown input, and rendered-preview endpoints out of scope.
 - A `PATCH` that updates `overview` or `detail` preserves unsupported/custom top-level body sections it did not understand.
 - A `PATCH` from a user without edit permission on the page is rejected, regardless of authentication class.
 - A `PATCH` missing any base-revision token returns a `validation_error` (never a silent overwrite).
-- Publishing, once added, uses Wagtail revision publishing and respects publish permissions.
+- Publishing uses Wagtail revision publishing and respects publish permissions.
 - Episode endpoints, once added, enforce episode-specific validation such as required podcast audio on publish.
 
 ## Alternatives Considered
@@ -1118,8 +1122,8 @@ Still open:
   separate create/update/publish scopes)?
 - What is the right endpoint namespace: `editor`, `content`, or a Wagtail-compatible extension?
 - Future-only publish question: this API version rejects `publish: true`; should a later version allow
-  publish-by-request in the create endpoint for callers with publish permission, or only through a separate publish
-  endpoint?
+  publish-by-request in the create endpoint for callers with publish permission, or keep publishing only on explicit
+  action endpoints?
 - How should remote image import be constrained so it is useful for agents but safe for production sites?
 - Deferred beyond this slice: should media upload endpoints support replacing existing media files, or only create new
   media objects?

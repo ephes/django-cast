@@ -13,15 +13,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [ ] Content editing API post publish action
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-  - Depends on: the implemented draft post create/read/update API.
-  - Scope: add the explicit `POST /api/editor/posts/{id}/publish/` action for post drafts, publishing through Wagtail's
-    revision path instead of overloading create/update payloads.
-  - Notes: keep `publish: true` rejected on create/update in this API version; the action must require Wagtail publish
-    permission, publish the intended latest draft revision, and return published revision/status/live URL metadata.
-  - Done when: permission, missing/stale revision, already-live/no-draft, success, docs, and release notes are covered.
+No next item selected.
 
 ## Ready
 
@@ -62,12 +54,11 @@ No ready item selected.
     [docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md](docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md)
   - Status: slices landed for parent listing, draft post create/read/update, existing image/audio body references,
     editor media list/upload and upload-collection discovery endpoints for images, audio, and video, `detail` section
-    create/read/update support, and `video` as an API-supported body block. After the selected post publish action,
-    the remaining later follow-ups are episode endpoints, scoped-token auth, remote media import, rendered-preview
-    endpoints, media replacement workflows, optional `If-Match`/ETag support, Markdown convenience input, and `embed`
-    blocks.
-  - Scope: after the post publish action is complete, split the remaining follow-ups into concrete implementation or
-    shaping items instead of keeping one broad API bucket.
+    create/read/update support, `video` as an API-supported body block, and the explicit post publish action. The
+    remaining later follow-ups are episode endpoints, scoped-token auth, remote media import, rendered-preview endpoints,
+    media replacement workflows, optional `If-Match`/ETag support, Markdown convenience input, and `embed` blocks.
+  - Scope: split the remaining follow-ups into concrete implementation or shaping items instead of keeping one broad API
+    bucket.
   - Notes: target use cases include agents turning assorted Markdown notes on disk into weeknotes, updating draft
     posts after review, and modifying existing content without direct database access.
   - Done when: each remaining follow-up is either represented by a concrete backlog item with scope/done-when criteria

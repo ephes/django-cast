@@ -356,7 +356,8 @@ Example response:
     Content-Type: application/json
 
 Creates a draft ``Post`` under the chosen parent page.  The page is saved as a
-Wagtail revision and is never published.  Passing ``"publish": true`` is rejected.
+Wagtail revision and is not published by this endpoint.  Passing
+``"publish": true`` is rejected; use the explicit publish action after review.
 (Episode creation mirrors this shape and is a planned follow-up; it is not part of
 this slice.)
 
@@ -530,6 +531,60 @@ A stale base revision returns ``409 Conflict``:
       "edit_url": "/admin/pages/987/edit/"
     }
 
+**Publish a draft post**::
+
+    POST /api/editor/posts/{id}/publish/
+
+Publishes the latest draft revision for an existing ``Post`` through Wagtail's
+revision publishing path. The caller must be authenticated, have Wagtail admin
+access, be able to edit the target page through the editor API, and have Wagtail
+publish permission for that page. The action does not accept a request body and
+does not use ``If-Match`` or ``base_revision_id`` in this API version; clients
+should ``GET`` the post immediately before presenting a publish action when they
+need to confirm the latest draft content.
+
+The success response is the normal editor post shape plus publish metadata:
+
+.. code-block:: json
+
+    {
+      "id": 987,
+      "type": "cast.Post",
+      "title": "Weeknotes 2026-25",
+      "slug": "weeknotes-2026-25",
+      "parent": {"id": 123},
+      "visible_date": "2026-06-19T18:00:00+02:00",
+      "tags": ["weeknotes"],
+      "categories": [],
+      "cover_image": null,
+      "overview": [
+        {"type": "paragraph", "value": "<p>Ready.</p>"}
+      ],
+      "detail": [],
+      "latest_revision_id": 6543,
+      "live": true,
+      "status": "live",
+      "preview_url": "/admin/pages/987/view_draft/",
+      "edit_url": "/admin/pages/987/edit/",
+      "api_url": "/api/editor/posts/987/",
+      "published_revision_id": 6543,
+      "public_url": "/blog/weeknotes-2026-25/"
+    }
+
+Publishing a live page that has unpublished draft changes publishes the latest
+draft revision. Publishing a page that is already live with no unpublished draft
+returns ``409 Conflict``:
+
+.. code-block:: json
+
+    {
+      "code": "no_unpublished_draft",
+      "detail": "This post is already live and has no unpublished draft revision."
+    }
+
+Permission failures use the standard ``permission_denied`` envelope. Missing
+posts use the standard ``not_found`` envelope.
+
 **Error envelopes**
 
 Validation errors (``400 Bad Request``):
@@ -701,11 +756,12 @@ still make a saved audio/video object fail the defensive post-save choose check.
 
 **Draft-only and Wagtail permissions**
 
-The editor API never publishes.  Create requests save Wagtail draft revisions,
-so newly-created pages are returned with ``live: false`` and do not appear in
-the public Wagtail pages API.  Updating an already-live page creates an
-unpublished draft revision and returns ``status: "draft"`` while ``live`` stays
-``true``.  Publishing is a separate follow-up action not yet implemented.
+Create and update requests are draft-only. Create requests save Wagtail draft
+revisions, so newly-created pages are returned with ``live: false`` and do not
+appear in the public Wagtail pages API until explicitly published. Updating an
+already-live page creates an unpublished draft revision and returns
+``status: "draft"`` while ``live`` stays ``true``. Use
+``POST /api/editor/posts/{id}/publish/`` to publish the latest draft revision.
 
 Authorization uses standard Wagtail page permissions:
 
@@ -715,6 +771,8 @@ Authorization uses standard Wagtail page permissions:
   selected parent.
 - ``GET /api/editor/posts/{id}/`` — requires edit permission for the page.
 - ``PATCH /api/editor/posts/{id}/`` — requires edit permission for the page.
+- ``POST /api/editor/posts/{id}/publish/`` — requires edit and publish
+  permission for the page.
 
 Pagination
 ----------

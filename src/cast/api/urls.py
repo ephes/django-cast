@@ -13,6 +13,7 @@ urlpatterns: list[Any] = [
     # content editing API (editor)
     path("editor/parents/", editor_views.ParentsListView.as_view(), name="editor_parents"),
     path("editor/posts/", editor_views.PostCreateView.as_view(), name="editor_post_create"),
+    path("editor/posts/<int:pk>/publish/", editor_views.PostPublishView.as_view(), name="editor_post_publish"),
     path("editor/posts/<int:pk>/", editor_views.PostDetailView.as_view(), name="editor_post_detail"),
     path("editor/media/images/", editor_media.EditorImageListCreateView.as_view(), name="editor_media_images"),
     path("editor/media/audios/", editor_media.EditorAudioListCreateView.as_view(), name="editor_media_audios"),

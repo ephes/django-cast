@@ -26,16 +26,18 @@
   the returned ``latest_revision_id`` as ``base_revision_id``; stale bases return
   ``409 revision_conflict`` instead of overwriting newer edits. The API stays
   authentication-mechanism agnostic — it requires an authenticated user and
-  authorizes every action with Wagtail page permissions — and never publishes:
-  pages are saved as drafts via Wagtail revisions. Body blocks supported in this
-  slice: heading, paragraph, code, image, gallery, audio, and video (media
-  blocks reference media the caller may choose). The editor API now also supports
-  the ``detail`` body section, editor media list/upload endpoints for images,
-  audio, and video, and upload collection discovery at
-  ``/api/editor/media/collections/``. Audio/video editor uploads share a
-  one-in-flight per-user lock, and editor audio probing is capped by a
-  request-path budget so slow files fail with ``probe_timeout`` instead of
-  hanging the request.
+  authorizes every action with Wagtail page permissions. Create and update stay
+  draft-only and reject ``publish: true``; draft posts can now be published
+  through the explicit ``POST /api/editor/posts/{id}/publish/`` action, which
+  requires Wagtail publish permission and publishes the latest draft revision
+  through Wagtail's revision path. Body blocks supported in this slice: heading,
+  paragraph, code, image, gallery, audio, and video (media blocks reference
+  media the caller may choose). The editor API now also supports the ``detail``
+  body section, editor media list/upload endpoints for images, audio, and video,
+  and upload collection discovery at ``/api/editor/media/collections/``.
+  Audio/video editor uploads share a one-in-flight per-user lock, and editor
+  audio probing is capped by a request-path budget so slow files fail with
+  ``probe_timeout`` instead of hanging the request.
 - Tightened Wagtail admin permissions for custom audio, video, and transcript
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and

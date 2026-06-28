@@ -20,6 +20,7 @@ from .body import (
     section_to_author_blocks,
 )
 from .errors import (
+    EditorFlatError,
     EditorNotFound,
     EditorPermissionDenied,
     EditorRevisionConflict,
@@ -191,6 +192,10 @@ class PostEditorMixin:
             "api_url": reverse("cast:api:editor_post_detail", kwargs={"pk": post.id}),
         }
 
+    def _public_url(self, post: Post, request: Request) -> str | None:
+        url = post.get_url(request=request)
+        return url or post.get_full_url(request=request)
+
 
 class PostCreateView(PostEditorMixin, EditorAPIView):
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -311,3 +316,32 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         revision = draft.save_revision(user=user)
         post.refresh_from_db()
         return Response(self._serialize(post, user=user, content_post=draft, revision=revision))
+
+
+class PostPublishView(PostEditorMixin, EditorAPIView):
+    def post(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
+        user = request.user
+        post = self._get_post(pk, user, denied_message="You cannot publish this draft.")
+        if not post.permissions_for_user(user).can_publish():
+            raise EditorPermissionDenied("You cannot publish this post.", parent_id=None)
+        if post.live and not post.has_unpublished_changes:
+            raise EditorFlatError(
+                "no_unpublished_draft",
+                "This post is already live and has no unpublished draft revision.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        revision = post.get_latest_revision()
+        if revision is None:
+            raise EditorFlatError(
+                "no_revision",
+                "This post has no draft revision to publish.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        revision.publish(user=user)
+        post = Post.objects.get(pk=post.pk).specific
+        data = self._serialize(post, user=user, content_post=post, revision=revision)
+        data["published_revision_id"] = revision.id
+        data["public_url"] = self._public_url(post, request)
+        return Response(data)
