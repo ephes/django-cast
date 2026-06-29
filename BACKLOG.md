@@ -13,11 +13,55 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-No next item selected.
+- [ ] Editor API episode draft endpoints
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see "Episode Endpoints (Next Implementation Slice)")
+  - Related to: the shipped post create/read/update/publish editor API and the podcast publishing metadata work
+    ([backlog/2026-06-18-podcast-publishing-metadata.md](backlog/2026-06-18-podcast-publishing-metadata.md)).
+  - Scope: add draft-only `POST /api/editor/episodes/`, `GET /api/editor/episodes/{id}/`, and
+    `PATCH /api/editor/episodes/{id}/` for `Episode` pages under a caller-selected `Podcast` parent, reusing the post
+    converter, media-reference `choose` checks, revision/`base_revision_id` conflict detection, and error envelopes.
+    `Episode` is a `Post` subclass, so the body (`overview`/`detail`), tags, categories, cover image, `visible_date`,
+    slug, and draft-revision semantics carry over unchanged. The new surface is the episode-specific fields:
+    `podcast_audio` (single `cast.Audio` reference, choosable by the caller, optional on a draft), `episode_number`,
+    `episode_type`, `season`, `keywords`, `explicit`, and `block`.
+  - Notes:
+    - Parent must be a `cast.Podcast`; reject a `cast.Blog` parent with a structured `parent` error. `GET
+      /api/editor/parents/` already lists podcasts.
+    - `podcast_audio` stays optional on draft create/update (the model allows null for drafts); the publish-time
+      requirement is the separate `Ready` publish item below.
+    - `season` must belong to the parent podcast (matches `Episode.clean`); a foreign season is a structured `season`
+      validation error.
+    - Stay draft-only: create/update reject `publish: true` with the existing `validation_error`/`unsupported` guard,
+      exactly like posts.
+    - Decide the episode response field set before implementing serializers; the PRD's episode section lists the
+      proposed contract and the few decisions (which iTunes metadata fields to expose, how `podcast_audio` serializes
+      on read) to pin in a short preflight.
+  - Done when: an authenticated editor can create, read back, and revise a draft `Episode` under a podcast they may add
+    to; episode-specific fields round-trip; foreign-podcast `season`, inaccessible `podcast_audio`, and a `cast.Blog`
+    parent return structured errors; `publish: true` is rejected; create/read/update keep post response-shape parity for
+    shared fields; tests cover these paths; and the API reference plus current release notes document the episode
+    endpoints.
 
 ## Ready
 
-No ready item selected.
+- [ ] Editor API episode publish action
+  - Depends on: Editor API episode draft endpoints (Next).
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see "Episode Endpoints (Next Implementation Slice)")
+  - Scope: add `POST /api/editor/episodes/{id}/publish/`, mirroring the shipped post publish action (Wagtail revision
+    publishing path, publish-permission gate, published-revision/public-URL metadata, `no_unpublished_draft` 409) plus
+    the episode-specific gate that publishing requires a non-null `podcast_audio` (matches `CustomEpisodeForm.clean`).
+  - Notes: because `Episode` is a `Post`, the existing `POST /api/editor/posts/{id}/publish/` would currently publish an
+    episode row without the `podcast_audio` gate; this item must either route episodes through the episode publish
+    endpoint with the gate or enforce the episode validation on the shared publish path so a podcast-audio-less episode
+    cannot be published through the editor API. Decide and test the missing-`podcast_audio` error shape (a publish-time
+    `validation_error` on `podcast_audio` is the expected default; do not silently 500).
+  - Done when: a draft episode with `podcast_audio` set publishes through Wagtail's revision path and returns publish
+    metadata; a draft episode without `podcast_audio` is rejected with a structured error and stays unpublished; the
+    post publish path cannot bypass that gate for episode rows; tests cover both; and docs/release notes are updated.
 
 ## Research / Shaping
 
@@ -47,22 +91,41 @@ No ready item selected.
   - Done when: the remaining PRD questions are either split into concrete implementation items under
     `Next`/`Ready`/`Later` or explicitly deferred in the PRD.
 
-- [ ] Programmatic content editing API follow-up triage
+- [ ] Editor API rendered-preview endpoint
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-  - Implemented slice plan:
-    [docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md](docs/superpowers/plans/2026-06-25-content-editing-api-media-detail-slice.md)
-  - Status: slices landed for parent listing, draft post create/read/update, existing image/audio body references,
-    editor media list/upload and upload-collection discovery endpoints for images, audio, and video, `detail` section
-    create/read/update support, `video` as an API-supported body block, and the explicit post publish action. The
-    remaining later follow-ups are episode endpoints, scoped-token auth, remote media import, rendered-preview endpoints,
-    media replacement workflows, optional `If-Match`/ETag support, Markdown convenience input, and `embed` blocks.
-  - Scope: split the remaining follow-ups into concrete implementation or shaping items instead of keeping one broad API
-    bucket.
-  - Notes: target use cases include agents turning assorted Markdown notes on disk into weeknotes, updating draft
-    posts after review, and modifying existing content without direct database access.
-  - Done when: each remaining follow-up is either represented by a concrete backlog item with scope/done-when criteria
-    or explicitly deferred in the PRD.
+  - Related to: Editor API scoped-token / IndieAuth scope mapping.
+  - Status: shaping. The shipped editor API returns an admin-session `preview_url` that only works for a human in a
+    Wagtail admin session; token-only/non-admin clients cannot self-render a draft.
+  - Scope: design a server-rendered draft preview path for token-only/non-admin editor clients (likely a
+    `GET /api/editor/posts/{id}/preview/`-style endpoint returning rendered draft HTML), preserving Wagtail page
+    permissions and not leaking unpublished content beyond the caller's permissions.
+  - Done when: there is a decision on whether rendered preview is needed before scoped-token auth ships, a proposed
+    endpoint/response contract, the permission model, and a first implementation slice or an explicit deferral with
+    rationale.
+
+- [ ] Editor API scoped-token / IndieAuth scope mapping
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Authentication And Permissions, Open Questions)
+  - Status: shaping. The editor API is deliberately authentication-mechanism agnostic; this item only defines the
+    generic action→required-scope mapping a scoped-token backend can satisfy, without django-cast importing IndieAuth.
+  - Scope: decide the action→scope mapping (single content scope vs separate create/update/publish scopes), where the
+    generic scope-checking permission class lives, and how it falls back to pure Wagtail permissions under session auth
+    (`request.auth is None`).
+  - Done when: the mapping and fallback are documented, the auth-agnostic boundary is preserved, and the work is split
+    into a concrete implementation slice or explicitly deferred.
+
+- [ ] Editor API remote media import
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Open Questions)
+  - Status: shaping. Blocked on safety constraints before any implementation.
+  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
+    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
+    for agents but safe for production sites.
+  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
+    documented, with a recommended first implementation slice or an explicit deferral.
 
 - [ ] Local authoring and sync workflow
   - Scope: research whether django-cast should support a local-first editing workflow where content can be pulled
@@ -91,6 +154,43 @@ No ready item selected.
     release notes.
 
 ## Later
+
+- [ ] Editor API optional If-Match/ETag conflict tokens
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Conflict Detection)
+  - Scope: add `If-Match`/ETag as an equivalent transport for the existing `base_revision_id` conflict semantics on
+    `PATCH`, without changing the JSON-body contract that already works.
+  - Done when: the header transport maps to the same `revision_conflict` behavior, both transports are documented, and
+    tests cover header- and body-supplied base revisions.
+
+- [ ] Editor API media replacement workflows
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Open Questions)
+  - Related to: the `media_replace` management command and media durability work.
+  - Scope: decide whether editor media endpoints should support replacing an existing media object's file (versus only
+    creating new objects), and how that interacts with references from published pages and stored renditions.
+  - Done when: the decision and, if accepted, a safe replacement contract (permissions, reference safety, cleanup) are
+    documented or the option is explicitly deferred.
+
+- [ ] Editor API Markdown convenience input
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Body Serialization, Tier 2)
+  - Scope: add an optional `overview_markdown`/`detail_markdown` convenience input converted server-side into the
+    canonical block list, behind an optional dependency so the Markdown parser is not forced onto all installs.
+  - Done when: the optional-dependency boundary and conversion policy are documented, the structured block list stays
+    canonical, and tests cover the conversion plus the dependency-absent path.
+
+- [ ] Editor API embed body block support
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Body Serialization)
+  - Scope: add `embed` as an author-facing body block in the editor converter, specifying URL validation and provider
+    behavior. Stored `embed` blocks are currently preserved only as unsupported placeholders.
+  - Done when: the `embed` value/validation contract is specified, the converter accepts and round-trips it, and tests
+    cover valid/invalid embed URLs and provider behavior.
 
 - [ ] Optimize public transcript speaker sanitization copies
   - Scope: avoid deep-copying large transcript structures on public player/transcript requests when all speaker

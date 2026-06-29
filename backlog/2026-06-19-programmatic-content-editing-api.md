@@ -28,9 +28,26 @@ Slice 4 implemented (2026-06-28): **post publish action**. The slice added
 permission, publishes the latest draft revision through Wagtail's revision publishing path, returns published revision
 and public URL metadata, and keeps `publish: true` rejected on create/update.
 
-Remaining follow-ups beyond slice 4: episode endpoints, scoped-token (IndieAuth) auth/scope support, remote media import,
-rendered-preview endpoints, media replacement workflows, optional `If-Match`/ETag conflict tokens, optional Markdown
-convenience input, and `embed` blocks.
+Remaining follow-ups beyond slice 4 (triaged 2026-06-29 into concrete `BACKLOG.md` items instead of one broad bucket):
+
+- **Episode draft endpoints — selected next slice.** Draft-only `POST/GET/PATCH /api/editor/episodes/` for `Episode`
+  pages under a `Podcast` parent. See "Episode Endpoints (Next Implementation Slice)" below for the detailed contract.
+- **Episode publish action — ready, depends on episode draft endpoints.** `POST /api/editor/episodes/{id}/publish/`
+  mirroring the post publish action plus the episode-specific `podcast_audio`-required gate.
+- **Rendered-preview endpoint — shaping.** Server-rendered draft preview for token-only/non-admin clients that cannot
+  use the admin-session `preview_url`.
+- **Scoped-token / IndieAuth scope mapping — shaping.** The generic action→required-scope mapping; see Authentication
+  And Permissions and Open Questions.
+- **Remote media import — shaping.** Importing media from remote URLs behind server-side safety constraints; see Open
+  Questions.
+- **Optional `If-Match`/ETag conflict tokens — later.** An equivalent header transport for the existing
+  `base_revision_id` conflict semantics; see Conflict Detection.
+- **Media replacement workflows — later.** Replacing an existing media object's file versus only creating new objects;
+  see Open Questions.
+- **Optional Markdown convenience input — later.** An optional `*_markdown` input converted server-side into the
+  canonical block list behind an optional dependency; see Body Serialization, Tier 2.
+- **`embed` body block support — later.** Adding `embed` as an author-facing block once URL validation and provider
+  behavior are specified; stored `embed` blocks are currently preserved only as unsupported placeholders.
 
 ## Summary
 
@@ -244,7 +261,8 @@ cast API rather than in a consumer site:
     return `validation_error` on `collection` with code `invalid`. Whole-request upload authorization failures use `permission_denied`; submitted
     collection values that are missing or unusable use the distinct field-level code `collection_permission_denied`.
 
-Future episode endpoints should mirror the same shape:
+Episode endpoints (the selected next slice and its ready publish follow-up) mirror the same shape; see
+"Episode Endpoints (Next Implementation Slice)" below for the detailed contract:
 
 - `POST /api/editor/episodes/`
 - `GET /api/editor/episodes/{id}/`
@@ -1011,6 +1029,85 @@ Markdown input, and rendered-preview endpoints out of scope; publishing landed l
    tightening for already-shipped image/audio body references, not only neutral message changes. The API reference must
    also explicitly document `rate_limited`/HTTP 429, `cleanup_failed`/HTTP 500, and `probe_timeout`/HTTP 422.
 
+## Episode Endpoints (Next Implementation Slice)
+
+Status: planned, selected as the next implementable slice on 2026-06-29. Tracked in `BACKLOG.md` as
+"Editor API episode draft endpoints" (`Next`) and "Editor API episode publish action" (`Ready`).
+
+This slice brings posts' create/read/update/publish surface to podcast episodes. It is the closest parity follow-up
+after the post editor API and reuses almost all of it; the new work is the episode-specific fields, the `Podcast`
+parent requirement, and the publish-time `podcast_audio` rule.
+
+### Why episodes are a small delta over posts
+
+`Episode` is a concrete subclass of `Post` (see `src/cast/models/pages.py`). It shares `Post.body`
+(`overview`/`detail`), tags, categories, cover image, `visible_date`, slug, and Wagtail draft/revision semantics, so the
+existing body converter, media-reference `choose` checks, `base_revision_id` conflict detection, draft-only `publish`
+guard, and structured error envelopes carry over unchanged. `Episode.parent_page_types = ["cast.Podcast"]`, and
+`GET /api/editor/parents/` already lists podcasts the caller may add to. The implementer should preflight whether to add
+dedicated `/api/editor/episodes/` views (mirroring the post views) or to generalize the existing post views; dedicated
+episode views are the expected default because the parent constraint, extra fields, and publish validation differ.
+
+### Episode-specific fields
+
+Beyond the inherited post fields, an episode adds (all defined on `Episode` in `src/cast/models/pages.py`):
+
+- `podcast_audio`: a single `cast.Audio` reference. Serialize/accept it as `{"id": <audio id>}` (or `null` to clear on
+  `PATCH`), validated as choosable by the caller using the same audio `choose` check used by body `audio` blocks; an
+  inaccessible/missing id collapses to the neutral `not_found` shape. It is **optional on a draft** (the model field is
+  null/blank) and only **required at publish time** (see below).
+- `episode_number`: optional positive integer (`MinValueValidator(1)`). Preserve the existing podcast publishing
+  metadata behavior (manual numbers stay authoritative; opt-in automatic first-publish numbering still applies).
+- `episode_type`: optional, one of `full`, `trailer`, `bonus`, or blank (blank omits the feed tag, equivalent to full).
+- `season`: optional `cast.Season` reference that **must belong to the parent podcast** (matches `Episode.clean`); a
+  foreign-podcast season is a structured `season` validation error.
+- `keywords`: optional iTunes keyword string.
+- `explicit`: choice (`1` yes, `2` no, `3` clean), default `1`.
+- `block`: boolean, default `False` (block from iTunes).
+
+### Decisions to pin in preflight
+
+- **Response field set.** Confirm which of the iTunes/publishing-metadata fields (`keywords`, `explicit`, `block`,
+  `episode_number`, `episode_type`, `season`) the episode response exposes, and confirm the shared post fields keep
+  response-shape parity. The expected default is to expose all episode fields above so a client can round-trip a draft.
+- **`podcast_audio` read shape.** Confirm it serializes as `{"id": ..., ...}` consistent with `cover_image`/`audio`
+  blocks rather than a bare id.
+- **Endpoint routing.** Confirm dedicated `/api/editor/episodes/` views versus generalizing the post views, and confirm
+  the parent-type guard rejects a `cast.Blog` parent with a structured `parent` error.
+
+### Draft create/read/update
+
+- `POST /api/editor/episodes/`: create a draft `Episode` under a caller-selected `Podcast`. Reject a non-`Podcast`
+  parent. Accept the inherited post fields plus the episode-specific fields above. Stay draft-only: reject `publish:
+  true` with the existing `validation_error`/`unsupported` guard.
+- `GET /api/editor/episodes/{id}/`: return editable metadata, normalized `overview`/`detail`, revision metadata, admin
+  URLs, and the episode-specific fields.
+- `PATCH /api/editor/episodes/{id}/`: require `base_revision_id`, preserve omitted fields/sections, support clearing
+  `podcast_audio`/`season` with explicit `null`, and keep the empty-update guard. `parent` stays immutable, like posts.
+
+### Publish action (ready follow-up)
+
+- `POST /api/editor/episodes/{id}/publish/`: mirror the post publish action — publish the latest draft revision through
+  Wagtail's revision publishing path, require Wagtail admin access plus page publish permission, and return published
+  revision id and public URL metadata — plus the episode rule that **publishing requires a non-null `podcast_audio`**
+  (matches `CustomEpisodeForm.clean`). A publish request for an episode without `podcast_audio` is rejected with a
+  structured error (expected default: a publish-time `validation_error` on `podcast_audio`) and leaves the episode
+  unpublished; do not surface a 500.
+- Compatibility note: because `Episode` is a `Post`, the shipped `POST /api/editor/posts/{id}/publish/` resolves an
+  episode row via `.specific` and would currently publish it without the `podcast_audio` gate. This slice must close
+  that gap — either route episodes to the episode publish endpoint and enforce the gate, or enforce the episode
+  validation on the shared publish path — so a podcast-audio-less episode cannot be published through the editor API.
+
+### Done-when
+
+- An authenticated editor can create, read back, and revise a draft `Episode` under a podcast they may add to, with
+  episode-specific fields round-tripping through create/read/update.
+- Foreign-podcast `season`, inaccessible `podcast_audio`, and a `cast.Blog` parent return structured errors; `publish:
+  true` is rejected on create/update.
+- A draft episode with `podcast_audio` publishes through Wagtail's revision path and returns publish metadata; without
+  `podcast_audio` it is rejected and stays unpublished, and the post publish path cannot bypass that gate for episodes.
+- Tests cover the above, and `docs/reference/api.rst` plus the current release notes document the episode endpoints.
+
 ## Test Scenarios
 
 - Authenticated editor can create a draft post under an editable blog and receives preview/edit URLs.
@@ -1116,17 +1213,22 @@ Resolved (2026-06-22):
   parser in the request path (see Body Serialization).
 - **Markdown** — demoted to an optional later convenience behind an optional dependency, not part of the first slice.
 
-Still open:
+Still open (each remaining content-editing follow-up is now tracked as a concrete `BACKLOG.md` item; see the triaged
+list near the top of this PRD and the "Episode Endpoints (Next Implementation Slice)" section):
 
 - What action→required-scope mapping should django-cast expose for scoped-token backends (a single content scope versus
-  separate create/update/publish scopes)?
-- What is the right endpoint namespace: `editor`, `content`, or a Wagtail-compatible extension?
+  separate create/update/publish scopes)? Tracked as "Editor API scoped-token / IndieAuth scope mapping" (shaping).
+- What is the right endpoint namespace: `editor`, `content`, or a Wagtail-compatible extension? The shipped surface uses
+  `editor`; this question is now informational rather than blocking.
 - Future-only publish question: this API version rejects `publish: true`; should a later version allow
   publish-by-request in the create endpoint for callers with publish permission, or keep publishing only on explicit
   action endpoints?
-- How should remote image import be constrained so it is useful for agents but safe for production sites?
-- Deferred beyond this slice: should media upload endpoints support replacing existing media files, or only create new
-  media objects?
+- How should remote image import be constrained so it is useful for agents but safe for production sites? Tracked as
+  "Editor API remote media import" (shaping).
+- Should media upload endpoints support replacing existing media files, or only create new media objects? Tracked as
+  "Editor API media replacement workflows" (later).
+- Do token-only/non-admin editor clients need a server-rendered draft preview, and must it ship before scoped-token
+  auth? Tracked as "Editor API rendered-preview endpoint" (shaping).
 
 Resolved by update slice (2026-06-23):
 
