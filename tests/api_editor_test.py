@@ -2893,3 +2893,110 @@ class TestEditorViewScopeDeclarations:
                 key = method.upper()
                 assert key in cls.required_scopes, f"{name} ({cls.__name__}) does not declare scope for {key}"
                 assert cls.required_scopes[key] in valid, f"{name}: bad scope value for {key}"
+
+
+class _FakeScopedToken:
+    def __init__(self, scope: str):
+        self.scope = scope
+
+
+class TestEditorScopeEnforcement:
+    pytestmark = pytest.mark.django_db
+
+    def _create_draft(self, api_client, blog, user):
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "Scope draft",
+            "slug": "scope-draft",
+            "tags": [],
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+        response = api_client.post(url, payload, format="json")
+        assert response.status_code == 201, response.content
+        return response.json()
+
+    def test_session_request_can_read(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        # session auth: request.auth is None -> scope layer defers to Wagtail
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        assert api_client.get(url, format="json").status_code == 200
+
+    def test_unscoped_token_can_write(self, api_client, blog, admin_user):
+        api_client.force_authenticate(user=admin_user, token=type("Tok", (), {})())
+        url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "Unscoped write",
+            "slug": "unscoped-write",
+            "tags": [],
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+        assert api_client.post(url, payload, format="json").status_code == 201
+
+    def test_write_scope_can_create(self, api_client, blog, admin_user):
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("write"))
+        url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "Write scope",
+            "slug": "write-scope",
+            "tags": [],
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+        assert api_client.post(url, payload, format="json").status_code == 201
+
+    def test_missing_scope_is_403_insufficient_scope(self, api_client, blog, admin_user):
+        # Token carries 'publish' but creating requires 'write'.
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("publish"))
+        url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "No write scope",
+            "slug": "no-write-scope",
+            "tags": [],
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+        response = api_client.post(url, payload, format="json")
+        assert response.status_code == 403
+        assert response.json()["code"] == "insufficient_scope"
+        assert not Post.objects.filter(slug="no-write-scope").exists()
+
+    def test_write_scope_cannot_publish(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("write"))
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+        response = api_client.post(url, {}, format="json")
+        assert response.status_code == 403
+        assert response.json()["code"] == "insufficient_scope"
+        assert Post.objects.get(pk=created["id"]).live is False
+
+    def test_publish_scope_can_publish(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("publish"))
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+        response = api_client.post(url, {}, format="json")
+        assert response.status_code == 200, response.content
+        assert Post.objects.get(pk=created["id"]).live is True
+
+    def test_scoped_token_can_read_without_scope(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user)
+        # A token scoped only for publish can still GET (reads need no scope).
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("publish"))
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        assert api_client.get(url, format="json").status_code == 200
+
+    def test_cast_editor_scopes_override_is_honoured(self, api_client, blog, admin_user, settings):
+        # Rename the write scope to match a site's issuer vocabulary.
+        settings.CAST_EDITOR_SCOPES = {"write": {"posts:edit"}, "publish": {"publish"}}
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("posts:edit"))
+        url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "Custom scope",
+            "slug": "custom-scope",
+            "tags": [],
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+        assert api_client.post(url, payload, format="json").status_code == 201
