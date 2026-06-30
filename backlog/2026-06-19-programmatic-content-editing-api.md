@@ -1222,8 +1222,14 @@ Resolved (2026-06-22):
 Still open (each remaining content-editing follow-up is now tracked as a concrete `BACKLOG.md` item; see the triaged
 list near the top of this PRD and the "Episode Endpoints (Next Implementation Slice)" section):
 
-- What action→required-scope mapping should django-cast expose for scoped-token backends (a single content scope versus
-  separate create/update/publish scopes)? Tracked as "Editor API scoped-token / IndieAuth scope mapping" (shaping).
+- ~~What action→required-scope mapping should django-cast expose for scoped-token backends (a single content scope
+  versus separate create/update/publish scopes)?~~ **Resolved (2026-06-30):** two logical scopes `write`/`publish`
+  (reads scope-free), enforced by a generic `HasEditorScope` permission class reading a per-method `required_scopes`
+  mapping (so mixed `GET`/`PATCH` views resolve per method) against a configurable `CAST_EDITOR_SCOPES` mapping;
+  session auth and unscoped tokens fall back to pure Wagtail permissions; scope failures return a 403
+  `insufficient_scope`. See
+  [2026-06-30-editor-api-scoped-token-auth.md](2026-06-30-editor-api-scoped-token-auth.md). Implementation slice
+  pending.
 - What is the right endpoint namespace: `editor`, `content`, or a Wagtail-compatible extension? The shipped surface uses
   `editor`; this question is now informational rather than blocking.
 - Future-only publish question: this API version rejects `publish: true`; should a later version allow
@@ -1233,8 +1239,10 @@ list near the top of this PRD and the "Episode Endpoints (Next Implementation Sl
   "Editor API remote media import" (shaping).
 - Should media upload endpoints support replacing existing media files, or only create new media objects? Tracked as
   "Editor API media replacement workflows" (later).
-- Do token-only/non-admin editor clients need a server-rendered draft preview, and must it ship before scoped-token
-  auth? Tracked as "Editor API rendered-preview endpoint" (shaping).
+- Do token-only/non-admin editor clients need a server-rendered draft preview? Tracked as "Editor API
+  rendered-preview endpoint" (shaping). **Partially resolved (2026-06-30):** rendered preview is **not** a
+  prerequisite for scoped-token auth — the scope layer is inert until a backend is plugged in and does not depend on
+  preview. Whether token clients ultimately need server-rendered preview remains open under that item.
 
 Resolved by update slice (2026-06-23):
 
