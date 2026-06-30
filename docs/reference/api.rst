@@ -603,13 +603,14 @@ exactly as documented for posts above. The endpoints are::
     POST  /api/editor/episodes/
     GET   /api/editor/episodes/{id}/
     PATCH /api/editor/episodes/{id}/
+    POST  /api/editor/episodes/{id}/publish/
 
 The parent must be a ``cast.Podcast``; a ``cast.Blog`` or any other parent is
 rejected with a ``validation_error`` on ``parent``. These endpoints serve
 episodes only — a non-episode page id returns the ``not_found`` envelope.
 
-Episode publishing is a planned follow-up and is **not** part of this slice;
-create and update stay draft-only and reject ``publish: true`` like posts.
+Create and update stay draft-only and reject ``publish: true`` like posts;
+publishing happens through the explicit episode publish action below.
 
 Beyond the shared post fields, episodes accept and return these
 episode-specific fields:
@@ -617,8 +618,8 @@ episode-specific fields:
 - ``podcast_audio`` (optional): ``{"id": <audio id>}`` referencing a
   ``cast.Audio`` the caller may choose, or ``null`` on ``PATCH`` to clear it.
   Missing or inaccessible audio collapses to the neutral
-  ``not_found`` shape at ``podcast_audio.id``. It is optional on a draft; the
-  publish-time requirement belongs to the planned publish action.
+  ``not_found`` shape at ``podcast_audio.id``. It is optional on a draft but
+  **required to publish** (see the publish action below).
 - ``episode_number`` (optional): positive integer, or ``null`` on ``PATCH`` to
   clear it.
 - ``episode_type`` (optional): one of ``full``, ``trailer``, ``bonus``, or an
@@ -657,6 +658,24 @@ The response is the standard editor draft shape (``id``, ``type`` of
 above. ``PATCH`` requires ``base_revision_id``, preserves omitted fields and
 sections, and keeps the empty-update guard, exactly like posts; ``parent`` is
 immutable.
+
+The episode publish action mirrors the post publish action::
+
+    POST /api/editor/episodes/{id}/publish/
+
+It publishes the latest draft revision through Wagtail's revision publishing
+path, requires Wagtail admin access plus publish permission for the page, takes
+no request body, and returns the editor episode shape plus ``published_revision_id``
+and ``public_url``. Publishing an episode that is already live with no
+unpublished draft returns the ``no_unpublished_draft`` conflict, just like posts.
+
+Publishing requires a non-null ``podcast_audio`` (the same rule the Wagtail admin
+enforces). A publish request for an episode without ``podcast_audio`` is rejected
+with a ``validation_error`` envelope (``required`` at ``podcast_audio``) and the
+episode stays unpublished. Because an ``Episode`` is a ``Post``,
+``POST /api/editor/posts/{id}/publish/`` also enforces this gate when its id
+resolves to an episode, so the audio requirement cannot be bypassed through the
+post publish endpoint.
 
 **Error envelopes**
 
@@ -851,6 +870,8 @@ Authorization uses standard Wagtail page permissions:
 - ``GET /api/editor/episodes/{id}/`` — requires edit permission for the episode.
 - ``PATCH /api/editor/episodes/{id}/`` — requires edit permission for the
   episode.
+- ``POST /api/editor/episodes/{id}/publish/`` — requires edit and publish
+  permission for the episode, and a non-null ``podcast_audio``.
 
 Pagination
 ----------

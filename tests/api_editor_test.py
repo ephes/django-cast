@@ -2600,8 +2600,140 @@ class TestEditorEpisodeUpdate:
         assert response.status_code == 400
         assert response.json()["errors"]["season"][0]["code"] == "invalid"
 
-    def test_no_episode_publish_route_exists(self):
-        from django.urls import NoReverseMatch
+class TestEditorEpisodePublish:
+    pytestmark = pytest.mark.django_db
 
-        with pytest.raises(NoReverseMatch):
-            reverse("cast:api:editor_episode_publish", kwargs={"pk": 1})
+    # ``admin_user`` can add/edit/publish pages under the site but cannot ``choose``
+    # media, so any episode that needs a real ``podcast_audio`` is created by ``superuser``.
+
+    def _create_draft(self, api_client, podcast, user, **overrides):
+        api_client.force_authenticate(user=user)
+        create_url = reverse("cast:api:editor_episode_create")
+        payload = {
+            "parent": {"id": podcast.id},
+            "title": "Publishable episode",
+            "slug": "publishable-episode",
+            "tags": ["podcast"],
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+        payload.update(overrides)
+        response = api_client.post(create_url, payload, format="json")
+        assert response.status_code == 201, response.content
+        return response.json()
+
+    def test_requires_authentication(self, api_client, podcast, admin_user):
+        created = self._create_draft(api_client, podcast, admin_user)
+        api_client.force_authenticate(user=None)
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code in (401, 403)
+
+    def test_requires_wagtail_admin_access_even_with_publish_permission(self, api_client, podcast, admin_user):
+        created = self._create_draft(api_client, podcast, admin_user)
+        user = page_permission_user(codenames=("change_page", "publish_page"))
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 403
+        assert response.json() == {
+            "code": "permission_denied",
+            "detail": "You do not have access to the Wagtail admin.",
+        }
+
+    def test_rejects_caller_without_publish_permission(self, api_client, podcast, admin_user):
+        created = self._create_draft(api_client, podcast, admin_user)
+        user = page_permission_user(codenames=("change_page",))
+        grant_wagtail_admin_access(user)
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 403
+        assert response.json() == {"code": "permission_denied", "detail": "You cannot publish this episode."}
+
+    def test_missing_episode_returns_404(self, api_client, admin_user):
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": 999999})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Episode not found."}
+
+    def test_plain_post_is_not_an_episode(self, api_client, blog, admin_user):
+        post = PostFactory(owner=blog.owner, parent=blog, title="Just a post", slug="just-a-post-publish")
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": post.id})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Episode not found."}
+
+    def test_publishes_draft_episode_with_audio(self, api_client, podcast, superuser, audio):
+        created = self._create_draft(
+            api_client, podcast, superuser, slug="publishable-with-audio", podcast_audio={"id": audio.id}
+        )
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        episode = Episode.objects.get(pk=created["id"])
+        assert episode.live is True
+        assert episode.has_unpublished_changes is False
+        assert episode.live_revision_id == created["latest_revision_id"]
+        assert data["published_revision_id"] == created["latest_revision_id"]
+        assert data["type"] == "cast.Episode"
+        assert data["live"] is True
+        assert data["status"] == "live"
+        # episode-shaped response: episode-specific fields and the episode api_url
+        assert data["podcast_audio"] == {"id": audio.id}
+        assert data["api_url"].endswith(f"/editor/episodes/{episode.id}/")
+        assert data["public_url"] is not None
+        assert "publishable-with-audio" in data["public_url"]
+
+    def test_publish_without_podcast_audio_is_rejected(self, api_client, podcast, admin_user):
+        created = self._create_draft(api_client, podcast, admin_user, slug="publishable-no-audio")
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 400
+        body = response.json()
+        assert body["code"] == "validation_error"
+        assert body["errors"]["podcast_audio"][0]["code"] == "required"
+        episode = Episode.objects.get(pk=created["id"])
+        assert episode.live is False
+
+    def test_live_episode_without_unpublished_draft_is_rejected(self, api_client, podcast, superuser, audio):
+        created = self._create_draft(
+            api_client, podcast, superuser, slug="already-live-episode", podcast_audio={"id": audio.id}
+        )
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})
+        first = api_client.post(url, {}, format="json")
+        assert first.status_code == 200, first.content
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 409
+        assert response.json()["code"] == "no_unpublished_draft"
+
+    def test_post_publish_endpoint_cannot_bypass_episode_audio_gate(self, api_client, podcast, admin_user):
+        # An Episode is a Post, so the shipped posts publish endpoint resolves it via
+        # ``.specific``; it must still enforce the podcast_audio gate and not publish.
+        created = self._create_draft(api_client, podcast, admin_user, slug="bypass-attempt")
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 400
+        assert response.json()["errors"]["podcast_audio"][0]["code"] == "required"
+        episode = Episode.objects.get(pk=created["id"])
+        assert episode.live is False

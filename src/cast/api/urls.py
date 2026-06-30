@@ -16,6 +16,11 @@ urlpatterns: list[Any] = [
     path("editor/posts/<int:pk>/publish/", editor_views.PostPublishView.as_view(), name="editor_post_publish"),
     path("editor/posts/<int:pk>/", editor_views.PostDetailView.as_view(), name="editor_post_detail"),
     path("editor/episodes/", editor_views.EpisodeCreateView.as_view(), name="editor_episode_create"),
+    path(
+        "editor/episodes/<int:pk>/publish/",
+        editor_views.EpisodePublishView.as_view(),
+        name="editor_episode_publish",
+    ),
     path("editor/episodes/<int:pk>/", editor_views.EpisodeDetailView.as_view(), name="editor_episode_detail"),
     path("editor/media/images/", editor_media.EditorImageListCreateView.as_view(), name="editor_media_images"),
     path("editor/media/audios/", editor_media.EditorAudioListCreateView.as_view(), name="editor_media_audios"),

@@ -48,7 +48,12 @@
   ``season`` must belong to that podcast, and ``podcast_audio`` must be choosable
   by the caller. ``GET /api/editor/parents/`` now points podcasts at the episode
   create endpoint. Create and update stay draft-only and reject ``publish:
-  true``; the episode publish action is a planned follow-up.
+  true``; draft episodes are published through the explicit
+  ``POST /api/editor/episodes/{id}/publish/`` action, which mirrors the post
+  publish action and additionally requires a non-null ``podcast_audio`` to
+  publish. That audio requirement is also enforced when an episode id is
+  published through ``POST /api/editor/posts/{id}/publish/``, so it cannot be
+  bypassed.
 - Tightened Wagtail admin permissions for custom audio, video, and transcript
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and

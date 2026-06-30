@@ -213,6 +213,48 @@ class PostEditorMixin:
         url = post.get_url(request=request)
         return url or post.get_full_url(request=request)
 
+    def _reject_unpublishable_episode(self, content: Post) -> None:
+        """Enforce the episode publish gate on the revision content about to go live.
+
+        An ``Episode`` is a ``Post``, so this shared check runs for both the post and
+        episode publish endpoints; it stops a podcast-audio-less episode from being
+        published through either path (mirrors ``CustomEpisodeForm.clean``).
+        """
+        if isinstance(content, Episode) and content.podcast_audio_id is None:
+            raise EditorValidationError(
+                {
+                    "podcast_audio": [
+                        {"code": "required", "message": "An episode must have an audio file to be published."}
+                    ]
+                }
+            )
+
+    def _publish(self, page: Post, *, user: Any, request: Request, publish_denied_message: str, noun: str) -> dict:
+        if not page.permissions_for_user(user).can_publish():
+            raise EditorPermissionDenied(publish_denied_message, parent_id=None)
+        if page.live and not page.has_unpublished_changes:
+            raise EditorFlatError(
+                "no_unpublished_draft",
+                f"This {noun} is already live and has no unpublished draft revision.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        revision = page.get_latest_revision()
+        if revision is None:
+            raise EditorFlatError(
+                "no_revision",
+                f"This {noun} has no draft revision to publish.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        self._reject_unpublishable_episode(revision.as_object())
+        revision.publish(user=user)
+        page = Post.objects.get(pk=page.pk).specific
+        data = self._serialize(page, user=user, content_post=page, revision=revision)
+        data["published_revision_id"] = revision.id
+        data["public_url"] = self._public_url(page, request)
+        return data
+
 
 class PostCreateView(PostEditorMixin, EditorAPIView):
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -339,28 +381,9 @@ class PostPublishView(PostEditorMixin, EditorAPIView):
     def post(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         user = request.user
         post = self._get_post(pk, user, denied_message="You cannot publish this draft.")
-        if not post.permissions_for_user(user).can_publish():
-            raise EditorPermissionDenied("You cannot publish this post.", parent_id=None)
-        if post.live and not post.has_unpublished_changes:
-            raise EditorFlatError(
-                "no_unpublished_draft",
-                "This post is already live and has no unpublished draft revision.",
-                status_code=status.HTTP_409_CONFLICT,
-            )
-
-        revision = post.get_latest_revision()
-        if revision is None:
-            raise EditorFlatError(
-                "no_revision",
-                "This post has no draft revision to publish.",
-                status_code=status.HTTP_409_CONFLICT,
-            )
-
-        revision.publish(user=user)
-        post = Post.objects.get(pk=post.pk).specific
-        data = self._serialize(post, user=user, content_post=post, revision=revision)
-        data["published_revision_id"] = revision.id
-        data["public_url"] = self._public_url(post, request)
+        data = self._publish(
+            post, user=user, request=request, publish_denied_message="You cannot publish this post.", noun="post"
+        )
         return Response(data)
 
 
@@ -576,3 +599,17 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         revision = draft.save_revision(user=user)
         episode.refresh_from_db()
         return Response(self._serialize(episode, user=user, content_post=draft, revision=revision))
+
+
+class EpisodePublishView(EpisodeEditorMixin, EditorAPIView):
+    def post(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
+        user = request.user
+        episode = self._get_episode(pk, user, denied_message="You cannot publish this draft.")
+        data = self._publish(
+            episode,
+            user=user,
+            request=request,
+            publish_denied_message="You cannot publish this episode.",
+            noun="episode",
+        )
+        return Response(data)

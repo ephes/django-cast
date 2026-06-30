@@ -13,23 +13,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [ ] Editor API episode publish action
-  - Depends on: Editor API episode draft endpoints — **shipped** (draft-only
-    `POST/GET/PATCH /api/editor/episodes/` landed; see `docs/releases/0.2.61.rst`).
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see "Episode Endpoints (Next Implementation Slice)")
-  - Scope: add `POST /api/editor/episodes/{id}/publish/`, mirroring the shipped post publish action (Wagtail revision
-    publishing path, publish-permission gate, published-revision/public-URL metadata, `no_unpublished_draft` 409) plus
-    the episode-specific gate that publishing requires a non-null `podcast_audio` (matches `CustomEpisodeForm.clean`).
-  - Notes: because `Episode` is a `Post`, the existing `POST /api/editor/posts/{id}/publish/` would currently publish an
-    episode row without the `podcast_audio` gate; this item must either route episodes through the episode publish
-    endpoint with the gate or enforce the episode validation on the shared publish path so a podcast-audio-less episode
-    cannot be published through the editor API. Decide and test the missing-`podcast_audio` error shape (a publish-time
-    `validation_error` on `podcast_audio` is the expected default; do not silently 500).
-  - Done when: a draft episode with `podcast_audio` set publishes through Wagtail's revision path and returns publish
-    metadata; a draft episode without `podcast_audio` is rejected with a structured error and stays unpublished; the
-    post publish path cannot bypass that gate for episode rows; tests cover both; and docs/release notes are updated.
+- (none — the editor API episode publish action shipped; see `docs/releases/0.2.61.rst`. Pick the next item from
+  Research / Shaping.)
 
 ## Research / Shaping
 
