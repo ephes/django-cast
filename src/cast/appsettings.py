@@ -19,6 +19,14 @@ _DYNAMIC_SETTING_DEFAULTS: dict[str, Any] = {
     "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS": [(1110, 740), (120, 80)],
     "CAST_REPOSITORY": "default",
     "CAST_AUDIO_PLAYER": "podlove",
+    "CAST_EDITOR_SCOPES": {
+        # django-cast deliberately has a single write bucket (create/update are not split),
+        # so the standard IndieAuth post-write scopes ``create``/``update`` both satisfy it.
+        # ``media`` (IndieAuth's upload-endpoint scope) and other aliases are intentionally
+        # NOT bundled here: a site whose issuer uses them maps them in via this setting.
+        "write": {"write", "create", "update"},
+        "publish": {"publish"},
+    },
 }
 
 
@@ -36,6 +44,7 @@ if TYPE_CHECKING:
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
     CAST_REPOSITORY: str
     CAST_AUDIO_PLAYER: str
+    CAST_EDITOR_SCOPES: dict[str, set[str]]
 
 
 def __getattr__(name: str) -> Any:

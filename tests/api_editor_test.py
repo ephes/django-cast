@@ -2737,3 +2737,55 @@ class TestEditorEpisodePublish:
         assert response.json()["errors"]["podcast_audio"][0]["code"] == "required"
         episode = Episode.objects.get(pk=created["id"])
         assert episode.live is False
+
+
+class TestEditorScopeReader:
+    def test_none_auth_returns_none(self):
+        from cast.api.editor.scopes import get_request_scopes
+
+        assert get_request_scopes(None) is None
+
+    def test_space_separated_scope_string_is_split(self):
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {"scope": "write publish"})()
+        assert get_request_scopes(token) == {"write", "publish"}
+
+    def test_scopes_iterable_is_collected(self):
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {"scopes": ["write"]})()
+        assert get_request_scopes(token) == {"write"}
+
+    def test_token_without_scope_info_returns_none(self):
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {})()
+        assert get_request_scopes(token) is None
+
+    def test_empty_scope_string_is_empty_set_not_none(self):
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {"scope": ""})()
+        assert get_request_scopes(token) == set()
+
+    def test_non_string_scope_value_fails_closed(self):
+        # ``scope`` is string-only by convention; a list must NOT be coerced into granted
+        # scopes (that would fail open). It fails closed to an empty set.
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {"scope": ["write"]})()
+        assert get_request_scopes(token) == set()
+
+    def test_empty_scopes_iterable_is_empty_set(self):
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {"scopes": []})()
+        assert get_request_scopes(token) == set()
+
+    def test_scopes_accepts_any_non_string_iterable(self):
+        # The contract is "iterable of scope strings", not "list" — a generator works.
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {"scopes": iter(["write", "publish"])})()
+        assert get_request_scopes(token) == {"write", "publish"}
