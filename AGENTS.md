@@ -35,6 +35,7 @@
 - Use `pytest -k "keyword"` or `just test-one path::node` for fast iteration.
 
 ## Commit & Pull Request Guidelines
+- This repository uses **trunk-based development**: `develop` is the trunk. Integrate work in small, frequent commits to `develop`—either directly or via short-lived branches that fast-forward back into it. Avoid long-lived feature branches that drift from the trunk.
 - Commit messages: short, imperative subjects; keep each commit scoped to a single logical change.
 - Do not bump version numbers on every commit.
 - Before opening a PR, run `just check` (lint, typecheck, and tests).
