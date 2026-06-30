@@ -347,8 +347,14 @@ Example response:
         {"id": 4, "title": "My Blog", "type": "cast.Blog",
          "api_url": "/api/editor/posts/"},
         {"id": 7, "title": "My Podcast", "type": "cast.Podcast",
-         "api_url": "/api/editor/posts/"}
+         "api_url": "/api/editor/episodes/"}
     ]
+
+``api_url`` is the create endpoint hint for that parent's primary content type:
+a ``cast.Blog`` points at ``/api/editor/posts/`` and a ``cast.Podcast`` points
+at ``/api/editor/episodes/``. Podcasts also accept plain posts; clients that
+want a post under a podcast can still ``POST /api/editor/posts/`` with that
+podcast as the parent.
 
 **Create a draft post**::
 
@@ -358,8 +364,8 @@ Example response:
 Creates a draft ``Post`` under the chosen parent page.  The page is saved as a
 Wagtail revision and is not published by this endpoint.  Passing
 ``"publish": true`` is rejected; use the explicit publish action after review.
-(Episode creation mirrors this shape and is a planned follow-up; it is not part of
-this slice.)
+Podcast episodes have their own create/read/update endpoints with the same shape
+plus episode-specific fields; see **Episode endpoints** below.
 
 Referenced media — ``cover_image`` and inline ``image``, ``gallery``,
 ``audio``, and ``video`` blocks — must be choosable by the caller. Missing and
@@ -585,6 +591,73 @@ returns ``409 Conflict``:
 Permission failures use the standard ``permission_denied`` envelope. Missing
 posts use the standard ``not_found`` envelope.
 
+**Episode endpoints**
+
+Podcast episodes have dedicated draft create/read/update endpoints that mirror
+the post endpoints. ``Episode`` is a ``Post`` subclass, so the body
+(``overview``/``detail``), ``tags``, ``categories``, ``cover_image``,
+``visible_date``, ``slug``, revision/``base_revision_id`` conflict detection, the
+draft-only ``publish`` guard, and the structured error envelopes all behave
+exactly as documented for posts above. The endpoints are::
+
+    POST  /api/editor/episodes/
+    GET   /api/editor/episodes/{id}/
+    PATCH /api/editor/episodes/{id}/
+
+The parent must be a ``cast.Podcast``; a ``cast.Blog`` or any other parent is
+rejected with a ``validation_error`` on ``parent``. These endpoints serve
+episodes only — a non-episode page id returns the ``not_found`` envelope.
+
+Episode publishing is a planned follow-up and is **not** part of this slice;
+create and update stay draft-only and reject ``publish: true`` like posts.
+
+Beyond the shared post fields, episodes accept and return these
+episode-specific fields:
+
+- ``podcast_audio`` (optional): ``{"id": <audio id>}`` referencing a
+  ``cast.Audio`` the caller may choose, or ``null`` on ``PATCH`` to clear it.
+  Missing or inaccessible audio collapses to the neutral
+  ``not_found`` shape at ``podcast_audio.id``. It is optional on a draft; the
+  publish-time requirement belongs to the planned publish action.
+- ``episode_number`` (optional): positive integer, or ``null`` on ``PATCH`` to
+  clear it.
+- ``episode_type`` (optional): one of ``full``, ``trailer``, ``bonus``, or an
+  empty string (which omits the feed tag, equivalent to ``full``).
+- ``season`` (optional): ``{"id": <season id>}`` referencing a ``cast.Season``
+  that **must belong to the parent podcast**, or ``null`` on ``PATCH`` to clear
+  it. A foreign-podcast season is a ``validation_error`` on ``season``.
+- ``keywords`` (optional): iTunes keyword string.
+- ``explicit`` (optional): one of ``1`` (yes), ``2`` (no), ``3`` (clean);
+  defaults to ``1``.
+- ``block`` (optional): boolean; blocks the episode from iTunes.
+
+Example create request:
+
+.. code-block:: json
+
+    {
+      "parent": {"id": 7},
+      "title": "Episode 12",
+      "slug": "episode-12",
+      "tags": ["interview"],
+      "overview": [
+        {"type": "heading", "value": "Show notes"}
+      ],
+      "podcast_audio": {"id": 321},
+      "episode_number": 12,
+      "episode_type": "full",
+      "season": {"id": 3},
+      "explicit": 1,
+      "block": false
+    }
+
+The response is the standard editor draft shape (``id``, ``type`` of
+``cast.Episode``, the shared post fields, ``preview_url``/``edit_url``, and an
+``api_url`` of ``/api/editor/episodes/{id}/``) plus the episode-specific fields
+above. ``PATCH`` requires ``base_revision_id``, preserves omitted fields and
+sections, and keeps the empty-update guard, exactly like posts; ``parent`` is
+immutable.
+
 **Error envelopes**
 
 Validation errors (``400 Bad Request``):
@@ -773,6 +846,11 @@ Authorization uses standard Wagtail page permissions:
 - ``PATCH /api/editor/posts/{id}/`` — requires edit permission for the page.
 - ``POST /api/editor/posts/{id}/publish/`` — requires edit and publish
   permission for the page.
+- ``POST /api/editor/episodes/`` — requires add-child permission on the
+  selected ``Podcast`` parent.
+- ``GET /api/editor/episodes/{id}/`` — requires edit permission for the episode.
+- ``PATCH /api/editor/episodes/{id}/`` — requires edit permission for the
+  episode.
 
 Pagination
 ----------

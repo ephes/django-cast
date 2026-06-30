@@ -30,9 +30,10 @@ and public URL metadata, and keeps `publish: true` rejected on create/update.
 
 Remaining follow-ups beyond slice 4 (triaged 2026-06-29 into concrete `BACKLOG.md` items instead of one broad bucket):
 
-- **Episode draft endpoints — selected next slice.** Draft-only `POST/GET/PATCH /api/editor/episodes/` for `Episode`
-  pages under a `Podcast` parent. See "Episode Endpoints (Next Implementation Slice)" below for the detailed contract.
-- **Episode publish action — ready, depends on episode draft endpoints.** `POST /api/editor/episodes/{id}/publish/`
+- **Episode draft endpoints — implemented (2026-06-29).** Draft-only `POST/GET/PATCH /api/editor/episodes/` for
+  `Episode` pages under a `Podcast` parent. See "Episode Endpoints (Next Implementation Slice)" below for the detailed
+  contract and shipped status.
+- **Episode publish action — next, draft endpoints now shipped.** `POST /api/editor/episodes/{id}/publish/`
   mirroring the post publish action plus the episode-specific `podcast_audio`-required gate.
 - **Rendered-preview endpoint — shaping.** Server-rendered draft preview for token-only/non-admin clients that cannot
   use the admin-session `preview_url`.
@@ -1031,8 +1032,13 @@ Markdown input, and rendered-preview endpoints out of scope; publishing landed l
 
 ## Episode Endpoints (Next Implementation Slice)
 
-Status: planned, selected as the next implementable slice on 2026-06-29. Tracked in `BACKLOG.md` as
-"Editor API episode draft endpoints" (`Next`) and "Editor API episode publish action" (`Ready`).
+Status: draft create/read/update implemented (2026-06-29): `POST /api/editor/episodes/`,
+`GET /api/editor/episodes/{id}/`, and `PATCH /api/editor/episodes/{id}/` for `Episode` pages under a `Podcast` parent.
+Episodes reuse the post body converter, media-reference `choose` checks, `base_revision_id` conflict detection, and the
+draft-only `publish` guard, and add the episode-specific fields (`podcast_audio`, `episode_number`, `episode_type`,
+`season`, `keywords`, `explicit`, `block`). A non-podcast parent and a foreign-podcast `season` return structured
+errors, and `GET /api/editor/parents/` now points podcasts at the episode create endpoint. The episode **publish**
+action is still pending; it is tracked in `BACKLOG.md` as "Editor API episode publish action" (`Next`).
 
 This slice brings posts' create/read/update/publish surface to podcast episodes. It is the closest parity follow-up
 after the post editor API and reuses almost all of it; the new work is the episode-specific fields, the `Podcast`

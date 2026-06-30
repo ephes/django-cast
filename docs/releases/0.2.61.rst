@@ -38,6 +38,17 @@
   Audio/video editor uploads share a one-in-flight per-user lock, and editor
   audio probing is capped by a request-path budget so slow files fail with
   ``probe_timeout`` instead of hanging the request.
+- Extended the editor API to podcast episodes with draft-only
+  ``POST /api/editor/episodes/``, ``GET /api/editor/episodes/{id}/``, and
+  ``PATCH /api/editor/episodes/{id}/``. Episodes reuse the post body, tags,
+  categories, cover image, and revision/conflict handling, and add the
+  episode-specific fields ``podcast_audio``, ``episode_number``,
+  ``episode_type``, ``season``, ``keywords``, ``explicit``, and ``block``. The
+  parent must be a ``cast.Podcast`` (a non-podcast parent is rejected), the
+  ``season`` must belong to that podcast, and ``podcast_audio`` must be choosable
+  by the caller. ``GET /api/editor/parents/`` now points podcasts at the episode
+  create endpoint. Create and update stay draft-only and reject ``publish:
+  true``; the episode publish action is a planned follow-up.
 - Tightened Wagtail admin permissions for custom audio, video, and transcript
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and

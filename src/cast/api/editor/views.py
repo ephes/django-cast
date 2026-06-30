@@ -11,11 +11,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ...models import Blog, Post
+from ...models import Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
 from .body import (
     author_blocks_to_overview,
     author_blocks_to_section,
+    get_choosable_audio,
     get_choosable_image,
     section_to_author_blocks,
 )
@@ -27,7 +28,13 @@ from .errors import (
     EditorValidationError,
     editor_exception_handler,
 )
-from .serializers import ParentSerializer, PostCreateSerializer, PostUpdateSerializer
+from .serializers import (
+    EpisodeCreateSerializer,
+    EpisodeUpdateSerializer,
+    ParentSerializer,
+    PostCreateSerializer,
+    PostUpdateSerializer,
+)
 
 
 class HasWagtailAdminAccess(BasePermission):
@@ -51,19 +58,22 @@ class EditorAPIView(APIView):
 class ParentsListView(EditorAPIView):
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         user = request.user
-        api_url = reverse("cast:api:editor_post_create")
+        post_api_url = reverse("cast:api:editor_post_create")
+        episode_api_url = reverse("cast:api:editor_episode_create")
         parents = []
         # Blog.objects includes Podcast rows: Podcast is concrete MTI over Blog
         # (Podcast has a blog_ptr), so .specific() resolves each row to its
         # Blog/Podcast type and both are listed.
         for blog in Blog.objects.all().specific():
             if blog.permissions_for_user(user).can_add_subpage():
+                # A podcast's primary content type is an episode, so point it at the
+                # episode create endpoint; plain blogs point at the post endpoint.
                 parents.append(
                     {
                         "id": blog.id,
                         "title": blog.title,
                         "type": blog._meta.label,  # "cast.Blog" or "cast.Podcast"
-                        "api_url": api_url,
+                        "api_url": episode_api_url if blog.is_podcast else post_api_url,
                     }
                 )
         return Response(ParentSerializer(parents, many=True).data)
@@ -71,6 +81,7 @@ class ParentsListView(EditorAPIView):
 
 class PostEditorMixin:
     body_section_order = ("overview", "detail")
+    detail_url_name = "cast:api:editor_post_detail"
 
     def _get_parent(self, parent_id: int):
         blog = Blog.objects.filter(pk=parent_id).first()
@@ -168,7 +179,7 @@ class PostEditorMixin:
         if content_post.cover_image_id is not None:
             cover = {"id": content_post.cover_image_id, "alt_text": content_post.cover_alt_text}
 
-        return {
+        data = {
             "id": post.id,
             "type": content_post._meta.label,
             "title": content_post.title,
@@ -189,8 +200,14 @@ class PostEditorMixin:
             "status": "live" if post.live and not post.has_unpublished_changes else "draft",
             "preview_url": reverse("wagtailadmin_pages:view_draft", args=[post.id]),
             "edit_url": reverse("wagtailadmin_pages:edit", args=[post.id]),
-            "api_url": reverse("cast:api:editor_post_detail", kwargs={"pk": post.id}),
+            "api_url": reverse(self.detail_url_name, kwargs={"pk": post.id}),
         }
+        data.update(self._extra_serialized_fields(content_post, user=user))
+        return data
+
+    def _extra_serialized_fields(self, content_post: Post, *, user: Any) -> dict:
+        """Hook for subclasses to add type-specific fields to the serialized response."""
+        return {}
 
     def _public_url(self, post: Post, request: Request) -> str | None:
         url = post.get_url(request=request)
@@ -345,3 +362,217 @@ class PostPublishView(PostEditorMixin, EditorAPIView):
         data["published_revision_id"] = revision.id
         data["public_url"] = self._public_url(post, request)
         return Response(data)
+
+
+class EpisodeEditorMixin(PostEditorMixin):
+    """Shared episode helpers: ``Podcast``-parent enforcement and episode-specific fields."""
+
+    detail_url_name = "cast:api:editor_episode_detail"
+
+    def _get_parent(self, parent_id: int):
+        parent = super()._get_parent(parent_id)
+        if not isinstance(parent, Podcast):
+            raise EditorValidationError(
+                {"parent": [{"code": "invalid", "message": "An episode parent must be a podcast."}]}
+            )
+        return parent
+
+    def _get_episode(self, pk: int, user: Any, *, denied_message: str) -> Episode:
+        # ``.specific()`` resolves the typed subclass row in the same query, so a
+        # plain ``Post`` and a missing page both fall through to the not-found path.
+        episode = Post.objects.filter(pk=pk).specific().first()
+        if not isinstance(episode, Episode):
+            raise EditorNotFound("Episode not found.")
+        if not episode.permissions_for_user(user).can_edit():
+            raise EditorPermissionDenied(denied_message, parent_id=None)
+        return episode
+
+    def _resolve_podcast_audio(self, ref: dict[str, Any] | None, user: Any):
+        if not ref:
+            return None
+        audio = get_choosable_audio(ref["id"], user)
+        if audio is None:
+            # Collapse missing and not-accessible into one error so we never leak the
+            # existence of audio the caller cannot choose (mirrors cover image handling).
+            raise EditorValidationError(
+                {"podcast_audio.id": [{"code": "not_found", "message": "Referenced media is not available."}]}
+            )
+        return audio
+
+    def _resolve_season(self, ref: dict[str, Any] | None, podcast: Podcast):
+        if not ref:
+            return None
+        # Filter by podcast in the query so a missing season and a season belonging to
+        # another podcast collapse into one neutral error: distinguishing them would let
+        # a caller enumerate Season ids of podcasts they cannot access (the same
+        # non-disclosure rule applied to podcast_audio/cover_image above).
+        season = Season.objects.filter(pk=ref["id"], podcast_id=podcast.id).first()
+        if season is None:
+            raise EditorValidationError(
+                {
+                    "season": [
+                        {"code": "invalid", "message": "The selected season must belong to this episode's podcast."}
+                    ]
+                }
+            )
+        return season
+
+    def _apply_episode_metadata(
+        self, episode: Episode, data: dict, user: Any, *, get_podcast: Callable[[], Podcast]
+    ) -> None:
+        """Apply the episode-specific scalar/reference fields present in ``data`` to ``episode``.
+
+        ``get_podcast`` is resolved lazily so a PATCH that does not touch ``season`` never
+        pays the extra parent/subclass queries needed to validate the season constraint.
+        """
+        if "podcast_audio" in data:
+            episode.podcast_audio = self._resolve_podcast_audio(data["podcast_audio"], user)
+        if "season" in data:
+            episode.season = self._resolve_season(data["season"], get_podcast())
+        if "episode_number" in data:
+            episode.episode_number = data["episode_number"]
+        if "episode_type" in data:
+            episode.episode_type = data["episode_type"]
+        if "keywords" in data:
+            episode.keywords = data["keywords"]
+        if "explicit" in data:
+            episode.explicit = data["explicit"]
+        if "block" in data:
+            episode.block = data["block"]
+
+    def _extra_serialized_fields(self, content_post: Episode, *, user: Any) -> dict:
+        podcast_audio = None
+        if content_post.podcast_audio_id is not None:
+            podcast_audio = {"id": content_post.podcast_audio_id}
+        season = None
+        if content_post.season_id is not None:
+            season = {"id": content_post.season_id}
+        return {
+            "podcast_audio": podcast_audio,
+            "episode_number": content_post.episode_number,
+            "episode_type": content_post.episode_type,
+            "season": season,
+            "keywords": content_post.keywords,
+            "explicit": content_post.explicit,
+            "block": content_post.block,
+        }
+
+
+class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        serializer = EpisodeCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = request.user
+
+        if data["publish"]:
+            raise EditorValidationError(
+                {"publish": [{"code": "unsupported", "message": "Publishing is not available in this API version."}]}
+            )
+
+        parent = self._get_parent(data["parent"]["id"])
+        if not parent.permissions_for_user(user).can_add_subpage():
+            raise EditorPermissionDenied("You cannot add episodes under this page.", parent_id=parent.id)
+
+        title = data["title"]
+        slug = data.get("slug") or slugify(title)
+        self._check_unique_slug(parent, slug)
+
+        cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
+        categories = self._resolve_categories(data["categories"])
+        overview_value = author_blocks_to_overview(data["overview"], user=user)
+        body_sections = [{"type": "overview", "value": overview_value}]
+        if "detail" in data:
+            body_sections.append(
+                {"type": "detail", "value": author_blocks_to_section(data["detail"], user=user, path_prefix="detail")}
+            )
+
+        episode = Episode(
+            title=title,
+            slug=slug,
+            owner=user,
+            live=False,
+            cover_image=cover_image,
+            cover_alt_text=cover_alt_text,
+            body=json.dumps(body_sections),
+        )
+        self._apply_episode_metadata(episode, data, user, get_podcast=lambda: parent)
+        if data.get("visible_date") is not None:
+            episode.visible_date = data["visible_date"]
+        parent.add_child(instance=episode)
+        if data["tags"]:
+            episode.tags.add(*data["tags"])
+        if categories:
+            episode.categories.set(categories)
+        if data["tags"] or categories:
+            episode.save()
+        revision = episode.save_revision(user=user)
+
+        return Response(
+            self._serialize(episode, user=user, content_post=episode, revision=revision),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
+    def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
+        episode = self._get_episode(pk, request.user, denied_message="You cannot view this draft.")
+        return Response(self._serialize(episode, user=request.user))
+
+    def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
+        serializer = EpisodeUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        user = request.user
+        if data.get("publish"):
+            raise EditorValidationError(
+                {"publish": [{"code": "unsupported", "message": "Publishing is not available in this API version."}]}
+            )
+        if not (set(data) - {"base_revision_id", "publish"}):
+            raise EditorValidationError(
+                {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
+            )
+
+        episode = self._get_episode(pk, user, denied_message="You cannot edit this draft.")
+        current_revision_id = episode.latest_revision_id
+        submitted_base_revision_id = data["base_revision_id"]
+        edit_url = reverse("wagtailadmin_pages:edit", args=[episode.id])
+        if current_revision_id != submitted_base_revision_id:
+            raise EditorRevisionConflict(
+                current_revision_id=current_revision_id,
+                submitted_base_revision_id=submitted_base_revision_id,
+                edit_url=edit_url,
+            )
+
+        # ``parent`` is immutable on PATCH, so the season constraint resolves against
+        # the episode's existing podcast parent — fetched lazily only when a season is sent.
+        draft = episode.get_latest_revision().as_object()
+        if "title" in data:
+            draft.title = data["title"]
+        if "slug" in data:
+            self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
+            draft.slug = data["slug"]
+        if "visible_date" in data:
+            draft.visible_date = data["visible_date"]
+        if "cover_image" in data:
+            draft.cover_image, draft.cover_alt_text = self._resolve_cover_image(data["cover_image"], user)
+        if "tags" in data:
+            draft.tags.set(data["tags"])
+        if "categories" in data:
+            draft.categories.set(self._resolve_categories(data["categories"]))
+        self._apply_episode_metadata(draft, data, user, get_podcast=lambda: episode.get_parent().specific)
+        body_replacements = {}
+        if "overview" in data:
+            body_replacements["overview"] = author_blocks_to_overview(
+                data["overview"], user=user, existing_section=self._section_value(draft, "overview")
+            )
+        if "detail" in data:
+            body_replacements["detail"] = author_blocks_to_section(
+                data["detail"], user=user, path_prefix="detail", existing_section=self._section_value(draft, "detail")
+            )
+        if body_replacements:
+            draft.body = self._body_sections_with_replacements(draft, body_replacements)
+
+        revision = draft.save_revision(user=user)
+        episode.refresh_from_db()
+        return Response(self._serialize(episode, user=user, content_post=draft, revision=revision))

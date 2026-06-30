@@ -43,3 +43,38 @@ class PostUpdateSerializer(serializers.Serializer):
     overview = serializers.ListField(required=False)
     detail = serializers.ListField(required=False)
     publish = serializers.BooleanField(required=False)
+
+
+class MediaRefSerializer(serializers.Serializer):
+    """An ``{"id": <object id>}`` reference to a single media object."""
+
+    id = serializers.IntegerField()
+
+
+def episode_metadata_fields() -> dict:
+    """The episode-specific serializer fields, sourced from the model to avoid choice drift."""
+    from ...models import Episode
+
+    return {
+        "podcast_audio": MediaRefSerializer(required=False, allow_null=True),
+        "episode_number": serializers.IntegerField(required=False, allow_null=True, min_value=1),
+        "episode_type": serializers.ChoiceField(choices=Episode.EpisodeType.choices, required=False, allow_blank=True),
+        "season": MediaRefSerializer(required=False, allow_null=True),
+        "keywords": serializers.CharField(required=False, allow_blank=True),
+        "explicit": serializers.ChoiceField(choices=Episode.EXPLICIT_CHOICES, required=False),
+        "block": serializers.BooleanField(required=False),
+    }
+
+
+class EpisodeCreateSerializer(PostCreateSerializer):
+    """Create payload for a draft ``Episode``: the post fields plus episode-specific metadata."""
+
+    def get_fields(self) -> dict:
+        return {**super().get_fields(), **episode_metadata_fields()}
+
+
+class EpisodeUpdateSerializer(PostUpdateSerializer):
+    """Update payload for a draft ``Episode``: the post fields plus episode-specific metadata."""
+
+    def get_fields(self) -> dict:
+        return {**super().get_fields(), **episode_metadata_fields()}

@@ -13,41 +13,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [ ] Editor API episode draft endpoints
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see "Episode Endpoints (Next Implementation Slice)")
-  - Related to: the shipped post create/read/update/publish editor API and the podcast publishing metadata work
-    ([backlog/2026-06-18-podcast-publishing-metadata.md](backlog/2026-06-18-podcast-publishing-metadata.md)).
-  - Scope: add draft-only `POST /api/editor/episodes/`, `GET /api/editor/episodes/{id}/`, and
-    `PATCH /api/editor/episodes/{id}/` for `Episode` pages under a caller-selected `Podcast` parent, reusing the post
-    converter, media-reference `choose` checks, revision/`base_revision_id` conflict detection, and error envelopes.
-    `Episode` is a `Post` subclass, so the body (`overview`/`detail`), tags, categories, cover image, `visible_date`,
-    slug, and draft-revision semantics carry over unchanged. The new surface is the episode-specific fields:
-    `podcast_audio` (single `cast.Audio` reference, choosable by the caller, optional on a draft), `episode_number`,
-    `episode_type`, `season`, `keywords`, `explicit`, and `block`.
-  - Notes:
-    - Parent must be a `cast.Podcast`; reject a `cast.Blog` parent with a structured `parent` error. `GET
-      /api/editor/parents/` already lists podcasts.
-    - `podcast_audio` stays optional on draft create/update (the model allows null for drafts); the publish-time
-      requirement is the separate `Ready` publish item below.
-    - `season` must belong to the parent podcast (matches `Episode.clean`); a foreign season is a structured `season`
-      validation error.
-    - Stay draft-only: create/update reject `publish: true` with the existing `validation_error`/`unsupported` guard,
-      exactly like posts.
-    - Decide the episode response field set before implementing serializers; the PRD's episode section lists the
-      proposed contract and the few decisions (which iTunes metadata fields to expose, how `podcast_audio` serializes
-      on read) to pin in a short preflight.
-  - Done when: an authenticated editor can create, read back, and revise a draft `Episode` under a podcast they may add
-    to; episode-specific fields round-trip; foreign-podcast `season`, inaccessible `podcast_audio`, and a `cast.Blog`
-    parent return structured errors; `publish: true` is rejected; create/read/update keep post response-shape parity for
-    shared fields; tests cover these paths; and the API reference plus current release notes document the episode
-    endpoints.
-
-## Ready
-
 - [ ] Editor API episode publish action
-  - Depends on: Editor API episode draft endpoints (Next).
+  - Depends on: Editor API episode draft endpoints — **shipped** (draft-only
+    `POST/GET/PATCH /api/editor/episodes/` landed; see `docs/releases/0.2.61.rst`).
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
     (see "Episode Endpoints (Next Implementation Slice)")
