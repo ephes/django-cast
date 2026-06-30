@@ -57,12 +57,18 @@ class HasEditorScope(BasePermission):
     message = "Your token lacks the scope required for this action."
 
     def has_permission(self, request: Request, view: APIView) -> bool:
-        if request.method in _NON_SCOPED_METHODS:
+        method = request.method
+        if method in _NON_SCOPED_METHODS:
             return True
-        required = getattr(view, "required_scopes", {}).get(request.method, _REQUIRED_SCOPE_UNSET)
+        if not hasattr(view, method.lower()):
+            # The view does not implement this method; let DRF return 405 Method Not
+            # Allowed instead of masking it as a scope failure.
+            return True
+        required = getattr(view, "required_scopes", {}).get(method, _REQUIRED_SCOPE_UNSET)
         if required is _REQUIRED_SCOPE_UNSET:
-            # An editor method without an explicit scope declaration is a configuration
-            # error; fail closed so a forgotten declaration can never bypass enforcement.
+            # A served editor method without an explicit scope declaration is a
+            # configuration error; fail closed so a forgotten declaration can never
+            # bypass enforcement (the view-declaration test guard catches it in CI).
             raise EditorFlatError(
                 "insufficient_scope",
                 "This action has no configured scope requirement.",
@@ -74,7 +80,10 @@ class HasEditorScope(BasePermission):
         if scopes is None:
             # Unscoped token or session auth: defer to Wagtail permissions.
             return True
-        accepted = appsettings.CAST_EDITOR_SCOPES.get(required, set())
+        configured = appsettings.CAST_EDITOR_SCOPES.get(required) or ()
+        # Tolerate list/tuple/set/str values in the setting so an operator config such as
+        # ``{"write": ["posts:edit"]}`` enforces scopes instead of raising a 500.
+        accepted = {configured} if isinstance(configured, str) else set(configured)
         if scopes & accepted:
             return True
         raise EditorFlatError(

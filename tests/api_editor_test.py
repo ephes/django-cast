@@ -2796,7 +2796,14 @@ class TestHasEditorScope:
         return type("Req", (), {"method": method, "auth": auth})()
 
     def _view(self, required_scopes):
-        return type("View", (), {"required_scopes": required_scopes})()
+        # Model a view that actually serves get/post/patch so the ``hasattr`` handler
+        # check passes; behavior here is driven by ``required_scopes`` (the 405
+        # fall-through for genuinely-unimplemented methods is covered by the API tests).
+        def handler(self, *args, **kwargs):
+            return None
+
+        attrs = {"required_scopes": required_scopes, "get": handler, "post": handler, "patch": handler}
+        return type("View", (), attrs)()
 
     def test_options_is_allowed_without_declaration(self):
         from cast.api.editor.scopes import HasEditorScope
@@ -3000,3 +3007,23 @@ class TestEditorScopeEnforcement:
             "overview": [{"type": "heading", "value": "Notes"}],
         }
         assert api_client.post(url, payload, format="json").status_code == 201
+
+    def test_list_valued_scope_setting_is_honoured(self, api_client, blog, admin_user, settings):
+        # Operators naturally write lists; the scope check must not 500 on a non-set value.
+        settings.CAST_EDITOR_SCOPES = {"write": ["posts:edit"], "publish": ["publish"]}
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("posts:edit"))
+        url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "List scope",
+            "slug": "list-scope",
+            "tags": [],
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+        assert api_client.post(url, payload, format="json").status_code == 201
+
+    def test_unsupported_method_is_405_not_403(self, api_client, admin_user):
+        # GET on a POST-only view must return 405 Method Not Allowed, not a scope 403.
+        api_client.force_authenticate(user=admin_user)
+        response = api_client.get(reverse("cast:api:editor_post_create"), format="json")
+        assert response.status_code == 405
