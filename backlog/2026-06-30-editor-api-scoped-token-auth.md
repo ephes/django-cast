@@ -126,15 +126,18 @@ A setting maps each logical scope to the set of token-scope strings that satisfy
 
 ```python
 CAST_EDITOR_SCOPES = {
-    "write": {"write", "create", "update", "media", "content"},
+    "write": {"write", "create", "update"},
     "publish": {"publish"},
 }
 ```
 
-This lets a site match its IndieAuth issuer's vocabulary (where write authority is conventionally
-`create`/`update`/`media`) without code changes, preserving the auth-agnostic boundary. The check in step 4 is
-`bool(scopes & CAST_EDITOR_SCOPES[required])`. Sites may override to tighten or rename. The defaults make a
-typical IndieAuth token work out of the box.
+The default for `write` accepts the standard IndieAuth post-write scopes `create` and `update` (django-cast has a
+single write bucket, so both map to it — see decision 3), letting a typical IndieAuth token create and revise
+drafts out of the box. Scopes that mean something narrower in the issuer's model are intentionally **not** bundled
+into `write` by default — notably IndieAuth's `media` scope, which authorises the upload endpoint rather than post
+editing; bundling it would let a media-only token edit posts. A deployment that wants such a scope to grant editor
+write access adds it via this setting. The check in step 4 is `bool(scopes & CAST_EDITOR_SCOPES[required])`. Sites
+may override to tighten, widen, or rename, preserving the auth-agnostic boundary.
 
 ### Error shape
 
