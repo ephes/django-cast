@@ -1,6 +1,7 @@
 # Editor API scoped-token / scope mapping — design
 
-Status: shaping complete (2026-06-30). Ready to split into an implementation slice.
+Status: implemented in 0.2.61 (2026-06-30) — `HasEditorScope` + `CAST_EDITOR_SCOPES`. This document is retained as
+the design record.
 
 Parent PRD:
 [2026-06-19-programmatic-content-editing-api.md](2026-06-19-programmatic-content-editing-api.md)

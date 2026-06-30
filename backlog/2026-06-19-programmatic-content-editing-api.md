@@ -1228,8 +1228,8 @@ list near the top of this PRD and the "Episode Endpoints (Next Implementation Sl
   mapping (so mixed `GET`/`PATCH` views resolve per method) against a configurable `CAST_EDITOR_SCOPES` mapping;
   session auth and unscoped tokens fall back to pure Wagtail permissions; scope failures return a 403
   `insufficient_scope`. See
-  [2026-06-30-editor-api-scoped-token-auth.md](2026-06-30-editor-api-scoped-token-auth.md). Implementation slice
-  pending.
+  [2026-06-30-editor-api-scoped-token-auth.md](2026-06-30-editor-api-scoped-token-auth.md). Implemented in 0.2.61
+  (`HasEditorScope` + `CAST_EDITOR_SCOPES`).
 - What is the right endpoint namespace: `editor`, `content`, or a Wagtail-compatible extension? The shipped surface uses
   `editor`; this question is now informational rather than blocking.
 - Future-only publish question: this API version rejects `publish: true`; should a later version allow

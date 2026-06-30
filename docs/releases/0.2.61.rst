@@ -54,6 +54,13 @@
   publish. That audio requirement is also enforced when an episode id is
   published through ``POST /api/editor/posts/{id}/publish/``, so it cannot be
   bypassed.
+- The editor API now enforces optional per-action scopes for scoped-token
+  authentication: reads need no scope, create/update/media uploads need a ``write``
+  scope, and the publish actions need a ``publish`` scope, so a token can be restricted
+  to draft-only. Session auth and unscoped tokens fall back to pure Wagtail permissions.
+  Accepted scope strings are configurable via ``CAST_EDITOR_SCOPES``; a token missing the
+  required scope gets ``403 insufficient_scope``. django-cast still imports no
+  authentication provider.
 - Tightened Wagtail admin permissions for custom audio, video, and transcript
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and

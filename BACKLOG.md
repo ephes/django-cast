@@ -57,19 +57,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     endpoint/response contract, the permission model, and a first implementation slice or an explicit deferral with
     rationale.
 
-- [ ] Editor API scoped-token / IndieAuth scope mapping
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Authentication And Permissions, Open Questions)
-  - Design: [backlog/2026-06-30-editor-api-scoped-token-auth.md](backlog/2026-06-30-editor-api-scoped-token-auth.md)
-  - Status: **shaping complete** — decided two logical scopes (`write`/`publish`, reads scope-free), a per-method
-    `required_scopes` mapping enforced by a generic `HasEditorScope` class (so mixed `GET`/`PATCH` views resolve
-    per method), session and unscoped-token fallback to pure Wagtail permissions, configurable `CAST_EDITOR_SCOPES`,
-    and an `insufficient_scope` 403 error. Ready to promote to an implementation slice (see the design's "First
-    implementation slice").
-  - Related to: Editor API rendered-preview endpoint — the design resolves that rendered preview is **not** a
-    blocker for scoped-token auth.
-
 - [ ] Editor API remote media import
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)

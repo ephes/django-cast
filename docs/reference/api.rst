@@ -873,6 +873,31 @@ Authorization uses standard Wagtail page permissions:
 - ``POST /api/editor/episodes/{id}/publish/`` — requires edit and publish
   permission for the episode, and a non-null ``podcast_audio``.
 
+Scoped-token authorization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When a request is authenticated by a token that carries OAuth/IndieAuth-style scopes
+(a ``scope`` space-separated string or a ``scopes`` iterable on ``request.auth``), the
+editor API additionally enforces a per-action scope on top of the Wagtail permission
+checks above:
+
+- Read endpoints (all ``GET``) require no scope.
+- Create, update, and media-upload endpoints require the ``write`` scope.
+- The publish actions require the ``publish`` scope.
+
+Scope is necessary but not sufficient — the Wagtail permission check still applies. A
+token that lacks the required scope receives ``403`` with code ``insufficient_scope``.
+
+Session authentication and tokens that carry no scope information are treated as
+unscoped and fall back to pure Wagtail permissions, so existing session and DRF
+``TokenAuthentication`` setups are unaffected. The accepted scope strings are
+configurable via ``CAST_EDITOR_SCOPES`` (default: ``write`` is satisfied by ``write``,
+``create``, or ``update``; ``publish`` by ``publish``), letting a site match its token
+issuer's vocabulary without code changes. Scopes that mean something narrower in the
+issuer's model (for example IndieAuth's ``media`` upload scope) are intentionally not
+bundled into ``write`` by default; add them via this setting if your deployment wants
+them to grant editor write access.
+
 Pagination
 ----------
 
