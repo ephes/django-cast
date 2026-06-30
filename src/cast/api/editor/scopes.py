@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from rest_framework import status
+from rest_framework.permissions import BasePermission
+from rest_framework.request import Request
+from rest_framework.views import APIView
+
+from ... import appsettings
+from .errors import EditorFlatError
+
 _REQUIRED_SCOPE_UNSET = object()
+_NON_SCOPED_METHODS = frozenset({"OPTIONS", "HEAD"})
 
 
 def get_request_scopes(auth: Any) -> set[str] | None:
@@ -35,3 +44,41 @@ def get_request_scopes(auth: Any) -> set[str] | None:
     # A scope attribute is present but malformed (a non-string ``scope``, or a
     # ``str``/``bytes``/non-iterable ``scopes``); fail closed rather than fall open.
     return set()
+
+
+class HasEditorScope(BasePermission):
+    """Enforce the per-method ``required_scopes`` mapping against ``request.auth`` scopes.
+
+    Scope is necessary, not sufficient — the view body still runs Wagtail permission
+    checks. Session auth (``request.auth is None``) and unscoped tokens defer to those
+    Wagtail checks. A served method missing a ``required_scopes`` entry fails closed.
+    """
+
+    message = "Your token lacks the scope required for this action."
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if request.method in _NON_SCOPED_METHODS:
+            return True
+        required = getattr(view, "required_scopes", {}).get(request.method, _REQUIRED_SCOPE_UNSET)
+        if required is _REQUIRED_SCOPE_UNSET:
+            # An editor method without an explicit scope declaration is a configuration
+            # error; fail closed so a forgotten declaration can never bypass enforcement.
+            raise EditorFlatError(
+                "insufficient_scope",
+                "This action has no configured scope requirement.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        if required is None:
+            return True
+        scopes = get_request_scopes(request.auth)
+        if scopes is None:
+            # Unscoped token or session auth: defer to Wagtail permissions.
+            return True
+        accepted = appsettings.CAST_EDITOR_SCOPES.get(required, set())
+        if scopes & accepted:
+            return True
+        raise EditorFlatError(
+            "insufficient_scope",
+            f"This action requires the {required!r} scope.",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )

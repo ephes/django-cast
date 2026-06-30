@@ -2789,3 +2789,74 @@ class TestEditorScopeReader:
 
         token = type("Tok", (), {"scopes": iter(["write", "publish"])})()
         assert get_request_scopes(token) == {"write", "publish"}
+
+
+class TestHasEditorScope:
+    def _request(self, method, auth):
+        return type("Req", (), {"method": method, "auth": auth})()
+
+    def _view(self, required_scopes):
+        return type("View", (), {"required_scopes": required_scopes})()
+
+    def test_options_is_allowed_without_declaration(self):
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        assert perm.has_permission(self._request("OPTIONS", None), self._view({})) is True
+
+    def test_none_scope_method_is_allowed(self):
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        assert perm.has_permission(self._request("GET", None), self._view({"GET": None})) is True
+
+    def test_undeclared_method_fails_closed(self):
+        from cast.api.editor.errors import EditorFlatError
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        with pytest.raises(EditorFlatError) as exc:
+            perm.has_permission(self._request("PATCH", None), self._view({"GET": None}))
+        assert exc.value.code_text == "insufficient_scope"
+        assert exc.value.status_code == 403
+
+    def test_session_request_allows_write(self):
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        # request.auth is None (session) -> defer to Wagtail
+        assert perm.has_permission(self._request("POST", None), self._view({"POST": "write"})) is True
+
+    def test_unscoped_token_allows_write(self):
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        token = type("Tok", (), {})()  # no scope/scopes attribute
+        assert perm.has_permission(self._request("POST", token), self._view({"POST": "write"})) is True
+
+    def test_scoped_token_missing_scope_is_denied(self):
+        from cast.api.editor.errors import EditorFlatError
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        token = type("Tok", (), {"scope": "publish"})()  # has publish, needs write
+        with pytest.raises(EditorFlatError) as exc:
+            perm.has_permission(self._request("POST", token), self._view({"POST": "write"}))
+        assert exc.value.code_text == "insufficient_scope"
+
+    def test_write_scope_allows_write_but_not_publish(self):
+        from cast.api.editor.errors import EditorFlatError
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        token = type("Tok", (), {"scope": "write"})()
+        assert perm.has_permission(self._request("POST", token), self._view({"POST": "write"})) is True
+        with pytest.raises(EditorFlatError):
+            perm.has_permission(self._request("POST", token), self._view({"POST": "publish"}))
+
+    def test_publish_scope_allows_publish(self):
+        from cast.api.editor.scopes import HasEditorScope
+
+        perm = HasEditorScope()
+        token = type("Tok", (), {"scope": "publish"})()
+        assert perm.has_permission(self._request("POST", token), self._view({"POST": "publish"})) is True
