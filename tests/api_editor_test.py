@@ -2860,3 +2860,36 @@ class TestHasEditorScope:
         perm = HasEditorScope()
         token = type("Tok", (), {"scope": "publish"})()
         assert perm.has_permission(self._request("POST", token), self._view({"POST": "publish"})) is True
+
+
+class TestEditorViewScopeDeclarations:
+    pytestmark = pytest.mark.django_db
+
+    def _editor_views(self):
+        from cast.api import urls as api_urls
+
+        views = {}
+        for pattern in api_urls.urlpatterns:
+            name = getattr(pattern, "name", None) or ""
+            if not name.startswith("editor_"):
+                continue
+            cls = getattr(pattern.callback, "cls", None)
+            if cls is not None:
+                views[name] = cls
+        return views
+
+    def test_found_editor_views(self):
+        # Guards the guard: make sure the URLconf scan actually finds the views.
+        assert "editor_post_create" in self._editor_views()
+        assert "editor_episode_publish" in self._editor_views()
+
+    def test_every_served_method_declares_a_required_scope(self):
+        valid = {None, "write", "publish"}
+        skipped = {"options", "head", "trace"}
+        for name, cls in self._editor_views().items():
+            methods = [m for m in cls.http_method_names if m not in skipped and hasattr(cls, m)]
+            assert methods, f"{name}: no handler methods found"
+            for method in methods:
+                key = method.upper()
+                assert key in cls.required_scopes, f"{name} ({cls.__name__}) does not declare scope for {key}"
+                assert cls.required_scopes[key] in valid, f"{name}: bad scope value for {key}"

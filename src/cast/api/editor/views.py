@@ -28,6 +28,7 @@ from .errors import (
     EditorValidationError,
     editor_exception_handler,
 )
+from .scopes import HasEditorScope
 from .serializers import (
     EpisodeCreateSerializer,
     EpisodeUpdateSerializer,
@@ -49,13 +50,16 @@ class HasWagtailAdminAccess(BasePermission):
 class EditorAPIView(APIView):
     """Base view for the content editing API; renders structured error envelopes."""
 
-    permission_classes = (IsAuthenticated, HasWagtailAdminAccess)
+    permission_classes = (IsAuthenticated, HasWagtailAdminAccess, HasEditorScope)
+    required_scopes: dict[str, str | None] = {}
 
     def get_exception_handler(self) -> Callable[..., Any]:
         return editor_exception_handler
 
 
 class ParentsListView(EditorAPIView):
+    required_scopes = {"GET": None}
+
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         user = request.user
         post_api_url = reverse("cast:api:editor_post_create")
@@ -257,6 +261,8 @@ class PostEditorMixin:
 
 
 class PostCreateView(PostEditorMixin, EditorAPIView):
+    required_scopes = {"POST": "write"}
+
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = PostCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -317,6 +323,8 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
 
 
 class PostDetailView(PostEditorMixin, EditorAPIView):
+    required_scopes = {"GET": None, "PATCH": "write"}
+
     def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         post = self._get_post(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(post, user=request.user))
@@ -378,6 +386,8 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
 
 
 class PostPublishView(PostEditorMixin, EditorAPIView):
+    required_scopes = {"POST": "publish"}
+
     def post(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         user = request.user
         post = self._get_post(pk, user, denied_message="You cannot publish this draft.")
@@ -482,6 +492,8 @@ class EpisodeEditorMixin(PostEditorMixin):
 
 
 class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
+    required_scopes = {"POST": "write"}
+
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = EpisodeCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -538,6 +550,8 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
 
 
 class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
+    required_scopes = {"GET": None, "PATCH": "write"}
+
     def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         episode = self._get_episode(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(episode, user=request.user))
@@ -602,6 +616,8 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
 
 
 class EpisodePublishView(EpisodeEditorMixin, EditorAPIView):
+    required_scopes = {"POST": "publish"}
+
     def post(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         user = request.user
         episode = self._get_episode(pk, user, denied_message="You cannot publish this draft.")

@@ -293,6 +293,7 @@ class EditorMediaListMixin:
 
 
 class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
+    required_scopes = {"GET": None, "POST": "write"}
     parser_classes = (MultiPartParser, FormParser)
     serializer_func = staticmethod(serialize_image)
 
@@ -326,6 +327,7 @@ class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
 
 
 class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
+    required_scopes = {"GET": None, "POST": "write"}
     parser_classes = (MultiPartParser, FormParser)
     serializer_func = staticmethod(serialize_audio)
 
@@ -388,6 +390,7 @@ class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
 
 
 class EditorVideoListCreateView(EditorMediaListMixin, EditorAPIView):
+    required_scopes = {"GET": None, "POST": "write"}
     parser_classes = (MultiPartParser, FormParser)
     serializer_func = staticmethod(serialize_video)
 
@@ -439,6 +442,7 @@ def _with_upload_lock(user: Any, callback: Callable[[], Response]) -> Response:
 
 
 class EditorMediaCollectionsView(EditorAPIView):
+    required_scopes = {"GET": None}
     pagination_class = StandardResultsSetPagination
     allowed_query_params = {"type", "page", "pageSize", "format"}
 
