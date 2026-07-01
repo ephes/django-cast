@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pytest
 from django.http import QueryDict
+from django.utils import timezone
 from django.utils.timezone import make_aware
 
 from cast.filters import CountFacetWidget, PostFilterset, SlugChoicesField
@@ -46,6 +47,23 @@ def test_selected_count_facet_is_in_hidden_input():
     cfw.data = QueryDict("date_facets=2018-12")
     option = cfw.render_option("date_facets", {"2018-12"}, "2018-12", "2018-12 (3)")
     assert '<input type="hidden" name="date_facets" value="2018-12">' in option
+
+
+def test_count_facet_widget_escapes_label_and_hidden_value():
+    cfw = CountFacetWidget()
+    cfw.data = QueryDict("tag_facets=bad%22%20onclick%3D%22alert(1)")
+    option = cfw.render_option(
+        "tag_facets",
+        {'bad" onclick="alert(1)'},
+        'bad" onclick="alert(1)',
+        '<img src=x onerror="alert(1)"> (1)',
+    )
+
+    assert "<img" not in option
+    assert 'onerror="' not in option
+    assert 'onclick="' not in option
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt; (1)" in option
+    assert 'value="bad&quot; onclick=&quot;alert(1)"' in option
 
 
 @pytest.mark.parametrize(
@@ -111,7 +129,8 @@ class TestPostFilterset:
         filterset = PostFilterset(QueryDict(), queryset=queryset)
         # then the post is counted in the date facets
         date_facets = filterset.filters["date_facets"].facet_counts
-        date_month_post = make_aware(datetime(post.visible_date.year, post.visible_date.month, 1))
+        local_visible_date = timezone.localtime(post.visible_date)
+        date_month_post = make_aware(datetime(local_visible_date.year, local_visible_date.month, 1))
         assert date_facets[date_month_post] == 1
 
     def test_post_is_counted_in_date_facets_when_in_search_result(self, post):
@@ -124,7 +143,8 @@ class TestPostFilterset:
         assert post in filterset.qs
         # and the post is counted in the date facets
         date_facets = filterset.filters["date_facets"].facet_counts
-        date_month_post = make_aware(datetime(post.visible_date.year, post.visible_date.month, 1))
+        local_visible_date = timezone.localtime(post.visible_date)
+        date_month_post = make_aware(datetime(local_visible_date.year, local_visible_date.month, 1))
         assert date_facets[date_month_post] == 1
 
     def test_post_is_counted_in_date_facets_when_not_in_search_result(self, post):
@@ -281,6 +301,35 @@ class TestPostFilterset:
         # then the tag appears in the choices of the bound field
         slugs = {slug for slug, display in filterset.form["tag_facets"].field.choices}
         assert "tag" in slugs
+
+    def test_tag_facet_label_is_escaped_in_rendered_form(self, post):
+        post.tags.add("safe-slug")
+        post.save()
+        tag = post.tags.first()
+        assert tag is not None
+        tag.name = f'<img src=x onerror="alert({post.pk})">'
+        tag.save()
+        filterset = PostFilterset(QueryDict(), queryset=post.blog.unfiltered_published_posts)
+
+        html = str(filterset.form["tag_facets"])
+
+        assert "<img" not in html
+        assert 'onerror="' not in html
+        assert f"&lt;img src=x onerror=&quot;alert({post.pk})&quot;&gt; (1)" in html
+
+    def test_category_facet_label_is_escaped_in_rendered_form(self, post):
+        category = PostCategory.objects.create(
+            name=f'<img src=x onerror="alert({post.pk})">', slug=f"safe-category-{post.pk}"
+        )
+        post.categories.add(category)
+        post.save()
+        filterset = PostFilterset(QueryDict(), queryset=post.blog.unfiltered_published_posts)
+
+        html = str(filterset.form["category_facets"])
+
+        assert "<img" not in html
+        assert 'onerror="' not in html
+        assert f"&lt;img src=x onerror=&quot;alert({post.pk})&quot;&gt; (1)" in html
 
     def test_remove_filters_not_in_configured_filters(self, mocker):
         # given the configured_filters are an empty set

@@ -92,11 +92,11 @@ def _episode_from_latest_revision(episode: Episode) -> Episode:
 def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpResponse:
     episode = get_object_or_404(Episode.objects.specific(), pk=episode_id)
     redirect_url = _get_redirect_url(request, reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
-    if not user_can_generate_transcript_for_episode(request=request, episode=episode):
+    if episode.permissions_for_user(request.user).can_edit() is False:
         raise PermissionDenied
     draft_episode = _episode_from_latest_revision(episode)
     audio = draft_episode.podcast_audio
-    if not isinstance(audio, Audio):
+    if not isinstance(audio, Audio) or not user_can_generate_transcript_for_audio(request=request, audio=audio):
         raise PermissionDenied
     site = episode.get_site() or Site.find_for_request(request)
     try:

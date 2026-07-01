@@ -45,3 +45,138 @@ li.comment-wrapper {
   display: none;
 }
 
+/* ---- author self-edit/delete affordances ---- */
+
+/* Action controls render as small, consistent pill links. They take an explicit
+   font-size so reply/edit/delete no longer inherit the comment heading size
+   (which made "reply" huge next to the others). Colors derive from currentColor
+   so the controls adapt to any theme (light or dark). */
+.comment-reply-link,
+.comment-author-actions a {
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0.12em 0.62em;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  vertical-align: middle;
+  /* important: override the theme's link underline on these control pills */
+  text-decoration: none !important;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.comment-reply-link:hover,
+.comment-author-actions a:hover {
+  text-decoration: none !important;
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.comment-author-actions {
+  margin-left: 0.25em;
+}
+
+/* delete reads as destructive on hover */
+.comment-delete-link:hover {
+  color: #ef5350;
+  border-color: color-mix(in srgb, #ef5350 60%, transparent);
+  background-color: color-mix(in srgb, #ef5350 14%, transparent);
+}
+
+.comment-edited-flag {
+  margin-left: 0.4em;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+/* ---- inline edit form ---- */
+
+.comment-edit-form {
+  margin: 0.6em 0 0.2em;
+}
+
+.comment-edit-form .comment-edit-textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 4.5em;
+  margin: 0;
+  padding: 0.5em 0.65em;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 0.45rem;
+  background-color: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.comment-edit-form .comment-edit-textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, currentColor 60%, transparent);
+}
+
+.comment-edit-note {
+  margin: 0.45em 0 0.6em;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.comment-edit-save,
+.comment-edit-cancel {
+  display: inline-block;
+  padding: 0.4em 1.1em;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: filter 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.comment-edit-save {
+  /* Fixed accent (overridable via --cast-comment-save-bg) rather than the theme
+     primary, which some dark themes lighten to the point that white label text
+     no longer meets contrast. */
+  margin-right: 0.5em;
+  color: #fff;
+  background-color: var(--cast-comment-save-bg, #6d5ce7);
+  border-color: var(--cast-comment-save-bg, #6d5ce7);
+}
+
+.comment-edit-save:hover {
+  filter: brightness(1.08);
+}
+
+.comment-edit-cancel {
+  color: inherit;
+  background-color: transparent;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+
+.comment-edit-cancel:hover {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.comment-edit-status {
+  display: block;
+  margin-top: 0.5em;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comment-reply-link,
+  .comment-author-actions a,
+  .comment-edit-save,
+  .comment-edit-cancel {
+    transition: none;
+  }
+}
+

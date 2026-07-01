@@ -98,9 +98,9 @@ Data Attributes
     base directory using the ``CAST_PODLOVE_PLAYER_THEMES`` setting.
 
 ``data-embed``
-    URL of the Podlove Web Player embed script. Defaults to the CDN version
-    at ``https://cdn.podlove.org/web-player/5.x/embed.js``. Django Cast ships
-    a local copy at ``cast/js/web-player/embed.5.js``.
+    URL of the Podlove Web Player embed script. This is required; missing
+    values fail closed and do not load a third-party fallback script. Django
+    Cast ships a local copy at ``cast/js/web-player/embed.5.js``.
 
 ``data-template``
     Optional Podlove template name passed through to the player initialization.
@@ -352,7 +352,7 @@ Configuration file: ``javascript/vite.config.ts``
      src/audio/custom-player.ts        ->  customPlayer-<hash>.js (+ CSS sidecar)
 
    Output:  javascript/dist/
-   Format:  ES modules (default Vite/Rollup output)
+   Format:  ES modules (default Vite/Rolldown output)
    Target:  ES2015
 
 ``npm run build`` writes to ``javascript/dist/``. The ``just js-build-vite``

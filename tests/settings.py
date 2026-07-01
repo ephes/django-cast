@@ -6,6 +6,7 @@ from cast.settings import *  # noqa: F403
 
 # Keep test uploads out of src/cast/media; tests/conftest.py cleans this path.
 MEDIA_ROOT = str(Path(__file__).parent / "media")
+CAST_PRIVATE_MEDIA_ROOT = str(Path(__file__).parent / "private-media")
 
 INSTALLED_APPS = [
     "django.contrib.auth",

@@ -166,6 +166,20 @@ def test_reference_entry_skips_non_absolute_clip():
     assert build_known_speaker_reference_entry(reference) is None
 
 
+def test_reference_entry_skips_private_clip_without_url():
+    class PrivateClip:
+        @property
+        def url(self):
+            raise ValueError("This private file is not accessible via a URL.")
+
+    reference = SimpleNamespace(
+        is_source_range=False,
+        source_audio_id=None,
+        clip=PrivateClip(),
+    )
+    assert build_known_speaker_reference_entry(reference) is None
+
+
 def test_reference_entry_returns_none_without_clip_or_range():
     reference = SimpleNamespace(is_source_range=False, source_audio_id=None, clip=None)
     assert build_known_speaker_reference_entry(reference) is None
@@ -250,6 +264,15 @@ def test_build_references_skips_contributor_without_resolvable_references(mocker
         consent_confirmed=True,
     )
     mocker.patch("cast.voxhelm.resolve_audio_source_url", side_effect=VoxhelmError("no url"))
+    assert build_known_speaker_references(episode_with(speaker)) == []
+
+
+@pytest.mark.django_db
+def test_build_references_skips_private_clip_reference_without_crashing(tmp_path, settings):
+    settings.CAST_PRIVATE_MEDIA_ROOT = str(tmp_path / "private")
+    speaker = Contributor.objects.create(display_name="Private Clip", slug="private-clip-reference")
+    approved_clip_reference(speaker)
+
     assert build_known_speaker_references(episode_with(speaker)) == []
 
 

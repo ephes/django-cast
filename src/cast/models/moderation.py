@@ -284,9 +284,16 @@ class SpamFilter(TimeStampedModel):
         """
         from django_comments import get_model as get_comments_model
 
+        from cast.comments import author_edits
+
         comment_class = get_comments_model()
+        # Author-deleted comments are excluded entirely: a legitimate comment the
+        # author removed must not be labelled spam and poison the filter.
+        deleted_pks = author_edits.deleted_comment_pks()
         train = []
         for comment in comment_class.objects.all():
+            if str(comment.pk) in deleted_pks:
+                continue
             label = "ham" if (comment.is_public and not comment.is_removed) else "spam"
             message = cls.comment_to_message(comment)
             train.append((label, message))

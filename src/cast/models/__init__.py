@@ -2,7 +2,7 @@ from .audio import Audio, ChapterMark, sync_chapter_marks
 from .contributors import Contributor, ContributorLink, EpisodeContributor
 from .file import File
 from .gallery import Gallery, get_or_create_gallery
-from .index_pages import Blog, Podcast
+from .index_pages import Blog, Podcast, Season
 from .itunes import ItunesArtWork
 from .moderation import SpamFilter
 from .pages import Episode, HomePage, Post, sync_media_ids
@@ -46,6 +46,7 @@ __all__ = [
     "ContributorLink",
     "EpisodeContributor",
     "Episode",
+    "Season",
     "sync_media_ids",
     "SpamFilter",
     "TranscriptGeneration",

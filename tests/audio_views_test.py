@@ -3,11 +3,16 @@ from unittest.mock import patch
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from wagtail.models import Collection, GroupCollectionPermission
 
 from cast.models import Audio
 from cast.views.audio import delete_old_audio_files
+
+
+def invalid_m4a_upload():
+    return SimpleUploadedFile("invalid.m4a", b"not a media file", content_type="audio/mp4")
 
 
 class TestPostWithAudioDetail:
@@ -209,13 +214,12 @@ class TestAudioAdd:
         content = r.content.decode("utf-8")
         assert "Uploading…" in content
 
-    def test_post_add_audio_invalid_form(self, admin_client, m4a_audio):
-        m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
+    def test_post_add_audio_invalid_form(self, admin_client):
         add_url = reverse("castaudio:add")
 
         post_data = {
             "title": "foobar",
-            "m4a": m4a_audio,  # invalid
+            "m4a": invalid_m4a_upload(),
             "tags": "foo,bar,baz",
         }
         r = admin_client.post(add_url, post_data)
@@ -284,9 +288,8 @@ class TestAudioEdit:
         content = r.content.decode("utf-8")
         assert "Delete" in content
 
-    def test_post_edit_audio_invalid_form(self, admin_client, audio_urls, m4a_audio):
-        m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
-        post_data = {"m4a": m4a_audio}
+    def test_post_edit_audio_invalid_form(self, admin_client, audio_urls):
+        post_data = {"m4a": invalid_m4a_upload()}
         r = admin_client.post(audio_urls.edit, post_data)
 
         # make sure we don't get redirected to index
@@ -442,10 +445,9 @@ class TestAudioChooserUpload:
         content = r.content.decode("utf-8")
         assert audio.title in content
 
-    def test_post_upload_audio_form_invalid(self, admin_client, m4a_audio):
-        m4a_audio.seek(m4a_audio.size)  # seek to end to make file empty/invalid
+    def test_post_upload_audio_form_invalid(self, admin_client):
         upload_url = reverse("castaudio:chooser_upload")
-        post_data = {"media-chooser-upload-m4a": m4a_audio}
+        post_data = {"media-chooser-upload-m4a": invalid_m4a_upload()}
         r = admin_client.post(upload_url, post_data)
 
         assert r.status_code == 200

@@ -6,7 +6,7 @@ from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
 
-from .builders import _blog_url_from_referer, apply_cover_fallback, data_for_blog_cachable
+from .builders import _blog_url_from_referer, apply_cover_fallback, build_media_lookup, data_for_blog_cachable
 from .serialization import (
     deserialize_audio,
     deserialize_blog,
@@ -18,10 +18,10 @@ from .serialization import (
     deserialize_video,
 )
 from .snapshot import PostQuerySnapshot, cache_page_url, clear_cached_page_urls
-from .types import AudioById, ImageById, LinkTuples, RenditionsForPosts, VideoById
+from .types import AudioById, CachableBlogData, ImageById, LinkTuples, RenditionsForPosts, VideoById
 
 if TYPE_CHECKING:
-    from cast.models import Audio, Blog, Episode, Post, Transcript, Video
+    from cast.models import Audio, Blog, Episode, Post, Transcript
     from cast.views import HtmxHttpRequest
 
 
@@ -205,14 +205,15 @@ class FeedContext:
         if site is not None:
             root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
         for post in queryset_data.queryset:
-            media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
-            for image_pk in queryset_data.images_by_post_id.get(post.pk, []):
-                media_lookup.setdefault("image", {}).update({image_pk: queryset_data.images[image_pk]})
-            for video_pk in queryset_data.videos_by_post_id.get(post.pk, []):
-                media_lookup.setdefault("video", {}).update({video_pk: queryset_data.videos[video_pk]})
-            for audio_pk in queryset_data.audios_by_post_id.get(post.pk, []):
-                media_lookup.setdefault("audio", {}).update({audio_pk: queryset_data.audios[audio_pk]})
-            post._media_lookup = media_lookup
+            post._media_lookup = build_media_lookup(
+                post.pk,
+                images_by_post_id=queryset_data.images_by_post_id,
+                videos_by_post_id=queryset_data.videos_by_post_id,
+                audios_by_post_id=queryset_data.audios_by_post_id,
+                images=queryset_data.images,
+                videos=queryset_data.videos,
+                audios=queryset_data.audios,
+            )
 
         return cls(
             site=site,
@@ -229,22 +230,23 @@ class FeedContext:
         request: HttpRequest,
         blog: "Blog",
         is_podcast: bool = False,
-    ) -> dict:
+    ) -> "CachableBlogData":
         blog.refresh_from_db()  # sometimes the blog object is stale / maybe because of serialization? FIXME
         if is_podcast:
             from ..pages import Episode
 
             post_queryset = (
                 Episode.objects.live()
+                .public()
                 .descendant_of(blog)
-                .select_related("podcast_audio__transcript")
+                .select_related("podcast_audio__transcript", "season")
                 .filter(podcast_audio__isnull=False)
                 .order_by("-visible_date")
             )
         else:
             from ..pages import Post
 
-            post_queryset = Post.objects.live().descendant_of(blog).order_by("-visible_date")
+            post_queryset = Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
         data = data_for_blog_cachable(request=request, blog=blog, post_queryset=post_queryset, is_paginated=False)
         data["blog_url"] = blog.get_url(request=request)
         return data
@@ -253,24 +255,20 @@ class FeedContext:
     def create_from_cachable_data(
         cls,
         *,
-        data: dict[str, Any],
+        data: CachableBlogData,
     ) -> "FeedContext":
         """
         This method recreates usable models from the cachable data.
         """
         # The page-link cache is request-scoped and repopulated by this repository.
         clear_cached_page_urls()
-        from wagtail.images.models import Image
-
-        from .. import Audio, Video
-
         site = Site(**data["site"])
         blog = deserialize_blog(data["blog"])
         if (last_build_date := data.get("last_build_date")) is not None:
             blog._last_build_date = last_build_date
         template_base_dir = data["template_base_dir"]
         post_by_id = {}
-        podcast_fields = ["podcast_audio", "block", "keywords", "explicit"]
+        podcast_fields = ["podcast_audio", "block", "keywords", "explicit", "episode_number", "episode_type", "season"]
         for post_pk, post_data in data["post_by_id"].items():
             is_podcast = any(field in post_data for field in podcast_fields)
             if is_podcast:
@@ -294,14 +292,15 @@ class FeedContext:
 
         user_model = get_user_model()
         for post in post_queryset:
-            media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
-            for image_pk in data["images_by_post_id"].get(post.pk, []):
-                media_lookup.setdefault("image", {}).update({image_pk: images[image_pk]})
-            for video_pk in data["videos_by_post_id"].get(post.pk, []):
-                media_lookup.setdefault("video", {}).update({video_pk: videos[video_pk]})
-            for audio_pk in data["audios_by_post_id"].get(post.pk, []):
-                media_lookup.setdefault("audio", {}).update({audio_pk: audios[audio_pk]})
-            post._media_lookup = media_lookup
+            post._media_lookup = build_media_lookup(
+                post.pk,
+                images_by_post_id=data["images_by_post_id"],
+                videos_by_post_id=data["videos_by_post_id"],
+                audios_by_post_id=data["audios_by_post_id"],
+                images=images,
+                videos=videos,
+                audios=audios,
+            )
             post.owner = user_model(username=data["owner_username_by_id"][post.pk])
             post.page_url = data["page_url_by_id"][post.pk]
 
@@ -420,24 +419,20 @@ class BlogIndexContext:
         *,
         request: HttpRequest,
         blog: "Blog",
-    ) -> dict:
+    ) -> "CachableBlogData":
         return data_for_blog_cachable(request=request, blog=blog, is_paginated=True, post_queryset=None)
 
     @classmethod
     def create_from_cachable_data(
         cls,
         *,
-        data: dict[str, Any],
+        data: CachableBlogData,
     ) -> "BlogIndexContext":
         """
         This method recreates usable models from the cachable data.
         """
         # The page-link cache is request-scoped and repopulated by this repository.
         clear_cached_page_urls()
-        from wagtail.images.models import Image
-
-        from .. import Audio, Video
-
         template_base_dir = data["template_base_dir"]
 
         post_by_id = {}
@@ -460,14 +455,15 @@ class BlogIndexContext:
         user_model = get_user_model()
         use_audio_player = False
         for post in post_queryset:
-            media_lookup: dict[str, dict[int, Audio | Video | Image]] = {}
-            for image_pk in data["images_by_post_id"].get(post.pk, []):
-                media_lookup.setdefault("image", {}).update({image_pk: images[image_pk]})
-            for video_pk in data["videos_by_post_id"].get(post.pk, []):
-                media_lookup.setdefault("video", {}).update({video_pk: videos[video_pk]})
-            for audio_pk in data["audios_by_post_id"].get(post.pk, []):
-                media_lookup.setdefault("audio", {}).update({audio_pk: audios[audio_pk]})
-            post._media_lookup = media_lookup
+            post._media_lookup = build_media_lookup(
+                post.pk,
+                images_by_post_id=data["images_by_post_id"],
+                videos_by_post_id=data["videos_by_post_id"],
+                audios_by_post_id=data["audios_by_post_id"],
+                images=images,
+                videos=videos,
+                audios=audios,
+            )
             post.owner = user_model(username=data["owner_username_by_id"][post.pk])
             post.page_url = data["page_url_by_id"][post.pk]
             cover_image_url = data["cover_by_post_id"].get(post.pk, "")

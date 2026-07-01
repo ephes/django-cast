@@ -51,5 +51,7 @@ class CastConfig(AppConfig):
     def ready(self) -> None:
         from . import checks  # noqa: F401 — registers @register("cast") decorators
         from .appsettings import init_cast_settings
+        from .podcast_numbering import install_episode_numbering_publish_hook
 
         init_cast_settings()
+        install_episode_numbering_publish_hook()

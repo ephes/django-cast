@@ -1,23 +1,36 @@
 {
+  "_defineProperty-BbfpZ9Tg.js": {
+    "file": "defineProperty-BbfpZ9Tg.js",
+    "name": "defineProperty"
+  },
   "src/audio/custom-player.ts": {
-    "file": "customPlayer-COZiea7Z.js",
+    "file": "customPlayer-Bmlzniz4.js",
     "name": "customPlayer",
     "src": "src/audio/custom-player.ts",
     "isEntry": true,
+    "imports": [
+      "_defineProperty-BbfpZ9Tg.js"
+    ],
     "css": [
-      "customPlayer-BdTfau6n.css"
+      "customPlayer-CNGiRFVK.css"
     ]
   },
   "src/audio/podlove-player.ts": {
-    "file": "podlovePlayer-BNZBJ_wF.js",
+    "file": "podlovePlayer-A14rRToH.js",
     "name": "podlovePlayer",
     "src": "src/audio/podlove-player.ts",
-    "isEntry": true
+    "isEntry": true,
+    "imports": [
+      "_defineProperty-BbfpZ9Tg.js"
+    ]
   },
   "src/gallery/image-gallery-bs4.ts": {
-    "file": "main-BMYP0Mkv.js",
+    "file": "main-CgQCtecY.js",
     "name": "main",
     "src": "src/gallery/image-gallery-bs4.ts",
-    "isEntry": true
+    "isEntry": true,
+    "imports": [
+      "_defineProperty-BbfpZ9Tg.js"
+    ]
   }
 }

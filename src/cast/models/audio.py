@@ -6,9 +6,10 @@ from copy import deepcopy
 from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, cast
 
 from django.contrib.auth import get_user_model
+from django.core.files.storage import Storage
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -18,20 +19,33 @@ from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
+from ..media_probe import run_media_probe
+from ..media_validation import validate_audio_upload
+
 if TYPE_CHECKING:
     from .pages import Episode
 
 logger = logging.getLogger(__name__)
 
 
+class AudioDurationProbeError(Exception):
+    """Raised when required audio duration probing fails."""
+
+
+class AudioDurationProbeTimeout(AudioDurationProbeError):
+    """Raised when required audio duration probing exceeds its timeout/budget."""
+
+
 class AudioQuerySet(SearchableQuerySetMixin, models.QuerySet):
     pass
 
 
-@runtime_checkable
 class FileField(Protocol):
     """Just to make mypy happy about field.url and field.path"""
 
+    file: object
+    name: str
+    storage: Storage
     url: str
     path: str
 
@@ -109,9 +123,10 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
 
     class Meta:
         ordering = ("-created",)
+        permissions = (("choose_audio", "Can choose audio"),)
 
     @property
-    def uploaded_audio_files(self) -> Iterable[tuple[str, models.FileField]]:
+    def uploaded_audio_files(self) -> Iterable[tuple[str, FileField]]:
         for name in self.audio_formats:
             field = getattr(self, name)
             if field.name is not None and len(field.name) > 0:
@@ -158,7 +173,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             str(audio_url),
         ]
         result = (
-            subprocess.run(
+            run_media_probe(
                 cmd,
                 check=True,
                 stdout=subprocess.PIPE,
@@ -176,17 +191,19 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     def create_duration(self) -> None:
         for name, field in self.uploaded_audio_files:
             try:
-                # For mypy this has to be a direct isinstance check
-                # In production it raises a NotImplementedError, very weird,
-                # very ugly, dunno how to fix it
-                if isinstance(field, FileField):
-                    audio_url = field.url
+                if hasattr(field, "url") and hasattr(field, "path"):
+                    file_field = cast(FileField, field)
+                    audio_url = file_field.url
                     if not audio_url.startswith("http"):
-                        audio_url = field.path
+                        audio_url = file_field.path
                     self.duration = self._get_audio_duration(audio_url)
                     break
             except NotImplementedError:  # pragma: no cover
                 pass
+            except subprocess.TimeoutExpired as exc:
+                raise AudioDurationProbeTimeout("Audio duration probing timed out.") from exc
+            except (subprocess.CalledProcessError, OSError, ValueError) as exc:
+                raise AudioDurationProbeError("Audio duration probing failed.") from exc
 
     @property
     def audio(self) -> list[dict[str, str]]:
@@ -228,11 +245,21 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         return "\n".join(chaptermarks)
 
     @staticmethod
-    def clean_ffprobe_chaptermarks(ffprobe_data: dict) -> list[dict[str, str]]:
-        cleaned = []
-        for item in ffprobe_data["chapters"]:
-            start = item["start_time"]
-            title = item["tags"]["title"]
+    def clean_ffprobe_chaptermarks(ffprobe_data: object) -> list[dict[str, str]]:
+        cleaned: list[dict[str, str]] = []
+        if not isinstance(ffprobe_data, dict):
+            return cleaned
+        chapters = ffprobe_data.get("chapters", [])
+        if not isinstance(chapters, list):
+            return cleaned
+        for item in chapters:
+            if not isinstance(item, dict):
+                continue
+            start = item.get("start_time")
+            tags = item.get("tags", {})
+            title = tags.get("title") if isinstance(tags, dict) else None
+            if not isinstance(start, str) or not isinstance(title, str):
+                continue
             if title == "":
                 continue
             cleaned.append({"start": start, "title": title})
@@ -257,7 +284,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             "-loglevel",
             "error",
         ]
-        ffprobe_data = json.loads(subprocess.run(command, check=True, stdout=subprocess.PIPE).stdout)
+        ffprobe_data = json.loads(run_media_probe(command, check=True, stdout=subprocess.PIPE).stdout)
         return self.clean_ffprobe_chaptermarks(ffprobe_data)
 
     def set_episode_id(self, episode_id: int) -> None:
@@ -321,6 +348,10 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         generate_duration = kwargs.pop("duration", True)
         cache_file_sizes = kwargs.pop("cache_file_sizes", True)
         using = kwargs.get("using")
+        if generate_duration:
+            for audio_format, field in self.uploaded_audio_files:
+                if not getattr(field, "_committed", True):
+                    validate_audio_upload(field.file, audio_format=audio_format)
         # Keep metadata enrichment and persistence all-or-nothing to avoid
         # partially updated rows when duration/filesize caching fails.
         with transaction.atomic(using=using):

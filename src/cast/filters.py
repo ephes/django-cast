@@ -15,6 +15,7 @@ from django.forms import Widget
 from django.forms.renderers import BaseRenderer
 from django.forms.utils import flatatt
 from django.http import QueryDict
+from django.utils.html import format_html
 from django.utils.datastructures import MultiValueDict
 from django.utils.encoding import force_str
 from django.utils.safestring import SafeText, mark_safe
@@ -88,22 +89,19 @@ class CountFacetWidget(Widget):
         if option_value in selected_choices:
             # the current option is already selected, so add a hidden input field
             # to preserve the selection and add the class "selected" to the link
-            option_attrs = ' class="selected"'
-            hidden_input = f'<input type="hidden" name="{name}" value="{option_value}">'
-        option_string = self.option_string() % {
-            "attrs": option_attrs,
-            "query_string": url,
-            "label": force_str(option_label),
-            "hidden_input": hidden_input,
-        }
-        return option_string
+            option_attrs = flatatt({"class": "selected"})
+            hidden_input = format_html('<input type="hidden" name="{}" value="{}">', name, option_value)
+        return format_html(
+            self.option_string(),
+            attrs=mark_safe(option_attrs),
+            query_string=url,
+            label=force_str(option_label),
+            hidden_input=hidden_input,
+        )
 
     @staticmethod
     def option_string() -> str:
-        return (
-            '<div class="cast-date-facet-item"><a%(attrs)s href="?%(query_string)s">%(label)s</a>'
-            "%(hidden_input)s</div>"
-        )
+        return '<div class="cast-date-facet-item"><a{attrs} href="?{query_string}">{label}</a>{hidden_input}</div>'
 
 
 def parse_date_facets(value: str) -> datetime:

@@ -3,11 +3,37 @@ from typing import Any
 from django.urls import include, path, re_path
 
 from . import views
+from .editor import media as editor_media
+from .editor import views as editor_views
 
 app_name = "api"
 
 urlpatterns: list[Any] = [
     path("", views.api_root, name="root"),
+    # content editing API (editor)
+    path("editor/parents/", editor_views.ParentsListView.as_view(), name="editor_parents"),
+    path("editor/posts/", editor_views.PostCreateView.as_view(), name="editor_post_create"),
+    path("editor/posts/<int:pk>/publish/", editor_views.PostPublishView.as_view(), name="editor_post_publish"),
+    path("editor/posts/<int:pk>/preview/", editor_views.PostPreviewView.as_view(), name="editor_post_preview"),
+    path("editor/posts/<int:pk>/", editor_views.PostDetailView.as_view(), name="editor_post_detail"),
+    path("editor/episodes/", editor_views.EpisodeCreateView.as_view(), name="editor_episode_create"),
+    path(
+        "editor/episodes/<int:pk>/publish/",
+        editor_views.EpisodePublishView.as_view(),
+        name="editor_episode_publish",
+    ),
+    path(
+        "editor/episodes/<int:pk>/preview/",
+        editor_views.EpisodePreviewView.as_view(),
+        name="editor_episode_preview",
+    ),
+    path("editor/episodes/<int:pk>/", editor_views.EpisodeDetailView.as_view(), name="editor_episode_detail"),
+    path("editor/media/images/", editor_media.EditorImageListCreateView.as_view(), name="editor_media_images"),
+    path("editor/media/audios/", editor_media.EditorAudioListCreateView.as_view(), name="editor_media_audios"),
+    path("editor/media/videos/", editor_media.EditorVideoListCreateView.as_view(), name="editor_media_videos"),
+    path(
+        "editor/media/collections/", editor_media.EditorMediaCollectionsView.as_view(), name="editor_media_collections"
+    ),
     # video
     path("videos/", views.VideoListView.as_view(), name="video_list"),
     re_path(r"^videos/(?P<pk>\d+)/?$", views.VideoDetailView.as_view(), name="video_detail"),

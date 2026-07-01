@@ -1,5 +1,6 @@
 import io
 import json
+import subprocess
 from unittest.mock import MagicMock
 
 import pytest
@@ -190,6 +191,18 @@ class TestAudioForm:
         saved_chaptermark = audio.chaptermarks.first()
         assert saved_chaptermark.title == expected_title
         assert str(saved_chaptermark.start) == "00:02:35.343000"  # == "155.343000"
+
+    def test_chaptermark_file_timeout_logs_and_degrades(self, audio, m4a_audio, caplog):
+        audio.get_chaptermark_data_from_file = MagicMock(
+            side_effect=subprocess.TimeoutExpired(cmd="ffprobe", timeout=30)
+        )
+        form = AudioForm({}, {"m4a": m4a_audio}, instance=audio)
+        assert form.is_valid()
+
+        form.save()
+
+        assert audio.chaptermarks.count() == 0
+        assert "Skipping audio chapter extraction after probe failure" in caplog.text
 
     def test_chaptermarks_validation_unchanged_with_collection_permissions(self, user):
         permitted_one, _permitted_two, _forbidden = _create_test_collections()

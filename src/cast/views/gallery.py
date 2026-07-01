@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET
 from wagtail.images.models import Image
 
 from ..blocks import get_srcset_images_for_slots
+from ..gallery_tokens import gallery_image_pks_match_token
 from ..models.theme import get_template_base_dir_choices
 from .htmx_helpers import HtmxHttpRequest
 
@@ -29,15 +30,19 @@ class GalleryModalForm(forms.Form):
     image_pks = CommaSeparatedIntegerField()
     current_image_index = forms.IntegerField()
     block_id = forms.CharField()
+    gallery_token = forms.CharField()
 
     def clean(self):
         cleaned_data = super().clean()
         image_pks = cleaned_data.get("image_pks", [])
         current_image_index = cleaned_data.get("current_image_index")
+        gallery_token = cleaned_data.get("gallery_token")
         if current_image_index is not None and (current_image_index < 0 or current_image_index >= len(image_pks)):
             raise forms.ValidationError(
                 f"current_image_index {current_image_index} is out of range for image_pks with length {len(image_pks)}"
             )
+        if image_pks and gallery_token and not gallery_image_pks_match_token(gallery_token, image_pks):
+            raise forms.ValidationError("Gallery token does not match image ids.")
         return cleaned_data
 
 
@@ -94,6 +99,7 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
     image_pks = form.cleaned_data["image_pks"]
     current_index = form.cleaned_data["current_image_index"]
     block_id = form.cleaned_data["block_id"]
+    gallery_token = form.cleaned_data["gallery_token"]
     prev_index, next_index = get_prev_next_indices(image_pks, current_index)
 
     # Get PKs for the images we need to fetch
@@ -133,6 +139,7 @@ def gallery_modal(request: HtmxHttpRequest, template_base_dir: str) -> HttpRespo
         "prev_image": prev_image,
         "next_image": next_image,
         "image_pks": ",".join([str(pk) for pk in image_pks]),
+        "gallery_token": gallery_token,
         "template_base_dir": template_base_dir,
         "block_id": block_id,
     }

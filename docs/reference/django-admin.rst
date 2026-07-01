@@ -72,6 +72,28 @@ Tags (from ``django-taggit``) are registered as a Wagtail snippet, providing
 a CRUD interface for managing tags directly in the Wagtail admin under
 the Snippets menu.
 
+Season Management
+-----------------
+
+Podcast seasons are regular Django models scoped to a single podcast. They are
+available in the Django admin for basic CRUD and can be selected from episode
+editing when assigning podcast publishing metadata.
+
+Podcast Numbering Controls
+--------------------------
+
+Podcast pages expose automatic episode numbering controls in Wagtail's podcast
+settings panel and in the Django admin. The behavior is disabled by default.
+When enabled, django-cast assigns ``next_episode_number`` to blank full episodes
+on first real publish, skips manually used numbers under the same podcast, and
+then advances the counter. Draft saves and future scheduling approvals do not
+consume numbers.
+
+Podcast pages also expose an optional ``itunes_type`` setting for Apple Podcasts
+channel ordering. Leave it blank to omit ``itunes:type`` from feeds, or set it
+to ``episodic`` or ``serial`` when the show should declare an explicit ordering
+policy.
+
 Editor Integration
 -------------------
 

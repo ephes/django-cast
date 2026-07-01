@@ -1,5 +1,6 @@
 from typing import Any, cast
 
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,6 +11,7 @@ from modelsearch.backends.base import BaseSearchResults
 from wagtail.admin import messages
 from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.admin.models import popular_tags_for_model
+from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
@@ -19,11 +21,18 @@ from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from . import AuthenticatedHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
+video_permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
+
 
 @vary_on_headers("X-Requested-With")
 def index(request: HttpRequest) -> HttpResponse:
     ordering = "-created"
-    base_videos = Video.objects.all().order_by(ordering)
+    user_can_add = video_permission_policy.user_has_permission(request.user, "add")
+    base_videos = video_permission_policy.instances_user_has_any_permission_for(
+        request.user, ["change", "delete"]
+    ).order_by(ordering)
+    if not user_can_add and not base_videos.exists():
+        raise PermissionDenied
     videos: models.QuerySet | BaseSearchResults = base_videos
 
     # Search
@@ -63,7 +72,7 @@ def index(request: HttpRequest) -> HttpResponse:
                 "is_searching": bool(query_string),
                 "search_form": form,
                 "popular_tags": popular_tags_for_model(Video),
-                "user_can_add": True,
+                "user_can_add": user_can_add,
                 "collections": None,
                 "current_collection": None,
             },
@@ -71,6 +80,8 @@ def index(request: HttpRequest) -> HttpResponse:
 
 
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
+    if not video_permission_policy.user_has_permission(request.user, "add"):
+        raise PermissionDenied
     video_form = cast(Any, get_video_form())
     if request.POST:
         video = Video(user=request.user)
@@ -103,7 +114,10 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
 
 def edit(request: HttpRequest, video_id: int) -> HttpResponse:
     video_form = cast(Any, get_video_form())
-    video = get_object_or_404(Video, id=video_id)
+    video = get_object_or_404(
+        video_permission_policy.instances_user_has_permission_for(request.user, "change"),
+        id=video_id,
+    )
 
     if request.POST:
         original_file = video.original
@@ -156,13 +170,16 @@ def edit(request: HttpRequest, video_id: int) -> HttpResponse:
             "video": video,
             "filesize": filesize,
             "form": form,
-            "user_can_delete": True,
+            "user_can_delete": video_permission_policy.user_has_permission_for_instance(request.user, "delete", video),
         },
     )
 
 
 def delete(request: HttpRequest, video_id: int) -> HttpResponse:
-    video = get_object_or_404(Video, id=video_id)
+    video = get_object_or_404(
+        video_permission_policy.instances_user_has_permission_for(request.user, "delete"),
+        id=video_id,
+    )
 
     if request.POST:
         video.delete()
@@ -173,8 +190,10 @@ def delete(request: HttpRequest, video_id: int) -> HttpResponse:
 
 
 def chooser(request: HttpRequest) -> HttpResponse:
+    if not video_permission_policy.user_has_permission(request.user, "choose"):
+        raise PermissionDenied
     ordering = "-created"
-    base_videos = Video.objects.all().order_by(ordering)
+    base_videos = video_permission_policy.instances_user_has_permission_for(request.user, "choose").order_by(ordering)
     videos: models.QuerySet | BaseSearchResults = base_videos
 
     upload_form = cast(Any, get_video_form())(prefix="media-chooser-upload", user=request.user)
@@ -238,7 +257,10 @@ def get_video_data(video: Video) -> dict[str, Any]:
 
 
 def chosen(request: HttpRequest, video_id: int) -> HttpResponse:
-    video = get_object_or_404(Video, id=video_id)
+    video = get_object_or_404(
+        video_permission_policy.instances_user_has_permission_for(request.user, "choose"),
+        id=video_id,
+    )
 
     return render_modal_workflow(
         request,
@@ -250,6 +272,10 @@ def chosen(request: HttpRequest, video_id: int) -> HttpResponse:
 
 
 def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
+    if not video_permission_policy.user_has_permission(
+        request.user, "add"
+    ) or not video_permission_policy.user_has_permission(request.user, "choose"):
+        raise PermissionDenied
     VideoForm = cast(Any, get_video_form())
 
     if request.method == "POST":
@@ -274,7 +300,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
             messages.error(request, _("The video could not be saved due to errors."))
 
     ordering = "-created"
-    videos = Video.objects.all().order_by(ordering)
+    videos = video_permission_policy.instances_user_has_permission_for(request.user, "choose").order_by(ordering)
 
     search_form = NonEmptySearchForm()
 

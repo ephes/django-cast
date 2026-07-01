@@ -8,7 +8,7 @@ from time import monotonic, sleep
 from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -34,10 +34,45 @@ SITE_SETTING_FIELD_MAP = {
 KNOWN_SPEAKER_STRATEGY = "pyannote_known_speaker"
 TRUE_SETTING_VALUES = {"1", "true", "yes", "on"}
 FALSE_SETTING_VALUES = {"0", "false", "no", "off"}
+MAX_VOXHELM_ARTIFACT_BYTES = 10 * 1024 * 1024
+MAX_VOXHELM_API_RESPONSE_BYTES = 1024 * 1024
+MAX_VOXHELM_ERROR_BYTES = 16 * 1024
+DOTE_REQUIRED_KEYS = {"startTime", "endTime", "speakerDesignation", "text"}
 
 
 class VoxhelmError(RuntimeError):
     """Raised when Voxhelm transcription or artifact retrieval fails."""
+
+
+class NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def open_url(request: Request, *, timeout: float, follow_redirects: bool = True):
+    if follow_redirects:
+        return urlopen(request, timeout=timeout)
+    return build_opener(NoRedirectHandler).open(request, timeout=timeout)
+
+
+def read_response_bytes(response, *, max_bytes: int | None = None) -> bytes:
+    if max_bytes is None:
+        return response.read()
+    data = response.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise VoxhelmError(f"Voxhelm response exceeded the maximum size of {max_bytes} bytes.")
+    return data
+
+
+def read_http_error_detail(exc: HTTPError) -> str:
+    data = exc.read(MAX_VOXHELM_ERROR_BYTES + 1)
+    if len(data) > MAX_VOXHELM_ERROR_BYTES:
+        data = data[:MAX_VOXHELM_ERROR_BYTES]
+        suffix = " [truncated]"
+    else:
+        suffix = ""
+    detail = data.decode("utf-8", errors="replace").strip() or str(exc.reason)
+    return f"{detail}{suffix}"
 
 
 @dataclass(frozen=True)
@@ -175,6 +210,56 @@ def optional_artifact_path(job_payload: dict[str, Any], format_name: str) -> str
     return None
 
 
+def parse_json_artifact(content: bytes, *, format_name: str) -> dict[str, Any]:
+    try:
+        data = json.loads(content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise VoxhelmError(f"Voxhelm {format_name} artifact was not valid UTF-8 JSON.") from exc
+    if not isinstance(data, dict):
+        raise VoxhelmError(f"Voxhelm {format_name} artifact must be a JSON object.")
+    return data
+
+
+def validate_json_list_artifact(content: bytes, *, format_name: str, list_key: str) -> list[Any]:
+    data = parse_json_artifact(content, format_name=format_name)
+    items = data.get(list_key)
+    if not isinstance(items, list):
+        raise VoxhelmError(f"Voxhelm {format_name} artifact must include a '{list_key}' list.")
+    return items
+
+
+def validate_podlove_artifact(content: bytes) -> None:
+    validate_json_list_artifact(content, format_name="podlove", list_key="transcripts")
+
+
+def validate_dote_artifact(content: bytes) -> None:
+    lines = validate_json_list_artifact(content, format_name="dote", list_key="lines")
+    for line in lines:
+        if not isinstance(line, dict):
+            raise VoxhelmError("Voxhelm dote artifact lines must be JSON objects.")
+        missing_keys = DOTE_REQUIRED_KEYS.difference(line.keys())
+        if missing_keys:
+            missing_display = ", ".join(sorted(missing_keys))
+            raise VoxhelmError(f"Voxhelm dote artifact lines must include keys: {missing_display}.")
+
+
+def validate_vtt_artifact(content: bytes) -> None:
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise VoxhelmError("Voxhelm vtt artifact was not valid UTF-8 text.") from exc
+    if not text.startswith("WEBVTT"):
+        raise VoxhelmError("Voxhelm vtt artifact must start with the WEBVTT header.")
+
+
+def validate_transcript_artifacts(*, podlove: bytes, dote: bytes, vtt: bytes, speakers: bytes | None = None) -> None:
+    validate_podlove_artifact(podlove)
+    validate_dote_artifact(dote)
+    validate_vtt_artifact(vtt)
+    if speakers is not None:
+        parse_json_artifact(speakers, format_name="speakers")
+
+
 def build_failure_message(job_payload: dict[str, Any]) -> str:
     error = job_payload.get("error")
     if isinstance(error, dict):
@@ -282,9 +367,10 @@ def build_known_speaker_references(episode: Any) -> list[dict[str, Any]]:
 
     Only approved, usable references for the episode's expected contributors are
     included. Hidden contributors are excluded unless a reference explicitly
-    opted into hidden-contributor use. References resolve to absolute reference
-    audio URLs (source ranges into existing audio, or uploaded clips); any
-    reference without a resolvable URL is skipped.
+    opted into hidden-contributor use. Source ranges resolve to absolute audio
+    URLs. Uploaded clips are included only when their protected storage backend
+    provides an absolute URL, for example a short-lived signed URL; no-URL
+    private clips are skipped.
     """
     if episode is None:
         return []
@@ -338,7 +424,10 @@ def build_known_speaker_reference_entry(reference: Any) -> dict[str, Any] | None
             "end": float(reference.end_seconds),
         }
     if reference.clip:
-        url = getattr(reference.clip, "url", "")
+        try:
+            url = reference.clip.url
+        except ValueError:
+            return None
         if isinstance(url, str) and url.startswith(("http://", "https://")):
             return {"kind": "clip_artifact", "audio": {"kind": "url", "url": url}}
     return None
@@ -460,7 +549,21 @@ class VoxhelmClient:
         target_parts = urlsplit(url)
         return (target_parts.scheme, target_parts.netloc) == (root_parts.scheme, root_parts.netloc)
 
-    def request_bytes(self, *, method: str, path: str, payload: dict[str, Any] | None = None) -> bytes:
+    def build_artifact_url(self, artifact_path: str) -> str:
+        url = self.build_url(artifact_path)
+        if not self.should_send_auth(url):
+            raise VoxhelmError("Voxhelm artifact URL must be relative or use the configured Voxhelm origin.")
+        return url
+
+    def request_bytes(
+        self,
+        *,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        max_bytes: int | None = None,
+        follow_redirects: bool = True,
+    ) -> bytes:
         url = self.build_url(path)
         body = None if payload is None else json.dumps(payload).encode("utf-8")
         headers = {}
@@ -470,16 +573,24 @@ class VoxhelmClient:
             headers["Content-Type"] = "application/json"
         request = Request(url, data=body, headers=headers, method=method)
         try:
-            with urlopen(request, timeout=self.request_timeout_seconds) as response:
-                return response.read()
+            with open_url(
+                request, timeout=self.request_timeout_seconds, follow_redirects=follow_redirects
+            ) as response:
+                return read_response_bytes(response, max_bytes=max_bytes)
         except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace").strip() or str(exc.reason)
+            detail = read_http_error_detail(exc)
             raise VoxhelmError(f"Voxhelm request failed with status {exc.code}: {detail}") from exc
         except URLError as exc:
             raise VoxhelmError(f"Voxhelm request failed: {exc.reason}") from exc
 
     def request_json(self, *, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        raw = self.request_bytes(method=method, path=path, payload=payload)
+        raw = self.request_bytes(
+            method=method,
+            path=path,
+            payload=payload,
+            max_bytes=MAX_VOXHELM_API_RESPONSE_BYTES,
+            follow_redirects=False,
+        )
         data = json.loads(raw.decode("utf-8"))
         if not isinstance(data, dict):
             raise VoxhelmError("Voxhelm returned a non-object JSON payload.")
@@ -540,7 +651,12 @@ class VoxhelmClient:
             sleep(self.poll_interval_seconds)
 
     def download_artifact(self, artifact_path: str) -> bytes:
-        return self.request_bytes(method="GET", path=artifact_path)
+        return self.request_bytes(
+            method="GET",
+            path=self.build_artifact_url(artifact_path),
+            max_bytes=MAX_VOXHELM_ARTIFACT_BYTES,
+            follow_redirects=False,
+        )
 
 
 class VoxhelmTranscriptService:
@@ -668,6 +784,7 @@ class VoxhelmTranscriptService:
         vtt: bytes,
         speakers: bytes | None = None,
     ) -> None:
+        validate_transcript_artifacts(podlove=podlove, dote=dote, vtt=vtt, speakers=speakers)
         file_stem = f"audio-{audio.pk}"
         replacements = StagedFileReplacementGroup()
         try:

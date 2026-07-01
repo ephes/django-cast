@@ -30,6 +30,18 @@ def page_is_publicly_viewable(page: Any, request: Any) -> bool:
     return all(restriction.accept_request(request) for restriction in page.get_view_restrictions())
 
 
+def page_is_unrestricted_public(page: Any) -> bool:
+    """Return ``True`` when ``page`` is live and has no view restrictions.
+
+    This is stricter than ``page_is_publicly_viewable``: a logged-in request may
+    be allowed through a login/group/password restriction, but that response is
+    still request-specific and must not be stored in shared public caches.
+    """
+    if page is None or not getattr(page, "live", False):
+        return False
+    return not page.get_view_restrictions().exists()
+
+
 def user_can_edit_page(page: Any, user: Any) -> bool:
     """Return ``True`` when ``user`` may edit ``page`` (covers preview/draft access)."""
     if page is None or user is None or not getattr(user, "is_authenticated", False):

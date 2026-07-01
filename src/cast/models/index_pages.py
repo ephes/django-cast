@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any, cast
 
 import django.forms.forms
+from django.core.validators import MinValueValidator
 from django.core.paginator import InvalidPage, Page as DjangoPage, Paginator
 from django.db import models
 from django.http import Http404
@@ -33,6 +34,40 @@ logger = logging.getLogger(__name__)
 
 
 ContextDict = dict[str, Any]
+
+
+class Season(models.Model):
+    """Reusable podcast season metadata scoped to one podcast."""
+
+    podcast: models.ForeignKey = models.ForeignKey(
+        "cast.Podcast",
+        on_delete=models.CASCADE,
+        related_name="seasons",
+        help_text=_("Podcast this season belongs to."),
+    )
+    number: models.PositiveIntegerField = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        help_text=_("Positive season number used in podcast feeds."),
+    )
+    name: models.CharField = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        help_text=_("Optional season name for Podcasting 2.0 feeds."),
+    )
+
+    class Meta:
+        ordering = ["podcast_id", "number"]
+        constraints = [
+            models.UniqueConstraint(fields=["podcast", "number"], name="unique_podcast_season_number"),
+        ]
+
+    def __str__(self) -> str:
+        podcast_title = self.podcast.title if self.podcast_id is not None else _("Podcast")
+        label = _("Season %(number)s") % {"number": self.number}
+        if self.name:
+            return f"{podcast_title}: {label} - {self.name}"
+        return f"{podcast_title}: {label}"
 
 
 class Blog(Page):
@@ -148,7 +183,7 @@ class Blog(Page):
         cached = getattr(self, "_last_build_date", None)
         if cached is not None:
             return cached
-        return Post.objects.live().descendant_of(self).order_by("-visible_date")[0].visible_date
+        return Post.objects.live().public().descendant_of(self).order_by("-visible_date")[0].visible_date
 
     @property
     def author_name(self) -> str:
@@ -161,7 +196,7 @@ class Blog(Page):
         if self.pk is None:
             # this blog is not saved to database yet, therefore it has no posts
             return Post.objects.none()
-        return Post.objects.live().descendant_of(self).order_by("-visible_date")
+        return Post.objects.live().public().descendant_of(self).order_by("-visible_date")
 
     def get_filterset(self, get_params: QueryDict) -> PostFilterset:
         return PostFilterset(data=get_params, queryset=self.unfiltered_published_posts)
@@ -333,6 +368,10 @@ class Blog(Page):
 class Podcast(Blog):
     """A podcast is a blog with some extra fields for podcasting."""
 
+    class ItunesType(models.TextChoices):
+        EPISODIC = "episodic", _("Episodic")
+        SERIAL = "serial", _("Serial")
+
     # atm it's only used for podcast image
     itunes_artwork: models.ForeignKey = models.ForeignKey(
         ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL, related_name="podcasts"
@@ -365,6 +404,23 @@ class Podcast(Blog):
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
+    itunes_type: models.CharField = models.CharField(
+        _("iTunes type"),
+        max_length=16,
+        choices=ItunesType.choices,
+        blank=True,
+        default="",
+        help_text=_("Optional Apple Podcasts channel ordering type. Leave blank to omit the feed tag."),
+    )
+    automatic_episode_numbering_enabled: models.BooleanField = models.BooleanField(
+        default=False,
+        help_text=_("Assign the next podcast-scoped number to blank full episodes on their first publish."),
+    )
+    next_episode_number: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        help_text=_("Next number to try when automatic episode numbering is enabled."),
+    )
 
     content_panels = Page.content_panels + [
         FieldPanel("subtitle", classname="collapsed"),
@@ -381,6 +437,9 @@ class Podcast(Blog):
                 FieldPanel("itunes_categories"),
                 FieldPanel("keywords"),
                 FieldPanel("explicit"),
+                FieldPanel("itunes_type"),
+                FieldPanel("automatic_episode_numbering_enabled"),
+                FieldPanel("next_episode_number"),
             ],
             heading=_("Podcast Settings"),
             classname="collapsed",

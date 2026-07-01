@@ -6,6 +6,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.request import Request
+from wagtail.models import PageViewRestriction
 
 from cast import modal_facet_counts
 from cast.api.serializers import AudioPodloveSerializer
@@ -858,20 +859,26 @@ class TestCommentTrainingData:
     "date, post_filter, len_result",
     [
         (datetime(2022, 8, 22), "true", 0),  # wrong date facet -> not found
-        (timezone.now(), "true", 1),  # correct date facet -> found
+        (None, "true", 1),  # correct date facet -> found
         (datetime(2022, 8, 22), "false", 1),  # wrong date facet and no post filter -> found
     ],
 )
 def test_wagtail_pages_api_with_post_filter(date, post_filter, len_result, rf, blog, post):
     viewset = FilteredPagesAPIViewSet()
     path = blog.wagtail_api_pages_url
+    if date is None:
+        date = timezone.localtime(post.visible_date)
     date_facet = f"{date.year}-{date.month}"
     request = rf.get(
         f"{path}?child_of={blog.pk}&type=cast.Post&date_facets={date_facet}&use_post_filter={post_filter}"
     )
     viewset.request = request
     queryset = viewset.get_queryset()
-    assert len(queryset) == len_result
+    queryset_ids = set(queryset.values_list("id", flat=True))
+    if len_result:
+        assert post.id in queryset_ids
+    else:
+        assert post.id not in queryset_ids
 
 
 @pytest.mark.django_db
@@ -954,7 +961,8 @@ def test_facet_counts_list(api_client, blog):
     r = api_client.get(url, format="json")
     assert r.status_code == 200
 
-    [result] = r.json()["results"]
+    results = r.json()["results"]
+    result = next(result for result in results if result["id"] == blog.pk)
     assert "id" in result
     assert "url" in result
     assert result["id"] == blog.pk
@@ -991,8 +999,9 @@ def test_facet_counts_detail(api_client, blog, post):
     facet_counts = result["facet_counts"]
 
     # Then we expect the correct facet counts to be returned
-    assert facet_counts["date_facets"][0]["slug"] == post.visible_date.strftime("%Y-%m")
-    assert facet_counts["date_facets"][0]["name"] == post.visible_date.strftime("%Y-%m")
+    local_visible_date = timezone.localtime(post.visible_date)
+    assert facet_counts["date_facets"][0]["slug"] == local_visible_date.strftime("%Y-%m")
+    assert facet_counts["date_facets"][0]["name"] == local_visible_date.strftime("%Y-%m")
     assert facet_counts["date_facets"][0]["count"] == 1
 
     assert facet_counts["category_facets"][0]["slug"] == category.slug
@@ -1094,6 +1103,34 @@ def test_facet_counts_detail_mode_modal_schema(api_client, blog, post):
         assert isinstance(group["options"], list)
         for option in group["options"]:
             assert set(option.keys()) == {"slug", "name", "count"}
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_excludes_restricted_post_facets(api_client, blog, post):
+    post.tags.add("secret")
+    post.save()
+    PageViewRestriction.objects.create(page=post, restriction_type=PageViewRestriction.LOGIN)
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    response = api_client.get(url, format="json")
+
+    assert response.status_code == 200
+    assert response.json()["facet_counts"]["tag_facets"] == []
+
+
+@pytest.mark.django_db
+def test_facet_counts_detail_modal_excludes_restricted_post_facets(api_client, blog, post):
+    post.tags.add("secret")
+    post.save()
+    PageViewRestriction.objects.create(page=post, restriction_type=PageViewRestriction.LOGIN)
+
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+    response = api_client.get(f"{url}?mode=modal", format="json")
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["result_count"] == 0
+    assert result["groups"]["tag_facets"]["options"] == []
 
 
 @pytest.mark.django_db
@@ -1347,6 +1384,18 @@ def test_get_comments_via_post_detail(api_client, post, comment):
 
     comments = r.json()["comments"]
     assert comments[0]["comment"] == comment.comment
+
+
+@pytest.mark.django_db
+def test_page_detail_omits_comment_security_data_when_comments_closed(api_client, post, comments_enabled):
+    post.comments_enabled = False
+    post.save()
+    url = reverse("cast:api:wagtail:pages:detail", kwargs={"pk": post.pk})
+
+    response = api_client.get(url, format="json")
+
+    assert response.status_code == 200
+    assert response.json()["comments_security_data"] == {}
 
 
 @pytest.mark.django_db

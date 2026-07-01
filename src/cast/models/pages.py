@@ -8,7 +8,8 @@ from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
@@ -368,8 +369,11 @@ class Post(Page):
 
     @property
     def comments_security_data(self) -> dict[str, str | int]:
+        from cast.comments.utils import comments_are_open
         from django_comments.forms import CommentSecurityForm
 
+        if not comments_are_open(self):
+            return {}
         form = CommentSecurityForm(self)
         return form.generate_security_data()
 
@@ -453,7 +457,7 @@ class Post(Page):
                     images = block.value.get("gallery", [])
                     image_ids = []
                     for image in images:
-                        if isinstance(image, dict):
+                        if isinstance(image, dict) and "value" in image:
                             image_ids.append(image["value"])
                         elif isinstance(image, Image):
                             image_ids.append(image.pk)
@@ -467,7 +471,9 @@ class Post(Page):
                         if hasattr(media_model, "id"):
                             from_body.setdefault(block.block_type, set()).add(media_model.id)
                         elif isinstance(media_model, int):
-                            from_body.setdefault(block.block_type, set()).add(media_model)
+                            media_model_class = self.media_model_lookup[block.block_type]
+                            if media_model_class._default_manager.filter(pk=media_model).exists():
+                                from_body.setdefault(block.block_type, set()).add(media_model)
                         else:
                             raise ValueError(f"media model {media_model} is not an instance of int or a model")
         return from_body
@@ -698,6 +704,20 @@ class CustomEpisodeForm(WagtailAdminPageForm):
     we have to check which button was clicked in the admin form.
     """
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if self.parent_page is not None:
+            self.instance._blog = cast("Blog", self.parent_page.specific)
+        season_field = self.fields.get("season")
+        if season_field is None:
+            return
+        try:
+            parent_podcast_id = self.instance.blog.pk
+        except (AttributeError, ObjectDoesNotExist, ValueError):
+            parent_podcast_id = None
+        if parent_podcast_id is not None:
+            season_field.queryset = season_field.queryset.filter(podcast_id=parent_podcast_id)
+
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()
         action_publish_values = self.data.getlist("action-publish") if hasattr(self.data, "getlist") else []
@@ -709,6 +729,11 @@ class CustomEpisodeForm(WagtailAdminPageForm):
 
 class Episode(Post):
     """A podcast episode is just a Post with some additional fields."""
+
+    class EpisodeType(models.TextChoices):
+        FULL = "full", _("Full")
+        TRAILER = "trailer", _("Trailer")
+        BONUS = "bonus", _("Bonus")
 
     podcast_audio: models.ForeignKey = models.ForeignKey(
         "cast.Audio",
@@ -743,6 +768,27 @@ class Episode(Post):
             ""
         ),
     )
+    episode_number: models.PositiveIntegerField = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1)],
+        help_text=_("Optional positive episode number used as podcast publishing metadata."),
+    )
+    episode_type: models.CharField = models.CharField(
+        max_length=16,
+        choices=EpisodeType.choices,
+        blank=True,
+        default="",
+        help_text=_("Optional podcast episode type. Leave blank to omit the feed tag; blank is equivalent to full."),
+    )
+    season: models.ForeignKey = models.ForeignKey(
+        "cast.Season",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=_("Optional podcast season. It must belong to this episode's podcast."),
+    )
 
     parent_page_types = ["cast.Podcast"]
 
@@ -750,6 +796,19 @@ class Episode(Post):
         FieldPanel("visible_date"),
         FieldPanel("podcast_audio"),
         EpisodeTranscriptStatusPanel(heading=_("Transcript generation")),
+        MultiFieldPanel(
+            [
+                FieldPanel("episode_type"),
+                FieldPanel("episode_number"),
+                FieldPanel("season"),
+            ],
+            heading=_("Podcast publishing metadata"),
+            classname="collapsed",
+            help_text=_(
+                "Podcast clients identify feed items by GUID. Episode numbers, types, and seasons are "
+                "publishing metadata only."
+            ),
+        ),
         MultiFieldPanel(
             [FieldPanel("categories", widget=forms.CheckboxSelectMultiple)],
             heading="Categories",
@@ -790,6 +849,22 @@ class Episode(Post):
         Use get_template() from the parent class, but pass a local template name.
         """
         return super().get_template(request, *args, local_template_name="episode.html", **kwargs)
+
+    def clean(self) -> None:
+        super().clean()
+        self._validate_season_matches_podcast()
+
+    def _validate_season_matches_podcast(self) -> None:
+        if self.season_id is None:
+            return
+        try:
+            parent_podcast_id = self.blog.pk
+        except (AttributeError, ObjectDoesNotExist, ValueError):
+            return
+        if parent_podcast_id is None:
+            return
+        if self.season.podcast_id != parent_podcast_id:
+            raise ValidationError({"season": _("The selected season must belong to this episode's podcast.")})
 
     def get_context(self, request, **kwargs) -> "ContextDict":
         context = super().get_context(request, **kwargs)

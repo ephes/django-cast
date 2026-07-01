@@ -55,10 +55,16 @@ def ajax_comment_tags(parser, token):
 
 @register.simple_tag(takes_context=True)
 def render_comment(context, comment):
+    request = context.get("request")
     template_name = get_comment_template_name(comment)
     ctx = get_comment_context_data(comment)
-    ctx["request"] = context.get("request")
-    return mark_safe(render_to_string(template_name, ctx, request=context.get("request")))
+    ctx["request"] = request
+    if request is not None:
+        from .. import author_edits
+
+        edited_pks = getattr(request, "_cast_edited_pks", None)
+        ctx.update(author_edits.comment_action_context(request, comment, edited_pks))
+    return mark_safe(render_to_string(template_name, ctx, request=request))
 
 
 @register.filter("comments_are_open")
@@ -81,6 +87,17 @@ def comments_count(content_object):
 @register.simple_tag(takes_context=True)
 def fluent_comments_list(context):
     comment_list = context.get("comment_list")
+    request = context.get("request")
+    # Precompute the 'edited' set once for the whole list to avoid an N+1 query
+    # in render_comment. Stored on the request; read by render_comment above.
+    # Skip entirely when the feature is off: comment_action_context will early-
+    # return without touching the DB, so _cast_edited_pks is not needed.
+    if request is not None:
+        from .. import author_edits
+
+        if author_edits.author_edits_enabled():
+            ids = [c.pk for c in comment_list] if comment_list else []
+            request._cast_edited_pks = author_edits.edited_pks_for(ids)
     target_object_id = context.get("target_object_id")
     if not target_object_id and comment_list:
         try:

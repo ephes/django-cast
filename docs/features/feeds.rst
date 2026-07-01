@@ -55,6 +55,8 @@ Podcast Feeds
 Podcast feeds extend blog feeds with additional podcast-specific features:
 
 - iTunes podcast metadata (artwork, categories, explicit content marking)
+- Optional episode publishing metadata for iTunes and Podcasting 2.0:
+  episode number, episode type, and season
 - Audio file enclosures for episode distribution
 - Multiple audio format support with separate feeds per format
 - RSS at ``<slug>/feed/podcast/<audio_format>/rss.xml``
@@ -85,10 +87,39 @@ Additional metadata for podcast feeds:
 - **iTunes Subtitle**: From the blog's subtitle field
 - **iTunes Categories**: Podcast directory categorization
 - **Explicit Content**: Content rating flag
+- **Podcast Type**: Optional ``episodic`` or ``serial`` channel ordering value
+  emitted as ``itunes:type`` only when explicitly configured.
 - **Episode Enclosures**: Audio files with proper MIME types
 - **Episode Duration**: Calculated from audio files
+- **Episode Number**: Optional positive integer emitted as ``itunes:episode``
+  and ``podcast:episode``
+- **Episode Type**: Optional ``full``, ``trailer``, or ``bonus`` value emitted
+  as ``itunes:episodeType`` only when explicitly set; a blank value omits the
+  tag and is equivalent to ``full``
+- **Season**: Optional reusable season object scoped to the podcast. Positive
+  season numbers are emitted as ``itunes:season`` and ``podcast:season``; a
+  season name is emitted as the Podcasting 2.0 ``name`` attribute.
 - **Chapter Marks**: Time-indexed navigation points
 - **Transcripts**: Links to VTT and DOTE transcript files
+
+RSS item GUIDs remain based on the episode UUID with
+``isPermaLink="false"``. Episode numbers, episode types, and seasons are
+publishing metadata only; changing them does not change feed identity.
+
+Backfilling Podcast Metadata
+----------------------------
+
+Existing podcasts do not need a data migration. The new episode number,
+episode type, and season fields are optional and feeds omit the corresponding
+tags until values are set.
+
+When backfilling from imported source metadata, copy only values that are valid
+for the django-cast fields: positive integer episode numbers, positive integer
+season numbers, and one of ``full``, ``trailer``, or ``bonus`` for episode
+type. Leave legacy values such as ``0``, blank numbers, decimal episode numbers,
+or host-specific display labels unset until a project-specific mapping is
+chosen. Keep imported GUIDs or django-cast UUIDs as feed identity; do not derive
+identity from episode or season numbers.
 
 Feed Generation
 ===============

@@ -85,8 +85,9 @@ an image model is removed locally.
 
 Also be careful with storage-management commands such as
 ``python manage.py media_stale --delete``. They operate on the configured
-``production`` storage backend and can remove real files if your local or
-staging environment points at shared production storage.
+``production`` storage backend and can remove real files under django-cast and
+Wagtail-managed media prefixes if your local or staging environment points at
+shared production storage.
 
 Finding unreferenced media files
 --------------------------------
@@ -103,6 +104,9 @@ To also delete them:
 .. code-block:: bash
 
     python manage.py media_stale --delete
+
+The command ignores objects outside known django-cast/Wagtail media prefixes by
+default, even when they live in the same storage backend.
 
 Themes and Templates
 ====================

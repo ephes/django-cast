@@ -1,9 +1,22 @@
 from django.core.management.base import BaseCommand
+from django.db import models
 from wagtail.images.models import Image
 
-from ...models import Audio, File, Transcript, Video
 from ...utils import storage_walk_paths
 from .storage_backend import get_production_and_backup_storage
+
+
+MANAGED_MEDIA_PREFIXES = (
+    "cast_audio/",
+    "cast_files/",
+    "cast_images/",
+    "cast_transcript/",
+    "cast_transcript_speakers/",
+    "cast_videos/",
+    "cast_voice_references/",
+    "images/",
+    "original_images/",
+)
 
 
 class Command(BaseCommand):
@@ -22,6 +35,11 @@ class Command(BaseCommand):
         )
 
     @staticmethod
+    def is_managed_media_path(path: str) -> bool:
+        normalized_path = path.lstrip("/")
+        return any(normalized_path.startswith(prefix) for prefix in MANAGED_MEDIA_PREFIXES)
+
+    @staticmethod
     def get_paths(storage):
         paths = {}
         for num, path in enumerate(storage_walk_paths(storage)):
@@ -30,6 +48,22 @@ class Command(BaseCommand):
             if num % 100 == 0:
                 print(".", end="", flush=True)
             # print(path, size / 2 ** 20)
+        return paths
+
+    @staticmethod
+    def get_cast_file_field_paths() -> set[str]:
+        paths = set()
+        from django.apps import apps
+
+        for model in apps.get_app_config("cast").get_models():
+            file_fields = [field for field in model._meta.get_fields() if isinstance(field, models.FileField)]
+            if not file_fields:
+                continue
+            for instance in model._default_manager.all().iterator():
+                for field in file_fields:
+                    field_file = getattr(instance, field.name)
+                    if field_file and field_file.name:
+                        paths.add(field_file.name)
         return paths
 
     @staticmethod
@@ -43,18 +77,7 @@ class Command(BaseCommand):
 
     def get_models_paths(self):
         paths = self.get_image_paths()
-        for audio in Audio.objects.all():
-            for path in audio.get_all_paths():
-                paths.add(path)
-        for transcript in Transcript.objects.all():
-            for path in transcript.get_all_paths():
-                paths.add(path)
-        for video in Video.objects.all():
-            for path in video.get_all_paths():
-                paths.add(path)
-        for misc_file in File.objects.all():
-            for path in misc_file.get_all_paths():
-                paths.add(path)
+        paths.update(self.get_cast_file_field_paths())
         return paths
 
     def handle(self, *args, **options):
@@ -65,6 +88,8 @@ class Command(BaseCommand):
         production_paths = self.get_paths(production_storage)
         stale_production = {}
         for path, size in production_paths.items():
+            if not self.is_managed_media_path(path):
+                continue
             if path not in paths_from_models:
                 print(path)
                 stale_production[path] = size

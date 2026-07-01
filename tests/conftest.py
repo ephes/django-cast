@@ -56,9 +56,11 @@ def remove_stale_media_files():
 
     # clean up before tests start (handles leftovers from interrupted runs)
     shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+    shutil.rmtree(settings.CAST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
     yield
     # clean up after tests end
     shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+    shutil.rmtree(settings.CAST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -327,12 +329,15 @@ def admin_user(db):
     for codename in (
         "add_audio",
         "change_audio",
+        "choose_audio",
         "delete_audio",
         "add_video",
         "change_video",
+        "choose_video",
         "delete_video",
         "add_transcript",
         "change_transcript",
+        "choose_transcript",
         "delete_transcript",
     ):
         permission = Permission.objects.get(codename=codename, content_type__app_label="cast")

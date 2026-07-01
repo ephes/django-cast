@@ -15,6 +15,7 @@ from .models import (
     ItunesArtWork,
     Podcast,
     Post,
+    Season,
     SpamFilter,
     Video,
 )
@@ -41,7 +42,21 @@ class BlogModelAdmin(AdminUserMixin, ModelAdmin):
 @admin.register(Podcast)
 class PodcastModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("title", "owner")
-    fields = ("itunes_artwork", "itunes_categories", "explicit", "keywords")
+    fields = (
+        "itunes_artwork",
+        "itunes_categories",
+        "explicit",
+        "itunes_type",
+        "keywords",
+        "automatic_episode_numbering_enabled",
+        "next_episode_number",
+    )
+
+
+@admin.register(Season)
+class SeasonModelAdmin(ModelAdmin):
+    list_display = ("podcast", "number", "name")
+    fields = ("podcast", "number", "name")
 
 
 @admin.register(Post)

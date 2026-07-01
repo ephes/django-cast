@@ -35,6 +35,7 @@ from cast.models import (
     EpisodeContributor,
     Podcast,
     Post,
+    Season,
     Transcript,
     Video,
 )
@@ -52,6 +53,7 @@ from cast.models.repository import (
     deserialize_episode,
     deserialize_image,
     deserialize_post,
+    deserialize_season,
     deserialize_transcript,
     deserialize_video,
     deserialize_blog,
@@ -65,6 +67,7 @@ from cast.models.repository import (
     serialize_image,
     serialize_post,
     serialize_renditions,
+    serialize_season,
     serialize_transcript,
     serialize_video,
 )
@@ -753,7 +756,12 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
     # Given a post with media in a blog
     settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
     blog = generate_blog_with_media(number_of_posts=6, podcast=True)
-    post = blog.unfiltered_published_posts.first()
+    post = Episode.objects.live().descendant_of(blog).order_by("-visible_date").first()
+    season = Season.objects.create(podcast=blog, number=2, name="Launch")
+    post.episode_number = 7
+    post.episode_type = Episode.EpisodeType.BONUS
+    post.season = season
+    post.save(update_fields=["episode_number", "episode_type", "season"])
     author_name = post.owner.username.capitalize()
     post_detail_url = post.get_url()
     request = rf.get(blog.get_url())
@@ -783,6 +791,11 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
     assert 'class="block-video"' in html
     assert 'class="block-audio"' in html
     assert "podcast:transcript" in html
+    assert "<itunes:episode>7</itunes:episode>" in html
+    assert "<itunes:season>2</itunes:season>" in html
+    assert "<itunes:episodeType>bonus</itunes:episodeType>" in html
+    assert "<podcast:episode>7</podcast:episode>" in html
+    assert '<podcast:season name="Launch">2</podcast:season>' in html
     assert author_name in html
     assert post_detail_url in html
     # And the database should not be hit
@@ -1157,6 +1170,38 @@ def test_serialize_episode_contributor_without_avatar_rendition(episode):
     assert rebuilt.href == ""
 
 
+@pytest.mark.django_db
+def test_serialize_season_roundtrip(episode):
+    season = Season.objects.create(podcast=episode.podcast, number=3, name="Named season")
+
+    data = serialize_season(season)
+    rebuilt = deserialize_season(data)
+
+    assert "pk" not in data
+    assert rebuilt.pk == season.pk
+    assert rebuilt.podcast_id == episode.podcast.pk
+    assert rebuilt.number == 3
+    assert rebuilt.name == "Named season"
+
+
+@pytest.mark.django_db
+def test_serialize_episode_roundtrip_with_publishing_metadata(episode):
+    season = Season.objects.create(podcast=episode.podcast, number=1, name="Launch")
+    episode.episode_number = 42
+    episode.episode_type = Episode.EpisodeType.FULL
+    episode.season = season
+
+    data = serialize_episode(episode)
+    rebuilt = deserialize_episode(data)
+
+    assert rebuilt.episode_number == 42
+    assert rebuilt.episode_type == Episode.EpisodeType.FULL
+    assert rebuilt.season is not None
+    assert rebuilt.season.number == 1
+    assert rebuilt.season.name == "Launch"
+    assert serialize_episode(rebuilt) == data
+
+
 def test_get_facet_choices():
     class Facet:
         choices = [("foo", "Foo"), ("bar", "Bar")]
@@ -1181,8 +1226,9 @@ def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     podcast_with_artwork.itunes_categories = "Technology"
     podcast_with_artwork.keywords = "foo,bar"
     podcast_with_artwork.explicit = 2
+    podcast_with_artwork.itunes_type = Podcast.ItunesType.SERIAL
     podcast_with_artwork.subtitle = "Test subtitle"
-    podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit", "subtitle"])
+    podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit", "itunes_type", "subtitle"])
 
     data = serialize_blog(podcast_with_artwork)
     rebuilt = deserialize_blog(data)
@@ -1193,6 +1239,7 @@ def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     assert rebuilt.itunes_categories == podcast_with_artwork.itunes_categories
     assert rebuilt.keywords == podcast_with_artwork.keywords
     assert rebuilt.explicit == podcast_with_artwork.explicit
+    assert rebuilt.itunes_type == podcast_with_artwork.itunes_type
     assert rebuilt.itunes_artwork is not None
     assert rebuilt.itunes_artwork.original.name == podcast_with_artwork.itunes_artwork.original.name
 
@@ -1447,6 +1494,45 @@ def test_apply_cover_fallback_uses_blog_cover():
     cover_url, cover_alt = apply_cover_fallback("", "", "/media/blog.jpg", "Blog alt text")
     assert cover_url == "/media/blog.jpg"
     assert cover_alt == "Blog alt text"
+
+
+def test_build_media_lookup_groups_media_by_kind():
+    from cast.models.repository.builders import build_media_lookup
+
+    images = {10: "image-10", 11: "image-11"}
+    videos = {20: "video-20"}
+    audios = {30: "audio-30"}
+    media_lookup = build_media_lookup(
+        1,
+        images_by_post_id={1: {10, 11}},
+        videos_by_post_id={1: {20}},
+        audios_by_post_id={1: {30}},
+        images=images,
+        videos=videos,
+        audios=audios,
+    )
+    assert media_lookup == {
+        "image": {10: "image-10", 11: "image-11"},
+        "video": {20: "video-20"},
+        "audio": {30: "audio-30"},
+    }
+
+
+def test_build_media_lookup_omits_empty_kinds_for_post_without_media():
+    from cast.models.repository.builders import build_media_lookup
+
+    # A post with no media of any kind must yield an empty mapping (no empty
+    # "image"/"video"/"audio" sub-dicts), matching the previous inline behavior.
+    media_lookup = build_media_lookup(
+        99,
+        images_by_post_id={},
+        videos_by_post_id={},
+        audios_by_post_id={},
+        images={},
+        videos={},
+        audios={},
+    )
+    assert media_lookup == {}
 
 
 @pytest.mark.django_db

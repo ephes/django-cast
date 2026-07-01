@@ -163,7 +163,23 @@ Configure separate storage backends through Django's ``STORAGES`` setting:
                 "location": "/backup/media",
             },
         },
+        "cast_private_media": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "OPTIONS": {
+                "location": "/srv/django-cast/private-media",
+                "base_url": None,
+            },
+        },
+        "cast_public_transcripts": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
     }
+
+The ``cast_public_transcripts`` storage is used for public Podlove, WebVTT, and DOTe
+transcript artifacts. The ``cast_private_media`` storage is reserved for
+private django-cast artifacts; known-speaker sidecars and contributor voice
+references use ``cast_voice_references`` when configured, falling back to
+``cast_private_media``.
 
 Image Renditions
 ----------------
@@ -303,7 +319,7 @@ Media Maintenance
 Find orphaned media files::
 
     python manage.py media_stale
-    python manage.py media_stale --delete  # Remove orphaned files
+    python manage.py media_stale --delete  # Remove orphaned managed media files
 
 Backup and Restore
 ~~~~~~~~~~~~~~~~~~

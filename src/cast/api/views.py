@@ -9,6 +9,7 @@ from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.utils.cache import patch_vary_headers
 from django.views.generic import CreateView
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
@@ -21,7 +22,7 @@ from wagtail.api.v2.router import WagtailAPIRouter
 from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.images.api.v2.views import ImagesAPIViewSet
 
-from ..audio_access import authorize_audio_access, page_grants_audio_access
+from ..audio_access import authorize_audio_access, page_grants_audio_access, page_is_unrestricted_public
 from ..filters import PostFilterset
 from ..forms import SelectThemeForm, VideoForm
 from ..models import (
@@ -194,8 +195,17 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
         else:
             response = Response({"cues": cues})
         response["ETag"] = etag
-        response["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
+        self._set_cache_headers(response, post)
         return response
+
+    @staticmethod
+    def _set_cache_headers(response: Response, post: Post) -> None:
+        specific = getattr(post, "specific", post)
+        if page_is_unrestricted_public(specific):
+            response["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
+            return
+        response["Cache-Control"] = "private, no-store"
+        patch_vary_headers(response, ("Cookie", "Authorization"))
 
     @staticmethod
     def _get_authorized_post(post_id: Any, audio: Audio, request: Request) -> Post | None:
@@ -226,13 +236,17 @@ class PlayerConfig(generics.RetrieveAPIView):
 
 class FacetCountListView(generics.ListAPIView):
     serializer_class = SimpleBlogSerializer
-    queryset = Blog.objects.all().live().order_by("-first_published_at")
     pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self) -> QuerySet[Blog]:
+        return Blog.objects.all().live().public().order_by("-first_published_at")
 
 
 class FacetCountsDetailView(generics.RetrieveAPIView):
-    queryset = Blog.objects.all().live()
     serializer_class = FacetCountSerializer
+
+    def get_queryset(self) -> QuerySet[Blog]:
+        return Blog.objects.all().live().public()
 
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
         if request.query_params.get("mode") == "modal":

@@ -16,6 +16,48 @@ CAST_COMMENTS_ENABLED
 
 Whether or not to enable comments on the site. Defaults to ``False``.
 
+.. _cast_comments_allow_author_edits:
+
+CAST_COMMENTS_ALLOW_AUTHOR_EDITS
+================================
+
+Whether to let an anonymous author edit or delete their own comment from the
+same browser. Defaults to ``False`` (opt-in). Set to the literal ``True`` to
+enable it — a string such as ``"False"`` does not turn it on.
+
+Requires a **server-side session backend**: the ``signed_cookies``
+``SESSION_ENGINE`` is rejected by the cast system checks (``cast.E006``),
+because comment ownership is tracked in the session and a client-carried list
+cannot be revoked. See :ref:`comments_author_edits` for the full behaviour and
+privacy notes.
+
+CAST_COMMENTS_OWNED_IDS_CAP
+===========================
+
+The maximum number of owned comment ids tracked in a single session. Older
+entries are dropped once the cap is reached. Defaults to ``200``; ``0`` means
+**no cap** (every id is kept). Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled.
+
+CAST_COMMENTS_EDIT_RATE_LIMIT
+=============================
+
+The maximum number of author edit/delete actions allowed per session within
+``CAST_COMMENTS_EDIT_RATE_WINDOW`` seconds. Defaults to ``30``; ``0``
+**disables** rate limiting. Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled.
+
+CAST_COMMENTS_EDIT_RATE_WINDOW
+==============================
+
+The length, in seconds, of the rate-limit window used by
+``CAST_COMMENTS_EDIT_RATE_LIMIT``. Defaults to ``60`` and must be a positive
+integer. Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled.
+
 **********
 Pagination
 **********
@@ -148,8 +190,9 @@ Whether to send approved contributor voice references to Voxhelm as
 known-speaker reference material for diarized transcript jobs. Defaults to
 ``False``. When enabled, a diarized job for an episode also sends the approved
 voice references of that episode's expected contributors (source ranges into
-existing audio or uploaded clips), never public profile URLs. Hidden
-contributors are excluded unless a reference explicitly opts in.
+existing audio, or uploaded clips only when protected storage provides an
+absolute temporary URL), never public profile URLs. Hidden contributors are
+excluded unless a reference explicitly opts in.
 
 This can be set as a Django setting or environment variable, using the same
 boolean strings as ``CAST_VOXHELM_DIARIZATION_ENABLED``. The Wagtail admin
@@ -382,7 +425,71 @@ like this:
               "location": ROOT_DIR.path("backups").path("media"),
           },
       },
+      "cast_private_media": {
+          "BACKEND": "django.core.files.storage.FileSystemStorage",
+          "OPTIONS": {
+              "location": ROOT_DIR.path("private").path("media"),
+              "base_url": None,
+          },
+      },
+      "cast_public_transcripts": {
+          "BACKEND": "config.settings.local.CustomS3Boto3Storage",
+      },
     }
+
+``cast_public_transcripts`` stores public transcript artifacts
+(``Transcript.podlove``, ``Transcript.vtt``, and ``Transcript.dote``). These
+files are publishable output used by public transcript pages, feeds, podcast
+clients, and the custom audio player. If the alias is omitted, django-cast uses
+``cast_private_media`` when that alias is explicitly configured, preserving
+sites that already adapted to the temporary private-storage behavior. If both
+aliases are omitted, transcript artifacts use Django's default storage, matching
+the original public-media behavior.
+
+``cast_private_media`` stores private django-cast artifacts outside public
+media. If omitted, django-cast falls back to ``CAST_PRIVATE_MEDIA_ROOT`` or a
+local ``cast-private-media`` directory next to ``MEDIA_ROOT``.
+
+Uploaded contributor voice-reference clips and the private
+``Transcript.speakers`` known-speaker sidecar use ``STORAGES["cast_voice_references"]``
+when configured. If that dedicated alias is omitted, they fall back to
+``cast_private_media`` or the same non-public local private-media fallback.
+
+
+CAST_AUDIO_UPLOAD_MAX_BYTES
+===========================
+
+Maximum accepted size, in bytes, for each uploaded audio file before
+django-cast validates the file container or runs ffprobe. Defaults to
+``536870912`` (512 MiB).
+
+
+CAST_VIDEO_UPLOAD_MAX_BYTES
+===========================
+
+Maximum accepted size, in bytes, for each uploaded video file before
+django-cast validates the file container or runs ffmpeg/ffprobe. Defaults to
+``2147483648`` (2 GiB).
+
+
+CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
+=====================================
+
+Time-to-live, in seconds, for the editor API's per-user audio/video upload
+lock. Defaults to ``7200`` (2 hours). The lock is stored in Django's default
+cache and is owner-token protected so one request does not release a successor
+lock. Multi-worker deployments need a shared cache backend, such as Redis or
+Memcached; Django's ``LocMemCache`` only coordinates within one process.
+
+
+CAST_EDITOR_MEDIA_PROBE_SECONDS
+===============================
+
+Cumulative synchronous ffprobe/ffmpeg budget, in seconds, for one editor API
+audio or video upload after the file has been received. Defaults to ``10``.
+Required audio duration probing failures are returned as ``probe_timeout`` or
+``probe_failed``; optional audio chapter extraction and video poster generation
+degrade without failing the upload.
 
 
 ******************

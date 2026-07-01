@@ -13,25 +13,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [x] Persistent player on python-podcast staging — **staging proof done (2026-06-08)**
-  - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
-    (see "Implementation Log")
-  - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
-  - Proven on `python-podcast.staging.django-cast.com` (pp theme, behind a staging-only flag): starting an
-    episode and navigating enhanced to the podcast index, another episode, and `/about/` keeps the same audio
-    object playing in the same document with currentTime advancing; an explicit play switches episodes cleanly;
-    back/forward keeps audio advancing; axe-core reports 0 violations; production is unchanged (flag pinned off).
-    All in python-podcast — django-cast/cast-bootstrap5 unchanged.
-  - Remaining (separate decision): whether to generalize into a reusable django-cast/cast-bootstrap5 API
-    (the open question in the note) or keep it python-podcast-specific.
-
-## Ready
-
-- [ ] Repository read-model cleanup experiment
-  - Notes: [backlog/2026-04-18-repository-readmodels.md](backlog/2026-04-18-repository-readmodels.md)
-  - Scope: try local typed read shapes around the repository layer before considering `django-mantle`.
-  - Done when: a narrow branch proves whether typed read shapes clarify repository logic without changing
-    template contracts or query counts.
+- [ ] Editor API remote media import safety design
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Open Questions)
+  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
+    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
+    for agents but safe for production sites.
+  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
+    documented, with a recommended first implementation slice or an explicit deferral.
 
 ## Research / Shaping
 
@@ -50,22 +40,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the current workflows are documented in one place, gaps are listed, and follow-up items are split
     into concrete implementation tasks.
 
-- [ ] Podcast feed import
-  - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
-  - Related to: Revisit onboarding and authoring workflows.
-  - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
-  - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on
-    stable feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
-
-- [ ] Programmatic content editing API
-  - Scope: research and design an API that lets trusted tools or agents create, update, draft, preview, publish,
-    and revise posts or episodes programmatically.
-  - Notes: target use cases include agents turning assorted Markdown notes on disk into weeknotes, updating draft
-    posts after review, and modifying existing content without direct database access.
-  - Done when: there is a proposed API shape covering authentication, permissions, draft vs live revisions,
-    StreamField/body serialization, media attachment handling, conflict detection, validation errors, and a first
-    implementation slice plan with test scenarios for create/update/publish workflows.
-
 - [ ] Local authoring and sync workflow
   - Scope: research whether django-cast should support a local-first editing workflow where content can be pulled
     from a production site, edited locally, previewed, and synced back safely.
@@ -83,7 +57,53 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: there is a small prototype or design note showing how the app would authenticate, list content,
     edit drafts, preview posts, sync changes, and handle conflicts.
 
+- [ ] Anonymous comment author edit hard limits
+  - PRD: [backlog/2026-06-21-anonymous-comment-self-editing.md](backlog/2026-06-21-anonymous-comment-self-editing.md)
+  - Status: implemented and tested (reviewed clean) — backend, browser frontend (templates + AJAX JS), and user
+    docs/release notes all landed.
+  - Scope: decide whether to add the deferred persistent edit-count cap, configurable hard time-window, both, or
+    neither for the already shipped session-bound author edit/delete feature.
+  - Done when: the decision is recorded and any accepted limit has settings, validation/checks, tests, docs, and
+    release notes.
+
 ## Later
+
+- [ ] Editor API optional If-Match/ETag conflict tokens
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Conflict Detection)
+  - Scope: add `If-Match`/ETag as an equivalent transport for the existing `base_revision_id` conflict semantics on
+    `PATCH`, without changing the JSON-body contract that already works.
+  - Done when: the header transport maps to the same `revision_conflict` behavior, both transports are documented, and
+    tests cover header- and body-supplied base revisions.
+
+- [ ] Editor API media replacement workflows
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Open Questions)
+  - Related to: the `media_replace` management command and media durability work.
+  - Scope: decide whether editor media endpoints should support replacing an existing media object's file (versus only
+    creating new objects), and how that interacts with references from published pages and stored renditions.
+  - Done when: the decision and, if accepted, a safe replacement contract (permissions, reference safety, cleanup) are
+    documented or the option is explicitly deferred.
+
+- [ ] Editor API Markdown convenience input
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Body Serialization, Tier 2)
+  - Scope: add an optional `overview_markdown`/`detail_markdown` convenience input converted server-side into the
+    canonical block list, behind an optional dependency so the Markdown parser is not forced onto all installs.
+  - Done when: the optional-dependency boundary and conversion policy are documented, the structured block list stays
+    canonical, and tests cover the conversion plus the dependency-absent path.
+
+- [ ] Editor API embed body block support
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Body Serialization)
+  - Scope: add `embed` as an author-facing body block in the editor converter, specifying URL validation and provider
+    behavior. Stored `embed` blocks are currently preserved only as unsupported placeholders.
+  - Done when: the `embed` value/validation contract is specified, the converter accepts and round-trips it, and tests
+    cover valid/invalid embed URLs and provider behavior.
 
 - [ ] Optimize public transcript speaker sanitization copies
   - Scope: avoid deep-copying large transcript structures on public player/transcript requests when all speaker
@@ -106,6 +126,29 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
     existing feed compatibility.
 
+- [ ] Chapter marks in podcast feeds
+  - Related to: Paged feeds, Podcast feed import, and the custom audio player.
+  - Scope: expose existing `ChapterMark` data in the podcast RSS/Atom feeds using both Podlove Simple Chapters
+    (`<psc:chapters>` with inline `<psc:chapter start=… title=…/>` elements, `xmlns:psc="http://podlove.org/simple-chapters"`)
+    and Podcasting 2.0 chapters (`<podcast:chapters>` referencing an external `application/json+chapters` document in the
+    existing `xmlns:podcast` namespace).
+  - Notes: chapter data already exists per episode (`ChapterMark`, parsed from audio files and shown in the player) but is
+    not written to the feed yet; feed namespaces/elements live in `src/cast/feeds.py` (`ITunesElements`,
+    `PodcastIndexElements`). Open question for the PC2.0 form: where to serve the chapters JSON file from (new view/URL,
+    similar to the existing transcript URLs) versus only emitting inline Podlove chapters. Keep emission conditional so
+    episodes without chapter marks produce no extra elements.
+  - Done when: feeds emit Podlove Simple Chapters inline and a `podcast:chapters` reference (with the JSON document served
+    from a stable URL), namespaces are declared, behavior is documented, and tests cover episodes with and without chapter
+    marks plus existing-feed compatibility.
+
+- [ ] Podcast feed import
+  - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
+  - Status: deferred for now.
+  - Related to: Revisit onboarding and authoring workflows.
+  - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
+  - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on stable
+    feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
+
 - [ ] Tags/categories and faceted navigation completion
   - Scope: decide whether tags, categories, or both should remain public organization primitives and finish the beta
     faceted navigation behavior.
@@ -116,6 +159,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: make currently soft-required theme templates strictly required after the deprecation period.
   - Done when: theme discovery enforces the final required template set and the theme docs/release notes explain the
     migration path.
+
+- [ ] Persistent player generic rollout decision
+  - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
+  - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
+  - Scope: decide whether the python-podcast staging proof should become a reusable django-cast/cast-bootstrap5 API,
+    remain python-podcast-specific, or be closed as a staging-only experiment.
+  - Done when: the generic theme contract/API work is split into concrete implementation items or explicitly deferred.
 
 - [ ] Podcast contributor follow-up options
   - Notes: [backlog/2026-05-12-podcast-episode-contributors.md](backlog/2026-05-12-podcast-episode-contributors.md)

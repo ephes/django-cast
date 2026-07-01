@@ -26,13 +26,21 @@
         {% if comment.name %}{{ comment.name }}{% else %}{% trans "Anonymous" %}{% endif %}{% comment %}
         {% endcomment %}{% if comment.url %}</a>{% endif %}
         <span class="comment-date">{% blocktrans with submit_date=comment.submit_date %}on {{ submit_date }}{% endblocktrans %}</span>
+        {% if edited %}<span class="comment-edited-flag">({% trans "edited" %})</span>{% endif %}
         {% if request.user.is_staff and not comment.is_public %}
           <span class="comment-moderated-flag">({% trans "moderated" %})</span>
         {% endif %}
         {% if USE_THREADEDCOMMENTS and not preview %}<a href="#c{{ comment.id }}" data-comment-id="{{ comment.id }}" class="comment-reply-link">{% trans "reply" %}</a>{% endif %}
+        {% if can_edit or can_delete %}
+          <span class="comment-author-actions">
+            {% if can_edit %}<a href="#c{{ comment.id }}" class="comment-edit-link" data-comment-id="{{ comment.id }}" data-edit-action="{% url 'comments-edit-comment-ajax' %}">{% trans "edit" %}</a>{% endif %}
+            {% if can_delete %}<a href="#c{{ comment.id }}" class="comment-delete-link" data-comment-id="{{ comment.id }}" data-delete-action="{% url 'comments-delete-comment-ajax' %}">{% trans "delete" %}</a>{% endif %}
+          </span>
+        {% endif %}
       {% endblock %}
     </h3>
 
     <div class="comment-text">{{ comment.comment|linebreaks }}</div>
+    {% if can_edit %}<textarea class="comment-raw" hidden>{{ comment.comment }}</textarea>{% endif %}
   {% endblock %}
 </div>

@@ -16,6 +16,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
+from .gallery_tokens import sign_gallery_image_pks
 from .models.repository import AudioById, ImageById, RenditionsForPosts, VideoById
 from .renditions import (
     Height,
@@ -208,7 +209,9 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     for index, image in enumerate(images_list):
         image.prev = f"gallery-{images_list[index - 1].pk}" if index > 0 else ""
         image.next = f"gallery-{images_list[index + 1].pk}" if index < len(images_list) - 1 else ""
-    context["image_pks"] = ",".join([str(image.pk) for image in images_list])
+    image_pks = [image.pk for image in images_list]
+    context["image_pks"] = ",".join([str(pk) for pk in image_pks])
+    context["gallery_token"] = sign_gallery_image_pks(image_pks)
     context["images"] = images_list
     return context
 

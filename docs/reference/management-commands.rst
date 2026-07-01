@@ -183,8 +183,12 @@ Options:
 
 The command prints summary counters in the form
 ``planned=<n> replaced=<n> skipped=<n> errors=<n>``. Missing local files are
-reported as skipped. If a production delete succeeds but a later save fails,
-the command also prints a warning about the data-loss risk for that path.
+reported as skipped. Replacement files are staged to a temporary production
+key before the target path is written. For existing production files, the
+command only reports success when the storage backend saves back to the exact
+requested path; if the backend auto-generates a different name, the generated
+file is removed, the original path is left untouched, and the path is reported
+as an error.
 
 media_sizes
 -----------
@@ -208,7 +212,10 @@ media_stale
 
 Find media files in production storage that are not referenced by any
 database record. The command checks paths referenced by image, video,
-audio, transcript, and file records before classifying anything as stale.
+audio, transcript, contributor voice-reference, and file records before
+classifying anything as stale. Only known django-cast/Wagtail-managed media
+prefixes are eligible for stale reporting or deletion, so unrelated objects in
+the same storage backend are ignored by default.
 Requires configured ``production`` and ``backup`` storage backends.
 
 .. code-block:: bash
@@ -222,7 +229,8 @@ Requires configured ``production`` and ``backup`` storage backends.
 Options:
 
 ``--delete``
-    Delete the stale files instead of only listing them.
+    Delete the stale files under managed media prefixes instead of only listing
+    them.
 
 The command prints matching stale paths and a final total stale size in MB.
 

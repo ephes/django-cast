@@ -1,7 +1,7 @@
 import logging
 
 from django.forms import ModelForm
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,9 @@ class FileUploadResponseMixin:
         model = form.save(commit=False)
         super().form_valid(form)  # type: ignore
         return HttpResponse(f"{model.pk}", status=201)
+
+    def form_invalid(self, form: ModelForm) -> JsonResponse:
+        return JsonResponse(form.errors.get_json_data(), status=400)
 
 
 class AddRequestUserMixin:

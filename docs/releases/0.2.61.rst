@@ -1,0 +1,118 @@
+0.2.61 (2026-07-01)
+-------------------
+
+- Added optional podcast publishing metadata: reusable podcast-scoped seasons,
+  episode numbers, and explicit episode types. Podcast feeds now emit matching
+  iTunes and Podcasting 2.0 item tags when metadata is present while preserving
+  existing UUID-based RSS GUIDs and omitting episode type for blank values.
+- Added an optional podcast-level Apple Podcasts ordering type. Podcast pages
+  can now set ``itunes_type`` to ``episodic`` or ``serial``; blank remains the
+  default and omits the channel-level ``itunes:type`` feed tag.
+- Added opt-in automatic podcast episode numbering per podcast. Blank full
+  episodes can now receive the next podcast-scoped number on first real publish;
+  draft saves and future scheduling approvals do not consume numbers, manual
+  numbers stay authoritative, and RSS GUIDs remain UUID-based.
+- Added opt-in anonymous comment self-editing and deletion. With
+  ``CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True`` and a server-side session backend,
+  an author can edit or delete their own comment from the same browser until
+  someone replies or the session expires. Edits are re-moderated (and flagged
+  ``(edited)``) and deletion is a soft delete that staff can restore from the
+  Django admin. Enabling the feature sets a functional session cookie for
+  previously cookieless commenters. See
+  :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>`.
+- Added a session-authenticated programmatic content editing API
+  (``/api/editor/``). Trusted clients can list the blogs and podcasts they may
+  add to (``GET /api/editor/parents/``), create a draft ``Post`` from a
+  structured ``overview`` block list (``POST /api/editor/posts/``), and read the
+  draft back with normalized authoring source (``GET /api/editor/posts/{id}/``).
+  Drafts can also be revised with ``PATCH /api/editor/posts/{id}/`` by sending
+  the returned ``latest_revision_id`` as ``base_revision_id``; stale bases return
+  ``409 revision_conflict`` instead of overwriting newer edits. The API stays
+  authentication-mechanism agnostic — it requires an authenticated user and
+  authorizes every action with Wagtail page permissions. Create and update stay
+  draft-only and reject ``publish: true``; draft posts can now be published
+  through the explicit ``POST /api/editor/posts/{id}/publish/`` action, which
+  requires Wagtail publish permission and publishes the latest draft revision
+  through Wagtail's revision path. Body blocks supported in this slice: heading,
+  paragraph, code, image, gallery, audio, and video (media blocks reference
+  media the caller may choose). The editor API now also supports the ``detail``
+  body section, editor media list/upload endpoints for images, audio, and video,
+  and upload collection discovery at ``/api/editor/media/collections/``.
+  Audio/video editor uploads share a one-in-flight per-user lock, and editor
+  audio probing is capped by a request-path budget so slow files fail with
+  ``probe_timeout`` instead of hanging the request.
+- Extended the editor API to podcast episodes with draft-only
+  ``POST /api/editor/episodes/``, ``GET /api/editor/episodes/{id}/``, and
+  ``PATCH /api/editor/episodes/{id}/``. Episodes reuse the post body, tags,
+  categories, cover image, and revision/conflict handling, and add the
+  episode-specific fields ``podcast_audio``, ``episode_number``,
+  ``episode_type``, ``season``, ``keywords``, ``explicit``, and ``block``. The
+  parent must be a ``cast.Podcast`` (a non-podcast parent is rejected), the
+  ``season`` must belong to that podcast, and ``podcast_audio`` must be choosable
+  by the caller. ``GET /api/editor/parents/`` now points podcasts at the episode
+  create endpoint. Create and update stay draft-only and reject ``publish:
+  true``; draft episodes are published through the explicit
+  ``POST /api/editor/episodes/{id}/publish/`` action, which mirrors the post
+  publish action and additionally requires a non-null ``podcast_audio`` to
+  publish. That audio requirement is also enforced when an episode id is
+  published through ``POST /api/editor/posts/{id}/publish/``, so it cannot be
+  bypassed.
+- The editor API now enforces optional per-action scopes for scoped-token
+  authentication: reads need no scope, create/update/media uploads need a ``write``
+  scope, and the publish actions need a ``publish`` scope, so a token can be restricted
+  to draft-only. Session auth and unscoped tokens fall back to pure Wagtail permissions.
+  Accepted scope strings are configurable via ``CAST_EDITOR_SCOPES``; a token missing the
+  required scope gets ``403 insufficient_scope``. django-cast still imports no
+  authentication provider.
+- Added rendered draft preview endpoints for token-only editor workflows:
+  ``GET /api/editor/posts/{id}/preview/`` and
+  ``GET /api/editor/episodes/{id}/preview/`` return the latest editable revision
+  as full themed ``text/html`` when the caller has edit permission, while errors
+  keep the editor API JSON envelopes.
+- Tightened Wagtail admin permissions for custom audio, video, and transcript
+  views. Index, chooser, edit, and delete endpoints now use collection-scoped
+  permission policies, and new ``choose_audio``, ``choose_video``, and
+  ``choose_transcript`` permissions control chooser access.
+- Added a dedicated ``STORAGES["cast_public_transcripts"]`` alias for public transcript
+  artifacts (Podlove JSON, DOTe JSON, and WebVTT). Those files are publishable
+  transcript output and no longer need ``cast_private_media``. For compatibility,
+  django-cast still reads/writes them through an explicitly configured
+  ``cast_private_media`` alias when ``cast_public_transcripts`` is omitted; otherwise
+  they stay on default storage. Public transcript URLs continue to use the
+  existing authorized and sanitized views.
+- Voice-reference clips and known-speaker sidecar files no longer fall back to
+  default public media storage when ``STORAGES["cast_voice_references"]`` is
+  omitted. They now use the private media backend, and a migration copies
+  existing default-storage files into private storage. Voxhelm known-speaker
+  handoff now skips uploaded clips on no-URL private storage instead of exposing
+  or crashing on direct storage URLs; source-range references continue to work.
+- Audio and video uploads are now rejected before ffprobe/ffmpeg when their
+  extension, content type, container signature, or configured size limit is not
+  supported. New ``CAST_AUDIO_UPLOAD_MAX_BYTES`` and
+  ``CAST_VIDEO_UPLOAD_MAX_BYTES`` settings control the size limits.
+- The editor media upload lock now uses owner tokens, defaults to a 2-hour TTL,
+  and can be tuned with ``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS``. Multi-worker
+  deployments should use a shared Django cache backend for process-wide upload
+  throttling; a worker crash can leave the per-user lock in place until the TTL
+  expires.
+- Editor media probing can be tuned with ``CAST_EDITOR_MEDIA_PROBE_SECONDS``.
+  Required audio probe failures now return ``probe_failed``/HTTP 422 with
+  cleanup instead of escaping as server errors. Optional chapter extraction
+  during audio saves is now best-effort in both the editor API and Wagtail
+  admin: failed or timed-out chapter probes are logged and the audio is saved
+  without auto-imported chapter marks, while malformed individual chapter
+  entries are skipped and valid entries are kept.
+- ``media_stale --delete`` now only reports and deletes files under known
+  django-cast/Wagtail-managed media prefixes, and its referenced-file scan
+  includes private transcript speaker sidecars and contributor voice clips.
+- ``media_replace --yes`` now stages replacements before writing the requested
+  production key and no longer deletes an existing production object before the
+  replacement save succeeds. If a storage backend would auto-save an existing
+  target as a different name, the generated file is removed and the original is
+  left untouched.
+- The Podlove player web component no longer falls back to a mutable third-party
+  CDN script when ``data-embed`` is missing. Themes must provide a first-party
+  embed script URL; missing configuration now fails closed in the player UI.
+- Updated the JavaScript toolchain to Vite 8, removing the vulnerable esbuild
+  dev-server dependency reported by ``npm audit``. Frontend builds now require
+  Node.js 20.19+ or 22.12+.

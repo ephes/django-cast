@@ -54,6 +54,12 @@ Settings
     ``"cast.moderation.Moderator"`` (the built-in spam filter moderator).
     Also accepts the legacy name ``FLUENT_COMMENTS_DEFAULT_MODERATOR``.
 
+``CAST_COMMENTS_ALLOW_AUTHOR_EDITS``
+    Opt-in switch that lets an anonymous author edit or delete their own
+    comment from the same browser. Defaults to ``False``. See
+    :ref:`comments_author_edits` for the behaviour, requirements, and privacy
+    implications.
+
 ``CAST_COMMENTS_FORM_CSS_CLASS``
     CSS class applied to the comment form. Defaults to
     ``"comments-form form-horizontal"``.
@@ -230,6 +236,94 @@ AJAX endpoint URL.
    The ``{% ajax_comment_tags for object %}`` template tag renders the
    cancel-reply link, a loading spinner, and success/moderation messages
    used by the JavaScript layer.
+
+.. _comments_author_edits:
+
+Author Self-Editing and Deletion
+================================
+
+By default, an anonymous comment is final once it is posted. Setting
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` to
+``True`` opts in to letting an author edit or delete **their own** comment from
+the **same browser**. The setting is strict: only the literal ``True`` enables
+the feature, so a stray string such as ``"False"`` (for example from an
+environment variable) cannot switch it on by accident.
+
+.. code-block:: python
+
+   CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True
+
+.. _comments_author_edits_session:
+
+Server-side session requirement
+-------------------------------
+
+Ownership is tracked entirely server-side: the ids of the comments created in
+a browser are stored in that browser's Django session, and edit or delete
+requests are authorized only against that list — never against anything the
+client supplies. This requires a **server-side session backend**. The
+``signed_cookies`` ``SESSION_ENGINE`` stores the session in a client-held
+cookie, which cannot be revoked, so it is rejected by the cast system checks
+(``cast.E006``). Use the database, cache, or file session backend instead.
+
+.. _comments_author_edits_behavior:
+
+Behaviour
+---------
+
+Once enabled, an author who posted a comment from the current browser sees
+edit and delete controls on that comment:
+
+- The controls are available **until someone replies** to the comment or the
+  **session expires**, whichever comes first. After a reply lands the comment
+  is frozen and the controls disappear, so editing history cannot diverge from
+  a conversation that already built on it.
+- Edits are **re-moderated**. An edited comment goes back through the spam
+  filter (see :ref:`comments_moderation`), so an edit can become hidden pending
+  moderation just like a freshly posted comment. Edited comments are marked
+  with an ``(edited)`` flag.
+- Deletion is a **soft delete**, not erasure. The comment is hidden from
+  readers but kept in the database, and staff can restore it from the Django
+  admin (see :ref:`comments_manual_moderation`).
+
+Scope and limitations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- The edit/delete controls and the inline editor are **server-rendered into the
+  comment templates and driven by the bundled comment JavaScript**. They apply to
+  any server-rendered theme that uses the shared comment template and the bundled
+  ``ajaxcomments.js`` (the built-in ``bootstrap4``, ``bootstrap5`` and ``plain``
+  themes). A single-page or API-driven comment UI (for example a custom front end
+  consuming the comment API) does not receive the controls automatically and would
+  need its own integration.
+- While the feature is enabled, **threaded replies must be posted through the
+  AJAX endpoint** (the reply form). The plain non-JavaScript ``POST`` to the
+  stock comment view is rejected for replies, because only the AJAX path locks
+  the parent row to coordinate with concurrent edit/delete. Top-level comments
+  still post without JavaScript. If your site relies on no-JavaScript threaded
+  replies, keep the feature disabled.
+
+Two optional tunables limit abuse and bound session size (both only apply when
+the feature is enabled):
+
+- :ref:`CAST_COMMENTS_OWNED_IDS_CAP <cast_comments_allow_author_edits>` caps how
+  many owned comment ids are kept per session (default ``200``). ``0`` means **no
+  cap** (keep every id).
+- :ref:`CAST_COMMENTS_EDIT_RATE_LIMIT <cast_comments_allow_author_edits>` and
+  :ref:`CAST_COMMENTS_EDIT_RATE_WINDOW <cast_comments_allow_author_edits>` cap
+  how many edit/delete actions a session may perform within a fixed cache
+  window (defaults ``30`` actions per ``60`` seconds). A rate limit of ``0``
+  **disables** rate limiting; the window must be a positive number of seconds.
+
+.. _comments_author_edits_privacy:
+
+Privacy note
+------------
+
+Enabling this feature sets a **functional session cookie** for anonymous
+commenters who were previously cookieless: a session is needed to remember
+which comments the browser owns. Take this into account for your cookie and
+privacy disclosures before turning the feature on.
 
 .. _comments_template_tags:
 

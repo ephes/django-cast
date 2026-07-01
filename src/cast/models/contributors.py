@@ -12,6 +12,7 @@ from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
 from wagtail.models import Orderable
 from wagtail.snippets.models import register_snippet
 
+from ..form_widgets import PrivateClearableFileInput
 
 CONTRIBUTOR_ROLE_HOST = "host"
 CONTRIBUTOR_ROLE_GUEST = "guest"
@@ -100,15 +101,18 @@ def get_voice_reference_storage():
 
     Production deployments should configure a protected (non-public) storage
     backend under the ``"cast_voice_references"`` alias in ``STORAGES`` so that
-    reference clips are not served from public media. When the alias is absent
-    we fall back to the default storage and document the protection requirement.
+    reference clips are not served from public media. When the alias is absent,
+    django-cast falls back to the private media storage backend instead of
+    default public media storage.
     """
-    from django.core.files.storage import InvalidStorageError, default_storage, storages
+    from django.core.files.storage import InvalidStorageError, storages
+
+    from ..private_storage import get_private_media_storage
 
     try:
         return storages["cast_voice_references"]
     except InvalidStorageError:
-        return default_storage
+        return get_private_media_storage()
 
 
 class ContributorVoiceReferenceQuerySet(models.QuerySet):
@@ -188,7 +192,7 @@ class ContributorVoiceReference(Orderable):
 
     panels = [
         FieldPanel("title"),
-        FieldPanel("clip"),
+        FieldPanel("clip", widget=PrivateClearableFileInput),
         FieldPanel("source_audio"),
         FieldPanel("source_episode"),
         FieldPanel("start_seconds"),

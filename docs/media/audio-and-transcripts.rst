@@ -168,6 +168,21 @@ feed:
 * `vtt` - WebVTT, a subtitle format in plain text
 * `dote` - DOTE, a json transcript format
 
+Podlove, WebVTT, and DOTe transcript artifacts are public transcript output.
+They are used by transcript pages, podcast feeds, podcast clients, and the
+custom audio player. Public JSON, WebVTT, PodcastIndex, and HTML transcript
+responses are still served through django-cast views that authorize the related
+episode/audio and sanitize public speaker labels, but the stored artifact
+content itself is publishable for public episodes.
+
+Configure ``STORAGES["cast_public_transcripts"]`` for production when transcript
+artifacts should use a dedicated public storage backend or prefix. If that alias
+is omitted, django-cast uses an explicitly configured ``cast_private_media``
+alias for compatibility with deployments that already adopted the temporary
+private-storage behavior; if neither alias is configured, transcript artifacts
+use Django's default storage. Private editorial sidecars, such as known-speaker
+suggestions, use the private voice-reference storage described below instead.
+
 Voxhelm Integration
 -------------------
 
@@ -322,9 +337,9 @@ existing audio, never both:
   ``start_seconds`` and ``end_seconds`` (start must be before end).
 - An *uploaded clip* is stored through a protected storage backend. Configure a
   non-public backend under the ``"cast_voice_references"`` alias in
-  ``STORAGES`` so reference clips are not served from public media; when the
-  alias is absent django-cast falls back to the default storage and you must
-  protect it yourself.
+  ``STORAGES`` for dedicated voice-reference storage. When the alias is absent,
+  django-cast falls back to the private media backend instead of default public
+  media storage.
 
 References start as ``pending`` and must be explicitly ``approved`` before they
 can be sent to a known-speaker backend. Approval requires confirming contributor
@@ -361,14 +376,20 @@ request for an episode also sends the approved voice references of that
 episode's expected contributors to Voxhelm as known-speaker reference material.
 Only approved references are sent, and hidden contributors are excluded unless a
 reference explicitly opted in. References are delivered as source ranges into
-existing audio or as uploaded clips, never as public profile URLs.
+existing audio or, when the protected storage backend can provide an absolute
+temporary URL, as uploaded clips. Uploaded clips on no-URL private storage are
+kept private and skipped for automatic handoff; use source ranges for those
+references. References are never public profile URLs.
 
 Voxhelm classifies the transcript segments against those references and returns
 per-segment *suggestions*: the most likely contributor, a candidate list,
 confidence, a margin, an uncertainty flag, and the raw anonymous diarization
 label. django-cast stores these as a private ``Transcript.speakers`` sidecar in
-protected storage. They are reviewable editorial state and never appear in
-public transcript output, feeds, theme context, or APIs.
+protected storage. The sidecar uses the same private storage selection as voice
+references, falling back to the private media backend when no dedicated
+``"cast_voice_references"`` alias is configured. They are reviewable editorial
+state and never appear in public transcript output, feeds, theme context, or
+APIs.
 
 Known-speaker results are suggestions, not final identity. Voxhelm leaves the
 public Podlove, DOTe, and WebVTT artifacts unlabeled for known-speaker jobs, so

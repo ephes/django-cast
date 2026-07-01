@@ -1,6 +1,7 @@
 import pytest
 from django.test import override_settings
 from django.urls import reverse
+from wagtail.models import PageViewRestriction
 
 from .factories import BlogFactory, EpisodeFactory
 from .multisite_helpers import create_site_root
@@ -16,6 +17,40 @@ def test_twitter_player(client, episode):
     content = r.content.decode("utf-8")
     assert str(episode.uuid) in content
     assert "embed.5.js" in content
+
+
+@pytest.mark.django_db
+def test_twitter_player_draft_episode_returns_404(client, episode):
+    episode.live = False
+    episode.save()
+    url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": episode.blog.slug})
+
+    response = client.get(url)
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_twitter_player_restricted_episode_returns_404_for_anonymous(client, episode):
+    PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
+    url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": episode.blog.slug})
+
+    response = client.get(url)
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_twitter_player_restricted_episode_allows_authenticated_user(client, episode, django_user_model):
+    PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
+    user = django_user_model.objects.create_user("member", password="x")
+    client.force_login(user)
+    url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": episode.blog.slug})
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert str(episode.uuid) in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db

@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import Http404
 from django.test import RequestFactory
@@ -6,12 +8,24 @@ from django.urls import reverse
 import pytest
 from wagtail.images.models import Image
 
+from cast.gallery_tokens import sign_gallery_image_pks
 from cast.views.gallery import (
     GalleryModalForm,
     _resolve_gallery_modal_template,
     gallery_modal,
     get_prev_next_indices,
 )
+
+
+def _gallery_modal_data(
+    image_pks: list[int], *, current_image_index: int = 0, block_id: str = "block_id"
+) -> dict[str, str]:
+    return {
+        "current_image_index": str(current_image_index),
+        "image_pks": ",".join(str(pk) for pk in image_pks),
+        "block_id": block_id,
+        "gallery_token": sign_gallery_image_pks(image_pks),
+    }
 
 
 @pytest.fixture
@@ -35,7 +49,7 @@ def gallery_duplicate_images(image_1px):
 
 def test_gallery_modal_form_happy():
     """#171 Test happy path for gallery modal form."""
-    data = {"current_image_index": 0, "image_pks": "1,2,3", "block_id": "block_id"}
+    data = _gallery_modal_data([1, 2, 3])
     form = GalleryModalForm(data)
     assert form.is_valid()
     assert form.cleaned_data["image_pks"] == [1, 2, 3]
@@ -43,15 +57,39 @@ def test_gallery_modal_form_happy():
 
 def test_gallery_modal_form_current_image_not_in_gallery():
     """#171 Test form validation when current image index is out of range."""
-    data = {"current_image_index": 3, "image_pks": "1,2,3", "block_id": "block_id"}
+    data = _gallery_modal_data([1, 2, 3], current_image_index=3)
     form = GalleryModalForm(data)
     assert not form.is_valid()
     assert "current_image_index 3 is out of range for image_pks with length 3" in str(form.errors)
 
 
+def test_gallery_modal_form_rejects_missing_token():
+    data = {"current_image_index": 0, "image_pks": "1,2,3", "block_id": "block_id"}
+    form = GalleryModalForm(data)
+    assert not form.is_valid()
+    assert form.errors["gallery_token"][0] == "This field is required."
+
+
+def test_gallery_modal_form_rejects_tampered_image_pks():
+    data = _gallery_modal_data([1, 2, 3])
+    data["image_pks"] = "1,2,4"
+    form = GalleryModalForm(data)
+    assert not form.is_valid()
+    assert "Gallery token does not match image ids." in str(form.errors)
+
+
+def test_gallery_modal_form_rejects_malformed_token():
+    data = _gallery_modal_data([1, 2, 3])
+    data["gallery_token"] = "not-a-valid-token"
+    form = GalleryModalForm(data)
+    assert not form.is_valid()
+    assert "Gallery token does not match image ids." in str(form.errors)
+
+
 def test_gallery_modal_form_current_image_index_required():
     """#171 Test that current_image_index is required."""
-    data = {"image_pks": "1,2,3", "block_id": "block_id"}
+    data = _gallery_modal_data([1, 2, 3])
+    del data["current_image_index"]
     form = GalleryModalForm(data)
     assert not form.is_valid()
     assert form.errors["current_image_index"][0] == "This field is required."
@@ -99,13 +137,35 @@ def test_get_prev_next_indices(current_image_pk, image_pks, expected_prev_next):
 def test_htmx_gallery_modal_happy(client, gallery):
     """#171 Test successful HTMX gallery modal request."""
     gallery.create_renditions()
-    image_pks = ",".join([str(image.pk) for image in gallery.images.all()])
-    current_image_index = 0
-    block_id = "block_id"
+    image_pks = list(gallery.images.values_list("pk", flat=True))
     base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": "plain"})
-    url = f"{base_url}?current_image_index={current_image_index}&image_pks={image_pks}&block_id={block_id}"
+    url = f"{base_url}?{urlencode(_gallery_modal_data(image_pks))}"
     response = client.get(url)
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_htmx_gallery_modal_without_token_rejects_arbitrary_image_ids(client, gallery):
+    gallery.create_renditions()
+    image_pks = ",".join(str(image.pk) for image in gallery.images.all())
+    base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": "plain"})
+    url = f"{base_url}?current_image_index=0&image_pks={image_pks}&block_id=block_id"
+
+    response = client.get(url)
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_htmx_gallery_modal_rejects_tampered_image_ids(client, gallery_duplicate_images):
+    image1, image2 = gallery_duplicate_images
+    base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": "plain"})
+    data = _gallery_modal_data([image1.pk])
+    data["image_pks"] = str(image2.pk)
+
+    response = client.get(f"{base_url}?{urlencode(data)}")
+
+    assert response.status_code == 400
 
 
 def test_resolve_gallery_modal_template_falls_back_for_missing_theme(mocker):
@@ -117,12 +177,10 @@ def test_resolve_gallery_modal_template_falls_back_for_missing_theme(mocker):
 @pytest.mark.django_db
 def test_gallery_modal_falls_back_to_plain_template_for_missing_optional_theme_template(client, gallery, mocker):
     gallery.create_renditions()
-    image_pks = ",".join(str(image.pk) for image in gallery.images.all())
-    current_image_index = 0
-    block_id = "block_id"
+    image_pks = list(gallery.images.values_list("pk", flat=True))
     template_base_dir = "theme-without-modal"
     base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": template_base_dir})
-    url = f"{base_url}?current_image_index={current_image_index}&image_pks={image_pks}&block_id={block_id}"
+    url = f"{base_url}?{urlencode(_gallery_modal_data(image_pks))}"
 
     mocker.patch(
         "cast.views.gallery.get_template_base_dir_choices",
@@ -155,7 +213,7 @@ def test_gallery_modal_invalid_template_base_dir_returns_404():
 def test_gallery_modal_missing_current_image_returns_404():
     request = RequestFactory().get(
         reverse("cast:gallery-modal", kwargs={"template_base_dir": "plain"}),
-        {"current_image_index": "0", "image_pks": "999999", "block_id": "block_id"},
+        _gallery_modal_data([999999]),
     )
     with pytest.raises(Http404):
         gallery_modal(request, "plain")
@@ -163,10 +221,10 @@ def test_gallery_modal_missing_current_image_returns_404():
 
 def test_htmx_gallery_modal_without_current_image_index_invalid(client):
     """#171 Test HTMX request without current_image_index returns 400."""
-    image_pks = "1,2,3"
-    block_id = "block_id"
     base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": "plain"})
-    url = f"{base_url}?&image_pks={image_pks}&block_id={block_id}"
+    data = _gallery_modal_data([1, 2, 3])
+    del data["current_image_index"]
+    url = f"{base_url}?{urlencode(data)}"
     response = client.get(url)
     assert response.status_code == 400
 
@@ -202,23 +260,17 @@ class TestGalleryView:
     def test_gallery_modal_form_validation(self):
         """#171 Test GalleryModalForm validation."""
         # Valid form
-        form = GalleryModalForm({"image_pks": "1,2,3,4,5", "current_image_index": "2", "block_id": "test-block"})
+        form = GalleryModalForm(_gallery_modal_data([1, 2, 3, 4, 5], current_image_index=2, block_id="test-block"))
         assert form.is_valid()
         assert form.cleaned_data["image_pks"] == [1, 2, 3, 4, 5]
         assert form.cleaned_data["current_image_index"] == 2
 
         # Invalid index - too high
-        form = GalleryModalForm(
-            {
-                "image_pks": "1,2,3",
-                "current_image_index": "3",  # out of range
-                "block_id": "test-block",
-            }
-        )
+        form = GalleryModalForm(_gallery_modal_data([1, 2, 3], current_image_index=3, block_id="test-block"))
         assert not form.is_valid()
 
         # Invalid index - negative
-        form = GalleryModalForm({"image_pks": "1,2,3", "current_image_index": "-1", "block_id": "test-block"})
+        form = GalleryModalForm(_gallery_modal_data([1, 2, 3], current_image_index=-1, block_id="test-block"))
         assert not form.is_valid()
 
     def test_gallery_modal_with_duplicate_images(self, gallery_duplicate_images):
@@ -234,7 +286,7 @@ class TestGalleryView:
         # Click on the third image (index 2, which is image1)
         request = factory.get(
             reverse("cast:gallery-modal", kwargs={"template_base_dir": "bootstrap4"}),
-            {"image_pks": ",".join(map(str, image_pks)), "current_image_index": "2", "block_id": "test-block"},
+            _gallery_modal_data(image_pks, current_image_index=2, block_id="test-block"),
         )
 
         response = gallery_modal(request, "bootstrap4")
@@ -248,11 +300,12 @@ class TestGalleryView:
         block_id = "test-block"
 
         base_url = reverse("cast:gallery-modal", kwargs={"template_base_dir": "bootstrap4"})
-        url = f"{base_url}?current_image_index={current_image_index}&image_pks={','.join(map(str, image_pks))}&block_id={block_id}"
+        url = f"{base_url}?{urlencode(_gallery_modal_data(image_pks, current_image_index=current_image_index, block_id=block_id))}"
         response = client.get(url)
 
         assert response.status_code == 200
         assert response.context is not None
+        assert "gallery_token=" in response.content.decode("utf-8")
         prev_image = response.context["prev_image"]
         next_image = response.context["next_image"]
         assert prev_image.gallery_index == 1

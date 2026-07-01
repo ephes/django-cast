@@ -1,7 +1,7 @@
 <div class="cast-gallery-container">
   {% for image in images %}
     <a
-      data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}"
+      data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}&gallery_token={{ gallery_token|urlencode }}"
       data-hx-trigger="click"
       data-hx-target="#imageGalleryModal-{{ block.id }}"
       class="cast-image-gallery-thumbnail cast-gallery-modal"

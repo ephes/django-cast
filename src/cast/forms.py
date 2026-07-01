@@ -6,11 +6,14 @@ a search form that rejects empty queries.
 """
 
 import json
+import logging
+import subprocess
 from datetime import datetime, time
 from typing import Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import UploadedFile
 from django.forms.models import modelform_factory
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -19,6 +22,7 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
+from .media_validation import validate_audio_upload, validate_video_upload
 from .models import (
     Audio,
     ChapterMark,
@@ -37,6 +41,8 @@ from .models.transcript import (
     KNOWN_SPEAKER_EDITOR_DECISION_FIELD,
 )
 
+logger = logging.getLogger(__name__)
+
 
 SPEAKER_MAPPING_ACTION = "map-speakers"
 KNOWN_SPEAKER_APPLY_ACTION = "apply-known-speakers"
@@ -47,7 +53,15 @@ KNOWN_SPEAKER_REVIEW_BULK_VALUE = "__bulk__"
 KNOWN_SPEAKER_REVIEW_BLANK_VALUE = "__blank__"
 
 
-class VideoForm(forms.ModelForm):
+class VideoUploadValidationMixin:
+    def clean_original(self):
+        original = self.cleaned_data.get("original")
+        if isinstance(original, UploadedFile):
+            validate_video_upload(original)
+        return original
+
+
+class VideoForm(VideoUploadValidationMixin, forms.ModelForm):
     """Simple model form for Video with only the ``original`` file field."""
 
     class Meta:
@@ -55,7 +69,7 @@ class VideoForm(forms.ModelForm):
         fields = ["original"]
 
 
-class BaseVideoForm(BaseCollectionMemberForm):
+class BaseVideoForm(VideoUploadValidationMixin, BaseCollectionMemberForm):
     """Base form for Video admin views with tag and file widgets, plus collection support."""
 
     class Meta:
@@ -185,6 +199,24 @@ class AudioForm(BaseCollectionMemberForm):
     def clean_transcript_diarization_mode(self) -> str:
         return self.cleaned_data.get("transcript_diarization_mode") or Audio.TranscriptDiarizationMode.INHERIT
 
+    def clean_m4a(self):
+        return self._clean_audio_upload("m4a")
+
+    def clean_mp3(self):
+        return self._clean_audio_upload("mp3")
+
+    def clean_oga(self):
+        return self._clean_audio_upload("oga")
+
+    def clean_opus(self):
+        return self._clean_audio_upload("opus")
+
+    def _clean_audio_upload(self, audio_format: str):
+        upload = self.cleaned_data.get(audio_format)
+        if isinstance(upload, UploadedFile):
+            validate_audio_upload(upload, audio_format=audio_format)
+        return upload
+
     def get_chaptermarks_from_field_or_files(self, audio: Audio) -> list[ChapterMark]:
         chaptermarks = self.cleaned_data["chaptermarks"]
         if len(chaptermarks) == 0:
@@ -198,7 +230,11 @@ class AudioForm(BaseCollectionMemberForm):
                     changed_audio_formats.append(audio_format)
             if len(changed_audio_formats) == 0:
                 return []
-            chaptermark_data = audio.get_chaptermark_data_from_file(changed_audio_formats[0])
+            try:
+                chaptermark_data = audio.get_chaptermark_data_from_file(changed_audio_formats[0])
+            except (subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError, ValueError, KeyError):
+                logger.warning("Skipping audio chapter extraction after probe failure", exc_info=True)
+                return []
             for data in chaptermark_data:
                 form = FFProbeChapterMarkForm(data)
                 if form.is_valid():

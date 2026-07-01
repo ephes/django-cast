@@ -15,6 +15,9 @@ from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
+from ..media_probe import run_media_probe
+from ..media_validation import validate_video_upload
+
 logger = logging.getLogger(__name__)
 
 
@@ -85,6 +88,9 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         index.FilterField("user"),
     ]
 
+    class Meta:
+        permissions = (("choose_video", "Can choose video"),)
+
     @property
     def filename(self) -> str:
         return Path(self.original.name or "").name
@@ -96,7 +102,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
     @staticmethod
     def _get_video_dimensions(video_url: str) -> tuple[int | None, int | None]:
         ffprobe_cmd = ["ffprobe", "-i", str(video_url)]
-        result = subprocess.run(
+        result = run_media_probe(
             ffprobe_cmd,
             check=True,
             stdout=subprocess.PIPE,
@@ -135,7 +141,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 tmp_path,
             ]
             logger.info(poster_cmd)
-            subprocess.run(poster_cmd, check=True, timeout=30)
+            run_media_probe(poster_cmd, check=True, timeout=30)
             name = os.path.basename(tmp_path)
             with open(tmp_path, "rb") as tmp_file:
                 self.poster.save(name, DjangoFile(tmp_file), save=False)
@@ -176,6 +182,8 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     def save(self, *args, **kwargs) -> Optional["Video"]:  # type: ignore[override]
         generate_poster = kwargs.pop("poster", True)
+        if generate_poster and not getattr(self.original, "_committed", True):
+            validate_video_upload(self.original.file)
         # need to save original first - django file handling is driving me nuts
         result = super().save(*args, **kwargs)
         if generate_poster:

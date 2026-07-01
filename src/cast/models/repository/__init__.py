@@ -24,6 +24,7 @@ from .serialization import (
     deserialize_image,
     deserialize_post,
     deserialize_renditions,
+    deserialize_season,
     deserialize_transcript,
     deserialize_video,
     rendition_to_dict,
@@ -36,6 +37,7 @@ from .serialization import (
     serialize_image,
     serialize_post,
     serialize_renditions,
+    serialize_season,
     serialize_transcript,
     serialize_video,
 )
@@ -98,6 +100,7 @@ __all__ = [
     "deserialize_image",
     "deserialize_post",
     "deserialize_renditions",
+    "deserialize_season",
     "deserialize_transcript",
     "deserialize_video",
     "get_facet_choices",
@@ -111,6 +114,7 @@ __all__ = [
     "serialize_image",
     "serialize_post",
     "serialize_renditions",
+    "serialize_season",
     "serialize_transcript",
     "serialize_video",
 ]
