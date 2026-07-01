@@ -27,7 +27,7 @@ from cast.api.editor.errors import (
 from cast.models import Audio, Episode, Post, Season, Video
 from cast.models.snippets import PostCategory
 
-from tests.factories import BlogFactory, PodcastFactory, PostFactory, UserFactory
+from tests.factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory, UserFactory
 
 
 def grant_wagtail_admin_access(user) -> None:
@@ -1262,6 +1262,142 @@ class TestEditorPostPublish:
             "code": "no_revision",
             "detail": "This post has no draft revision to publish.",
         }
+
+
+class TestEditorPreview:
+    pytestmark = pytest.mark.django_db
+
+    def _post_with_live_and_draft_revisions(self, blog, admin_user):
+        post = PostFactory(
+            owner=blog.owner,
+            parent=blog,
+            title="Live preview title",
+            slug="live-preview-title",
+            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live-only marker"}]}]),
+        )
+        post.save_revision(user=admin_user, changed=False)
+        draft = post.get_latest_revision_as_object()
+        draft.title = "Draft preview title"
+        draft.body = json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Draft-only marker"}]}])
+        draft.save_revision(user=admin_user)
+        post.refresh_from_db()
+        assert post.live is True
+        assert post.has_unpublished_changes is True
+        return post
+
+    def _episode_with_live_and_draft_revisions(self, podcast, admin_user):
+        episode = EpisodeFactory(
+            owner=podcast.owner,
+            parent=podcast,
+            title="Live episode title",
+            slug="live-episode-preview",
+            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live episode marker"}]}]),
+        )
+        episode.save_revision(user=admin_user, changed=False)
+        draft = episode.get_latest_revision_as_object()
+        draft.title = "Draft episode title"
+        draft.body = json.dumps(
+            [{"type": "overview", "value": [{"type": "heading", "value": "Draft episode marker"}]}]
+        )
+        draft.save_revision(user=admin_user)
+        episode.refresh_from_db()
+        assert episode.live is True
+        assert episode.has_unpublished_changes is True
+        return episode
+
+    def test_post_preview_renders_latest_draft_as_html(self, api_client, blog, admin_user):
+        post = self._post_with_live_and_draft_revisions(blog, admin_user)
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_preview", kwargs={"pk": post.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code == 200, response.content
+        assert response.headers["Content-Type"].startswith("text/html")
+        html = response.content.decode()
+        assert "Draft preview title" in html
+        assert "Draft-only marker" in html
+        assert "Live-only marker" not in html
+
+    def test_post_preview_allows_scoped_token_without_write_scope(self, api_client, blog, admin_user):
+        post = self._post_with_live_and_draft_revisions(blog, admin_user)
+        api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("publish"))
+        url = reverse("cast:api:editor_post_preview", kwargs={"pk": post.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code == 200, response.content
+
+    def test_post_preview_missing_post_uses_editor_envelope(self, api_client, admin_user):
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_preview", kwargs={"pk": 999999})
+
+        response = api_client.get(url)
+
+        assert response.status_code == 404
+        assert response.headers["Content-Type"].startswith("application/json")
+        assert response.json() == {"code": "not_found", "detail": "Post not found."}
+
+    def test_post_preview_requires_authentication(self, api_client, post):
+        url = reverse("cast:api:editor_post_preview", kwargs={"pk": post.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code in (401, 403)
+
+    def test_post_preview_requires_edit_permission(self, api_client, post):
+        user = UserFactory()
+        grant_wagtail_admin_access(user)
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_post_preview", kwargs={"pk": post.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code == 403
+        assert response.json() == {"code": "permission_denied", "detail": "You cannot preview this draft."}
+
+    def test_episode_preview_renders_episode_draft(self, api_client, podcast, admin_user):
+        episode = self._episode_with_live_and_draft_revisions(podcast, admin_user)
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_episode_preview", kwargs={"pk": episode.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code == 200, response.content
+        assert response.headers["Content-Type"].startswith("text/html")
+        html = response.content.decode()
+        assert "Draft episode title" in html
+        assert "Draft episode marker" in html
+        assert "Live episode marker" not in html
+
+    def test_episode_preview_requires_authentication(self, api_client, podcast, admin_user):
+        episode = self._episode_with_live_and_draft_revisions(podcast, admin_user)
+        url = reverse("cast:api:editor_episode_preview", kwargs={"pk": episode.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code in (401, 403)
+
+    def test_episode_preview_requires_edit_permission(self, api_client, podcast, admin_user):
+        episode = self._episode_with_live_and_draft_revisions(podcast, admin_user)
+        user = UserFactory()
+        grant_wagtail_admin_access(user)
+        api_client.force_authenticate(user=user)
+        url = reverse("cast:api:editor_episode_preview", kwargs={"pk": episode.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code == 403
+        assert response.json() == {"code": "permission_denied", "detail": "You cannot preview this draft."}
+
+    def test_episode_preview_rejects_plain_post_id(self, api_client, post, admin_user):
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_episode_preview", kwargs={"pk": post.id})
+
+        response = api_client.get(url)
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Episode not found."}
 
 
 class TestEditorDetailSection:
@@ -2600,6 +2736,7 @@ class TestEditorEpisodeUpdate:
         assert response.status_code == 400
         assert response.json()["errors"]["season"][0]["code"] == "invalid"
 
+
 class TestEditorEpisodePublish:
     pytestmark = pytest.mark.django_db
 
@@ -2781,6 +2918,12 @@ class TestEditorScopeReader:
         from cast.api.editor.scopes import get_request_scopes
 
         token = type("Tok", (), {"scopes": []})()
+        assert get_request_scopes(token) == set()
+
+    def test_non_iterable_scopes_value_fails_closed(self):
+        from cast.api.editor.scopes import get_request_scopes
+
+        token = type("Tok", (), {"scopes": 1})()
         assert get_request_scopes(token) == set()
 
     def test_scopes_accepts_any_non_string_iterable(self):

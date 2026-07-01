@@ -61,6 +61,11 @@
   Accepted scope strings are configurable via ``CAST_EDITOR_SCOPES``; a token missing the
   required scope gets ``403 insufficient_scope``. django-cast still imports no
   authentication provider.
+- Added rendered draft preview endpoints for token-only editor workflows:
+  ``GET /api/editor/posts/{id}/preview/`` and
+  ``GET /api/editor/episodes/{id}/preview/`` return the latest editable revision
+  as full themed ``text/html`` when the caller has edit permission, while errors
+  keep the editor API JSON envelopes.
 - Tightened Wagtail admin permissions for custom audio, video, and transcript
   views. Index, chooser, edit, and delete endpoints now use collection-scoped
   permission policies, and new ``choose_audio``, ``choose_video``, and

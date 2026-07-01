@@ -1,6 +1,6 @@
 # Editor API rendered-preview endpoint — design
 
-Status: shaping complete (2026-06-30). Ready to split into an implementation slice.
+Status: implemented in 0.2.61 (2026-07-01). This document is retained as the design record.
 
 Parent PRD:
 [2026-06-19-programmatic-content-editing-api.md](2026-06-19-programmatic-content-editing-api.md)
@@ -60,9 +60,9 @@ GET /api/editor/episodes/{id}/preview/
   live revision; Wagtail handles the no-revision fallback). This matches the object the read/update/publish
   endpoints already operate on, so a preview shows exactly what a subsequent publish would push live. Per-revision
   preview (`?revision_id=`) is out of scope; add it later only if a concrete need appears.
-- Rendering call: `draft.make_preview_request(original_request=request)`, passing the incoming request so host and
-  theme-selection context (cookie/query) are honored. The endpoint returns a Django `HttpResponse` carrying that
-  response's content and `text/html` content type.
+- Rendering call: `draft.make_preview_request(original_request=request._request)`, passing the underlying Django
+  request from DRF's request wrapper so host and theme-selection context (cookie/query) are honored. The endpoint
+  returns the resulting Django `HttpResponse` directly, preserving its rendered content and `text/html` content type.
 
 ### Permissions and scope
 

@@ -1239,10 +1239,9 @@ list near the top of this PRD and the "Episode Endpoints (Next Implementation Sl
   "Editor API remote media import" (shaping).
 - Should media upload endpoints support replacing existing media files, or only create new media objects? Tracked as
   "Editor API media replacement workflows" (later).
-- Do token-only/non-admin editor clients need a server-rendered draft preview? Tracked as "Editor API
-  rendered-preview endpoint" (shaping). **Partially resolved (2026-06-30):** rendered preview is **not** a
-  prerequisite for scoped-token auth — the scope layer is inert until a backend is plugged in and does not depend on
-  preview. Whether token clients ultimately need server-rendered preview remains open under that item.
+- Do token-only/non-admin editor clients need a server-rendered draft preview? **Resolved (2026-07-01):** yes;
+  implemented in 0.2.61 as `GET /api/editor/posts/{id}/preview/` and
+  `GET /api/editor/episodes/{id}/preview/`, returning full themed `text/html` for callers with edit permission.
 
 Resolved by update slice (2026-06-23):
 
@@ -1259,7 +1258,7 @@ Resolved by media/detail planning (2026-06-25):
   existing representation.
 - The next implementation slice should add create-only editor media list/upload endpoints for images, audio, and video;
   media replacement remains deferred.
-- A dedicated rendered-preview endpoint is deferred. The next slice keeps returning the existing admin-session
-  `preview_url`, which is sufficient only for the accepted human-review workflow where a reviewer opens it with a Wagtail
-  admin session.
+- A dedicated rendered-preview endpoint was later implemented in 0.2.61. The existing admin-session `preview_url`
+  remains in create/read/update responses for human Wagtail-admin review, and token-only clients can use
+  `GET /api/editor/posts/{id}/preview/` or `GET /api/editor/episodes/{id}/preview/` for server-rendered draft HTML.
 - Markdown input is deferred. Structured JSON remains the canonical write contract for now.

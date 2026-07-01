@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pytest
 from django.http import QueryDict
+from django.utils import timezone
 from django.utils.timezone import make_aware
 
 from cast.filters import CountFacetWidget, PostFilterset, SlugChoicesField
@@ -128,7 +129,8 @@ class TestPostFilterset:
         filterset = PostFilterset(QueryDict(), queryset=queryset)
         # then the post is counted in the date facets
         date_facets = filterset.filters["date_facets"].facet_counts
-        date_month_post = make_aware(datetime(post.visible_date.year, post.visible_date.month, 1))
+        local_visible_date = timezone.localtime(post.visible_date)
+        date_month_post = make_aware(datetime(local_visible_date.year, local_visible_date.month, 1))
         assert date_facets[date_month_post] == 1
 
     def test_post_is_counted_in_date_facets_when_in_search_result(self, post):
@@ -141,7 +143,8 @@ class TestPostFilterset:
         assert post in filterset.qs
         # and the post is counted in the date facets
         date_facets = filterset.filters["date_facets"].facet_counts
-        date_month_post = make_aware(datetime(post.visible_date.year, post.visible_date.month, 1))
+        local_visible_date = timezone.localtime(post.visible_date)
+        date_month_post = make_aware(datetime(local_visible_date.year, local_visible_date.month, 1))
         assert date_facets[date_month_post] == 1
 
     def test_post_is_counted_in_date_facets_when_not_in_search_result(self, post):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
+from django.http import HttpResponse
 from django.urls import reverse
 from django.utils.text import slugify
 from rest_framework import status
@@ -397,6 +398,20 @@ class PostPublishView(PostEditorMixin, EditorAPIView):
         return Response(data)
 
 
+class PreviewMixin:
+    required_scopes: dict[str, str | None] = {"GET": None}
+
+    def _render_preview(self, page: Post, request: Request) -> HttpResponse:
+        draft = page.get_latest_revision_as_object()
+        return draft.make_preview_request(original_request=request._request)
+
+
+class PostPreviewView(PreviewMixin, PostEditorMixin, EditorAPIView):
+    def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> HttpResponse:
+        post = self._get_post(pk, request.user, denied_message="You cannot preview this draft.")
+        return self._render_preview(post, request)
+
+
 class EpisodeEditorMixin(PostEditorMixin):
     """Shared episode helpers: ``Podcast``-parent enforcement and episode-specific fields."""
 
@@ -629,3 +644,9 @@ class EpisodePublishView(EpisodeEditorMixin, EditorAPIView):
             noun="episode",
         )
         return Response(data)
+
+
+class EpisodePreviewView(PreviewMixin, EpisodeEditorMixin, EditorAPIView):
+    def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> HttpResponse:
+        episode = self._get_episode(pk, request.user, denied_message="You cannot preview this draft.")
+        return self._render_preview(episode, request)

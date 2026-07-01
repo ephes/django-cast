@@ -13,8 +13,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- (none — the editor API episode publish action and the scoped-token scope enforcement both shipped in 0.2.61;
-  see `docs/releases/0.2.61.rst`. Pick the next item from Research / Shaping.)
+- (none — the editor API episode publish action, scoped-token scope enforcement, and rendered-preview endpoint all
+  shipped in 0.2.61; see `docs/releases/0.2.61.rst`. Pick the next item from Research / Shaping.)
 
 ## Research / Shaping
 
@@ -43,20 +43,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     import values, and possible channel-level `itunes:type` support.
   - Done when: the remaining PRD questions are either split into concrete implementation items under
     `Next`/`Ready`/`Later` or explicitly deferred in the PRD.
-
-- [ ] Editor API rendered-preview endpoint
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-  - Related to: Editor API scoped-token scope mapping — **shipped in 0.2.61**
-    ([design](backlog/2026-06-30-editor-api-scoped-token-auth.md)); that work resolved that rendered preview does
-    **not** block scoped-token auth, so this is now the remaining gap for a complete token-only client workflow.
-  - Status: shaping. The shipped editor API returns an admin-session `preview_url` that only works for a human in a
-    Wagtail admin session; token-only/non-admin clients cannot self-render a draft.
-  - Scope: design a server-rendered draft preview path for token-only/non-admin editor clients (likely a
-    `GET /api/editor/posts/{id}/preview/`-style endpoint returning rendered draft HTML), preserving Wagtail page
-    permissions and not leaking unpublished content beyond the caller's permissions.
-  - Done when: there is a proposed endpoint/response contract, the permission model, and a first implementation
-    slice or an explicit deferral with rationale.
 
 - [ ] Editor API remote media import
   - PRD:

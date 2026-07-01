@@ -859,13 +859,15 @@ class TestCommentTrainingData:
     "date, post_filter, len_result",
     [
         (datetime(2022, 8, 22), "true", 0),  # wrong date facet -> not found
-        (timezone.now(), "true", 1),  # correct date facet -> found
+        (None, "true", 1),  # correct date facet -> found
         (datetime(2022, 8, 22), "false", 1),  # wrong date facet and no post filter -> found
     ],
 )
 def test_wagtail_pages_api_with_post_filter(date, post_filter, len_result, rf, blog, post):
     viewset = FilteredPagesAPIViewSet()
     path = blog.wagtail_api_pages_url
+    if date is None:
+        date = timezone.localtime(post.visible_date)
     date_facet = f"{date.year}-{date.month}"
     request = rf.get(
         f"{path}?child_of={blog.pk}&type=cast.Post&date_facets={date_facet}&use_post_filter={post_filter}"
@@ -997,8 +999,9 @@ def test_facet_counts_detail(api_client, blog, post):
     facet_counts = result["facet_counts"]
 
     # Then we expect the correct facet counts to be returned
-    assert facet_counts["date_facets"][0]["slug"] == post.visible_date.strftime("%Y-%m")
-    assert facet_counts["date_facets"][0]["name"] == post.visible_date.strftime("%Y-%m")
+    local_visible_date = timezone.localtime(post.visible_date)
+    assert facet_counts["date_facets"][0]["slug"] == local_visible_date.strftime("%Y-%m")
+    assert facet_counts["date_facets"][0]["name"] == local_visible_date.strftime("%Y-%m")
     assert facet_counts["date_facets"][0]["count"] == 1
 
     assert facet_counts["category_facets"][0]["slug"] == category.slug

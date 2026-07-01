@@ -485,6 +485,23 @@ Use this endpoint — not the public Wagtail pages API — to read back a draft:
 the Wagtail pages API returns only live pages and does not expose authoring
 source or revision IDs.
 
+**Preview a draft post**::
+
+    GET /api/editor/posts/{id}/preview/
+
+Returns the latest editable revision rendered through django-cast's normal
+Wagtail preview path. On success the response is the full themed page with
+``Content-Type: text/html; charset=utf-8`` rather than a JSON envelope, so a
+client can load it directly in a browser or iframe. The endpoint renders the
+same latest revision that ``GET``, ``PATCH``, and the publish action operate on:
+an unpublished draft when one exists, otherwise the current live revision.
+
+Errors still use the existing editor JSON envelopes (``application/json``), for
+example ``not_found`` for a missing post or ``permission_denied`` when the
+caller cannot edit the page. Preview is a read action and requires no token
+scope, but the caller must still be authenticated, have Wagtail admin access,
+and have edit permission for the page.
+
 **Update a draft post**::
 
     PATCH /api/editor/posts/{id}/
@@ -604,6 +621,7 @@ exactly as documented for posts above. The endpoints are::
     GET   /api/editor/episodes/{id}/
     PATCH /api/editor/episodes/{id}/
     POST  /api/editor/episodes/{id}/publish/
+    GET   /api/editor/episodes/{id}/preview/
 
 The parent must be a ``cast.Podcast``; a ``cast.Blog`` or any other parent is
 rejected with a ``validation_error`` on ``parent``. These endpoints serve
@@ -676,6 +694,12 @@ episode stays unpublished. Because an ``Episode`` is a ``Post``,
 ``POST /api/editor/posts/{id}/publish/`` also enforces this gate when its id
 resolves to an episode, so the audio requirement cannot be bypassed through the
 post publish endpoint.
+
+The episode preview endpoint mirrors post preview: it returns the latest
+editable episode revision as full themed ``text/html`` on success, uses the
+editor JSON error envelopes on failure, requires edit permission, and requires
+no token scope. Passing a plain post id to the episode preview endpoint returns
+the standard ``not_found`` envelope.
 
 **Error envelopes**
 
@@ -862,12 +886,16 @@ Authorization uses standard Wagtail page permissions:
 - ``POST /api/editor/posts/`` — requires add-child permission on the
   selected parent.
 - ``GET /api/editor/posts/{id}/`` — requires edit permission for the page.
+- ``GET /api/editor/posts/{id}/preview/`` — requires edit permission for the
+  page and returns rendered HTML on success.
 - ``PATCH /api/editor/posts/{id}/`` — requires edit permission for the page.
 - ``POST /api/editor/posts/{id}/publish/`` — requires edit and publish
   permission for the page.
 - ``POST /api/editor/episodes/`` — requires add-child permission on the
   selected ``Podcast`` parent.
 - ``GET /api/editor/episodes/{id}/`` — requires edit permission for the episode.
+- ``GET /api/editor/episodes/{id}/preview/`` — requires edit permission for the
+  episode and returns rendered HTML on success.
 - ``PATCH /api/editor/episodes/{id}/`` — requires edit permission for the
   episode.
 - ``POST /api/editor/episodes/{id}/publish/`` — requires edit and publish
