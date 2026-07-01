@@ -1,4 +1,4 @@
-0.2.61 (unreleased)
+0.2.61 (2026-07-01)
 -------------------
 
 - Added optional podcast publishing metadata: reusable podcast-scoped seasons,
