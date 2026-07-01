@@ -1,3 +1,9 @@
 0.2.62 (unreleased)
 -------------------
 
+- Set ``TERM=xterm-256color`` inside tox test environments so local runs
+  launched from Ghostty do not print missing ``xterm-ghostty`` terminfo
+  warnings.
+- Point the test settings' extra static files directory at the shipped
+  ``src/cast/static`` tree so tox migrations no longer emit Django's
+  ``staticfiles.W004`` warning.
