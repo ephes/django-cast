@@ -211,6 +211,25 @@ class TestPodcastModel:
         context = podcast.get_context(request)
         assert context["podcast"] == podcast
 
+    def test_itunes_type_is_optional(self):
+        podcast = Podcast(id=1, title="Podcast", slug="podcast", itunes_type="")
+
+        Podcast._meta.get_field("itunes_type").clean(podcast.itunes_type, podcast)
+
+    @pytest.mark.parametrize("itunes_type", ["episodic", "serial"])
+    def test_itunes_type_choices_are_valid(self, itunes_type):
+        podcast = Podcast(id=1, title="Podcast", slug="podcast", itunes_type=itunes_type)
+
+        Podcast._meta.get_field("itunes_type").clean(podcast.itunes_type, podcast)
+
+    def test_itunes_type_rejects_unknown_value(self):
+        podcast = Podcast(id=1, title="Podcast", slug="podcast", itunes_type="chronological")
+
+        with pytest.raises(ValidationError) as error:
+            Podcast._meta.get_field("itunes_type").clean(podcast.itunes_type, podcast)
+
+        assert error.value.code == "invalid_choice"
+
 
 class TestSeasonModel:
     pytestmark = pytest.mark.django_db

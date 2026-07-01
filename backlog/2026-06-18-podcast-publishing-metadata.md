@@ -2,9 +2,9 @@
 
 Date: 2026-06-18
 Status: first metadata slice and automatic numbering follow-up implemented.
-Remaining active work is limited to deferred follow-up questions: season editing
-shape, duplicate number policy, legacy import values, and possible channel-level
-`itunes:type` support.
+Follow-up triage completed 2026-07-01. Channel-level `itunes:type` was
+implemented as an optional explicit podcast setting after triage. No immediate
+metadata implementation slice remains.
 
 ## Summary
 
@@ -24,15 +24,14 @@ season numbers, titles, or slugs.
 
 ## Motivation
 
-`cast.Episode` currently supports podcast audio, visible date, body, keywords,
-explicit/block values, cover image, and contributors, but it has no canonical
-episode number, season, or episode type fields. The podcast feed emits GUID,
-author, subtitle, summary, duration, keywords, explicit, and block tags, but not
-`itunes:episode`, `itunes:season`, or `itunes:episodeType`. The feed also does
-not emit a channel-level `itunes:type` (episodic vs serial), so Apple currently
-treats every django-cast show as episodic by default; this matters because
-episode numbers are only optional for episodic shows and effectively required
-for serial shows (see Feed Behavior and Open Questions).
+At the time of the original design, `cast.Episode` supported podcast audio,
+visible date, body, keywords, explicit/block values, cover image, and
+contributors, but it had no canonical episode number, season, or episode type
+fields. The podcast feed emitted GUID, author, subtitle, summary, duration,
+keywords, explicit, and block tags, but not `itunes:episode`,
+`itunes:season`, or `itunes:episodeType`. A later follow-up also added explicit
+channel-level `itunes:type` support for shows that need to declare episodic or
+serial ordering.
 
 The Podcasting 2.0 `xmlns:podcast` namespace is already declared on the podcast
 feed (`src/cast/feeds.py`, `PodcastIndexElements.namespace_attributes`), so
@@ -143,9 +142,11 @@ supports a season name. A real model gives editors one season object to reuse,
 prevents duplicate season definitions, and avoids repeatedly typing names into
 episode rows.
 
-Implementation detail to settle: whether `Season` should be a Wagtail snippet.
-Snippet editing is attractive for global editor UX, but the model must still be
-strictly scoped to one `Podcast`.
+Triage decision, 2026-07-01: keep `Season` as the implemented regular Django
+model registered in Django admin. It is podcast-scoped by its foreign key and
+unique `(podcast, number)` constraint, and episodes select it through the
+existing Wagtail edit panel. Do not convert it to a Wagtail snippet without a
+specific editor workflow that justifies the extra public/editing surface.
 
 ### `Episode`
 
@@ -219,12 +220,9 @@ than one season, so emitting `itunes:season` for a single-season show is valid
 and harmless but will not be surfaced. Do not treat a hidden single-season badge
 as a bug.
 
-Channel-level `itunes:type` (episodic vs serial) is currently not emitted and is
-out of scope for the first slice, but it is the natural companion to season and
-episode-number metadata for serial shows. The first slice should not silently
-imply serial ordering; if a later slice adds serial support it must add an
-explicit `itunes:type` channel control rather than inferring it from the
-presence of seasons. Tracked under Open Questions.
+Channel-level `itunes:type` (episodic vs serial) was out of scope for the first
+metadata slice but later added as an explicit podcast-level control. django-cast
+does not infer serial ordering from the presence of seasons or episode numbers.
 
 ## Wagtail Editing Behavior
 
@@ -263,8 +261,8 @@ Automatic assignment was added in a follow-up implementation:
   object being saved.
 
 This remains a policy layer separate from the base metadata fields. Feed import,
-renumbering, season-scoped numbering, and channel-level `itunes:type` remain out
-of scope and tracked separately when needed.
+renumbering, and season-scoped numbering remain out of scope and tracked
+separately when needed.
 
 ## Backwards Compatibility
 
@@ -287,18 +285,29 @@ instead defaults to `full` and emits `<itunes:episodeType>full</itunes:episodeTy
 for every existing item, that is a feed output change for all current episodes
 and must be called out in release notes.
 
-## Open Questions
+## Follow-up Triage Decisions
 
-- Should `Season` be a Wagtail snippet or a regular model edited through a
-  podcast-scoped admin view? (open)
-- Should duplicate non-null episode numbers be validated per podcast, per season,
-  or only for full episodes? (open — note trailers/bonus may legitimately reuse
-  or skip numbers)
-- How should consumer importers handle legacy source values that are not valid
-  iTunes episode numbers (e.g. `0`, blank, or non-integer)? (open)
-- Should a later slice add channel-level `itunes:type` (episodic vs serial) so
-  serial shows can declare ordering, given episode numbers are effectively
-  required for serial shows? (open — deliberately out of the first slice)
+Resolved on 2026-07-01:
+
+- `Season` editing shape: keep the implemented regular Django model with basic
+  Django-admin CRUD and Wagtail episode selection. Do not promote seasons to
+  snippets now.
+- Duplicate episode numbers: keep manual entry permissive. The base metadata
+  field remains publishing metadata, not identity, and feeds continue to rely on
+  GUIDs. Automatic numbering already skips all non-null numbers under the same
+  podcast, independent of season or episode type, which is the conservative
+  behavior needed to avoid collisions created by django-cast itself. Add manual
+  duplicate validation only if a concrete downstream workflow needs stricter
+  semantics.
+- Legacy import values: keep `Episode.episode_number` as a positive integer.
+  Importers must not store invalid legacy feed values such as `0`, blanks,
+  decimals, or non-integers in the canonical field. They should omit the
+  canonical field and either preserve the raw source value in import provenance
+  or report it as unsupported, depending on the podcast feed import policy.
+- Channel-level `itunes:type`: implemented after triage as an optional
+  podcast-level `itunes_type` choice. Blank omits the feed tag; explicit
+  `episodic` or `serial` values emit `itunes:type`. Serial ordering is not
+  inferred from seasons or episode numbers.
 
 Resolved with a recommended default (kept here for visibility, may still be
 revisited):

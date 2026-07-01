@@ -25,9 +25,10 @@ from cast.feeds import (
     RssPodcastFeed,
     _feed_stylesheets,
     _episode_season_data,
+    _is_itunes_type,
     _is_positive_integer,
 )
-from cast.models import Contributor, ContributorLink, Episode, EpisodeContributor, Season, Post
+from cast.models import Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Season, Post
 
 
 def test_unknown_audio_format():
@@ -336,11 +337,60 @@ class TestGeneratedFeeds:
 
         assert response.status_code == 200
         content = response.content.decode("utf-8")
+        assert "<itunes:type>" not in content
         assert "<itunes:episode>" not in content
         assert "<itunes:season>" not in content
         assert "<itunes:episodeType>" not in content
         assert "<podcast:episode>" not in content
         assert "<podcast:season" not in content
+
+    @pytest.mark.parametrize("itunes_type", ["episodic", "serial"])
+    def test_podcast_feed_includes_explicit_channel_type(self, client, episode, use_dummy_cache_backend, itunes_type):
+        podcast = episode.podcast
+        podcast.itunes_type = itunes_type
+        podcast.save(update_fields=["itunes_type"])
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        root = ElementTree.fromstring(response.content.decode("utf-8"))
+        namespace = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+        channel = root.find("./channel")
+        assert channel is not None
+        assert channel.findtext("itunes:type", namespaces=namespace) == itunes_type
+
+    def test_podcast_atom_feed_includes_explicit_channel_type(self, client, episode, use_dummy_cache_backend):
+        podcast = episode.podcast
+        podcast.itunes_type = Podcast.ItunesType.SERIAL
+        podcast.save(update_fields=["itunes_type"])
+        feed_url = reverse(
+            "cast:podcast_feed_atom",
+            kwargs={"slug": podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        root = ElementTree.fromstring(response.content.decode("utf-8"))
+        namespace = {"itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"}
+        assert root.findtext("itunes:type", namespaces=namespace) == Podcast.ItunesType.SERIAL
+
+    def test_podcast_feed_suppresses_invalid_channel_type(self, client, episode, use_dummy_cache_backend):
+        podcast = episode.podcast
+        type(podcast).objects.filter(pk=podcast.pk).update(itunes_type="chronological")
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        assert "<itunes:type>" not in response.content.decode("utf-8")
 
     def test_podcast_feed_includes_publishing_metadata(self, client, episode, use_dummy_cache_backend):
         season = Season.objects.create(podcast=episode.podcast, number=2, name="Launch")
@@ -455,6 +505,20 @@ def test_episode_season_data():
     assert _episode_season_data(SimpleNamespace(season=None)) == (None, "")
     assert _episode_season_data(SimpleNamespace(season=SimpleNamespace(number=0, name="Invalid"))) == (None, "")
     assert _episode_season_data(SimpleNamespace(season=SimpleNamespace(number=1, name="Launch"))) == (1, "Launch")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("episodic", True),
+        ("serial", True),
+        ("", False),
+        ("chronological", False),
+        (None, False),
+    ],
+)
+def test_is_itunes_type(value, expected):
+    assert _is_itunes_type(value) is expected
 
 
 def test_itunes_elements_add_root_elements_index_error(mocker):

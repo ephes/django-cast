@@ -72,6 +72,7 @@ Specialized blog for podcasting with iTunes-specific metadata.
         itunes_categories = CharField()  # JSON field
         keywords = CharField(max_length=255)
         explicit = PositiveSmallIntegerField(choices=EXPLICIT_CHOICES)
+        itunes_type = CharField(choices=["episodic", "serial"], blank=True, default="")
         automatic_episode_numbering_enabled = BooleanField(default=False)
         next_episode_number = PositiveIntegerField(default=1)
 
@@ -80,6 +81,8 @@ Specialized blog for podcasting with iTunes-specific metadata.
 - Inherits all Blog functionality
 - Adds podcast-specific fields for feed generation
 - ``itunes_categories_parsed`` property returns parsed categories
+- ``itunes_type`` is optional; blank preserves existing feeds, while
+  ``episodic`` or ``serial`` emits the channel-level ``itunes:type`` tag.
 - Automatic episode numbering is opt-in per podcast. When enabled,
   ``next_episode_number`` is locked and advanced during first publish of blank
   full episodes, while manual episode numbers remain authoritative.

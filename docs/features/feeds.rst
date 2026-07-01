@@ -87,6 +87,8 @@ Additional metadata for podcast feeds:
 - **iTunes Subtitle**: From the blog's subtitle field
 - **iTunes Categories**: Podcast directory categorization
 - **Explicit Content**: Content rating flag
+- **Podcast Type**: Optional ``episodic`` or ``serial`` channel ordering value
+  emitted as ``itunes:type`` only when explicitly configured.
 - **Episode Enclosures**: Audio files with proper MIME types
 - **Episode Duration**: Calculated from audio files
 - **Episode Number**: Optional positive integer emitted as ``itunes:episode``

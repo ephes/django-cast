@@ -368,6 +368,10 @@ class Blog(Page):
 class Podcast(Blog):
     """A podcast is a blog with some extra fields for podcasting."""
 
+    class ItunesType(models.TextChoices):
+        EPISODIC = "episodic", _("Episodic")
+        SERIAL = "serial", _("Serial")
+
     # atm it's only used for podcast image
     itunes_artwork: models.ForeignKey = models.ForeignKey(
         ItunesArtWork, null=True, blank=True, on_delete=models.SET_NULL, related_name="podcasts"
@@ -400,6 +404,14 @@ class Podcast(Blog):
         choices=EXPLICIT_CHOICES,
         help_text=_("``Clean`` will put the clean iTunes graphic by it."),
     )
+    itunes_type: models.CharField = models.CharField(
+        _("iTunes type"),
+        max_length=16,
+        choices=ItunesType.choices,
+        blank=True,
+        default="",
+        help_text=_("Optional Apple Podcasts channel ordering type. Leave blank to omit the feed tag."),
+    )
     automatic_episode_numbering_enabled: models.BooleanField = models.BooleanField(
         default=False,
         help_text=_("Assign the next podcast-scoped number to blank full episodes on their first publish."),
@@ -425,6 +437,7 @@ class Podcast(Blog):
                 FieldPanel("itunes_categories"),
                 FieldPanel("keywords"),
                 FieldPanel("explicit"),
+                FieldPanel("itunes_type"),
                 FieldPanel("automatic_episode_numbering_enabled"),
                 FieldPanel("next_episode_number"),
             ],

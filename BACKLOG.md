@@ -13,8 +13,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- (none — the editor API episode publish action, scoped-token scope enforcement, and rendered-preview endpoint all
-  shipped in 0.2.61; see `docs/releases/0.2.61.rst`. Pick the next item from Research / Shaping.)
+- [ ] Editor API remote media import safety design
+  - PRD:
+    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
+    (see Open Questions)
+  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
+    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
+    for agents but safe for production sites.
+  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
+    documented, with a recommended first implementation slice or an explicit deferral.
 
 ## Research / Shaping
 
@@ -32,28 +39,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     top of the podcast feed import workflow.
   - Done when: the current workflows are documented in one place, gaps are listed, and follow-up items are split
     into concrete implementation tasks.
-
-- [ ] Podcast publishing metadata follow-up triage
-  - PRD: [backlog/2026-06-18-podcast-publishing-metadata.md](backlog/2026-06-18-podcast-publishing-metadata.md)
-  - Status: first implementation slice landed for optional episode number, episode type, podcast-scoped seasons,
-    Wagtail editing, feed tags, validation, repository/cache serialization, docs, and release notes. The automatic
-    podcast episode numbering follow-up also landed for opt-in podcast-scoped first-publish assignment.
-  - Related to: Podcast feed import and podcast contributor follow-up options.
-  - Scope: decide the remaining deferred questions in the PRD: season editing shape, duplicate number policy, legacy
-    import values, and possible channel-level `itunes:type` support.
-  - Done when: the remaining PRD questions are either split into concrete implementation items under
-    `Next`/`Ready`/`Later` or explicitly deferred in the PRD.
-
-- [ ] Editor API remote media import
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Open Questions)
-  - Status: shaping. Blocked on safety constraints before any implementation.
-  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
-    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
-    for agents but safe for production sites.
-  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
-    documented, with a recommended first implementation slice or an explicit deferral.
 
 - [ ] Local authoring and sync workflow
   - Scope: research whether django-cast should support a local-first editing workflow where content can be pulled

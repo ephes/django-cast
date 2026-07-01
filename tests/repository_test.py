@@ -1226,8 +1226,9 @@ def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     podcast_with_artwork.itunes_categories = "Technology"
     podcast_with_artwork.keywords = "foo,bar"
     podcast_with_artwork.explicit = 2
+    podcast_with_artwork.itunes_type = Podcast.ItunesType.SERIAL
     podcast_with_artwork.subtitle = "Test subtitle"
-    podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit", "subtitle"])
+    podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit", "itunes_type", "subtitle"])
 
     data = serialize_blog(podcast_with_artwork)
     rebuilt = deserialize_blog(data)
@@ -1238,6 +1239,7 @@ def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     assert rebuilt.itunes_categories == podcast_with_artwork.itunes_categories
     assert rebuilt.keywords == podcast_with_artwork.keywords
     assert rebuilt.explicit == podcast_with_artwork.explicit
+    assert rebuilt.itunes_type == podcast_with_artwork.itunes_type
     assert rebuilt.itunes_artwork is not None
     assert rebuilt.itunes_artwork.original.name == podcast_with_artwork.itunes_artwork.original.name
 

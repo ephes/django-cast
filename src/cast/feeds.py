@@ -51,6 +51,10 @@ def _is_episode_type(value: object) -> bool:
     return value in {"full", "trailer", "bonus"}
 
 
+def _is_itunes_type(value: object) -> bool:
+    return value in {"episodic", "serial"}
+
+
 class RepositoryMixin:
     is_podcast: bool = False
     request: HtmxHttpRequest
@@ -253,6 +257,8 @@ class ITunesElements:
 
         haqe("itunes:summary", blog.description)
         haqe("itunes:explicit", blog.get_explicit_display())
+        if _is_itunes_type(itunes_type := getattr(blog, "itunes_type", "")):
+            haqe("itunes:type", itunes_type)
         try:
             haqe("lastBuildDate", rfc2822_date(blog.last_build_date))
         except IndexError:

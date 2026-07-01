@@ -84,6 +84,14 @@ Keywords
 
 Keywords are set in the podcast feed as the iTunes keywords tag.
 
+Podcast Type
+------------
+
+Podcast pages can optionally set an Apple Podcasts channel type:
+``episodic`` or ``serial``. Leaving the field blank omits ``itunes:type`` and
+preserves the existing feed behavior. Set it explicitly only when the show has a
+known ordering policy for podcast directories.
+
 Podcast Publishing Metadata
 ---------------------------
 

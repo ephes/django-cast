@@ -46,6 +46,7 @@ class PodcastModelAdmin(AdminUserMixin, ModelAdmin):
         "itunes_artwork",
         "itunes_categories",
         "explicit",
+        "itunes_type",
         "keywords",
         "automatic_episode_numbering_enabled",
         "next_episode_number",

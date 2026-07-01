@@ -205,6 +205,7 @@ def serialize_blog(blog):
         data["itunes_categories"] = blog.itunes_categories
         data["keywords"] = blog.keywords
         data["explicit"] = blog.explicit
+        data["itunes_type"] = blog.itunes_type
         if blog.itunes_artwork is not None:
             artwork = cast(ItunesArtWork, blog.itunes_artwork)
             data["itunes_artwork"] = {

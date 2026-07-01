@@ -356,6 +356,11 @@ at ``/api/editor/episodes/``. Podcasts also accept plain posts; clients that
 want a post under a podcast can still ``POST /api/editor/posts/`` with that
 podcast as the parent.
 
+Podcast-level feed settings such as ``itunes_type`` are not edited through the
+editor API. Manage them on the podcast page in Wagtail or through the Django
+admin; editor API episode endpoints only manage episode-level publishing
+metadata.
+
 **Create a draft post**::
 
     POST /api/editor/posts/

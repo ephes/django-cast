@@ -89,6 +89,11 @@ on first real publish, skips manually used numbers under the same podcast, and
 then advances the counter. Draft saves and future scheduling approvals do not
 consume numbers.
 
+Podcast pages also expose an optional ``itunes_type`` setting for Apple Podcasts
+channel ordering. Leave it blank to omit ``itunes:type`` from feeds, or set it
+to ``episodic`` or ``serial`` when the show should declare an explicit ordering
+policy.
+
 Editor Integration
 -------------------
 
