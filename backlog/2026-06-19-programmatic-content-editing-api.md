@@ -8,9 +8,9 @@ session auth in the first slice, and authorizes with Wagtail page permissions. T
 list (heading, paragraph, code, image, gallery).
 
 Slice 2 implemented (2026-06-23): **updating drafts** via `PATCH /api/editor/posts/{id}/` with revision-based conflict
-detection (`409`). `PATCH` requires `base_revision_id`, saves a new Wagtail draft revision, leaves omitted fields
+detection (`409`). `PATCH` requires a revision token, saves a new Wagtail draft revision, leaves omitted fields
 untouched, replaces the whole `overview` section when supplied, and supports explicit `cover_image: null` to clear the
-draft cover image. `If-Match` later landed as an equivalent request-header transport for the same revision token.
+draft cover image. The token may be sent as body `base_revision_id` or as a strict `If-Match` request header.
 
 Slice 3 implemented (2026-06-25): **editor media uploads and full body-section editing**. The slice added authenticated
 editor endpoints for listing/uploading Wagtail images, django-cast audio, and django-cast video; upload collection
@@ -31,7 +31,7 @@ and public URL metadata, and keeps `publish: true` rejected on create/update.
 Remaining follow-ups beyond slice 4 (triaged 2026-06-29 into concrete `BACKLOG.md` items instead of one broad bucket):
 
 - **Episode draft endpoints — implemented (2026-06-29).** Draft-only `POST/GET/PATCH /api/editor/episodes/` for
-  `Episode` pages under a `Podcast` parent. See "Episode Endpoints (Next Implementation Slice)" below for the detailed
+  `Episode` pages under a `Podcast` parent. See "Episode Endpoints (Implemented Slice)" below for the detailed
   contract and shipped status.
 - **Episode publish action — implemented (2026-06-30).** `POST /api/editor/episodes/{id}/publish/`
   mirrors the post publish action plus the episode-specific `podcast_audio`-required gate.
@@ -262,8 +262,8 @@ cast API rather than in a consumer site:
     return `validation_error` on `collection` with code `invalid`. Whole-request upload authorization failures use `permission_denied`; submitted
     collection values that are missing or unusable use the distinct field-level code `collection_permission_denied`.
 
-Episode endpoints (the selected next slice and its ready publish follow-up) mirror the same shape; see
-"Episode Endpoints (Next Implementation Slice)" below for the detailed contract:
+Episode endpoints (now implemented, along with their publish follow-up) mirror the same shape; see
+"Episode Endpoints (Implemented Slice)" below for the detailed contract:
 
 - `POST /api/editor/episodes/`
 - `GET /api/editor/episodes/{id}/`
@@ -1032,11 +1032,11 @@ Markdown input, and rendered-preview endpoints out of scope; publishing landed l
    tightening for already-shipped image/audio body references, not only neutral message changes. The API reference must
    also explicitly document `rate_limited`/HTTP 429, `cleanup_failed`/HTTP 500, and `probe_timeout`/HTTP 422.
 
-## Episode Endpoints (Next Implementation Slice)
+## Episode Endpoints (Implemented Slice)
 
 Status: draft create/read/update implemented (2026-06-29): `POST /api/editor/episodes/`,
 `GET /api/editor/episodes/{id}/`, and `PATCH /api/editor/episodes/{id}/` for `Episode` pages under a `Podcast` parent.
-Episodes reuse the post body converter, media-reference `choose` checks, `base_revision_id` conflict detection, and the
+Episodes reuse the post body converter, media-reference `choose` checks, revision-token conflict detection, and the
 draft-only `publish` guard, and add the episode-specific fields (`podcast_audio`, `episode_number`, `episode_type`,
 `season`, `keywords`, `explicit`, `block`). A non-podcast parent and a foreign-podcast `season` return structured
 errors, and `GET /api/editor/parents/` now points podcasts at the episode create endpoint. The episode **publish**
@@ -1050,7 +1050,7 @@ parent requirement, and the publish-time `podcast_audio` rule.
 
 `Episode` is a concrete subclass of `Post` (see `src/cast/models/pages.py`). It shares `Post.body`
 (`overview`/`detail`), tags, categories, cover image, `visible_date`, slug, and Wagtail draft/revision semantics, so the
-existing body converter, media-reference `choose` checks, `base_revision_id` conflict detection, draft-only `publish`
+existing body converter, media-reference `choose` checks, revision-token conflict detection, draft-only `publish`
 guard, and structured error envelopes carry over unchanged. `Episode.parent_page_types = ["cast.Podcast"]`, and
 `GET /api/editor/parents/` already lists podcasts the caller may add to. The implementer should preflight whether to add
 dedicated `/api/editor/episodes/` views (mirroring the post views) or to generalize the existing post views; dedicated
@@ -1222,7 +1222,7 @@ Resolved (2026-06-22):
 - **Markdown** — demoted to an optional later convenience behind an optional dependency, not part of the first slice.
 
 Still open (each remaining content-editing follow-up is now tracked as a concrete `BACKLOG.md` item; see the triaged
-list near the top of this PRD and the "Episode Endpoints (Next Implementation Slice)" section):
+list near the top of this PRD and the "Episode Endpoints (Implemented Slice)" section):
 
 - ~~What action→required-scope mapping should django-cast expose for scoped-token backends (a single content scope
   versus separate create/update/publish scopes)?~~ **Resolved (2026-06-30):** two logical scopes `write`/`publish`
