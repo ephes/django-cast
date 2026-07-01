@@ -262,11 +262,13 @@ class TestAuthorBlocksToOverview:
         assert item["value"] == image.id
         assert isinstance(item["id"], str) and len(item["id"]) > 0
 
-    def test_image_not_choosable_by_caller_reports_not_found(self, image, admin_user):
-        # admin_user has page permissions but no image ``choose`` permission, so a
-        # real image id must be rejected exactly like a missing one (no enumeration).
+    def test_image_not_choosable_by_caller_reports_not_found(self, image):
+        # A caller with no image ``choose`` permission sees a real image id rejected
+        # exactly like a missing one (no enumeration).
+        caller = UserFactory(is_staff=True)
+        grant_wagtail_admin_access(caller)
         with pytest.raises(EditorValidationError) as excinfo:
-            author_blocks_to_overview([{"type": "image", "value": {"id": image.id}}], user=admin_user)
+            author_blocks_to_overview([{"type": "image", "value": {"id": image.id}}], user=caller)
         assert excinfo.value.error_map["overview.0.value.id"][0]["code"] == "not_found"
 
     def test_audio_block_resolves_to_pk(self, audio, superuser):
@@ -603,10 +605,12 @@ class TestEditorPostCreate:
         assert response.status_code == 400
         assert "overview.0.value.0.id" in response.json()["errors"]
 
-    def test_inline_image_not_choosable_by_caller_is_rejected(self, api_client, blog, admin_user, image):
-        # admin_user can add the post but lacks image ``choose`` permission, so a real
+    def test_inline_image_not_choosable_by_caller_is_rejected(self, api_client, blog, image):
+        # This caller can add the post but lacks image ``choose`` permission, so a real
         # image id is rejected with the same not_found path as a missing image (media IDOR guard).
-        api_client.force_authenticate(user=admin_user)
+        caller = page_permission_user(codenames=("add_page",))
+        grant_wagtail_admin_access(caller)
+        api_client.force_authenticate(user=caller)
         url = reverse("cast:api:editor_post_create")
         payload = self._payload(
             blog,
@@ -688,9 +692,11 @@ class TestEditorPostCreate:
         overview = post.body[0].value.raw_data
         assert any(b["type"] == "audio" and b["value"] == audio.id for b in overview)
 
-    def test_cover_image_not_choosable_is_rejected(self, api_client, blog, admin_user, image):
-        # admin_user can add the post but cannot choose the image.
-        api_client.force_authenticate(user=admin_user)
+    def test_cover_image_not_choosable_is_rejected(self, api_client, blog, image):
+        # This caller can add the post but cannot choose the image.
+        caller = page_permission_user(codenames=("add_page",))
+        grant_wagtail_admin_access(caller)
+        api_client.force_authenticate(user=caller)
         url = reverse("cast:api:editor_post_create")
         payload = self._payload(blog, slug="weeknotes-badcover", cover_image={"id": image.id, "alt_text": "x"})
         response = api_client.post(url, payload, format="json")
@@ -2268,8 +2274,8 @@ class TestMediaProbeBudget:
 class TestEditorEpisodeCreate:
     pytestmark = pytest.mark.django_db
 
-    # ``admin_user`` can add/edit pages anywhere under the site but cannot ``choose``
-    # media, so podcast-audio tests that need a real audio reference use ``superuser``.
+    # ``admin_user`` can add/edit pages anywhere under the site. Media-negative tests
+    # use a fresh page-permission user with no collection media permissions.
 
     def _payload(self, podcast, **overrides):
         payload = {

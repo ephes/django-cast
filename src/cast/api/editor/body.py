@@ -26,10 +26,9 @@ def get_choosable_object(obj_id: Any, user: Any, *, queryset: Any, policy: Any) 
     """
     if not isinstance(obj_id, int) or isinstance(obj_id, bool):
         return None
-    obj = queryset.filter(pk=obj_id).first()
+    visible = policy.instances_user_has_permission_for(user, "choose")
+    obj = queryset.filter(pk=obj_id, pk__in=visible.values("pk")).first()
     if obj is None:
-        return None
-    if not policy.user_has_permission_for_instance(user, "choose", obj):
         return None
     return obj
 
