@@ -13,15 +13,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [ ] Editor API remote media import safety design
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Open Questions)
-  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
-    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
-    for agents but safe for production sites.
-  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
-    documented, with a recommended first implementation slice or an explicit deferral.
+- [ ] Choose next implementation slice
+  - Scope: pick a small, concrete item from Research / Shaping or Later based on current project needs.
+  - Done when: the chosen item has a clear first slice, expected files/tests, and any sibling-repo checks identified.
 
 ## Research / Shaping
 
@@ -68,14 +62,16 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
-- [ ] Editor API optional If-Match/ETag conflict tokens
+- [ ] Editor API remote media import safety design
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Conflict Detection)
-  - Scope: add `If-Match`/ETag as an equivalent transport for the existing `base_revision_id` conflict semantics on
-    `PATCH`, without changing the JSON-body contract that already works.
-  - Done when: the header transport maps to the same `revision_conflict` behavior, both transports are documented, and
-    tests cover header- and body-supplied base revisions.
+    (see Open Questions)
+  - Status: deferred for now.
+  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
+    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
+    for agents but safe for production sites.
+  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
+    documented, with a recommended first implementation slice or an explicit deferral.
 
 - [ ] Editor API media replacement workflows
   - PRD:

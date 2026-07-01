@@ -514,16 +514,17 @@ and have edit permission for the page.
 
 Creates a new Wagtail draft revision for an existing ``Post``.  The request
 must include the ``latest_revision_id`` returned by ``GET`` or the previous
-write response as ``base_revision_id``.  Omitted fields are left unchanged; a
-provided ``overview`` or ``detail`` replaces that whole section, including when
-the supplied value is an empty list. Omitted sections and unsupported/custom
-top-level body sections are preserved. At least one mutable field besides
-``base_revision_id`` is required; ``publish: false`` does not count as a
-mutable field and ``publish: true`` is rejected as unsupported.
+write response as ``base_revision_id`` or as an ``If-Match`` request header.
+Omitted fields are left unchanged; a provided ``overview`` or ``detail``
+replaces that whole section, including when the supplied value is an empty list.
+Omitted sections and unsupported/custom top-level body sections are preserved.
+At least one mutable field besides the revision token is required; ``publish:
+false`` does not count as a mutable field and ``publish: true`` is rejected as
+unsupported.
 
 Update fields:
 
-- ``base_revision_id`` (required): optimistic concurrency token.
+- ``base_revision_id`` (optional when ``If-Match`` is supplied): optimistic concurrency token.
 - ``title`` (optional): page title.
 - ``slug`` (optional): URL slug; must remain unique under the same parent.
 - ``visible_date`` (optional): ISO 8601 datetime string.
@@ -546,6 +547,25 @@ Example update request:
         {"type": "paragraph", "value": "<p>Updated draft text.</p>"}
       ]
     }
+
+Instead of putting the token in the JSON body, clients may send the same
+revision id as a strict ``If-Match`` header:
+
+.. code-block:: text
+
+    If-Match: "6543"
+
+Only a single strong quoted integer token is accepted; optional surrounding
+whitespace is ignored. Bare integers (``If-Match: 6543``), weak ETags
+(``W/"6543"``), wildcard ``*``, blank values, and comma-separated ETag lists are
+rejected with the normal ``validation_error`` envelope. If both
+``base_revision_id`` and ``If-Match`` are supplied, they must carry the same
+revision id. This endpoint uses
+``If-Match`` only as an alternate transport for django-cast's revision token:
+malformed or contradictory tokens return ``400 validation_error`` and stale
+valid tokens return ``409 revision_conflict``. It does not emit response
+``ETag`` headers in this API version, and it intentionally does not use
+``412 Precondition Failed``.
 
 A stale base revision returns ``409 Conflict``:
 
@@ -678,9 +698,11 @@ Example create request:
 The response is the standard editor draft shape (``id``, ``type`` of
 ``cast.Episode``, the shared post fields, ``preview_url``/``edit_url``, and an
 ``api_url`` of ``/api/editor/episodes/{id}/``) plus the episode-specific fields
-above. ``PATCH`` requires ``base_revision_id``, preserves omitted fields and
-sections, and keeps the empty-update guard, exactly like posts; ``parent`` is
-immutable.
+above. ``PATCH`` requires the same revision token, preserves omitted fields and
+sections, and keeps the empty-update guard, exactly like posts. As with posts,
+the token may be sent as ``base_revision_id`` in the JSON body or as
+``If-Match: "<latest_revision_id>"``, with the same strict syntax and
+validation behavior. ``parent`` is immutable.
 
 The episode publish action mirrors the post publish action::
 

@@ -841,10 +841,96 @@ class TestEditorPostUpdate:
         assert body["code"] == "validation_error"
         assert "base_revision_id" in body["errors"]
 
+    def test_patch_accepts_if_match_revision_token(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"title": "Header revision"},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"',
+        )
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["title"] == "Header revision"
+        assert data["latest_revision_id"] != created["latest_revision_id"]
+
+    def test_patch_accepts_if_match_revision_token_with_whitespace(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"title": "Header revision"},
+            format="json",
+            HTTP_IF_MATCH=f'  "{created["latest_revision_id"]}"  ',
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["title"] == "Header revision"
+
+    def test_patch_accepts_matching_if_match_and_body_revision(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "Matching revision"},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"',
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["title"] == "Matching revision"
+
+    def test_patch_rejects_mismatched_if_match_and_body_revision(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "Mismatch"},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"] + 1}"',
+        )
+
+        assert response.status_code == 400
+        body = response.json()
+        assert body["code"] == "validation_error"
+        assert body["errors"]["If-Match"][0]["code"] == "mismatch"
+
+    @pytest.mark.parametrize("if_match", ["123", 'W/"123"', "*", "", '"123", "456"', '"abc"', '""', '"²"'])
+    def test_patch_rejects_malformed_if_match_revision_token(self, api_client, blog, admin_user, if_match):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"title": "Malformed header"},
+            format="json",
+            HTTP_IF_MATCH=if_match,
+        )
+
+        assert response.status_code == 400
+        body = response.json()
+        assert body["code"] == "validation_error"
+        assert body["errors"]["If-Match"][0]["code"] == "invalid"
+
     def test_patch_without_any_update_field_is_validation_error(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
         response = api_client.patch(url, {"base_revision_id": created["latest_revision_id"]}, format="json")
+        assert response.status_code == 400
+        assert response.json()["errors"]["non_field_errors"][0]["code"] == "required"
+
+    def test_patch_with_only_if_match_revision_is_validation_error(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(url, {}, format="json", HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"')
+
         assert response.status_code == 400
         assert response.json()["errors"]["non_field_errors"][0]["code"] == "required"
 
@@ -883,6 +969,29 @@ class TestEditorPostUpdate:
         detail = api_client.get(url, format="json").json()
         assert detail["title"] == "Human draft"
         assert detail["latest_revision_id"] == human_revision.id
+
+    def test_stale_if_match_revision_returns_conflict_without_overwrite(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        post = Post.objects.get(id=created["id"]).specific
+        human_draft = post.get_latest_revision_as_object()
+        human_draft.title = "Human draft"
+        human_revision = human_draft.save_revision(user=admin_user)
+
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(
+            url,
+            {"title": "Agent draft"},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"',
+        )
+
+        assert response.status_code == 409
+        body = response.json()
+        assert body["code"] == "revision_conflict"
+        assert body["current_revision_id"] == human_revision.id
+        assert body["submitted_base_revision_id"] == created["latest_revision_id"]
+        detail = api_client.get(url, format="json").json()
+        assert detail["title"] == "Human draft"
 
     def test_patch_updates_only_sent_fields(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
@@ -2596,6 +2705,51 @@ class TestEditorEpisodeUpdate:
         assert response.status_code == 400
         assert "base_revision_id" in response.json()["errors"]
 
+    def test_patch_accepts_if_match_revision_token(self, api_client, podcast, admin_user):
+        created = self._create(api_client, podcast, admin_user)
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"title": "Header revision"},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"',
+        )
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["title"] == "Header revision"
+        assert data["latest_revision_id"] != created["latest_revision_id"]
+
+    def test_patch_rejects_mismatched_if_match_and_body_revision(self, api_client, podcast, admin_user):
+        created = self._create(api_client, podcast, admin_user)
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "Mismatch"},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"] + 1}"',
+        )
+
+        assert response.status_code == 400
+        assert response.json()["errors"]["If-Match"][0]["code"] == "mismatch"
+
+    @pytest.mark.parametrize("if_match", ["123", '"²"'])
+    def test_patch_rejects_malformed_if_match_revision_token(self, api_client, podcast, admin_user, if_match):
+        created = self._create(api_client, podcast, admin_user)
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"title": "Malformed header"},
+            format="json",
+            HTTP_IF_MATCH=if_match,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["errors"]["If-Match"][0]["code"] == "invalid"
+
     def test_empty_update_is_validation_error(self, api_client, podcast, admin_user):
         created = self._create(api_client, podcast, admin_user)
         url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
@@ -2629,6 +2783,27 @@ class TestEditorEpisodeUpdate:
         assert body["current_revision_id"] == human_revision.id
         detail = api_client.get(url, format="json").json()
         assert detail["title"] == "Human draft"
+
+    def test_stale_if_match_revision_returns_conflict(self, api_client, podcast, admin_user):
+        created = self._create(api_client, podcast, admin_user)
+        episode = Episode.objects.get(id=created["id"])
+        human_draft = episode.get_latest_revision_as_object()
+        human_draft.title = "Human draft"
+        human_revision = human_draft.save_revision(user=admin_user)
+
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+        response = api_client.patch(
+            url,
+            {"title": "Agent draft"},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"',
+        )
+
+        assert response.status_code == 409
+        body = response.json()
+        assert body["code"] == "revision_conflict"
+        assert body["current_revision_id"] == human_revision.id
+        assert body["submitted_base_revision_id"] == created["latest_revision_id"]
 
     def test_patch_updates_episode_fields(self, api_client, podcast, superuser, audio):
         season = Season.objects.create(podcast=podcast, number=3)

@@ -33,7 +33,7 @@ class PostCreateSerializer(serializers.Serializer):
 
 
 class PostUpdateSerializer(serializers.Serializer):
-    base_revision_id = serializers.IntegerField()
+    base_revision_id = serializers.IntegerField(required=False)
     title = serializers.CharField(required=False)
     slug = serializers.SlugField(required=False)
     visible_date = serializers.DateTimeField(required=False)

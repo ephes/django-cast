@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from django.http import HttpResponse
 from django.urls import reverse
@@ -56,6 +56,45 @@ class EditorAPIView(APIView):
 
     def get_exception_handler(self) -> Callable[..., Any]:
         return editor_exception_handler
+
+
+def _if_match_revision_id(request: Request) -> int | None:
+    value = request.headers.get("If-Match")
+    if value is None:
+        return None
+    value = value.strip()
+    if not (value.startswith('"') and value.endswith('"')):
+        raise EditorValidationError(
+            {"If-Match": [{"code": "invalid", "message": 'If-Match must be a quoted revision id such as "123".'}]}
+        )
+    revision_id = value[1:-1]
+    if not (revision_id.isascii() and revision_id.isdigit()):
+        raise EditorValidationError(
+            {"If-Match": [{"code": "invalid", "message": 'If-Match must be a quoted revision id such as "123".'}]}
+        )
+    return int(revision_id)
+
+
+def _submitted_base_revision_id(request: Request, data: dict[str, Any]) -> int:
+    body_revision_id = cast(int | None, data.get("base_revision_id"))
+    header_revision_id = _if_match_revision_id(request)
+    if body_revision_id is None and header_revision_id is None:
+        raise EditorValidationError({"base_revision_id": [{"code": "required", "message": "This field is required."}]})
+    if body_revision_id is not None and header_revision_id is not None and body_revision_id != header_revision_id:
+        raise EditorValidationError(
+            {
+                "If-Match": [
+                    {
+                        "code": "mismatch",
+                        "message": "If-Match must match base_revision_id when both are supplied.",
+                    }
+                ]
+            }
+        )
+    if body_revision_id is None:
+        assert header_revision_id is not None
+        return header_revision_id
+    return body_revision_id
 
 
 class ParentsListView(EditorAPIView):
@@ -334,6 +373,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         serializer = PostUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        submitted_base_revision_id = _submitted_base_revision_id(request, data)
         user = request.user
         if data.get("publish"):
             raise EditorValidationError(
@@ -346,7 +386,6 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
 
         post = self._get_post(pk, user, denied_message="You cannot edit this draft.")
         current_revision_id = post.latest_revision_id
-        submitted_base_revision_id = data["base_revision_id"]
         edit_url = reverse("wagtailadmin_pages:edit", args=[post.id])
         if current_revision_id != submitted_base_revision_id:
             raise EditorRevisionConflict(
@@ -575,6 +614,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         serializer = EpisodeUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        submitted_base_revision_id = _submitted_base_revision_id(request, data)
         user = request.user
         if data.get("publish"):
             raise EditorValidationError(
@@ -587,7 +627,6 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
 
         episode = self._get_episode(pk, user, denied_message="You cannot edit this draft.")
         current_revision_id = episode.latest_revision_id
-        submitted_base_revision_id = data["base_revision_id"]
         edit_url = reverse("wagtailadmin_pages:edit", args=[episode.id])
         if current_revision_id != submitted_base_revision_id:
             raise EditorRevisionConflict(

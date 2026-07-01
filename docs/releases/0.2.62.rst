@@ -7,3 +7,6 @@
 - Point the test settings' extra static files directory at the shipped
   ``src/cast/static`` tree so tox migrations no longer emit Django's
   ``staticfiles.W004`` warning.
+- Allow editor API post and episode draft ``PATCH`` requests to send the
+  optimistic concurrency token as a strict ``If-Match: "<revision id>"`` header
+  instead of JSON ``base_revision_id``.
