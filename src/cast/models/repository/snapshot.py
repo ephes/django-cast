@@ -102,9 +102,9 @@ class PostQuerySnapshot:
         primary post and media lookup dicts. Renditions are collected
         separately via ``Post.get_all_renditions_from_queryset``.
         """
-        from ..pages import Episode
+        from ..pages import Episode, Post
 
-        queryset = queryset.select_related("owner", "cover_image")
+        queryset = queryset.select_related("owner", "cover_image", "content_type")
         queryset_model = getattr(queryset, "model", None)
         if isinstance(queryset_model, type) and issubclass(queryset_model, Episode):
             queryset = queryset.select_related("podcast_audio__transcript", "season")
@@ -129,11 +129,40 @@ class PostQuerySnapshot:
         page_url_by_id: PageUrlByID = {}
         absolute_page_url_by_id: PageUrlByID = {}
         episode_by_id: dict[int, Episode] = {}
-        for post in queryset:
-            specific_post = post.specific
+        posts = list(queryset)
+        specific_post_by_id: PostByID = {}
+        pks_by_specific_model: dict[type[Post], list[int]] = {}
+        for post in posts:
+            specific_model_attr = getattr(post, "specific_class", None)
+            if not isinstance(specific_model_attr, type) or not issubclass(specific_model_attr, Post):
+                specific_post_by_id[post.pk] = post.specific
+                continue
+            specific_model = cast(type[Post], specific_model_attr)
+            if isinstance(post, specific_model):
+                specific_post_by_id[post.pk] = post
+            else:
+                pks_by_specific_model.setdefault(specific_model, []).append(post.pk)
+        for specific_model, pks in pks_by_specific_model.items():
+            specific_queryset = specific_model._default_manager.filter(pk__in=pks)
+            if issubclass(specific_model, Episode):
+                specific_queryset = specific_queryset.select_related("podcast_audio__transcript", "season")
+            specific_post_by_id.update(specific_queryset.in_bulk(pks))
+
+        for post in posts:
+            specific_post = specific_post_by_id[post.pk]
             post_by_id[post.pk] = specific_post
             owner_username_by_id[post.pk] = post.owner.username
-            has_audio_by_id[post.pk] = post.has_audio
+            audios_count = 0
+            try:
+                audios_count = post.audios.count()
+            except (AttributeError, ValueError):
+                pass
+            if getattr(post, "audio_in_body", False) or audios_count > 0:
+                has_audio_by_id[post.pk] = True
+            elif isinstance(specific_post, Episode):
+                has_audio_by_id[post.pk] = specific_post.podcast_audio_id is not None
+            else:
+                has_audio_by_id[post.pk] = False
             page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
             absolute_page_url_by_id[post.pk] = post.full_url
             cover_image_url = ""
@@ -182,8 +211,6 @@ class PostQuerySnapshot:
                 assignments_by_episode_id[assignment.episode_id].append(assignment)
             for episode_id, episode in episode_by_id.items():
                 episode._visible_contributor_assignments = assignments_by_episode_id[episode_id]
-
-        from ..pages import Post
 
         return cls(
             post_queryset=queryset,

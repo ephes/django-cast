@@ -951,6 +951,42 @@ def test_render_podcast_feed_from_django_models_with_contributors_without_hittin
 
 
 @pytest.mark.django_db
+def test_blog_index_snapshot_query_count_does_not_scale_for_mixed_base_post_queryset(rf, blog, site, audio, body):
+    larger_blog = Blog(title="larger mixed blog", slug="larger-mixed-blog", owner=blog.owner)
+    site.root_page.add_child(instance=larger_blog)
+
+    def add_mixed_posts(target_blog, *, episode_count: int, post_count: int, slug_prefix: str) -> None:
+        for index in range(episode_count):
+            EpisodeFactory(
+                owner=target_blog.owner,
+                parent=target_blog,
+                title=f"{slug_prefix} episode {index}",
+                slug=f"{slug_prefix}-episode-{index}",
+                podcast_audio=audio,
+                body=body,
+            )
+        for index in range(post_count):
+            create_post(blog=target_blog, body=body, num=index)
+
+    add_mixed_posts(blog, episode_count=2, post_count=2, slug_prefix="small-mixed")
+    add_mixed_posts(larger_blog, episode_count=5, post_count=2, slug_prefix="large-mixed")
+
+    def count_snapshot_queries(target_blog: Blog) -> int:
+        reset_queries()
+        PostQuerySnapshot.create_from_post_queryset(
+            request=rf.get("/"),
+            site=site,
+            queryset=target_blog.unfiltered_published_posts,
+        )
+        return len(connection.queries)
+
+    small_count = count_snapshot_queries(blog)
+    larger_count = count_snapshot_queries(larger_blog)
+
+    assert larger_count == small_count
+
+
+@pytest.mark.django_db
 def test_post_queryset_snapshot_caches_episode_contributors_for_base_post_queryset(rf, episode):
     contributor = Contributor.objects.create(display_name="Mixed Feed Guest", slug="mixed-feed-guest")
     EpisodeContributor.objects.create(
@@ -1634,6 +1670,7 @@ def test_page_link_handler_expand_db_attributes_single():
 
 
 def test_page_link_handler_expand_db_attributes_many(mocker):
+    PageLinkHandlerWithCache.cache.clear()
     # all urls are cached
     PageLinkHandlerWithCache.cache_url(1, "/foo-bar/")
     PageLinkHandlerWithCache.cache_url(2, "/bar-foo/")
@@ -1850,6 +1887,122 @@ def test_queryset_data_create_from_post_queryset_handles_episode_without_podcast
         queryset=Post.objects.live().descendant_of(episode.podcast),
     )
     assert episode.id not in queryset_data.podcast_audio_by_episode_id
+
+
+@pytest.mark.django_db
+def test_post_queryset_snapshot_bulk_fetches_non_episode_specific_models(rf, blog):
+    post = create_post(blog=blog)
+
+    class OtherPost(Post):
+        class Meta:
+            proxy = True
+            app_label = "cast"
+
+    class FakeManager:
+        @staticmethod
+        def count():
+            return 0
+
+        @staticmethod
+        def all():
+            return []
+
+    class FakePost:
+        pk = post.pk
+        owner = post.owner
+        cover_image = None
+        cover_alt_text = ""
+        specific_class = OtherPost
+        videos = FakeManager()
+        audios = FakeManager()
+        audio_in_body = False
+        full_url = "http://testserver/fake-post/"
+
+        @staticmethod
+        def get_url(**_kwargs):
+            return "/fake-post/"
+
+        @staticmethod
+        def get_all_images():
+            return []
+
+    class FakeQuerySet(list):
+        model = Post
+
+        def select_related(self, *_args):
+            return self
+
+        def prefetch_related(self, *_args):
+            return self
+
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
+        request=rf.get("/"), site=None, queryset=FakeQuerySet([FakePost()])
+    )
+
+    assert isinstance(queryset_data.post_by_id[post.pk], OtherPost)
+
+
+@pytest.mark.django_db
+def test_post_queryset_snapshot_bulk_fetches_episode_subclass_specific_models(rf, episode):
+    transcript = create_transcript(audio=episode.podcast_audio)
+    season = Season.objects.create(podcast=episode.podcast, number=1, name="Subclass season")
+    episode.season = season
+    episode.save(update_fields=["season"])
+
+    class OtherEpisode(Episode):
+        class Meta:
+            proxy = True
+            app_label = "cast"
+
+    class FakeManager:
+        @staticmethod
+        def count():
+            return 0
+
+        @staticmethod
+        def all():
+            return []
+
+    class FakePost:
+        pk = episode.pk
+        owner = episode.owner
+        cover_image = None
+        cover_alt_text = ""
+        specific_class = OtherEpisode
+        videos = FakeManager()
+        audios = FakeManager()
+        audio_in_body = False
+        full_url = "http://testserver/fake-episode/"
+
+        @staticmethod
+        def get_url(**_kwargs):
+            return "/fake-episode/"
+
+        @staticmethod
+        def get_all_images():
+            return []
+
+    class FakeQuerySet(list):
+        model = Post
+
+        def select_related(self, *_args):
+            return self
+
+        def prefetch_related(self, *_args):
+            return self
+
+    queryset_data = PostQuerySnapshot.create_from_post_queryset(
+        request=rf.get("/"), site=None, queryset=FakeQuerySet([FakePost()])
+    )
+    snapshot_episode = queryset_data.post_by_id[episode.pk]
+
+    assert isinstance(snapshot_episode, OtherEpisode)
+    assert queryset_data.transcript_by_audio_id[episode.podcast_audio_id].pk == transcript.pk
+    reset_queries()
+    with connection.execute_wrapper(blocker):
+        assert snapshot_episode.podcast_audio.transcript.pk == transcript.pk
+        assert snapshot_episode.season.number == season.number
+    assert len(connection.queries) == 0
 
 
 def test_queryset_data_create_from_post_queryset_raises_attribute_error_for_broken_transcript(rf, mocker):
