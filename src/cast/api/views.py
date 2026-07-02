@@ -126,6 +126,7 @@ class AudioDetailView(generics.RetrieveDestroyAPIView):
 class AudioPodloveDetailView(generics.RetrieveAPIView):
     queryset = Audio.objects.all()
     serializer_class = AudioPodloveSerializer
+    permission_classes = (AllowAny,)
 
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
         instance = self.get_object()
@@ -227,6 +228,8 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
 
 
 class PlayerConfig(generics.RetrieveAPIView):
+    permission_classes = (AllowAny,)
+
     def retrieve(self, request: Request, *args, **kwargs) -> Response:
         template_base_dir = get_template_base_dir(request, None)
         color_scheme = request.query_params.get("color_scheme")
@@ -237,6 +240,7 @@ class PlayerConfig(generics.RetrieveAPIView):
 class FacetCountListView(generics.ListAPIView):
     serializer_class = SimpleBlogSerializer
     pagination_class = StandardResultsSetPagination
+    permission_classes = (AllowAny,)
 
     def get_queryset(self) -> QuerySet[Blog]:
         return Blog.objects.all().live().public().order_by("-first_published_at")
@@ -244,6 +248,7 @@ class FacetCountListView(generics.ListAPIView):
 
 class FacetCountsDetailView(generics.RetrieveAPIView):
     serializer_class = FacetCountSerializer
+    permission_classes = (AllowAny,)
 
     def get_queryset(self) -> QuerySet[Blog]:
         return Blog.objects.all().live().public()
@@ -274,6 +279,8 @@ class ThemeListView(generics.ListAPIView):
     This is used by the theme switcher for the vue frontend for example.
     """
 
+    permission_classes = (AllowAny,)
+
     def get_queryset(self) -> None:
         return None
 
@@ -293,6 +300,8 @@ class UpdateThemeView(APIView):
     """
     Update the selected theme.
     """
+
+    permission_classes = (AllowAny,)
 
     def post(self, request: Request, *args, **kwargs) -> Response:
         if not isinstance(request.data, dict):

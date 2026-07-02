@@ -232,7 +232,6 @@ class Evaluation:
     def calc_performance(self, results: dict[str, Counts]) -> dict[str, Performance]:
         """Calc precision, recall and f1 for each label."""
         performance = {}
-        print("results: ", results)
         for label, result in results.items():
             precision, recall, f1 = self.get_precision_recall_f1(result)
             performance[label] = {

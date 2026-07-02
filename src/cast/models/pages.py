@@ -384,9 +384,6 @@ class Post(Page):
         """
         return type(self)._meta.app_label + "." + type(self).__name__  # FIXME butt ugly
 
-    def get_url(self, request=None, current_site=None):
-        return super().get_url(request=request, current_site=current_site)
-
     def get_full_url(self, request=None):
         if hasattr(self, "page_url"):
             return self.page_url
