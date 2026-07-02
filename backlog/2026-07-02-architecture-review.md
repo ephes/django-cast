@@ -78,13 +78,22 @@ Fix note (partial, 2026-07-02): `Video.save` now wraps poster generation in `tra
 and `Post.save` gained `sync_media`/`create_renditions` opt-out kwargs (defaults unchanged). Moving the derivation
 work to services/async remains open (phase 2).
 
-### H3. `Transcript` is a 1575-line model containing file-format parsers
+### H3. `Transcript` is a 1575-line model containing file-format parsers — Fixed (2026-07-02)
 
 `src/cast/models/transcript.py` mixes the ORM model with WebVTT/Podlove/DOTe read-rewrite logic, speaker-sample
 selection, known-speaker suggestion application, and fingerprinting (transcript.py:390-1474). Three formats' quirks
 live as private methods on a Django model, and none of it runs without a `Transcript` row. Direction: extract
 per-format handlers and a speaker-mapping service; leave `Transcript` as fields plus thin delegation. Its
 `save()` → `sync_speaker_mappings()` (transcript.py:218-222) shares the H2 concern.
+
+Fix note: new `cast.transcripts` domain package. Django-free format/parsing modules (`parsing`, `webvtt`,
+`podlove`, `dote`, `known_speakers`, `speaker_samples`, `voice_references`) hold each format's quirks and run
+without a `Transcript` row; `transcripts/services.py` holds the speaker-mapping/known-speaker orchestration
+(no runtime `cast.models` import, so the model→services dependency stays acyclic). `Transcript` keeps its
+fields, file-IO primitives, and one-line delegates with unchanged public signatures; public module names
+(`time_to_seconds`, `convert_dote_to_podcastindex_transcript`, `KNOWN_SPEAKER_*`, the dataclasses) remain
+importable from `cast.models.transcript`. The `save()`→`sync_speaker_mappings()` coupling itself is unchanged
+(H2 territory). Plan: `docs/superpowers/plans/2026-07-02-transcript-domain-extraction.md`.
 
 ### H4. Triplicated admin media views for audio/video/transcript — Fixed (2026-07-02)
 
@@ -222,12 +231,18 @@ can issue per-row queries. Zero-query invariants are asserted for the podcast fe
 path. Direction: prefetch for the episode subset of mixed querysets, or compute `has_audio` from prefetched data;
 add a query-count assertion for the mixed path.
 
-### M9. `transcript.edit` is a 150-line POST dispatcher with inline business logic
+### M9. `transcript.edit` is a 150-line POST dispatcher with inline business logic — Fixed (2026-07-02)
 
 `views/transcript.py:467-616` branches on `request.POST.get("action")` across five modes, re-instantiating forms and
 duplicating the messages+redirect tail; voice-reference/known-speaker orchestration lives in the view module.
 `_episode_from_latest_revision` is duplicated identically in views/transcript.py:226 and views/voxhelm.py:86-87.
 Direction: dispatch via an action→handler map and move orchestration behind the model/service layer (pairs with H3).
+
+Fix note: `edit` now dispatches through an `EDIT_ACTION_HANDLERS` map (unknown/missing actions fall through to
+the plain transcript-form save handler, as before); each old branch became a handler with identical messages,
+redirects, and form state. Editor orchestration (speaker-mapping context, voice-reference lookup/creation,
+`episode_from_latest_revision`) moved to `cast/transcripts/editing.py`; the duplicate
+`_episode_from_latest_revision` in `views/voxhelm.py` was deleted in favor of the single shared function.
 
 ### M10. Very large test modules and a monolithic conftest
 

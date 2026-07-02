@@ -63,3 +63,15 @@
   setting: it paginated with a hardcoded page size of 10 instead of
   ``CHOOSER_PAGINATION`` like every other chooser view (invisible under the
   default of 10, wrong for sites that override the setting).
+- Extract the transcript domain into a new ``cast.transcripts`` package: the
+  WebVTT/Podlove/DOTe rewrite logic, speaker-sample selection, voice-reference
+  derivation, and known-speaker handling now live in Django-free per-format
+  modules plus a service layer, and the ``Transcript`` model keeps its public
+  API as thin delegates. Public names such as ``time_to_seconds``,
+  ``convert_dote_to_podcastindex_transcript``, and the ``KNOWN_SPEAKER_*``
+  constants remain importable from ``cast.models.transcript``.
+- Refactor the transcript admin edit view to dispatch its POST actions through
+  a declarative action→handler map, and deduplicate the
+  ``episode_from_latest_revision`` helper that was copied between the
+  transcript and Voxhelm admin views. Messages, redirects, and form behavior
+  are unchanged.

@@ -85,14 +85,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     fixed on 2026-07-02 with a flat-query-count guard test.)
   - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
 
-- [ ] Transcript domain extraction (architecture review H3/M9)
-  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
-  - Scope: extract the WebVTT/Podlove/DOTe read-rewrite logic from the 1575-line `Transcript` model into per-format
-    handler modules, move speaker-mapping/known-speaker orchestration into a service, and replace the 150-line
-    `transcript.edit` POST action dispatcher with an action→handler map that calls that service.
-  - Done when: `Transcript` is fields plus thin delegation, each format's quirks live in one module with focused
-    tests, and the edit view dispatches declaratively.
-
 - [ ] Consolidate CAST_* settings resolution (architecture review M2, M12)
   - Related to: Documentation polish pass.
   - Scope: converge the five-plus settings mechanisms on the `appsettings.__getattr__` pattern (fold in the Voxhelm
