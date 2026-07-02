@@ -37,3 +37,16 @@
   license classifier and a duplicated classifier, check types against Python
   3.11 (the support floor), and remove the legacy mypy django-stubs plugin
   table.
+- Make ``Post.get_description`` side-effect free: the feed/social-card body
+  template is now passed as a rendering argument instead of being stored on
+  the instance, so a post or episode rendered after its description was
+  generated no longer leaks the ``post_body.html`` partial into the full page
+  render.
+- Wrap ``Video.save`` poster generation in a transaction like ``Audio.save``,
+  so a failed poster derivation no longer leaves a half-saved video row.
+- Add ``sync_media`` and ``create_renditions`` keyword arguments to
+  ``Post.save`` (both default ``True``) so bulk operations and migrations can
+  skip media-derivation side effects explicitly.
+- Move the ``HtmxHttpRequest`` typing class to ``cast.http_types``; it stays
+  importable from ``cast.views`` and ``cast.views.htmx_helpers`` for
+  backwards compatibility.

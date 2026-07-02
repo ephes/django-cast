@@ -74,6 +74,69 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
+- [ ] Model-layer decoupling (architecture review H1/H2/M1/M8)
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md), plan
+    [docs/superpowers/plans/2026-07-02-model-layer-decoupling-phase1.md](docs/superpowers/plans/2026-07-02-model-layer-decoupling-phase1.md)
+  - Status: phase 1 landed on 2026-07-02 — `HtmxHttpRequest` lives in `cast/http_types.py` (models no longer import
+    from views), `get_description` is side-effect free, `Video.save` is transactional, and `Post.save` has
+    `sync_media`/`create_renditions` opt-outs.
+  - Scope: phase 2 — extract description rendering and media derivation into presenter/service modules (and decide
+    on async), invert the remaining model→blocks/filters imports, fix the mixed blog-index snapshot N+1 with a
+    query-count test (M8).
+  - Done when: save-side effects are explicit service calls, description rendering lives outside the model, and the
+    mixed-queryset render path has a zero-/low-query assertion.
+
+- [ ] Transcript domain extraction (architecture review H3/M9)
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
+  - Scope: extract the WebVTT/Podlove/DOTe read-rewrite logic from the 1575-line `Transcript` model into per-format
+    handler modules, move speaker-mapping/known-speaker orchestration into a service, and replace the 150-line
+    `transcript.edit` POST action dispatcher with an action→handler map that calls that service.
+  - Done when: `Transcript` is fields plus thin delegation, each format's quirks live in one module with focused
+    tests, and the edit view dispatches declaratively.
+
+- [ ] Deduplicate media admin views (architecture review H4)
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
+  - Scope: extract a generic media viewset/factory parametrized by model, form, and template for the near-identical
+    audio/video/transcript index/add/edit/delete/chooser views; align the drifted chooser pagination (`per_page=10`
+    vs `CHOOSER_PAGINATION`).
+  - Done when: one shared implementation serves all three media types, the pagination drift is resolved, and the
+    chooser modal workflows keep passing their existing tests.
+
+- [ ] Consolidate CAST_* settings resolution (architecture review M2, M12)
+  - Related to: Documentation polish pass.
+  - Scope: converge the five-plus settings mechanisms on the `appsettings.__getattr__` pattern (fold in the Voxhelm
+    helper chain and the ~51 inline `getattr(settings, ...)` defaults; drop the app-ready global-settings mutation),
+    and document the twelve undocumented `CAST_*` settings in `docs/reference/settings.rst`.
+  - Done when: one accessor owns defaults, `check_cast_setting_types` derives from it instead of a parallel table,
+    and every user-facing setting is documented.
+
+- [ ] Voxhelm optional subpackage (architecture review M3)
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
+  - Scope: split `voxhelm.py` into a `voxhelm/` subpackage (client, service, task refs, settings), break the
+    models↔voxhelm circular imports, and evaluate a `[transcripts]`-style optional extra so `django-tasks` and the
+    Voxhelm admin wiring activate only when configured.
+  - Done when: the cycle is gone (no function-body imports papering it over), the subpackage boundaries match the
+    three concerns, and the optional-extra decision is recorded.
+
+- [ ] Legacy API consolidation (architecture review M4 remainder, M5)
+  - Related to: Consider stricter mypy annotation checks (feeds.py is the shared offender).
+  - Scope: freeze and document `api/views.py` as legacy, migrate still-used endpoints to the editor API conventions
+    (structured errors, explicit scopes/permissions, JSON responses from `VideoCreateView`), and dedupe `feeds.py`
+    (shared `item_description`/`item_link`/`write()`, typed XML handlers, `item_pubdate`/`item_guid` for the blog
+    feed).
+  - Done when: no endpoint relies on ad-hoc error shapes or bare-text responses, and `feeds.py` has one copy of the
+    shared logic with mypy-clean signatures.
+
+- [ ] Packaging and test-suite hygiene (architecture review M6/M7/M10/M11 remainder)
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
+  - Scope: move the test settings module (committed SECRET_KEY, `tests.urls` ROOT_URLCONF) out of the shipped
+    package and rename `dev_settings.py` to match its feature-flag role (M6); add an explicit type discriminator to
+    the repository cache serialization instead of key-sniffing in three places (M7); split the largest test modules
+    and the 906-line conftest into per-directory packages (M10); audit theme-/dev-only runtime dependencies and
+    factor the duplicated tox env deps into a base env (M11 remainder).
+  - Done when: `pip install django-cast` ships no test-only settings, cache deserialization branches on a stored
+    type field, and no test module exceeds ~1000 lines without a local conftest.
+
 - [ ] Editor API remote media import safety design
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)

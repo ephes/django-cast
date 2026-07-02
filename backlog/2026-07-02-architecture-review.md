@@ -58,6 +58,11 @@ unit-testable without a request/template stack, and mutating `_local_template_na
 footgun. Direction: move template-name resolution and description rendering into the view/feed layer or a presenter;
 keep the model to fields, persistence, and pure derivations.
 
+Fix note (partial, 2026-07-02): `get_description` is now side-effect free — the body template travels as a `serve`
+kwarg and the `_local_template_name` machinery is gone (it was a real bug: instances rendered after a description
+kept the feed partial). Full presenter extraction remains open (phase 2 of the model-layer decoupling backlog
+item).
+
 ### H2. `save()` overrides do expensive, surprising work on every write
 
 - `Post.save` runs `sync_media_ids()` and `create_missing_renditions_for_posts([self])` on every save
@@ -68,6 +73,10 @@ keep the model to fields, persistence, and pure derivations.
 Bulk operations, data migrations, fixtures, and tests all pay this cost or silently skip it, and a rendition failure
 can abort an editorial save. `Audio.save` wraps enrichment in `transaction.atomic` (good); Video and Post do not.
 Direction: move media derivation to signals/async tasks or explicit services; make probe/render steps opt-in.
+
+Fix note (partial, 2026-07-02): `Video.save` now wraps poster generation in `transaction.atomic` like `Audio.save`,
+and `Post.save` gained `sync_media`/`create_renditions` opt-out kwargs (defaults unchanged). Moving the derivation
+work to services/async remains open (phase 2).
 
 ### H3. `Transcript` is a 1575-line model containing file-format parsers
 
@@ -118,7 +127,7 @@ a future test repeating that pattern would reintroduce the bug.
 
 ## Medium severity
 
-### M1. Models depend on the presentation layer (inverted import direction)
+### M1. Models depend on the presentation layer (inverted import direction) — Partially fixed (2026-07-02)
 
 Module-level imports pull views/blocks/presentation into models: `from ..views import HtmxHttpRequest`
 (pages.py:49, index_pages.py:28), `from cast.blocks/player/follow_links import ...` (pages.py:39-45),
@@ -126,6 +135,9 @@ Module-level imports pull views/blocks/presentation into models: `from ..views i
 function-local imports scattered through `models/` and `models/repository/` (141 function-body imports repo-wide,
 clustered in `repository/serialization.py` and the models↔voxhelm cycle). Direction: move `HtmxHttpRequest` to a
 neutral module; let presentation import models, not the reverse.
+
+Fix note (2026-07-02): `HtmxHttpRequest` moved to `cast/http_types.py` (re-exported from `cast.views` for
+compatibility); no `views` imports remain in `src/cast/models/`. The blocks/filters import inversion remains open.
 
 ### M2. Settings resolution fragmented across five or six mechanisms
 
