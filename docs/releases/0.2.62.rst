@@ -10,3 +10,6 @@
 - Allow editor API post and episode draft ``PATCH`` requests to send the
   optimistic concurrency token as a strict ``If-Match: "<revision id>"`` header
   instead of JSON ``base_revision_id``.
+- Avoid deep-copying Podlove and DOTe transcript JSON during public speaker
+  sanitization when all speaker labels are already public or when the transcript
+  contains no speaker metadata.

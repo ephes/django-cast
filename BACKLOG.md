@@ -101,12 +101,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the `embed` value/validation contract is specified, the converter accepts and round-trips it, and tests
     cover valid/invalid embed URLs and provider behavior.
 
-- [ ] Optimize public transcript speaker sanitization copies
-  - Scope: avoid deep-copying large transcript structures on public player/transcript requests when all speaker
-    labels are already public or when no speaker metadata is present.
-  - Done when: Podlove and DOTe sanitizers preserve current output, keep stored files untouched, and skip copying
-    for no-op requests with focused tests.
-
 - [ ] Default theme design improvements
   - Scope: improve the built-in theme design while keeping theme contracts stable for existing sites.
   - Done when: the default theme feels more polished, remains accessible, and existing theme overrides keep working.
