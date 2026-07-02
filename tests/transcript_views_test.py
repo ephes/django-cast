@@ -16,6 +16,7 @@ from cast.devdata import create_transcript
 from cast.views import transcript as transcript_views
 from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
 from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptSpeakerMapping
+from cast.transcripts import parsing, speaker_samples, webvtt
 from cast.views.transcript import (
     _resolve_transcript_template,
     get_speaker_mapping_context,
@@ -386,7 +387,7 @@ class TestTranscriptSpeakerMapping:
         mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
         mapping.source_artifact_fingerprint = transcript.transcript_artifact_fingerprint()
         mapping.save(update_fields=["source_artifact_fingerprint"])
-        mocker.patch("cast.models.transcript.timezone.now", return_value=mapping.last_seen)
+        mocker.patch("cast.transcripts.services.timezone.now", return_value=mapping.last_seen)
 
         transcript.sync_speaker_mappings()
 
@@ -411,7 +412,7 @@ class TestTranscriptSpeakerMapping:
             "<v.loud Speaker 1>Classed voice label</v>\n"
         )
 
-        assert Transcript._get_webvtt_speaker_labels(content) == {"Speaker 1"}
+        assert webvtt.get_speaker_labels(content) == {"Speaker 1"}
 
     def test_speaker_mapping_sync_marks_approved_row_with_deleted_contributor_stale(self, audio):
         contributor = Contributor.objects.create(display_name="Deleted Alice", slug="deleted-alice")
@@ -534,6 +535,8 @@ class TestTranscriptSpeakerMapping:
         assert not samples["Voice 1"][0].has_start_time
         assert transcript.get_speaker_samples(limit=1)["Speaker 1"][0].timestamp_label == "00:10"
         assert transcript.get_speaker_samples(limit=0) == {}
+        # The pure module API keeps its own guard even though the service guards first.
+        assert speaker_samples.get_speaker_samples({}, {}, limit=0) == {}
 
     def test_get_speaker_samples_uses_dote_fallback_and_low_signal_fallback(self, audio):
         low_signal_text = "ja ja ja ja ja ja ja ja ja ja ja ja ja ja ja ja"
@@ -573,32 +576,32 @@ class TestTranscriptSpeakerMapping:
         assert samples["Hour Speaker"][0].timestamp_label == "01:02:03"
 
     def test_speaker_sample_helpers_handle_edge_cases(self):
-        assert Transcript._parse_timestamp_seconds(True) is None
-        assert Transcript._parse_timestamp_seconds(None) is None
-        assert Transcript._parse_timestamp_seconds("") is None
-        assert Transcript._parse_timestamp_seconds("not a timestamp") is None
-        assert Transcript._parse_timestamp_seconds("00:00:not-a-number") is None
-        assert Transcript._parse_timestamp_seconds("00:00:00:00") is None
-        assert Transcript._parse_timestamp_seconds(-1) is None
-        assert Transcript._parse_timestamp_seconds("-1") is None
-        assert Transcript._parse_timestamp_seconds("65.5") == 65.5
-        assert Transcript._parse_timestamp_seconds("01:02") == 62
+        assert parsing.parse_timestamp_seconds(True) is None
+        assert parsing.parse_timestamp_seconds(None) is None
+        assert parsing.parse_timestamp_seconds("") is None
+        assert parsing.parse_timestamp_seconds("not a timestamp") is None
+        assert parsing.parse_timestamp_seconds("00:00:not-a-number") is None
+        assert parsing.parse_timestamp_seconds("00:00:00:00") is None
+        assert parsing.parse_timestamp_seconds(-1) is None
+        assert parsing.parse_timestamp_seconds("-1") is None
+        assert parsing.parse_timestamp_seconds("65.5") == 65.5
+        assert parsing.parse_timestamp_seconds("01:02") == 62
         assert (
-            Transcript._parse_record_start_seconds(
+            parsing.parse_record_start_seconds(
                 {"start_ms": False, "start": "00:00:02"},
                 timestamp_fields=("start",),
             )
             == 2
         )
-        assert Transcript._parse_record_start_seconds({"start_ms": -1}, timestamp_fields=("start",)) is None
-        assert Transcript._format_sample_timestamp(None) == ""
+        assert parsing.parse_record_start_seconds({"start_ms": -1}, timestamp_fields=("start",)) is None
+        assert parsing.format_sample_timestamp(None) == ""
 
-        assert Transcript._clean_sample_text(5) == ""
-        assert not Transcript._sample_text_is_useful("short", min_chars=10, min_words=1)
-        assert not Transcript._sample_text_is_useful("one two three", min_chars=1, min_words=4)
-        assert not Transcript._sample_text_is_useful("okay", min_chars=1, min_words=1)
-        assert not Transcript._sample_text_is_useful("mhm mhm mhm mhm", min_chars=1, min_words=4)
-        assert Transcript._sample_text_is_useful("你好 你好 你好 你好", min_chars=1, min_words=4)
+        assert parsing.clean_sample_text(5) == ""
+        assert not parsing.sample_text_is_useful("short", min_chars=10, min_words=1)
+        assert not parsing.sample_text_is_useful("one two three", min_chars=1, min_words=4)
+        assert not parsing.sample_text_is_useful("okay", min_chars=1, min_words=1)
+        assert not parsing.sample_text_is_useful("mhm mhm mhm mhm", min_chars=1, min_words=4)
+        assert parsing.sample_text_is_useful("你好 你好 你好 你好", min_chars=1, min_words=4)
 
     def test_rewrite_speaker_labels_updates_podlove_dote_and_vtt_voice_labels(self, audio):
         vtt = (

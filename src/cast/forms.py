@@ -34,7 +34,8 @@ from .models import (
     get_template_base_dir_choices,
 )
 from .models.contributors import ContributorVoiceReference
-from .models.transcript import (
+from .transcripts import known_speakers, parsing
+from .transcripts.known_speakers import (
     KNOWN_SPEAKER_DECISION_APPROVE,
     KNOWN_SPEAKER_DECISION_CORRECT,
     KNOWN_SPEAKER_DECISION_REJECT,
@@ -424,13 +425,13 @@ class SpeakerContributorMappingForm(forms.Form):
         cleaned_data = super().clean() or {}
         speaker_mapping = {}
         mapping_updates: dict[str, dict[str, Any]] = {}
-        raw_speaker_labels = {Transcript._clean_speaker_label(label) for label in self.speaker_labels}
+        raw_speaker_labels = {parsing.clean_speaker_label(label) for label in self.speaker_labels}
         display_field_by_label = {
             speaker_label: field_name for field_name, speaker_label in self.display_field_names.items()
         }
         for field_name, speaker_label in self.speaker_field_names.items():
             contributor_value = cleaned_data.get(field_name)
-            display_name = Transcript._clean_speaker_label(cleaned_data.get(display_field_by_label[speaker_label]))
+            display_name = parsing.clean_speaker_label(cleaned_data.get(display_field_by_label[speaker_label]))
             contributor = self.contributor_lookup.get(contributor_value) if contributor_value else None
             if contributor_value and contributor is None:
                 self.add_error(field_name, _("Select a valid contributor."))
@@ -549,9 +550,7 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
         for segment in segments:
             cls._append_name(names, segment.get("speaker"))
             cls._append_candidate_names(names, segment.get("candidates"))
-            decision = Transcript._normalize_known_speaker_editor_decision(
-                segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD)
-            )
+            decision = known_speakers.normalize_editor_decision(segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD))
             if decision is not None:
                 cls._append_name(names, decision["speaker"])
         for assignment in contributor_assignments:
@@ -573,7 +572,7 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
 
     @staticmethod
     def _append_name(names: list[str], value: object) -> None:
-        name = Transcript._clean_speaker_label(value)
+        name = parsing.clean_speaker_label(value)
         if name and name not in names:
             names.append(name)
 
@@ -582,9 +581,7 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
         return f"speaker:{name}"
 
     def _initial_value(self, segment: dict) -> str:
-        decision = Transcript._normalize_known_speaker_editor_decision(
-            segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD)
-        )
+        decision = known_speakers.normalize_editor_decision(segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD))
         if decision is None:
             return KNOWN_SPEAKER_REVIEW_BULK_VALUE
         if decision["action"] == KNOWN_SPEAKER_DECISION_REJECT:
@@ -602,7 +599,7 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
                 segment_decisions[position] = {"action": KNOWN_SPEAKER_DECISION_REJECT, "speaker": ""}
             else:
                 speaker = self.speaker_choice_lookup[value]
-                suggested_speaker = Transcript._clean_speaker_label(self.segments[position].get("speaker"))
+                suggested_speaker = parsing.clean_speaker_label(self.segments[position].get("speaker"))
                 action = (
                     KNOWN_SPEAKER_DECISION_APPROVE if speaker == suggested_speaker else KNOWN_SPEAKER_DECISION_CORRECT
                 )

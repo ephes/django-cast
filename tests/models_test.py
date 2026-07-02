@@ -25,11 +25,8 @@ from cast.models.pages import (
     Post,
 )
 from cast.models.repository import BlogIndexContext
-from cast.models.transcript import (
-    Transcript,
-    convert_dote_to_podcastindex_transcript,
-    time_to_seconds,
-)
+from cast.models.transcript import Transcript
+from cast.transcripts.dote import convert_dote_to_podcastindex_transcript, time_to_seconds
 from cast.models.video import Video
 from tests.factories import EpisodeFactory, PodcastFactory
 

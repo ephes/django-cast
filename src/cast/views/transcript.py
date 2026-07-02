@@ -1,4 +1,6 @@
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 
 from django.core.exceptions import ValidationError
@@ -27,7 +29,6 @@ from ..models import (
     Blog,
     Contributor,
     Episode,
-    EpisodeContributor,
     Post,
     Transcript,
     TranscriptSpeakerMapping,
@@ -37,8 +38,9 @@ from ..models import (
 )
 from ..audio_access import authorize_transcript_access, request_may_view_page
 from ..models.contributors import ContributorVoiceReference
-from ..models.transcript import _dote_timestamp_to_ms, convert_dote_to_podcastindex_transcript
 from ..site_lookup import get_site_specific_page_or_404
+from ..transcripts import editing, parsing
+from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
 from ..transcript_sanitization import (
     apply_public_speaker_mapping_to_dote_data,
     apply_public_speaker_mapping_to_podlove_data,
@@ -56,13 +58,11 @@ from .media import MediaAdminConfig, MediaAdminViews
 TRANSCRIPT_FALLBACK_THEME = "plain"
 transcript_permission_policy = CollectionPermissionPolicy(Transcript)
 
-
-class SpeakerMappingContext(TypedDict):
-    contributor_assignments: list[EpisodeContributor]
-    multiple_episodes: bool
-    speaker_mappings: list[TranscriptSpeakerMapping]
-    speaker_labels: list[str]
-    source_episode: Episode | None
+create_voice_reference_from_candidate = editing.create_voice_reference_from_candidate
+get_speaker_mapping_context = editing.get_speaker_mapping_context
+get_voice_reference_candidate = editing.get_voice_reference_candidate
+resolve_voice_reference_contributor = editing.resolve_voice_reference_contributor
+validation_error_message = editing.validation_error_message
 
 
 class SpeakerMappingRow(TypedDict):
@@ -150,32 +150,6 @@ def _transcript_message_arg(transcript: Transcript) -> Any:
     return transcript.pk
 
 
-def _episode_from_latest_revision(episode: Episode) -> Episode:
-    return cast(Episode, episode.get_latest_revision_as_object())
-
-
-def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext:
-    transcript.sync_speaker_mappings()
-    episodes = [
-        _episode_from_latest_revision(episode)
-        for episode in transcript.audio.episodes.select_related("latest_revision")
-        .prefetch_related("contributor_assignments__contributor")
-        .all()
-    ]
-    contributor_assignments: list[EpisodeContributor] = []
-    for episode in episodes:
-        contributor_assignments.extend(episode.visible_contributor_assignments)
-    speaker_mappings = list(transcript.speaker_mappings.select_related("contributor").all())
-    speaker_labels = [mapping.speaker_label for mapping in speaker_mappings if mapping.active]
-    return {
-        "contributor_assignments": contributor_assignments,
-        "multiple_episodes": len(episodes) > 1,
-        "speaker_mappings": speaker_mappings,
-        "speaker_labels": speaker_labels,
-        "source_episode": episodes[0] if len(episodes) == 1 else None,
-    }
-
-
 def get_speaker_mapping_rows(
     speaker_mapping_form: SpeakerContributorMappingForm,
     speaker_samples: dict[str, list[TranscriptSpeakerSample]],
@@ -200,7 +174,7 @@ def get_known_speaker_text_by_start_ms(transcript: Transcript) -> dict[int, str]
             if not isinstance(segment, dict):
                 continue
             start_ms = segment.get("start_ms")
-            text = Transcript._clean_sample_text(segment.get("text"))
+            text = parsing.clean_sample_text(segment.get("text"))
             if isinstance(start_ms, int) and text:
                 texts.setdefault(start_ms, text)
     dote_lines = transcript.dote_data.get("lines", [])
@@ -208,8 +182,8 @@ def get_known_speaker_text_by_start_ms(transcript: Transcript) -> dict[int, str]
         for line in dote_lines:
             if not isinstance(line, dict):
                 continue
-            start_ms = _dote_timestamp_to_ms(line.get("startTime"))
-            text = Transcript._clean_sample_text(line.get("text"))
+            start_ms = dote_timestamp_to_ms(line.get("startTime"))
+            text = parsing.clean_sample_text(line.get("text"))
             if start_ms is not None and text:
                 texts.setdefault(start_ms, text)
     return texts
@@ -223,9 +197,9 @@ def get_known_speaker_review_rows(
     rows: list[KnownSpeakerReviewRow] = []
     for field_name, position in known_speaker_review_form.segment_field_names.items():
         segment = known_speaker_review_form.segments[position]
-        start_seconds = Transcript._parse_timestamp_seconds(segment.get("start"))
+        start_seconds = parsing.parse_timestamp_seconds(segment.get("start"))
         start_ms = int(round(start_seconds * 1000)) if start_seconds is not None else None
-        text = Transcript._clean_sample_text(segment.get("text"))
+        text = parsing.clean_sample_text(segment.get("text"))
         if not text and start_ms is not None:
             text = text_by_start_ms.get(start_ms, "")
         rows.append(
@@ -233,50 +207,18 @@ def get_known_speaker_review_rows(
                 "confidence": segment.get("confidence"),
                 "field": known_speaker_review_form[field_name],
                 "margin": segment.get("margin"),
-                "speaker": Transcript._clean_speaker_label(segment.get("speaker")),
-                "text": Transcript._truncate_sample_text(text, max_chars=140) if text else "",
-                "timestamp_label": Transcript._format_sample_timestamp(start_seconds),
+                "speaker": parsing.clean_speaker_label(segment.get("speaker")),
+                "text": parsing.truncate_sample_text(text, max_chars=140) if text else "",
+                "timestamp_label": parsing.format_sample_timestamp(start_seconds),
                 "uncertain": bool(segment.get("speaker_uncertain") or segment.get("low_margin")),
             }
         )
     return rows
 
 
-def resolve_voice_reference_contributor(
-    speaker_label: str,
-    contributor_assignments: list[EpisodeContributor],
-) -> Contributor | None:
-    contributors: dict[int, Contributor] = {}
-    for assignment in contributor_assignments:
-        if assignment.display_name != speaker_label or assignment.contributor_id is None:
-            continue
-        contributors[assignment.contributor_id] = assignment.contributor
-    if len(contributors) == 1:
-        return next(iter(contributors.values()))
-    return None
-
-
-def get_duplicate_voice_reference(
-    *,
-    transcript: Transcript,
-    contributor: Contributor,
-    candidate: TranscriptVoiceReferenceCandidate,
-) -> ContributorVoiceReference | None:
-    return (
-        ContributorVoiceReference.objects.filter(
-            contributor=contributor,
-            source_audio=transcript.audio,
-            start_seconds=candidate.start_seconds,
-            end_seconds=candidate.end_seconds,
-        )
-        .order_by("pk")
-        .first()
-    )
-
-
 def get_voice_reference_candidate_groups(
     transcript: Transcript,
-    speaker_mapping_context: SpeakerMappingContext,
+    speaker_mapping_context: editing.SpeakerMappingContext,
 ) -> list[VoiceReferenceCandidateGroup]:
     groups: dict[str, VoiceReferenceCandidateGroup] = {}
     candidates = transcript.get_voice_reference_candidates()
@@ -297,7 +239,7 @@ def get_voice_reference_candidate_groups(
             },
         )
         duplicate_reference = (
-            get_duplicate_voice_reference(transcript=transcript, contributor=contributor, candidate=candidate)
+            editing.get_duplicate_voice_reference(transcript=transcript, contributor=contributor, candidate=candidate)
             if contributor is not None
             else None
         )
@@ -310,61 +252,6 @@ def get_voice_reference_candidate_groups(
             }
         )
     return list(groups.values())
-
-
-def get_voice_reference_candidate(
-    transcript: Transcript,
-    *,
-    speaker_label: str,
-    candidate_rank: int,
-) -> TranscriptVoiceReferenceCandidate | None:
-    for candidate in transcript.get_voice_reference_candidates():
-        if candidate.speaker_label == speaker_label and candidate.rank == candidate_rank:
-            return candidate
-    return None
-
-
-def create_voice_reference_from_candidate(
-    transcript: Transcript,
-    speaker_mapping_context: SpeakerMappingContext,
-    candidate: TranscriptVoiceReferenceCandidate,
-    *,
-    status: str,
-    consent_confirmed: bool,
-) -> tuple[ContributorVoiceReference, bool]:
-    contributor = resolve_voice_reference_contributor(
-        candidate.speaker_label,
-        speaker_mapping_context["contributor_assignments"],
-    )
-    if contributor is None:
-        raise ValidationError(
-            _("Map this speaker label to one episode contributor before creating a voice reference.")
-        )
-    duplicate_reference = get_duplicate_voice_reference(
-        transcript=transcript,
-        contributor=contributor,
-        candidate=candidate,
-    )
-    if duplicate_reference is not None:
-        return duplicate_reference, False
-    reference = ContributorVoiceReference(
-        contributor=contributor,
-        source_audio=transcript.audio,
-        source_episode=speaker_mapping_context["source_episode"],
-        start_seconds=candidate.start_seconds,
-        end_seconds=candidate.end_seconds,
-        status=status,
-        consent_confirmed=consent_confirmed,
-        notes=_("Created from transcript %(transcript_id)s, speaker label '%(speaker_label)s'.")
-        % {"transcript_id": transcript.pk, "speaker_label": candidate.speaker_label},
-    )
-    reference.full_clean()
-    reference.save()
-    return reference, True
-
-
-def validation_error_message(error: ValidationError) -> str:
-    return " ".join(error.messages)
 
 
 def get_transcript_audio_sources(transcript: Transcript) -> list[AudioSource]:
@@ -391,123 +278,187 @@ def get_transcript_audio_sources(transcript: Transcript) -> list[AudioSource]:
     return sources
 
 
+@dataclass
+class EditFormState:
+    form: TranscriptForm
+    speaker_mapping_form: SpeakerContributorMappingForm
+    known_speaker_review_form: KnownSpeakerSegmentReviewForm | None = None
+
+
+EditActionHandler = Callable[[HttpRequest, Transcript, editing.SpeakerMappingContext], HttpResponse | EditFormState]
+
+
+def _handle_known_speaker_apply(
+    request: HttpRequest,
+    transcript: Transcript,
+    speaker_mapping_context: editing.SpeakerMappingContext,
+) -> HttpResponse | EditFormState:
+    applied = transcript.apply_known_speaker_suggestions()
+    if applied:
+        messages.success(
+            request,
+            _("Applied known-speaker names to {0} public transcript entries.").format(applied),
+        )
+    else:
+        messages.warning(request, _("No confident known-speaker suggestions were available to apply."))
+    return redirect("cast-transcript:edit", transcript_id=transcript.id)
+
+
+def _handle_known_speaker_review(
+    request: HttpRequest,
+    transcript: Transcript,
+    speaker_mapping_context: editing.SpeakerMappingContext,
+) -> HttpResponse | EditFormState:
+    form = TranscriptForm(instance=transcript, user=request.user)
+    speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+    known_speaker_review_form = KnownSpeakerSegmentReviewForm(
+        request.POST,
+        segments=transcript.get_speaker_suggestions(),
+        contributor_assignments=speaker_mapping_context["contributor_assignments"],
+        multiple_episodes=speaker_mapping_context["multiple_episodes"],
+    )
+    if known_speaker_review_form.is_valid():
+        changed = transcript.save_known_speaker_editor_decisions(known_speaker_review_form.segment_decisions)
+        applied = transcript.apply_known_speaker_suggestions(smooth=False)
+        if changed or applied:
+            messages.success(
+                request,
+                _("Saved known-speaker segment decisions and applied {0} public transcript entries.").format(applied),
+            )
+        else:
+            messages.warning(request, _("No known-speaker segment decisions were changed."))
+        return redirect("cast-transcript:edit", transcript_id=transcript.id)
+    messages.error(request, _("The known-speaker segment decisions could not be saved due to errors."))
+    return EditFormState(
+        form=form,
+        speaker_mapping_form=speaker_mapping_form,
+        known_speaker_review_form=known_speaker_review_form,
+    )
+
+
+def _handle_voice_reference_create(
+    request: HttpRequest,
+    transcript: Transcript,
+    speaker_mapping_context: editing.SpeakerMappingContext,
+) -> HttpResponse | EditFormState:
+    form = TranscriptForm(instance=transcript, user=request.user)
+    speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+    voice_reference_form = VoiceReferenceCandidateCreateForm(request.POST)
+    if voice_reference_form.is_valid():
+        candidate = get_voice_reference_candidate(
+            transcript,
+            speaker_label=voice_reference_form.cleaned_data["speaker_label"],
+            candidate_rank=voice_reference_form.cleaned_data["candidate_rank"],
+        )
+        if candidate is None:
+            messages.error(request, _("The selected voice-reference candidate is no longer available."))
+        else:
+            try:
+                reference, created = create_voice_reference_from_candidate(
+                    transcript,
+                    speaker_mapping_context,
+                    candidate,
+                    status=voice_reference_form.cleaned_data["voice_reference_status"],
+                    consent_confirmed=voice_reference_form.cleaned_data["consent_confirmed"],
+                )
+            except ValidationError as error:
+                messages.error(request, validation_error_message(error))
+            else:
+                if created:
+                    if reference.status == ContributorVoiceReference.Status.APPROVED:
+                        messages.success(
+                            request,
+                            _("Created approved voice reference for {0}.").format(reference.contributor),
+                        )
+                    else:
+                        messages.success(
+                            request,
+                            _("Saved pending voice reference for {0}.").format(reference.contributor),
+                        )
+                else:
+                    messages.warning(
+                        request,
+                        _("A voice reference for {0} already exists for this source range.").format(
+                            reference.contributor
+                        ),
+                    )
+                return redirect("cast-transcript:edit", transcript_id=transcript.id)
+    else:
+        messages.error(request, _("The voice reference could not be created due to errors."))
+    return EditFormState(form=form, speaker_mapping_form=speaker_mapping_form)
+
+
+def _handle_speaker_mapping_save(
+    request: HttpRequest,
+    transcript: Transcript,
+    speaker_mapping_context: editing.SpeakerMappingContext,
+) -> HttpResponse | EditFormState:
+    form = TranscriptForm(instance=transcript, user=request.user)
+    speaker_mapping_form = SpeakerContributorMappingForm(request.POST, **speaker_mapping_context)
+    if speaker_mapping_form.is_valid():
+        if speaker_mapping_form.save():
+            messages.success(request, _("Speaker mappings saved."))
+        else:
+            messages.warning(request, _("No speaker mappings were changed."))
+        return redirect("cast-transcript:edit", transcript_id=transcript.id)
+    messages.error(request, _("The speaker labels could not be updated due to errors."))
+    return EditFormState(form=form, speaker_mapping_form=speaker_mapping_form)
+
+
+def _handle_transcript_form_save(
+    request: HttpRequest,
+    transcript: Transcript,
+    speaker_mapping_context: editing.SpeakerMappingContext,
+) -> HttpResponse | EditFormState:
+    speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+    form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
+    if form.is_valid():
+        transcript = form.save()
+
+        # Reindex the media entry to make sure all tags are indexed
+        for backend in get_search_backends():
+            backend.add(transcript)
+
+        messages.success(
+            request,
+            _("Transcript file '{0}' updated").format(transcript.pk),
+            buttons=[messages.button(reverse("cast-transcript:edit", args=(transcript.id,)), _("Edit"))],
+        )
+        return redirect("cast-transcript:index")
+    else:
+        messages.error(request, _("The transcript could not be saved due to errors."))
+    return EditFormState(form=form, speaker_mapping_form=speaker_mapping_form)
+
+
+EDIT_ACTION_HANDLERS: dict[str, EditActionHandler] = {
+    KNOWN_SPEAKER_APPLY_ACTION: _handle_known_speaker_apply,
+    KNOWN_SPEAKER_REVIEW_ACTION: _handle_known_speaker_review,
+    VOICE_REFERENCE_CREATE_ACTION: _handle_voice_reference_create,
+    SPEAKER_MAPPING_ACTION: _handle_speaker_mapping_save,
+}
+
+
 def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     transcript = get_object_or_404(
         transcript_permission_policy.instances_user_has_permission_for(request.user, "change"),
         id=transcript_id,
     )
-    speaker_mapping_context = get_speaker_mapping_context(transcript)
-    known_speaker_review_form: KnownSpeakerSegmentReviewForm | None = None
+    speaker_mapping_context = editing.get_speaker_mapping_context(transcript)
 
-    if request.method == "POST" and request.POST.get("action") == KNOWN_SPEAKER_APPLY_ACTION:
-        applied = transcript.apply_known_speaker_suggestions()
-        if applied:
-            messages.success(
-                request,
-                _("Applied known-speaker names to {0} public transcript entries.").format(applied),
-            )
-        else:
-            messages.warning(request, _("No confident known-speaker suggestions were available to apply."))
-        return redirect("cast-transcript:edit", transcript_id=transcript.id)
-    elif request.method == "POST" and request.POST.get("action") == KNOWN_SPEAKER_REVIEW_ACTION:
-        form = TranscriptForm(instance=transcript, user=request.user)
-        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
-        known_speaker_review_form = KnownSpeakerSegmentReviewForm(
-            request.POST,
-            segments=transcript.get_speaker_suggestions(),
-            contributor_assignments=speaker_mapping_context["contributor_assignments"],
-            multiple_episodes=speaker_mapping_context["multiple_episodes"],
-        )
-        if known_speaker_review_form.is_valid():
-            changed = transcript.save_known_speaker_editor_decisions(known_speaker_review_form.segment_decisions)
-            applied = transcript.apply_known_speaker_suggestions(smooth=False)
-            if changed or applied:
-                messages.success(
-                    request,
-                    _("Saved known-speaker segment decisions and applied {0} public transcript entries.").format(
-                        applied
-                    ),
-                )
-            else:
-                messages.warning(request, _("No known-speaker segment decisions were changed."))
-            return redirect("cast-transcript:edit", transcript_id=transcript.id)
-        messages.error(request, _("The known-speaker segment decisions could not be saved due to errors."))
-    elif request.method == "POST" and request.POST.get("action") == VOICE_REFERENCE_CREATE_ACTION:
-        form = TranscriptForm(instance=transcript, user=request.user)
-        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
-        voice_reference_form = VoiceReferenceCandidateCreateForm(request.POST)
-        if voice_reference_form.is_valid():
-            candidate = get_voice_reference_candidate(
-                transcript,
-                speaker_label=voice_reference_form.cleaned_data["speaker_label"],
-                candidate_rank=voice_reference_form.cleaned_data["candidate_rank"],
-            )
-            if candidate is None:
-                messages.error(request, _("The selected voice-reference candidate is no longer available."))
-            else:
-                try:
-                    reference, created = create_voice_reference_from_candidate(
-                        transcript,
-                        speaker_mapping_context,
-                        candidate,
-                        status=voice_reference_form.cleaned_data["voice_reference_status"],
-                        consent_confirmed=voice_reference_form.cleaned_data["consent_confirmed"],
-                    )
-                except ValidationError as error:
-                    messages.error(request, validation_error_message(error))
-                else:
-                    if created:
-                        if reference.status == ContributorVoiceReference.Status.APPROVED:
-                            messages.success(
-                                request,
-                                _("Created approved voice reference for {0}.").format(reference.contributor),
-                            )
-                        else:
-                            messages.success(
-                                request,
-                                _("Saved pending voice reference for {0}.").format(reference.contributor),
-                            )
-                    else:
-                        messages.warning(
-                            request,
-                            _("A voice reference for {0} already exists for this source range.").format(
-                                reference.contributor
-                            ),
-                        )
-                    return redirect("cast-transcript:edit", transcript_id=transcript.id)
-        else:
-            messages.error(request, _("The voice reference could not be created due to errors."))
-    elif request.method == "POST" and request.POST.get("action") == SPEAKER_MAPPING_ACTION:
-        form = TranscriptForm(instance=transcript, user=request.user)
-        speaker_mapping_form = SpeakerContributorMappingForm(request.POST, **speaker_mapping_context)
-        if speaker_mapping_form.is_valid():
-            if speaker_mapping_form.save():
-                messages.success(request, _("Speaker mappings saved."))
-            else:
-                messages.warning(request, _("No speaker mappings were changed."))
-            return redirect("cast-transcript:edit", transcript_id=transcript.id)
-        messages.error(request, _("The speaker labels could not be updated due to errors."))
-    elif request.method == "POST":
-        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
-        form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
-        if form.is_valid():
-            transcript = form.save()
-
-            # Reindex the media entry to make sure all tags are indexed
-            for backend in get_search_backends():
-                backend.add(transcript)
-
-            messages.success(
-                request,
-                _("Transcript file '{0}' updated").format(transcript.pk),
-                buttons=[messages.button(reverse("cast-transcript:edit", args=(transcript.id,)), _("Edit"))],
-            )
-            return redirect("cast-transcript:index")
-        else:
-            messages.error(request, _("The transcript could not be saved due to errors."))
+    if request.method == "POST":
+        handler = EDIT_ACTION_HANDLERS.get(cast(str, request.POST.get("action")), _handle_transcript_form_save)
+        result = handler(request, transcript, speaker_mapping_context)
+        if isinstance(result, HttpResponse):
+            return result
+        form_state = result
     else:
-        form = TranscriptForm(instance=transcript, user=request.user)
-        speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+        form_state = EditFormState(
+            form=TranscriptForm(instance=transcript, user=request.user),
+            speaker_mapping_form=SpeakerContributorMappingForm(**speaker_mapping_context),
+        )
+    form = form_state.form
+    speaker_mapping_form = form_state.speaker_mapping_form
+    known_speaker_review_form = form_state.known_speaker_review_form
     if known_speaker_review_form is None:
         known_speaker_review_form = KnownSpeakerSegmentReviewForm(
             segments=transcript.get_speaker_suggestions(),

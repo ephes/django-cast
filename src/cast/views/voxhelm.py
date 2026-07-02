@@ -8,13 +8,13 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_POST
-from typing import cast
 from wagtail.admin import messages
 from wagtail.models import Site
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ..models import Audio, Episode
 from ..models.transcript_generation import TranscriptGeneration
+from ..transcripts.editing import episode_from_latest_revision
 from ..voxhelm import (
     VoxhelmError,
     enqueue_audio_transcript_generation,
@@ -83,10 +83,6 @@ def _add_generation_error_message(request: HttpRequest, exc: VoxhelmError) -> No
     messages.error(request, _("Transcript generation failed: %(message)s") % {"message": exc})
 
 
-def _episode_from_latest_revision(episode: Episode) -> Episode:
-    return cast(Episode, episode.get_latest_revision_as_object())
-
-
 @login_required
 @require_POST
 def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpResponse:
@@ -94,7 +90,7 @@ def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpRe
     redirect_url = _get_redirect_url(request, reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
     if episode.permissions_for_user(request.user).can_edit() is False:
         raise PermissionDenied
-    draft_episode = _episode_from_latest_revision(episode)
+    draft_episode = episode_from_latest_revision(episode)
     audio = draft_episode.podcast_audio
     if not isinstance(audio, Audio) or not user_can_generate_transcript_for_audio(request=request, audio=audio):
         raise PermissionDenied
