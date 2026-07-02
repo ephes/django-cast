@@ -1,7 +1,7 @@
 import json
 from typing import Any, TypedDict, cast
 
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -9,18 +9,14 @@ from django.template import TemplateDoesNotExist
 from django.template.loader import get_template
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.vary import vary_on_headers
 from wagtail.admin import messages
-from wagtail.admin.modal_workflow import render_modal_workflow
 from wagtail.permission_policies.collections import CollectionPermissionPolicy
 from wagtail.search.backends import get_search_backends
 
-from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import (
     KNOWN_SPEAKER_APPLY_ACTION,
     KNOWN_SPEAKER_REVIEW_ACTION,
     KnownSpeakerSegmentReviewForm,
-    NonEmptySearchForm,
     SpeakerContributorMappingForm,
     SPEAKER_MAPPING_ACTION,
     TranscriptForm,
@@ -54,7 +50,7 @@ from ..transcript_sanitization import (
     strict_public_speaker_labels_for_transcript,
 )
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
-from .wagtail_pagination import paginate, pagination_template
+from .media import MediaAdminConfig, MediaAdminViews
 
 
 TRANSCRIPT_FALLBACK_THEME = "plain"
@@ -142,85 +138,16 @@ def _render_transcript_html(
     return render(request, template_name, context)
 
 
-@vary_on_headers("X-Requested-With")
-def index(request: HttpRequest) -> HttpResponse:
-    user_can_add = transcript_permission_policy.user_has_permission(request.user, "add")
-    transcripts = transcript_permission_policy.instances_user_has_any_permission_for(
-        request.user, ["change", "delete"]
-    )
-    if not user_can_add and not transcripts.exists():
-        raise PermissionDenied
-
-    # Search
-    query_string = None
-    if "q" in request.GET:
-        form = NonEmptySearchForm(request.GET, placeholder=_("Search transcript files"))
-        if form.is_valid():
-            query_string = form.cleaned_data["q"]
-            transcripts = transcripts.filter(audio__title__icontains=query_string)
-    else:
-        form = NonEmptySearchForm(placeholder=_("Search transcripts"))
-
-    # Pagination
-    paginator, transcript_items = paginate(request, transcripts, per_page=MENU_ITEM_PAGINATION)
-
-    # Create response
-    if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return render(
-            request,
-            "cast/transcript/results.html",
-            {
-                "transcripts": transcript_items,
-                "query_string": query_string,
-                "is_searching": bool(query_string),
-            },
-        )
-    else:
-        return render(
-            request,
-            "cast/transcript/index.html",
-            {
-                "transcripts": transcript_items,
-                "query_string": query_string,
-                "is_searching": bool(query_string),
-                "search_form": form,
-                "user_can_add": user_can_add,
-                "collections": None,
-                "current_collection": None,
-            },
-        )
+def _search_transcripts(base_transcripts: Any, raw_query_string: str) -> tuple[Any, str]:
+    return base_transcripts.filter(audio__title__icontains=raw_query_string), raw_query_string
 
 
-def add(request: AuthenticatedHttpRequest) -> HttpResponse:
-    if not transcript_permission_policy.user_has_permission(request.user, "add"):
-        raise PermissionDenied
-    if request.POST:
-        transcript = Transcript()
-        form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
-        if form.is_valid():
-            form.save()
+def _create_transcript(user: Any) -> Transcript:
+    return Transcript()
 
-            # Reindex the media entry to make sure all tags are indexed
-            for backend in get_search_backends():
-                backend.add(transcript)
 
-            messages.success(
-                request,
-                _("Transcript file '{0}' added.").format(transcript.pk),
-                buttons=[messages.button(reverse("cast-transcript:edit", args=(transcript.id,)), _("Edit"))],
-            )
-            return redirect("cast-transcript:index")
-        else:
-            messages.error(request, _("The transcript file could not be saved due to errors."))
-    else:
-        transcript = Transcript()
-        form = TranscriptForm(instance=transcript, user=request.user)
-
-    return render(
-        request,
-        "cast/transcript/add.html",
-        {"form": form},
-    )
+def _transcript_message_arg(transcript: Transcript) -> Any:
+    return transcript.pk
 
 
 def _episode_from_latest_revision(episode: Episode) -> Episode:
@@ -616,73 +543,6 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
     )
 
 
-def delete(request: HttpRequest, transcript_id: int) -> HttpResponse:
-    transcript = get_object_or_404(
-        transcript_permission_policy.instances_user_has_permission_for(request.user, "delete"),
-        id=transcript_id,
-    )
-
-    if request.POST:
-        transcript.delete()
-        messages.success(request, _("Transcript '{0}' deleted.").format(transcript.pk))
-        return redirect("cast-transcript:index")
-
-    return render(request, "cast/transcript/confirm_delete.html", {"transcript": transcript})
-
-
-def chooser(request: HttpRequest) -> HttpResponse:
-    if not transcript_permission_policy.user_has_permission(request.user, "choose"):
-        raise PermissionDenied
-    transcripts = transcript_permission_policy.instances_user_has_permission_for(request.user, "choose")
-
-    upload_form = TranscriptForm(prefix="media-chooser-upload", user=request.user)
-
-    if "q" in request.GET or "p" in request.GET:
-        search_form = NonEmptySearchForm(request.GET)
-        if search_form.is_valid():
-            q = search_form.cleaned_data["q"]
-
-            transcripts = transcripts.filter(audio__title__icontains=q)
-            is_searching = True
-        else:
-            q = None
-            is_searching = False
-
-        paginator, transcript_items = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
-        return render(
-            request,
-            "cast/transcript/chooser_results.html",
-            {
-                "transcripts": transcript_items,
-                "query_string": q,
-                "is_searching": is_searching,
-                "pagination_template": pagination_template,
-            },
-        )
-    else:
-        search_form = NonEmptySearchForm()
-        paginator, transcript_items = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
-
-    return render_modal_workflow(
-        request,
-        "cast/transcript/chooser_chooser.html",
-        None,
-        {
-            "transcripts": transcript_items,
-            "uploadform": upload_form,
-            "searchform": search_form,
-            "is_searching": False,
-            "pagination_template": pagination_template,
-        },
-        json_data={
-            "step": "chooser",
-            "error_label": "Server Error",
-            "error_message": "Report this error to your webmaster with the following information:",
-            "tag_autocomplete_url": reverse("wagtailadmin_tag_autocomplete"),
-        },
-    )
-
-
 def get_transcript_data(transcript: Transcript) -> dict[str, Any]:
     """
     helper function: given a transcript, return the json to pass back to the
@@ -694,70 +554,49 @@ def get_transcript_data(transcript: Transcript) -> dict[str, Any]:
     }
 
 
-def chosen(request, transcript_id: int) -> HttpResponse:
-    transcript = get_object_or_404(
-        transcript_permission_policy.instances_user_has_permission_for(request.user, "choose"),
-        id=transcript_id,
-    )
+transcript_admin_config = MediaAdminConfig(
+    model=Transcript,
+    permission_policy=transcript_permission_policy,
+    get_form=lambda: TranscriptForm,
+    url_namespace="cast-transcript",
+    template_dir="cast/transcript",
+    plural_context_name="transcripts",
+    singular_context_name="transcript",
+    chosen_step="transcript_chosen",
+    get_chosen_data=get_transcript_data,
+    create_instance=_create_transcript,
+    search=_search_transcripts,
+    ordering=None,
+    show_popular_tags=False,
+    index_search_placeholder=_("Search transcript files"),
+    index_fallback_placeholder=_("Search transcripts"),
+    added_message=_("Transcript file '{0}' added."),
+    add_error_message=_("The transcript file could not be saved due to errors."),
+    deleted_message=_("Transcript '{0}' deleted."),
+    chooser_upload_error_message=_("The transcript could not be saved due to errors."),
+    message_arg=_transcript_message_arg,
+)
 
-    return render_modal_workflow(
-        request,
-        None,
-        None,
-        None,
-        json_data={"step": "transcript_chosen", "result": get_transcript_data(transcript)},
-    )
+_views = MediaAdminViews(transcript_admin_config)
+
+index = _views.index
+chooser = _views.chooser
+
+
+def add(request: AuthenticatedHttpRequest) -> HttpResponse:
+    return _views.add(request)
+
+
+def delete(request: HttpRequest, transcript_id: int) -> HttpResponse:
+    return _views.delete(request, transcript_id)
+
+
+def chosen(request: HttpRequest, transcript_id: int) -> HttpResponse:
+    return _views.chosen(request, transcript_id)
 
 
 def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
-    if not transcript_permission_policy.user_has_permission(
-        request.user, "add"
-    ) or not transcript_permission_policy.user_has_permission(request.user, "choose"):
-        raise PermissionDenied
-    if request.method == "POST":
-        transcript = Transcript()
-        form = TranscriptForm(
-            request.POST, request.FILES, instance=transcript, user=request.user, prefix="media-chooser-upload"
-        )
-
-        if form.is_valid():
-            form.save()
-
-            # Reindex the media entry to make sure all tags are indexed
-            for backend in get_search_backends():
-                backend.add(transcript)
-
-            return render_modal_workflow(
-                request,
-                None,
-                None,
-                None,
-                json_data={"step": "transcript_chosen", "result": get_transcript_data(transcript)},
-            )
-        else:
-            messages.error(request, _("The transcript could not be saved due to errors."))
-
-    transcripts = transcript_permission_policy.instances_user_has_permission_for(request.user, "choose")
-
-    search_form = NonEmptySearchForm()
-
-    paginator, transcript_items = paginate(request, transcripts, per_page=CHOOSER_PAGINATION)
-
-    context = {
-        "transcripts": transcript_items,
-        "searchform": search_form,
-        # "collections": collections,
-        "uploadform": TranscriptForm(user=request.user),
-        "is_searching": False,
-        "pagination_template": "wagtailadmin/shared/pagination_nav.html",
-    }
-    return render_modal_workflow(
-        request,
-        "cast/transcript/chooser_chooser.html",
-        None,
-        context,
-        json_data={"step": "chooser"},
-    )
+    return _views.chooser_upload(request)
 
 
 def podlove_transcript_json(request: HttpRequest, pk) -> HttpResponse:

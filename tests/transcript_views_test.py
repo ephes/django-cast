@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.test import override_settings
@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import translation
 
 from cast.devdata import create_transcript
+from cast.views import transcript as transcript_views
 from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
 from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptSpeakerMapping
 from cast.views.transcript import (
@@ -21,7 +22,7 @@ from cast.views.transcript import (
     get_transcript_audio_sources,
 )
 
-from .factories import BlogFactory, EpisodeFactory
+from .factories import BlogFactory, EpisodeFactory, UserFactory
 from .multisite_helpers import create_site_root
 
 
@@ -74,6 +75,21 @@ class TestAllTranscriptEndpoints:
 
             # assert we are not redirected to log in
             assert r.status_code == 200
+
+    def test_shared_admin_views_require_collection_permissions(self, rf):
+        user = UserFactory()
+
+        for view in (
+            transcript_views.index,
+            transcript_views.add,
+            transcript_views.chooser,
+            transcript_views.chooser_upload,
+        ):
+            request = rf.get("/")
+            request.user = user
+
+            with pytest.raises(PermissionDenied):
+                view(request)
 
 
 class TestTranscriptIndex:
@@ -135,7 +151,7 @@ class TestTranscriptIndex:
         transcript = Transcript(audio=audio)
         transcript.save()
         index_url = reverse("cast-transcript:index")
-        with patch("cast.views.transcript.MENU_ITEM_PAGINATION", return_value=1):
+        with patch("cast.views.media.MENU_ITEM_PAGINATION", return_value=1):
             r = admin_client.get(index_url, {"p": "1"})
         transcripts = r.context["transcripts"]
 
@@ -143,7 +159,7 @@ class TestTranscriptIndex:
         assert len(transcripts) == 1
         assert transcripts[0] == transcripts[-1]
 
-        with patch("cast.views.transcript.MENU_ITEM_PAGINATION", return_value=1):
+        with patch("cast.views.media.MENU_ITEM_PAGINATION", return_value=1):
             r = admin_client.get(index_url, {"p": "2"})
         transcripts = r.context["transcripts"]
 
