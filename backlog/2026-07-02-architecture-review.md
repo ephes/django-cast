@@ -86,7 +86,7 @@ live as private methods on a Django model, and none of it runs without a `Transc
 per-format handlers and a speaker-mapping service; leave `Transcript` as fields plus thin delegation. Its
 `save()` → `sync_speaker_mappings()` (transcript.py:218-222) shares the H2 concern.
 
-### H4. Triplicated admin media views for audio/video/transcript
+### H4. Triplicated admin media views for audio/video/transcript — Fixed (2026-07-02)
 
 `src/cast/views/audio.py`, `views/video.py`, and `views/transcript.py` copy `index`/`add`/`edit`/`delete`/`chooser`/
 `chosen`/`chooser_upload` nearly verbatim (e.g. audio.py:28-80 vs video.py:27-79; the `render_modal_workflow` blob at
@@ -95,6 +95,14 @@ audio.py:248-253, video.py:238-243, transcript.py:677-682; the reindex loop ~10 
 chooser/Wagtail-compat fix currently needs three edits. Direction: extract a generic media viewset/factory
 parametrized by model, form, and template; at minimum factor out `reindex(obj)`, the chooser response, and the shared
 search/paginate helpers.
+
+Fix note: `cast.views.media` now holds a `MediaAdminConfig` dataclass plus `MediaAdminViews` implementing all
+seven views once (including the `reindex(obj)` helper); `audio.py`/`video.py`/`transcript.py` shrink to configs,
+thin URL-kwarg wrappers, and their genuinely type-specific parts (audio's multi-format old-file deletion and
+voxhelm edit context, transcript's action-dispatcher `edit` and public transcript views stay local). The
+`per_page=10` drift is fixed — video's chooser upload honors `CHOOSER_PAGINATION`, with a regression test.
+URL names/kwargs, templates, context keys, message msgids, and modal-workflow JSON are unchanged. Plan:
+`docs/superpowers/plans/2026-07-02-media-views-dedup.md`.
 
 ### H5. Stale tooling documentation and dead config files — Fixed (2026-07-02)
 

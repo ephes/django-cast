@@ -54,3 +54,12 @@
   post/episode listings: page specialization and episode audio now load in
   bulk, so the query count no longer grows with the number of episodes, and
   a regression test guards the flat query count.
+- Deduplicate the audio/video/transcript Wagtail-admin media views: the
+  previously triplicated ``index``/``add``/``edit``/``delete``/``chooser``/
+  ``chosen``/``chooser_upload`` views now share one parametrized
+  implementation in ``cast.views.media``. URL names, templates, contexts,
+  messages, and chooser modal workflows are unchanged.
+- Fix the video chooser upload view ignoring the ``CAST_CHOOSER_PAGINATION``
+  setting: it paginated with a hardcoded page size of 10 instead of
+  ``CHOOSER_PAGINATION`` like every other chooser view (invisible under the
+  default of 10, wrong for sites that override the setting).

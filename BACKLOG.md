@@ -93,14 +93,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: `Transcript` is fields plus thin delegation, each format's quirks live in one module with focused
     tests, and the edit view dispatches declaratively.
 
-- [ ] Deduplicate media admin views (architecture review H4)
-  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
-  - Scope: extract a generic media viewset/factory parametrized by model, form, and template for the near-identical
-    audio/video/transcript index/add/edit/delete/chooser views; align the drifted chooser pagination (`per_page=10`
-    vs `CHOOSER_PAGINATION`).
-  - Done when: one shared implementation serves all three media types, the pagination drift is resolved, and the
-    chooser modal workflows keep passing their existing tests.
-
 - [ ] Consolidate CAST_* settings resolution (architecture review M2, M12)
   - Related to: Documentation polish pass.
   - Scope: converge the five-plus settings mechanisms on the `appsettings.__getattr__` pattern (fold in the Voxhelm
