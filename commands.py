@@ -66,16 +66,14 @@ def env_with_pythonpath():
 @cli.command()
 def mypy():
     """Run Mypy (configured in pyproject.toml)"""
-    subprocess.run(["mypy", "cast"])
+    subprocess.run(["mypy"])
 
 
 @cli.command()
 def test(test_path: str = typer.Argument(None)):
     if test_path is None:
         test_path = "tests"
-    subprocess.call([sys.executable, "runtests.py", test_path])
-    # FIXME use pytest after fixing removing test images after running tests
-    # subprocess.call(["python", "-m", "pytest"], env=env_with_pythonpath())
+    subprocess.call([sys.executable, "-m", "pytest", test_path])
 
 
 @cli.command()

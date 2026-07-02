@@ -153,6 +153,13 @@ def test_cast_comment_form_field_order_without_threadedcomments(monkeypatch, pos
 
     from cast.comments import appsettings
 
+    # Import the forms module *before* patching: CastCommentForm's base class is
+    # chosen once at first import (threaded vs. plain). Triggering that first
+    # import via get_form() while USE_THREADEDCOMMENTS is patched to False would
+    # bake a parent-less form class into sys.modules for the rest of the test
+    # session, breaking later reply tests depending on test order.
+    from cast.comments import forms  # noqa: F401
+
     monkeypatch.setattr(appsettings, "USE_THREADEDCOMMENTS", False)
     form = get_form()(post)
     fields = list(form.fields.keys())

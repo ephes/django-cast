@@ -24,8 +24,6 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Topic :: Internet",
     "Development Status :: 3 - Alpha",
-    "Environment :: Web Environment",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -134,11 +132,10 @@ addopts = [
     "--strict-markers",
     "--reuse-db",
     "--no-migrations",
-    "--randomly-seed=1234",
 ]
 
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.11"
 ignore_missing_imports = true
 plugins = ["mypy_django_plugin.main"]
 exclude = "[a-zA-Z]*/(migrations)|(example)/(.)*"  # ignore migrations
@@ -157,7 +154,7 @@ omit = [
     "src/cast/settings.py",
     "src/cast/quickstart.py",
 ]
-command_line = "runtests.py tests"
+command_line = "-m pytest"
 
 [tool.coverage.report]
 show_missing = true
@@ -167,6 +164,3 @@ exclude_lines = [
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
 ]
-
-[mypy.plugins.django-stubs]
-django_settings_module = "cast.settings"

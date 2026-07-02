@@ -38,8 +38,14 @@ from .factories import (
 )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def api_client():
+    """A fresh APIClient per test.
+
+    Function-scoped on purpose: a shared client accumulates state (session
+    cookies from ``login()``, forced authentication) and leaks it into later
+    tests, causing order-dependent failures under randomized test ordering.
+    """
     return APIClient()
 
 

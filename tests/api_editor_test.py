@@ -54,19 +54,6 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
     return user
 
 
-@pytest.fixture(autouse=True)
-def _reset_api_client_auth(request):
-    """Reset the module-scoped ``api_client`` auth before each test that uses it.
-
-    ``api_client`` is module-scoped, so a forced authentication in one test would
-    otherwise leak into the next and make order-dependent tests pass or fail by luck.
-    Only tests that request ``api_client`` are reset — ``force_authenticate(None)``
-    calls ``logout()``, which touches the session DB, so pure unit tests must skip it.
-    """
-    if "api_client" in request.fixturenames:
-        request.getfixturevalue("api_client").force_authenticate(user=None)
-
-
 @pytest.fixture
 def superuser(django_user_model):
     """A superuser, which passes every Wagtail page and image ``choose`` permission."""
@@ -169,7 +156,6 @@ class TestEditorParents:
     pytestmark = pytest.mark.django_db
 
     def test_requires_authentication(self, api_client, db):
-        api_client.force_authenticate(user=None)  # reset state from module-scoped fixture
         url = reverse("cast:api:editor_parents")
         response = api_client.get(url, format="json")
         assert response.status_code in (401, 403)
