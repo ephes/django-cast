@@ -34,6 +34,14 @@ from cast.models.video import Video
 from tests.factories import EpisodeFactory, PodcastFactory
 
 
+def test_htmx_http_request_is_importable_from_neutral_module():
+    """Models must not depend on the views package for typing (architecture review M1)."""
+    from cast.http_types import HtmxHttpRequest as neutral
+    from cast.views.htmx_helpers import HtmxHttpRequest as legacy
+
+    assert neutral is legacy
+
+
 class TestVideoModel:
     pytestmark = pytest.mark.django_db
 
@@ -306,6 +314,22 @@ class TestPostModel:
         assert template_base_dir == post.blog.get_template_base_dir(simple_request)
         get_parent_mock.assert_not_called()
 
+    def test_post_save_side_effects_can_be_skipped(self, monkeypatch, post):
+        """Post.save media derivation must be skippable for bulk operations (architecture review H2)."""
+        import cast.models.pages as pages_module
+
+        sync_calls, rendition_calls = [], []
+        monkeypatch.setattr(type(post), "sync_media_ids", lambda self: sync_calls.append(1))
+        monkeypatch.setattr(
+            pages_module, "create_missing_renditions_for_posts", lambda posts: rendition_calls.append(1)
+        )
+
+        post.save(sync_media=False, create_renditions=False)
+        assert sync_calls == [] and rendition_calls == []
+
+        post.save()
+        assert sync_calls == [1] and rendition_calls == [1]
+
     def test_post_has_audio(self, post):
         assert post.has_audio is False
 
@@ -494,9 +518,9 @@ class TestPostModel:
 
         mocker.patch("cast.models.pages.TemplateBaseDirectory.for_request", return_value=TemplateBaseDirectory())
         post = Post()
-        post._local_template_name = local_template_name
+        kwargs = {} if local_template_name is None else {"local_template_name": local_template_name}
 
-        assert post.get_template(simple_request) == expected_template
+        assert post.get_template(simple_request, **kwargs) == expected_template
 
     @pytest.mark.parametrize(
         "is_public, is_removed, contained_in_list",
@@ -1191,9 +1215,9 @@ class TestEpisodeModel:
 
         mocker.patch("cast.models.pages.TemplateBaseDirectory.for_request", return_value=TemplateBaseDirectory())
         episode = Episode()
-        episode._local_template_name = local_template_name
+        kwargs = {} if local_template_name is None else {"local_template_name": local_template_name}
 
-        assert episode.get_template(simple_request) == expected_template
+        assert episode.get_template(simple_request, **kwargs) == expected_template
 
     def test_page_type(self):
         episode = Episode()
@@ -1708,6 +1732,20 @@ def test_video_create_poster_handles_missing_dimensions_gracefully(mocker, tmp_p
     poster_save.assert_not_called()
     assert not tmp_poster.exists()
     assert not video.poster
+
+
+@pytest.mark.django_db
+def test_video_save_rolls_back_row_when_poster_generation_fails(monkeypatch, minimal_mp4, user):
+    """Video.save enrichment must be all-or-nothing like Audio.save (architecture review H2)."""
+
+    def boom(self):
+        raise RuntimeError("poster generation failed")
+
+    monkeypatch.setattr(Video, "create_poster", boom)
+    video = Video(user=user, original=minimal_mp4)
+    with pytest.raises(RuntimeError):
+        video.save()
+    assert Video.objects.count() == 0
 
 
 @pytest.mark.django_db

@@ -42,11 +42,11 @@ from cast.blocks import (
     CastImageChooserBlock,
     GalleryBlock,
 )
+from cast.http_types import HtmxHttpRequest
 from cast.models import get_or_create_gallery
 from cast.post_body_blocks import configured_content_blocks, default_content_blocks
 from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
-from ..views import HtmxHttpRequest
 from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
 from .repository import (
     AudioById,
@@ -205,7 +205,6 @@ class Post(Page):
     # managers
     tags = ClusterTaggableManager(through=PostTag, blank=True, verbose_name=_("tags"))
 
-    _local_template_name: str | None = None
     _blog: Optional["Blog"] = None
     _media_lookup: dict[str, dict[int, Any]] | None = None
 
@@ -293,8 +292,6 @@ class Post(Page):
         return self._blog.get_template_base_dir(cast(HtmxHttpRequest, request))
 
     def get_template(self, request: HttpRequest, *args, local_template_name: str = "post.html", **kwargs) -> str:
-        if self._local_template_name is not None:
-            local_template_name = self._local_template_name
         template_base_dir = kwargs.get("template_base_dir", None)
         if template_base_dir is None:
             template_base_dir = self.get_template_base_dir(request)
@@ -638,9 +635,12 @@ class Post(Page):
         request = cast(HtmxHttpRequest, request)
         if repository is None:
             repository = self.get_repository(request, {})
-        self._local_template_name = "post_body.html"
         description = self.serve(
-            request, render_detail=render_detail, repository=repository, render_for_feed=render_for_feed
+            request,
+            render_detail=render_detail,
+            repository=repository,
+            render_for_feed=render_for_feed,
+            local_template_name="post_body.html",
         ).rendered_content
         if remove_newlines:
             description = description.replace("\n", "")
@@ -686,9 +686,13 @@ class Post(Page):
         return super().serve_preview(request, mode_name)
 
     def save(self, *args, **kwargs) -> None:
+        sync_media = kwargs.pop("sync_media", True)
+        create_renditions = kwargs.pop("create_renditions", True)
         save_return = super().save(*args, **kwargs)
-        self.sync_media_ids()
-        create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset
+        if sync_media:
+            self.sync_media_ids()
+        if create_renditions:
+            create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset
         return save_return
 
 
@@ -843,9 +847,10 @@ class Episode(Post):
 
     def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
         """
-        Use get_template() from the parent class, but pass a local template name.
+        Use get_template() from the parent class, but default to the episode template.
         """
-        return super().get_template(request, *args, local_template_name="episode.html", **kwargs)
+        kwargs.setdefault("local_template_name", "episode.html")
+        return super().get_template(request, *args, **kwargs)
 
     def clean(self) -> None:
         super().clean()

@@ -21,8 +21,8 @@ from .snapshot import PostQuerySnapshot, cache_page_url, clear_cached_page_urls
 from .types import AudioById, CachableBlogData, ImageById, LinkTuples, RenditionsForPosts, VideoById
 
 if TYPE_CHECKING:
+    from cast.http_types import HtmxHttpRequest
     from cast.models import Audio, Blog, Episode, Post, Transcript
-    from cast.views import HtmxHttpRequest
 
 
 class PostDetailContext:

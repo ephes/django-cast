@@ -7,7 +7,7 @@ from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from taggit.managers import TaggableManager
@@ -182,21 +182,25 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     def save(self, *args, **kwargs) -> Optional["Video"]:  # type: ignore[override]
         generate_poster = kwargs.pop("poster", True)
+        using = kwargs.get("using")
         if generate_poster and not getattr(self.original, "_committed", True):
             validate_video_upload(self.original.file)
-        # need to save original first - django file handling is driving me nuts
-        result = super().save(*args, **kwargs)
-        if generate_poster:
-            logger.info("generate video poster")
-            # generate poster thumbnail by default, but make it optional
-            # for recalc management command
-            poster_name_before = self.poster.name or ""
-            self.create_poster()
-            poster_name_after = self.poster.name or ""
-            if poster_name_after and poster_name_after != poster_name_before:
-                save_kwargs = {"update_fields": ["poster"]}
-                using = kwargs.get("using")
-                if using is not None:
-                    save_kwargs["using"] = using
-                result = super().save(**save_kwargs)
+        # Keep poster generation and persistence all-or-nothing to avoid
+        # partially updated rows when poster creation fails (same discipline
+        # as Audio.save).
+        with transaction.atomic(using=using):
+            # need to save original first - django file handling is driving me nuts
+            result = super().save(*args, **kwargs)
+            if generate_poster:
+                logger.info("generate video poster")
+                # generate poster thumbnail by default, but make it optional
+                # for recalc management command
+                poster_name_before = self.poster.name or ""
+                self.create_poster()
+                poster_name_after = self.poster.name or ""
+                if poster_name_after and poster_name_after != poster_name_before:
+                    save_kwargs: dict[str, object] = {"update_fields": ["poster"]}
+                    if using is not None:
+                        save_kwargs["using"] = using
+                    result = super().save(**save_kwargs)
         return result

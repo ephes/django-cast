@@ -25,6 +25,7 @@ from wagtail.images.api.v2.views import ImagesAPIViewSet
 from ..audio_access import authorize_audio_access, page_grants_audio_access, page_is_unrestricted_public
 from ..filters import PostFilterset
 from ..forms import SelectThemeForm, VideoForm
+from ..http_types import HtmxHttpRequest
 from ..models import (
     Audio,
     Blog,
@@ -37,7 +38,6 @@ from ..models import (
 from ..modal_facet_counts import get_modal_facet_counts
 from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
-from ..views import HtmxHttpRequest
 from ..views.theme import set_template_base_dir
 from .serializers import (
     AudioPodloveSerializer,

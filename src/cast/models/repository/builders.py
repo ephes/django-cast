@@ -31,8 +31,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
+    from cast.http_types import HtmxHttpRequest
     from cast.models import Blog, Post
-    from cast.views import HtmxHttpRequest
 
     from .types import CachableBlogData
 

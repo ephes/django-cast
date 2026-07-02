@@ -24,9 +24,9 @@ from cast import appsettings
 from cast.player import audio_player_context_flags
 from cast.follow_links import get_follow_links
 from cast.filters import PostFilterset, get_active_facets, has_active_filters
+from cast.http_types import HtmxHttpRequest
 from cast.models.itunes import ItunesArtWork
 
-from ..views import HtmxHttpRequest
 from .pages import Post
 from .repository import BlogIndexContext
 from .theme import get_template_base_dir, get_template_base_dir_choices

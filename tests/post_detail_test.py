@@ -31,6 +31,21 @@ class TestPostDetail:
         assert "in_all" in content
         assert "only_in_detail" in content
 
+    def test_get_description_does_not_leak_template_into_later_renders(self, client, post):
+        """get_description must not mutate instance state (architecture review H1)."""
+        request = client.get(post.get_url()).wsgi_request
+        description = post.get_description(request=request)
+        assert description
+        template_after = post.get_template(request)
+        assert template_after.endswith("/post.html")
+
+    def test_get_description_does_not_leak_template_into_later_renders_for_episode(self, client, episode):
+        request = client.get(episode.get_url()).wsgi_request
+        description = episode.get_description(request=request)
+        assert description
+        template_after = episode.get_template(request)
+        assert template_after.endswith("/episode.html")
+
     def test_post_detail_with_gallery(self, client, post_with_gallery):
         create_missing_renditions_for_posts([post_with_gallery])
         images_with_type = get_all_images_from_posts([post_with_gallery])

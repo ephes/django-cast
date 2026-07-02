@@ -15,8 +15,8 @@ from typing import cast
 from django.core.management.base import BaseCommand, CommandError
 from django.test import RequestFactory
 
+from cast.http_types import HtmxHttpRequest
 from cast.models import Blog, Episode, Podcast, Post, get_template_base_dir_choices
-from cast.views.htmx_helpers import HtmxHttpRequest
 from cast.views.styleguide import (
     STYLEGUIDE_BLOG_SLUG,
     STYLEGUIDE_EPISODE_SLUG,

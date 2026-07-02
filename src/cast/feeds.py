@@ -17,11 +17,11 @@ from django.utils.xmlutils import SimplerXMLGenerator
 from wagtail.images.models import Image
 
 from cast import appsettings
+from cast.http_types import HtmxHttpRequest
 from cast.site_lookup import get_site_specific_page_or_404
 
 from .models import Audio, Blog, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext
-from .views import HtmxHttpRequest
 
 if django.VERSION >= (5, 2):
     from django.utils.feedgenerator import Stylesheet
