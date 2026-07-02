@@ -19,6 +19,18 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
+- [ ] Architecture review follow-ups
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
+  - Status: the direct-fix pass landed on 2026-07-02 (bugs B1/B2 with tests, dead tooling/config cleanup, seed
+    unpin plus the two test-isolation bugs it surfaced, explicit API permissions, safe metadata subset).
+  - Scope: triage the remaining findings — split the larger structural themes (model-layer god classes and `save()`
+    side effects, triplicated media admin views, settings consolidation, Voxhelm isolation, legacy API migration)
+    into their own backlog items or explicitly accept them.
+  - Related to: Consider stricter mypy annotation checks (feeds.py typing), Documentation polish pass (undocumented
+    settings), Revisit onboarding and authoring workflows (quickstart template drift).
+  - Done when: each remaining high/medium finding is either a concrete backlog item or explicitly accepted in the
+    review doc.
+
 - [ ] Typeahead search
   - Scope: research whether current full-text search is fast enough for typeahead, what API/frontend surface is
     needed, and how to keep it optional for themes.

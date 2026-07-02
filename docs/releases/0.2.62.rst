@@ -13,3 +13,27 @@
 - Avoid deep-copying Podlove and DOTe transcript JSON during public speaker
   sanitization when all speaker labels are already public or when the transcript
   contains no speaker metadata.
+- Fix ``Blog.last_build_date`` crashing with ``IndexError`` on blogs and
+  podcasts without any published posts; it now falls back to the page's first
+  publication date or the current time, so feeds for empty blogs render.
+- Fix the podcast feed's RSS ``<category>`` element: it now emits the first
+  entry of the blog's ``keywords`` field when keywords are set (the previous
+  guard checked a nonexistent ``categories`` attribute and always produced an
+  empty category).
+- Declare explicit ``permission_classes = (AllowAny,)`` on the public API views
+  (Podlove detail, player config, facet counts, theme list, theme update) so
+  intended anonymous access no longer depends on the DRF project default and
+  cannot be broken by a host site setting restrictive default permissions.
+- Remove dead tooling files (``bootstrap.md``, ``.travis.yml``, ``setup.cfg``,
+  ``runtests.py``, ``javascript/jest.config.js``, ``command_lines.txt``); the
+  ``commands.py`` ``test`` and ``mypy`` subcommands now invoke pytest and the
+  configured mypy directly.
+- Stop pinning the ``pytest-randomly`` seed so the test order actually
+  randomizes, and fix the two test-isolation bugs this surfaced (a shared API
+  client leaking session cookies between tests, and a monkeypatched
+  ``USE_THREADEDCOMMENTS`` baking the wrong comment form base class when the
+  forms module was first imported under the patch).
+- Clean up packaging and type-check metadata: drop the contradictory MIT
+  license classifier and a duplicated classifier, check types against Python
+  3.11 (the support floor), and remove the legacy mypy django-stubs plugin
+  table.
