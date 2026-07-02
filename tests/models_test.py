@@ -178,6 +178,17 @@ class TestBlogModel:
         repository = blog.get_repository(simple_request, {})
         assert isinstance(repository, BlogIndexContext)
 
+    def test_last_build_date_without_published_posts_falls_back_to_first_published_at(self, blog):
+        blog.first_published_at = timezone.now() - timezone.timedelta(days=1)
+        assert blog.last_build_date == blog.first_published_at
+
+    def test_last_build_date_without_published_posts_or_first_published_at_falls_back_to_now(self, blog):
+        blog.first_published_at = None
+        before = timezone.now()
+        result = blog.last_build_date
+        after = timezone.now()
+        assert before <= result <= after
+
     def test_get_cover_image_url_for_blog(self, mocker):
         # just empty cover image
         blog = Blog(id=1)

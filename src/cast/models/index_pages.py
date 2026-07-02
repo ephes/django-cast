@@ -12,6 +12,7 @@ from django.http import Http404
 from django.http.request import QueryDict
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.api import APIField
@@ -183,7 +184,12 @@ class Blog(Page):
         cached = getattr(self, "_last_build_date", None)
         if cached is not None:
             return cached
-        return Post.objects.live().public().descendant_of(self).order_by("-visible_date")[0].visible_date
+        newest_post = Post.objects.live().public().descendant_of(self).order_by("-visible_date").first()
+        if newest_post is not None:
+            return newest_post.visible_date
+        if self.first_published_at is not None:
+            return self.first_published_at
+        return timezone.now()
 
     @property
     def author_name(self) -> str:
