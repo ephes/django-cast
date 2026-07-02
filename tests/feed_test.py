@@ -580,14 +580,13 @@ def test_podcast_index_add_item_elements_post_block(rf, mocker):
 
 def test_podcast_feed_categories_and_keywords():
     class MockedBlog:
-        categories = True
         keywords = "foo, bar, baz"
         itunes_categories = "one,two,three"
 
     podcast_feed = PodcastFeed()
 
     blog = MockedBlog()
-    # test categories -> first category
+    # test categories -> first keyword, stripped
     categories = podcast_feed.categories(blog)
     assert categories == ("foo",)
 
@@ -596,6 +595,53 @@ def test_podcast_feed_categories_and_keywords():
 
     # item_keywords -> item.keywords
     assert podcast_feed.item_keywords(blog) == blog.keywords
+
+
+def test_podcast_feed_categories_empty_keywords():
+    class MockedBlog:
+        keywords = ""
+
+    podcast_feed = PodcastFeed()
+
+    assert podcast_feed.categories(MockedBlog()) == ()
+
+
+@pytest.mark.django_db
+def test_podcast_feed_rss_renders_first_keyword_as_category(client, episode, use_dummy_cache_backend):
+    podcast = episode.podcast
+    podcast.keywords = "python,django"
+    podcast.save(update_fields=["keywords"])
+    feed_url = reverse(
+        "cast:podcast_feed_rss",
+        kwargs={"slug": podcast.slug, "audio_format": "m4a"},
+    )
+
+    response = client.get(feed_url)
+
+    assert response.status_code == 200
+    root = ElementTree.fromstring(response.content.decode("utf-8"))
+    channel = root.find("./channel")
+    assert channel is not None
+    assert channel.findtext("category") == "python"
+
+
+@pytest.mark.django_db
+def test_podcast_feed_rss_omits_category_when_keywords_blank(client, episode, use_dummy_cache_backend):
+    podcast = episode.podcast
+    podcast.keywords = ""
+    podcast.save(update_fields=["keywords"])
+    feed_url = reverse(
+        "cast:podcast_feed_rss",
+        kwargs={"slug": podcast.slug, "audio_format": "m4a"},
+    )
+
+    response = client.get(feed_url)
+
+    assert response.status_code == 200
+    root = ElementTree.fromstring(response.content.decode("utf-8"))
+    channel = root.find("./channel")
+    assert channel is not None
+    assert channel.find("category") is None
 
 
 def test_podcast_feed_item_description_repository_none(mocker):

@@ -427,11 +427,11 @@ class PodcastFeed(RepositoryMixin, Feed):
     def subtitle(self, blog: Blog) -> str:
         return blog.subtitle
 
-    def categories(self, blog: Blog) -> tuple[str]:
-        if hasattr(blog, "categories"):
-            return (blog.keywords.split(",")[0],)
+    def categories(self, blog: Blog) -> tuple[str, ...]:
+        if blog.keywords:
+            return (blog.keywords.split(",")[0].strip(),)
         else:
-            return ("",)
+            return ()
 
     def itunes_categories(self, blog: Blog) -> list[str]:
         return blog.itunes_categories.split(",")
