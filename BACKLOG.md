@@ -81,10 +81,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     from views), `get_description` is side-effect free, `Video.save` is transactional, and `Post.save` has
     `sync_media`/`create_renditions` opt-outs.
   - Scope: phase 2 — extract description rendering and media derivation into presenter/service modules (and decide
-    on async), invert the remaining model→blocks/filters imports, fix the mixed blog-index snapshot N+1 with a
-    query-count test (M8).
-  - Done when: save-side effects are explicit service calls, description rendering lives outside the model, and the
-    mixed-queryset render path has a zero-/low-query assertion.
+    on async), and invert the remaining model→blocks/filters imports. (The mixed blog-index snapshot N+1 (M8) was
+    fixed on 2026-07-02 with a flat-query-count guard test.)
+  - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
 
 - [ ] Transcript domain extraction (architecture review H3/M9)
   - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)

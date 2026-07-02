@@ -50,3 +50,7 @@
 - Move the ``HtmxHttpRequest`` typing class to ``cast.http_types``; it stays
   importable from ``cast.views`` and ``cast.views.htmx_helpers`` for
   backwards compatibility.
+- Eliminate per-row queries when building blog index snapshots for mixed
+  post/episode listings: page specialization and episode audio now load in
+  bulk, so the query count no longer grows with the number of episodes, and
+  a regression test guards the flat query count.

@@ -205,7 +205,7 @@ Episode/Podcast requires updating the serializer, both deserializers, and the ri
 class is deserialized silently. Direction: store an explicit `type` discriminator and branch on it; centralize field
 lists per model. Follows on from [2026-04-18-repository-readmodels.md](2026-04-18-repository-readmodels.md).
 
-### M8. N+1 risk on the mixed blog-index snapshot path
+### M8. N+1 risk on the mixed blog-index snapshot path — Fixed (2026-07-02)
 
 `PostQuerySnapshot.create_from_post_queryset` only select-relates `podcast_audio__transcript` when the queryset
 model is an `Episode` subclass (snapshot.py:108-110), but the blog index feeds a base `Post` queryset
