@@ -166,6 +166,17 @@ calls each with their own inline default. `check_cast_setting_types` (checks.py:
 table because defaults are not centralized. Direction: consolidate on the `appsettings.__getattr__` pattern, fold in
 Voxhelm helpers and inline defaults, and drop the global-settings mutation in favor of read-time defaults.
 
+Fix note (2026-07-03, mostly fixed): `cast.appsettings.CAST_SETTING_REGISTRY` now owns every static `CAST_*`
+default; the inline `getattr(settings, "CAST_...", default)` call sites read through the accessor at call time
+(coercions stay local, so `override_settings` and string env values behave as before), and
+`check_cast_setting_types` derives from registry metadata with a test pinning the enforcement scope to the
+previous eleven settings. Deliberately kept: the app-ready `set_default_if_not_set` mutation (it defaults
+third-party settings — `SITE_ID`, `WAGTAIL_SITE_NAME`, `CRISPY_*` — that third-party code reads directly, so
+read-time defaults cannot replace it), `comments/appsettings.py` as the comments accessor (legacy `FLUENT_*`
+fallbacks and strict coercions; its defaults now source from the central registry), and
+`dev_settings.dev_tools_enabled` (deprecation precedence). The Voxhelm site→setting→env chain is deferred to
+the M3 subpackage work.
+
 ### M3. Voxhelm integration is welded into the core
 
 `voxhelm.py` (859 lines) is internally clean but not isolatable: its models are exported unconditionally from
@@ -270,7 +281,7 @@ are really theme- or dev-only, and factor tox deps into a base env.
 Fix note (partial, 2026-07-02): classifiers deduplicated (BSD only), mypy pinned to 3.11, legacy django-stubs
 plugin table removed. Still open: the runtime-dependency audit and the tox base-env refactor.
 
-### M12. Undocumented settings and quickstart template drift
+### M12. Undocumented settings and quickstart template drift — Partially fixed (2026-07-03)
 
 Twelve of the ~51 user-facing `CAST_*` settings are missing from `docs/reference/settings.rst` (including
 `CAST_AUDIO_PLAYER`, `CAST_EDITOR_SCOPES`, `CAST_POST_BODY_BLOCKS`, `CAST_SLUG`, four `CAST_COMMENTS_*`, and the
@@ -279,6 +290,11 @@ a second "recommended settings story" that drifts silently and is coverage-exclu
 `user`/`password` superuser. Direction: document the missing settings; generate quickstart projects from packaged
 template files and add a smoke test that the generated project boots. Related to: "Revisit onboarding and authoring
 workflows" and "Documentation polish pass" in `BACKLOG.md`.
+
+Fix note (2026-07-03): the settings half is done — every user-facing setting is documented in
+`docs/reference/settings.rst`, with defaults verified against the central registry. `CAST_SLUG` turned out not
+to exist in the codebase (stale name in this finding). The quickstart template-drift half remains open and
+belongs to the "Revisit onboarding and authoring workflows" backlog item.
 
 ## Low severity (batch when touching the area)
 

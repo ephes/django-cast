@@ -75,3 +75,13 @@
   ``episode_from_latest_revision`` helper that was copied between the
   transcript and Voxhelm admin views. Messages, redirects, and form behavior
   are unchanged.
+- Centralize the static ``CAST_*`` setting defaults in a single registry in
+  ``cast.appsettings``: the scattered inline ``getattr(settings, ...)``
+  defaults now resolve through one accessor (still read at call time, so
+  ``override_settings`` and runtime changes keep working), and the
+  ``cast.E001`` type check derives from the registry instead of a separately
+  maintained table. Defaults and check coverage are unchanged.
+- Document all previously undocumented settings in the settings reference,
+  including ``CAST_AUDIO_PLAYER``, ``CAST_EDITOR_SCOPES``,
+  ``CAST_POST_BODY_BLOCKS``, the comment form CSS-class and moderator
+  settings, and the remaining styleguide tunables.
