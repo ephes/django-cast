@@ -85,3 +85,17 @@
   including ``CAST_AUDIO_PLAYER``, ``CAST_EDITOR_SCOPES``,
   ``CAST_POST_BODY_BLOCKS``, the comment form CSS-class and moderator
   settings, and the remaining styleguide tunables.
+- Split the Voxhelm integration into a ``cast.voxhelm`` subpackage with
+  dedicated ``settings`` (the site → Django setting → environment precedence
+  chain), ``client`` (HTTP transport), ``task_refs``, and ``service``
+  (orchestration) modules. The transcript-generation status helpers move to
+  ``cast.transcripts.generation_status``, which removes the circular import
+  between ``cast.models`` and the Voxhelm code (a static test now guards that
+  nothing imported during model initialisation depends on ``cast.voxhelm``).
+  Every previously public name remains importable from ``cast.voxhelm``.
+- Show the "Generate transcript" action on the episode and audio edit pages
+  only when Voxhelm is actually configured (API base and key resolvable via
+  site settings, Django settings, or environment variables) for the request's
+  site. Transcript generation status stays visible regardless, and direct
+  POST requests keep reporting missing configuration as friendly error
+  messages.

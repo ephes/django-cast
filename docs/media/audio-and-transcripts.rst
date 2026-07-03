@@ -197,6 +197,12 @@ transcript generation directly from:
 * an episode edit view
 * an audio edit view
 
+The "Generate transcript" action only appears when Voxhelm is configured for
+the request's site — the API base URL and API key must resolve through site
+settings, Django settings, or environment variables. Transcript generation
+status stays visible on both edit surfaces even when the configuration is
+later removed.
+
 The admin request now returns after the Voxhelm batch job has been submitted
 and a local completion task has been queued. Editors see local
 queued/running/succeeded/failed status on the same Episode and Audio edit

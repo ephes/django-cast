@@ -174,8 +174,9 @@ previous eleven settings. Deliberately kept: the app-ready `set_default_if_not_s
 third-party settings — `SITE_ID`, `WAGTAIL_SITE_NAME`, `CRISPY_*` — that third-party code reads directly, so
 read-time defaults cannot replace it), `comments/appsettings.py` as the comments accessor (legacy `FLUENT_*`
 fallbacks and strict coercions; its defaults now source from the central registry), and
-`dev_settings.dev_tools_enabled` (deprecation precedence). The Voxhelm site→setting→env chain is deferred to
-the M3 subpackage work.
+`dev_settings.dev_tools_enabled` (deprecation precedence). The Voxhelm site→setting→env chain was folded into
+`cast/voxhelm/settings.py` with the M3 subpackage extraction (2026-07-03) — it stays a deliberate third
+mechanism (site setting beats Django setting beats env var) but now lives in one named settings module.
 
 ### M3. Voxhelm integration is welded into the core
 
@@ -186,6 +187,23 @@ admin URLs and action menu item, and `django-tasks` is a hard dependency (pyproj
 completion. The file also mixes three concerns (settings layer, HTTP client, domain orchestration/task refs).
 Direction: split into a `voxhelm/` subpackage (`client.py`, `service.py`, `task_refs.py`, `settings.py`), break the
 model cycle, and consider an optional extra so `django-tasks` and the admin wiring activate only when configured.
+
+Fix note (2026-07-03, fixed): `cast.voxhelm` is now a subpackage (`exceptions`, `settings` — the site→setting→env
+chain, `client`, `task_refs`, `service`), split byte-faithfully with the full public surface re-exported from the
+package `__init__`. The models↔voxhelm cycle is gone: the status helpers (`get_transcript_generation`,
+`get_transcript_generation_status_context`, `transcript_complete`) moved to
+`cast/transcripts/generation_status.py`, which imports only model leaf submodules, so `wagtail_panels.py` imports
+it at module level — no function-body imports; a static AST test (`tests/import_cycle_test.py`) pins that nothing
+imported during `cast.models` initialisation depends on `cast.voxhelm`, including inside function bodies.
+Optional-extra decision (recorded in `docs/superpowers/plans/2026-07-03-voxhelm-subpackage.md`): no `[voxhelm]`
+packaging extra — `django-tasks` stays a hard dependency (lightweight; an extra would trade clean degradation for
+ImportError crashes), models/migrations stay unconditional (Django model discovery cannot be optional), and the
+`cast_transcripts` TASKS backend is only required at first enqueue because `voxhelm_tasks` is deliberately
+imported lazily (`@task(backend=...)` resolves the backend at import time — verified empirically; the lazy import
+in `enqueue_audio_transcript_generation` is the load-bearing optionality seam, not cycle paper-over). The admin
+wiring half landed as a visibility gate: the "Generate transcript" action/button renders only when
+`voxhelm_configured()` resolves the API base and key for the request's site; status display and the POST paths'
+friendly misconfiguration errors are unchanged.
 
 ### M4. Two inconsistent API generations side by side; implicit AllowAny on writes
 

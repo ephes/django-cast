@@ -73,16 +73,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     fixed on 2026-07-02 with a flat-query-count guard test.)
   - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
 
-- [ ] Voxhelm optional subpackage (architecture review M3)
-  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
-  - Scope: split `voxhelm.py` into a `voxhelm/` subpackage (client, service, task refs, settings), break the
-    models↔voxhelm circular imports, and evaluate a `[transcripts]`-style optional extra so `django-tasks` and the
-    Voxhelm admin wiring activate only when configured. Includes the settings-consolidation remainder deferred
-    from M2: fold the Voxhelm site→setting→env precedence chain (`voxhelm.get_setting`) into the subpackage's
-    settings module.
-  - Done when: the cycle is gone (no function-body imports papering it over), the subpackage boundaries match the
-    three concerns, and the optional-extra decision is recorded.
-
 - [ ] Legacy API consolidation (architecture review M4 remainder, M5)
   - Related to: Consider stricter mypy annotation checks (feeds.py is the shared offender).
   - Scope: freeze and document `api/views.py` as legacy, migrate still-used endpoints to the editor API conventions
