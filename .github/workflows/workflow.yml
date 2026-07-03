@@ -77,7 +77,9 @@ jobs:
           uv run ruff check .
 
       - name: Run mypy
-        run: uv run mypy
+        # django-stubs imports the settings module (tests.settings, kept out of the
+        # shipped package) at runtime, so the repo root must be on PYTHONPATH.
+        run: PYTHONPATH="$(pwd)" uv run mypy
 
       - name: Run test suite with coverage enforcement
         run: |

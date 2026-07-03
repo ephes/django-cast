@@ -71,7 +71,9 @@ test-one TARGET:
 
 # Run type checks with mypy
 typecheck:
-    uv run mypy
+    # django-stubs imports the settings module (tests.settings, kept out of the
+    # shipped package) at runtime, so the repo root must be on PYTHONPATH.
+    PYTHONPATH="{{justfile_directory()}}" uv run mypy
 
 # Run linting and formatting with ruff
 lint:

@@ -615,7 +615,8 @@ def test_render_podcast_index_without_hitting_the_database(rf, blog_data):
     the database should not be hit.
     """
     data = blog_data
-    # add postcast_audio
+    # add podcast_audio
+    data["post_by_id"][1]["type"] = "episode"
     data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
     reset_queries()
     # with connection.execute_wrapper(blocker):
@@ -1250,11 +1251,22 @@ def test_get_facet_choices():
 @pytest.mark.django_db
 def test_deserialize_blog_returns_blog(blog):
     data = serialize_blog(blog)
+    assert data["type"] == "blog"
     rebuilt = deserialize_blog(data)
     assert isinstance(rebuilt, Blog)
     assert not isinstance(rebuilt, Podcast)
     assert rebuilt.title == blog.title
     assert rebuilt.subtitle == blog.subtitle
+
+
+@pytest.mark.django_db
+def test_deserialize_legacy_blog_without_type_returns_blog(blog):
+    data = serialize_blog(blog)
+    data.pop("type")
+    rebuilt = deserialize_blog(data)
+    assert isinstance(rebuilt, Blog)
+    assert not isinstance(rebuilt, Podcast)
+    assert rebuilt.title == blog.title
 
 
 @pytest.mark.django_db
@@ -1267,6 +1279,7 @@ def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit", "itunes_type", "subtitle"])
 
     data = serialize_blog(podcast_with_artwork)
+    assert data["type"] == "podcast"
     rebuilt = deserialize_blog(data)
 
     assert isinstance(rebuilt, Podcast)
@@ -1282,6 +1295,21 @@ def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     # no choices found
     choices = get_facet_choices({}, "foobar")
     assert choices == []
+
+
+@pytest.mark.django_db
+def test_deserialize_legacy_podcast_without_type_returns_podcast(podcast_with_artwork):
+    podcast_with_artwork.itunes_categories = "Technology"
+    podcast_with_artwork.keywords = "foo,bar"
+    podcast_with_artwork.explicit = 2
+    podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit"])
+
+    data = serialize_blog(podcast_with_artwork)
+    data.pop("type")
+    rebuilt = deserialize_blog(data)
+
+    assert isinstance(rebuilt, Podcast)
+    assert rebuilt.keywords == podcast_with_artwork.keywords
 
 
 @pytest.mark.django_db
@@ -1454,10 +1482,85 @@ def test_serialize_deserialize_roundtrip_for_media_types():
 @pytest.mark.django_db
 def test_serialize_deserialize_roundtrip_for_post_types(post, episode):
     post_data = serialize_post(post)
+    assert post_data["type"] == "post"
     assert serialize_post(deserialize_post(post_data)) == post_data
 
     episode_data = serialize_episode(episode)
+    assert episode_data["type"] == "episode"
     assert serialize_episode(deserialize_episode(episode_data)) == episode_data
+
+
+def test_feed_context_deserializes_post_discriminator(blog_data):
+    data = deepcopy(blog_data)
+    data.update(
+        {
+            "site": {"id": 1},
+            "blog_url": "/some-blog/",
+        }
+    )
+
+    repository = FeedContext.create_from_cachable_data(data=data)
+
+    assert isinstance(repository.post_by_id[1], Post)
+    assert not isinstance(repository.post_by_id[1], Episode)
+
+
+def test_feed_context_deserializes_episode_discriminator(blog_data):
+    data = deepcopy(blog_data)
+    data.update(
+        {
+            "site": {"id": 1},
+            "blog_url": "/some-blog/",
+        }
+    )
+    data["post_by_id"][1]["type"] = "episode"
+    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
+
+    repository = FeedContext.create_from_cachable_data(data=data)
+
+    assert isinstance(repository.post_by_id[1], Episode)
+
+
+def test_feed_context_deserializes_legacy_post_without_type(blog_data):
+    data = deepcopy(blog_data)
+    data.update(
+        {
+            "site": {"id": 1},
+            "blog_url": "/some-blog/",
+        }
+    )
+    data["post_by_id"][1].pop("type")
+
+    repository = FeedContext.create_from_cachable_data(data=data)
+
+    assert isinstance(repository.post_by_id[1], Post)
+    assert not isinstance(repository.post_by_id[1], Episode)
+
+
+def test_feed_context_deserializes_legacy_episode_without_type(blog_data):
+    data = deepcopy(blog_data)
+    data.update(
+        {
+            "site": {"id": 1},
+            "blog_url": "/some-blog/",
+        }
+    )
+    data["post_by_id"][1].pop("type")
+    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
+
+    repository = FeedContext.create_from_cachable_data(data=data)
+
+    assert isinstance(repository.post_by_id[1], Episode)
+
+
+def test_blog_index_context_deserializes_legacy_episode_without_type(blog_data):
+    data = deepcopy(blog_data)
+    data["post_by_id"][1].pop("type")
+    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
+
+    repository = BlogIndexContext.create_from_cachable_data(data=data)
+
+    assert isinstance(repository.post_by_id[1], Episode)
 
 
 @pytest.mark.django_db

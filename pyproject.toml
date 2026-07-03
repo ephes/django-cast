@@ -38,7 +38,6 @@ dependencies = [
     "django>=4.2,<7",  # Django itself
     "django-crispy-forms",  # bootstrap4 theme
     "django-contrib-comments",  # comments framework
-    "django-environ",  # needed by pluggy and pytest
     "django-filter",  # filter section on blog index
     "django-htmx",  # htmx support
     "django-model-utils",  # model mixins
@@ -70,7 +69,6 @@ module-name = "cast"
 [dependency-groups]
 dev = [
     "django-allauth",  # for mypy
-    "django-environ",
     "django_extensions",
     "django-stubs[compatible-mypy]",
     "factory_boy",
@@ -137,12 +135,17 @@ addopts = [
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
+follow_imports = "silent"
 plugins = ["mypy_django_plugin.main"]
 exclude = "[a-zA-Z]*/(migrations)|(example)/(.)*"  # ignore migrations
-files = ["src"]
+files = ["src", "tests/settings.py"]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+follow_imports = "skip"
 
 [tool.django-stubs]
-django_settings_module = "cast.settings"
+django_settings_module = "tests.settings"
 
 [tool.coverage.run]
 branch = true
@@ -151,7 +154,6 @@ omit = [
     "src/cast/migrations/*",
     "src/cast/comments/migrations/*",
     "src/cast/runner.py",
-    "src/cast/settings.py",
     "src/cast/quickstart.py",
 ]
 command_line = "-m pytest"

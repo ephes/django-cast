@@ -212,7 +212,7 @@ def styleguide(request: HtmxHttpRequest) -> HttpResponse:
 
 
 def _styleguide_is_enabled() -> bool:
-    from cast.dev_settings import dev_tools_enabled
+    from cast.dev_tools import dev_tools_enabled
 
     return dev_tools_enabled()
 

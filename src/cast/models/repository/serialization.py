@@ -184,7 +184,11 @@ def deserialize_video(data: dict[str, Any]):
 
 def serialize_blog(blog):
     """Serialize a Blog (or Podcast) model instance to a plain dict for caching."""
+    from .. import Podcast
+
+    is_podcast = isinstance(blog, Podcast)
     data = {
+        "type": "podcast" if is_podcast else "blog",
         "id": blog.pk,
         "pk": blog.pk,
         "title": blog.title,
@@ -198,10 +202,9 @@ def serialize_blog(blog):
         "template_base_dir": blog.template_base_dir,
         "description": blog.description,
     }
-    from .. import Podcast
     from ..itunes import ItunesArtWork
 
-    if isinstance(blog, Podcast):
+    if is_podcast:
         data["itunes_categories"] = blog.itunes_categories
         data["keywords"] = blog.keywords
         data["explicit"] = blog.explicit
@@ -223,11 +226,17 @@ def deserialize_blog(data: dict[str, Any]) -> "Blog":
     from ..itunes import ItunesArtWork
 
     blog_data = data.copy()
+    blog_type = blog_data.pop("type", None)
     itunes_artwork_data = blog_data.pop("itunes_artwork", None)
-    is_podcast = (
-        any(field in blog_data for field in ("itunes_categories", "keywords", "explicit"))
-        or itunes_artwork_data is not None
-    )
+    if blog_type is not None:
+        is_podcast = blog_type == "podcast"
+    else:
+        # Legacy cache entries written before the explicit discriminator fall back to key-sniffing.
+        # This fallback can be removed after one release.
+        is_podcast = (
+            any(field in blog_data for field in ("itunes_categories", "keywords", "explicit"))
+            or itunes_artwork_data is not None
+        )
     blog_class = Podcast if is_podcast else Blog
     blog = blog_class(**blog_data)
     if itunes_artwork_data is not None:
@@ -238,6 +247,7 @@ def deserialize_blog(data: dict[str, Any]) -> "Blog":
 def serialize_post(post):
     """Serialize a Post instance to a plain dict for caching."""
     return {
+        "type": "post",
         "id": post.pk,
         "pk": post.pk,
         "uuid": post.uuid,
@@ -254,12 +264,15 @@ def deserialize_post(data: dict[str, Any]):
     """Reconstruct a Post instance from a serialized dict."""
     from .. import Post
 
-    return Post(**data)
+    post_data = data.copy()
+    post_data.pop("type", None)
+    return Post(**post_data)
 
 
 def serialize_episode(post):
     """Serialize an Episode instance (post with podcast audio) to a plain dict."""
     data = {
+        "type": "episode",
         "id": post.pk,
         "pk": post.pk,
         "uuid": post.uuid,
@@ -288,6 +301,7 @@ def deserialize_episode(data: dict[str, Any]):
     from .. import Episode
 
     episode_data = data.copy()
+    episode_data.pop("type", None)
     if "podcast_audio" in episode_data:
         episode_data["podcast_audio"] = deserialize_audio(episode_data["podcast_audio"])
     if (season_data := episode_data.get("season")) is not None:

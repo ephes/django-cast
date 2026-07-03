@@ -2,7 +2,7 @@ import warnings
 
 import pytest
 
-from cast.dev_settings import dev_tools_enabled
+from cast.dev_tools import dev_tools_enabled
 
 
 def test_dev_tools_enabled_defaults_false(settings):

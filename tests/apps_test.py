@@ -3,7 +3,6 @@ from django.test import override_settings
 import pytest
 
 import cast.appsettings as appsettings
-import cast.settings as cast_settings
 from cast.apps import CAST_APPS
 from cast.appsettings import init_cast_settings
 
@@ -91,9 +90,9 @@ def test_test_settings_keep_comments_app_ordering():
     assert cast_comments_index < django_comments_index
 
 
-def test_test_settings_import_from_cast_settings():
+def test_test_settings_are_self_contained():
     from tests import settings as test_settings
 
-    assert test_settings.SECRET_KEY == cast_settings.SECRET_KEY
-    assert test_settings.DATABASES == cast_settings.DATABASES
-    assert test_settings.TEMPLATES == cast_settings.TEMPLATES
+    assert test_settings.ROOT_URLCONF == "tests.urls"
+    assert test_settings.SECRET_KEY
+    assert test_settings.DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3"
