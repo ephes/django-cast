@@ -1,8 +1,10 @@
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
 
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage, InvalidStorageError, default_storage, storages
+
+from cast import appsettings
 
 PRIVATE_MEDIA_STORAGE_ALIAS = "cast_private_media"
 TRANSCRIPT_STORAGE_ALIAS = "cast_public_transcripts"
@@ -14,7 +16,7 @@ class PrivateFileSystemStorage(FileSystemStorage):
 
 
 def get_private_media_root() -> str:
-    configured_root = getattr(settings, "CAST_PRIVATE_MEDIA_ROOT", "")
+    configured_root = appsettings.CAST_PRIVATE_MEDIA_ROOT
     if configured_root:
         return str(configured_root)
     media_root = Path(getattr(settings, "MEDIA_ROOT", "."))

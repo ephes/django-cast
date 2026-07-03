@@ -28,6 +28,7 @@ from wagtail.images.models import Image
 from wagtail.images.models import Rendition
 from wagtail.models import Page, Site
 
+from cast import appsettings
 from cast.devdata import (
     add_audio_to_body,
     add_gallery_to_body,
@@ -607,7 +608,7 @@ def _create_styleguide_galleries(images: list[Image] | None, user) -> list[Galle
         image_ids = [image.pk for image in images if image and image.pk]
         images_by_id = {image.pk: image for image in Image.objects.filter(pk__in=image_ids)}
         ordered_images = [images_by_id[image_id] for image_id in image_ids if image_id in images_by_id]
-        chunk_size = int(getattr(settings, "CAST_STYLEGUIDE_GALLERY_CHUNK_SIZE", 6))
+        chunk_size = int(appsettings.CAST_STYLEGUIDE_GALLERY_CHUNK_SIZE)
         for start in range(0, len(ordered_images), chunk_size):
             chunk = ordered_images[start : start + chunk_size]
             if not chunk:  # pragma: no cover
@@ -743,13 +744,13 @@ def _styleguide_transcript_data() -> dict[str, Any]:
 
 
 def _styleguide_transcript_excerpt(data: dict[str, Any]) -> dict[str, Any]:
-    max_segments = int(getattr(settings, "CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS", 2))
+    max_segments = int(appsettings.CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS)
     transcripts = list(data.get("transcripts", []))
     return {**data, "transcripts": transcripts[:max_segments]}
 
 
 def _styleguide_body_gallery_limit() -> int:
-    return int(getattr(settings, "CAST_STYLEGUIDE_BODY_GALLERY_LIMIT", 1))
+    return int(appsettings.CAST_STYLEGUIDE_BODY_GALLERY_LIMIT)
 
 
 def _ensure_podlove_transcript(audio: Audio, data: dict[str, Any]) -> Transcript:
@@ -1034,11 +1035,11 @@ class _StyleguideTranscriptParser(HTMLParser):
 
 
 def _styleguide_remote_media_enabled() -> bool:
-    return bool(getattr(settings, "CAST_STYLEGUIDE_REMOTE_MEDIA", False))
+    return bool(appsettings.CAST_STYLEGUIDE_REMOTE_MEDIA)
 
 
 def _styleguide_setting_list(name: str) -> list[str]:
-    value = getattr(settings, name, None)
+    value = getattr(appsettings, name)
     if value is None:
         return []
     if isinstance(value, (list, tuple)):
@@ -1053,34 +1054,34 @@ def _styleguide_image_source_urls() -> list[str]:
 
 
 def _styleguide_podcast_source_url() -> str | None:
-    url = getattr(settings, "CAST_STYLEGUIDE_PODCAST_SOURCE_URL", None)
+    url = appsettings.CAST_STYLEGUIDE_PODCAST_SOURCE_URL
     return str(url) if url else None
 
 
 def _styleguide_transcript_source_url() -> str | None:
-    url = getattr(settings, "CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL", None)
+    url = appsettings.CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL
     return str(url) if url else None
 
 
 def _styleguide_video_source_url() -> str | None:
-    url = getattr(settings, "CAST_STYLEGUIDE_VIDEO_SOURCE_URL", None)
+    url = appsettings.CAST_STYLEGUIDE_VIDEO_SOURCE_URL
     return str(url) if url else None
 
 
 def _styleguide_remote_timeout() -> float:
-    return float(getattr(settings, "CAST_STYLEGUIDE_REMOTE_TIMEOUT", 8))
+    return float(appsettings.CAST_STYLEGUIDE_REMOTE_TIMEOUT)
 
 
 def _styleguide_remote_image_limit() -> int:
-    return int(getattr(settings, "CAST_STYLEGUIDE_IMAGE_LIMIT", 6))
+    return int(appsettings.CAST_STYLEGUIDE_IMAGE_LIMIT)
 
 
 def _styleguide_generate_renditions() -> bool:
-    return bool(getattr(settings, "CAST_STYLEGUIDE_GENERATE_RENDITIONS", False))
+    return bool(appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS)
 
 
 def _styleguide_transcript_max_segments() -> int:
-    return int(getattr(settings, "CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS", 12))
+    return int(appsettings.CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS)
 
 
 def _styleguide_request(url: str) -> Request:

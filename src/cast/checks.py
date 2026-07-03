@@ -10,24 +10,18 @@ from django.apps import AppConfig, apps
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
+from cast import appsettings
+from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.apps import CAST_MIDDLEWARE
 from cast.post_body_blocks import validate_post_body_block_setting
 
 # Source extensions to consider
 SOURCE_EXTENSIONS = frozenset({".ts", ".tsx", ".js", ".jsx", ".vue", ".css", ".scss", ".sass"})
 
-CAST_SETTING_TYPES: tuple[tuple[str, type], ...] = (
-    ("CAST_COMMENTS_ENABLED", bool),
-    ("CAST_COMMENTS_ALLOW_AUTHOR_EDITS", bool),
-    ("CAST_CUSTOM_THEMES", list),
-    ("CAST_FOLLOW_LINKS", dict),
-    ("CAST_FILTERSET_FACETS", list),
-    ("CAST_IMAGE_FORMATS", list),
-    ("CAST_REGULAR_IMAGE_SLOT_DIMENSIONS", list),
-    ("CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", list),
-    ("CAST_REPOSITORY", str),
-    ("CAST_PODLOVE_PLAYER_THEMES", dict),
-    ("CAST_AUDIO_PLAYER", str),
+CAST_SETTING_TYPES: tuple[tuple[str, type], ...] = tuple(
+    (name, cast_setting.check_type)
+    for name, cast_setting in CAST_SETTING_REGISTRY.items()
+    if cast_setting.check_type is not None
 )
 
 VALID_AUDIO_PLAYERS = frozenset({"podlove", "custom"})
@@ -91,7 +85,10 @@ def check_cast_audio_player_settings(
     """Validate the value of the custom-audio-player setting."""
     errors: list[Error] = []
 
-    player = getattr(settings, "CAST_AUDIO_PLAYER", None)
+    # Read through the central accessor so an unset value resolves to the
+    # registry default; an explicit ``CAST_AUDIO_PLAYER = None`` still skips
+    # validation as before.
+    player = appsettings.CAST_AUDIO_PLAYER
     if player is not None and player not in VALID_AUDIO_PLAYERS:
         valid = ", ".join(sorted(VALID_AUDIO_PLAYERS))
         errors.append(

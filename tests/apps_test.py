@@ -60,6 +60,14 @@ def test_appsettings_custom_themes_can_come_from_settings(settings):
     assert appsettings.CAST_CUSTOM_THEMES == [("plain", "Plain"), ("bootstrap4", "Bootstrap 4")]
 
 
+def test_appsettings_new_registry_entries_resolve_at_call_time():
+    with override_settings():
+        assert appsettings.CAST_STYLEGUIDE_IMAGE_LIMIT == 6
+
+    with override_settings(CAST_STYLEGUIDE_IMAGE_LIMIT=3):
+        assert appsettings.CAST_STYLEGUIDE_IMAGE_LIMIT == 3
+
+
 def test_test_settings_include_all_cast_apps():
     from tests import settings as test_settings
 
