@@ -318,6 +318,15 @@ loaded for every session. Direction: split the biggest modules into packages wit
 domain fixtures into per-directory conftests. Also add `tests/*.sqlite3` to `.gitignore` and consider a
 `tests/support/` package for the helper modules mixed into `tests/` root.
 
+Fix note (2026-07-03, fixed): the seven largest flat modules were split into per-directory packages —
+`tests/api/`, `tests/transcripts/`, `tests/repository/`, `tests/voxhelm/`, `tests/models/`,
+`tests/styleguide/` — each an `__init__.py` package with a local `conftest.py`. No module exceeds ~940 lines
+now. Directory-exclusive fixtures (`mp3_audio`/`create_minimal_mp3`, `video_with_poster`, `post_in_podcast`)
+moved from the root conftest (912 → 876 lines) into the owning directory's conftest, each verified used only
+under that directory. The reorganisation is behavior-preserving: the collected set of test node-ID suffixes is
+identical before and after (2148 tests, verified by an independent suffix-multiset diff against the pre-split
+commit, empty), and every moved test body is unchanged. The `tests/support/` helper-package idea is deferred.
+
 ### M11. Packaging and type-check metadata inconsistencies
 
 - Conflicting license classifiers in `pyproject.toml` (BSD at :24, MIT at :28; `LICENSE` says BSD) and
@@ -335,6 +344,13 @@ are really theme- or dev-only, and factor tox deps into a base env.
 
 Fix note (partial, 2026-07-02): classifiers deduplicated (BSD only), mypy pinned to 3.11, legacy django-stubs
 plugin table removed. Still open: the runtime-dependency audit and the tox base-env refactor.
+
+Fix note (2026-07-03, fixed): `[testenv:fast]` now inherits the shared tool deps and `setenv` from `[testenv]`
+via `{[testenv]deps}`/`{[testenv]setenv}` (keeping only its own Django/wagtail pins), so the duplicated
+dependency and env-var lists are gone. The runtime-dependency audit found every `[project]` dependency except
+`setuptools` has a direct `src/cast` reference; `setuptools` has none but is documented as required by
+`django-model-utils` on Python ≥ 3.12, so it was left in place (a scratch-venv removal proof is the residual).
+`django-environ` was already removed in the M6 slice.
 
 ### M12. Undocumented settings and quickstart template drift — Partially fixed (2026-07-03)
 

@@ -73,15 +73,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     fixed on 2026-07-02 with a flat-query-count guard test.)
   - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
 
-- [ ] Test-suite hygiene (architecture review M10/M11 remainder)
-  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
-  - Scope: split the largest test modules and the ~900-line conftest into per-directory packages with local
-    conftests (M10); audit theme-/dev-only runtime dependencies and factor the duplicated tox env deps into a
-    base env (M11 remainder). (M6 — test settings moved to `tests/`, `dev_settings.py` → `dev_tools.py`,
-    `django-environ` dropped — and M7 — explicit cache `type` discriminator — landed 2026-07-03.)
-  - Done when: no test module exceeds ~1000 lines without a local conftest, and the duplicated tox env deps are
-    factored into a shared base env.
-
 - [ ] Editor API remote media import safety design
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
