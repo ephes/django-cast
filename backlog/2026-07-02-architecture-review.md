@@ -336,10 +336,12 @@ belongs to the "Revisit onboarding and authoring workflows" backlog item.
 - The spam filter keeps its algorithm as pure functions with a thin model around it; comment posting handles
   concurrency with `select_for_update` and post-commit signals.
 
-## Suggested first slices
+## Suggested first slices (historical — all completed by 2026-07-03)
 
-1. Fix B1 and B2 with tests (small, isolated, immediate value).
+1. Fix B1 and B2 with tests (small, isolated, immediate value). — Done 2026-07-02.
 2. Delete the five dead config/doc files and unpin the pytest-randomly seed (H5, H6) — pure cleanup, no behavior
-   risk beyond newly surfaced test-order bugs, which are the point.
+   risk beyond newly surfaced test-order bugs, which are the point. — Done 2026-07-02.
 3. Pick one structural theme to shape into its own backlog item: the save-side-effects extraction (H2) or the
-   media-views deduplication (H4) are the most self-contained.
+   media-views deduplication (H4) are the most self-contained. — Done: H2 phase 1 and H4 landed 2026-07-02,
+   H3/M9 and M2/M12 followed 2026-07-02/03. Remaining themes (M3, M4/M5, M6/M7/M10/M11, model-layer phase 2)
+   live as items in `BACKLOG.md`.
