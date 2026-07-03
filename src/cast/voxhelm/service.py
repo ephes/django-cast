@@ -1,78 +1,26 @@
 from __future__ import annotations
 
 import json
-import os
-import re
 from dataclasses import dataclass
-from time import monotonic, sleep
 from typing import TYPE_CHECKING, Any
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
-from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django.urls import reverse
 from wagtail.models import Site
 
-from .file_replacement import StagedFileReplacementGroup, stage_file_replacement
-from .models import Transcript, TranscriptGeneration
+from cast.models.contributors import ContributorVoiceReference
+from cast.models.transcript import Transcript
+from cast.models.transcript_generation import TranscriptGeneration
+from cast.transcripts.generation_status import get_transcript_generation
+
+from ..file_replacement import StagedFileReplacementGroup, stage_file_replacement
+from .client import TERMINAL_JOB_STATES, VoxhelmClient
+from .exceptions import VoxhelmError
+from .task_refs import resolve_audio_task_ref
 
 if TYPE_CHECKING:
-    from .models import Audio
+    from cast.models.audio import Audio
 
-TERMINAL_JOB_STATES = {"succeeded", "failed", "canceled", "expired"}
-SITE_SETTING_FIELD_MAP = {
-    "CAST_VOXHELM_API_BASE": "api_base",
-    "CAST_VOXHELM_API_KEY": "api_token",
-    "CAST_VOXHELM_MODEL": "model",
-    "CAST_VOXHELM_LANGUAGE": "language",
-    "CAST_VOXHELM_DIARIZATION_ENABLED": "diarization_enabled",
-    "CAST_VOXHELM_KNOWN_SPEAKER_ENABLED": "known_speaker_enabled",
-}
-KNOWN_SPEAKER_STRATEGY = "pyannote_known_speaker"
-TRUE_SETTING_VALUES = {"1", "true", "yes", "on"}
-FALSE_SETTING_VALUES = {"0", "false", "no", "off"}
-MAX_VOXHELM_ARTIFACT_BYTES = 10 * 1024 * 1024
-MAX_VOXHELM_API_RESPONSE_BYTES = 1024 * 1024
-MAX_VOXHELM_ERROR_BYTES = 16 * 1024
 DOTE_REQUIRED_KEYS = {"startTime", "endTime", "speakerDesignation", "text"}
-
-
-class VoxhelmError(RuntimeError):
-    """Raised when Voxhelm transcription or artifact retrieval fails."""
-
-
-class NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-def open_url(request: Request, *, timeout: float, follow_redirects: bool = True):
-    if follow_redirects:
-        return urlopen(request, timeout=timeout)
-    return build_opener(NoRedirectHandler).open(request, timeout=timeout)
-
-
-def read_response_bytes(response, *, max_bytes: int | None = None) -> bytes:
-    if max_bytes is None:
-        return response.read()
-    data = response.read(max_bytes + 1)
-    if len(data) > max_bytes:
-        raise VoxhelmError(f"Voxhelm response exceeded the maximum size of {max_bytes} bytes.")
-    return data
-
-
-def read_http_error_detail(exc: HTTPError) -> str:
-    data = exc.read(MAX_VOXHELM_ERROR_BYTES + 1)
-    if len(data) > MAX_VOXHELM_ERROR_BYTES:
-        data = data[:MAX_VOXHELM_ERROR_BYTES]
-        suffix = " [truncated]"
-    else:
-        suffix = ""
-    detail = data.decode("utf-8", errors="replace").strip() or str(exc.reason)
-    return f"{detail}{suffix}"
 
 
 @dataclass(frozen=True)
@@ -95,84 +43,6 @@ class TranscriptSubmission:
 class TranscriptEnqueueResult:
     generation: TranscriptGeneration
     enqueued: bool
-
-
-def normalize_api_base(api_base: str) -> tuple[str, str]:
-    normalized = api_base.rstrip("/")
-    if normalized.endswith("/v1"):
-        return normalized[: -len("/v1")], normalized
-    return normalized, f"{normalized}/v1"
-
-
-def get_site_setting_value(name: str, request_or_site: HttpRequest | Site | None) -> object:
-    field_name = SITE_SETTING_FIELD_MAP.get(name)
-    if field_name is None or request_or_site is None:
-        return None
-
-    from .models import VoxhelmSettings
-
-    if isinstance(request_or_site, Site):
-        site_settings = VoxhelmSettings.for_site(request_or_site)
-    else:
-        site_settings = VoxhelmSettings.for_request(request_or_site)
-    value = getattr(site_settings, field_name, "")
-    if isinstance(value, str):
-        return value.strip()
-    return value
-
-
-def get_setting(name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None) -> object:
-    site_value = get_site_setting_value(name, request_or_site)
-    if site_value not in {None, ""}:
-        return site_value
-    value = getattr(settings, name, None)
-    if value not in {None, ""}:
-        return value
-    return os.getenv(name, default)
-
-
-def require_setting(name: str, *, request_or_site: HttpRequest | Site | None = None) -> str:
-    value = get_setting(name, request_or_site=request_or_site)
-    if not isinstance(value, str) or not value.strip():
-        raise ImproperlyConfigured(f"{name} must be configured as a Django setting or environment variable.")
-    return value.strip()
-
-
-def get_float_setting(name: str, default: float, *, request_or_site: HttpRequest | Site | None = None) -> float:
-    value = get_setting(name, default, request_or_site=request_or_site)
-    try:
-        return float(str(value))
-    except (TypeError, ValueError) as exc:
-        raise ImproperlyConfigured(
-            f"{name} must be configured as a numeric value in seconds through a Django setting or environment variable."
-        ) from exc
-
-
-def get_bool_setting(name: str, default: bool = False, *, request_or_site: HttpRequest | Site | None = None) -> bool:
-    value = get_setting(name, default, request_or_site=request_or_site)
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int) and value in {0, 1}:
-        return bool(value)
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if not normalized:
-            return default
-        if normalized in TRUE_SETTING_VALUES:
-            return True
-        if normalized in FALSE_SETTING_VALUES:
-            return False
-    raise ImproperlyConfigured(
-        f"{name} must be configured as a boolean value: one of 1, true, yes, on, 0, false, no, or off."
-    )
-
-
-def transcript_complete(transcript: Transcript) -> bool:
-    if not (transcript.podlove and transcript.vtt and transcript.dote):
-        return False
-    podlove_transcripts = transcript.podlove_data.get("transcripts")
-    dote_lines = transcript.dote_data.get("lines")
-    return bool(podlove_transcripts) and bool(dote_lines)
 
 
 def resolve_audio_source_url(audio: Audio) -> str:
@@ -275,63 +145,6 @@ def replace_file(field, filename: str, content: bytes) -> None:
     stage_file_replacement(field, filename, content)
 
 
-def build_audio_task_ref(
-    audio_id: int,
-    *,
-    diarization_enabled: bool = False,
-    diarization_speaker_count: int | None = None,
-) -> str:
-    task_ref = f"cast-audio-{audio_id}"
-    if not diarization_enabled:
-        return task_ref
-    task_ref = f"{task_ref}-diarized"
-    if diarization_speaker_count is not None:
-        task_ref = f"{task_ref}-{diarization_speaker_count}-speakers"
-    return task_ref
-
-
-def append_diarization_speaker_count_to_task_ref(task_ref: str, speaker_count: int | None) -> str:
-    if speaker_count is None:
-        return task_ref
-    suffix = f"-{speaker_count}-speakers"
-    if task_ref.endswith(suffix):
-        return task_ref
-    if re.search(r"-diarized-\d+-speakers$", task_ref):
-        return re.sub(r"-\d+-speakers$", suffix, task_ref)
-    return f"{task_ref}{suffix}"
-
-
-def ensure_diarized_task_ref(task_ref: str) -> str:
-    if re.search(r"-diarized(?:-\d+-speakers)?$", task_ref):
-        return task_ref
-    return f"{task_ref}-diarized"
-
-
-def strip_diarized_task_ref(task_ref: str) -> str:
-    return re.sub(r"-diarized(?:-\d+-speakers)?$", "", task_ref)
-
-
-def resolve_audio_task_ref(
-    audio_id: int,
-    *,
-    task_ref: str | None = None,
-    diarization_enabled: bool = False,
-    diarization_speaker_count: int | None = None,
-) -> str:
-    if task_ref is None:
-        return build_audio_task_ref(
-            audio_id,
-            diarization_enabled=diarization_enabled,
-            diarization_speaker_count=diarization_speaker_count,
-        )
-    if not diarization_enabled:
-        return strip_diarized_task_ref(task_ref)
-    return append_diarization_speaker_count_to_task_ref(
-        ensure_diarized_task_ref(task_ref),
-        diarization_speaker_count,
-    )
-
-
 def count_episode_diarization_speakers(episode: Any) -> int | None:
     assignments = getattr(episode, "contributor_assignments", None)
     if assignments is None:
@@ -388,8 +201,6 @@ def build_known_speaker_references(episode: Any) -> list[dict[str, Any]]:
             ordered_contributors[contributor_id] = contributor
     if not ordered_contributors:
         return []
-
-    from .models.contributors import ContributorVoiceReference
 
     references = (
         ContributorVoiceReference.objects.usable_known_speaker()
@@ -449,214 +260,6 @@ def resolve_audio_diarization_enabled(audio: Audio, client: object) -> bool:
     if mode == "disabled":
         return False
     return client_diarization_enabled(client)
-
-
-def get_transcript_generation(audio: Audio) -> TranscriptGeneration | None:
-    try:
-        return audio.transcript_generation
-    except TranscriptGeneration.DoesNotExist:
-        return None
-
-
-def get_transcript_generation_status_context(*, audio: Audio) -> dict[str, str | bool]:
-    generation = get_transcript_generation(audio)
-    if generation is None:
-        return {
-            "transcript_generation_active": False,
-            "transcript_generation_status": "",
-            "transcript_generation_message": "",
-            "transcript_generation_error": "",
-            "transcript_generation_transcript_url": "",
-        }
-
-    message_lookup = {
-        TranscriptGeneration.Status.QUEUED.value: "Transcript generation is queued.",
-        TranscriptGeneration.Status.RUNNING.value: "Transcript generation is running.",
-        TranscriptGeneration.Status.SUCCEEDED.value: "Transcript generation completed.",
-        TranscriptGeneration.Status.FAILED.value: "Transcript generation failed.",
-    }
-    transcript_url = ""
-    if generation.status == TranscriptGeneration.Status.SUCCEEDED and hasattr(audio, "transcript"):
-        transcript_url = reverse("cast-transcript:edit", args=(audio.transcript.pk,))
-    return {
-        "transcript_generation_active": generation.is_active,
-        "transcript_generation_status": generation.get_status_display(),
-        "transcript_generation_message": message_lookup[generation.status],
-        "transcript_generation_error": generation.error_message,
-        "transcript_generation_transcript_url": transcript_url,
-    }
-
-
-class VoxhelmClient:
-    def __init__(
-        self,
-        *,
-        api_base: str,
-        api_key: str,
-        model: str = "auto",
-        language: str = "",
-        diarization_enabled: bool = False,
-        known_speaker_enabled: bool = False,
-        poll_interval_seconds: float = 2.0,
-        job_timeout_seconds: float = 900.0,
-        request_timeout_seconds: float = 30.0,
-    ) -> None:
-        if not isinstance(diarization_enabled, bool):
-            raise TypeError("diarization_enabled must be a bool.")
-        if not isinstance(known_speaker_enabled, bool):
-            raise TypeError("known_speaker_enabled must be a bool.")
-        self.root_url, self.api_base = normalize_api_base(api_base)
-        self.api_key = api_key
-        self.model = model
-        self.language = language
-        self.diarization_enabled = diarization_enabled
-        self.known_speaker_enabled = known_speaker_enabled
-        self.poll_interval_seconds = poll_interval_seconds
-        self.job_timeout_seconds = job_timeout_seconds
-        self.request_timeout_seconds = request_timeout_seconds
-
-    @classmethod
-    def from_settings(cls, *, request_or_site: HttpRequest | Site | None = None) -> VoxhelmClient:
-        return cls(
-            api_base=require_setting("CAST_VOXHELM_API_BASE", request_or_site=request_or_site),
-            api_key=require_setting("CAST_VOXHELM_API_KEY", request_or_site=request_or_site),
-            model=str(get_setting("CAST_VOXHELM_MODEL", "auto", request_or_site=request_or_site)).strip() or "auto",
-            language=str(get_setting("CAST_VOXHELM_LANGUAGE", "", request_or_site=request_or_site)).strip(),
-            diarization_enabled=get_bool_setting(
-                "CAST_VOXHELM_DIARIZATION_ENABLED", False, request_or_site=request_or_site
-            ),
-            known_speaker_enabled=get_bool_setting(
-                "CAST_VOXHELM_KNOWN_SPEAKER_ENABLED", False, request_or_site=request_or_site
-            ),
-            poll_interval_seconds=get_float_setting(
-                "CAST_VOXHELM_POLL_INTERVAL", 2.0, request_or_site=request_or_site
-            ),
-            job_timeout_seconds=get_float_setting("CAST_VOXHELM_POLL_TIMEOUT", 900.0, request_or_site=request_or_site),
-            request_timeout_seconds=get_float_setting(
-                "CAST_VOXHELM_REQUEST_TIMEOUT", 30.0, request_or_site=request_or_site
-            ),
-        )
-
-    def build_url(self, path: str) -> str:
-        if path.startswith(("http://", "https://")):
-            return path
-        if path.startswith("/"):
-            return f"{self.root_url}{path}"
-        return f"{self.api_base}/{path.lstrip('/')}"
-
-    def should_send_auth(self, url: str) -> bool:
-        root_parts = urlsplit(self.root_url)
-        target_parts = urlsplit(url)
-        return (target_parts.scheme, target_parts.netloc) == (root_parts.scheme, root_parts.netloc)
-
-    def build_artifact_url(self, artifact_path: str) -> str:
-        url = self.build_url(artifact_path)
-        if not self.should_send_auth(url):
-            raise VoxhelmError("Voxhelm artifact URL must be relative or use the configured Voxhelm origin.")
-        return url
-
-    def request_bytes(
-        self,
-        *,
-        method: str,
-        path: str,
-        payload: dict[str, Any] | None = None,
-        max_bytes: int | None = None,
-        follow_redirects: bool = True,
-    ) -> bytes:
-        url = self.build_url(path)
-        body = None if payload is None else json.dumps(payload).encode("utf-8")
-        headers = {}
-        if self.should_send_auth(url):
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        if body is not None:
-            headers["Content-Type"] = "application/json"
-        request = Request(url, data=body, headers=headers, method=method)
-        try:
-            with open_url(
-                request, timeout=self.request_timeout_seconds, follow_redirects=follow_redirects
-            ) as response:
-                return read_response_bytes(response, max_bytes=max_bytes)
-        except HTTPError as exc:
-            detail = read_http_error_detail(exc)
-            raise VoxhelmError(f"Voxhelm request failed with status {exc.code}: {detail}") from exc
-        except URLError as exc:
-            raise VoxhelmError(f"Voxhelm request failed: {exc.reason}") from exc
-
-    def request_json(self, *, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        raw = self.request_bytes(
-            method=method,
-            path=path,
-            payload=payload,
-            max_bytes=MAX_VOXHELM_API_RESPONSE_BYTES,
-            follow_redirects=False,
-        )
-        data = json.loads(raw.decode("utf-8"))
-        if not isinstance(data, dict):
-            raise VoxhelmError("Voxhelm returned a non-object JSON payload.")
-        return data
-
-    def submit_transcription_job(
-        self,
-        *,
-        source_url: str,
-        task_ref: str,
-        context: dict[str, Any],
-        speaker_count: int | None = None,
-        diarization_enabled: bool | None = None,
-        known_speakers: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
-        if speaker_count is not None and (
-            not isinstance(speaker_count, int) or isinstance(speaker_count, bool) or speaker_count < 1
-        ):
-            raise VoxhelmError("speaker_count must be a positive integer when provided.")
-        send_diarization = self.diarization_enabled if diarization_enabled is None else diarization_enabled
-        if not isinstance(send_diarization, bool):
-            raise TypeError("diarization_enabled must be a bool when provided.")
-        payload = {
-            "job_type": "transcribe",
-            "priority": "normal",
-            "lane": "batch",
-            "backend": "auto",
-            "model": self.model,
-            "input": {"kind": "url", "url": source_url},
-            "output": {"formats": ["podlove", "dote", "vtt"]},
-            "context": context,
-            "task_ref": task_ref,
-        }
-        if self.language:
-            payload["language"] = self.language
-        if send_diarization:
-            diarization: dict[str, Any] = {"enabled": True}
-            if speaker_count is not None:
-                diarization["num_speakers"] = speaker_count
-            if known_speakers:
-                diarization["strategy"] = KNOWN_SPEAKER_STRATEGY
-                diarization["known_speakers"] = known_speakers
-            payload["diarization"] = diarization
-        return self.request_json(method="POST", path="jobs", payload=payload)
-
-    def get_job(self, job_id: str) -> dict[str, Any]:
-        return self.request_json(method="GET", path=f"jobs/{job_id}")
-
-    def wait_for_job(self, job_id: str) -> dict[str, Any]:
-        deadline = monotonic() + self.job_timeout_seconds
-        while True:
-            job_payload = self.get_job(job_id)
-            state = str(job_payload.get("state", ""))
-            if state in TERMINAL_JOB_STATES:
-                return job_payload
-            if monotonic() >= deadline:
-                raise VoxhelmError(f"Timed out waiting for Voxhelm job {job_id}.")
-            sleep(self.poll_interval_seconds)
-
-    def download_artifact(self, artifact_path: str) -> bytes:
-        return self.request_bytes(
-            method="GET",
-            path=self.build_artifact_url(artifact_path),
-            max_bytes=MAX_VOXHELM_ARTIFACT_BYTES,
-            follow_redirects=False,
-        )
 
 
 class VoxhelmTranscriptService:
@@ -847,7 +450,8 @@ def enqueue_audio_transcript_generation(
         site=site,
         requested_by=requested_by,
     )
-    from .voxhelm_tasks import complete_transcript_generation
+    # Deliberately imported at enqueue time: importing voxhelm_tasks requires the "cast_transcripts" TASKS backend to be configured (django-tasks resolves it at decoration).
+    from ..voxhelm_tasks import complete_transcript_generation
 
     try:
         task_result = complete_transcript_generation.enqueue(generation.pk)

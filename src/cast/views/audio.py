@@ -10,6 +10,7 @@ from wagtail.permission_policies.collections import CollectionOwnershipPermissio
 from ..forms import AudioForm
 from ..models import Audio
 from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
+from ..voxhelm import voxhelm_configured
 from . import AuthenticatedHttpRequest
 from .media import MediaAdminConfig, MediaAdminViews
 from .voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_audio
@@ -55,7 +56,8 @@ def _delete_old_audio_files(audio_id: int, form: Any) -> None:
 def _extra_audio_edit_context(request: HttpRequest, audio: Audio) -> dict[str, Any]:
     return {
         "generate_transcript_url": reverse("cast-voxhelm:generate_audio", args=(audio.pk,)),
-        "user_can_generate_transcript": user_can_generate_transcript_for_audio(request=request, audio=audio),
+        "user_can_generate_transcript": voxhelm_configured(request_or_site=request)
+        and user_can_generate_transcript_for_audio(request=request, audio=audio),
         **get_audio_transcript_status_context(audio=audio),
     }
 

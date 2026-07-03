@@ -458,7 +458,7 @@ def test_client_submit_job_and_download_artifact(mocker):
             return FakeResponse(b'{"id": "job-1", "state": "queued"}')
         return FakeResponse(b"artifact-bytes")
 
-    mocker.patch("cast.voxhelm.open_url", side_effect=fake_open_url)
+    mocker.patch("cast.voxhelm.client.open_url", side_effect=fake_open_url)
     client = VoxhelmClient(
         api_base="https://voxhelm.example",
         api_key="secret",
@@ -577,7 +577,7 @@ def test_client_request_bytes_omits_auth_for_cross_origin_url(mocker):
         requests.append(request)
         return FakeResponse(b"{}")
 
-    mocker.patch("cast.voxhelm.open_url", side_effect=fake_open_url)
+    mocker.patch("cast.voxhelm.client.open_url", side_effect=fake_open_url)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     assert client.request_bytes(method="POST", path="https://api.other.example/jobs", payload={"ok": True}) == b"{}"
@@ -589,7 +589,7 @@ def test_client_request_bytes_omits_auth_for_cross_origin_url(mocker):
 
 
 def test_client_download_artifact_rejects_cross_origin_absolute_url(mocker):
-    open_url_mock = mocker.patch("cast.voxhelm.open_url")
+    open_url_mock = mocker.patch("cast.voxhelm.client.open_url")
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="configured Voxhelm origin"):
@@ -605,7 +605,7 @@ def test_client_download_artifact_allows_same_origin_absolute_url(mocker):
         requests.append((request, timeout, follow_redirects))
         return FakeResponse(b"artifact-bytes")
 
-    mocker.patch("cast.voxhelm.open_url", side_effect=fake_open_url)
+    mocker.patch("cast.voxhelm.client.open_url", side_effect=fake_open_url)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     artifact = client.download_artifact("https://voxhelm.example/v1/jobs/job-1/artifacts/transcript.vtt")
@@ -616,8 +616,8 @@ def test_client_download_artifact_allows_same_origin_absolute_url(mocker):
 
 
 def test_client_download_artifact_rejects_oversized_response(mocker):
-    mocker.patch("cast.voxhelm.MAX_VOXHELM_ARTIFACT_BYTES", 4)
-    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b"12345"))
+    mocker.patch("cast.voxhelm.client.MAX_VOXHELM_ARTIFACT_BYTES", 4)
+    mocker.patch("cast.voxhelm.client.open_url", return_value=FakeResponse(b"12345"))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="maximum size"):
@@ -625,8 +625,8 @@ def test_client_download_artifact_rejects_oversized_response(mocker):
 
 
 def test_client_download_artifact_allows_response_at_size_limit(mocker):
-    mocker.patch("cast.voxhelm.MAX_VOXHELM_ARTIFACT_BYTES", 4)
-    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b"1234"))
+    mocker.patch("cast.voxhelm.client.MAX_VOXHELM_ARTIFACT_BYTES", 4)
+    mocker.patch("cast.voxhelm.client.open_url", return_value=FakeResponse(b"1234"))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     assert client.download_artifact("/v1/jobs/job-1/artifacts/transcript.vtt") == b"1234"
@@ -640,7 +640,7 @@ def test_client_download_artifact_rejects_redirect_response(mocker):
         hdrs=None,
         fp=io.BytesIO(b"redirect"),
     )
-    open_url_mock = mocker.patch("cast.voxhelm.open_url", side_effect=error)
+    open_url_mock = mocker.patch("cast.voxhelm.client.open_url", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="302: redirect"):
@@ -652,7 +652,7 @@ def test_client_download_artifact_rejects_redirect_response(mocker):
 def test_open_url_without_redirects_uses_no_redirect_opener(mocker):
     opener = mocker.Mock()
     opener.open.return_value = FakeResponse(b"ok")
-    build_opener = mocker.patch("cast.voxhelm.build_opener", return_value=opener)
+    build_opener = mocker.patch("cast.voxhelm.client.build_opener", return_value=opener)
     request = Request("https://voxhelm.example/v1/jobs")
 
     response = open_url(request, timeout=1.0, follow_redirects=False)
@@ -669,7 +669,7 @@ def test_no_redirect_handler_blocks_redirect():
 
 
 def test_client_request_json_requires_object_response(mocker):
-    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b'["not-an-object"]'))
+    mocker.patch("cast.voxhelm.client.open_url", return_value=FakeResponse(b'["not-an-object"]'))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="non-object"):
@@ -677,8 +677,8 @@ def test_client_request_json_requires_object_response(mocker):
 
 
 def test_client_request_json_rejects_oversized_response(mocker):
-    mocker.patch("cast.voxhelm.MAX_VOXHELM_API_RESPONSE_BYTES", 4)
-    mocker.patch("cast.voxhelm.open_url", return_value=FakeResponse(b'{"id": "job-1"}'))
+    mocker.patch("cast.voxhelm.client.MAX_VOXHELM_API_RESPONSE_BYTES", 4)
+    mocker.patch("cast.voxhelm.client.open_url", return_value=FakeResponse(b'{"id": "job-1"}'))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="maximum size"):
@@ -693,7 +693,7 @@ def test_client_request_json_rejects_redirect_response(mocker):
         hdrs=None,
         fp=io.BytesIO(b"redirect"),
     )
-    open_url_mock = mocker.patch("cast.voxhelm.open_url", side_effect=error)
+    open_url_mock = mocker.patch("cast.voxhelm.client.open_url", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="302: redirect"):
@@ -710,7 +710,7 @@ def test_client_http_error_includes_body(mocker):
         hdrs=None,
         fp=io.BytesIO(b"upstream broke"),
     )
-    mocker.patch("cast.voxhelm.urlopen", side_effect=error)
+    mocker.patch("cast.voxhelm.client.urlopen", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="502: upstream broke"):
@@ -718,7 +718,7 @@ def test_client_http_error_includes_body(mocker):
 
 
 def test_client_http_error_body_is_bounded(mocker):
-    mocker.patch("cast.voxhelm.MAX_VOXHELM_ERROR_BYTES", 4)
+    mocker.patch("cast.voxhelm.client.MAX_VOXHELM_ERROR_BYTES", 4)
     error = HTTPError(
         url="https://voxhelm.example/v1/jobs",
         code=500,
@@ -726,7 +726,7 @@ def test_client_http_error_body_is_bounded(mocker):
         hdrs=None,
         fp=io.BytesIO(b"abcdef"),
     )
-    mocker.patch("cast.voxhelm.urlopen", side_effect=error)
+    mocker.patch("cast.voxhelm.client.urlopen", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match=r"500: abcd \[truncated\]"):
@@ -741,7 +741,7 @@ def test_client_http_error_falls_back_to_reason_when_body_is_empty(mocker):
         hdrs=None,
         fp=io.BytesIO(b""),
     )
-    mocker.patch("cast.voxhelm.urlopen", side_effect=error)
+    mocker.patch("cast.voxhelm.client.urlopen", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="503: Service Unavailable"):
@@ -749,7 +749,7 @@ def test_client_http_error_falls_back_to_reason_when_body_is_empty(mocker):
 
 
 def test_client_url_error_is_wrapped(mocker):
-    mocker.patch("cast.voxhelm.urlopen", side_effect=URLError("offline"))
+    mocker.patch("cast.voxhelm.client.urlopen", side_effect=URLError("offline"))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="offline"):
@@ -812,8 +812,8 @@ def test_client_wait_for_job_times_out(mocker):
         job_timeout_seconds=5.0,
     )
     mocker.patch.object(client, "get_job", return_value={"id": "job-1", "state": "queued"})
-    mocker.patch("cast.voxhelm.monotonic", side_effect=[0.0, 5.1])
-    mocker.patch("cast.voxhelm.sleep")
+    mocker.patch("cast.voxhelm.client.monotonic", side_effect=[0.0, 5.1])
+    mocker.patch("cast.voxhelm.client.sleep")
 
     with pytest.raises(VoxhelmError, match="Timed out"):
         client.wait_for_job("job-1")
@@ -831,7 +831,7 @@ def test_client_wait_for_job_polls_until_terminal_state(mocker):
         "get_job",
         side_effect=[{"id": "job-1", "state": "queued"}, {"id": "job-1", "state": "succeeded"}],
     )
-    sleep_mock = mocker.patch("cast.voxhelm.sleep")
+    sleep_mock = mocker.patch("cast.voxhelm.client.sleep")
 
     assert client.wait_for_job("job-1") == {"id": "job-1", "state": "succeeded"}
     assert get_job.call_count == 2
@@ -1299,7 +1299,7 @@ def test_enqueue_audio_transcript_generation_creates_local_state(mocker, audio, 
     )
     service = mocker.Mock()
     service.submit_for_audio.return_value = submission
-    service_cls = mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    service_cls = mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
     enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
@@ -1355,8 +1355,8 @@ def test_enqueue_audio_transcript_generation_reuses_active_job_found_after_initi
     )
     service = mocker.Mock()
     service.client = SimpleNamespace(diarization_enabled=False)
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
-    mocker.patch("cast.voxhelm.get_transcript_generation", return_value=None)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.get_transcript_generation", return_value=None)
 
     result = enqueue_audio_transcript_generation(audio=audio)
 
@@ -1419,7 +1419,7 @@ def test_enqueue_audio_transcript_generation_uses_episode_speaker_count(mocker, 
     service = mocker.Mock()
     service.client = SimpleNamespace(diarization_enabled=True)
     service.submit_for_audio.return_value = submission
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
     enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
@@ -1452,7 +1452,7 @@ def test_enqueue_audio_transcript_generation_enabled_mode_overrides_client_disab
     service = mocker.Mock()
     service.client = SimpleNamespace(diarization_enabled=False)
     service.submit_for_audio.return_value = submission
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
     enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
@@ -1485,7 +1485,7 @@ def test_enqueue_audio_transcript_generation_disabled_mode_overrides_client_enab
     service = mocker.Mock()
     service.client = SimpleNamespace(diarization_enabled=True)
     service.submit_for_audio.return_value = submission
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
     enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
@@ -1518,7 +1518,7 @@ def test_enqueue_audio_transcript_generation_requeues_inactive_generation_with_d
     service = mocker.Mock()
     service.client = SimpleNamespace(diarization_enabled=True)
     service.submit_for_audio.return_value = submission
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
     enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-123"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
@@ -1550,7 +1550,7 @@ def test_enqueue_audio_transcript_generation_marks_failed_when_enqueue_fails(moc
     )
     service = mocker.Mock()
     service.submit_for_audio.return_value = submission
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
     enqueue_mock = mocker.Mock(side_effect=RuntimeError("queue broke"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
@@ -1567,7 +1567,7 @@ def test_enqueue_audio_transcript_generation_marks_failed_when_enqueue_fails(moc
 def test_enqueue_audio_transcript_generation_marks_failed_when_initial_submit_fails(mocker, audio, site):
     service = mocker.Mock()
     service.submit_for_audio.side_effect = VoxhelmError("voxhelm offline")
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
 
     with pytest.raises(VoxhelmError, match="voxhelm offline"):
         enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=audio.user)
@@ -1591,7 +1591,7 @@ def test_enqueue_audio_transcript_generation_preserves_existing_failed_row_when_
     )
     service = mocker.Mock()
     service.submit_for_audio.side_effect = VoxhelmError("voxhelm still offline")
-    mocker.patch("cast.voxhelm.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
 
     with pytest.raises(VoxhelmError, match="voxhelm still offline"):
         enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=audio.user)

@@ -1,6 +1,8 @@
 from django.utils.functional import cached_property
 from wagtail.admin.panels import Panel
 
+from cast.transcripts.generation_status import get_transcript_generation_status_context
+
 
 class EpisodeTranscriptStatusPanel(Panel):
     """Display transcript generation status in the episode edit form."""
@@ -19,8 +21,6 @@ class EpisodeTranscriptStatusPanel(Panel):
                     "transcript_generation_error": "",
                     "transcript_generation_transcript_url": "",
                 }
-
-            from cast.voxhelm import get_transcript_generation_status_context
 
             return get_transcript_generation_status_context(audio=audio)
 

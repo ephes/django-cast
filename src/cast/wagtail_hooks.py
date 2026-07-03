@@ -28,7 +28,9 @@ from wagtail.snippets.views.snippets import SnippetViewSet
 
 from .admin_urls import audio, contributors, transcript, video, voxhelm
 from .models import Audio, Contributor, Episode, Transcript, Video
-from .views.voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_episode
+from .transcripts.generation_status import get_transcript_generation_status_context
+from .views.voxhelm import user_can_generate_transcript_for_episode
+from .voxhelm import voxhelm_configured
 
 _T = TypeVar("_T")
 
@@ -180,6 +182,8 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
         page = context.get("page")
         if context.get("view") != "edit" or not isinstance(page, Episode):
             return False
+        if not voxhelm_configured(request_or_site=context["request"]):
+            return False
         return user_can_generate_transcript_for_episode(request=context["request"], episode=page)
 
     def get_url(self, parent_context):
@@ -194,7 +198,7 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
         page = parent_context["page"]
         audio = getattr(page, "podcast_audio", None)
         if isinstance(audio, Audio):
-            status_context = get_audio_transcript_status_context(audio=audio)
+            status_context = get_transcript_generation_status_context(audio=audio)
             context["transcript_generation_active"] = status_context["transcript_generation_active"]
         else:
             context["transcript_generation_active"] = False

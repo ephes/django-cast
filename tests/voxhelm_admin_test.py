@@ -1,5 +1,5 @@
-from urllib.parse import urlencode
 from types import SimpleNamespace
+from urllib.parse import urlencode
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -111,7 +111,9 @@ def test_voxhelm_settings_new_instance_allows_empty_token(admin_client, site):
 
 
 @pytest.mark.django_db
-def test_episode_edit_page_shows_generate_transcript_action(admin_client, episode):
+def test_episode_edit_page_shows_generate_transcript_action(admin_client, episode, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
     edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
     response = admin_client.get(f"{edit_url}?show=comments&tab=content")
 
@@ -121,6 +123,46 @@ def test_episode_edit_page_shows_generate_transcript_action(admin_client, episod
     assert "Generate transcript" in content
     assert expected_action in content
     assert "button-secondary button-longrunning" not in content
+
+
+@pytest.mark.django_db
+def test_episode_edit_page_hides_generate_transcript_action_when_unconfigured(
+    admin_client, episode, settings, monkeypatch
+):
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = ""
+    monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+    monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+
+    response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert reverse("cast-voxhelm:generate_episode", args=(episode.pk,)) not in content
+    assert "action-generate-transcript" not in content
+
+
+@pytest.mark.django_db
+def test_episode_edit_page_shows_generate_transcript_action_with_site_config(
+    admin_client, episode, settings, monkeypatch
+):
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = ""
+    monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+    monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+    site = episode.get_site()
+    assert site is not None
+    VoxhelmSettings.objects.update_or_create(
+        site=site,
+        defaults={"api_base": "https://voxhelm.example", "api_token": "secret"},
+    )
+
+    response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Generate transcript" in content
+    assert reverse("cast-voxhelm:generate_episode", args=(episode.pk,)) in content
 
 
 @pytest.mark.django_db
@@ -168,7 +210,9 @@ def test_episode_edit_page_links_succeeded_transcript(admin_client, episode):
 
 
 @pytest.mark.django_db
-def test_audio_edit_page_shows_generate_transcript_action(admin_client, audio):
+def test_audio_edit_page_shows_generate_transcript_action(admin_client, audio, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
     response = admin_client.get(reverse("castaudio:edit", args=(audio.pk,)))
 
     assert response.status_code == 200
@@ -177,6 +221,44 @@ def test_audio_edit_page_shows_generate_transcript_action(admin_client, audio):
     assert reverse("cast-voxhelm:generate_audio", args=(audio.pk,)) in content
     assert 'class="button button-secondary"' in content
     assert "button-longrunning" not in content
+
+
+@pytest.mark.django_db
+def test_audio_edit_page_hides_generate_transcript_action_when_unconfigured(
+    admin_client, audio, settings, monkeypatch
+):
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = ""
+    monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+    monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+
+    response = admin_client.get(reverse("castaudio:edit", args=(audio.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Generate transcript" not in content
+    assert f'action="{reverse("cast-voxhelm:generate_audio", args=(audio.pk,))}"' not in content
+
+
+@pytest.mark.django_db
+def test_audio_edit_page_shows_generate_transcript_action_with_site_config(
+    admin_client, audio, site, settings, monkeypatch
+):
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = ""
+    monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+    monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+    VoxhelmSettings.objects.update_or_create(
+        site=site,
+        defaults={"api_base": "https://voxhelm.example", "api_token": "secret"},
+    )
+
+    response = admin_client.get(reverse("castaudio:edit", args=(audio.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Generate transcript" in content
+    assert reverse("cast-voxhelm:generate_audio", args=(audio.pk,)) in content
 
 
 @pytest.mark.django_db
@@ -197,6 +279,32 @@ def test_audio_edit_page_shows_transcript_generation_status(admin_client, audio)
     assert "upstream broke" in content
     assert 'class="cast-transcript-status"' in content
     assert 'class="help-block"' not in content
+
+
+@pytest.mark.django_db
+def test_audio_edit_page_shows_transcript_generation_status_when_unconfigured(
+    admin_client, audio, settings, monkeypatch
+):
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = ""
+    monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+    monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+    TranscriptGeneration.objects.create(
+        audio=audio,
+        status=TranscriptGeneration.Status.FAILED,
+        task_ref=build_audio_task_ref(audio.pk),
+        error_message="upstream broke",
+    )
+
+    response = admin_client.get(reverse("castaudio:edit", args=(audio.pk,)))
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Transcript status:" in content
+    assert "Failed" in content
+    assert "upstream broke" in content
+    assert "Generate transcript" not in content
+    assert f'action="{reverse("cast-voxhelm:generate_audio", args=(audio.pk,))}"' not in content
 
 
 @pytest.mark.django_db
@@ -508,7 +616,12 @@ def test_generate_episode_transcript_denies_user_without_permissions(limited_adm
 
 
 @pytest.mark.django_db
-def test_episode_without_audio_hides_generate_transcript_action(admin_client, unpublished_episode_without_audio):
+def test_episode_without_audio_hides_generate_transcript_action(
+    admin_client, unpublished_episode_without_audio, settings
+):
+    # Configure Voxhelm so the hidden action is attributable to the missing audio, not the config gate.
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
     response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(unpublished_episode_without_audio.pk,)))
 
     assert response.status_code == 200
