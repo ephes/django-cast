@@ -99,3 +99,18 @@
   site. Transcript generation status stays visible regardless, and direct
   POST requests keep reporting missing configuration as friendly error
   messages.
+- Deduplicate ``feeds.py``: the shared ``item_description``/``item_link``/
+  ``item_pubdate`` methods and the Atom stylesheet ``write()`` now live in one
+  place, the iTunes/Podcast-Index generator mixins are statically typed
+  (no more ``# type: ignore`` or defensive ``try/except``), and podcast feed
+  XML output is unchanged.
+- Blog (non-podcast) RSS and Atom feeds now emit a stable per-entry
+  identifier and publication dates: RSS items gain ``<pubDate>`` and a
+  ``<guid isPermaLink="false">`` set to the post's UUID, and Atom entries gain
+  ``<updated>`` and a UUID ``<id>``. Feed readers may show existing blog
+  entries as new once, after which the UUID identifier survives slug and URL
+  changes.
+- Document ``cast.api.views`` as a frozen legacy API surface (including the
+  bare-text ``POST /api/upload_video/`` response); new integrations should use
+  the editor API for structured errors, scoped authorization, and ``If-Match``
+  revision handling.

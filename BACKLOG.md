@@ -73,15 +73,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     fixed on 2026-07-02 with a flat-query-count guard test.)
   - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
 
-- [ ] Legacy API consolidation (architecture review M4 remainder, M5)
-  - Related to: Consider stricter mypy annotation checks (feeds.py is the shared offender).
-  - Scope: freeze and document `api/views.py` as legacy, migrate still-used endpoints to the editor API conventions
-    (structured errors, explicit scopes/permissions, JSON responses from `VideoCreateView`), and dedupe `feeds.py`
-    (shared `item_description`/`item_link`/`write()`, typed XML handlers, `item_pubdate`/`item_guid` for the blog
-    feed).
-  - Done when: no endpoint relies on ad-hoc error shapes or bare-text responses, and `feeds.py` has one copy of the
-    shared logic with mypy-clean signatures.
-
 - [ ] Packaging and test-suite hygiene (architecture review M6/M7/M10/M11 remainder)
   - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
   - Scope: move the test settings module (committed SECRET_KEY, `tests.urls` ROOT_URLCONF) out of the shipped
@@ -197,8 +188,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: evaluate enabling `disallow_incomplete_defs = true` and/or `disallow_untyped_defs = true` incrementally,
     likely per module first instead of project-wide.
   - Notes: a quick probe showed `disallow_incomplete_defs` currently reports 123 errors in 30 files, while
-    `disallow_untyped_defs` reports 219 errors in 48 files; `src/cast/feeds.py` alone reports 21 and 24 errors
-    respectively.
+    `disallow_untyped_defs` reports 219 errors in 48 files. `src/cast/feeds.py` (previously the worst offender at
+    21/24 errors) was fully typed during the M5 dedup on 2026-07-03 — zero `# type: ignore` — so it is a natural
+    first module to opt into per-module strictness; re-probe the counts before deciding the rollout.
   - Done when: the preferred strictness level and rollout strategy are documented, and at least one initial
     module is either cleaned up or explicitly excluded/deferred.
 

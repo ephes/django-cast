@@ -220,7 +220,15 @@ breaks the theme switcher for anonymous visitors. Direction: set `permission_cla
 still-used endpoints to editor conventions.
 
 Fix note (partial, 2026-07-02): the six permission-less DRF views now declare `permission_classes = (AllowAny,)`
-explicitly. The larger legacy-API consolidation remains open.
+explicitly.
+
+Fix note (2026-07-03, resolved as freeze): `cast.api.views` is now documented as a legacy surface with a module
+docstring and a "Legacy API" section in `docs/reference/api.rst`; new clients are pointed at `cast.api.editor.*`.
+The "migrate still-used endpoints to editor conventions" direction is deliberately superseded: the 2026-06-25
+media-detail plan already committed to keeping `POST /api/upload_video/`'s bare-text `"<pk>"` 201 response for
+existing clients, and the podlove/player-config/facet-counts/theme response shapes are consumed by cast-vue via
+page-supplied URLs, so migrating their contracts would be a breaking change with no caller demand. The endpoints
+stay frozen-as-legacy rather than rewritten; no open work remains for M4.
 
 ### M5. `feeds.py` god module with duplicated feed logic and weak typing
 
@@ -231,6 +239,16 @@ explicitly. The larger legacy-API consolidation remains open.
 same module the mypy-strictness backlog item identifies as the worst offender — the two items should be tackled
 together. Also: `LatestEntriesFeed` omits `item_pubdate`/`item_guid`, so non-podcast RSS/Atom items lack guids and
 pubdates. Related to: "Consider stricter mypy annotation checks" in `BACKLOG.md`.
+
+Fix note (2026-07-03, fixed): `feeds.py` now has one copy of the shared feed logic. `item_description`,
+`item_link`, `item_pubdate`, and `item_updateddate` live on `RepositoryMixin` (deleted from both feed classes),
+and the Atom stylesheet `write()`/`add_stylesheets()` are shared via `AtomStylesheetsMixin`. The
+`PodcastIndexElements`/`ITunesElements` mixins now subclass `SyndicationFeed` so cooperative `super()` resolves
+statically; the runtime MROs and per-method owners of `AtomITunesFeedGenerator`/`RssITunesFeedGenerator` are
+unchanged (verified), so podcast XML output is byte-identical. The defensive `try/except AttributeError` and all
+seven `# type: ignore` comments are gone (feeds.py has zero). The two additive changes are on the blog feeds only:
+`LatestEntriesFeed` gains pubdate/updateddate and an explicit `<guid isPermaLink="false">`/Atom `<id>` of the
+post uuid (`serialize_post` now carries `last_published_at` so the cached path can render Atom `<updated>`).
 
 ### M6. Test-only settings and dev fixtures ship inside the installed package
 
