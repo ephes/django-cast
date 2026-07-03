@@ -24,8 +24,8 @@ Binding decisions:
 ## Slice B — M6 test settings out of the package + M7 cache type discriminator
 
 Binding decisions:
-1. `src/cast/settings.py` (test-only settings) moves to `tests/`; every reference (tox, docs, CI,
-   scripts, example) is repointed. `dev_settings.py` is renamed to match its feature-flag-resolver role
+1. The package-level test settings module moves to `tests/`; every reference (tox, docs, CI,
+   scripts, example) is repointed. `dev_tools.py` names the feature-flag-resolver role
    (name decided in the brief after inventorying importers). Shipped-package check: the sdist/wheel must
    not contain test settings. `devdata.py` split is OUT of scope (matches BACKLOG wording).
 2. M7: repository cache serialization stores an explicit `type` discriminator; `deserialize_blog`,

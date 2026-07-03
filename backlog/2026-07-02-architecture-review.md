@@ -259,6 +259,16 @@ password hasher — that a `pip install`'d user receives in site-packages. Confu
 and `views/styleguide.py`. Direction: move test settings into `tests/`, rename `dev_settings.py` to reflect its
 role, and split the genuinely runtime part of `devdata.py` from pytest fixtures.
 
+Fix note (2026-07-03, fixed): `src/cast/settings.py` is gone — its content moved into `tests/settings.py`
+(now self-contained: no `from cast.settings import *`, `INSTALLED_APPS` composed as the base Django apps plus
+`list(cast.apps.CAST_APPS)`), so `pip install django-cast` ships no test settings (verified against the built
+wheel). `dev_settings.py` was renamed to `dev_tools.py` to match its feature-flag-resolver role (content
+identical; importers in `views/dev.py`/`views/styleguide.py` and the test module repointed). `django-environ`,
+used only by the old test settings, is dropped from the dependencies. django-stubs imports its
+`django_settings_module` (now `tests.settings`) at runtime, so `just typecheck` and the CI mypy step put the
+repo root on `PYTHONPATH`. The `devdata.py` fixture/runtime split is deliberately deferred (the BACKLOG item
+scoped M6 to the settings move only).
+
 ### M7. Cache-boundary serialization relies on key-sniffing in three places
 
 `repository/serialization.py` hand-maintains per-model field lists (`serialize_post` vs `serialize_episode`
@@ -268,6 +278,15 @@ three spots that must stay consistent: `deserialize_blog` (serialization.py:227-
 Episode/Podcast requires updating the serializer, both deserializers, and the right key-sniff list, or the wrong
 class is deserialized silently. Direction: store an explicit `type` discriminator and branch on it; centralize field
 lists per model. Follows on from [2026-04-18-repository-readmodels.md](2026-04-18-repository-readmodels.md).
+
+Fix note (2026-07-03, fixed): each serializer now writes an explicit `type` discriminator
+(`serialize_blog` → `"podcast"`/`"blog"`, `serialize_post` → `"post"`, `serialize_episode` → `"episode"`), and
+the three reconstruction sites (`deserialize_blog`, `FeedContext`, `BlogIndexContext`) branch on it. Each keeps
+the old key-sniff as an explicit fallback for cache entries written before this change (commented "removable
+after one release"); the deserializers strip `type` before constructing the model. Both the discriminator and
+fallback branches are covered by new round-trip and legacy-entry tests. The per-model field-list centralization
+the finding also suggests is deliberately deferred — a larger refactor with no correctness pressure now that the
+discriminator removes the silent-misclassification risk; noted as a residual.
 
 ### M8. N+1 risk on the mixed blog-index snapshot path — Fixed (2026-07-02)
 

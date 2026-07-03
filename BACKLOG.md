@@ -73,15 +73,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     fixed on 2026-07-02 with a flat-query-count guard test.)
   - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
 
-- [ ] Packaging and test-suite hygiene (architecture review M6/M7/M10/M11 remainder)
+- [ ] Test-suite hygiene (architecture review M10/M11 remainder)
   - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
-  - Scope: move the test settings module (committed SECRET_KEY, `tests.urls` ROOT_URLCONF) out of the shipped
-    package and rename `dev_settings.py` to match its feature-flag role (M6); add an explicit type discriminator to
-    the repository cache serialization instead of key-sniffing in three places (M7); split the largest test modules
-    and the 906-line conftest into per-directory packages (M10); audit theme-/dev-only runtime dependencies and
-    factor the duplicated tox env deps into a base env (M11 remainder).
-  - Done when: `pip install django-cast` ships no test-only settings, cache deserialization branches on a stored
-    type field, and no test module exceeds ~1000 lines without a local conftest.
+  - Scope: split the largest test modules and the ~900-line conftest into per-directory packages with local
+    conftests (M10); audit theme-/dev-only runtime dependencies and factor the duplicated tox env deps into a
+    base env (M11 remainder). (M6 — test settings moved to `tests/`, `dev_settings.py` → `dev_tools.py`,
+    `django-environ` dropped — and M7 — explicit cache `type` discriminator — landed 2026-07-03.)
+  - Done when: no test module exceeds ~1000 lines without a local conftest, and the duplicated tox env deps are
+    factored into a shared base env.
 
 - [ ] Editor API remote media import safety design
   - PRD:

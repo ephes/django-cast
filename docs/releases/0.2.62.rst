@@ -114,3 +114,14 @@
   bare-text ``POST /api/upload_video/`` response); new integrations should use
   the editor API for structured errors, scoped authorization, and ``If-Match``
   revision handling.
+- Stop shipping test-only settings in the installed package. The former
+  ``cast.settings`` module (committed ``SECRET_KEY``, ``tests.urls`` root
+  URLconf, MD5 hasher) now lives entirely in ``tests/settings.py``, and
+  ``dev_settings.py`` is renamed to ``dev_tools.py`` to reflect its role as a
+  feature-flag resolver rather than a settings module. ``django-environ`` is
+  dropped from the dependencies. This is an internal packaging change with no
+  effect on configuring a real django-cast site.
+- Give the repository cache serialization an explicit ``type`` discriminator
+  instead of guessing a cached object's class from which keys are present.
+  Blog/podcast and post/episode entries now record their type and deserialize
+  by it, with a fallback that keeps entries cached by earlier versions working.
