@@ -24,7 +24,7 @@ from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACH
 
 from cast import appsettings
 from cast.devdata import create_transcript
-from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
+from cast.models import Audio, ChapterMark, File, ItunesArtWork
 from cast.models.theme import _clear_template_base_dir_choices_cache
 
 from .factories import (
@@ -259,28 +259,10 @@ def small_jpeg_io():
 
 
 # Audio testing stuff
-def create_minimal_mp3():
-    mp3 = (
-        b"\xff\xe3\x18\xc4\x00\x00\x00\x03H\x00\x00\x00\x00"
-        b"LAME3.98.2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-    )
-    return mp3
-
-
 def read_test_m4a(fixture_dir):
     with open(os.path.join(fixture_dir, "test.m4a"), "rb") as f:
         m4a = f.read()
     return m4a
-
-
-@pytest.fixture()
-def mp3_audio():
-    mp3 = create_minimal_mp3()
-    simple_mp3 = SimpleUploadedFile(name="test.mp3", content=mp3, content_type="audio/mpeg")
-    return simple_mp3
 
 
 @pytest.fixture()
@@ -371,13 +353,6 @@ def image(db, image_1px):
     image = Image(title="test", file=image_1px, collection=collection)
     image.save()
     return image
-
-
-@pytest.fixture()
-def video_with_poster(user, minimal_mp4, image_1px):
-    video = Video(user=user, original=minimal_mp4, poster=image_1px)
-    video.save()
-    return video
 
 
 @pytest.fixture()
@@ -580,17 +555,6 @@ def post(blog, body):
     return PostFactory(
         owner=blog.owner,
         parent=blog,
-        title="test entry",
-        slug="test-entry",
-        body=body,
-    )
-
-
-@pytest.fixture()
-def post_in_podcast(podcast, body):
-    return PostFactory(
-        owner=podcast.owner,
-        parent=podcast,
         title="test entry",
         slug="test-entry",
         body=body,
