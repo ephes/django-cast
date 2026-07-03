@@ -1,3 +1,12 @@
+"""Legacy django-cast API surface with frozen response contracts.
+
+This module intentionally preserves its existing response shapes for current
+clients, including ``VideoCreateView`` returning a bare-text ``"<pk>"`` body with
+``201 Created``. New clients should use ``cast.api.editor.*`` endpoints, which
+provide structured errors, scoped authorization, and ``If-Match`` revision
+conflict handling. This freeze follows the 2026-06-25 media-detail plan.
+"""
+
 import hashlib
 import json
 import logging

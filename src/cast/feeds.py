@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import cast
+from typing import Any, Protocol, cast
 
 import django
 from django.contrib.syndication.views import Feed
@@ -33,6 +33,14 @@ else:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
+class _RepositoryAwareFeed(Protocol):
+    repository: FeedContext
+
+
+class _RequestAwareFeed(Protocol):
+    request: HttpRequest
+
+
 def _is_positive_integer(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
@@ -55,7 +63,7 @@ def _is_itunes_type(value: object) -> bool:
     return value in {"episodic", "serial"}
 
 
-class RepositoryMixin:
+class RepositoryMixin(Feed):
     is_podcast: bool = False
     request: HtmxHttpRequest
 
@@ -110,9 +118,31 @@ class RepositoryMixin:
         # to avoid db queries in context_processors
         self.request.cast_site_template_base_dir = repository.template_base_dir
         self._cache_site_for_feed(request)
-        feed = super().get_feed(obj, request)  # type: ignore
-        feed.repository = repository  # pass repository to feed to be able to access it in PodcastIndexElements
+        feed = super().get_feed(obj, request)
+        # Pass repository to feed to be able to access it in PodcastIndexElements.
+        cast(_RepositoryAwareFeed, feed).repository = repository
         return feed
+
+    def item_description(self, item: Post) -> SafeText:
+        repository = None
+        if self.repository is not None:
+            repository = self.repository.get_post_detail_repository(item)
+        item.description = item.get_description(
+            request=self.request, render_detail=True, escape_html=False, repository=repository
+        )
+        return item.description
+
+    def item_link(self, item: Post) -> SafeText:
+        if self.repository is not None:
+            repository = self.repository.get_post_detail_repository(item)
+            return cast(SafeText, repository.absolute_page_url)
+        return item.get_full_url()
+
+    def item_pubdate(self, item: Post) -> datetime:
+        return item.visible_date
+
+    def item_updateddate(self, item: Post) -> datetime:
+        return item.last_published_at
 
     @staticmethod
     def _cache_site_for_feed(request: HttpRequest) -> None:
@@ -132,25 +162,38 @@ class RepositoryMixin:
         sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain=domain, name=domain)
 
 
-class AtomFeedWithStylesheets(Atom1Feed):
-    """Atom feed generator that supports XSL stylesheets."""
+class AtomStylesheetsMixin:
+    """Atom feed generator mixin that supports XSL stylesheets."""
 
-    def add_stylesheets(self, handler):
+    feed: dict[str, Any]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+    def add_stylesheets(self, handler: SimplerXMLGenerator) -> None:
         for stylesheet in self.feed.get("stylesheets") or []:
             handler.processingInstruction("xml-stylesheet", str(stylesheet))
 
-    def write(self, outfile, encoding):
+    def write(self, outfile: Any, encoding: str) -> None:
+        # Atom1Feed.write() does not call add_stylesheets() like Rss201rev2Feed does,
+        # so we override write() below to inject stylesheet processing instructions.
+        atom_feed = cast(Atom1Feed, self)
         handler = SimplerXMLGenerator(outfile, encoding, short_empty_elements=True)
         handler.startDocument()
         self.add_stylesheets(handler)
-        handler.startElement("feed", self.root_attributes())
-        self.add_root_elements(handler)
-        self.write_items(handler)
+        handler.startElement("feed", cast(Any, atom_feed.root_attributes()))
+        atom_feed.add_root_elements(handler)
+        atom_feed.write_items(handler)
         handler.endElement("feed")
 
 
-class LatestEntriesFeed(RepositoryMixin, Feed):
+class AtomFeedWithStylesheets(AtomStylesheetsMixin, Atom1Feed):
+    """Atom feed generator that supports XSL stylesheets."""
+
+
+class LatestEntriesFeed(RepositoryMixin):
     stylesheets = _feed_stylesheets
+    item_guid_is_permalink = False
     object: Blog
     request: HtmxHttpRequest
 
@@ -184,20 +227,8 @@ class LatestEntriesFeed(RepositoryMixin, Feed):
         assert isinstance(post, Post)
         return post.title
 
-    def item_description(self, post: Model) -> SafeText:
-        assert isinstance(post, Post)
-        assert self.repository is not None
-        repository = self.repository.get_post_detail_repository(post)
-        post.description = post.get_description(
-            request=self.request, render_detail=True, escape_html=False, repository=repository
-        )
-        return post.description
-
-    def item_link(self, item) -> SafeText:
-        if self.repository is not None:
-            repository = self.repository.get_post_detail_repository(item)
-            return cast(SafeText, repository.absolute_page_url)
-        return item.get_full_url()
+    def item_guid(self, post: Post) -> str:
+        return str(post.uuid)
 
     def get_context_data(self, **kwargs) -> dict:
         context = super().get_context_data(**kwargs)
@@ -212,35 +243,39 @@ class LatestEntriesAtomFeed(LatestEntriesFeed):
         return self.object.description
 
 
-class ITunesElements:
-    feed: dict
+class ITunesElements(SyndicationFeed):
+    feed: dict[str, Any]
 
-    def add_artwork(self, podcast: Podcast, handler) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args or kwargs:
+            super().__init__(*args, **kwargs)
+
+    def add_artwork(self, podcast: Podcast, handler: SimplerXMLGenerator) -> None:
         if podcast.itunes_artwork is None:
             return
 
         haqe = handler.addQuickElement
         itunes_artwork_url = cast(Image, podcast.itunes_artwork).original.url
         handler.addQuickElement("itunes:image", attrs={"href": itunes_artwork_url})
-        handler.startElement("image", {})
+        handler.startElement("image", cast(Any, {}))
         haqe("url", itunes_artwork_url)
         haqe("title", self.feed["title"])
         handler.endElement("image")
 
     @staticmethod
-    def add_itunes_categories(podcast: Podcast, handler) -> None:
+    def add_itunes_categories(podcast: Podcast, handler: SimplerXMLGenerator) -> None:
         itunes_categories = podcast.itunes_categories_parsed
         if len(itunes_categories) == 0:
             return
         for category, subcategories in itunes_categories.items():
-            handler.startElement("itunes:category", {"text": category})
+            handler.startElement("itunes:category", cast(Any, {"text": category}))
             for subcategory in subcategories:
                 handler.addQuickElement("itunes:category", attrs={"text": subcategory})
             handler.endElement("itunes:category")
 
-    def add_root_elements(self, handler) -> None:
+    def add_root_elements(self, handler: SimplerXMLGenerator) -> None:
         """Add additional elements to the blog object"""
-        super().add_root_elements(handler)  # type: ignore
+        super().add_root_elements(handler)
         haqe = handler.addQuickElement
         blog = self.feed["blog"]
 
@@ -248,7 +283,7 @@ class ITunesElements:
 
         haqe("itunes:subtitle", self.feed["subtitle"])
         haqe("itunes:author", blog.author_name)
-        handler.startElement("itunes:owner", {})
+        handler.startElement("itunes:owner", cast(Any, {}))
         haqe("itunes:name", blog.author_name)
         haqe("itunes:email", blog.email)
         handler.endElement("itunes:owner")
@@ -267,9 +302,9 @@ class ITunesElements:
         haqe("generator", generator)
         haqe("docs", "https://blogs.law.harvard.edu/tech/rss")
 
-    def add_item_elements(self, handler, item) -> None:
+    def add_item_elements(self, handler: SimplerXMLGenerator, item: dict[str, Any]) -> None:
         """Add additional elements to the post object"""
-        super().add_item_elements(handler, item)  # type: ignore
+        super().add_item_elements(handler, item)
         haqe = handler.addQuickElement
 
         post = item["post"]
@@ -293,14 +328,14 @@ class ITunesElements:
         if post.block:
             haqe("itunes:block", "yes")
 
-    def namespace_attributes(self) -> dict:
+    def namespace_attributes(self) -> dict[str, str]:
         namespace_attributes = {}
         namespace_attributes.update({"xmlns:itunes": "http://www.itunes.com/dtds/podcast-1.0.dtd"})
         return namespace_attributes
 
 
-class PodcastIndexElements:
-    feed: dict
+class PodcastIndexElements(ITunesElements):
+    feed: dict[str, Any]
     request: HttpRequest
     repository: FeedContext
 
@@ -316,12 +351,13 @@ class PodcastIndexElements:
             attrs["href"] = href
         return attrs
 
-    def add_item_elements(self, handler, item) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args or kwargs:
+            super().__init__(*args, **kwargs)
+
+    def add_item_elements(self, handler: SimplerXMLGenerator, item: dict[str, Any]) -> None:
         """Add additional elements to the post object"""
-        try:
-            super().add_item_elements(handler, item)  # type: ignore
-        except AttributeError:
-            pass
+        super().add_item_elements(handler, item)
 
         haqe = handler.addQuickElement
         episode = item["post"]
@@ -348,42 +384,27 @@ class PodcastIndexElements:
                 attrs=self.get_person_attributes(assignment, self.request),
             )
 
-    def namespace_attributes(self) -> dict:
-        namespace_attributes = super().namespace_attributes()  # type: ignore
+    def namespace_attributes(self) -> dict[str, str]:
+        namespace_attributes = super().namespace_attributes()
         namespace_attributes.update({"xmlns:podcast": "https://podcastindex.org/namespace/1.0/"})
         return namespace_attributes
 
 
-class AtomITunesFeedGenerator(PodcastIndexElements, ITunesElements, Atom1Feed):
-    def root_attributes(self) -> dict:
+class AtomITunesFeedGenerator(PodcastIndexElements, AtomStylesheetsMixin, Atom1Feed):
+    def root_attributes(self) -> dict[str, str]:
         atom_attrs = super().root_attributes()
         atom_attrs.update(self.namespace_attributes())
         return atom_attrs
 
-    def add_stylesheets(self, handler) -> None:
-        # Atom1Feed.write() does not call add_stylesheets() like Rss201rev2Feed does,
-        # so we override write() below to inject stylesheet processing instructions.
-        for stylesheet in self.feed.get("stylesheets") or []:
-            handler.processingInstruction("xml-stylesheet", str(stylesheet))
 
-    def write(self, outfile, encoding) -> None:
-        handler = SimplerXMLGenerator(outfile, encoding, short_empty_elements=True)
-        handler.startDocument()
-        self.add_stylesheets(handler)
-        handler.startElement("feed", self.root_attributes())  # type: ignore[arg-type]
-        self.add_root_elements(handler)
-        self.write_items(handler)
-        handler.endElement("feed")
-
-
-class RssITunesFeedGenerator(PodcastIndexElements, ITunesElements, Rss201rev2Feed):
-    def rss_attributes(self) -> dict:
+class RssITunesFeedGenerator(PodcastIndexElements, Rss201rev2Feed):
+    def rss_attributes(self) -> dict[str, str]:
         rss_attrs = super().rss_attributes()
         rss_attrs.update(self.namespace_attributes())
         return rss_attrs
 
 
-class PodcastFeed(RepositoryMixin, Feed):
+class PodcastFeed(RepositoryMixin):
     """
     A feed of podcasts for iTunes and other compatible podcatchers.
     """
@@ -439,27 +460,6 @@ class PodcastFeed(RepositoryMixin, Feed):
     def item_title(self, item) -> str:
         return item.title
 
-    def item_description(self, item) -> str:
-        repository = None
-        if self.repository is not None:
-            repository = self.repository.get_post_detail_repository(item)
-        item.description = item.get_description(
-            request=self.request, render_detail=True, escape_html=False, repository=repository
-        )
-        return item.description
-
-    def item_link(self, item) -> str:
-        if self.repository is not None:
-            repository = self.repository.get_post_detail_repository(item)
-            return repository.absolute_page_url
-        return item.get_full_url()
-
-    def item_pubdate(self, item) -> datetime:
-        return item.visible_date
-
-    def item_updateddate(self, item: Post) -> datetime:
-        return item.last_published_at
-
     # def item_categories(self, post):
     #    return self.categories(self.blog)
 
@@ -483,7 +483,7 @@ class PodcastFeed(RepositoryMixin, Feed):
 
     def get_feed(self, obj, request) -> SyndicationFeed:
         feed = super().get_feed(obj, request)
-        feed.request = request  # type: ignore
+        cast(_RequestAwareFeed, feed).request = request
         return feed
 
 

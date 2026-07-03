@@ -244,6 +244,7 @@ def serialize_post(post):
         "slug": post.slug,
         "title": post.title,
         "visible_date": post.visible_date,
+        "last_published_at": post.last_published_at,
         "comments_enabled": post.comments_enabled,
         "body": json.dumps(list(post.body.raw_data)),
     }

@@ -149,6 +149,36 @@ class TestGeneratedFeeds:
         assert "xml" in content
         assert post.title in content
 
+    def test_latest_entries_rss_feed_item_has_pubdate_and_uuid_guid(self, client, post, use_dummy_cache_backend):
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        root = ElementTree.fromstring(response.content.decode("utf-8"))
+        item = root.find("./channel/item")
+        assert item is not None
+        assert item.findtext("pubDate") is not None
+        guid = item.find("guid")
+        assert guid is not None
+        assert guid.text == str(post.uuid)
+        assert guid.attrib == {"isPermaLink": "false"}
+
+    def test_latest_entries_atom_feed_entry_has_updated_and_uuid_id(self, client, post, use_dummy_cache_backend):
+        post.last_published_at = post.visible_date
+        post.save(update_fields=["last_published_at"])
+        feed_url = reverse("cast:latest_entries_atom_feed", kwargs={"slug": post.blog.slug})
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        root = ElementTree.fromstring(response.content.decode("utf-8"))
+        namespace = {"atom": "http://www.w3.org/2005/Atom"}
+        entry = root.find("atom:entry", namespace)
+        assert entry is not None
+        assert entry.findtext("atom:updated", namespaces=namespace) is not None
+        assert entry.findtext("atom:id", namespaces=namespace) == str(post.uuid)
+
     def test_get_link_if_no_repository(self, blog):
         feed_view = LatestEntriesFeed()
         feed_view.object = blog

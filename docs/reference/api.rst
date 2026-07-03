@@ -33,6 +33,15 @@ Public endpoints (no authentication required) include:
 - Wagtail pages and images
 - Facet counts
 
+Legacy API
+----------
+
+The non-editor ``cast.api.views`` endpoints are a legacy API surface with frozen
+response contracts for existing clients. That includes ``POST /api/upload_video/``
+returning its historical bare-text ``"<pk>"`` body with ``201 Created``. New
+integrations should use the editor API below for structured errors, scoped
+authorization, and ``If-Match`` revision handling.
+
 Endpoints
 ---------
 
