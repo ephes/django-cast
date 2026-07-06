@@ -135,3 +135,5 @@
   for now because the project-wide probes still report broad annotation debt.
 - Extend that stricter mypy rollout to the pure DOTe transcript conversion
   helpers in ``cast.transcripts.dote``.
+- Extend the same per-module strictness checks to the site-scoped page lookup
+  helpers in ``cast.site_lookup``.
