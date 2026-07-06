@@ -186,10 +186,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     focused `src/cast/feeds.py` probe reported 9 errors for `disallow_incomplete_defs` and 10 errors for
     `disallow_untyped_defs`; that cleanup landed with a per-module `cast.feeds` mypy override enabling both flags.
     Follow-up slices added the same per-module strictness override to `cast.transcripts.dote`, where both focused
-    probes had 2 errors, and `cast.site_lookup`, where both focused probes had 3 errors. After those cleanups, the
-    remaining project-wide counts were 116 errors in 30 files for `disallow_incomplete_defs` and 224 errors in 52
-    files for `disallow_untyped_defs`. Next rollout slices should stay per-module until the project-level error
-    counts are much lower.
+    probes had 2 errors, `cast.site_lookup`, where both focused probes had 3 errors, and `cast.widgets`, where both
+    focused probes had 1 error. After those cleanups, the remaining project-wide counts were 115 errors in 29 files
+    for `disallow_incomplete_defs` and 223 errors in 51 files for `disallow_untyped_defs`. Next rollout slices
+    should stay per-module until the project-level error counts are much lower.
   - Done when: the preferred strictness level and rollout strategy are documented, and at least one initial
     module is either cleaned up or explicitly excluded/deferred.
 

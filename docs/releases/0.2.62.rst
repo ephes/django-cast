@@ -137,3 +137,5 @@
   helpers in ``cast.transcripts.dote``.
 - Extend the same per-module strictness checks to the site-scoped page lookup
   helpers in ``cast.site_lookup``.
+- Extend the same per-module strictness checks to the Wagtail chooser widgets in
+  ``cast.widgets``.

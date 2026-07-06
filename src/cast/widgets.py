@@ -8,7 +8,6 @@ client-side rendering.
 """
 
 import json
-from typing import Union
 
 from django import forms
 from django.template.loader import render_to_string
@@ -95,7 +94,7 @@ class AdminVideoChooser(CastChooser):
         html = render_to_string("cast/video/chooser.html", context=context)
         return html
 
-    def render_js_init(self, id_: int, name: str, value: dict | None) -> str:
+    def render_js_init(self, id_: str, name: str, value: dict | None) -> str:
         return f"createVideoChooser({json.dumps(id_)});"
 
     class Media:
@@ -137,7 +136,7 @@ class AdminAudioChooser(CastChooser):
     chooser_namespace = "castaudio"
     template_name = "cast/audio/chooser.html"
 
-    def get_value_data(self, value: Union["Video", int] | None) -> dict | None:
+    def get_value_data(self, value: Audio | int | None) -> dict | None:
         if value is None:
             return value
         if not isinstance(value, Audio):
@@ -149,7 +148,7 @@ class AdminAudioChooser(CastChooser):
             "edit_link": reverse("castaudio:edit", args=[value.id]),
         }
 
-    def render_js_init(self, id_, name: str, value: dict | None) -> str:
+    def render_js_init(self, id_: str, name: str, value: dict | None) -> str:
         return f"createAudioChooser({json.dumps(id_)});"
 
     class Media:
