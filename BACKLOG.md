@@ -14,7 +14,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 ## Next
 
 - [ ] Choose next implementation slice
-  - Scope: pick a small, concrete item from Research / Shaping or Later based on current project needs.
+  - Scope: pick the next small, concrete item from Research / Shaping or Later based on current project needs.
+  - Status: the 2026-07-06 slice addressed quickstart template drift under "Revisit onboarding and authoring
+    workflows"; choose a fresh slice when this backlog is next revisited.
   - Done when: the chosen item has a clear first slice, expected files/tests, and any sibling-repo checks identified.
 
 ## Research / Shaping
@@ -30,7 +32,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     `ensure_reference_site` workflows and decide what onboarding should mean for django-cast users: new project
     setup, local development setup, editor onboarding, or assisted content authoring.
   - Notes: include "try django-cast with your own podcast feed" as one possible getting-started path, built on
-    top of the podcast feed import workflow.
+    top of the podcast feed import workflow. The quickstart template-drift implementation slice landed on
+    2026-07-06: generated project files now come from packaged templates and a smoke test verifies the generated
+    project boots through Django's system check.
   - Done when: the current workflows are documented in one place, gaps are listed, and follow-up items are split
     into concrete implementation tasks.
 

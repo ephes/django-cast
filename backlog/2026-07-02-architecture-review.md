@@ -367,6 +367,10 @@ Fix note (2026-07-03): the settings half is done — every user-facing setting i
 to exist in the codebase (stale name in this finding). The quickstart template-drift half remains open and
 belongs to the "Revisit onboarding and authoring workflows" backlog item.
 
+Fix note (2026-07-06): the quickstart template-drift half is fixed — `django-cast-quickstart` now renders generated
+project files from packaged templates under `cast/quickstart_templates`, and a focused test generates a project and
+verifies it passes Django's system check. The broader onboarding workflow review remains open in `BACKLOG.md`.
+
 ## Low severity (batch when touching the area)
 
 - Rendering relies on runtime attribute injection onto model instances (`post._media_lookup`, `post.page_url`,

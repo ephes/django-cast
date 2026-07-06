@@ -65,6 +65,9 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = "src"
 module-name = "cast"
+# The quickstart command loads these package resources with importlib.resources.
+# Module contents are included by uv_build defaults; keep this explicit for sdist audits.
+source-include = ["src/cast/quickstart_templates/*.template"]
 
 [dependency-groups]
 dev = [

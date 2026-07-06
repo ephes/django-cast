@@ -125,3 +125,7 @@
   instead of guessing a cached object's class from which keys are present.
   Blog/podcast and post/episode entries now record their type and deserialize
   by it, with a fallback that keeps entries cached by earlier versions working.
+- Generate ``django-cast-quickstart`` project files from packaged templates
+  instead of large inline Python strings, and add a smoke test that the
+  generated project passes Django's system check. The quickstart command's
+  user-visible behavior is unchanged.
