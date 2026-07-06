@@ -110,7 +110,7 @@ class RepositoryMixin(Feed):
         self.repository.used = True
         return queryset
 
-    def get_feed(self, obj, request) -> SyndicationFeed:
+    def get_feed(self, obj: Blog, request: HttpRequest) -> SyndicationFeed:
         # If we want to cache the site to avoid one additional db query, we should do it here
         blog = obj
         self.repository = repository = self.get_repository(self.request, blog)
@@ -197,7 +197,7 @@ class LatestEntriesFeed(RepositoryMixin):
     object: Blog
     request: HtmxHttpRequest
 
-    def get_object(self, request: HttpRequest, *args, **kwargs) -> Blog:
+    def get_object(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Blog:
         self.request = cast(HtmxHttpRequest, request)  # need request for item.serve(request) later on
         slug = kwargs["slug"]
         blog = None
@@ -230,7 +230,7 @@ class LatestEntriesFeed(RepositoryMixin):
     def item_guid(self, post: Post) -> str:
         return str(post.uuid)
 
-    def get_context_data(self, **kwargs) -> dict:
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         return context
 
@@ -239,7 +239,7 @@ class LatestEntriesAtomFeed(LatestEntriesFeed):
     stylesheets = _feed_stylesheets
     feed_type = AtomFeedWithStylesheets
 
-    def subtitle(self):
+    def subtitle(self) -> str:
         return self.object.description
 
 
@@ -423,7 +423,7 @@ class PodcastFeed(RepositoryMixin):
             self.audio_format = audio_format
             self.mime_type = format_to_mime[audio_format]
 
-    def get_object(self, request, *args, **kwargs) -> Podcast:
+    def get_object(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Podcast:
         self.set_audio_format(kwargs["audio_format"])
 
         slug = kwargs["slug"]
@@ -434,7 +434,7 @@ class PodcastFeed(RepositoryMixin):
         if blog is None:
             blog = get_site_specific_page_or_404(Podcast, request, slug=slug)
         self.object = blog
-        self.request = request  # need request for item.serve(request) later on
+        self.request = cast(HtmxHttpRequest, request)  # need request for item.serve(request) later on
         return self.object
 
     def link(self) -> str:
@@ -457,7 +457,7 @@ class PodcastFeed(RepositoryMixin):
     def itunes_categories(self, blog: Blog) -> list[str]:
         return blog.itunes_categories.split(",")
 
-    def item_title(self, item) -> str:
+    def item_title(self, item: Post) -> str:
         return item.title
 
     # def item_categories(self, post):
@@ -475,13 +475,13 @@ class PodcastFeed(RepositoryMixin):
     def item_keywords(self, item: Post) -> str:
         return item.keywords
 
-    def feed_extra_kwargs(self, obj) -> dict:
+    def feed_extra_kwargs(self, obj: Podcast) -> dict[str, Blog]:
         return {"blog": self.object}
 
-    def item_extra_kwargs(self, item) -> dict:
+    def item_extra_kwargs(self, item: Post) -> dict[str, Blog | Post]:
         return {"blog": self.object, "post": item}
 
-    def get_feed(self, obj, request) -> SyndicationFeed:
+    def get_feed(self, obj: Blog, request: HttpRequest) -> SyndicationFeed:
         feed = super().get_feed(obj, request)
         cast(_RequestAwareFeed, feed).request = request
         return feed
@@ -494,7 +494,7 @@ class AtomPodcastFeed(PodcastFeed):
     def author_name(self, blog: Blog) -> str:
         return blog.author_name
 
-    def author_email(self, blog) -> str:
+    def author_email(self, blog: Blog) -> str | None:
         return blog.email
 
     def link(self) -> str:

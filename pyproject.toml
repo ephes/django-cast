@@ -147,6 +147,11 @@ files = ["src", "tests/settings.py"]
 module = ["tests.*"]
 follow_imports = "skip"
 
+[[tool.mypy.overrides]]
+module = ["cast.feeds"]
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+
 [tool.django-stubs]
 django_settings_module = "tests.settings"
 

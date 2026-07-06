@@ -129,3 +129,7 @@
   instead of large inline Python strings, and add a smoke test that the
   generated project passes Django's system check. The quickstart command's
   user-visible behavior is unchanged.
+- Start the incremental stricter mypy annotation rollout with a per-module
+  ``cast.feeds`` override enabling both ``disallow_incomplete_defs`` and
+  ``disallow_untyped_defs``. The stronger checks stay scoped to the feed module
+  for now because the project-wide probes still report broad annotation debt.

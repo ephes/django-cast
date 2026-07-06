@@ -181,10 +181,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Consider stricter mypy annotation checks
   - Scope: evaluate enabling `disallow_incomplete_defs = true` and/or `disallow_untyped_defs = true` incrementally,
     likely per module first instead of project-wide.
-  - Notes: a quick probe showed `disallow_incomplete_defs` currently reports 123 errors in 30 files, while
-    `disallow_untyped_defs` reports 219 errors in 48 files. `src/cast/feeds.py` (previously the worst offender at
-    21/24 errors) was fully typed during the M5 dedup on 2026-07-03 — zero `# type: ignore` — so it is a natural
-    first module to opt into per-module strictness; re-probe the counts before deciding the rollout.
+  - Notes: a 2026-07-06 re-probe before the first rollout showed `disallow_incomplete_defs` at 130 errors in 33
+    files and `disallow_untyped_defs` at 239 errors in 55 files, so project-wide rollout is still too broad. The
+    focused `src/cast/feeds.py` probe reported 9 errors for `disallow_incomplete_defs` and 10 errors for
+    `disallow_untyped_defs`; that cleanup landed with a per-module `cast.feeds` mypy override enabling both flags.
+    After `cast.feeds` was cleaned up, the remaining project-wide counts were 121 errors in 32 files for
+    `disallow_incomplete_defs` and 229 errors in 54 files for `disallow_untyped_defs`. Next rollout slices should
+    stay per-module until the project-level error counts are much lower.
   - Done when: the preferred strictness level and rollout strategy are documented, and at least one initial
     module is either cleaned up or explicitly excluded/deferred.
 
