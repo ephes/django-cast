@@ -6,6 +6,10 @@ from typing import Any
 
 from . import parsing
 
+DoteSegment = Mapping[str, str]
+PodcastIndexSegment = dict[str, str | float]
+PodcastIndexTranscript = dict[str, str | list[PodcastIndexSegment]]
+
 
 def dote_timestamp_to_ms(value: object) -> int | None:
     """Parse a DOTe ``HH:MM:SS,mmm`` timestamp into milliseconds."""
@@ -66,7 +70,7 @@ def rewrite_speakers(data: dict[str, Any], mapping: Mapping[str, str]) -> bool:
     return changed
 
 
-def time_to_seconds(time_str) -> float:
+def time_to_seconds(time_str: str) -> float:
     match = re.match(r"(\d+):(\d+):(\d+),(\d+)", time_str)
     if match:
         hours, minutes, seconds, milliseconds = map(int, match.groups())
@@ -74,8 +78,8 @@ def time_to_seconds(time_str) -> float:
     raise ValueError(f"Invalid time format: {time_str}")
 
 
-def convert_segments(segments) -> list[dict]:
-    converted = []
+def convert_segments(segments: list[DoteSegment]) -> list[PodcastIndexSegment]:
+    converted: list[PodcastIndexSegment] = []
     for segment in segments:
         converted.append(
             {
@@ -88,7 +92,7 @@ def convert_segments(segments) -> list[dict]:
     return converted
 
 
-def convert_dote_to_podcastindex_transcript(transcript: dict) -> dict:
+def convert_dote_to_podcastindex_transcript(transcript: Mapping[str, list[DoteSegment]]) -> PodcastIndexTranscript:
     return {
         "version": "1.0",
         "segments": convert_segments(transcript["lines"]),

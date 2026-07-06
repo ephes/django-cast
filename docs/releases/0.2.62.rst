@@ -133,3 +133,5 @@
   ``cast.feeds`` override enabling both ``disallow_incomplete_defs`` and
   ``disallow_untyped_defs``. The stronger checks stay scoped to the feed module
   for now because the project-wide probes still report broad annotation debt.
+- Extend that stricter mypy rollout to the pure DOTe transcript conversion
+  helpers in ``cast.transcripts.dote``.
