@@ -106,13 +106,22 @@ def test_heading_migration_converts_live_bodies_and_revisions(blog, podcast, sit
     _set_raw_body(HomePage, home_page.pk, home_body)
     post_content_type = ContentType.objects.get_for_model(Post)
     episode_content_type = ContentType.objects.get_for_model(Episode)
+    real_revision_post = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="Real revision shape",
+        slug="real-revision-shape",
+        body=[("overview", [("paragraph", "<p>Real body</p>")])],
+    )
+    real_revision = real_revision_post.save_revision()
+    assert type(real_revision.content["body"]) is str
     Revision.objects.create(
         content_type=post_content_type,
         base_content_type=post_content_type,
         object_id=str(post.pk),
         created_at=timezone.now(),
         object_str=post.title,
-        content={"body": revision_body, "title": post.title},
+        content={"body": json.dumps(revision_body), "title": post.title},
     )
     Revision.objects.create(
         content_type=episode_content_type,
@@ -120,7 +129,7 @@ def test_heading_migration_converts_live_bodies_and_revisions(blog, podcast, sit
         object_id=str(episode.pk),
         created_at=timezone.now(),
         object_str=episode.title,
-        content={"body": episode_revision_body, "title": episode.title},
+        content={"body": json.dumps(episode_revision_body), "title": episode.title},
     )
 
     with override_settings(MIGRATION_MODULES={}):
@@ -164,10 +173,10 @@ def test_heading_migration_converts_live_bodies_and_revisions(blog, podcast, sit
         {"type": "paragraph", "value": "<h2>A &amp; B &lt;x&gt;</h2>", "id": "home-heading"},
         {"type": "paragraph", "value": "<h2></h2>", "id": "home-empty"},
     ]
-    assert revision_converted["body"] == [
+    assert json.loads(revision_converted["body"]) == [
         {"type": "paragraph", "value": "<h2>A &amp; B &lt;x&gt;</h2>", "id": "revision-heading"}
     ]
     assert revision_converted["title"] == post.title
-    assert episode_revision_converted["body"] == [
+    assert json.loads(episode_revision_converted["body"]) == [
         {"type": "paragraph", "value": "<h2>A &amp; B &lt;x&gt;</h2>", "id": "episode-revision-heading"}
     ]

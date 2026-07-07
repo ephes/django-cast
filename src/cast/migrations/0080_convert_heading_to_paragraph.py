@@ -105,7 +105,10 @@ def _convert_revisions(apps: Any) -> None:
         content = row["content"]
         if not isinstance(content, dict) or "body" not in content:
             continue
-        if convert_heading_blocks(content["body"]):
+        body = content["body"]
+        parsed_body = json.loads(body) if isinstance(body, str) else body
+        if convert_heading_blocks(parsed_body):
+            content["body"] = json.dumps(parsed_body) if isinstance(body, str) else parsed_body
             Revision.objects.filter(pk=row["pk"]).update(content=content)
 
 
