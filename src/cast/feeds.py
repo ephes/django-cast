@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any, Protocol, cast
 
 import django
@@ -32,6 +32,8 @@ else:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
+PSC_NAMESPACE = "http://podlove.org/simple-chapters"
+
 
 class _RepositoryAwareFeed(Protocol):
     repository: FeedContext
@@ -61,6 +63,14 @@ def _is_episode_type(value: object) -> bool:
 
 def _is_itunes_type(value: object) -> bool:
     return value in {"episodic", "serial"}
+
+
+def _psc_start(iso: str) -> str:
+    start = time.fromisoformat(iso)
+    formatted = start.strftime("%H:%M:%S")
+    if start.microsecond == 0:
+        return formatted
+    return f"{formatted}.{start.microsecond // 1000:03d}"
 
 
 class RepositoryMixin(Feed):
@@ -371,6 +381,15 @@ class PodcastIndexElements(ITunesElements):
             podcastindex_transcript_url := episode.get_podcastindex_transcript_url(self.request, repository)
         ) is not None:
             haqe("podcast:transcript", attrs={"type": "application/json", "url": podcastindex_transcript_url})
+        chapters = repository.chapters if repository else []
+        if chapters:
+            handler.startElement(
+                "psc:chapters",
+                cast(Any, {"xmlns:psc": PSC_NAMESPACE, "version": "1.2"}),
+            )
+            for chapter in chapters:
+                haqe("psc:chapter", attrs={"start": _psc_start(chapter["start"]), "title": chapter["title"]})
+            handler.endElement("psc:chapters")
         if _is_positive_integer(episode_number := getattr(episode, "episode_number", None)):
             haqe("podcast:episode", str(episode_number))
         season_number, season_name = _episode_season_data(episode)

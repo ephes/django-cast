@@ -1,0 +1,5 @@
+0.2.63 (unreleased)
+-------------------
+
+- Emit inline Podlove Simple Chapters in podcast RSS and Atom feeds for
+  episodes with chapter marks, while leaving chapterless feed XML unchanged.

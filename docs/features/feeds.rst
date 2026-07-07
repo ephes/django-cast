@@ -107,6 +107,25 @@ Additional metadata for podcast feeds:
 - **Chapter Marks**: Time-indexed navigation points
 - **Transcripts**: Links to VTT and DOTE transcript files
 
+Podlove Simple Chapters
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Podcast RSS and Atom feeds include inline Podlove Simple Chapters for episodes
+that have chapter marks. The ``psc`` namespace is declared on each emitted
+``psc:chapters`` element, not on the feed root, so feeds and episodes without
+chapter marks remain unchanged.
+
+The emitted shape is::
+
+    <psc:chapters xmlns:psc="http://podlove.org/simple-chapters" version="1.2">
+      <psc:chapter start="00:01:23" title="Intro" />
+      <psc:chapter start="00:04:56.789" title="Topic" />
+    </psc:chapters>
+
+Chapter ``start`` values use ``HH:MM:SS`` or ``HH:MM:SS.mmm`` when fractional
+seconds are present. Podlove Simple Chapters v1 output currently includes the
+``start`` and ``title`` attributes only.
+
 RSS item GUIDs remain based on the episode UUID with
 ``isPermaLink="false"``. Episode numbers, episode types, and seasons are
 publishing metadata only; changing them does not change feed identity.
