@@ -194,6 +194,7 @@ def add_queryset_data(data: dict[str, Any], queryset_data: PostQuerySnapshot) ->
         episode_id: serialize_audio(audio) for episode_id, audio in queryset_data.podcast_audio_by_episode_id.items()
     }
     data["transcripts"] = transcripts
+    data["chapters"] = queryset_data.chapters_by_audio_id
     data["cover_by_post_id"] = queryset_data.cover_by_post_id
     data["cover_alt_by_post_id"] = queryset_data.cover_alt_by_post_id
     data["has_audio_by_id"] = queryset_data.has_audio_by_id
