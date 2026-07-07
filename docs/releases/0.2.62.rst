@@ -146,3 +146,9 @@
   episodes with chapter marks, while leaving chapterless feed XML unchanged.
 - Add Podcasting 2.0 external chapters JSON documents and feed references via
   ``podcast:chapters`` using ``application/json+chapters`` endpoints.
+- Document tags and categories as supported, default-on content-organization
+  primitives and drop the "beta / not yet implemented" framing around faceted
+  navigation. The recommended model is categories for a small, stable set of
+  groupings and tags for many, fast-changing labels; both power the blog and
+  podcast list-page facets. This is a documentation and test-coverage change
+  only — no behavior, setting, or schema change for existing sites.

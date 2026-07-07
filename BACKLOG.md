@@ -21,9 +21,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     [backlog/2026-07-07-remove-heading-block-plan.md](backlog/2026-07-07-remove-heading-block-plan.md) and the
     RESOLVED [backlog/2026-07-07-overview-heading-block-rendering.md](backlog/2026-07-07-overview-heading-block-rendering.md).
     Choose a fresh slice when this backlog is next revisited.
-  - Ready candidates (concrete scope, done-when): Tags/categories and faceted navigation completion, and the
-    Anonymous comment author edit hard-limits decision. (Editor API embed body block was weighed on 2026-07-07 and
-    kept deferred — no consumer demand; see its entry under Later.)
+  - Ready candidates (concrete scope, done-when): the Anonymous comment author edit hard-limits decision. (Editor
+    API embed body block was weighed on 2026-07-07 and kept deferred — no consumer demand; see its entry under
+    Later.)
   - Done when: the chosen item has a clear first slice, expected files/tests, and any sibling-repo checks identified.
 
 ## Research / Shaping
@@ -164,12 +164,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on stable
     feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
 
-- [ ] Tags/categories and faceted navigation completion
-  - Scope: decide whether tags, categories, or both should remain public organization primitives and finish the beta
-    faceted navigation behavior.
-  - Done when: the intended model is documented, stale beta wording is removed, and filters/navigation have focused
-    tests.
-
 - [ ] Promote soft-required theme templates to strict requirements
   - Scope: make currently soft-required theme templates strictly required after the deprecation period.
   - Done when: theme discovery enforces the final required template set and the theme docs/release notes explain the
@@ -211,6 +205,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     Fixed the one latent nitpicky broken reference (a stray `:class:`Audio`` domain role that could not
     resolve without autodoc, now a literal) so the tree is also clean under `sphinx -n`, and turned the
     illustrative `localhost:8000` example URLs in the tutorial/installation guides into inline literals so
-    they no longer render as dead links. Remaining beta wording in `content/organization.rst` is owned by
-    the "Tags/categories and faceted navigation completion" item, not this pass.
+    they no longer render as dead links. The remaining beta wording in `content/organization.rst` was
+    resolved separately by documenting tags and categories as supported, default-on primitives (see the
+    0.2.62 release notes), which retired that follow-up item.
   - Done when: docs build cleanly and remaining docs TODOs are either implemented or intentionally removed.

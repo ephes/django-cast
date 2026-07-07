@@ -11,6 +11,10 @@ is available in two contexts:
 - Blog/podcast list pages (Wagtail page views)
 - Wagtail API pages listing when ``use_post_filter=true``
 
+Categories and tags are both supported, default-on content-organization
+primitives that feed the category and tag facets below; see
+:ref:`content_organization` for guidance on when to use each.
+
 Filter Parameters
 =================
 

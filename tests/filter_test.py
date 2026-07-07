@@ -261,6 +261,46 @@ class TestPostFilterset:
         assert another_post not in filterset.qs
         assert filterset.qs.count() == 1
 
+    def test_tag_facet_counts_reflect_category_filtered_queryset(self, post, another_post):
+        # given two posts in different categories, each carrying a different tag
+        til = PostCategory.objects.create(name="Today I Learned", slug="til")
+        weeknotes = PostCategory.objects.create(name="Weeknotes", slug="weeknotes")
+        post.categories.add(til)
+        post.tags.add("python")
+        post.save()
+        another_post.categories.add(weeknotes)
+        another_post.tags.add("django")
+        another_post.save()
+        # when the queryset is narrowed by one category facet
+        queryset = post.blog.unfiltered_published_posts
+        querydict = QueryDict("category_facets=til")
+        filterset = PostFilterset(querydict, queryset=queryset)
+        # then only the remaining post is in the queryset
+        assert list(filterset.qs) == [post]
+        # and the tag facet counts reflect that filtered queryset only
+        tag_facets = filterset.filters["tag_facets"].facet_counts
+        assert tag_facets == {"python": ("python", 1)}
+
+    def test_category_facet_counts_reflect_tag_filtered_queryset(self, post, another_post):
+        # given two posts in different categories, each carrying a different tag
+        til = PostCategory.objects.create(name="Today I Learned", slug="til")
+        weeknotes = PostCategory.objects.create(name="Weeknotes", slug="weeknotes")
+        post.categories.add(til)
+        post.tags.add("python")
+        post.save()
+        another_post.categories.add(weeknotes)
+        another_post.tags.add("django")
+        another_post.save()
+        # when the queryset is narrowed by one tag facet
+        queryset = post.blog.unfiltered_published_posts
+        querydict = QueryDict("tag_facets=python")
+        filterset = PostFilterset(querydict, queryset=queryset)
+        # then only the remaining post is in the queryset
+        assert list(filterset.qs) == [post]
+        # and the category facet counts reflect that filtered queryset only
+        category_facets = filterset.filters["category_facets"].facet_counts
+        assert category_facets == {"til": ("Today I Learned", 1)}
+
     def test_fields_without_facets_having_some_posts_get_removed(self, post):
         # given a queryset without a post having a category or tag
         queryset = post.blog.unfiltered_published_posts
