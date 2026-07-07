@@ -117,10 +117,13 @@ chapter marks remain unchanged.
 
 The emitted shape is::
 
-    <psc:chapters xmlns:psc="http://podlove.org/simple-chapters" version="1.2">
-      <psc:chapter start="00:01:23" title="Intro" />
-      <psc:chapter start="00:04:56.789" title="Topic" />
+    <psc:chapters version="1.2" xmlns:psc="http://podlove.org/simple-chapters">
+      <psc:chapter start="00:01:23" title="Intro"/>
+      <psc:chapter start="00:04:56.789" title="Topic"/>
     </psc:chapters>
+
+(The feed serializer emits self-closing empty elements and sorts element
+attributes alphabetically.)
 
 Chapter ``start`` values use ``HH:MM:SS`` or ``HH:MM:SS.mmm`` when fractional
 seconds are present. Podlove Simple Chapters v1 output currently includes the
@@ -128,7 +131,7 @@ seconds are present. Podlove Simple Chapters v1 output currently includes the
 
 Chaptered episodes also include a Podcasting 2.0 external chapters reference::
 
-    <podcast:chapters url="https://example.com/chapters/<audio pk>/?episode_id=<episode pk>" type="application/json+chapters" />
+    <podcast:chapters type="application/json+chapters" url="https://example.com/chapters/<audio pk>/?episode_id=<episode pk>"/>
 
 The stable endpoint path is ``chapters/<audio pk>/?episode_id=<episode pk>``.
 ``application/json+chapters`` is the Podcasting 2.0 specification's literal media-type
