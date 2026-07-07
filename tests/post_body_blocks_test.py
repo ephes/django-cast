@@ -16,7 +16,6 @@ from tests.factories import PostFactory
 
 
 DEFAULT_BLOCK_NAMES = [
-    "heading",
     "paragraph",
     "code",
     "image",

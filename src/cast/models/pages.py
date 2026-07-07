@@ -1025,7 +1025,6 @@ class Episode(Post):
 class HomePage(Page):
     body = StreamField(
         [
-            ("heading", blocks.CharBlock(classname="full title")),
             ("paragraph", blocks.RichTextBlock()),
             ("image", CastImageChooserBlock(template="cast/image/image.html")),
             ("gallery", GalleryBlock(ImageChooserBlock())),

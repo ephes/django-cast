@@ -1,5 +1,11 @@
 # Standalone `heading` block renders as plain text (and is single-level)
 
+Status: RESOLVED — django-cast removed the standalone `heading` block. Existing stored
+`heading` content is converted to rich-text `<h2>` paragraphs by migrations 0080/0081;
+future multi-level headings are authored in paragraph rich text. See
+`backlog/2026-07-07-remove-heading-block-plan.md` for the removal plan and migration
+scope.
+
 ## Background
 
 There are two ways to author headings in `Post.body`, and they behave differently:

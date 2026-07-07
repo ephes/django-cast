@@ -75,7 +75,7 @@ class TestEditorPostDetail:
             "slug": "readable-draft",
             "tags": ["weeknotes"],
             "overview": [
-                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
                 {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
             ],
         }
@@ -91,7 +91,7 @@ class TestEditorPostDetail:
         assert data["status"] == "draft"
         assert data["tags"] == ["weeknotes"]
         assert data["overview"] == [
-            {"type": "heading", "value": "Notes"},
+            {"type": "paragraph", "value": "<h2>Notes</h2>"},
             {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
         ]
 
@@ -123,7 +123,7 @@ class TestEditorPostDetail:
             parent=blog,
             title="Detail only",
             slug="detail-only",
-            body=json.dumps([{"type": "detail", "value": [{"type": "heading", "value": "d"}]}]),
+            body=json.dumps([{"type": "detail", "value": [{"type": "paragraph", "value": "<h2>d</h2>"}]}]),
         )
         api_client.force_authenticate(user=admin_user)
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": post.id})
@@ -148,7 +148,7 @@ class TestEditorPostDetail:
             "slug": "cover-draft",
             "tags": ["weeknotes"],
             "overview": [
-                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
             ],
             "cover_image": {"id": image.id, "alt_text": "Desk photo"},
         }
@@ -175,7 +175,7 @@ class TestEditorPostUpdate:
             "slug": "editable-draft",
             "tags": ["weeknotes"],
             "overview": [
-                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
                 {"type": "paragraph", "value": "<p>Original text.</p>"},
             ],
         }
@@ -369,7 +369,7 @@ class TestEditorPostUpdate:
         assert data["slug"] == "editable-draft"
         assert data["tags"] == ["weeknotes"]
         assert data["overview"] == [
-            {"type": "heading", "value": "Notes"},
+            {"type": "paragraph", "value": "<h2>Notes</h2>"},
             {"type": "paragraph", "value": "<p>Original text.</p>"},
         ]
         assert data["live"] is False
@@ -457,7 +457,7 @@ class TestEditorPostUpdate:
             parent=blog,
             title="Live page",
             slug="live-page",
-            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live"}]}]),
+            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live</h2>"}]}]),
         )
         revision = post.save_revision(user=admin_user, changed=False)
         post.refresh_from_db()
@@ -530,12 +530,12 @@ class TestEditorPostUpdate:
             parent=blog,
             title="Detail only patch",
             slug="detail-only-patch",
-            body=json.dumps([{"type": "detail", "value": [{"type": "heading", "value": "Detail"}]}]),
+            body=json.dumps([{"type": "detail", "value": [{"type": "paragraph", "value": "<h2>Detail</h2>"}]}]),
         )
         revision = post.save_revision(user=admin_user)
         api_client.force_authenticate(user=admin_user)
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": post.id})
-        overview = [{"type": "heading", "value": "New overview"}]
+        overview = [{"type": "paragraph", "value": "<h2>New overview</h2>"}]
 
         response = api_client.patch(
             url,
@@ -556,7 +556,7 @@ class TestEditorPostUpdate:
             parent=blog,
             title="Overview only patch",
             slug="overview-only-patch",
-            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Overview"}]}]),
+            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Overview</h2>"}]}]),
         )
         revision = post.save_revision(user=admin_user)
         api_client.force_authenticate(user=admin_user)

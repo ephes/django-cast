@@ -1,4 +1,5 @@
 # ruff: noqa: F401,F811,I001
+import json
 import os
 from types import SimpleNamespace
 
@@ -329,8 +330,23 @@ def test_episode_edit_view_publish_action_publishes_contributor_assignments(admi
         "body-0-value-count": "1",
         "body-0-value-0-deleted": "",
         "body-0-value-0-order": "0",
-        "body-0-value-0-type": "heading",
-        "body-0-value-0-value": "Published overview",
+        "body-0-value-0-type": "paragraph",
+        "body-0-value-0-value": json.dumps(
+            {
+                "blocks": [
+                    {
+                        "key": "00000",
+                        "text": "Published overview",
+                        "type": "header-two",
+                        "depth": 0,
+                        "inlineStyleRanges": [],
+                        "entityRanges": [],
+                        "data": {},
+                    }
+                ],
+                "entityMap": {},
+            }
+        ),
         "keywords": "",
         "explicit": "1",
         "cover_image": "",

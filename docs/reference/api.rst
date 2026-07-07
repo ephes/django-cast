@@ -408,7 +408,7 @@ Body block types accepted in ``overview`` and ``detail``:
 .. code-block:: json
 
     [
-        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<h2>Notes</h2>"},
         {"type": "paragraph", "value": "<p>Rich-text HTML.</p>"},
         {"type": "code",      "value": {"language": "python",
                                         "source": "print('hi')"}},
@@ -443,7 +443,7 @@ Full create request example:
       "tags": ["weeknotes"],
       "categories": [],
       "overview": [
-        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<h2>Notes</h2>"},
         {"type": "paragraph", "value": "<p>Shipped the first draft.</p>"},
         {"type": "code",      "value": {"language": "python",
                                         "source": "print(\"hello\")"}},
@@ -470,7 +470,7 @@ Success response (``201 Created``):
       "categories": [],
       "cover_image": {"id": 456, "alt_text": "Notebook and laptop on a desk"},
       "overview": [
-        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<h2>Notes</h2>"},
         {"type": "paragraph", "value": "<p>Shipped the first draft.</p>"},
         {"type": "code",      "value": {"language": "python",
                                         "source": "print(\"hello\")"}},
@@ -694,7 +694,7 @@ Example create request:
       "slug": "episode-12",
       "tags": ["interview"],
       "overview": [
-        {"type": "heading", "value": "Show notes"}
+        {"type": "paragraph", "value": "<h2>Show notes</h2>"}
       ],
       "podcast_audio": {"id": 321},
       "episode_number": 12,

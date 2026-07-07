@@ -215,21 +215,19 @@ class TestAuthorBlocksToOverview:
     pytestmark = pytest.mark.django_db
 
     def test_supported_block_set(self):
-        assert SUPPORTED_OVERVIEW_BLOCKS == frozenset(
-            {"heading", "paragraph", "code", "image", "gallery", "audio", "video"}
-        )
+        assert SUPPORTED_OVERVIEW_BLOCKS == frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
 
-    def test_heading_paragraph_code_pass_through(self, superuser):
+    def test_paragraph_code_pass_through(self, superuser):
         result = author_blocks_to_overview(
             [
-                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
                 {"type": "paragraph", "value": "<p>Shipped.</p>"},
                 {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
             ],
             user=superuser,
         )
         assert result == [
-            {"type": "heading", "value": "Notes"},
+            {"type": "paragraph", "value": "<h2>Notes</h2>"},
             {"type": "paragraph", "value": "<p>Shipped.</p>"},
             {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
         ]
@@ -298,7 +296,7 @@ class TestAuthorBlocksToOverview:
         with pytest.raises(EditorValidationError) as excinfo:
             author_blocks_to_overview(
                 [
-                    {"type": "heading", "value": "h"},
+                    {"type": "paragraph", "value": "<h2>h</h2>"},
                     {"type": "gallery", "value": [{"id": 999999}]},
                 ],
                 user=superuser,
@@ -327,10 +325,10 @@ class TestAuthorBlocksToOverview:
             author_blocks_to_overview([{"value": "x"}], user=superuser)
         assert excinfo.value.error_map["overview.0.type"][0]["code"] == "required"
 
-    def test_heading_non_string_rejected(self, superuser):
+    def test_heading_block_type_rejected(self, superuser):
         with pytest.raises(EditorValidationError) as excinfo:
-            author_blocks_to_overview([{"type": "heading", "value": 123}], user=superuser)
-        assert excinfo.value.error_map["overview.0.value"][0]["code"] == "invalid"
+            author_blocks_to_overview([{"type": "heading", "value": "Notes"}], user=superuser)
+        assert excinfo.value.error_map["overview.0.type"][0]["code"] == "unsupported_block_type"
 
     def test_paragraph_non_string_rejected(self, superuser):
         with pytest.raises(EditorValidationError) as excinfo:
@@ -364,7 +362,7 @@ class TestOverviewToAuthorBlocks:
 
     def test_round_trip(self, image, audio, video, superuser):
         author = [
-            {"type": "heading", "value": "Notes"},
+            {"type": "paragraph", "value": "<h2>Notes</h2>"},
             {"type": "paragraph", "value": "<p>Shipped.</p>"},
             {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
             {"type": "image", "value": {"id": image.id}},
@@ -379,7 +377,7 @@ class TestOverviewToAuthorBlocks:
         internal = [{"type": "embed", "value": "https://example.com"}, {"type": "heading", "value": "h"}]
         assert overview_to_author_blocks(internal) == [
             {"type": "unsupported", "value": {"stored_type": "embed", "position": "overview.0"}},
-            {"type": "heading", "value": "h"},
+            {"type": "unsupported", "value": {"stored_type": "heading", "position": "overview.1"}},
         ]
 
     def test_malformed_stored_gallery_is_placeholder(self):
@@ -415,13 +413,13 @@ class TestOverviewToAuthorBlocks:
 
         moved = author_blocks_to_overview(
             [
-                {"type": "heading", "value": "Inserted above"},
+                {"type": "paragraph", "value": "<h2>Inserted above</h2>"},
                 {"type": "unsupported", "value": {"stored_type": "embed", "position": "overview.0"}},
             ],
             user=superuser,
             existing_section=existing,
         )
-        assert moved == [{"type": "heading", "value": "Inserted above"}, existing[0]]
+        assert moved == [{"type": "paragraph", "value": "<h2>Inserted above</h2>"}, existing[0]]
 
         with pytest.raises(EditorValidationError) as excinfo:
             author_blocks_to_overview(
@@ -493,7 +491,7 @@ class TestEditorPostCreate:
             "slug": "weeknotes-2026-25",
             "tags": ["weeknotes"],
             "overview": [
-                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
                 {"type": "paragraph", "value": "<p>Shipped the first draft.</p>"},
                 {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
             ],
@@ -671,7 +669,7 @@ class TestEditorPostCreate:
         payload = self._payload(
             blog,
             slug="weeknotes-audio",
-            overview=[{"type": "heading", "value": "Audio"}, {"type": "audio", "value": {"id": audio.id}}],
+            overview=[{"type": "paragraph", "value": "<h2>Audio</h2>"}, {"type": "audio", "value": {"id": audio.id}}],
         )
         response = api_client.post(url, payload, format="json")
         assert response.status_code == 201, response.content

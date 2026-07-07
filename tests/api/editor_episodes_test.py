@@ -76,7 +76,7 @@ class TestEditorEpisodeCreate:
             "slug": "episode-12",
             "tags": ["podcast"],
             "overview": [
-                {"type": "heading", "value": "Show notes"},
+                {"type": "paragraph", "value": "<h2>Show notes</h2>"},
                 {"type": "paragraph", "value": "<p>In this episode.</p>"},
             ],
             "publish": False,
@@ -320,7 +320,7 @@ class TestEditorEpisodeDetail:
             "title": "Readable episode",
             "slug": "readable-episode",
             "tags": ["podcast"],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         payload.update(overrides)
         response = api_client.post(create_url, payload, format="json")
@@ -336,7 +336,7 @@ class TestEditorEpisodeDetail:
         assert data["id"] == created["id"]
         assert data["type"] == "cast.Episode"
         assert data["status"] == "draft"
-        assert data["overview"] == [{"type": "heading", "value": "Notes"}]
+        assert data["overview"] == [{"type": "paragraph", "value": "<h2>Notes</h2>"}]
 
     def test_plain_post_is_not_an_episode(self, api_client, blog, admin_user):
         post = PostFactory(owner=blog.owner, parent=blog, title="Just a post", slug="just-a-post")
@@ -374,7 +374,7 @@ class TestEditorEpisodeUpdate:
             "title": "Editable episode",
             "slug": "editable-episode",
             "tags": ["podcast"],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         payload.update(overrides)
         response = api_client.post(create_url, payload, format="json")
@@ -615,7 +615,7 @@ class TestEditorEpisodePublish:
             "title": "Publishable episode",
             "slug": "publishable-episode",
             "tags": ["podcast"],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         payload.update(overrides)
         response = api_client.post(create_url, payload, format="json")

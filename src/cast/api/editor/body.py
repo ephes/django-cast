@@ -10,7 +10,7 @@ from wagtail.images.permissions import permission_policy as image_permission_pol
 
 from .errors import EditorValidationError
 
-SUPPORTED_BODY_BLOCKS = frozenset({"heading", "paragraph", "code", "image", "gallery", "audio", "video"})
+SUPPORTED_BODY_BLOCKS = frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
 SUPPORTED_OVERVIEW_BLOCKS = SUPPORTED_BODY_BLOCKS
 
 # A single shared RichTextBlock used to validate/normalize paragraph HTML through
@@ -184,13 +184,7 @@ def author_blocks_to_section(
             ]
             continue
 
-        if block_type == "heading":
-            if not isinstance(value, str):
-                errors[f"{base}.value"] = [{"code": "invalid", "message": "Expected a string value."}]
-                continue
-            result.append({"type": "heading", "value": value})
-
-        elif block_type == "paragraph":
+        if block_type == "paragraph":
             if not isinstance(value, str):
                 errors[f"{base}.value"] = [{"code": "invalid", "message": "Expected a string value."}]
                 continue
@@ -297,7 +291,7 @@ def section_to_author_blocks(
     for index, block in enumerate(section_value):
         block_type = block.get("type")
         value = block.get("value")
-        if block_type in ("heading", "paragraph"):
+        if block_type == "paragraph":
             author.append({"type": block_type, "value": value})
         elif block_type == "code":
             if (

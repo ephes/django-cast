@@ -95,8 +95,8 @@ def create_python_body() -> Body:
             "type": "overview",
             "value": [
                 {
-                    "type": "heading",
-                    "value": "in_all heading",
+                    "type": "paragraph",
+                    "value": "<h2>in_all heading</h2>",
                 }
             ],
         },
@@ -104,8 +104,8 @@ def create_python_body() -> Body:
             "type": "detail",
             "value": [
                 {
-                    "type": "heading",
-                    "value": "only_in_detail heading",
+                    "type": "paragraph",
+                    "value": "<h2>only_in_detail heading</h2>",
                 }
             ],
         },
