@@ -140,7 +140,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     Podcasting 2.0 `application/json+chapters` endpoint references at stable audio-scoped URLs.
   - Done when: feeds emit Podlove Simple Chapters inline and a `podcast:chapters` reference (with the JSON document served
     from a stable URL), namespaces are declared, behavior is documented, and tests cover episodes with and without chapter
-    marks plus existing-feed compatibility. Completed in 0.2.63.
+    marks plus existing-feed compatibility. Completed in 0.2.62.
 
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)

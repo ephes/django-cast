@@ -133,3 +133,7 @@
   instead of large inline Python strings, and add a smoke test that the
   generated project passes Django's system check. The quickstart command's
   user-visible behavior is unchanged.
+- Emit inline Podlove Simple Chapters in podcast RSS and Atom feeds for
+  episodes with chapter marks, while leaving chapterless feed XML unchanged.
+- Add Podcasting 2.0 external chapters JSON documents and feed references via
+  ``podcast:chapters`` using ``application/json+chapters`` endpoints.
