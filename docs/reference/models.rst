@@ -26,7 +26,7 @@ The site's root page that can optionally redirect to another page.
 **Key Features:**
 
 - Can redirect to any other page via ``alias_for_page``
-- Supports basic content blocks (heading, paragraph, image, gallery)
+- Supports basic content blocks (paragraph, image, gallery)
 - Serves as the site root in Wagtail's page tree
 
 Blog

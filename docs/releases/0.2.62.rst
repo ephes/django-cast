@@ -1,6 +1,15 @@
 0.2.62 (unreleased)
 -------------------
 
+- Remove django-cast's built-in ``heading`` StreamField block. This is a
+  breaking change for third-party installs: author multi-level headings in
+  ``paragraph`` rich text (``<h2>``/``<h3>``/``<h4>``) going forward. The
+  upgrade migrations automatically convert existing stored ``heading`` blocks
+  in live bodies and page revisions across ``Post``, ``Episode``,
+  ``HomePage``, and ``Post`` subclasses to ``<h2>`` rich-text paragraphs;
+  consumers that reference the built-in ``heading`` block in fixtures or
+  newly-created content should migrate those payloads to ``paragraph`` rich
+  text before upgrading.
 - Set ``TERM=xterm-256color`` inside tox test environments so local runs
   launched from Ghostty do not print missing ``xterm-ghostty`` terminfo
   warnings.

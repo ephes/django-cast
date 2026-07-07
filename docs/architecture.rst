@@ -172,7 +172,7 @@ This allows showing just the overview on index pages and full content on detail 
 
 Available block types include:
 
-- Text blocks (heading, paragraph, code)
+- Text blocks (paragraph rich text, code)
 - Media blocks (image, gallery, video, audio)
 - Embed blocks (HTML, external embeds)
 
