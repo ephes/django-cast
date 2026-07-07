@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, time
 from types import SimpleNamespace
 from time import mktime
+from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 import feedparser
@@ -20,15 +21,37 @@ from cast.feeds import (
     ITunesElements,
     LatestEntriesAtomFeed,
     LatestEntriesFeed,
+    PSC_NAMESPACE,
     PodcastFeed,
     PodcastIndexElements,
     RssPodcastFeed,
-    _feed_stylesheets,
     _episode_season_data,
+    _feed_stylesheets,
     _is_itunes_type,
     _is_positive_integer,
+    _psc_start,
 )
-from cast.models import Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Season, Post
+from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Season, Post
+from cast.models.repository import FeedContext
+from tests.factories import EpisodeFactory
+
+
+RSS_CHAPTERLESS_ROOT_BASELINE = (
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" '
+    'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" '
+    'xmlns:podcast="https://podcastindex.org/namespace/1.0/">'
+)
+ATOM_CHAPTERLESS_ROOT_BASELINE = (
+    '<feed xml:lang="en-us" xmlns="http://www.w3.org/2005/Atom" '
+    'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" '
+    'xmlns:podcast="https://podcastindex.org/namespace/1.0/">'
+)
+
+
+def _root_start_tag(content: str, root_name: str) -> str:
+    start = content.index(f"<{root_name}")
+    end = content.index(">", start) + 1
+    return content[start:end]
 
 
 def test_unknown_audio_format():
@@ -209,6 +232,148 @@ class TestGeneratedFeeds:
         content = r.content.decode("utf-8")
         assert "feed" in content
         assert episode.title in content
+
+    @pytest.mark.parametrize(
+        ("route_name", "root_path"),
+        [
+            ("cast:podcast_feed_rss", "./channel/item"),
+            ("cast:podcast_feed_atom", "atom:entry"),
+        ],
+    )
+    def test_podcast_feed_emits_podlove_simple_chapters(
+        self, client, episode, use_dummy_cache_backend, route_name, root_path
+    ):
+        ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 2, 0, 123456), title="Middle")
+        ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 1, 0), title="Intro")
+        feed_url = reverse(route_name, kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"})
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert content.count(f'xmlns:psc="{PSC_NAMESPACE}"') == 1
+        root = ElementTree.fromstring(content)
+        namespace = {
+            "atom": "http://www.w3.org/2005/Atom",
+            "podcast": "https://podcastindex.org/namespace/1.0/",
+            "psc": PSC_NAMESPACE,
+        }
+        item = root.find(root_path, namespace)
+        assert item is not None
+        chapters = item.find("psc:chapters", namespace)
+        assert chapters is not None
+        assert chapters.attrib == {"version": "1.2"}
+        chapter_elements = chapters.findall("psc:chapter", namespace)
+        assert [chapter.attrib for chapter in chapter_elements] == [
+            {"start": "00:01:00", "title": "Intro"},
+            {"start": "00:02:00.123", "title": "Middle"},
+        ]
+        podcast_chapters = item.find("podcast:chapters", namespace)
+        assert podcast_chapters is not None
+        assert podcast_chapters.attrib == {
+            "url": "http://testserver"
+            f"{reverse('cast:chapters-json', kwargs={'pk': episode.podcast_audio.pk})}?episode_id={episode.pk}",
+            "type": "application/json+chapters",
+        }
+        endpoint_url = urlparse(podcast_chapters.attrib["url"])
+        endpoint_response = client.get(f"{endpoint_url.path}?{endpoint_url.query}")
+        assert endpoint_response.status_code == 200
+        assert endpoint_response.json()["chapters"] == [
+            {"startTime": 60, "title": "Intro"},
+            {"startTime": 120, "title": "Middle"},
+        ]
+
+    def test_podcast_feed_declares_podlove_namespace_once_per_chaptered_episode(
+        self, client, episode, use_dummy_cache_backend
+    ):
+        ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 1, 0), title="Intro")
+        EpisodeFactory(
+            owner=episode.owner,
+            parent=episode.podcast,
+            title="second chaptered episode",
+            slug="second-chaptered-episode",
+            podcast_audio=episode.podcast_audio,
+            body=episode.body,
+        )
+        feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert content.count(f'xmlns:psc="{PSC_NAMESPACE}"') == 2
+
+    def test_podcast_feed_chaptered_item_element_query_count_is_flat(
+        self, rf, episode, django_assert_num_queries, mocker
+    ):
+        class CapturingHandler:
+            def __init__(self):
+                self.calls = []
+
+            def startElement(self, name, attrs):
+                self.calls.append(("startElement", name, attrs))
+
+            def addQuickElement(self, name, content=None, attrs=None):
+                self.calls.append(("addQuickElement", name, content, attrs))
+
+            def endElement(self, name):
+                self.calls.append(("endElement", name))
+
+        ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 1, 0), title="Intro")
+        for index in range(2):
+            EpisodeFactory(
+                owner=episode.owner,
+                parent=episode.podcast,
+                title=f"additional chaptered episode {index}",
+                slug=f"additional-chaptered-episode-{index}",
+                podcast_audio=episode.podcast_audio,
+                body=episode.body,
+            )
+        request = rf.get(episode.podcast.get_url())
+        repository = FeedContext.create_from_django_models(
+            request=request,
+            blog=episode.podcast,
+            post_queryset=Episode.objects.live()
+            .public()
+            .descendant_of(episode.podcast)
+            .filter(podcast_audio__isnull=False),
+        )
+        handler = CapturingHandler()
+        generator = PodcastIndexElements()
+        generator.request = request
+        generator.repository = repository
+        mocker.patch("cast.feeds.ITunesElements.add_item_elements")
+
+        with django_assert_num_queries(0):
+            for item in repository.post_queryset:
+                generator.add_item_elements(handler, {"post": item})
+
+        podcast_chapters_calls = [call for call in handler.calls if call[1] == "podcast:chapters"]
+        assert len(podcast_chapters_calls) == 3
+
+    @pytest.mark.parametrize(
+        ("route_name", "root_name", "root_baseline"),
+        [
+            ("cast:podcast_feed_rss", "rss", RSS_CHAPTERLESS_ROOT_BASELINE),
+            ("cast:podcast_feed_atom", "feed", ATOM_CHAPTERLESS_ROOT_BASELINE),
+        ],
+    )
+    def test_chapterless_podcast_feed_omits_podlove_namespace_and_keeps_root_stable(
+        self, client, episode, use_dummy_cache_backend, route_name, root_name, root_baseline
+    ):
+        feed_url = reverse(route_name, kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"})
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert content.count(f'xmlns:psc="{PSC_NAMESPACE}"') == 0
+        assert "psc:" not in content
+        assert "podcast:chapters" not in content
+        assert _root_start_tag(content, root_name) == root_baseline
 
     @pytest.mark.parametrize("repository", ["default", "django"])
     def test_get_podcast_feed_excludes_restricted_episodes(self, client, episode, use_dummy_cache_backend, repository):
@@ -551,6 +716,59 @@ def test_is_itunes_type(value, expected):
     assert _is_itunes_type(value) is expected
 
 
+@pytest.mark.parametrize(
+    ("iso", "expected"),
+    [
+        ("01:02:03", "01:02:03"),
+        ("01:02:03.987654", "01:02:03.987"),
+    ],
+)
+def test_psc_start_formats_iso_time_for_podlove_simple_chapters(iso, expected):
+    assert _psc_start(iso) == expected
+
+
+@pytest.mark.django_db
+def test_episode_get_chapters_url_uses_feed_repository(rf, episode):
+    request = rf.get("/")
+    repository = SimpleNamespace(
+        chapters=[{"start": "00:01:00", "title": "Intro"}],
+        podcast_audio=episode.podcast_audio,
+    )
+
+    assert episode.get_chapters_url(request, repository) == (
+        "http://testserver"
+        f"{reverse('cast:chapters-json', kwargs={'pk': episode.podcast_audio.pk})}?episode_id={episode.pk}"
+    )
+
+
+@pytest.mark.django_db
+def test_episode_get_chapters_url_returns_none_for_chapterless_repository(rf, episode):
+    request = rf.get("/")
+    repository = SimpleNamespace(chapters=[], podcast_audio=episode.podcast_audio)
+
+    assert episode.get_chapters_url(request, repository) is None
+
+
+@pytest.mark.django_db
+def test_episode_get_chapters_url_falls_back_to_podcast_audio(rf, episode):
+    ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 1, 0), title="Intro")
+    request = rf.get("/")
+
+    assert episode.get_chapters_url(request) == (
+        "http://testserver"
+        f"{reverse('cast:chapters-json', kwargs={'pk': episode.podcast_audio.pk})}?episode_id={episode.pk}"
+    )
+
+
+@pytest.mark.django_db
+def test_episode_get_chapters_url_fallback_returns_none_without_chapters_or_audio(rf, episode):
+    request = rf.get("/")
+    assert episode.get_chapters_url(request) is None
+
+    episode.podcast_audio = None
+    assert episode.get_chapters_url(request) is None
+
+
 def test_itunes_elements_add_root_elements_index_error(mocker):
     class MockedHandler:
         def addQuickElement(self, name, content=None, attrs=None):
@@ -600,12 +818,57 @@ def test_podcast_index_add_item_elements_post_block(rf, mocker):
     json_url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript_pk})
     json_url = request.build_absolute_uri(json_url)
     post.get_podcastindex_transcript_url.return_value = json_url
+    post.get_chapters_url.return_value = None
 
     atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
     atom_itunes_feed_generator.request = request
     atom_itunes_feed_generator.add_item_elements(handler, {"post": post})
     handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "text/vtt", "url": vtt_url})
     handler.addQuickElement.assert_any_call("podcast:transcript", attrs={"type": "application/json", "url": json_url})
+
+
+def test_podcast_index_add_item_elements_emits_podlove_simple_chapters_sequence(rf, mocker):
+    class CapturingHandler:
+        def __init__(self):
+            self.calls = []
+
+        def startElement(self, name, attrs):
+            self.calls.append(("startElement", name, attrs))
+
+        def addQuickElement(self, name, content=None, attrs=None):
+            self.calls.append(("addQuickElement", name, content, attrs))
+
+        def endElement(self, name):
+            self.calls.append(("endElement", name))
+
+    request = rf.get("/")
+    mocker.patch("cast.feeds.ITunesElements.add_item_elements")
+    episode_repository = SimpleNamespace(
+        chapters=[
+            {"start": "00:01:02", "title": "Intro"},
+            {"start": "00:03:04.567890", "title": "Middle"},
+        ]
+    )
+    repository = SimpleNamespace(get_episode_feed_detail_repository=lambda _episode: episode_repository)
+    episode = SimpleNamespace(
+        get_vtt_transcript_url=lambda _request, _repository: None,
+        get_podcastindex_transcript_url=lambda _request, _repository: None,
+        get_chapters_url=lambda _request, _repository: None,
+        visible_contributor_assignments=[],
+    )
+    handler = CapturingHandler()
+
+    atom_itunes_feed_generator = AtomITunesFeedGenerator("title", "link", "description")
+    atom_itunes_feed_generator.request = request
+    atom_itunes_feed_generator.repository = repository
+    atom_itunes_feed_generator.add_item_elements(handler, {"post": episode})
+
+    assert handler.calls == [
+        ("startElement", "psc:chapters", {"xmlns:psc": PSC_NAMESPACE, "version": "1.2"}),
+        ("addQuickElement", "psc:chapter", None, {"start": "00:01:02", "title": "Intro"}),
+        ("addQuickElement", "psc:chapter", None, {"start": "00:03:04.567", "title": "Middle"}),
+        ("endElement", "psc:chapters"),
+    ]
 
 
 def test_podcast_feed_categories_and_keywords():

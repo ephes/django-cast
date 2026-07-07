@@ -59,6 +59,7 @@ from .repository import (
 from .theme import TemplateBaseDirectory
 
 if TYPE_CHECKING:
+    from .audio import Audio
     from .contributors import EpisodeContributor
     from .index_pages import Blog, ContextDict, Podcast
     from .transcript import Transcript
@@ -1005,6 +1006,20 @@ class Episode(Post):
                 relative_url = f"{relative_url}?episode_id={self.pk}"
                 return request.build_absolute_uri(relative_url)
         return None
+
+    def get_chapters_url(self, request: HtmxHttpRequest, repository: EpisodeFeedContext | None = None) -> str | None:
+        if repository is not None:
+            if not repository.chapters:
+                return None
+            audio_pk = repository.podcast_audio.pk
+        else:
+            podcast_audio = cast("Audio | None", self.podcast_audio)
+            if podcast_audio is None or not podcast_audio.chaptermarks.exists():
+                return None
+            audio_pk = podcast_audio.pk
+        relative_url = reverse("cast:chapters-json", kwargs={"pk": audio_pk})
+        relative_url = f"{relative_url}?episode_id={self.pk}"
+        return request.build_absolute_uri(relative_url)
 
 
 class HomePage(Page):

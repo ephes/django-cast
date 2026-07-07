@@ -7,6 +7,7 @@ queries when rendering posts.
 
 import json
 import pickle
+from datetime import time, timedelta
 from contextvars import Context, copy_context
 from copy import deepcopy
 from pathlib import Path
@@ -19,6 +20,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from wagtail.images.models import Image, Rendition
@@ -30,6 +32,7 @@ from cast.filters import PostFilterset
 from cast.models import (
     Audio,
     Blog,
+    ChapterMark,
     Contributor,
     ContributorLink,
     Episode,
@@ -482,6 +485,134 @@ def test_queryset_data_create_from_post_queryset_handles_episode_without_podcast
     assert episode.id not in queryset_data.podcast_audio_by_episode_id
 
 
+def _create_chaptered_episode(podcast, body, index, starts):
+    audio = Audio.objects.create(user=podcast.owner, title=f"chaptered audio {index}")
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title=f"chaptered episode {index}",
+        slug=f"chaptered-episode-{index}",
+        podcast_audio=audio,
+        body=body,
+        visible_date=timezone.now() + timedelta(minutes=index),
+    )
+    for position, start in enumerate(starts):
+        ChapterMark.objects.create(audio=audio, start=start, title=f"chapter {index}.{position}")
+    return episode
+
+
+def _episode_chapters_from_live_feed_context(rf, podcast):
+    request = rf.get(podcast.get_url())
+    repository = FeedContext.create_from_django_models(
+        request=request,
+        blog=podcast,
+        post_queryset=Episode.objects.live()
+        .public()
+        .descendant_of(podcast)
+        .filter(podcast_audio__isnull=False)
+        .order_by("pk"),
+    )
+    return [repository.get_episode_feed_detail_repository(episode).chapters for episode in repository.post_queryset]
+
+
+@pytest.mark.django_db
+def test_feed_context_threads_chapters_from_django_models_in_start_order(rf, podcast, body):
+    episode = _create_chaptered_episode(
+        podcast,
+        body,
+        1,
+        [time(0, 3, 0), time(0, 1, 0), time(0, 2, 0, 123456)],
+    )
+    _create_chaptered_episode(podcast, body, 2, [time(0, 5, 0), time(0, 4, 0)])
+    request = rf.get(podcast.get_url())
+
+    repository = FeedContext.create_from_django_models(
+        request=request,
+        blog=podcast,
+        post_queryset=Post.objects.live().public().descendant_of(podcast).order_by("pk"),
+    )
+
+    assert repository.get_episode_feed_detail_repository(episode).chapters == [
+        {"start": "00:01:00", "title": "chapter 1.1"},
+        {"start": "00:02:00.123456", "title": "chapter 1.2"},
+        {"start": "00:03:00", "title": "chapter 1.0"},
+    ]
+
+
+@pytest.mark.django_db
+def test_feed_context_threads_chapters_for_audio_without_transcript(rf, podcast, body):
+    episode = _create_chaptered_episode(podcast, body, 1, [time(0, 1, 0)])
+    request = rf.get(podcast.get_url())
+
+    repository = FeedContext.create_from_django_models(
+        request=request,
+        blog=podcast,
+        post_queryset=Post.objects.live().public().descendant_of(podcast),
+    )
+
+    episode_repository = repository.get_episode_feed_detail_repository(episode)
+    assert episode_repository.transcript is None
+    assert episode_repository.chapters == [{"start": "00:01:00", "title": "chapter 1.0"}]
+
+
+@pytest.mark.django_db
+def test_feed_context_chapter_access_query_count_is_flat(rf, django_assert_num_queries, podcast, body):
+    _create_chaptered_episode(podcast, body, 1, [time(0, 1, 0)])
+    with CaptureQueriesContext(connection) as captured:
+        _episode_chapters_from_live_feed_context(rf, podcast)
+    baseline_query_count = len(captured)
+
+    _create_chaptered_episode(podcast, body, 2, [time(0, 2, 0)])
+    _create_chaptered_episode(podcast, body, 3, [time(0, 3, 0)])
+    with django_assert_num_queries(baseline_query_count):
+        chapters = _episode_chapters_from_live_feed_context(rf, podcast)
+
+    assert chapters == [
+        [{"start": "00:01:00", "title": "chapter 1.0"}],
+        [{"start": "00:02:00", "title": "chapter 2.0"}],
+        [{"start": "00:03:00", "title": "chapter 3.0"}],
+    ]
+
+
+@pytest.mark.django_db
+def test_feed_context_cachable_data_preserves_chapters_and_old_cache_entries_deserialize(rf, podcast, body):
+    episode = _create_chaptered_episode(podcast, body, 1, [time(0, 1, 0, 987654)])
+    request = rf.get(podcast.get_url())
+    request.htmx = False
+    data = data_for_blog_cachable(
+        request=request,
+        blog=podcast,
+        is_paginated=False,
+        post_queryset=Episode.objects.live().public().descendant_of(podcast).order_by("pk"),
+    )
+    data["blog_url"] = podcast.get_url(request=request)
+
+    repository = FeedContext.create_from_cachable_data(data=data)
+    old_data = deepcopy(data)
+    old_data.pop("chapters")
+    old_repository = FeedContext.create_from_cachable_data(data=old_data)
+
+    assert repository.get_episode_feed_detail_repository(episode).chapters == [
+        {"start": "00:01:00.987654", "title": "chapter 1.0"}
+    ]
+    assert old_repository.get_episode_feed_detail_repository(episode).chapters == []
+
+
+@pytest.mark.django_db
+def test_feed_context_cachable_data_json_string_chapter_keys_are_int_normalized(rf, podcast, body):
+    episode = _create_chaptered_episode(podcast, body, 1, [time(0, 1, 2, 345678)])
+    request = rf.get(podcast.get_url())
+    request.htmx = False
+    data = FeedContext.data_for_feed_cachable(request=request, blog=podcast, is_podcast=True)
+    json_data = json.loads(json.dumps(data, default=str))
+
+    repository = FeedContext.create_from_cachable_data(data=json_data)
+
+    assert repository.get_episode_feed_detail_repository(episode).chapters == [
+        {"start": "00:01:02.345678", "title": "chapter 1.0"}
+    ]
+
+
 @pytest.mark.django_db
 def test_post_queryset_snapshot_bulk_fetches_non_episode_specific_models(rf, blog):
     post = create_post(blog=blog)
@@ -599,8 +730,14 @@ def test_post_queryset_snapshot_bulk_fetches_episode_subclass_specific_models(rf
 
 
 def test_queryset_data_create_from_post_queryset_raises_attribute_error_for_broken_transcript(rf, mocker):
+    class EmptyChapterMarks:
+        @staticmethod
+        def all():
+            return []
+
     class BrokenTranscriptAudio:
         pk = 42
+        chaptermarks = EmptyChapterMarks()
 
         @property
         def transcript(self):

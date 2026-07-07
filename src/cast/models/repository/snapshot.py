@@ -9,6 +9,7 @@ from wagtail.models import Site
 from .types import (
     AudioById,
     AudiosByPostID,
+    ChaptersByAudioId,
     CoverAltByPostID,
     CoverURLByPostID,
     HasAudioByID,
@@ -23,7 +24,15 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from cast.models import Post
+    from cast.models import Audio, Post
+
+
+def _serialize_chaptermarks(audio: "Audio") -> list[dict[str, str]]:
+    """Serialize prefetched chapter marks without issuing ordering queries."""
+    return [
+        {"start": chaptermark.start.isoformat(), "title": chaptermark.title}
+        for chaptermark in sorted(audio.chaptermarks.all(), key=lambda mark: mark.start)
+    ]
 
 
 def cache_page_url(post_id: int, url: str) -> None:
@@ -60,6 +69,7 @@ class PostQuerySnapshot:
         audios: AudioById,  # used in blocks
         podcast_audio_by_episode_id: AudioById,  # used in podcast rss feed for podcast:transcript elements
         transcript_by_audio_id: TranscriptByAudioId,  # used in podcast rss feed for podcast:transcript elements
+        chapters_by_audio_id: ChaptersByAudioId,  # used in podcast feeds for chapter elements
         images: ImageById,
         videos: VideoById,
         audios_by_post_id: AudiosByPostID,
@@ -81,6 +91,7 @@ class PostQuerySnapshot:
         self.audios_by_post_id = audios_by_post_id
         self.podcast_audio_by_episode_id = podcast_audio_by_episode_id
         self.transcript_by_audio_id = transcript_by_audio_id
+        self.chapters_by_audio_id = chapters_by_audio_id
         self.videos_by_post_id = videos_by_post_id
         self.images_by_post_id = images_by_post_id
         self.owner_username_by_id = owner_username_by_id
@@ -107,7 +118,9 @@ class PostQuerySnapshot:
         queryset = queryset.select_related("owner", "cover_image", "content_type")
         queryset_model = getattr(queryset, "model", None)
         if isinstance(queryset_model, type) and issubclass(queryset_model, Episode):
-            queryset = queryset.select_related("podcast_audio__transcript", "season")
+            queryset = queryset.select_related("podcast_audio__transcript", "season").prefetch_related(
+                "podcast_audio__chaptermarks"
+            )
         queryset = queryset.prefetch_related(
             "audios",
             "images",
@@ -124,6 +137,7 @@ class PostQuerySnapshot:
         audios_by_post_id: AudiosByPostID = {}
         podcast_audio_by_episode_id: AudioById = {}
         transcript_by_audio_id: TranscriptByAudioId = {}
+        chapters_by_audio_id: ChaptersByAudioId = {}
         videos_by_post_id: VideosByPostID = {}
         images_by_post_id: ImagesByPostID = {}
         page_url_by_id: PageUrlByID = {}
@@ -145,7 +159,9 @@ class PostQuerySnapshot:
         for specific_model, pks in pks_by_specific_model.items():
             specific_queryset = specific_model._default_manager.filter(pk__in=pks)
             if issubclass(specific_model, Episode):
-                specific_queryset = specific_queryset.select_related("podcast_audio__transcript", "season")
+                specific_queryset = specific_queryset.select_related(
+                    "podcast_audio__transcript", "season"
+                ).prefetch_related("podcast_audio__chaptermarks")
             specific_post_by_id.update(specific_queryset.in_bulk(pks))
 
         for post in posts:
@@ -184,6 +200,9 @@ class PostQuerySnapshot:
                 podcast_audio = specific_post.podcast_audio
                 if podcast_audio is not None:
                     podcast_audio_by_episode_id[post.pk] = podcast_audio
+                    marks = _serialize_chaptermarks(podcast_audio)
+                    if marks:
+                        chapters_by_audio_id[podcast_audio.pk] = marks
                     try:
                         transcript_by_audio_id[podcast_audio.pk] = podcast_audio.transcript
                     except ObjectDoesNotExist:
@@ -221,6 +240,7 @@ class PostQuerySnapshot:
             audios_by_post_id=audios_by_post_id,
             podcast_audio_by_episode_id=podcast_audio_by_episode_id,
             transcript_by_audio_id=transcript_by_audio_id,
+            chapters_by_audio_id=chapters_by_audio_id,
             videos_by_post_id=videos_by_post_id,
             images_by_post_id=images_by_post_id,
             has_audio_by_id=has_audio_by_id,

@@ -151,6 +151,7 @@ def queryset_data(**kwargs):
         audios_by_post_id={},
         podcast_audio_by_episode_id={},
         transcript_by_audio_id={},
+        chapters_by_audio_id={},
         videos_by_post_id={},
         images_by_post_id={},
         owner_username_by_id={},
