@@ -5,9 +5,10 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
-from django.apps import apps
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection
+from django.db.migrations.loader import MigrationLoader
+from django.test import override_settings
 from django.utils import timezone
 from wagtail.models import Revision
 
@@ -122,7 +123,10 @@ def test_heading_migration_converts_live_bodies_and_revisions(blog, podcast, sit
         content={"body": episode_revision_body, "title": episode.title},
     )
 
-    migration.forward(apps, SimpleNamespace(connection=connection))
+    with override_settings(MIGRATION_MODULES={}):
+        state = MigrationLoader(connection).project_state(("cast", "0080_convert_heading_to_paragraph"))
+
+    migration.forward(state.apps, SimpleNamespace(connection=connection))
     post_converted = _get_raw_body(Post, post.pk)
     home_converted = _get_raw_body(HomePage, home_page.pk)
     revision_converted = Revision.objects.values_list("content", flat=True).get(
@@ -133,7 +137,7 @@ def test_heading_migration_converts_live_bodies_and_revisions(blog, podcast, sit
     )
     before_second_run = deepcopy((post_converted, home_converted, revision_converted, episode_revision_converted))
 
-    migration.forward(apps, SimpleNamespace(connection=connection))
+    migration.forward(state.apps, SimpleNamespace(connection=connection))
 
     assert _get_raw_body(Post, post.pk) == before_second_run[0]
     assert _get_raw_body(HomePage, home_page.pk) == before_second_run[1]

@@ -84,16 +84,22 @@ def _convert_live_bodies(model: type[Any], schema_editor: Any) -> None:
 
 
 def _convert_revisions(apps: Any) -> None:
+    from django.apps import apps as global_apps
+    from django.db.models import Q
+
     from cast.models import HomePage, Post
 
     ContentType = apps.get_model("contenttypes", "ContentType")
     Revision = apps.get_model("wagtailcore", "Revision")
-    content_type_ids = [
-        content_type.pk
-        for content_type in ContentType.objects.all()
-        if (model_class := content_type.model_class()) is not None
-        and (issubclass(model_class, Post) or issubclass(model_class, HomePage))
-    ]
+    target_labels = {
+        (model._meta.app_label, model._meta.model_name)
+        for model in global_apps.get_models()
+        if issubclass(model, Post) or issubclass(model, HomePage)
+    }
+    query = Q()
+    for app_label, model_name in target_labels:
+        query |= Q(app_label=app_label, model=model_name)
+    content_type_ids = list(ContentType.objects.filter(query).values_list("pk", flat=True)) if target_labels else []
 
     for row in Revision.objects.filter(content_type_id__in=content_type_ids).values("pk", "content").iterator():
         content = row["content"]
