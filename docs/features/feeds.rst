@@ -126,6 +126,28 @@ Chapter ``start`` values use ``HH:MM:SS`` or ``HH:MM:SS.mmm`` when fractional
 seconds are present. Podlove Simple Chapters v1 output currently includes the
 ``start`` and ``title`` attributes only.
 
+Chaptered episodes also include a Podcasting 2.0 external chapters reference::
+
+    <podcast:chapters url="https://example.com/chapters/<audio pk>/?episode_id=<episode pk>" type="application/json+chapters" />
+
+The stable endpoint path is ``chapters/<audio pk>/?episode_id=<episode pk>``.
+``application/json+chapters`` is the Podcasting 2.0 specification's literal media-type
+string, not ``application/chapters+json``.
+It returns ``application/json+chapters`` with this body shape::
+
+    {
+      "version": "1.2.0",
+      "chapters": [
+        {"startTime": 83, "title": "Intro"}
+      ]
+    }
+
+``startTime`` values are integer seconds. Access to the endpoint uses the same
+audio-access checks as public audio and transcript endpoints: the supplied
+``episode_id`` must reference the audio and be viewable by the requester.
+Denied requests raise ``Http404`` so object existence is not leaked. Authorized
+requests for audio without chapter marks return a valid empty chapters document.
+
 RSS item GUIDs remain based on the episode UUID with
 ``isPermaLink="false"``. Episode numbers, episode types, and seasons are
 publishing metadata only; changing them does not change feed identity.

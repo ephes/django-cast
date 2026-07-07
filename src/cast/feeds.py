@@ -390,6 +390,8 @@ class PodcastIndexElements(ITunesElements):
             for chapter in chapters:
                 haqe("psc:chapter", attrs={"start": _psc_start(chapter["start"]), "title": chapter["title"]})
             handler.endElement("psc:chapters")
+        if (chapters_url := episode.get_chapters_url(self.request, repository)) is not None:
+            haqe("podcast:chapters", attrs={"url": chapters_url, "type": "application/json+chapters"})
         if _is_positive_integer(episode_number := getattr(episode, "episode_number", None)):
             haqe("podcast:episode", str(episode_number))
         season_number, season_name = _episode_season_data(episode)

@@ -5,9 +5,10 @@ from django.views.decorators.cache import cache_page
 
 from . import feeds
 from .views import meta
+from .views.chapters import chapters_json
+from .views.dev import components_view, dev_health_view, theme_compare_view
 from .views.feed import feed_detail
 from .views.gallery import gallery_modal
-from .views.dev import components_view, dev_health_view, theme_compare_view
 from .views.styleguide import styleguide
 from .views.theme import select_theme
 from .views.transcript import (
@@ -27,6 +28,8 @@ urlpatterns: list[Any] = [
     path("transcripts/podcastindex/<int:pk>/", view=podcastindex_transcript_json, name="podcastindex-transcript-json"),
     # WebVTT transcripts
     path("transcripts/vtt/<int:pk>/", view=webvtt_transcript, name="webvtt-transcript"),
+    # Podcasting 2.0 chapters
+    path("chapters/<int:pk>/", view=chapters_json, name="chapters-json"),
     # HTML transcripts
     path("transcripts/html/<int:transcript_pk>/", html_transcript, name="html-transcript-no-post"),
     path("transcripts/html/<int:transcript_pk>/<int:post_pk>/", view=html_transcript, name="html-transcript"),

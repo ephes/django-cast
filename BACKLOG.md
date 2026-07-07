@@ -130,20 +130,17 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
     existing feed compatibility.
 
-- [ ] Chapter marks in podcast feeds
+- [x] Chapter marks in podcast feeds
   - Related to: Paged feeds, Podcast feed import, and the custom audio player.
   - Scope: expose existing `ChapterMark` data in the podcast RSS/Atom feeds using both Podlove Simple Chapters
     (`<psc:chapters>` with inline `<psc:chapter start=… title=…/>` elements, `xmlns:psc="http://podlove.org/simple-chapters"`)
     and Podcasting 2.0 chapters (`<podcast:chapters>` referencing an external `application/json+chapters` document in the
     existing `xmlns:podcast` namespace).
-  - Notes: chapter data already exists per episode (`ChapterMark`, parsed from audio files and shown in the player) but is
-    not written to the feed yet; feed namespaces/elements live in `src/cast/feeds.py` (`ITunesElements`,
-    `PodcastIndexElements`). Open question for the PC2.0 form: where to serve the chapters JSON file from (new view/URL,
-    similar to the existing transcript URLs) versus only emitting inline Podlove chapters. Keep emission conditional so
-    episodes without chapter marks produce no extra elements.
+  - Notes: implemented 2026-07-07 with N+1-safe feed snapshot chapter data, inline Podlove Simple Chapters, and
+    Podcasting 2.0 `application/json+chapters` endpoint references at stable audio-scoped URLs.
   - Done when: feeds emit Podlove Simple Chapters inline and a `podcast:chapters` reference (with the JSON document served
     from a stable URL), namespaces are declared, behavior is documented, and tests cover episodes with and without chapter
-    marks plus existing-feed compatibility.
+    marks plus existing-feed compatibility. Completed in 0.2.63.
 
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)

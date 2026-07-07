@@ -3,3 +3,5 @@
 
 - Emit inline Podlove Simple Chapters in podcast RSS and Atom feeds for
   episodes with chapter marks, while leaving chapterless feed XML unchanged.
+- Add Podcasting 2.0 external chapters JSON documents and feed references via
+  ``podcast:chapters`` using ``application/json+chapters`` endpoints.
