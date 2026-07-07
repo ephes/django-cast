@@ -67,8 +67,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 ## Later
 
 - [ ] Model-layer decoupling (architecture review H1/H2/M1/M8)
-  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md), plan
-    [docs/superpowers/plans/2026-07-02-model-layer-decoupling-phase1.md](docs/superpowers/plans/2026-07-02-model-layer-decoupling-phase1.md)
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
   - Status: phase 1 landed on 2026-07-02 — `HtmxHttpRequest` lives in `cast/http_types.py` (models no longer import
     from views), `get_description` is side-effect free, `Video.save` is transactional, and `Post.save` has
     `sync_media`/`create_renditions` opt-outs.
@@ -167,6 +166,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Persistent player generic rollout decision
   - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
+  - Design: [backlog/2026-06-09-play-button-and-player-view-transition-design.md](backlog/2026-06-09-play-button-and-player-view-transition-design.md)
+    (play-affordance and inline→persistent player view-transition morph; includes open questions)
   - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
   - Scope: decide whether the python-podcast staging proof should become a reusable django-cast/cast-bootstrap5 API,
     remain python-podcast-specific, or be closed as a staging-only experiment.

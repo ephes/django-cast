@@ -49,6 +49,11 @@ Blog feeds are available in RSS and Atom formats, automatically generated from y
 - Feed fields populated from Blog model: title, description, author
 - Automatic inclusion of post content (overview and detail sections)
 
+Blog RSS item GUIDs are based on the post UUID with ``isPermaLink="false"``, so
+they are stable across slug and URL changes. Feed readers that subscribed before
+UUID-based GUIDs were introduced see each existing post once as new; from then on
+the GUIDs remain constant.
+
 Podcast Feeds
 -------------
 

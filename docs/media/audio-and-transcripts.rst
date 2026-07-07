@@ -175,6 +175,15 @@ responses are still served through django-cast views that authorize the related
 episode/audio and sanitize public speaker labels, but the stored artifact
 content itself is publishable for public episodes.
 
+Authorization serves an object only when it is anchored to a live episode/post
+whose Wagtail view restrictions the request satisfies (the *public path*), or
+when the requesting user has ``can_edit`` on a referencing page (the *editor
+path*, which covers Wagtail preview and never-published drafts). A supplied
+``episode_id``/``post_id`` anchor must actually reference the requested object
+and satisfy one of those paths; a missing, mismatched, or non-public anchor is
+rejected rather than silently ignored. Every denial returns ``Http404`` (never
+``403``) so object existence is not leaked.
+
 Configure ``STORAGES["cast_public_transcripts"]`` for production when transcript
 artifacts should use a dedicated public storage backend or prefix. If that alias
 is omitted, django-cast uses an explicitly configured ``cast_private_media``

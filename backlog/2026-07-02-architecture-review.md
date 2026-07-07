@@ -93,7 +93,7 @@ without a `Transcript` row; `transcripts/services.py` holds the speaker-mapping/
 fields, file-IO primitives, and one-line delegates with unchanged public signatures; public module names
 (`time_to_seconds`, `convert_dote_to_podcastindex_transcript`, `KNOWN_SPEAKER_*`, the dataclasses) remain
 importable from `cast.models.transcript`. The `save()`→`sync_speaker_mappings()` coupling itself is unchanged
-(H2 territory). Plan: `docs/superpowers/plans/2026-07-02-transcript-domain-extraction.md`.
+(H2 territory).
 
 ### H4. Triplicated admin media views for audio/video/transcript — Fixed (2026-07-02)
 
@@ -110,8 +110,7 @@ seven views once (including the `reindex(obj)` helper); `audio.py`/`video.py`/`t
 thin URL-kwarg wrappers, and their genuinely type-specific parts (audio's multi-format old-file deletion and
 voxhelm edit context, transcript's action-dispatcher `edit` and public transcript views stay local). The
 `per_page=10` drift is fixed — video's chooser upload honors `CHOOSER_PAGINATION`, with a regression test.
-URL names/kwargs, templates, context keys, message msgids, and modal-workflow JSON are unchanged. Plan:
-`docs/superpowers/plans/2026-07-02-media-views-dedup.md`.
+URL names/kwargs, templates, context keys, message msgids, and modal-workflow JSON are unchanged.
 
 ### H5. Stale tooling documentation and dead config files — Fixed (2026-07-02)
 
@@ -195,7 +194,7 @@ package `__init__`. The models↔voxhelm cycle is gone: the status helpers (`get
 `cast/transcripts/generation_status.py`, which imports only model leaf submodules, so `wagtail_panels.py` imports
 it at module level — no function-body imports; a static AST test (`tests/import_cycle_test.py`) pins that nothing
 imported during `cast.models` initialisation depends on `cast.voxhelm`, including inside function bodies.
-Optional-extra decision (recorded in `docs/superpowers/plans/2026-07-03-voxhelm-subpackage.md`): no `[voxhelm]`
+Optional-extra decision (recorded 2026-07-03): no `[voxhelm]`
 packaging extra — `django-tasks` stays a hard dependency (lightweight; an extra would trade clean degradation for
 ImportError crashes), models/migrations stay unconditional (Django model discovery cannot be optional), and the
 `cast_transcripts` TASKS backend is only required at first enqueue because `voxhelm_tasks` is deliberately
