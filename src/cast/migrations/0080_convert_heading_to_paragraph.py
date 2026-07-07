@@ -83,7 +83,7 @@ def _convert_live_bodies(model: type[Any], schema_editor: Any) -> None:
             _update_streamfield_json(model, pk, body, schema_editor)
 
 
-def _convert_revisions(apps: Any) -> None:
+def _convert_revisions(apps: Any, using: str) -> None:
     from django.apps import apps as global_apps
     from django.db.models import Q
 
@@ -99,9 +99,12 @@ def _convert_revisions(apps: Any) -> None:
     query = Q()
     for app_label, model_name in target_labels:
         query |= Q(app_label=app_label, model=model_name)
-    content_type_ids = list(ContentType.objects.filter(query).values_list("pk", flat=True)) if target_labels else []
+    content_type_ids = (
+        list(ContentType.objects.using(using).filter(query).values_list("pk", flat=True)) if target_labels else []
+    )
 
-    for row in Revision.objects.filter(content_type_id__in=content_type_ids).values("pk", "content").iterator():
+    revisions = Revision.objects.using(using).filter(content_type_id__in=content_type_ids)
+    for row in revisions.values("pk", "content").iterator():
         content = row["content"]
         if not isinstance(content, dict) or "body" not in content:
             continue
@@ -109,7 +112,7 @@ def _convert_revisions(apps: Any) -> None:
         parsed_body = json.loads(body) if isinstance(body, str) else body
         if convert_heading_blocks(parsed_body):
             content["body"] = json.dumps(parsed_body) if isinstance(body, str) else parsed_body
-            Revision.objects.filter(pk=row["pk"]).update(content=content)
+            Revision.objects.using(using).filter(pk=row["pk"]).update(content=content)
 
 
 def forward(apps: Any, schema_editor: Any) -> None:
@@ -118,7 +121,7 @@ def forward(apps: Any, schema_editor: Any) -> None:
 
     _convert_live_bodies(Post, schema_editor)
     _convert_live_bodies(HomePage, schema_editor)
-    _convert_revisions(apps)
+    _convert_revisions(apps, schema_editor.connection.alias)
 
 
 class Migration(migrations.Migration):
