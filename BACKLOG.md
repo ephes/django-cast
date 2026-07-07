@@ -21,8 +21,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     [backlog/2026-07-07-remove-heading-block-plan.md](backlog/2026-07-07-remove-heading-block-plan.md) and the
     RESOLVED [backlog/2026-07-07-overview-heading-block-rendering.md](backlog/2026-07-07-overview-heading-block-rendering.md).
     Choose a fresh slice when this backlog is next revisited.
-  - Ready candidates (concrete scope, done-when, PRD where noted): Editor API embed body block support,
-    Tags/categories and faceted navigation completion, and the Anonymous comment author edit hard-limits decision.
+  - Ready candidates (concrete scope, done-when): Tags/categories and faceted navigation completion, and the
+    Anonymous comment author edit hard-limits decision. (Editor API embed body block was weighed on 2026-07-07 and
+    kept deferred — no consumer demand; see its entry under Later.)
   - Done when: the chosen item has a clear first slice, expected files/tests, and any sibling-repo checks identified.
 
 ## Research / Shaping
@@ -116,6 +117,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
     (see Body Serialization)
+  - Status: deferred (reconfirmed 2026-07-07). The converter change is small, but the effort and risk are
+    concentrated in the oEmbed provider fetch at author time (network egress / SSRF surface, mocked-provider
+    tests) — a security decision about a block type the maintainer does not use. The one candidate consumer,
+    daybook, posts overview author blocks through this API but renders archive items (incl. watched videos) as
+    prose links by design, not embeds, so there is no consumer demand today. Revisit only if daybook (or another
+    editor-API client) decides to render items as embedded players/cards; if so, lean toward store-the-URL /
+    defer-resolution-to-render validation to avoid per-post provider fetches.
   - Scope: add `embed` as an author-facing body block in the editor converter, specifying URL validation and provider
     behavior. Stored `embed` blocks are currently preserved only as unsupported placeholders.
   - Done when: the `embed` value/validation contract is specified, the converter accepts and round-trips it, and tests
