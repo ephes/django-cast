@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, NewType, cast, get_args
@@ -21,12 +21,12 @@ class Rectangle:
     width: Width
     height: Height
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, Rectangle):
             raise ValueError(f"Can't compare RectDimension with {type(other)}")
         return (self.width, self.height) == (other.width, other.height)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.width, self.height))
 
 
@@ -69,7 +69,7 @@ class _ImageTypeToSlots(Mapping[ImageType, list[Rectangle]]):
     def __getitem__(self, key: ImageType) -> list[Rectangle]:
         return _build_image_type_to_slots()[key]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[ImageType]:
         return iter(_build_image_type_to_slots())
 
     def __len__(self) -> int:
@@ -87,7 +87,7 @@ class _DefaultImageFormats:
     def __len__(self) -> int:
         return len(self._get())
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[ImageFormat]:
         return iter(self._get())
 
 
@@ -205,13 +205,15 @@ class RenditionFilters:
         self.filter_to_url: dict[str, str] = {}
 
     @classmethod
-    def from_wagtail_image(cls, image: AbstractImage, slots: list[Rectangle], image_formats: ImageFormats):
+    def from_wagtail_image(
+        cls, image: AbstractImage, slots: list[Rectangle], image_formats: ImageFormats
+    ) -> "RenditionFilters":
         original_format = get_image_format_by_name(image.file.name)
         image = Rectangle(Width(image.width), Height(image.height))
         return cls(image=image, original_format=original_format, slots=slots, image_formats=image_formats)
 
     @classmethod
-    def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: ImageType):
+    def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: ImageType) -> "RenditionFilters":
         return cls.from_wagtail_image(
             image, slots=IMAGE_TYPE_TO_SLOTS[image_type], image_formats=list(DEFAULT_IMAGE_FORMATS)
         )

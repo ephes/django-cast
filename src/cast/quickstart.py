@@ -119,7 +119,7 @@ def collect_static_files(project_dir: Path) -> None:
 def open_browser_delayed(url: str, delay: float = 5.0) -> None:
     """Open browser after a delay to allow server to start."""
 
-    def _open():
+    def _open() -> None:
         time.sleep(delay)
         print(f"\nOpening browser to {url}")
         print("Login with username: user, password: password")
@@ -157,7 +157,7 @@ else:
         subprocess.run([sys.executable, str(manage_py), "createsuperuser"], check=True)
 
 
-def main():
+def main() -> None:
     """Main entry point for the quickstart command."""
     parser = argparse.ArgumentParser(
         description="Create a new Django project with django-cast pre-configured.",

@@ -108,7 +108,7 @@ class PostDetailContext:
             root_nav_links=[(p.get_url(), p.title) for p in blog.get_root().get_children().live()],
             has_audio=post.has_audio,
             page_url=post.get_url(request=request),
-            absolute_page_url=post.get_full_url(request=request),
+            absolute_page_url=cast(str, post.get_full_url(request=request)),
             owner_username=owner_username,
             blog_url=_blog_url_from_referer(request, blog.get_url(request=request)),
             cover_image_url=cover_image_url,

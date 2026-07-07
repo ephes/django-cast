@@ -1,6 +1,7 @@
 import io
 import json
 import subprocess
+from datetime import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,7 +10,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
 from wagtail.models import Collection, GroupCollectionPermission
 
-from cast.forms import AudioForm, ChapterMarkForm, TranscriptForm, get_video_form
+from cast.forms import AudioForm, ChapterMarkForm, FFProbeStartField, TranscriptForm, get_video_form
 from cast.models import Audio, ChapterMark, Transcript, Video
 from tests.factories import UserFactory
 
@@ -112,6 +113,12 @@ class TestAudioForm:
         form = AudioForm({"chaptermarks": ""})
         assert form.is_valid()
         assert form.cleaned_data["chaptermarks"] == []
+
+    def test_ffprobe_start_field_delegates_empty_and_time_values(self):
+        field = FFProbeStartField(required=False)
+
+        assert field.to_python(None) is None
+        assert field.to_python(time(1, 2, 3)) == time(1, 2, 3)
 
     def test_chaptermarks_invalid_line(self):
         broken_line = "00:12:24.409Dokumentation"

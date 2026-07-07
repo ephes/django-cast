@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from crispy_forms.helper import FormHelper
 from django_comments import get_form_target
 
@@ -15,7 +17,7 @@ class CommentFormHelper(FormHelper):
     def form_action(self) -> str:
         return get_form_target()
 
-    def __init__(self, form=None):
+    def __init__(self, form: Any | None = None) -> None:
         super().__init__(form=form)
         self.form_class = f"js-comments-form {appsettings.FORM_CSS_CLASS}"
         self.label_class = appsettings.LABEL_CSS_CLASS

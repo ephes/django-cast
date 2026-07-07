@@ -93,7 +93,7 @@ def apply_cover_fallback(
     return cover_image_url, cover_alt_text
 
 
-def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
+def get_facet_choices(fields: dict[str, HasChoices], field_name: str) -> list[Choice]:
     """Return non-empty filter choices for a facet field, or an empty list."""
     if field_name in fields:
         return [(k, v) for k, v in fields[field_name].choices if k != ""]

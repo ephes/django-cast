@@ -1,3 +1,6 @@
+from typing import Any
+
+from django.template import Context
 from django.utils.functional import cached_property
 from wagtail.admin.panels import Panel
 
@@ -27,7 +30,7 @@ class EpisodeTranscriptStatusPanel(Panel):
         def is_shown(self) -> bool:
             return bool(self.transcript_generation_context["transcript_generation_status"])
 
-        def get_context_data(self, parent_context=None):
+        def get_context_data(self, parent_context: Context | dict[str, Any] | None = None) -> dict[str, Any]:
             context = super().get_context_data(parent_context)
             context.update(self.transcript_generation_context)
             return context

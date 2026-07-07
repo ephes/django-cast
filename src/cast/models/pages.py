@@ -13,11 +13,11 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
+from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
 from django.utils.html import escape
-from django.utils.safestring import SafeText
 from django.utils.translation import gettext_lazy as _
 from django_comments import get_model as get_comment_model
 from modelcluster.contrib.taggit import ClusterTaggableManager
@@ -32,7 +32,7 @@ from wagtail.api import APIField
 from wagtail.fields import StreamField
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image, Rendition
-from wagtail.models import Page, PageManager
+from wagtail.models import Page, PageManager, Site
 from wagtail.search import index
 
 from cast import appsettings
@@ -121,11 +121,11 @@ class HtmlField(Field):
     itself.
     """
 
-    def __init__(self, *, render_detail: bool = False, **kwargs) -> None:
+    def __init__(self, *, render_detail: bool = False, **kwargs: Any) -> None:
         self.render_detail = render_detail
         super().__init__(**kwargs)
 
-    def to_representation(self, post: "Post") -> SafeText:
+    def to_representation(self, post: "Post") -> str:
         """
         Pass the request from context to the post's serve method to be able to
         render the post with the correct theme.
@@ -291,7 +291,13 @@ class Post(Page):
         self._blog = parent.blog
         return self._blog.get_template_base_dir(cast(HtmxHttpRequest, request))
 
-    def get_template(self, request: HttpRequest, *args, local_template_name: str = "post.html", **kwargs) -> str:
+    def get_template(
+        self,
+        request: HttpRequest,
+        *args: Any,
+        local_template_name: str = "post.html",
+        **kwargs: Any,
+    ) -> str:
         template_base_dir = kwargs.get("template_base_dir", None)
         if template_base_dir is None:
             template_base_dir = self.get_template_base_dir(request)
@@ -381,7 +387,7 @@ class Post(Page):
         """
         return type(self)._meta.app_label + "." + type(self).__name__  # FIXME butt ugly
 
-    def get_full_url(self, request=None):
+    def get_full_url(self, request: HttpRequest | None = None) -> str | None:
         if hasattr(self, "page_url"):
             return self.page_url
         return super().get_full_url(request=request)
@@ -415,7 +421,7 @@ class Post(Page):
             context["page"].pk = repository.post_id
         return context
 
-    def get_context(self, request: HttpRequest, **kwargs) -> "ContextDict":
+    def get_context(self, request: HttpRequest, **kwargs: Any) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         request = cast(HtmxHttpRequest, request)
         context["repository"] = repository = self.get_repository(request, kwargs)
@@ -627,7 +633,7 @@ class Post(Page):
         escape_html: bool = True,
         remove_newlines: bool = True,
         repository: PostDetailContext | None = None,
-    ) -> SafeText:
+    ) -> str:
         """
         Get a description for the feed or twitter player card. Needs to be
         a method because the feed is able to pass the actual request object.
@@ -652,7 +658,7 @@ class Post(Page):
         """This is needed for django-fluentcomments."""
         return self.full_url
 
-    def get_site(self):
+    def get_site(self) -> Site | None:
         if hasattr(self, "_repository"):
             return self._repository.site
         return super().get_site()
@@ -663,17 +669,17 @@ class Post(Page):
             return repository
         return PostDetailContext.create_from_django_models(request=request, post=self)
 
-    def serve(self, request: HtmxHttpRequest, *args, **kwargs):
+    def serve(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> TemplateResponse:
         kwargs.setdefault("render_detail", True)
         kwargs["repository"] = repository = self.get_repository(request, kwargs)
         # set the template_base_dir from the post_data to avoid having self.get_template_base_dir() called
         kwargs["template_base_dir"] = repository.template_base_dir
         return super().serve(request, *args, **kwargs)
 
-    def get_preview_context(self, request, mode_name):
+    def get_preview_context(self, request: HttpRequest, mode_name: str) -> "ContextDict":
         return self.get_context(request, render_detail=True, is_preview=True)
 
-    def serve_preview(self, request, mode_name, *args, **kwargs):
+    def serve_preview(self, request: HttpRequest, mode_name: str, *args: Any, **kwargs: Any) -> HttpResponse:
         # sync media ids before preview, because otherwise the repository
         # will not have the correct media ids and fail to get the correct
         # renditions and fail with a w1110 not found rendition key error.
@@ -685,7 +691,7 @@ class Post(Page):
             pass
         return super().serve_preview(request, mode_name)
 
-    def save(self, *args, **kwargs) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         sync_media = kwargs.pop("sync_media", True)
         create_renditions = kwargs.pop("create_renditions", True)
         save_return = super().save(*args, **kwargs)
@@ -845,7 +851,7 @@ class Episode(Post):
     # Per-instance repository cache; snapshots/deserializers overwrite this on episode instances.
     _visible_contributor_assignments: list["EpisodeContributor"] | None = None
 
-    def get_template(self, request: HttpRequest, *args, **kwargs) -> str:
+    def get_template(self, request: HttpRequest, *args: Any, **kwargs: Any) -> str:
         """
         Use get_template() from the parent class, but default to the episode template.
         """
@@ -868,7 +874,7 @@ class Episode(Post):
         if self.season.podcast_id != parent_podcast_id:
             raise ValidationError({"season": _("The selected season must belong to this episode's podcast.")})
 
-    def get_context(self, request, **kwargs) -> "ContextDict":
+    def get_context(self, request: HttpRequest, **kwargs: Any) -> "ContextDict":
         context = super().get_context(request, **kwargs)
         context["episode"] = self
         if "episode_contributors" not in context:
@@ -1027,7 +1033,7 @@ class HomePage(Page):
         FieldPanel("body"),
     ]
 
-    def serve(self, request, *args, **kwargs) -> HttpResponse:
+    def serve(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         if self.alias_for_page is not None:
             return redirect(cast(Page, self.alias_for_page).url, permanent=False)
         return super().serve(request, *args, **kwargs)

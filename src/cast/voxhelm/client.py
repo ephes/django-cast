@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from time import monotonic, sleep
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
@@ -20,18 +20,50 @@ MAX_VOXHELM_API_RESPONSE_BYTES = 1024 * 1024
 MAX_VOXHELM_ERROR_BYTES = 16 * 1024
 
 
+if TYPE_CHECKING:
+    from http.client import HTTPMessage
+    from types import TracebackType
+    from typing import IO, Protocol, Self, overload
+
+    class ReadableResponse(Protocol):
+        @overload
+        def read(self) -> bytes: ...
+
+        @overload
+        def read(self, size: int, /) -> bytes: ...
+
+        def __enter__(self) -> Self: ...
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc_value: BaseException | None,
+            traceback: TracebackType | None,
+        ) -> object: ...
+else:
+    ReadableResponse = Any
+
+
 class NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(
+        self,
+        req: Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> Request | None:
         return None
 
 
-def open_url(request: Request, *, timeout: float, follow_redirects: bool = True):
+def open_url(request: Request, *, timeout: float, follow_redirects: bool = True) -> ReadableResponse:
     if follow_redirects:
         return urlopen(request, timeout=timeout)
     return build_opener(NoRedirectHandler).open(request, timeout=timeout)
 
 
-def read_response_bytes(response, *, max_bytes: int | None = None) -> bytes:
+def read_response_bytes(response: ReadableResponse, *, max_bytes: int | None = None) -> bytes:
     if max_bytes is None:
         return response.read()
     data = response.read(max_bytes + 1)

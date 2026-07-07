@@ -1,15 +1,26 @@
 import json
 from typing import TYPE_CHECKING, Any, cast
 
-from wagtail.images.models import Rendition
+from wagtail.images.models import Image, Rendition
 
 from .types import RenditionsForPosts, SerializedRenditions
 
 if TYPE_CHECKING:
-    from cast.models import Blog, Contributor, ContributorLink, EpisodeContributor, Season
+    from cast.models import (
+        Audio,
+        Blog,
+        Contributor,
+        ContributorLink,
+        Episode,
+        EpisodeContributor,
+        Post,
+        Season,
+        Transcript,
+        Video,
+    )
 
 
-def serialize_audio(audio) -> dict:
+def serialize_audio(audio: "Audio") -> dict[str, Any]:
     """Serialize an Audio model instance to a plain dict for caching."""
     data = {
         "id": audio.pk,
@@ -29,14 +40,14 @@ def serialize_audio(audio) -> dict:
     return data
 
 
-def deserialize_audio(data: dict[str, Any]):
+def deserialize_audio(data: dict[str, Any]) -> "Audio":
     """Reconstruct an Audio model instance from a serialized dict."""
     from .. import Audio
 
     return Audio(**data)
 
 
-def serialize_transcript(transcript) -> dict:
+def serialize_transcript(transcript: "Transcript") -> dict[str, Any]:
     """Serialize a Transcript model instance to a plain dict for caching."""
     data = {
         "id": transcript.pk,
@@ -52,7 +63,7 @@ def serialize_transcript(transcript) -> dict:
     return data
 
 
-def deserialize_transcript(data: dict[str, Any]):
+def deserialize_transcript(data: dict[str, Any]) -> "Transcript":
     """Reconstruct a Transcript model instance from a serialized dict."""
     from .. import Transcript
 
@@ -159,7 +170,7 @@ def deserialize_season(data: dict[str, Any]) -> "Season":
     return Season(**data)
 
 
-def serialize_video(video) -> dict:
+def serialize_video(video: "Video") -> dict[str, Any]:
     """Serialize a Video model instance to a plain dict for caching."""
     data = {
         "id": video.pk,
@@ -175,14 +186,14 @@ def serialize_video(video) -> dict:
     return data
 
 
-def deserialize_video(data: dict[str, Any]):
+def deserialize_video(data: dict[str, Any]) -> "Video":
     """Reconstruct a Video model instance from a serialized dict."""
     from .. import Video
 
     return Video(**data)
 
 
-def serialize_blog(blog):
+def serialize_blog(blog: "Blog") -> dict[str, Any]:
     """Serialize a Blog (or Podcast) model instance to a plain dict for caching."""
     from .. import Podcast
 
@@ -244,7 +255,7 @@ def deserialize_blog(data: dict[str, Any]) -> "Blog":
     return blog
 
 
-def serialize_post(post):
+def serialize_post(post: "Post") -> dict[str, Any]:
     """Serialize a Post instance to a plain dict for caching."""
     return {
         "type": "post",
@@ -260,7 +271,7 @@ def serialize_post(post):
     }
 
 
-def deserialize_post(data: dict[str, Any]):
+def deserialize_post(data: dict[str, Any]) -> "Post":
     """Reconstruct a Post instance from a serialized dict."""
     from .. import Post
 
@@ -269,7 +280,7 @@ def deserialize_post(data: dict[str, Any]):
     return Post(**post_data)
 
 
-def serialize_episode(post):
+def serialize_episode(post: "Episode") -> dict[str, Any]:
     """Serialize an Episode instance (post with podcast audio) to a plain dict."""
     data = {
         "type": "episode",
@@ -296,7 +307,7 @@ def serialize_episode(post):
     return data
 
 
-def deserialize_episode(data: dict[str, Any]):
+def deserialize_episode(data: dict[str, Any]) -> "Episode":
     """Reconstruct an Episode instance from a serialized dict."""
     from .. import Episode
 
@@ -314,7 +325,7 @@ def deserialize_episode(data: dict[str, Any]):
     return episode
 
 
-def serialize_image(image):
+def serialize_image(image: Image) -> dict[str, Any]:
     """Serialize a Wagtail Image instance to a plain dict for caching."""
     data = {
         "pk": image.pk,
@@ -330,14 +341,14 @@ def serialize_image(image):
     return data
 
 
-def deserialize_image(data: dict[str, Any]):
+def deserialize_image(data: dict[str, Any]) -> Image:
     """Reconstruct an Image instance from a serialized dict."""
     from wagtail.images.models import Image
 
     return Image(**data)
 
 
-def rendition_to_dict(rendition):
+def rendition_to_dict(rendition: Rendition) -> dict[str, Any]:
     """Serialize a Wagtail Rendition instance to a plain dict."""
     return {
         "pk": rendition.pk,

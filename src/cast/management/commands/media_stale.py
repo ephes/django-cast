@@ -1,3 +1,7 @@
+from argparse import ArgumentParser
+from typing import Any
+
+from django.core.files.storage import Storage
 from django.core.management.base import BaseCommand
 from django.db import models
 from wagtail.images.models import Image
@@ -25,7 +29,7 @@ class Command(BaseCommand):
         "(requires production and backup storage backends configured)"
     )
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "--delete",
             action="store_true",
@@ -40,8 +44,8 @@ class Command(BaseCommand):
         return any(normalized_path.startswith(prefix) for prefix in MANAGED_MEDIA_PREFIXES)
 
     @staticmethod
-    def get_paths(storage):
-        paths = {}
+    def get_paths(storage: Storage) -> dict[str, int]:
+        paths: dict[str, int] = {}
         for num, path in enumerate(storage_walk_paths(storage)):
             size = storage.size(path)
             paths[path] = size
@@ -52,7 +56,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def get_cast_file_field_paths() -> set[str]:
-        paths = set()
+        paths: set[str] = set()
         from django.apps import apps
 
         for model in apps.get_app_config("cast").get_models():
@@ -68,25 +72,25 @@ class Command(BaseCommand):
 
     @staticmethod
     def get_image_paths() -> set[str]:
-        paths = set()
+        paths: set[str] = set()
         for image in Image.objects.all():
             paths.add(image.file.name)
             for rendition in image.renditions.all():
                 paths.add(rendition.file.name)
         return paths
 
-    def get_models_paths(self):
+    def get_models_paths(self) -> set[str]:
         paths = self.get_image_paths()
         paths.update(self.get_cast_file_field_paths())
         return paths
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         production_storage, _ = get_production_and_backup_storage()
         paths_from_models = self.get_models_paths()
 
         print("stale production")
         production_paths = self.get_paths(production_storage)
-        stale_production = {}
+        stale_production: dict[str, int] = {}
         for path, size in production_paths.items():
             if not self.is_managed_media_path(path):
                 continue

@@ -141,7 +141,7 @@ def build_failure_message(job_payload: dict[str, Any]) -> str:
     return f"Voxhelm job {job_id} ended in state '{state}'."
 
 
-def replace_file(field, filename: str, content: bytes) -> None:
+def replace_file(field: Any, filename: str, content: bytes) -> None:
     stage_file_replacement(field, filename, content)
 
 
@@ -406,7 +406,7 @@ def enqueue_audio_transcript_generation(
     *,
     audio: Audio,
     request_or_site: HttpRequest | Site | None = None,
-    requested_by=None,
+    requested_by: Any | None = None,
     episode: Any | None = None,
 ) -> TranscriptEnqueueResult:
     if audio.pk is None:

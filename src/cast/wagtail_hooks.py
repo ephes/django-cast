@@ -6,9 +6,9 @@ registers a Tags snippet viewset for CRUD operations on ``taggit.Tag``
 from the Wagtail admin sidebar.
 """
 
-from collections.abc import Iterator, MutableMapping
+from collections.abc import Iterator, Mapping, MutableMapping
 from contextvars import ContextVar
-from typing import TypeVar, overload
+from typing import Any, TypeVar, overload
 from urllib.parse import urlencode
 
 from django.http import HttpRequest
@@ -178,7 +178,7 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
     icon_name = "doc-full"
     template_name = "cast/wagtail/voxhelm_generate_transcript_action.html"
 
-    def is_shown(self, context):
+    def is_shown(self, context: Mapping[str, Any]) -> bool:
         page = context.get("page")
         if context.get("view") != "edit" or not isinstance(page, Episode):
             return False
@@ -186,11 +186,11 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
             return False
         return user_can_generate_transcript_for_episode(request=context["request"], episode=page)
 
-    def get_url(self, parent_context):
+    def get_url(self, parent_context: Mapping[str, Any]) -> str:
         page = parent_context["page"]
         return reverse("cast-voxhelm:generate_episode", args=(page.pk,))
 
-    def get_context_data(self, parent_context):
+    def get_context_data(self, parent_context: Mapping[str, Any]) -> dict[str, Any]:
         context = super().get_context_data(parent_context)
         url = context["url"]
         separator = "&" if "?" in url else "?"
@@ -269,17 +269,17 @@ class PageLinkHandlerWithCache(PageLinkHandler):
     cache: MutableMapping[int, str] = _ContextLocalCache()
 
     @classmethod
-    def cache_url(cls, page_id: int, url: str):
+    def cache_url(cls, page_id: int, url: str) -> None:
         cls.cache[page_id] = url
 
     @classmethod
-    def expand_db_attributes(cls, attrs):
+    def expand_db_attributes(cls, attrs: dict[str, Any]) -> str:
         if (cached_url := cls.cache.get(int(attrs["id"]))) is not None:
             return f'<a href="{cached_url}">'
         return super().expand_db_attributes(attrs)
 
     @classmethod
-    def expand_db_attributes_many(cls, attrs_list: list[dict]) -> list[str]:
+    def expand_db_attributes_many(cls, attrs_list: list[dict[str, Any]]) -> list[str]:
         """Required for Wagtail >= 6.1"""
         links, all_cached = [], True
         for attrs in attrs_list:
@@ -295,6 +295,6 @@ class PageLinkHandlerWithCache(PageLinkHandler):
 
 
 @hooks.register("register_rich_text_features")
-def register_page_link(features):
+def register_page_link(features: Any) -> None:
     """Replace Wagtail's default page link handler with the cache-aware variant."""
     features.register_link_type(PageLinkHandlerWithCache)

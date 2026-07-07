@@ -132,11 +132,11 @@ class RepositoryMixin(Feed):
         )
         return item.description
 
-    def item_link(self, item: Post) -> SafeText:
+    def item_link(self, item: Post) -> str:
         if self.repository is not None:
             repository = self.repository.get_post_detail_repository(item)
-            return cast(SafeText, repository.absolute_page_url)
-        return item.get_full_url()
+            return repository.absolute_page_url
+        return cast(str, item.get_full_url())
 
     def item_pubdate(self, item: Post) -> datetime:
         return item.visible_date

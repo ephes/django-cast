@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from django.conf import settings
-from django.core.files.storage import FileSystemStorage, InvalidStorageError, default_storage, storages
+from django.core.files.storage import FileSystemStorage, InvalidStorageError, Storage, default_storage, storages
 
 from cast import appsettings
 
@@ -28,14 +28,14 @@ def get_private_filesystem_storage(location: str) -> PrivateFileSystemStorage:
     return PrivateFileSystemStorage(location=location)
 
 
-def get_private_media_storage():
+def get_private_media_storage() -> Storage:
     try:
         return storages[PRIVATE_MEDIA_STORAGE_ALIAS]
     except InvalidStorageError:
         return get_private_filesystem_storage(get_private_media_root())
 
 
-def get_transcript_storage():
+def get_transcript_storage() -> Storage:
     """Return storage for public transcript artifacts.
 
     Podlove, WebVTT, and DOTe transcript files are publishable artifacts. Prefer

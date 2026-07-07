@@ -142,30 +142,12 @@ follow_imports = "silent"
 plugins = ["mypy_django_plugin.main"]
 exclude = "[a-zA-Z]*/(migrations)|(example)/(.)*"  # ignore migrations
 files = ["src", "tests/settings.py"]
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-module = ["cast.feeds"]
-disallow_incomplete_defs = true
-disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["cast.transcripts.dote"]
-disallow_incomplete_defs = true
-disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["cast.site_lookup"]
-disallow_incomplete_defs = true
-disallow_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["cast.widgets"]
-disallow_incomplete_defs = true
-disallow_untyped_defs = true
 
 [tool.django-stubs]
 django_settings_module = "tests.settings"

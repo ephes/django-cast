@@ -6,9 +6,10 @@ from .models import SpamFilter
 
 
 class Moderator:
-    def __init__(self, model, spamfilter=None):
+    def __init__(self, model: type[Any] | None, spamfilter: SpamFilter | None = None) -> None:
         self.model = model
         # Allow spamfilter to be set for tests
+        self.spamfilter: SpamFilter | None
         if spamfilter is not None:
             self.spamfilter = spamfilter
         else:

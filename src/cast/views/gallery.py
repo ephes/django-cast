@@ -32,8 +32,8 @@ class GalleryModalForm(forms.Form):
     block_id = forms.CharField()
     gallery_token = forms.CharField()
 
-    def clean(self):
-        cleaned_data = super().clean()
+    def clean(self) -> dict[str, Any]:
+        cleaned_data = super().clean() or {}
         image_pks = cleaned_data.get("image_pks", [])
         current_image_index = cleaned_data.get("current_image_index")
         gallery_token = cleaned_data.get("gallery_token")

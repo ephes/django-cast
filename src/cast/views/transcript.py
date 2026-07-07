@@ -550,7 +550,7 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     return _views.chooser_upload(request)
 
 
-def podlove_transcript_json(request: HttpRequest, pk) -> HttpResponse:
+def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))

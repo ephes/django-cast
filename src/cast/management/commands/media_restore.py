@@ -1,3 +1,6 @@
+from typing import Any
+
+from django.core.files.storage import Storage
 from django.core.management.base import BaseCommand
 
 from .storage_backend import get_production_and_backup_storage, sync_media_files
@@ -10,8 +13,8 @@ class Command(BaseCommand):
     )
 
     @staticmethod
-    def restore_media_files(production_storage, backup_storage):
+    def restore_media_files(production_storage: Storage, backup_storage: Storage) -> None:
         sync_media_files(backup_storage, production_storage)
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         self.restore_media_files(*get_production_and_backup_storage())

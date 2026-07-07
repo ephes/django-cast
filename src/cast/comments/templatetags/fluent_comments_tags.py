@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, cast
+
 from django import template
+from django.template.base import FilterExpression, Parser, Token
 from django.template.exceptions import TemplateSyntaxError
 from django.template.loader import render_to_string
-from django.utils.safestring import mark_safe
+from django.utils.safestring import SafeString, mark_safe
 
 from .. import appsettings
 from ..utils import (
@@ -13,14 +16,17 @@ from ..utils import (
     get_comment_template_name,
 )
 
+if TYPE_CHECKING:
+    from ..models import BaseComment
+
 register = template.Library()
 
 
 class AjaxCommentTagsNode(template.Node):
-    def __init__(self, target_object_expr):
+    def __init__(self, target_object_expr: FilterExpression) -> None:
         self.target_object_expr = target_object_expr
 
-    def render(self, context):
+    def render(self, context: template.Context) -> str:
         target_object = self.target_object_expr.resolve(context)
         return render_to_string(
             "fluent_comments/templatetags/ajax_comment_tags.html",
@@ -33,7 +39,7 @@ class AjaxCommentTagsNode(template.Node):
 
 
 @register.tag
-def ajax_comment_tags(parser, token):
+def ajax_comment_tags(parser: Parser, token: Token) -> AjaxCommentTagsNode:
     """
     Backwards-compatible tag.
 
@@ -54,7 +60,7 @@ def ajax_comment_tags(parser, token):
 
 
 @register.simple_tag(takes_context=True)
-def render_comment(context, comment):
+def render_comment(context: template.Context, comment: BaseComment) -> SafeString:
     request = context.get("request")
     template_name = get_comment_template_name(comment)
     ctx = get_comment_context_data(comment)
@@ -68,24 +74,24 @@ def render_comment(context, comment):
 
 
 @register.filter("comments_are_open")
-def comments_are_open_filter(content_object):
+def comments_are_open_filter(content_object: object) -> bool:
     return comments_are_open(content_object)
 
 
 @register.filter("comments_are_moderated")
-def comments_are_moderated_filter(content_object):
+def comments_are_moderated_filter(content_object: object) -> bool:
     return comments_are_moderated(content_object)
 
 
 @register.filter
-def comments_count(content_object):
+def comments_count(content_object: object) -> int:
     from django_comments import get_model as get_comments_model
 
     return get_comments_model().objects.for_model(content_object).count()
 
 
 @register.simple_tag(takes_context=True)
-def fluent_comments_list(context):
+def fluent_comments_list(context: template.Context) -> SafeString:
     comment_list = context.get("comment_list")
     request = context.get("request")
     # Precompute the 'edited' set once for the whole list to avoid an N+1 query
@@ -107,7 +113,7 @@ def fluent_comments_list(context):
         if first is not None:
             target_object_id = getattr(first, "object_pk", None)
 
-    ctx = context.flatten()
+    ctx = cast(dict[str, Any], context.flatten())
     ctx["USE_THREADEDCOMMENTS"] = appsettings.USE_THREADEDCOMMENTS
     ctx["target_object_id"] = target_object_id
 

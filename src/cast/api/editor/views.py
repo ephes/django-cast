@@ -12,7 +12,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ...models import Blog, Episode, Podcast, Post, Season
+from ...models import Audio, Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
 from .body import (
     author_blocks_to_overview,
@@ -127,7 +127,7 @@ class PostEditorMixin:
     body_section_order = ("overview", "detail")
     detail_url_name = "cast:api:editor_post_detail"
 
-    def _get_parent(self, parent_id: int):
+    def _get_parent(self, parent_id: int) -> Blog:
         blog = Blog.objects.filter(pk=parent_id).first()
         if blog is None:
             raise EditorValidationError(
@@ -135,7 +135,7 @@ class PostEditorMixin:
             )
         return blog.specific
 
-    def _get_post(self, pk: int, user: Any, *, denied_message: str):
+    def _get_post(self, pk: int, user: Any, *, denied_message: str) -> Post:
         post = Post.objects.filter(pk=pk).first()
         if post is None:
             raise EditorNotFound("Post not found.")
@@ -155,7 +155,7 @@ class PostEditorMixin:
                 {"slug": [{"code": "duplicate", "message": f"Slug {slug!r} is already used here."}]}
             )
 
-    def _resolve_cover_image(self, cover: dict[str, Any] | None, user: Any):
+    def _resolve_cover_image(self, cover: dict[str, Any] | None, user: Any) -> tuple[Any | None, str]:
         if not cover:
             return None, ""
         image = get_choosable_image(cover["id"], user)
@@ -171,7 +171,7 @@ class PostEditorMixin:
             )
         return image, cover.get("alt_text", "")
 
-    def _resolve_categories(self, ids: list[int]):
+    def _resolve_categories(self, ids: list[int]) -> list[PostCategory]:
         if not ids:
             return []
         found_by_id = {category.pk: category for category in PostCategory.objects.filter(pk__in=ids)}
@@ -456,7 +456,7 @@ class EpisodeEditorMixin(PostEditorMixin):
 
     detail_url_name = "cast:api:editor_episode_detail"
 
-    def _get_parent(self, parent_id: int):
+    def _get_parent(self, parent_id: int) -> Podcast:
         parent = super()._get_parent(parent_id)
         if not isinstance(parent, Podcast):
             raise EditorValidationError(
@@ -474,7 +474,7 @@ class EpisodeEditorMixin(PostEditorMixin):
             raise EditorPermissionDenied(denied_message, parent_id=None)
         return episode
 
-    def _resolve_podcast_audio(self, ref: dict[str, Any] | None, user: Any):
+    def _resolve_podcast_audio(self, ref: dict[str, Any] | None, user: Any) -> Audio | None:
         if not ref:
             return None
         audio = get_choosable_audio(ref["id"], user)
@@ -486,7 +486,7 @@ class EpisodeEditorMixin(PostEditorMixin):
             )
         return audio
 
-    def _resolve_season(self, ref: dict[str, Any] | None, podcast: Podcast):
+    def _resolve_season(self, ref: dict[str, Any] | None, podcast: Podcast) -> Season | None:
         if not ref:
             return None
         # Filter by podcast in the query so a missing season and a season belonging to

@@ -137,7 +137,7 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
     serializer_class = AudioPodloveSerializer
     permission_classes = (AllowAny,)
 
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         instance = self.get_object()
         post_id = kwargs.get("post_id")
         episode_id = request.query_params.get("episode_id")
@@ -181,7 +181,7 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
     queryset = Audio.objects.all()
     permission_classes = (AllowAny,)
 
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         audio = self.get_object()
         post_id = kwargs.get("post_id") or request.query_params.get("post_id")
         post = self._get_authorized_post(post_id, audio, request)
@@ -239,7 +239,7 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
 class PlayerConfig(generics.RetrieveAPIView):
     permission_classes = (AllowAny,)
 
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         template_base_dir = get_template_base_dir(request, None)
         color_scheme = request.query_params.get("color_scheme")
         config = build_podlove_player_config(template_base_dir=template_base_dir, color_scheme=color_scheme)
@@ -262,7 +262,7 @@ class FacetCountsDetailView(generics.RetrieveAPIView):
     def get_queryset(self) -> QuerySet[Blog]:
         return Blog.objects.all().live().public()
 
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         if request.query_params.get("mode") == "modal":
             blog = self.get_object()
             payload = get_modal_facet_counts(blog, request.query_params)
@@ -274,7 +274,7 @@ class CommentTrainingDataView(APIView):
     permission_classes = (IsAdminUser,)
 
     @staticmethod
-    def get(request, _format: Any = None) -> JsonResponse:
+    def get(request: Request, _format: Any = None) -> JsonResponse:
         """
         Return training data for comment classification.
         """
@@ -293,7 +293,7 @@ class ThemeListView(generics.ListAPIView):
     def get_queryset(self) -> None:
         return None
 
-    def list(self, request: Request, *args, **kwargs) -> Response:
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         choices = get_template_base_dir_choices()
         request = cast(HtmxHttpRequest, request)
         template_base_dir = get_template_base_dir(request, None)
@@ -312,7 +312,7 @@ class UpdateThemeView(APIView):
 
     permission_classes = (AllowAny,)
 
-    def post(self, request: Request, *args, **kwargs) -> Response:
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         if not isinstance(request.data, dict):
             return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -336,12 +336,13 @@ class RemoveNullBytesMixin:
 
     request: HttpRequest
 
-    def cleanup_null_bytes(self):
+    def cleanup_null_bytes(self) -> None:
         for key, value in self.request.GET.items():
+            value = cast(str, value)
             if "\x00" in value:
                 mutable_copy = self.request.GET.copy()
                 mutable_copy[key] = value.replace("\x00", "")
-                self.request.GET = mutable_copy
+                cast(Any, self.request).GET = mutable_copy
 
     def filter_queryset(self, queryset: QuerySet) -> QuerySet:
         self.cleanup_null_bytes()
@@ -388,7 +389,7 @@ class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
         filterset = PostFilterset(data=original_get_params, queryset=queryset)
         return filterset.qs
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Any]:
         self._extend_known_query_parameters()
         self._apply_template_base_dir_override()
         if self.request.GET.dict().get("use_post_filter", "false") == "true":

@@ -19,7 +19,7 @@ class _Auto:
     Sentinel value indicating an automatic default will be used.
     """
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         # Allow `Auto` to be used like `None` or `False` in boolean expressions
         return False
 
@@ -191,7 +191,7 @@ def add_video_to_body(*, body: Body, video: Video = Auto) -> Body:
     return body
 
 
-def create_minimal_mp3():
+def create_minimal_mp3() -> bytes:
     mp3 = (
         b"\xff\xe3\x18\xc4\x00\x00\x00\x03H\x00\x00\x00\x00"
         b"LAME3.98.2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -256,14 +256,16 @@ def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto, vtt: str = A
     return transcript
 
 
-def add_audio_to_body(*, body: Body, audio: Audio = Auto):
+def add_audio_to_body(*, body: Body, audio: Audio = Auto) -> Body:
     if not audio:  # pragma: no cover
         audio = create_audio()
     body[0]["value"].append({"type": "audio", "value": audio.id})
     return body
 
 
-def generate_blog_with_media(*, number_of_posts: int = 1, media_numbers: dict[str, int] = Auto, podcast=False) -> Blog:
+def generate_blog_with_media(
+    *, number_of_posts: int = 1, media_numbers: dict[str, int] = Auto, podcast: bool = False
+) -> Blog:
     if not media_numbers:  # pragma: no cover
         media_numbers = {k: 1 for k in ["images", "videos", "audios", "galleries"]}
     blog = create_podcast() if podcast else create_blog()

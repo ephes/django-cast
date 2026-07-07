@@ -9,7 +9,7 @@ import json
 import logging
 import subprocess
 from datetime import datetime, time
-from typing import Any, cast
+from typing import IO, Any, NoReturn, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -55,7 +55,9 @@ KNOWN_SPEAKER_REVIEW_BLANK_VALUE = "__blank__"
 
 
 class VideoUploadValidationMixin:
-    def clean_original(self):
+    cleaned_data: dict[str, Any]
+
+    def clean_original(self) -> Any:
         original = self.cleaned_data.get("original")
         if isinstance(original, UploadedFile):
             validate_video_upload(original)
@@ -111,11 +113,13 @@ class ChapterMarkForm(forms.ModelForm):
 class FFProbeStartField(forms.TimeField):
     """Time field that converts an ffprobe-style seconds-since-epoch float to a ``time`` object."""
 
-    def to_python(self, value) -> time:
+    def to_python(self, value: Any) -> time | None:
+        if value in self.empty_values or isinstance(value, time):
+            return super().to_python(value)
         try:
             # utcfromtimestamp, super important!
             return datetime.utcfromtimestamp(float(value)).time()
-        except ValueError:
+        except (TypeError, ValueError):
             raise ValidationError(
                 _(f"Invalid chaptermark start: {value}"),
                 code="invalid",
@@ -136,7 +140,7 @@ class FFProbeChapterMarkForm(forms.ModelForm):
 def parse_chaptermark_line(line: str) -> ChapterMark:
     """Parse a single ``HH:MM:SS Title text`` line into an unsaved ChapterMark."""
 
-    def raise_line_validation_error():
+    def raise_line_validation_error() -> NoReturn:
         raise ValidationError(
             _(f"Invalid chaptermark line: {line}"),
             code="invalid",
@@ -193,26 +197,26 @@ class AudioForm(BaseCollectionMemberForm):
             "opus": forms.ClearableFileInput,
         }
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["transcript_diarization_mode"].required = False
 
     def clean_transcript_diarization_mode(self) -> str:
         return self.cleaned_data.get("transcript_diarization_mode") or Audio.TranscriptDiarizationMode.INHERIT
 
-    def clean_m4a(self):
+    def clean_m4a(self) -> Any:
         return self._clean_audio_upload("m4a")
 
-    def clean_mp3(self):
+    def clean_mp3(self) -> Any:
         return self._clean_audio_upload("mp3")
 
-    def clean_oga(self):
+    def clean_oga(self) -> Any:
         return self._clean_audio_upload("oga")
 
-    def clean_opus(self):
+    def clean_opus(self) -> Any:
         return self._clean_audio_upload("opus")
 
-    def _clean_audio_upload(self, audio_format: str):
+    def _clean_audio_upload(self, audio_format: str) -> Any:
         upload = self.cleaned_data.get(audio_format)
         if isinstance(upload, UploadedFile):
             validate_audio_upload(upload, audio_format=audio_format)
@@ -253,7 +257,7 @@ class AudioForm(BaseCollectionMemberForm):
             cm.audio = audio
         ChapterMark.objects.sync_chaptermarks(audio, chaptermarks)
 
-    def save(self, commit=True) -> Audio:
+    def save(self, commit: bool = True) -> Audio:
         audio = super().save(commit=commit)
         if commit:
             self.save_chaptermarks(audio)
@@ -279,7 +283,7 @@ class TranscriptForm(BaseCollectionMemberForm):
             "dote": forms.ClearableFileInput,
         }
 
-    def clean_podlove(self):
+    def clean_podlove(self) -> Any:
         podlove = self.cleaned_data.get("podlove")
         if not podlove:
             return podlove
@@ -290,7 +294,7 @@ class TranscriptForm(BaseCollectionMemberForm):
             raise ValidationError(_("Podlove transcript 'transcripts' must be a list."))
         return podlove
 
-    def clean_dote(self):
+    def clean_dote(self) -> Any:
         dote = self.cleaned_data.get("dote")
         if not dote:
             return dote
@@ -313,7 +317,7 @@ class TranscriptForm(BaseCollectionMemberForm):
                 )
         return dote
 
-    def clean_vtt(self):
+    def clean_vtt(self) -> Any:
         vtt = self.cleaned_data.get("vtt")
         if not vtt:
             return vtt
@@ -323,7 +327,7 @@ class TranscriptForm(BaseCollectionMemberForm):
         return vtt
 
     @staticmethod
-    def _load_json(uploaded_file, *, field_label: str):
+    def _load_json(uploaded_file: UploadedFile | IO[str] | IO[bytes], *, field_label: str) -> Any:
         try:
             uploaded_file.seek(0)
             return json.load(uploaded_file)
@@ -336,7 +340,7 @@ class TranscriptForm(BaseCollectionMemberForm):
                 pass
 
     @staticmethod
-    def _read_header(uploaded_file, size: int = 32) -> str:
+    def _read_header(uploaded_file: UploadedFile | IO[str] | IO[bytes], size: int = 32) -> str:
         try:
             uploaded_file.seek(0)
             header = uploaded_file.read(size)
@@ -359,13 +363,13 @@ class SpeakerContributorMappingForm(forms.Form):
 
     def __init__(
         self,
-        *args,
+        *args: Any,
         speaker_mappings: list[TranscriptSpeakerMapping] | None = None,
         speaker_labels: list[str] | None = None,
         contributor_assignments: list[EpisodeContributor],
         multiple_episodes: bool = False,
         source_episode: Any | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         del source_episode
         super().__init__(*args, **kwargs)
@@ -507,11 +511,11 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
 
     def __init__(
         self,
-        *args,
-        segments: list[dict],
+        *args: Any,
+        segments: list[dict[str, Any]],
         contributor_assignments: list[EpisodeContributor],
         multiple_episodes: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         del multiple_episodes
         super().__init__(*args, **kwargs)
@@ -543,7 +547,7 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
     @classmethod
     def _speaker_names(
         cls,
-        segments: list[dict],
+        segments: list[dict[str, Any]],
         contributor_assignments: list[EpisodeContributor],
     ) -> list[str]:
         names: list[str] = []
@@ -580,7 +584,7 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
     def _speaker_choice_value(name: str) -> str:
         return f"speaker:{name}"
 
-    def _initial_value(self, segment: dict) -> str:
+    def _initial_value(self, segment: dict[str, Any]) -> str:
         decision = known_speakers.normalize_editor_decision(segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD))
         if decision is None:
             return KNOWN_SPEAKER_REVIEW_BULK_VALUE
@@ -661,6 +665,6 @@ class SelectThemeForm(forms.Form):
     )
     next = forms.CharField(widget=forms.HiddenInput, required=False)
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["template_base_dir"].choices = get_template_base_dir_choices()  # type: ignore

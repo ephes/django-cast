@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, TypeAlias
 
 from wagtail.images.models import Image, Rendition
@@ -8,7 +8,7 @@ from ..renditions import ImageType, RenditionFilters
 ImageIdSet = set[int]
 RenditionStringsByImageId = dict[int, set[str]]
 ObsoleteAndMissing = tuple[ImageIdSet, RenditionStringsByImageId]
-ImagesWithType: TypeAlias = Iterator[tuple[ImageType, Image]]
+ImagesWithType: TypeAlias = Iterable[tuple[ImageType, Image]]
 
 if TYPE_CHECKING:
     from cast.models import Post

@@ -372,7 +372,7 @@ def _ensure_site() -> Site:
     return Site.objects.create(hostname="localhost", port=80, root_page=root_page, is_default_site=True)
 
 
-def _ensure_blog(site: Site, user) -> Blog:
+def _ensure_blog(site: Site, user: User) -> Blog:
     default_theme = _styleguide_default_theme()
     blog = Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).first()
     if blog is None:
@@ -403,7 +403,7 @@ def _styleguide_post_date(now: datetime, months_back: int) -> datetime:
 
 def _ensure_posts(
     blog: Blog,
-    user,
+    user: User,
     media: StyleguideMedia,
     galleries: list[Gallery],
     *,
@@ -479,7 +479,7 @@ def _ensure_styleguide_tags_and_categories(posts: list[Post]) -> None:
         post.save()
 
 
-def _ensure_podcast(site: Site, user) -> Podcast:
+def _ensure_podcast(site: Site, user: User) -> Podcast:
     default_theme = _styleguide_default_theme()
     podcast = Podcast.objects.filter(slug=STYLEGUIDE_PODCAST_SLUG).first()
     if podcast is None:
@@ -502,7 +502,7 @@ def _ensure_podcast(site: Site, user) -> Podcast:
 
 def _ensure_episode(
     podcast: Podcast,
-    user,
+    user: User,
     media: StyleguideMedia,
     galleries: list[Gallery],
     transcript_seed: dict[str, Any] | None,
@@ -602,7 +602,7 @@ def _styleguide_default_theme() -> str:
     return _find_fallback_theme(available)
 
 
-def _create_styleguide_galleries(images: list[Image] | None, user) -> list[Gallery]:
+def _create_styleguide_galleries(images: list[Image] | None, user: User) -> list[Gallery]:
     galleries: list[Gallery] = []
     if images:
         image_ids = [image.pk for image in images if image and image.pk]
@@ -640,7 +640,7 @@ def _create_styleguide_media(
     audio: Audio | None = None,
     gallery: Gallery | None = None,
     gallery_images: list[Image] | None = None,
-    user=None,
+    user: Any = None,
 ) -> StyleguideMedia:
     if gallery is None:
         if gallery_images is None or len(gallery_images) == 0:
@@ -1270,7 +1270,7 @@ def _extract_transcript_data(html: str) -> dict[str, Any] | None:
     return {"version": 1, "transcripts": segments}
 
 
-def _get_or_create_remote_image(url: str, user) -> Image | None:
+def _get_or_create_remote_image(url: str, user: User) -> Image | None:
     title = f"Styleguide source: {url}"
     existing = Image.objects.filter(title=title).first()
     if existing is not None:
@@ -1294,7 +1294,7 @@ def _get_or_create_remote_image(url: str, user) -> Image | None:
     return image
 
 
-def _backfill_legacy_styleguide_audio_titles(user) -> None:
+def _backfill_legacy_styleguide_audio_titles(user: User) -> None:
     """Migrate legacy 'Styleguide source: <url>' titles to clean display titles."""
     prefix = "Styleguide source: "
     for audio in Audio.objects.filter(user=user, title__startswith=prefix):
@@ -1309,7 +1309,7 @@ def _backfill_legacy_styleguide_audio_titles(user) -> None:
         audio.save()
 
 
-def _get_or_create_remote_audio(url: str, user) -> Audio | None:
+def _get_or_create_remote_audio(url: str, user: User) -> Audio | None:
     _backfill_legacy_styleguide_audio_titles(user)
     filename = urlparse(url).path.rsplit("/", 1)[-1] or "styleguide-audio.m4a"
     stem = filename.rsplit(".", 1)[0] if "." in filename else filename
@@ -1364,7 +1364,7 @@ def _styleguide_remote_html_pages(urls: list[str]) -> list[tuple[str, str]]:
     return pages
 
 
-def _fetch_styleguide_remote_gallery_media(user) -> tuple[list[Image] | None, list[str] | None]:
+def _fetch_styleguide_remote_gallery_media(user: User) -> tuple[list[Image] | None, list[str] | None]:
     gallery_images: list[Image] = []
     image_urls: list[str] = []
     gallery_blocks: list[str] = []
@@ -1393,7 +1393,7 @@ def _fetch_styleguide_remote_video_media() -> tuple[str | None, str | None]:
 
 
 def _fetch_styleguide_remote_podcast_media(
-    user,
+    user: User,
     transcript_url: str | None,
 ) -> tuple[Audio | None, dict[str, Any] | None, Image | None, str | None]:
     podcast_url = _styleguide_podcast_source_url()
@@ -1431,7 +1431,7 @@ def _fetch_styleguide_remote_podcast_media(
 
 
 def _fetch_styleguide_remote_transcript_media(
-    user,
+    user: User,
     *,
     transcript_url: str | None,
     transcript_data: dict[str, Any] | None,
@@ -1452,7 +1452,7 @@ def _fetch_styleguide_remote_transcript_media(
     return transcript_data, cover_image
 
 
-def _fetch_styleguide_remote_media(user) -> StyleguideRemoteMedia:
+def _fetch_styleguide_remote_media(user: User) -> StyleguideRemoteMedia:
     if not _styleguide_remote_media_enabled():
         return _empty_styleguide_remote_media()
 

@@ -178,20 +178,18 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     and API fields for external themes.
   - Done when: follow-up options are either split into concrete ready items or explicitly deferred.
 
-- [ ] Consider stricter mypy annotation checks
+- [x] Consider stricter mypy annotation checks
   - Scope: evaluate enabling `disallow_incomplete_defs = true` and/or `disallow_untyped_defs = true` incrementally,
     likely per module first instead of project-wide.
-  - Notes: a 2026-07-06 re-probe before the first rollout showed `disallow_incomplete_defs` at 130 errors in 33
-    files and `disallow_untyped_defs` at 239 errors in 55 files, so project-wide rollout is still too broad. The
-    focused `src/cast/feeds.py` probe reported 9 errors for `disallow_incomplete_defs` and 10 errors for
-    `disallow_untyped_defs`; that cleanup landed with a per-module `cast.feeds` mypy override enabling both flags.
-    Follow-up slices added the same per-module strictness override to `cast.transcripts.dote`, where both focused
-    probes had 2 errors, `cast.site_lookup`, where both focused probes had 3 errors, and `cast.widgets`, where both
-    focused probes had 1 error. After those cleanups, the remaining project-wide counts were 115 errors in 29 files
-    for `disallow_incomplete_defs` and 223 errors in 51 files for `disallow_untyped_defs`. Next rollout slices
-    should stay per-module until the project-level error counts are much lower.
+  - Notes: implemented on 2026-07-06. The initial re-probe showed `disallow_incomplete_defs` at 130 errors in 33
+    files and `disallow_untyped_defs` at 239 errors in 55 files, so the rollout started with per-module overrides.
+    The first focused `src/cast/feeds.py` probe reported 9 errors for `disallow_incomplete_defs` and 10 errors for
+    `disallow_untyped_defs`; that cleanup landed with both flags enabled for `cast.feeds`. Subsequent slices cleaned
+    the remaining modules, ending with `cast.blocks`, `cast.models.pages`, and `cast.views.styleguide`. The final
+    2026-07-06 project-level probes for both flags passed with no issues in 142 source files, so the rollout now
+    enables `disallow_incomplete_defs = true` and `disallow_untyped_defs = true` globally in `pyproject.toml`.
   - Done when: the preferred strictness level and rollout strategy are documented, and at least one initial
-    module is either cleaned up or explicitly excluded/deferred.
+    module is either cleaned up or explicitly excluded/deferred. Completed with no deferred source modules.
 
 - [ ] Documentation polish pass
   - Notes: [backlog/2025-07-11-documentation-polish.md](backlog/2025-07-11-documentation-polish.md)

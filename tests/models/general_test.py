@@ -11,6 +11,7 @@ from django.http import QueryDict
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
+from wagtail.images.models import Image
 
 from cast import appsettings
 from cast.devdata import create_transcript
@@ -83,6 +84,36 @@ class TestGalleryModel:
     @pytest.mark.django_db
     def test_get_image_ids(self, gallery):
         assert len(gallery.image_ids) == gallery.images.count()
+
+    @pytest.mark.django_db
+    def test_reverse_image_relation_refreshes_signature(self, gallery, image_1px):
+        image = Image(title="second", file=image_1px)
+        image.save()
+
+        image.gallery_set.add(gallery)
+        gallery.refresh_from_db()
+        assert gallery.signature == gallery.build_signature(gallery.image_ids)
+        assert image.pk in gallery.image_ids
+
+        image.gallery_set.remove(gallery)
+        gallery.refresh_from_db()
+        assert gallery.signature == gallery.build_signature(gallery.image_ids)
+        assert image.pk not in gallery.image_ids
+
+        image.gallery_set.add(gallery)
+        gallery.refresh_from_db()
+        assert image.pk in gallery.image_ids
+
+        image.gallery_set.clear()
+        gallery.refresh_from_db()
+        assert gallery.signature == gallery.build_signature(gallery.image_ids)
+        assert image.pk not in gallery.image_ids
+
+        other_gallery = gallery.__class__.objects.create()
+        image.gallery_set.add(other_gallery)
+        other_gallery.refresh_from_db()
+        assert other_gallery.signature == other_gallery.build_signature(other_gallery.image_ids)
+        assert image.pk in other_gallery.image_ids
 
 
 class TestFileModel:

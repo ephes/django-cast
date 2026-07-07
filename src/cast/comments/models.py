@@ -28,7 +28,7 @@ else:
 
 
 class CastCommentManager(CommentManager):
-    def get_queryset(self):
+    def get_queryset(self) -> models.QuerySet[DjangoComment]:
         return super().get_queryset().select_related("user")
 
 

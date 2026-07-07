@@ -267,7 +267,7 @@ class CountChoicesMixin:
 class CategoryFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
     field_class = SlugChoicesField
 
-    def filter(self, qs: models.QuerySet, value: str):
+    def filter(self, qs: models.QuerySet, value: str) -> models.QuerySet:
         # Check if value is provided (not None and not an empty list)
         if value:
             return qs.filter(categories__slug__in=[value])
@@ -287,7 +287,7 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
     field_class = SlugChoicesField
     facet_count_key = "tags"
 
-    def filter(self, qs: models.QuerySet, value: str):
+    def filter(self, qs: models.QuerySet, value: str) -> models.QuerySet:
         # Check if value is provided (not None and not an empty list)
         if value:
             return qs.filter(tags__slug__in=[value])

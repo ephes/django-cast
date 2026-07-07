@@ -3,7 +3,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
@@ -28,7 +28,7 @@ class VideoQuerySet(SearchableQuerySetMixin, models.QuerySet):
 def get_video_dimensions(lines: list[str]) -> tuple[int | None, int | None]:
     """Has its own function to be easier to test."""
 
-    def get_width_height(my_video_type, my_line) -> tuple[int, int]:
+    def get_width_height(my_video_type: str, my_line: str) -> tuple[int, int]:
         dim_col = my_line.split(", ")[3]
         if my_video_type != "h264":
             dim_col = dim_col.split(" ")[0]
@@ -180,7 +180,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             "avi": "video/x-msvideo",
         }.get(ending, "video/mp4")
 
-    def save(self, *args, **kwargs) -> Optional["Video"]:  # type: ignore[override]
+    def save(self, *args: Any, **kwargs: Any) -> Optional["Video"]:  # type: ignore[override]
         generate_poster = kwargs.pop("poster", True)
         using = kwargs.get("using")
         if generate_poster and not getattr(self.original, "_committed", True):
