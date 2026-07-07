@@ -13,6 +13,23 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
+- [ ] **High priority — standalone `heading` block renders as plain text; reconcile with rich-text headings**
+  - Scope: the standalone `heading` block is a template-less, single-level `CharBlock`,
+    so `{% include_block %}` emits only its escaped string — it renders as body text with
+    no heading tag. Rich text (`paragraph`) already supports multi-level `<h2>/<h3>/<h4>`
+    headings that render correctly. Decide whether to deprecate the `heading` block in
+    favour of rich-text headings, give it an author-selectable level, or render it at a
+    fixed level — and give it a template so it stops rendering flat.
+  - Note: heading level is the author's choice (content has an h2/h3/h4 outline); no
+    fixed level fits all headings. daybook can get correct headings today by authoring
+    them as rich text instead of `heading` blocks.
+  - Related to: post-body block rendering. Cross-repo: a leveled `heading` block would
+    change the daybook overview heading contract (`value` string → `{text, level}`).
+  - Done when: headings render as real, correctly-levelled elements in the `plain` and
+    `bootstrap4` themes; the heading-block-vs-rich-text roles are documented and tested;
+    release notes are updated.
+  - Detail: [backlog/2026-07-07-overview-heading-block-rendering.md](backlog/2026-07-07-overview-heading-block-rendering.md)
+
 - [ ] Choose next implementation slice
   - Scope: pick the next small, concrete item from Research / Shaping or Later based on current project needs.
   - Status: the 2026-07-06 slice addressed quickstart template drift under "Revisit onboarding and authoring
