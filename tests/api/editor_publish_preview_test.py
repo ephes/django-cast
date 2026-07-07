@@ -240,12 +240,16 @@ class TestEditorPreview:
             parent=blog,
             title="Live preview title",
             slug="live-preview-title",
-            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live-only marker</h2>"}]}]),
+            body=json.dumps(
+                [{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live-only marker</h2>"}]}]
+            ),
         )
         post.save_revision(user=admin_user, changed=False)
         draft = post.get_latest_revision_as_object()
         draft.title = "Draft preview title"
-        draft.body = json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Draft-only marker</h2>"}]}])
+        draft.body = json.dumps(
+            [{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Draft-only marker</h2>"}]}]
+        )
         draft.save_revision(user=admin_user)
         post.refresh_from_db()
         assert post.live is True
@@ -258,7 +262,9 @@ class TestEditorPreview:
             parent=podcast,
             title="Live episode title",
             slug="live-episode-preview",
-            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live episode marker</h2>"}]}]),
+            body=json.dumps(
+                [{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live episode marker</h2>"}]}]
+            ),
         )
         episode.save_revision(user=admin_user, changed=False)
         draft = episode.get_latest_revision_as_object()
