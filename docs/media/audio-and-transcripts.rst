@@ -348,7 +348,7 @@ them from the Wagtail contributor snippet under *Voice references (private)*.
 Each reference is either an uploaded clean-solo clip **or** a source range into
 existing audio, never both:
 
-- A *source range* points at an existing :class:`Audio` object with
+- A *source range* points at an existing ``Audio`` object with
   ``start_seconds`` and ``end_seconds`` (start must be before end).
 - An *uploaded clip* is stored through a protected storage backend. Configure a
   non-public backend under the ``"cast_voice_references"`` alias in

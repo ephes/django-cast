@@ -189,7 +189,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the preferred strictness level and rollout strategy are documented, and at least one initial
     module is either cleaned up or explicitly excluded/deferred. Completed with no deferred source modules.
 
-- [ ] Documentation polish pass
+- [x] Documentation polish pass
   - Notes: [backlog/2025-07-11-documentation-polish.md](backlog/2025-07-11-documentation-polish.md)
   - Scope: retire the stale documentation task list by checking remaining docs structure, links, and warnings.
+  - Notes: completed 2026-07-07. Consistency pass over the current docs tree: `index.rst` navigation is
+    already well-structured, no orphaned pages, and the `just docs` (`sphinx -b html -W`) build is clean.
+    Fixed the one latent nitpicky broken reference (a stray `:class:`Audio`` domain role that could not
+    resolve without autodoc, now a literal) so the tree is also clean under `sphinx -n`, and turned the
+    illustrative `localhost:8000` example URLs in the tutorial/installation guides into inline literals so
+    they no longer render as dead links. Remaining beta wording in `content/organization.rst` is owned by
+    the "Tags/categories and faceted navigation completion" item, not this pass.
   - Done when: docs build cleanly and remaining docs TODOs are either implemented or intentionally removed.
