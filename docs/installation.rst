@@ -70,9 +70,9 @@ After Quickstart
 
 Once the server is running, you can:
 
-1. **Access the Wagtail admin** at http://localhost:8000/cms/
-2. **Access the Django admin** at http://localhost:8000/admin/
-3. **View your site** at http://localhost:8000/
+1. **Access the Wagtail admin** at ``http://localhost:8000/cms/``
+2. **Access the Django admin** at ``http://localhost:8000/admin/``
+3. **View your site** at ``http://localhost:8000/``
 
 ***********************************
 Integrating Into Existing Projects
