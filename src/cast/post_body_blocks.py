@@ -19,7 +19,6 @@ from cast.blocks import (
 POST_BODY_BLOCKS_SETTING = "CAST_POST_BODY_BLOCKS"
 POST_BODY_SECTIONS = frozenset({"overview", "detail"})
 DEFAULT_CONTENT_BLOCK_NAMES = (
-    "heading",
     "paragraph",
     "code",
     "image",
@@ -36,7 +35,6 @@ PostBodyBlockFactory: TypeAlias = Callable[[], ContentBlockDefinition]
 def default_content_blocks() -> list[ContentBlockDefinition]:
     """Return fresh instances of django-cast's built-in Post.body blocks."""
     return [
-        ("heading", blocks.CharBlock(classname="full title")),
         ("paragraph", blocks.RichTextBlock()),
         ("code", CodeBlock(icon="code")),
         ("image", CastImageChooserBlock(template="cast/image/image.html")),

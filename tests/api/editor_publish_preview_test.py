@@ -80,7 +80,7 @@ class TestEditorPostPublish:
             "slug": "publishable-draft",
             "tags": ["weeknotes"],
             "overview": [
-                {"type": "heading", "value": "Notes"},
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
                 {"type": "paragraph", "value": "<p>Ready to publish.</p>"},
             ],
         }
@@ -161,7 +161,7 @@ class TestEditorPostPublish:
             parent=blog,
             title="Live title",
             slug="live-with-draft",
-            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live"}]}]),
+            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live</h2>"}]}]),
         )
         post.save_revision(user=admin_user, changed=False)
         post.refresh_from_db()
@@ -199,7 +199,7 @@ class TestEditorPostPublish:
             parent=blog,
             title="Already live",
             slug="already-live",
-            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live"}]}]),
+            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live</h2>"}]}]),
         )
         post.save_revision(user=admin_user, changed=False)
         post.refresh_from_db()
@@ -240,12 +240,12 @@ class TestEditorPreview:
             parent=blog,
             title="Live preview title",
             slug="live-preview-title",
-            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live-only marker"}]}]),
+            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live-only marker</h2>"}]}]),
         )
         post.save_revision(user=admin_user, changed=False)
         draft = post.get_latest_revision_as_object()
         draft.title = "Draft preview title"
-        draft.body = json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Draft-only marker"}]}])
+        draft.body = json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Draft-only marker</h2>"}]}])
         draft.save_revision(user=admin_user)
         post.refresh_from_db()
         assert post.live is True
@@ -258,13 +258,13 @@ class TestEditorPreview:
             parent=podcast,
             title="Live episode title",
             slug="live-episode-preview",
-            body=json.dumps([{"type": "overview", "value": [{"type": "heading", "value": "Live episode marker"}]}]),
+            body=json.dumps([{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Live episode marker</h2>"}]}]),
         )
         episode.save_revision(user=admin_user, changed=False)
         draft = episode.get_latest_revision_as_object()
         draft.title = "Draft episode title"
         draft.body = json.dumps(
-            [{"type": "overview", "value": [{"type": "heading", "value": "Draft episode marker"}]}]
+            [{"type": "overview", "value": [{"type": "paragraph", "value": "<h2>Draft episode marker</h2>"}]}]
         )
         draft.save_revision(user=admin_user)
         episode.refresh_from_db()
@@ -379,7 +379,7 @@ class TestEditorDetailSection:
             "slug": "detail-draft",
             "overview": [],
             "detail": [
-                {"type": "heading", "value": "Detail"},
+                {"type": "paragraph", "value": "<h2>Detail</h2>"},
                 {"type": "video", "value": {"id": video.id}},
             ],
         }
@@ -403,6 +403,21 @@ class TestEditorDetailSection:
         assert patched.json()["overview"] == []
         assert patched.json()["detail"] == replacement
 
+    def test_create_rejects_heading_block(self, api_client, blog, superuser):
+        api_client.force_authenticate(user=superuser)
+        create_url = reverse("cast:api:editor_post_create")
+        payload = {
+            "parent": {"id": blog.id},
+            "title": "Heading rejected",
+            "slug": "heading-rejected",
+            "overview": [{"type": "heading", "value": "Notes"}],
+        }
+
+        response = api_client.post(create_url, payload, format="json")
+
+        assert response.status_code == 400
+        assert response.json()["errors"]["overview.0.type"][0]["code"] == "unsupported_block_type"
+
     def test_patch_preserves_returned_unsupported_placeholder(self, api_client, blog, admin_user):
         post = Post(
             title="Unsupported detail",
@@ -415,7 +430,7 @@ class TestEditorDetailSection:
                         "type": "detail",
                         "value": [
                             {"type": "embed", "value": "https://example.com"},
-                            {"type": "heading", "value": "Old heading"},
+                            {"type": "paragraph", "value": "<h2>Old heading</h2>"},
                         ],
                     }
                 ]
@@ -427,7 +442,7 @@ class TestEditorDetailSection:
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": post.id})
         detail = api_client.get(url, format="json").json()["detail"]
         assert detail[0] == {"type": "unsupported", "value": {"stored_type": "embed", "position": "detail.0"}}
-        replacement = [detail[0], {"type": "heading", "value": "Replacement"}]
+        replacement = [detail[0], {"type": "paragraph", "value": "<h2>Replacement</h2>"}]
 
         response = api_client.patch(
             url,
@@ -441,7 +456,7 @@ class TestEditorDetailSection:
         stored_detail = draft.body.raw_data[0]["value"]
         assert stored_detail[0]["type"] == "embed"
         assert stored_detail[0]["value"] == "https://example.com"
-        assert stored_detail[1] == {"type": "heading", "value": "Replacement"}
+        assert stored_detail[1] == {"type": "paragraph", "value": "<h2>Replacement</h2>"}
 
     def test_patch_can_move_unsupported_placeholder(self, api_client, blog, admin_user):
         post = Post(
@@ -461,14 +476,14 @@ class TestEditorDetailSection:
             url,
             {
                 "base_revision_id": revision.id,
-                "detail": [{"type": "heading", "value": "Inserted above"}, placeholder],
+                "detail": [{"type": "paragraph", "value": "<h2>Inserted above</h2>"}, placeholder],
             },
             format="json",
         )
 
         assert response.status_code == 200, response.content
         assert response.json()["detail"] == [
-            {"type": "heading", "value": "Inserted above"},
+            {"type": "paragraph", "value": "<h2>Inserted above</h2>"},
             {"type": "unsupported", "value": {"stored_type": "embed", "position": "detail.1"}},
         ]
 
@@ -558,14 +573,14 @@ class TestEditorDetailSection:
             url,
             {
                 "base_revision_id": revision.id,
-                "detail": [{"type": "heading", "value": "Keep editing"}, *detail],
+                "detail": [{"type": "paragraph", "value": "<h2>Keep editing</h2>"}, *detail],
             },
             format="json",
         )
 
         assert response.status_code == 200, response.content
         assert response.json()["detail"] == [
-            {"type": "heading", "value": "Keep editing"},
+            {"type": "paragraph", "value": "<h2>Keep editing</h2>"},
             {"type": "unsupported", "value": {"stored_type": "image", "position": "detail.1"}},
             {"type": "unsupported", "value": {"stored_type": "gallery", "position": "detail.2"}},
             {"type": "unsupported", "value": {"stored_type": "audio", "position": "detail.3"}},

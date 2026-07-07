@@ -478,8 +478,23 @@ def post_data_wagtail():
         "body-0-type": "overview",
         "body-0-value-0-deleted": "",
         "body-0-value-0-order": "0",
-        "body-0-value-0-type": "heading",
-        "body-0-value-0-value": "overview heading",
+        "body-0-value-0-type": "paragraph",
+        "body-0-value-0-value": json.dumps(
+            {
+                "blocks": [
+                    {
+                        "key": "00000",
+                        "text": "overview heading",
+                        "type": "header-two",
+                        "depth": 0,
+                        "inlineStyleRanges": [],
+                        "entityRanges": [],
+                        "data": {},
+                    }
+                ],
+                "entityMap": {},
+            }
+        ),
         "body-0-value-count": "1",
         "body-count": "1",
         "slug": "new-post",
@@ -495,8 +510,8 @@ def python_body():
             "type": "overview",
             "value": [
                 {
-                    "type": "heading",
-                    "value": "in_all heading",
+                    "type": "paragraph",
+                    "value": "<h2>in_all heading</h2>",
                 }
             ],
         },
@@ -504,8 +519,8 @@ def python_body():
             "type": "detail",
             "value": [
                 {
-                    "type": "heading",
-                    "value": "only_in_detail heading",
+                    "type": "paragraph",
+                    "value": "<h2>only_in_detail heading</h2>",
                 }
             ],
         },

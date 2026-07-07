@@ -248,7 +248,7 @@ class TestEditorScopeEnforcement:
             "title": "Scope draft",
             "slug": "scope-draft",
             "tags": [],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         response = api_client.post(url, payload, format="json")
         assert response.status_code == 201, response.content
@@ -268,7 +268,7 @@ class TestEditorScopeEnforcement:
             "title": "Unscoped write",
             "slug": "unscoped-write",
             "tags": [],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         assert api_client.post(url, payload, format="json").status_code == 201
 
@@ -280,7 +280,7 @@ class TestEditorScopeEnforcement:
             "title": "Write scope",
             "slug": "write-scope",
             "tags": [],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         assert api_client.post(url, payload, format="json").status_code == 201
 
@@ -293,7 +293,7 @@ class TestEditorScopeEnforcement:
             "title": "No write scope",
             "slug": "no-write-scope",
             "tags": [],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         response = api_client.post(url, payload, format="json")
         assert response.status_code == 403
@@ -334,7 +334,7 @@ class TestEditorScopeEnforcement:
             "title": "Custom scope",
             "slug": "custom-scope",
             "tags": [],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         assert api_client.post(url, payload, format="json").status_code == 201
 
@@ -348,7 +348,7 @@ class TestEditorScopeEnforcement:
             "title": "List scope",
             "slug": "list-scope",
             "tags": [],
-            "overview": [{"type": "heading", "value": "Notes"}],
+            "overview": [{"type": "paragraph", "value": "<h2>Notes</h2>"}],
         }
         assert api_client.post(url, payload, format="json").status_code == 201
 

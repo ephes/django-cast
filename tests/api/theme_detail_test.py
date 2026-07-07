@@ -153,4 +153,4 @@ def test_render_html_with_theme_from_session(api_client, post):
 
     # Then we expect the blog post to be rendered with the theme from the session
     assert r.context.get("template_base_dir") == "plain"
-    assert all([t.name.startswith("cast/plain/") for t in r.templates])
+    assert all(t.name.startswith("cast/plain/") or t.name == "wagtailcore/shared/richtext.html" for t in r.templates)
