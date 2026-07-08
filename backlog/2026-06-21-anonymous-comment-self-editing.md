@@ -32,7 +32,9 @@ These were settled during shaping and drive the rest of the document:
 - **Ownership proof:** server-side Django session only (a server-side session backend is required; `signed_cookies` is
   rejected by a system check). No signed token, no email link.
 - **Operations:** both edit and delete.
-- **Edit window:** the session lifetime (`SESSION_COOKIE_AGE`, default two weeks). No separate hard time cap.
+- **Edit window:** the session lifetime (`SESSION_COOKIE_AGE`, default two weeks), optionally further capped by
+  `CAST_COMMENTS_AUTHOR_EDIT_WINDOW` (integer seconds, default `0` meaning no additional hard cap). The hard window
+  applies to both edit and delete and is counted from the comment submission time.
 - **Freeze once answered:** a comment that has been replied to can no longer be edited or deleted. Combined with the
   still-public rule, edit/delete only ever touch an owned, still-public, reply-less comment.
 - **Edit re-moderation:** every edit re-enters the spam/moderation pipeline via the `comment_will_be_posted` signal.
@@ -385,7 +387,8 @@ functional cookie) are bounded and addressed through configuration and documenta
   - `AppConfig.ready()` may additionally raise `ImproperlyConfigured` for fail-fast startup where checks are run.
   The security model depends on a server-side backend (revocability and a non-client-exposed owned-ids list); the feature
   is optional, so deployments that want it run a server-side backend.
-- Tunables: the owned-id list cap (default 200). Rate-limit thresholds for the cache-based limiter.
+- Tunables: optional `CAST_COMMENTS_AUTHOR_EDIT_WINDOW` hard time cap (default `0`, no additional cap), the owned-id
+  list cap (default 200), and rate-limit thresholds for the cache-based limiter.
 - Follow the existing `appsettings.py` `__getattr__` pattern and the `CAST_COMMENTS_*` naming, honoring legacy
   `FLUENT_COMMENTS_*` fallbacks where that pattern already exists.
 
@@ -537,3 +540,15 @@ Still pending (a follow-up slice): the browser frontend — ownership-aware edit
 `(edited)` marker, and the ephemerality/"awaiting moderation" messaging across the `bootstrap4`, `plain`, and `vue`
 template families plus the AJAX JS — and the matching user docs and release note. The endpoints are fully functional and
 tested server-side; only the in-browser affordances are missing.
+
+## Hard-Limits Follow-up Decision (2026-07-08)
+
+The hard-limits follow-up accepts a disabled-by-default hard time window and defers the persistent edit-count cap. The
+accepted setting is `CAST_COMMENTS_AUTHOR_EDIT_WINDOW`: integer seconds, default `0` for no additional cap, applied to
+both author edit and author delete eligibility from the original comment submission time. The existing reply rule is
+unchanged: an answered comment remains frozen for author edit/delete, and an expired author-edit window does not block
+other users from replying to an otherwise public/unremoved comment.
+
+No edit-count setting or persistent edit-count storage is implemented in this slice. That option remains deferred because
+it needs separate product decisions about what counts as an edit attempt and how delete/spam-hidden edits should consume a
+cap.

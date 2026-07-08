@@ -9,7 +9,7 @@ solely by the comment id (as a string) being present in the current session's
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -88,13 +88,39 @@ def comment_has_reply(comment: Any) -> bool:
     return django_comments.get_model().objects.using(db).filter(parent_id=comment.pk).exists()
 
 
+def comment_within_author_window(comment: Any, now: datetime | None = None) -> bool:
+    """True when the comment is still inside the configured author-action window."""
+    window = appsettings.AUTHOR_EDIT_WINDOW
+    if window <= 0:
+        return True
+
+    submit_date = getattr(comment, "submit_date", None)
+    if not isinstance(submit_date, datetime):
+        return False
+
+    from django.utils import timezone
+
+    if now is None:
+        now = timezone.now()
+    try:
+        return submit_date + timedelta(seconds=window) >= now
+    except (AttributeError, OverflowError, TypeError, ValueError):
+        return False
+
+
 def comment_is_actionable(comment: Any) -> bool:
     """The non-ownership half of the eligibility predicate.
 
     A comment may be edited or deleted by its owner only while it is still
-    publicly visible and has not been answered.
+    publicly visible, has not been answered, and remains inside the optional
+    hard author-action window.
     """
-    return bool(comment.is_public) and not bool(comment.is_removed) and not comment_has_reply(comment)
+    return (
+        bool(comment.is_public)
+        and not bool(comment.is_removed)
+        and not comment_has_reply(comment)
+        and comment_within_author_window(comment)
+    )
 
 
 def _meta_model() -> type[CommentAuthorMeta]:

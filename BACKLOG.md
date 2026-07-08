@@ -21,9 +21,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     [backlog/2026-07-07-remove-heading-block-plan.md](backlog/2026-07-07-remove-heading-block-plan.md) and the
     RESOLVED [backlog/2026-07-07-overview-heading-block-rendering.md](backlog/2026-07-07-overview-heading-block-rendering.md).
     Choose a fresh slice when this backlog is next revisited.
-  - Ready candidates (concrete scope, done-when): the Anonymous comment author edit hard-limits decision. (Editor
-    API embed body block was weighed on 2026-07-07 and kept deferred — no consumer demand; see its entry under
-    Later.)
+  - Ready candidates (concrete scope, done-when): none currently selected. The Anonymous comment author edit
+    hard-limits decision is resolved; the Editor API embed body block was weighed on 2026-07-07 and kept deferred —
+    no consumer demand; see its entry under Later.
   - Done when: the chosen item has a clear first slice, expected files/tests, and any sibling-repo checks identified.
 
 ## Research / Shaping
@@ -62,14 +62,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: there is a small prototype or design note showing how the app would authenticate, list content,
     edit drafts, preview posts, sync changes, and handle conflicts.
 
-- [ ] Anonymous comment author edit hard limits
+- [x] Anonymous comment author edit hard limits
   - PRD: [backlog/2026-06-21-anonymous-comment-self-editing.md](backlog/2026-06-21-anonymous-comment-self-editing.md)
-  - Status: implemented and tested (reviewed clean) — backend, browser frontend (templates + AJAX JS), and user
-    docs/release notes all landed.
+  - Status: resolved for 0.2.62 — optional hard time window accepted and implemented as
+    ``CAST_COMMENTS_AUTHOR_EDIT_WINDOW`` (default ``0`` / no additional cap); persistent edit-count cap deferred and
+    not implemented in this slice.
   - Scope: decide whether to add the deferred persistent edit-count cap, configurable hard time-window, both, or
     neither for the already shipped session-bound author edit/delete feature.
   - Done when: the decision is recorded and any accepted limit has settings, validation/checks, tests, docs, and
-    release notes.
+    release notes. Completed in 0.2.62.
 
 ## Later
 

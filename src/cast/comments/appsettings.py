@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     FIELD_CSS_CLASS: str
     ALLOW_AUTHOR_EDITS: bool
     OWNED_IDS_CAP: int
+    AUTHOR_EDIT_WINDOW: int
     EDIT_RATE_LIMIT: int
     EDIT_RATE_WINDOW: int
 
@@ -65,6 +66,14 @@ def __getattr__(name: str) -> Any:
         )
     if name == "OWNED_IDS_CAP":
         return int(getattr(settings, "CAST_COMMENTS_OWNED_IDS_CAP", _central_default("CAST_COMMENTS_OWNED_IDS_CAP")))
+    if name == "AUTHOR_EDIT_WINDOW":
+        return int(
+            getattr(
+                settings,
+                "CAST_COMMENTS_AUTHOR_EDIT_WINDOW",
+                _central_default("CAST_COMMENTS_AUTHOR_EDIT_WINDOW"),
+            )
+        )
     if name == "EDIT_RATE_LIMIT":
         return int(
             getattr(settings, "CAST_COMMENTS_EDIT_RATE_LIMIT", _central_default("CAST_COMMENTS_EDIT_RATE_LIMIT"))

@@ -64,6 +64,22 @@ because comment ownership is tracked in the session and a client-carried list
 cannot be revoked. See :ref:`comments_author_edits` for the full behaviour and
 privacy notes.
 
+.. _cast_comments_author_edit_window:
+
+CAST_COMMENTS_AUTHOR_EDIT_WINDOW
+================================
+
+Optional hard time window, in integer seconds, for author edit/delete actions.
+Defaults to ``0``, which means there is no additional hard time cap beyond the
+same-browser session, reply, visibility, and rate-limit rules. A positive value
+applies to both edit and delete, counted from the comment's submission time.
+Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled. The value must be a non-negative integer; invalid values are reported
+by the cast system checks as ``cast.E007``.
+
+.. _cast_comments_owned_ids_cap:
+
 CAST_COMMENTS_OWNED_IDS_CAP
 ===========================
 
@@ -73,6 +89,8 @@ entries are dropped once the cap is reached. Defaults to ``200``; ``0`` means
 :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
 enabled.
 
+.. _cast_comments_edit_rate_limit:
+
 CAST_COMMENTS_EDIT_RATE_LIMIT
 =============================
 
@@ -81,6 +99,8 @@ The maximum number of author edit/delete actions allowed per session within
 **disables** rate limiting. Only relevant when
 :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
 enabled.
+
+.. _cast_comments_edit_rate_window:
 
 CAST_COMMENTS_EDIT_RATE_WINDOW
 ==============================

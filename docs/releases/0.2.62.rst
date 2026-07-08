@@ -1,6 +1,9 @@
 0.2.62 (unreleased)
 -------------------
 
+- Add ``CAST_COMMENTS_AUTHOR_EDIT_WINDOW`` to optionally cap anonymous comment
+  author edit/delete eligibility by comment age; the default ``0`` preserves the
+  existing session-bound behavior.
 - Remove django-cast's built-in ``heading`` StreamField block. This is a
   breaking change for third-party installs: author multi-level headings in
   ``paragraph`` rich text (``<h2>``/``<h3>``/``<h4>``) going forward. The

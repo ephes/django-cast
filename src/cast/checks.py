@@ -222,10 +222,11 @@ def check_cast_comments_author_edits_tunables(
     surprising list-slicing/timeout behaviour.
     """
     errors: list[Error] = []
-    # ``OWNED_IDS_CAP`` 0 means "no cap" and ``EDIT_RATE_LIMIT`` 0 means "disabled",
-    # so both allow 0; the rate window must be a positive number of seconds.
+    # ``OWNED_IDS_CAP`` 0 means "no cap", ``AUTHOR_EDIT_WINDOW`` 0 means disabled,
+    # and ``EDIT_RATE_LIMIT`` 0 means "disabled"; the rate window must be positive.
     for name, minimum in (
         ("CAST_COMMENTS_OWNED_IDS_CAP", 0),
+        ("CAST_COMMENTS_AUTHOR_EDIT_WINDOW", 0),
         ("CAST_COMMENTS_EDIT_RATE_LIMIT", 0),
         ("CAST_COMMENTS_EDIT_RATE_WINDOW", 1),
     ):

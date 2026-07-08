@@ -60,6 +60,11 @@ Settings
     :ref:`comments_author_edits` for the behaviour, requirements, and privacy
     implications.
 
+``CAST_COMMENTS_AUTHOR_EDIT_WINDOW``
+    Optional hard time window, in seconds, for author edit/delete actions.
+    Defaults to ``0`` (no additional hard time cap). Only applies when
+    ``CAST_COMMENTS_ALLOW_AUTHOR_EDITS`` is enabled.
+
 ``CAST_COMMENTS_FORM_CSS_CLASS``
     CSS class applied to the comment form. Defaults to
     ``"comments-form form-horizontal"``.
@@ -275,9 +280,13 @@ Once enabled, an author who posted a comment from the current browser sees
 edit and delete controls on that comment:
 
 - The controls are available **until someone replies** to the comment or the
-  **session expires**, whichever comes first. After a reply lands the comment
-  is frozen and the controls disappear, so editing history cannot diverge from
-  a conversation that already built on it.
+  **session expires**, whichever comes first. Sites can also configure an
+  optional hard time window with
+  :ref:`CAST_COMMENTS_AUTHOR_EDIT_WINDOW <cast_comments_author_edit_window>`;
+  when set, edit and delete eligibility ends after that many seconds from the
+  comment's submission time even if the session is still valid. After a reply
+  lands the comment is frozen and the controls disappear, so editing history
+  cannot diverge from a conversation that already built on it.
 - Edits are **re-moderated**. An edited comment goes back through the spam
   filter (see :ref:`comments_moderation`), so an edit can become hidden pending
   moderation just like a freshly posted comment. Edited comments are marked
@@ -303,16 +312,19 @@ Scope and limitations
   still post without JavaScript. If your site relies on no-JavaScript threaded
   replies, keep the feature disabled.
 
-Two optional tunables limit abuse and bound session size (both only apply when
-the feature is enabled):
+Optional tunables limit abuse and bound eligibility/session size (all only
+apply when the feature is enabled):
 
-- :ref:`CAST_COMMENTS_OWNED_IDS_CAP <cast_comments_allow_author_edits>` caps how
-  many owned comment ids are kept per session (default ``200``). ``0`` means **no
+- :ref:`CAST_COMMENTS_AUTHOR_EDIT_WINDOW <cast_comments_author_edit_window>` can
+  add a hard edit/delete time cap based on the comment submission time (default
+  ``0``, no additional cap).
+- :ref:`CAST_COMMENTS_OWNED_IDS_CAP <cast_comments_owned_ids_cap>` caps how many
+  owned comment ids are kept per session (default ``200``). ``0`` means **no
   cap** (keep every id).
-- :ref:`CAST_COMMENTS_EDIT_RATE_LIMIT <cast_comments_allow_author_edits>` and
-  :ref:`CAST_COMMENTS_EDIT_RATE_WINDOW <cast_comments_allow_author_edits>` cap
-  how many edit/delete actions a session may perform within a fixed cache
-  window (defaults ``30`` actions per ``60`` seconds). A rate limit of ``0``
+- :ref:`CAST_COMMENTS_EDIT_RATE_LIMIT <cast_comments_edit_rate_limit>` and
+  :ref:`CAST_COMMENTS_EDIT_RATE_WINDOW <cast_comments_edit_rate_window>` cap how
+  many edit/delete actions a session may perform within a fixed cache window
+  (defaults ``30`` actions per ``60`` seconds). A rate limit of ``0``
   **disables** rate limiting; the window must be a positive number of seconds.
 
 .. _comments_author_edits_privacy:
