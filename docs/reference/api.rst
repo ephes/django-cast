@@ -418,17 +418,36 @@ Body block types accepted in ``overview`` and ``detail``:
         {"type": "video",     "value": {"id": 43}}
     ]
 
+Sites can expose additional section-specific custom block types through
+``CAST_POST_BODY_BLOCKS``. For a configured custom block, clients send the
+block's author-facing value directly, not Wagtail's internal StreamField
+storage wrappers. For example, a custom ``ListBlock(StructBlock(...))`` value is
+sent as a plain JSON list of objects; clients do not send ``{"type": "item",
+"id": "...", "value": ...}`` list-item wrappers. Custom block values are
+converted through the configured Wagtail block's ``to_python()``, ``clean()``,
+and ``get_prep_value()`` methods on write, and are returned in an editor-facing
+representation on read.
+
+Custom blocks are a trusted site-level extension point. The editor API enforces
+the built-in media blocks' per-user ``choose`` permissions, but it cannot infer
+permissions for arbitrary object references inside custom block values. A
+custom block that references images, pages, snippets, or media should enforce
+its own validation and permission semantics, or should not be exposed to editor
+API clients.
+
 Stored body blocks that this API version cannot safely edit are returned as
 ``{"type": "unsupported", "value": {"stored_type": "...", "position":
-"detail.0"}}`` placeholders. This includes custom or unsupported block types
-such as ``embed``, and supported block types whose stored value cannot be
-represented as an editable authoring block, such as deleted or inaccessible
-media references, empty or malformed galleries, or malformed code blocks. To
-preserve one of these blocks while replacing a section, send the placeholder
-back with the same ``stored_type`` and ``position``. The placeholder may move to
-a different index in the submitted section; ``position`` identifies the original
-stored block to preserve. Omitting a placeholder removes that stored block as
-part of the full-section replacement.
+"detail.0"}}`` placeholders. This includes unsupported block types such as
+``embed``, no-longer-configured custom blocks, configured custom blocks whose
+stored value can no longer be converted safely, and supported block types whose
+stored value cannot be represented as an editable authoring block, such as
+deleted or inaccessible media references, empty or malformed galleries, or
+malformed code blocks. To preserve one of these blocks while replacing a
+section, send the placeholder back with the same ``stored_type`` and
+``position``. The placeholder may move to a different index in the submitted
+section; ``position`` identifies the original stored block to preserve.
+Omitting a placeholder removes that stored block as part of the full-section
+replacement.
 
 Full create request example:
 

@@ -3,21 +3,31 @@ import json
 import subprocess
 
 import pytest
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import Group, Permission
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.response import Response
+from wagtail import blocks
 from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
 
 from cast import media_probe
 from cast.api.editor import media as editor_media
 from cast.api.editor.body import (
     SUPPORTED_OVERVIEW_BLOCKS,
+    _content_section,
+    _custom_author_value,
+    _custom_block_map,
+    _flatten_django_validation_error,
     _media_ref_is_available,
+    _unwrap_list_item_values,
     author_blocks_to_overview,
+    author_blocks_to_section,
     overview_to_author_blocks,
+    section_to_author_blocks,
 )
 from cast.api.editor.errors import (
     EditorNotFound,
@@ -29,6 +39,17 @@ from cast.models import Audio, Episode, Post, Season, Video
 from cast.models.snippets import PostCategory
 
 from tests.factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory, UserFactory
+
+
+WEEKNOTE_LINK = {
+    "category": "articles",
+    "kind": "article",
+    "title": "Example article",
+    "url": "https://example.com/article",
+    "source": "Example",
+    "source_url": "",
+    "description": "<p>Short summary.</p>",
+}
 
 
 def grant_wagtail_admin_access(user) -> None:
@@ -151,6 +172,68 @@ class TestEditorExceptionHandler:
         exc = ValidationError({"field": ErrorDetail("bad", code="invalid")})
         response = editor_exception_handler(exc, {})
         assert response.data["errors"]["field"][0] == {"code": "invalid", "message": "bad"}
+
+
+class TestEditorCustomBlockHelpers:
+    def test_unknown_path_prefix_has_no_custom_blocks(self):
+        assert _content_section("not-body") is None
+        assert _custom_block_map(None) == {}
+
+    def test_django_validation_error_dict_is_flattened(self):
+        exc = DjangoValidationError({"title": [DjangoValidationError("Bad title", code="invalid")]})
+
+        assert _flatten_django_validation_error(exc, "overview.0.value") == {
+            "overview.0.value.title": [{"code": "invalid", "message": "Bad title"}]
+        }
+
+    def test_wagtail_non_block_errors_are_flattened(self):
+        exc = DjangoValidationError("Container failed")
+        exc.non_block_errors = [DjangoValidationError("Bad list", code="invalid")]
+
+        assert _flatten_django_validation_error(exc, "overview.0.value") == {
+            "overview.0.value": [{"code": "invalid", "message": "Bad list"}]
+        }
+
+    def test_non_validation_children_are_ignored_until_leaf_fallback(self):
+        exc = DjangoValidationError("Container failed")
+        exc.block_errors = {"field": "not a validation error"}
+
+        assert _flatten_django_validation_error(exc, "overview.0.value") == {
+            "overview.0.value": [{"code": "invalid", "message": "Container failed"}]
+        }
+
+    def test_non_validation_non_block_children_are_ignored_until_leaf_fallback(self):
+        exc = DjangoValidationError("Container failed")
+        exc.non_block_errors = ["not a validation error"]
+
+        assert _flatten_django_validation_error(exc, "overview.0.value") == {
+            "overview.0.value": [{"code": "invalid", "message": "Container failed"}]
+        }
+
+    def test_non_validation_error_dict_children_are_ignored_until_leaf_fallback(self):
+        exc = DjangoValidationError("Container failed")
+        exc.error_dict = {"field": ["not a validation error"]}
+
+        assert _flatten_django_validation_error(exc, "overview.0.value") == {
+            "overview.0.value": [{"code": "invalid", "message": "not a validation error"}]
+        }
+
+    def test_base_block_author_value_uses_prep_value_fallback(self):
+        class PlainBlock(blocks.Block):
+            pass
+
+        assert _custom_author_value(PlainBlock(), {"nested": ["value"]}) == {"nested": ["value"]}
+
+    def test_list_item_unwrap_handles_plain_lists_and_nested_dicts(self):
+        assert _unwrap_list_item_values(
+            {
+                "items": [
+                    {"type": "item", "id": "a", "value": {"title": "A"}},
+                    {"type": "item", "id": "b", "value": {"title": "B"}},
+                ],
+                "plain": [1, {"x": 2}],
+            }
+        ) == {"items": [{"title": "A"}, {"title": "B"}], "plain": [1, {"x": 2}]}
 
 
 class TestEditorParents:
@@ -330,6 +413,50 @@ class TestAuthorBlocksToOverview:
             author_blocks_to_overview([{"type": "heading", "value": "Notes"}], user=superuser)
         assert excinfo.value.error_map["overview.0.type"][0]["code"] == "unsupported_block_type"
 
+    def test_non_string_block_type_rejected(self, superuser):
+        with pytest.raises(EditorValidationError) as excinfo:
+            author_blocks_to_overview([{"type": 1, "value": "Notes"}], user=superuser)
+        assert excinfo.value.error_map["overview.0.type"][0]["code"] == "unsupported_block_type"
+
+    @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})
+    def test_configured_custom_list_block_round_trips_without_internal_item_wrappers(self, superuser):
+        author = [{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}]
+
+        internal = author_blocks_to_overview(author, user=superuser)
+
+        assert internal[0]["type"] == "weeknote_links"
+        assert internal[0]["value"][0]["type"] == "item"
+        assert internal[0]["value"][0]["value"] == WEEKNOTE_LINK
+        assert overview_to_author_blocks(internal) == author
+
+    @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})
+    def test_configured_custom_block_validation_errors_are_field_precise(self, superuser):
+        bad_link = {**WEEKNOTE_LINK, "title": "", "url": "not-a-url"}
+
+        with pytest.raises(EditorValidationError) as excinfo:
+            author_blocks_to_overview([{"type": "weeknote_links", "value": [bad_link]}], user=superuser)
+
+        assert excinfo.value.error_map["overview.0.value.0.title"][0]["code"] == "required"
+        assert excinfo.value.error_map["overview.0.value.0.url"][0]["code"] == "invalid"
+
+    @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.raising_to_python_block"]})
+    def test_configured_custom_block_conversion_errors_are_validation_errors(self, superuser):
+        with pytest.raises(EditorValidationError) as excinfo:
+            author_blocks_to_overview([{"type": "raising_custom", "value": "boom"}], user=superuser)
+
+        assert excinfo.value.error_map["overview.0.value"] == [
+            {"code": "invalid", "message": "custom conversion failed"}
+        ]
+
+    @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})
+    def test_configured_custom_block_is_section_scoped(self, superuser):
+        with pytest.raises(EditorValidationError) as excinfo:
+            author_blocks_to_section(
+                [{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}], user=superuser, path_prefix="detail"
+            )
+
+        assert excinfo.value.error_map["detail.0.type"][0]["code"] == "unsupported_block_type"
+
     def test_paragraph_non_string_rejected(self, superuser):
         with pytest.raises(EditorValidationError) as excinfo:
             author_blocks_to_overview([{"type": "paragraph", "value": 123}], user=superuser)
@@ -378,6 +505,41 @@ class TestOverviewToAuthorBlocks:
         assert overview_to_author_blocks(internal) == [
             {"type": "unsupported", "value": {"stored_type": "embed", "position": "overview.0"}},
             {"type": "unsupported", "value": {"stored_type": "heading", "position": "overview.1"}},
+        ]
+
+    def test_unconfigured_stored_custom_block_is_placeholder(self):
+        internal = [{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}]
+
+        assert overview_to_author_blocks(internal) == [
+            {"type": "unsupported", "value": {"stored_type": "weeknote_links", "position": "overview.0"}}
+        ]
+
+    @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.raising_to_python_block"]})
+    def test_malformed_stored_custom_block_is_placeholder(self):
+        internal = [{"type": "raising_custom", "value": "boom"}]
+
+        assert overview_to_author_blocks(internal) == [
+            {"type": "unsupported", "value": {"stored_type": "raising_custom", "position": "overview.0"}}
+        ]
+
+    @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})
+    def test_invalid_stored_custom_block_is_placeholder(self):
+        invalid_link = {**WEEKNOTE_LINK, "title": "", "url": "not-a-url"}
+        internal = [{"type": "weeknote_links", "value": [{"type": "item", "value": invalid_link, "id": "abc"}]}]
+
+        assert overview_to_author_blocks(internal) == [
+            {"type": "unsupported", "value": {"stored_type": "weeknote_links", "position": "overview.0"}}
+        ]
+
+    @override_settings(CAST_POST_BODY_BLOCKS={"detail": ["tests.custom_post_body_blocks.detail_weeknote_links_block"]})
+    def test_detail_custom_block_serializes_only_in_detail_section(self):
+        internal = [{"type": "weeknote_links", "value": [{"type": "item", "value": WEEKNOTE_LINK, "id": "abc"}]}]
+
+        assert section_to_author_blocks(internal, path_prefix="detail") == [
+            {"type": "weeknote_links", "value": [WEEKNOTE_LINK]}
+        ]
+        assert overview_to_author_blocks(internal) == [
+            {"type": "unsupported", "value": {"stored_type": "weeknote_links", "position": "overview.0"}}
         ]
 
     def test_malformed_stored_gallery_is_placeholder(self):

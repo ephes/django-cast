@@ -21,6 +21,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     [backlog/2026-07-07-remove-heading-block-plan.md](backlog/2026-07-07-remove-heading-block-plan.md) and the
     RESOLVED [backlog/2026-07-07-overview-heading-block-rendering.md](backlog/2026-07-07-overview-heading-block-rendering.md).
     Choose a fresh slice when this backlog is next revisited.
+  - Status: the Editor API support for configured custom post body blocks slice was selected and implemented on
+    2026-07-09; see
+    [backlog/2026-07-08-editor-api-custom-post-body-blocks.md](backlog/2026-07-08-editor-api-custom-post-body-blocks.md).
+    Choose a fresh slice when this backlog is next revisited.
   - Ready candidates (concrete scope, done-when): none currently selected. The Anonymous comment author edit
     hard-limits decision is resolved; the Editor API embed body block was weighed on 2026-07-07 and kept deferred —
     no consumer demand; see its entry under Later.

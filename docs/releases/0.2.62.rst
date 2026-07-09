@@ -22,6 +22,11 @@
 - Allow editor API post and episode draft ``PATCH`` requests to send the
   optimistic concurrency token as a strict ``If-Match: "<revision id>"`` header
   instead of JSON ``base_revision_id``.
+- Let the editor API round-trip custom ``Post.body`` blocks configured through
+  ``CAST_POST_BODY_BLOCKS`` for their ``overview`` or ``detail`` section.
+  Custom ``ListBlock`` values use the author-facing list shape instead of
+  Wagtail's internal ``type: item`` wrappers, and invalid custom values are
+  reported through the normal editor validation envelope.
 - Avoid deep-copying Podlove and DOTe transcript JSON during public speaker
   sanitization when all speaker labels are already public or when the transcript
   contains no speaker metadata.

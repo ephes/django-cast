@@ -1,6 +1,11 @@
 # Editor API support for configured custom post body blocks
 
-Status: backlog
+Status: implemented for 0.2.62. The editor API now accepts configured custom
+body blocks for their configured `overview`/`detail` section, validates them
+through the Wagtail block API, and serializes them back to author-facing values
+instead of `unsupported` placeholders. Custom blocks remain a trusted site-level
+extension point; blocks that reference images, pages, snippets, or media are
+responsible for their own permission semantics.
 
 ## Problem
 

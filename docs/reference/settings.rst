@@ -197,6 +197,12 @@ other or the built-in block names.
         "detail": ["myapp.blocks.callout_block"],
     }
 
+Configured blocks are also available to the editor API for their configured
+section. Editor API clients send custom block values in the block's
+author-facing JSON shape; they do not send Wagtail's internal ``ListBlock``
+item wrappers. Custom blocks that reference images, pages, snippets, or media
+are responsible for their own validation and permission semantics.
+
 *************
 Transcription
 *************
