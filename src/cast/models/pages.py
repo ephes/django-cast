@@ -896,6 +896,8 @@ class Episode(Post):
             player_url = reverse("cast:twitter-player", kwargs={"episode_slug": self.slug, "blog_slug": blog_slug})
             player_url = request.build_absolute_uri(player_url)
             context["player_url"] = player_url
+            if self.podcast_audio and self.podcast_audio.m4a:
+                context["podcast_audio_url"] = request.build_absolute_uri(self.podcast_audio.m4a.url)
             if include_public_transcript_url:
                 transcript_url = reverse(
                     "cast:episode-transcript",

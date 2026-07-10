@@ -22,6 +22,14 @@
 - Allow editor API post and episode draft ``PATCH`` requests to send the
   optimistic concurrency token as a strict ``If-Match: "<revision id>"`` header
   instead of JSON ``base_revision_id``.
+- Let the editor API create, read, and update Wagtail's ``seo_title`` and
+  ``search_description`` Promote-tab fields for posts and episodes.
+- Give the built-in Bootstrap 4 and plain post/episode templates complete,
+  non-empty search/social metadata: canonical URLs, title/description fallbacks,
+  cover-dependent Twitter cards, conditional image tags, article publication
+  and modification timestamps, ``og:site_name``, and
+  ``BlogPosting``/``PodcastEpisode`` JSON-LD. External themes must opt into the
+  new shared partial separately.
 - Let the editor API round-trip custom ``Post.body`` blocks configured through
   ``CAST_POST_BODY_BLOCKS`` for their ``overview`` or ``detail`` section.
   Custom ``ListBlock`` values use the author-facing list shape instead of

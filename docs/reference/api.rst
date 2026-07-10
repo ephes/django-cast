@@ -394,6 +394,8 @@ Request fields:
   ``Podcast`` the caller may add to.
 - ``title`` (required): page title.
 - ``slug`` (optional): URL slug; auto-derived from ``title`` if omitted.
+- ``seo_title`` (optional): Wagtail Promote-tab title used for search and social previews.
+- ``search_description`` (optional): Wagtail Promote-tab description used for search and social previews.
 - ``visible_date`` (optional): ISO 8601 datetime string.
 - ``cover_image`` (optional): ``{"id": <image id>, "alt_text": "…"}``.
 - ``tags`` (optional): list of tag name strings.
@@ -457,6 +459,8 @@ Full create request example:
       "parent": {"id": 123},
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "seo_title": "Weeknotes 2026-25",
+      "search_description": "A concise summary of this week's main theme.",
       "visible_date": "2026-06-19T18:00:00+02:00",
       "cover_image": {"id": 456, "alt_text": "Notebook and laptop on a desk"},
       "tags": ["weeknotes"],
@@ -483,6 +487,8 @@ Success response (``201 Created``):
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "seo_title": "Weeknotes 2026-25",
+      "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
       "visible_date": "2026-06-19T18:00:00+02:00",
       "tags": ["weeknotes"],
@@ -555,6 +561,8 @@ Update fields:
 - ``base_revision_id`` (optional when ``If-Match`` is supplied): optimistic concurrency token.
 - ``title`` (optional): page title.
 - ``slug`` (optional): URL slug; must remain unique under the same parent.
+- ``seo_title`` (optional): Wagtail Promote-tab title; send ``""`` to clear it.
+- ``search_description`` (optional): Wagtail Promote-tab description; send ``""`` to clear it.
 - ``visible_date`` (optional): ISO 8601 datetime string.
 - ``cover_image`` (optional): ``{"id": <image id>, "alt_text": "…"}``, or
   ``null`` to clear the draft cover image.
@@ -571,6 +579,8 @@ Example update request:
     {
       "base_revision_id": 6543,
       "title": "Updated draft title",
+      "seo_title": "Updated search title",
+      "search_description": "A concise updated summary.",
       "overview": [
         {"type": "paragraph", "value": "<p>Updated draft text.</p>"}
       ]
@@ -628,6 +638,8 @@ The success response is the normal editor post shape plus publish metadata:
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "seo_title": "Weeknotes 2026-25",
+      "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
       "visible_date": "2026-06-19T18:00:00+02:00",
       "tags": ["weeknotes"],

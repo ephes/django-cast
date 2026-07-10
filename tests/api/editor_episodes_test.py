@@ -228,6 +228,8 @@ class TestEditorEpisodeCreate:
         payload = self._payload(
             podcast,
             slug="episode-rich",
+            seo_title="Episode search title",
+            search_description="Episode search and social description.",
             visible_date="2026-06-29T09:00:00+02:00",
             categories=[category.id],
             cover_image={"id": image.id, "alt_text": "Cover"},
@@ -236,6 +238,8 @@ class TestEditorEpisodeCreate:
         response = api_client.post(url, payload, format="json")
         assert response.status_code == 201, response.content
         data = response.json()
+        assert data["seo_title"] == "Episode search title"
+        assert data["search_description"] == "Episode search and social description."
         assert data["categories"] == [category.id]
         assert data["cover_image"] == {"id": image.id, "alt_text": "Cover"}
         assert data["detail"] == [{"type": "paragraph", "value": "<p>Long form.</p>"}]
@@ -529,6 +533,8 @@ class TestEditorEpisodeUpdate:
                 "base_revision_id": created["latest_revision_id"],
                 "title": "Updated episode",
                 "slug": "updated-episode",
+                "seo_title": "Updated episode search title",
+                "search_description": "Updated episode search and social description.",
                 "visible_date": "2026-06-29T08:15:00+02:00",
                 "tags": ["podcast", "updated"],
                 "categories": [category.id],
@@ -542,12 +548,40 @@ class TestEditorEpisodeUpdate:
         data = response.json()
         assert data["title"] == "Updated episode"
         assert data["slug"] == "updated-episode"
+        assert data["seo_title"] == "Updated episode search title"
+        assert data["search_description"] == "Updated episode search and social description."
         assert data["tags"] == ["podcast", "updated"]
         assert data["categories"] == [category.id]
         assert data["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
         assert data["overview"] == overview
         assert data["detail"] == detail
         assert data["visible_date"].startswith("2026-06-29T")
+
+    def test_patch_can_clear_promote_text_and_rejects_overlong_title(self, api_client, podcast, superuser):
+        created = self._create(api_client, podcast, superuser, slug="episode-promote-validation")
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+
+        cleared = api_client.patch(
+            url,
+            {
+                "base_revision_id": created["latest_revision_id"],
+                "seo_title": "",
+                "search_description": "",
+            },
+            format="json",
+        )
+
+        assert cleared.status_code == 200, cleared.content
+        assert cleared.json()["seo_title"] == ""
+        assert cleared.json()["search_description"] == ""
+
+        rejected = api_client.patch(
+            url,
+            {"base_revision_id": cleared.json()["latest_revision_id"], "seo_title": "x" * 256},
+            format="json",
+        )
+        assert rejected.status_code == 400
+        assert rejected.json()["errors"]["seo_title"][0]["code"] == "max_length"
 
     def test_patch_preserves_omitted_episode_fields(self, api_client, podcast, superuser, audio):
         created = self._create(

@@ -291,8 +291,10 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert post.title in html
     assert repository.page_url in html
     assert repository.owner_username.capitalize() in html
-    assert '<meta name="twitter:image:alt" content="Cover alt text">' in html
-    assert '<meta property="og:image:alt" content="Cover alt text">' in html
+    # This database-free repository fixture has no social rendition URL; do not
+    # emit an unusable empty image or a detached alt tag.
+    assert '<meta name="twitter:image"' not in html
+    assert '<meta property="og:image"' not in html
     assert "audio_1" in html
     assert "<video" in html
     assert '<section class="block-image">' in html

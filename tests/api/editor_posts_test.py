@@ -73,6 +73,8 @@ class TestEditorPostDetail:
             "parent": {"id": blog.id},
             "title": "Readable draft",
             "slug": "readable-draft",
+            "seo_title": "Readable draft for search",
+            "search_description": "A concise description for search and social previews.",
             "tags": ["weeknotes"],
             "overview": [
                 {"type": "paragraph", "value": "<h2>Notes</h2>"},
@@ -89,6 +91,8 @@ class TestEditorPostDetail:
         data = response.json()
         assert data["id"] == created["id"]
         assert data["status"] == "draft"
+        assert data["seo_title"] == "Readable draft for search"
+        assert data["search_description"] == "A concise description for search and social previews."
         assert data["tags"] == ["weeknotes"]
         assert data["overview"] == [
             {"type": "paragraph", "value": "<h2>Notes</h2>"},
@@ -389,6 +393,8 @@ class TestEditorPostUpdate:
                 "base_revision_id": created["latest_revision_id"],
                 "title": "Updated draft",
                 "slug": "updated-draft",
+                "seo_title": "Updated search title",
+                "search_description": "Updated search and social description.",
                 "visible_date": "2026-06-23T08:15:00+02:00",
                 "tags": ["weeknotes", "updated"],
                 "categories": [category.id],
@@ -403,6 +409,8 @@ class TestEditorPostUpdate:
         assert data["latest_revision_id"] != created["latest_revision_id"]
         assert data["title"] == "Updated draft"
         assert data["slug"] == "updated-draft"
+        assert data["seo_title"] == "Updated search title"
+        assert data["search_description"] == "Updated search and social description."
         assert data["tags"] == ["weeknotes", "updated"]
         assert data["categories"] == [category.id]
         assert data["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
@@ -414,12 +422,16 @@ class TestEditorPostUpdate:
         detail = api_client.get(url, format="json").json()
         assert detail["latest_revision_id"] == data["latest_revision_id"]
         assert detail["title"] == "Updated draft"
+        assert detail["seo_title"] == "Updated search title"
+        assert detail["search_description"] == "Updated search and social description."
         assert detail["tags"] == ["weeknotes", "updated"]
         assert detail["categories"] == [category.id]
         assert detail["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
         assert detail["overview"] == overview
 
         revision_post = Post.objects.get(id=created["id"]).get_latest_revision().as_object()
+        assert revision_post.seo_title == "Updated search title"
+        assert revision_post.search_description == "Updated search and social description."
         assert [tag.name for tag in revision_post.tags.all()] == ["weeknotes", "updated"]
         assert [saved_category.pk for saved_category in revision_post.categories.all()] == [category.id]
         assert revision_post.cover_image_id == image.id
@@ -428,6 +440,40 @@ class TestEditorPostUpdate:
         assert stored_post.title == "Editable draft"
         assert stored_post.slug == "all-fields"
         assert stored_post.cover_image_id is None
+
+    def test_patch_can_clear_promote_text(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user, slug="clear-promote")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {
+                "base_revision_id": created["latest_revision_id"],
+                "seo_title": "",
+                "search_description": "",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["seo_title"] == ""
+        assert response.json()["search_description"] == ""
+        detail = api_client.get(url, format="json").json()
+        assert detail["seo_title"] == ""
+        assert detail["search_description"] == ""
+
+    def test_patch_rejects_overlong_seo_title(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user, slug="long-promote-title")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "seo_title": "x" * 256},
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.json()["errors"]["seo_title"][0]["code"] == "max_length"
 
     def test_patch_chains_returned_revision_id(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user, slug="chainable")

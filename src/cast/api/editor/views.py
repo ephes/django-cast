@@ -228,6 +228,8 @@ class PostEditorMixin:
             "type": content_post._meta.label,
             "title": content_post.title,
             "slug": content_post.slug,
+            "seo_title": content_post.seo_title,
+            "search_description": content_post.search_description,
             "parent": {"id": post.get_parent().id},
             "visible_date": content_post.visible_date,
             "tags": [tag.name for tag in content_post.tags.all()],
@@ -337,6 +339,8 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         post = Post(
             title=title,
             slug=slug,
+            seo_title=data["seo_title"],
+            search_description=data["search_description"],
             owner=user,
             live=False,
             cover_image=cover_image,
@@ -400,6 +404,10 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         if "slug" in data:
             self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+        if "seo_title" in data:
+            draft.seo_title = data["seo_title"]
+        if "search_description" in data:
+            draft.search_description = data["search_description"]
         if "visible_date" in data:
             draft.visible_date = data["visible_date"]
         if "cover_image" in data:
@@ -579,6 +587,8 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         episode = Episode(
             title=title,
             slug=slug,
+            seo_title=data["seo_title"],
+            search_description=data["search_description"],
             owner=user,
             live=False,
             cover_image=cover_image,
@@ -643,6 +653,10 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if "slug" in data:
             self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+        if "seo_title" in data:
+            draft.seo_title = data["seo_title"]
+        if "search_description" in data:
+            draft.search_description = data["search_description"]
         if "visible_date" in data:
             draft.visible_date = data["visible_date"]
         if "cover_image" in data:
