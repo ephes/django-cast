@@ -14,6 +14,33 @@ if TYPE_CHECKING:
     from cast.models import Post
 
 
+def get_srgb_counterpart_filter_spec(filter_spec: str) -> str | None:
+    """Return the matching filter spec on the other side of django-cast's thumbnail sRGB policy."""
+    filter_parts = filter_spec.split("|")
+    if "srgb" in filter_parts:
+        filter_parts.remove("srgb")
+        return "|".join(filter_parts)
+    if filter_parts[0].startswith("width-"):
+        return "|".join([filter_parts[0], "srgb", *filter_parts[1:]])
+    if filter_parts[0].startswith("format-"):
+        return "|".join(["srgb", *filter_parts])
+    return None
+
+
+def get_gallery_thumbnail_srgb_counterpart_filterstrings(image: Image) -> Iterator[tuple[int, str]]:
+    """Return sRGB-policy counterpart filter strings for a gallery image's thumbnail slot."""
+    rendition_filters = RenditionFilters.from_wagtail_image_with_type(image, "gallery")
+    if len(rendition_filters.slots) < 2:
+        return
+    thumbnail_slot = rendition_filters.slots[1]
+    for filters_for_format in rendition_filters.filters[thumbnail_slot].values():
+        for rendition_filter in filters_for_format:
+            filter_spec = rendition_filter.get_wagtail_filter_str(rendition_filters.original_format)
+            counterpart = get_srgb_counterpart_filter_spec(filter_spec)
+            assert counterpart is not None
+            yield image.pk, counterpart
+
+
 def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[int, str]]:
     """
     For an iterator of images with types, return an iterator of all image ids and filter strings that
@@ -30,7 +57,12 @@ def get_obsolete_and_missing_rendition_strings(images_with_type: ImagesWithType)
     """
     Get all obsolete and missing rendition strings from a queryset of posts.
     """
-    required_renditions = set(get_all_filterstrings(images_with_type))
+    required_renditions: set[tuple[int, str]] = set()
+    srgb_counterpart_renditions: set[tuple[int, str]] = set()
+    for image_type, image in images_with_type:
+        required_renditions.update(get_all_filterstrings([(image_type, image)]))
+        if image_type == "gallery":
+            srgb_counterpart_renditions.update(get_gallery_thumbnail_srgb_counterpart_filterstrings(image))
     all_image_ids = {image_id for image_id, filter_string in required_renditions}
     renditions_queryset = Rendition.objects.filter(image__in=all_image_ids)
     existing_rendition_to_id = {
@@ -40,12 +72,9 @@ def get_obsolete_and_missing_rendition_strings(images_with_type: ImagesWithType)
     existing_renditions = set(existing_rendition_to_id.keys())
     obsolete_renditions_unfiltered = existing_renditions - required_renditions
 
-    # remove wagtail generated renditions from obsolete_renditions
-    obsolete_renditions = set()
-    wagtail_filter_specs = {"max-165x165", "max-800x600"}
-    for image_id, filter_spec in obsolete_renditions_unfiltered:
-        if filter_spec not in wagtail_filter_specs:
-            obsolete_renditions.add((image_id, filter_spec))
+    # Only remove known predecessor/successor specs from django-cast's gallery thumbnail sRGB policy.
+    # Generic Wagtail filter specs such as ``width-400`` do not encode ownership and must be preserved.
+    obsolete_renditions = obsolete_renditions_unfiltered & srgb_counterpart_renditions
     obsolete_rendition_pks = {
         existing_rendition_to_id[(image_id, filter_spec)] for image_id, filter_spec in obsolete_renditions
     }

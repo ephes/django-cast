@@ -175,6 +175,23 @@ Defaults to ``[(1110, 740), (120, 80)]``.
 
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(1110, 740), (120, 80)]
 
+CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB
+=======================================
+
+Whether gallery thumbnail renditions should normalize embedded ICC profiles to
+compact sRGB profiles. Defaults to ``True``. Only the thumbnail slot (the
+second entry in ``CAST_GALLERY_IMAGE_SLOT_DIMENSIONS``) is affected;
+modal/full-size gallery renditions and regular image renditions preserve their
+existing color handling.
+
+.. code-block:: python
+
+    CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = True
+
+Changing this setting changes the generated Wagtail rendition filter specs. Run
+``sync_renditions`` after deployment to create the new renditions and remove the
+matching previous/next thumbnail color-profile rendition records/files safely.
+
 ****************
 Post Body Blocks
 ****************

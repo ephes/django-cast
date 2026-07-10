@@ -27,12 +27,19 @@ from wagtail.snippets.permissions import user_can_access_snippets
 from wagtail.snippets.views.snippets import SnippetViewSet
 
 from .admin_urls import audio, contributors, transcript, video, voxhelm
+from .image_operations import TransformColorspaceToSrgbOperation
 from .models import Audio, Contributor, Episode, Transcript, Video
 from .transcripts.generation_status import get_transcript_generation_status_context
 from .views.voxhelm import user_can_generate_transcript_for_episode
 from .voxhelm import voxhelm_configured
 
 _T = TypeVar("_T")
+
+
+@hooks.register("register_image_operations")
+def register_image_operations() -> list[tuple[str, type[TransformColorspaceToSrgbOperation]]]:
+    """Register custom image operations for django-cast renditions."""
+    return [("srgb", TransformColorspaceToSrgbOperation)]
 
 
 @hooks.register("register_admin_urls")

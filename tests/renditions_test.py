@@ -4,6 +4,7 @@ from django.test import override_settings
 from cast.renditions import (
     DEFAULT_IMAGE_FORMATS,
     IMAGE_TYPE_TO_SLOTS,
+    FormatRenditionFilter,
     Height,
     ImageFormat,
     Rectangle,
@@ -43,6 +44,23 @@ def test_get_wagtail_filter_str(
 ):
     rendition_filter = RenditionFilter(width=width, slot=slot, format=image_format)
     assert rendition_filter.get_wagtail_filter_str(original_format) == expected_filter_str
+
+
+def test_get_wagtail_filter_str_includes_srgb_before_format_conversion():
+    rendition_filter = RenditionFilter(width=w53, slot=thumbnail_slot, format="avif", normalize_to_srgb=True)
+
+    assert rendition_filter.get_wagtail_filter_str("jpeg") == "width-53|srgb|format-avif"
+
+
+def test_format_rendition_filter_includes_srgb_before_format_conversion():
+    rendition_filter = FormatRenditionFilter(
+        width=w53,
+        slot=thumbnail_slot,
+        format="avif",
+        normalize_to_srgb=True,
+    )
+
+    assert rendition_filter.get_wagtail_filter_str("jpeg") == "srgb|format-avif"
 
 
 @pytest.mark.parametrize(
@@ -169,6 +187,37 @@ def test_rendition_filters_from_wagtail_image_with_type_respects_override_settin
 
     assert filters.slots == [Rectangle(Width(200), Height(100))]
     assert list(filters.image_formats) == ["webp"]
+
+
+def test_gallery_thumbnail_rendition_filters_normalize_to_srgb_by_default():
+    with override_settings(
+        CAST_GALLERY_IMAGE_SLOT_DIMENSIONS=[(1110, 740), (120, 80)],
+        CAST_IMAGE_FORMATS=["jpeg", "avif"],
+    ):
+        filters = RenditionFilters.from_wagtail_image_with_type(StubWagtailImage(), "gallery")
+
+    assert "width-120" not in filters.filter_strings
+    assert "width-120|format-avif" not in filters.filter_strings
+    assert "width-120|srgb" in filters.filter_strings
+    assert "width-120|srgb|format-avif" in filters.filter_strings
+    assert "width-1110" in filters.filter_strings
+    assert "width-1110|format-avif" in filters.filter_strings
+    assert "width-1110|srgb" not in filters.filter_strings
+    assert "width-1110|srgb|format-avif" not in filters.filter_strings
+
+
+def test_gallery_thumbnail_srgb_normalization_can_be_disabled():
+    with override_settings(
+        CAST_GALLERY_IMAGE_SLOT_DIMENSIONS=[(1110, 740), (120, 80)],
+        CAST_IMAGE_FORMATS=["jpeg", "avif"],
+        CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB=False,
+    ):
+        filters = RenditionFilters.from_wagtail_image_with_type(StubWagtailImage(), "gallery")
+
+    assert "width-120" in filters.filter_strings
+    assert "width-120|format-avif" in filters.filter_strings
+    assert "width-120|srgb" not in filters.filter_strings
+    assert "width-120|srgb|format-avif" not in filters.filter_strings
 
 
 def test_image_type_to_slots_is_runtime_mapping():

@@ -104,10 +104,13 @@ class RenditionFilter:
     width: Width  # width of the rendition
     slot: Rectangle  # slot the image needs to fit into
     format: ImageFormat  # desired image format
+    normalize_to_srgb: bool = False  # whether to compact profiled raster renditions to sRGB
 
     def get_wagtail_filter_str(self, original_format: ImageFormat) -> str:
         """Return the filter string in wagtail format."""
         filter_parts = [f"width-{self.width}"]
+        if self.normalize_to_srgb:
+            filter_parts.append("srgb")
         if self.format != original_format:
             filter_parts.append(f"format-{self.format}")
         return "|".join(filter_parts)
@@ -120,7 +123,11 @@ class FormatRenditionFilter(RenditionFilter):
     """
 
     def get_wagtail_filter_str(self, _original_format: ImageFormat) -> str:
-        return f"format-{self.format}"
+        filter_parts = []
+        if self.normalize_to_srgb:
+            filter_parts.append("srgb")
+        filter_parts.append(f"format-{self.format}")
+        return "|".join(filter_parts)
 
 
 def get_rendition_filters_for_image_and_slot(
@@ -128,6 +135,7 @@ def get_rendition_filters_for_image_and_slot(
     slot: Rectangle,  # slot the image needs to fit into
     image_format: ImageFormat,  # desired image format
     max_scale_factor: int = 3,  # don't scale up renditions more than this
+    normalize_to_srgb: bool = False,  # compact profiled raster renditions to sRGB
 ) -> list[RenditionFilter]:
     """
     Get a list of rendition filters for an image that has to fit into a slot.
@@ -141,7 +149,9 @@ def get_rendition_filters_for_image_and_slot(
         if rendition_width > image.width * 0.8:
             # already big enough
             continue
-        filters.append(RenditionFilter(width=rendition_width, slot=slot, format=image_format))
+        filters.append(
+            RenditionFilter(width=rendition_width, slot=slot, format=image_format, normalize_to_srgb=normalize_to_srgb)
+        )
     return filters
 
 
@@ -192,12 +202,14 @@ class RenditionFilters:
         original_format: ImageFormat,
         slots: list[Rectangle],
         image_formats: ImageFormats,
+        normalize_to_srgb_slots: Iterable[Rectangle] = (),
     ) -> None:
         super().__init__()
         self.image = image
         self.original_format = original_format
         self.image_formats = image_formats
         self.slots = slots
+        self.normalize_to_srgb_slots = set(normalize_to_srgb_slots)
         self.slot_to_fitting_width: dict[Rectangle, Width] = {}
         for slot in slots:
             self.slot_to_fitting_width[slot] = Width(calculate_fitting_width(image, slot))
@@ -206,16 +218,33 @@ class RenditionFilters:
 
     @classmethod
     def from_wagtail_image(
-        cls, image: AbstractImage, slots: list[Rectangle], image_formats: ImageFormats
+        cls,
+        image: AbstractImage,
+        slots: list[Rectangle],
+        image_formats: ImageFormats,
+        normalize_to_srgb_slots: Iterable[Rectangle] = (),
     ) -> "RenditionFilters":
         original_format = get_image_format_by_name(image.file.name)
         image = Rectangle(Width(image.width), Height(image.height))
-        return cls(image=image, original_format=original_format, slots=slots, image_formats=image_formats)
+        return cls(
+            image=image,
+            original_format=original_format,
+            slots=slots,
+            image_formats=image_formats,
+            normalize_to_srgb_slots=normalize_to_srgb_slots,
+        )
 
     @classmethod
     def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: ImageType) -> "RenditionFilters":
+        slots = IMAGE_TYPE_TO_SLOTS[image_type]
+        normalize_to_srgb_slots = []
+        if image_type == "gallery" and appsettings.CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB:
+            normalize_to_srgb_slots = slots[1:2]
         return cls.from_wagtail_image(
-            image, slots=IMAGE_TYPE_TO_SLOTS[image_type], image_formats=list(DEFAULT_IMAGE_FORMATS)
+            image,
+            slots=slots,
+            image_formats=list(DEFAULT_IMAGE_FORMATS),
+            normalize_to_srgb_slots=normalize_to_srgb_slots,
         )
 
     def set_filter_to_url_via_wagtail_renditions(self, renditions: dict[str, AbstractRendition]) -> None:
@@ -231,15 +260,23 @@ class RenditionFilters:
         filters: Filters = {slot: {} for slot in slots}
         for slot in slots:
             for image_format in image_formats:
+                normalize_to_srgb = slot in self.normalize_to_srgb_slots
                 filters[slot][image_format] = format_filters = get_rendition_filters_for_image_and_slot(
-                    image, slot, image_format
+                    image, slot, image_format, normalize_to_srgb=normalize_to_srgb
                 )
                 if len(format_filters) == 0 and image_format != original_format:
                     # if no filters found for the image format and the image format is not the original format
                     # add a format filter to convert the image to the desired format. This happens if the image
                     # is too small to be scaled to the slot.
                     fitting_width = self.slot_to_fitting_width[slot]
-                    format_filters.append(FormatRenditionFilter(slot=slot, width=fitting_width, format=image_format))
+                    format_filters.append(
+                        FormatRenditionFilter(
+                            slot=slot,
+                            width=fitting_width,
+                            format=image_format,
+                            normalize_to_srgb=normalize_to_srgb,
+                        )
+                    )
         return filters
 
     def get_filter_by_slot_format_and_fitting_width(

@@ -13,7 +13,7 @@ class Command(BaseCommand):
     help = """
 What does it mean to sync the renditions for all posts?
     - create missing renditions
-    - delete obsolete renditions
+    - delete previous/next gallery thumbnail sRGB-policy counterpart renditions
 
 Optional arguments:
     --post-slug: sync renditions for a specific post

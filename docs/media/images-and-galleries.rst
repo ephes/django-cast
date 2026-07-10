@@ -184,7 +184,10 @@ The class computes a *fitting width* for each slot by comparing the
 image's aspect ratio with the slot's aspect ratio, then generates
 ``RenditionFilter`` objects for each slot/format/pixel-density combination
 (1x, 2x, 3x). Renditions that would be nearly as large as the original
-are skipped.
+are skipped. Gallery thumbnail slots can also include django-cast's custom
+``srgb`` Wagtail operation before any ``format-*`` conversion, so profiled
+thumbnail renditions use compact sRGB ICC profiles while modal/full-size
+renditions preserve their existing color handling.
 
 Convenience constructors:
 
@@ -241,7 +244,8 @@ The full rendering pipeline works as follows:
 5. Theme templates use the ``ImageForSlot`` attributes to render
    ``<picture>`` elements with appropriate ``<source>`` and ``<img>`` tags.
 
-To create missing renditions in bulk (e.g. after changing slot
-dimensions), use the management command::
+To create missing renditions in bulk (e.g. after changing slot dimensions,
+image formats, or gallery thumbnail color-profile policy), use the management
+command::
 
     python manage.py sync_renditions

@@ -131,7 +131,10 @@ Cache Configuration
     ]
 
 These settings define layout slots. django-cast derives multiple rendition
-widths per slot for responsive ``srcset`` output.
+widths per slot for responsive ``srcset`` output. Gallery thumbnail renditions
+also normalize embedded ICC profiles to compact sRGB by default, avoiding large
+camera/display profiles in small thumbnails without changing uploaded originals
+or gallery modal/full-size renditions.
 
 Media Optimization
 ==================

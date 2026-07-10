@@ -42,6 +42,7 @@ CAST_SETTING_REGISTRY: dict[str, CastSetting] = {
     "CAST_IMAGE_FORMATS": CastSetting(["jpeg", "avif"], list),
     "CAST_REGULAR_IMAGE_SLOT_DIMENSIONS": CastSetting([(1110, 740)], list),
     "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS": CastSetting([(1110, 740), (120, 80)], list),
+    "CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB": CastSetting(True, bool),
     "CAST_REPOSITORY": CastSetting("default", str),
     "CAST_PODLOVE_PLAYER_THEMES": CastSetting({}, dict),
     "CAST_AUDIO_PLAYER": CastSetting("podlove", str),
@@ -104,6 +105,7 @@ if TYPE_CHECKING:
     CAST_IMAGE_FORMATS: list[str]
     CAST_REGULAR_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
+    CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB: bool
     CAST_REPOSITORY: str
     CAST_PODLOVE_PLAYER_THEMES: dict[str, Any]
     CAST_AUDIO_PLAYER: str

@@ -158,6 +158,7 @@ class TestCheckCastSettingTypes:
             ("CAST_IMAGE_FORMATS", list),
             ("CAST_REGULAR_IMAGE_SLOT_DIMENSIONS", list),
             ("CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", list),
+            ("CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB", bool),
             ("CAST_REPOSITORY", str),
             ("CAST_PODLOVE_PLAYER_THEMES", dict),
             ("CAST_AUDIO_PLAYER", str),
@@ -179,6 +180,7 @@ class TestCheckCastSettingTypes:
         settings.CAST_IMAGE_FORMATS = ["jpeg", "avif"]
         settings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [(1110, 740)]
         settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(1110, 740), (120, 80)]
+        settings.CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = True
         settings.CAST_REPOSITORY = "default"
         settings.CAST_PODLOVE_PLAYER_THEMES = {"default": {"main": "#333"}}
 
