@@ -92,6 +92,12 @@ the new files and removes the previous/next sRGB-policy counterpart keys for the
 same thumbnail specs. Uploaded originals, Wagtail admin renditions, and custom
 site renditions with unrelated filter specs are preserved.
 
+Run this as a one-off migration step after a deployment that changes rendition
+specifications or policy; it is not required for every normal application
+deployment. During an sRGB policy transition, rendering falls back to an
+existing predecessor/successor thumbnail rendition until synchronization has
+created the requested key.
+
 .. code-block:: bash
 
     # Sync renditions for all posts

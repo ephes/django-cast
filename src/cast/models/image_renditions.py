@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, TypeAlias
 
 from wagtail.images.models import Image, Rendition
 
-from ..renditions import ImageType, RenditionFilters
+from ..renditions import ImageType, RenditionFilters, get_srgb_counterpart_filter_spec
 
 ImageIdSet = set[int]
 RenditionStringsByImageId = dict[int, set[str]]
@@ -12,19 +12,6 @@ ImagesWithType: TypeAlias = Iterable[tuple[ImageType, Image]]
 
 if TYPE_CHECKING:
     from cast.models import Post
-
-
-def get_srgb_counterpart_filter_spec(filter_spec: str) -> str | None:
-    """Return the matching filter spec on the other side of django-cast's thumbnail sRGB policy."""
-    filter_parts = filter_spec.split("|")
-    if "srgb" in filter_parts:
-        filter_parts.remove("srgb")
-        return "|".join(filter_parts)
-    if filter_parts[0].startswith("width-"):
-        return "|".join([filter_parts[0], "srgb", *filter_parts[1:]])
-    if filter_parts[0].startswith("format-"):
-        return "|".join(["srgb", *filter_parts])
-    return None
 
 
 def get_gallery_thumbnail_srgb_counterpart_filterstrings(image: Image) -> Iterator[tuple[int, str]]:

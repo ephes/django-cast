@@ -14,6 +14,7 @@ from cast.renditions import (
     calculate_fitting_width,
     get_image_format_by_name,
     get_rendition_filters_for_image_and_slot,
+    get_srgb_counterpart_filter_spec,
 )
 
 rect = Rectangle
@@ -241,6 +242,87 @@ def test_default_image_formats_is_runtime_sequence():
 class RenditionStub:
     def __init__(self, url):
         self.url = url
+
+
+def test_gallery_thumbnail_uses_existing_pre_srgb_renditions_until_sync():
+    with override_settings(
+        CAST_GALLERY_IMAGE_SLOT_DIMENSIONS=[(1110, 740), (120, 80)],
+        CAST_IMAGE_FORMATS=["jpeg", "avif"],
+    ):
+        rendition_filters = RenditionFilters.from_wagtail_image_with_type(StubWagtailImage(), "gallery")
+
+    rendition_filters.set_filter_to_url_via_wagtail_renditions(
+        {
+            "width-120": RenditionStub("/legacy-120.jpg"),
+            "width-240": RenditionStub("/legacy-240.jpg"),
+            "width-360": RenditionStub("/legacy-360.jpg"),
+            "width-120|format-avif": RenditionStub("/legacy-120.avif"),
+            "width-240|format-avif": RenditionStub("/legacy-240.avif"),
+            "width-360|format-avif": RenditionStub("/legacy-360.avif"),
+        }
+    )
+
+    thumbnail = rendition_filters.get_image_for_slot(rendition_filters.slots[1])
+
+    assert thumbnail.src == {"jpeg": "/legacy-120.jpg", "avif": "/legacy-120.avif"}
+    assert thumbnail.srcset == {
+        "jpeg": "/legacy-120.jpg 120w, /legacy-240.jpg 240w, /legacy-360.jpg 360w",
+        "avif": "/legacy-120.avif 120w, /legacy-240.avif 240w, /legacy-360.avif 360w",
+    }
+
+
+def test_gallery_thumbnail_uses_existing_srgb_renditions_when_policy_is_disabled():
+    with override_settings(
+        CAST_GALLERY_IMAGE_SLOT_DIMENSIONS=[(1110, 740), (120, 80)],
+        CAST_IMAGE_FORMATS=["jpeg"],
+        CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB=False,
+    ):
+        rendition_filters = RenditionFilters.from_wagtail_image_with_type(StubWagtailImage(), "gallery")
+
+    rendition_filters.set_filter_to_url_via_wagtail_renditions(
+        {
+            "width-120|srgb": RenditionStub("/srgb-120.jpg"),
+            "width-240|srgb": RenditionStub("/srgb-240.jpg"),
+            "width-360|srgb": RenditionStub("/srgb-360.jpg"),
+        }
+    )
+
+    thumbnail = rendition_filters.get_image_for_slot(rendition_filters.slots[1])
+
+    assert thumbnail.src == {"jpeg": "/srgb-120.jpg"}
+    assert thumbnail.srcset == {"jpeg": "/srgb-120.jpg 120w, /srgb-240.jpg 240w, /srgb-360.jpg 360w"}
+
+
+def test_srcset_keeps_width_matched_to_each_available_rendition():
+    rendition_filters = RenditionFilters(
+        image=Rectangle(Width(4000), Height(6000)),
+        original_format="jpeg",
+        slots=[thumbnail_slot],
+        image_formats=["jpeg"],
+    )
+    rendition_filters.set_filter_to_url_via_wagtail_renditions({"width-106": RenditionStub("/available-106.jpg")})
+
+    thumbnail = rendition_filters.get_image_for_slot(thumbnail_slot)
+
+    assert thumbnail.src == {}
+    assert thumbnail.srcset == {"jpeg": "/available-106.jpg 106w"}
+
+
+@pytest.mark.parametrize(
+    ("filter_spec", "expected"),
+    [
+        ("width-120", "width-120|srgb"),
+        ("width-120|format-avif", "width-120|srgb|format-avif"),
+        ("width-120|srgb", "width-120"),
+        ("width-120|srgb|format-avif", "width-120|format-avif"),
+        ("format-avif", "srgb|format-avif"),
+        ("srgb|format-avif", "format-avif"),
+        ("max-165x165", None),
+        ("fill-1x1", None),
+    ],
+)
+def test_get_srgb_counterpart_filter_spec(filter_spec, expected):
+    assert get_srgb_counterpart_filter_spec(filter_spec) == expected
 
 
 # def test_get_renditions_to_fetch():

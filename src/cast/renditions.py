@@ -95,6 +95,19 @@ IMAGE_TYPE_TO_SLOTS: Mapping[ImageType, list[Rectangle]] = _ImageTypeToSlots()
 DEFAULT_IMAGE_FORMATS: ImageFormats = _DefaultImageFormats()
 
 
+def get_srgb_counterpart_filter_spec(filter_spec: str) -> str | None:
+    """Return the matching filter spec on the other side of the thumbnail sRGB policy."""
+    filter_parts = filter_spec.split("|")
+    if "srgb" in filter_parts:
+        filter_parts.remove("srgb")
+        return "|".join(filter_parts)
+    if filter_parts[0].startswith("width-"):
+        return "|".join([filter_parts[0], "srgb", *filter_parts[1:]])
+    if filter_parts[0].startswith("format-"):
+        return "|".join(["srgb", *filter_parts])
+    return None
+
+
 @dataclass
 class RenditionFilter:
     """
@@ -203,6 +216,7 @@ class RenditionFilters:
         slots: list[Rectangle],
         image_formats: ImageFormats,
         normalize_to_srgb_slots: Iterable[Rectangle] = (),
+        srgb_counterpart_fallback_slots: Iterable[Rectangle] = (),
     ) -> None:
         super().__init__()
         self.image = image
@@ -210,6 +224,7 @@ class RenditionFilters:
         self.image_formats = image_formats
         self.slots = slots
         self.normalize_to_srgb_slots = set(normalize_to_srgb_slots)
+        self.srgb_counterpart_fallback_slots = set(srgb_counterpart_fallback_slots)
         self.slot_to_fitting_width: dict[Rectangle, Width] = {}
         for slot in slots:
             self.slot_to_fitting_width[slot] = Width(calculate_fitting_width(image, slot))
@@ -223,6 +238,7 @@ class RenditionFilters:
         slots: list[Rectangle],
         image_formats: ImageFormats,
         normalize_to_srgb_slots: Iterable[Rectangle] = (),
+        srgb_counterpart_fallback_slots: Iterable[Rectangle] = (),
     ) -> "RenditionFilters":
         original_format = get_image_format_by_name(image.file.name)
         image = Rectangle(Width(image.width), Height(image.height))
@@ -232,19 +248,22 @@ class RenditionFilters:
             slots=slots,
             image_formats=image_formats,
             normalize_to_srgb_slots=normalize_to_srgb_slots,
+            srgb_counterpart_fallback_slots=srgb_counterpart_fallback_slots,
         )
 
     @classmethod
     def from_wagtail_image_with_type(cls, image: AbstractImage, image_type: ImageType) -> "RenditionFilters":
         slots = IMAGE_TYPE_TO_SLOTS[image_type]
+        srgb_counterpart_fallback_slots = slots[1:2] if image_type == "gallery" else []
         normalize_to_srgb_slots = []
         if image_type == "gallery" and appsettings.CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB:
-            normalize_to_srgb_slots = slots[1:2]
+            normalize_to_srgb_slots = srgb_counterpart_fallback_slots
         return cls.from_wagtail_image(
             image,
             slots=slots,
             image_formats=list(DEFAULT_IMAGE_FORMATS),
             normalize_to_srgb_slots=normalize_to_srgb_slots,
+            srgb_counterpart_fallback_slots=srgb_counterpart_fallback_slots,
         )
 
     def set_filter_to_url_via_wagtail_renditions(self, renditions: dict[str, AbstractRendition]) -> None:
@@ -326,25 +345,36 @@ class RenditionFilters:
         fitting_width = self.slot_to_fitting_width[slot]
         for image_format in self.image_formats:
             format_filter = self.get_filter_by_slot_format_and_fitting_width(slot, image_format, fitting_width)
-            format_filter_string = format_filter.get_wagtail_filter_str(self.original_format)
-            url = self.filter_to_url.get(format_filter_string)
-            if url is not None:  # pragma: no cover
-                # FIXME this only happens during tests, dunno why - probably a wagtail bug
+            url = self.get_url_for_filter(
+                format_filter, allow_srgb_counterpart=slot in self.srgb_counterpart_fallback_slots
+            )
+            if url is not None:
                 src[image_format] = url
         return src
+
+    def get_url_for_filter(self, rendition_filter: RenditionFilter, *, allow_srgb_counterpart: bool) -> str | None:
+        """Return a rendition URL, optionally falling back across the thumbnail sRGB policy boundary."""
+        filter_spec = rendition_filter.get_wagtail_filter_str(self.original_format)
+        url = self.filter_to_url.get(filter_spec)
+        if url is not None or not allow_srgb_counterpart:
+            return url
+        counterpart_filter_spec = get_srgb_counterpart_filter_spec(filter_spec)
+        assert counterpart_filter_spec is not None
+        return self.filter_to_url.get(counterpart_filter_spec)
 
     def get_srcset_for_slot(self, slot: Rectangle) -> dict[ImageFormat, str]:
         srcset = {}
         filters_for_slot = self.filters[slot]
         for image_format in self.image_formats:
             filters_for_format = filters_for_slot[image_format]
-            filter_strings_for_format = [f.get_wagtail_filter_str(self.original_format) for f in filters_for_format]
-            # FIXME sometimes there's no url for a filter string, dunno why - probably a wagtail bug
-            # this only happens during tests
-            urls_for_filters = filter(None, (self.filter_to_url.get(fs) for fs in filter_strings_for_format))
             srcset_parts = []
-            for url, filter_string in zip(urls_for_filters, filters_for_format):
-                srcset_parts.append(f"{url} {filter_string.width}w")
+            for rendition_filter in filters_for_format:
+                url = self.get_url_for_filter(
+                    rendition_filter,
+                    allow_srgb_counterpart=slot in self.srgb_counterpart_fallback_slots,
+                )
+                if url is not None:
+                    srcset_parts.append(f"{url} {rendition_filter.width}w")
             srcset[image_format] = ", ".join(srcset_parts)
         return srcset
 

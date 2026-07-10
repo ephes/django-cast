@@ -189,8 +189,10 @@ existing color handling.
     CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = True
 
 Changing this setting changes the generated Wagtail rendition filter specs. Run
-``sync_renditions`` after deployment to create the new renditions and remove the
-matching previous/next thumbnail color-profile rendition records/files safely.
+``sync_renditions`` once after deployment to create the new renditions and
+remove the matching previous/next thumbnail color-profile rendition
+records/files safely. Until that synchronization completes, gallery rendering
+uses an existing counterpart rendition so thumbnails remain visible.
 
 ****************
 Post Body Blocks

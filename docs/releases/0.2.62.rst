@@ -5,10 +5,12 @@
   renditions by default using a new reusable ``srgb`` Wagtail image operation.
   Uploaded originals, regular image renditions, and gallery modal/full-size
   renditions keep their existing color handling; sites can disable the thumbnail
-  policy with ``CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = False``. Run
-  ``sync_renditions`` after deployment so new thumbnail rendition keys are
-  generated and matching previous thumbnail color-profile keys are cleaned up
-  safely.
+  policy with ``CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = False``. Gallery
+  rendering falls back to the existing sRGB/non-sRGB counterpart rendition
+  during policy rollouts, preventing empty thumbnail URLs before synchronization.
+  Run ``sync_renditions`` once after deploying a policy change so new thumbnail
+  rendition keys are generated and matching previous thumbnail color-profile
+  keys are cleaned up safely.
 - Add ``CAST_COMMENTS_AUTHOR_EDIT_WINDOW`` to optionally cap anonymous comment
   author edit/delete eligibility by comment age; the default ``0`` preserves the
   existing session-bound behavior.

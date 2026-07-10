@@ -5,7 +5,6 @@ from cast.models.image_renditions import (
     get_all_filterstrings,
     get_gallery_thumbnail_srgb_counterpart_filterstrings,
     get_obsolete_and_missing_rendition_strings,
-    get_srgb_counterpart_filter_spec,
 )
 
 
@@ -131,20 +130,3 @@ def test_post_get_obsolete_and_missing_rendition_strings_for_disabled_srgb_polic
         rendition_queryset.srgb_gallery_avif_thumbnail_pk,
     }
     assert "width-240" in missing_renditions[1]
-
-
-@pytest.mark.parametrize(
-    ("filter_spec", "expected"),
-    [
-        ("width-120", "width-120|srgb"),
-        ("width-120|format-avif", "width-120|srgb|format-avif"),
-        ("width-120|srgb", "width-120"),
-        ("width-120|srgb|format-avif", "width-120|format-avif"),
-        ("format-avif", "srgb|format-avif"),
-        ("srgb|format-avif", "format-avif"),
-        ("max-165x165", None),
-        ("fill-1x1", None),
-    ],
-)
-def test_get_srgb_counterpart_filter_spec(filter_spec, expected):
-    assert get_srgb_counterpart_filter_spec(filter_spec) == expected
