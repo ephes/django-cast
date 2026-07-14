@@ -1,5 +1,5 @@
 (function() {
-	//#region \0@oxc-project+runtime@0.137.0/helpers/esm/asyncToGenerator.js
+	//#region \0@oxc-project+runtime@0.139.0/helpers/esm/asyncToGenerator.js
 	function asyncGeneratorStep(n, t, e, r, o, a, c) {
 		try {
 			var i = n[a](c), u = i.value;
@@ -275,7 +275,8 @@
 			wrapForms();
 			fixBrokenCommentsDivIds();
 			const submitter = event.submitter || document.activeElement;
-			ajaxComment(form, { preview: ((submitter === null || submitter === void 0 || (_submitter$getAttribu = submitter.getAttribute) === null || _submitter$getAttribu === void 0 ? void 0 : _submitter$getAttribu.call(submitter, "name")) || (submitter === null || submitter === void 0 ? void 0 : submitter.name) || "") === "preview" });
+			const preview = ((submitter === null || submitter === void 0 || (_submitter$getAttribu = submitter.getAttribute) === null || _submitter$getAttribu === void 0 ? void 0 : _submitter$getAttribu.call(submitter, "name")) || (submitter === null || submitter === void 0 ? void 0 : submitter.name) || "") === "preview";
+			ajaxComment(form, { preview });
 		};
 		const showThreadedReplyForm = (event) => {
 			const target = event.target;

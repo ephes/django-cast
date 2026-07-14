@@ -1,4 +1,4 @@
-0.2.62 (unreleased)
+0.2.62 (2026-07-14)
 -------------------
 
 - Normalize embedded ICC profiles to compact sRGB for gallery thumbnail
@@ -26,6 +26,11 @@
 - Set ``TERM=xterm-256color`` inside tox test environments so local runs
   launched from Ghostty do not print missing ``xterm-ghostty`` terminfo
   warnings.
+- Constrain installed package dependencies to each tox matrix environment's
+  Django and Wagtail factors, preventing the package-dependency installation
+  phase from silently replacing a tested framework version.
+- Refresh the frontend lockfile and committed bundles with the latest
+  compatible Vite and Vitest patch releases.
 - Point the test settings' extra static files directory at the shipped
   ``src/cast/static`` tree so tox migrations no longer emit Django's
   ``staticfiles.W004`` warning.

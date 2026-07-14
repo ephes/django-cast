@@ -13,22 +13,19 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [ ] Choose next implementation slice
-  - Scope: pick the next small, concrete item from Research / Shaping or Later based on current project needs.
-  - Status: the standalone `heading` block slice landed on 2026-07-07 — the block was removed rather than
-    reworked (multi-level headings are authored in rich text; migrations 0080/0081 convert stored `heading`
-    blocks to rich-text `<h2>` paragraphs), shipped in 0.2.62. See
-    [backlog/2026-07-07-remove-heading-block-plan.md](backlog/2026-07-07-remove-heading-block-plan.md) and the
-    RESOLVED [backlog/2026-07-07-overview-heading-block-rendering.md](backlog/2026-07-07-overview-heading-block-rendering.md).
-    Choose a fresh slice when this backlog is next revisited.
-  - Status: the Editor API support for configured custom post body blocks slice was selected and implemented on
-    2026-07-09; see
-    [backlog/2026-07-08-editor-api-custom-post-body-blocks.md](backlog/2026-07-08-editor-api-custom-post-body-blocks.md).
-    Choose a fresh slice when this backlog is next revisited.
-  - Ready candidates (concrete scope, done-when): none currently selected. The Anonymous comment author edit
-    hard-limits decision is resolved; the Editor API embed body block was weighed on 2026-07-07 and kept deferred —
-    no consumer demand; see its entry under Later.
-  - Done when: the chosen item has a clear first slice, expected files/tests, and any sibling-repo checks identified.
+- [ ] Extract post description rendering from the model
+  - Related to: Model-layer decoupling (phase 2) below.
+  - Scope: move the HTML description-rendering implementation into a presenter module, update django-cast's feed and
+    Wagtail API serializer callers to use it directly, and retain `Post.get_description()` as a compatibility wrapper.
+    Keep media derivation and the `Post.save()`/async decision out of this slice.
+  - Expected code: `src/cast/presenters.py`, `src/cast/models/pages.py`, and `src/cast/feeds.py`.
+  - Expected tests: focused presenter/model compatibility coverage in `tests/models/posts_test.py` and existing feed,
+    post-detail, and API rendering coverage where call ownership changes.
+  - Sibling check: `../homepage/homepage/core/webmention_integration.py` calls `Post.get_description()` directly;
+    preserve that call in this slice through the compatibility wrapper. The theme repositories do not call the method.
+  - Done when: description rendering is implemented outside the model, django-cast's direct callers use the presenter,
+    output and query behavior are unchanged, the public compatibility method remains covered, docs/release notes match,
+    and `just check` passes.
 
 ## Research / Shaping
 
@@ -80,16 +77,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     editor for its first proof. Candidates for this separate external client include Electron, Tauri, or a PWA.
   - Done when: concrete demand exists and there is a small prototype or design note showing how the client would
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
-
-- [x] Anonymous comment author edit hard limits
-  - PRD: [backlog/2026-06-21-anonymous-comment-self-editing.md](backlog/2026-06-21-anonymous-comment-self-editing.md)
-  - Status: resolved for 0.2.62 — optional hard time window accepted and implemented as
-    ``CAST_COMMENTS_AUTHOR_EDIT_WINDOW`` (default ``0`` / no additional cap); persistent edit-count cap deferred and
-    not implemented in this slice.
-  - Scope: decide whether to add the deferred persistent edit-count cap, configurable hard time-window, both, or
-    neither for the already shipped session-bound author edit/delete feature.
-  - Done when: the decision is recorded and any accepted limit has settings, validation/checks, tests, docs, and
-    release notes. Completed in 0.2.62.
 
 ## Later
 
@@ -164,18 +151,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
     existing feed compatibility.
 
-- [x] Chapter marks in podcast feeds
-  - Related to: Paged feeds, Podcast feed import, and the custom audio player.
-  - Scope: expose existing `ChapterMark` data in the podcast RSS/Atom feeds using both Podlove Simple Chapters
-    (`<psc:chapters>` with inline `<psc:chapter start=… title=…/>` elements, `xmlns:psc="http://podlove.org/simple-chapters"`)
-    and Podcasting 2.0 chapters (`<podcast:chapters>` referencing an external `application/json+chapters` document in the
-    existing `xmlns:podcast` namespace).
-  - Notes: implemented 2026-07-07 with N+1-safe feed snapshot chapter data, inline Podlove Simple Chapters, and
-    Podcasting 2.0 `application/json+chapters` endpoint references at stable audio-scoped URLs.
-  - Done when: feeds emit Podlove Simple Chapters inline and a `podcast:chapters` reference (with the JSON document served
-    from a stable URL), namespaces are declared, behavior is documented, and tests cover episodes with and without chapter
-    marks plus existing-feed compatibility. Completed in 0.2.62.
-
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
   - Related design:
@@ -194,43 +169,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: theme discovery enforces the final required template set and the theme docs/release notes explain the
     migration path.
 
-- [ ] Persistent player generic rollout decision
-  - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
-  - Design: [backlog/2026-06-09-play-button-and-player-view-transition-design.md](backlog/2026-06-09-play-button-and-player-view-transition-design.md)
-    (play-affordance and inline→persistent player view-transition morph; includes open questions)
-  - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
-  - Scope: decide whether the python-podcast staging proof should become a reusable django-cast/cast-bootstrap5 API,
-    remain python-podcast-specific, or be closed as a staging-only experiment.
-  - Done when: the generic theme contract/API work is split into concrete implementation items or explicitly deferred.
-
 - [ ] Podcast contributor follow-up options
   - Notes: [backlog/2026-05-12-podcast-episode-contributors.md](backlog/2026-05-12-podcast-episode-contributors.md)
   - Scope: consider default contributors, public contributor detail pages, assignment notes, broader role taxonomy,
     and API fields for external themes.
   - Done when: follow-up options are either split into concrete ready items or explicitly deferred.
-
-- [x] Consider stricter mypy annotation checks
-  - Scope: evaluate enabling `disallow_incomplete_defs = true` and/or `disallow_untyped_defs = true` incrementally,
-    likely per module first instead of project-wide.
-  - Notes: implemented on 2026-07-06. The initial re-probe showed `disallow_incomplete_defs` at 130 errors in 33
-    files and `disallow_untyped_defs` at 239 errors in 55 files, so the rollout started with per-module overrides.
-    The first focused `src/cast/feeds.py` probe reported 9 errors for `disallow_incomplete_defs` and 10 errors for
-    `disallow_untyped_defs`; that cleanup landed with both flags enabled for `cast.feeds`. Subsequent slices cleaned
-    the remaining modules, ending with `cast.blocks`, `cast.models.pages`, and `cast.views.styleguide`. The final
-    2026-07-06 project-level probes for both flags passed with no issues in 142 source files, so the rollout now
-    enables `disallow_incomplete_defs = true` and `disallow_untyped_defs = true` globally in `pyproject.toml`.
-  - Done when: the preferred strictness level and rollout strategy are documented, and at least one initial
-    module is either cleaned up or explicitly excluded/deferred. Completed with no deferred source modules.
-
-- [x] Documentation polish pass
-  - Notes: [backlog/2025-07-11-documentation-polish.md](backlog/2025-07-11-documentation-polish.md)
-  - Scope: retire the stale documentation task list by checking remaining docs structure, links, and warnings.
-  - Notes: completed 2026-07-07. Consistency pass over the current docs tree: `index.rst` navigation is
-    already well-structured, no orphaned pages, and the `just docs` (`sphinx -b html -W`) build is clean.
-    Fixed the one latent nitpicky broken reference (a stray `:class:`Audio`` domain role that could not
-    resolve without autodoc, now a literal) so the tree is also clean under `sphinx -n`, and turned the
-    illustrative `localhost:8000` example URLs in the tutorial/installation guides into inline literals so
-    they no longer render as dead links. The remaining beta wording in `content/organization.rst` was
-    resolved separately by documenting tags and categories as supported, default-on primitives (see the
-    0.2.62 release notes), which retired that follow-up item.
-  - Done when: docs build cleanly and remaining docs TODOs are either implemented or intentionally removed.
