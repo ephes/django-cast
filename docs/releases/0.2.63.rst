@@ -1,3 +1,5 @@
-0.2.63 (unreleased)
--------------------
+0.2.63 (yanked)
+----------------
 
+This version was accidentally published from the post-release development branch and was yanked from PyPI.
+Use version 0.2.62 instead.
