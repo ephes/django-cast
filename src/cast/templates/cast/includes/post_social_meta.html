@@ -1,0 +1,47 @@
+{% with social_title=page.seo_title|default:page.title social_description=page.search_description|default:page.title %}
+  {% if twitter_card %}
+    <meta name="twitter:card" content="{{ twitter_card }}">
+  {% elif social_cover_image_url %}
+    <meta name="twitter:card" content="summary_large_image">
+  {% else %}
+    <meta name="twitter:card" content="summary">
+  {% endif %}
+  <meta name="twitter:title" content="{{ social_title }}">
+  <meta name="twitter:description" content="{{ social_description }}">
+  {% if social_cover_image_url %}
+    <meta name="twitter:image" content="{{ social_cover_image_url }}">
+    {% if cover_alt_text %}<meta name="twitter:image:alt" content="{{ cover_alt_text }}">{% endif %}
+  {% endif %}
+
+  <meta property="og:url" content="{{ absolute_page_url }}">
+  <meta property="og:title" content="{{ social_title }}">
+  <meta property="og:description" content="{{ social_description }}">
+  <meta property="og:type" content="article">
+  {% if blog.title %}<meta property="og:site_name" content="{{ blog.title }}">{% endif %}
+  {% if social_cover_image_url %}
+    <meta property="og:image" content="{{ social_cover_image_url }}">
+    <meta property="og:image:type" content="image/jpeg">
+    {% if cover_alt_text %}<meta property="og:image:alt" content="{{ cover_alt_text }}">{% endif %}
+    <meta property="og:image:width" content="{{ social_cover_image_width }}">
+    <meta property="og:image:height" content="{{ social_cover_image_height }}">
+  {% endif %}
+  {% with published_time=page.first_published_at|default:page.visible_date modified_time=page.last_published_at|default:page.visible_date %}
+    {% if published_time %}<meta property="article:published_time" content="{{ published_time|date:'c' }}">{% endif %}
+    {% if modified_time %}<meta property="article:modified_time" content="{{ modified_time|date:'c' }}">{% endif %}
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "{{ structured_data_type|default:'BlogPosting'|escapejs }}",
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "{{ absolute_page_url|escapejs }}"},
+        {% if structured_data_type == "PodcastEpisode" %}"name"{% else %}"headline"{% endif %}: "{{ social_title|escapejs }}",
+        "description": "{{ social_description|escapejs }}",
+        "url": "{{ absolute_page_url|escapejs }}"{% if published_time %},
+        "datePublished": "{{ published_time|date:'c' }}"{% endif %}{% if modified_time %},
+        "dateModified": "{{ modified_time|date:'c' }}"{% endif %}{% if blog.author_name %},
+        "author": {"@type": "Person", "name": "{{ blog.author_name|escapejs }}"}{% endif %}{% if social_cover_image_url %},
+        "image": "{{ social_cover_image_url|escapejs }}"{% endif %}
+      }
+    </script>
+  {% endwith %}
+{% endwith %}

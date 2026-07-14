@@ -351,12 +351,27 @@ def sanitize_podlove_data(data: dict[str, Any], allowed_speaker_labels: set[str]
     if allowed_speaker_labels is None:
         return data
 
-    sanitized = copy.deepcopy(data)
-    transcripts = sanitized.get("transcripts", [])
+    transcripts = data.get("transcripts", [])
     if not isinstance(transcripts, list):
-        return sanitized
+        return data
 
+    needs_sanitization = False
     for segment in transcripts:
+        if not isinstance(segment, dict):
+            continue
+        for field_name in PODLOVE_SPEAKER_FIELDS:
+            label = clean_speaker_label(segment.get(field_name))
+            if label and label not in allowed_speaker_labels:
+                needs_sanitization = True
+                break
+        if needs_sanitization:
+            break
+    if not needs_sanitization:
+        return data
+
+    sanitized = copy.deepcopy(data)
+    sanitized_transcripts = sanitized.get("transcripts", [])
+    for segment in sanitized_transcripts:
         if not isinstance(segment, dict):
             continue
         for field_name in PODLOVE_SPEAKER_FIELDS:
@@ -370,12 +385,24 @@ def sanitize_dote_data(data: dict[str, Any], allowed_speaker_labels: set[str] | 
     if allowed_speaker_labels is None:
         return data
 
-    sanitized = copy.deepcopy(data)
-    lines = sanitized.get("lines", [])
+    lines = data.get("lines", [])
     if not isinstance(lines, list):
-        return sanitized
+        return data
 
+    needs_sanitization = False
     for line in lines:
+        if not isinstance(line, dict):
+            continue
+        label = clean_speaker_label(line.get("speakerDesignation"))
+        if label and label not in allowed_speaker_labels:
+            needs_sanitization = True
+            break
+    if not needs_sanitization:
+        return data
+
+    sanitized = copy.deepcopy(data)
+    sanitized_lines = sanitized.get("lines", [])
+    for line in sanitized_lines:
         if not isinstance(line, dict):
             continue
         label = clean_speaker_label(line.get("speakerDesignation"))

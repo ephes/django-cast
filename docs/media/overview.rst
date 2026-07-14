@@ -51,7 +51,10 @@ Django Cast extends Wagtail's image handling with responsive image generation.
 
 Each tuple defines a target slot in the layout. django-cast then generates the
 responsive rendition widths needed for multiple pixel densities, so one slot
-still produces multiple image files in ``srcset``.
+still produces multiple image files in ``srcset``. Gallery thumbnails normalize
+embedded ICC profiles to compact sRGB by default; set
+``CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = False`` to preserve the previous
+thumbnail rendition filter policy.
 
 Audio
 ~~~~~

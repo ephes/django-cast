@@ -16,7 +16,7 @@ Glossary
       typed blocks.  In Django Cast, every ``Post`` has a ``body`` StreamField
       with two top-level sections -- ``overview`` (shown on index pages) and
       ``detail`` (shown on the full post page).  Each section can contain
-      heading, paragraph, code, image, gallery, embed, video, and audio blocks.
+      paragraph, code, image, gallery, embed, video, and audio blocks.
       See ``src/cast/blocks.py`` for the block definitions.
 
    chooser

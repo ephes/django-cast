@@ -49,6 +49,11 @@ Blog feeds are available in RSS and Atom formats, automatically generated from y
 - Feed fields populated from Blog model: title, description, author
 - Automatic inclusion of post content (overview and detail sections)
 
+Blog RSS item GUIDs are based on the post UUID with ``isPermaLink="false"``, so
+they are stable across slug and URL changes. Feed readers that subscribed before
+UUID-based GUIDs were introduced see each existing post once as new; from then on
+the GUIDs remain constant.
+
 Podcast Feeds
 -------------
 
@@ -101,6 +106,50 @@ Additional metadata for podcast feeds:
   season name is emitted as the Podcasting 2.0 ``name`` attribute.
 - **Chapter Marks**: Time-indexed navigation points
 - **Transcripts**: Links to VTT and DOTE transcript files
+
+Podlove Simple Chapters
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Podcast RSS and Atom feeds include inline Podlove Simple Chapters for episodes
+that have chapter marks. The ``psc`` namespace is declared on each emitted
+``psc:chapters`` element, not on the feed root, so feeds and episodes without
+chapter marks remain unchanged.
+
+The emitted shape is::
+
+    <psc:chapters version="1.2" xmlns:psc="http://podlove.org/simple-chapters">
+      <psc:chapter start="00:01:23" title="Intro"/>
+      <psc:chapter start="00:04:56.789" title="Topic"/>
+    </psc:chapters>
+
+(The feed serializer emits self-closing empty elements and sorts element
+attributes alphabetically.)
+
+Chapter ``start`` values use ``HH:MM:SS`` or ``HH:MM:SS.mmm`` when fractional
+seconds are present. Podlove Simple Chapters v1 output currently includes the
+``start`` and ``title`` attributes only.
+
+Chaptered episodes also include a Podcasting 2.0 external chapters reference::
+
+    <podcast:chapters type="application/json+chapters" url="https://example.com/chapters/<audio pk>/?episode_id=<episode pk>"/>
+
+The stable endpoint path is ``chapters/<audio pk>/?episode_id=<episode pk>``.
+``application/json+chapters`` is the Podcasting 2.0 specification's literal media-type
+string, not ``application/chapters+json``.
+It returns ``application/json+chapters`` with this body shape::
+
+    {
+      "version": "1.2.0",
+      "chapters": [
+        {"startTime": 83, "title": "Intro"}
+      ]
+    }
+
+``startTime`` values are integer seconds. Access to the endpoint uses the same
+audio-access checks as public audio and transcript endpoints: the supplied
+``episode_id`` must reference the audio and be viewable by the requester.
+Denied requests raise ``Http404`` so object existence is not leaked. Authorized
+requests for audio without chapter marks return a valid empty chapters document.
 
 RSS item GUIDs remain based on the episode UUID with
 ``isPermaLink="false"``. Episode numbers, episode types, and seasons are

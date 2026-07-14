@@ -8,7 +8,7 @@ from cast.devdata import create_transcript
 from cast.forms import VoiceReferenceCandidateCreateForm
 from cast.models import Contributor, EpisodeContributor, TranscriptVoiceReferenceCandidate
 from cast.models.contributors import ContributorVoiceReference
-from cast.models.transcript import Transcript
+from cast.transcripts import parsing, voice_references
 from cast.views.transcript import (
     create_voice_reference_from_candidate,
     get_speaker_mapping_context,
@@ -146,9 +146,17 @@ class TestVoiceReferenceCandidateDerivation:
         assert transcript.get_voice_reference_candidates(target_seconds=Decimal("0")) == []
         assert transcript.get_voice_reference_candidates(max_gap_seconds=Decimal("-0.001")) == []
 
+    def test_pure_get_candidates_limits_and_invalid_thresholds_return_empty_lists(self):
+        """The pure module API keeps its own guards even though the service guards first."""
+        podlove_data = {"transcripts": [podlove_segment("Alice", "0", "12")]}
+
+        assert voice_references.get_candidates(podlove_data, limit_per_speaker=0) == []
+        assert voice_references.get_candidates(podlove_data, target_seconds=Decimal("0")) == []
+        assert voice_references.get_candidates(podlove_data, max_gap_seconds=Decimal("-0.001")) == []
+
     def test_private_empty_run_builder_guard(self):
         assert (
-            Transcript._build_voice_reference_candidate_from_run(
+            voice_references.build_candidate_from_run(
                 [],
                 target_seconds=Decimal("30.000"),
                 min_seconds=Decimal("8.000"),
@@ -171,7 +179,7 @@ class TestVoiceReferenceCandidateDerivation:
         ],
     )
     def test_timestamp_decimal_parser_edges(self, value, expected):
-        assert Transcript._parse_timestamp_decimal_seconds(value) == expected
+        assert parsing.parse_timestamp_decimal_seconds(value) == expected
 
     def test_timestamp_label_formats_hours(self):
         candidate = TranscriptVoiceReferenceCandidate(

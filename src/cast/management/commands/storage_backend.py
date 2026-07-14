@@ -4,7 +4,7 @@ from django.core.management.base import CommandError
 from ...utils import storage_walk_paths
 
 
-def sync_media_files(source_storage, target_storage):
+def sync_media_files(source_storage: Storage, target_storage: Storage) -> None:
     for num, path in enumerate(storage_walk_paths(source_storage)):
         if not target_storage.exists(path):
             with source_storage.open(path, "rb") as in_f:

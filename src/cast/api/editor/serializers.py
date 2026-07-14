@@ -23,6 +23,8 @@ class PostCreateSerializer(serializers.Serializer):
     parent = ParentRefSerializer()
     title = serializers.CharField()
     slug = serializers.SlugField(required=False)
+    seo_title = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)
+    search_description = serializers.CharField(required=False, allow_blank=True, default="")
     visible_date = serializers.DateTimeField(required=False)
     cover_image = CoverImageSerializer(required=False)
     tags = serializers.ListField(child=serializers.CharField(), required=False, default=list)
@@ -33,9 +35,11 @@ class PostCreateSerializer(serializers.Serializer):
 
 
 class PostUpdateSerializer(serializers.Serializer):
-    base_revision_id = serializers.IntegerField()
+    base_revision_id = serializers.IntegerField(required=False)
     title = serializers.CharField(required=False)
     slug = serializers.SlugField(required=False)
+    seo_title = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    search_description = serializers.CharField(required=False, allow_blank=True)
     visible_date = serializers.DateTimeField(required=False)
     cover_image = CoverImageSerializer(required=False, allow_null=True)
     tags = serializers.ListField(child=serializers.CharField(), required=False)

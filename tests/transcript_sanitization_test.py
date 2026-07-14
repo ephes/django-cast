@@ -169,11 +169,18 @@ def test_public_episode_from_request(rf, episode):
 
 def test_sanitize_podlove_data_edge_cases():
     data = {"transcripts": [{"speaker": "Alice", "voice": "Alice"}, "not-a-segment"]}
+    data_without_speaker_metadata = {"transcripts": [{"text": "No speaker metadata"}, "not-a-segment"]}
 
     assert sanitize_podlove_data(data, None) is data
-    assert sanitize_podlove_data({"transcripts": "not-a-list"}, {"Alice"}) == {"transcripts": "not-a-list"}
-    assert sanitize_podlove_data(data, {"Alice"}) == data
-    assert sanitize_podlove_data(data, set()) == {"transcripts": [{}, "not-a-segment"]}
+    malformed_data = {"transcripts": "not-a-list"}
+    assert sanitize_podlove_data(malformed_data, {"Alice"}) is malformed_data
+    assert sanitize_podlove_data(data_without_speaker_metadata, {"Alice"}) is data_without_speaker_metadata
+    assert sanitize_podlove_data(data, {"Alice"}) is data
+
+    sanitized = sanitize_podlove_data(data, set())
+    assert sanitized == {"transcripts": [{}, "not-a-segment"]}
+    assert sanitized is not data
+    assert data == {"transcripts": [{"speaker": "Alice", "voice": "Alice"}, "not-a-segment"]}
 
 
 def test_apply_speaker_mapping_to_podlove_data_edge_cases():
@@ -189,11 +196,18 @@ def test_apply_speaker_mapping_to_podlove_data_edge_cases():
 
 def test_sanitize_dote_data_edge_cases():
     data = {"lines": [{"speakerDesignation": "Alice"}, "not-a-line"]}
+    data_without_speaker_metadata = {"lines": [{"text": "No speaker metadata"}, "not-a-line"]}
 
     assert sanitize_dote_data(data, None) is data
-    assert sanitize_dote_data({"lines": "not-a-list"}, {"Alice"}) == {"lines": "not-a-list"}
-    assert sanitize_dote_data(data, {"Alice"}) == data
-    assert sanitize_dote_data(data, set()) == {"lines": [{"speakerDesignation": ""}, "not-a-line"]}
+    malformed_data = {"lines": "not-a-list"}
+    assert sanitize_dote_data(malformed_data, {"Alice"}) is malformed_data
+    assert sanitize_dote_data(data_without_speaker_metadata, {"Alice"}) is data_without_speaker_metadata
+    assert sanitize_dote_data(data, {"Alice"}) is data
+
+    sanitized = sanitize_dote_data(data, set())
+    assert sanitized == {"lines": [{"speakerDesignation": ""}, "not-a-line"]}
+    assert sanitized is not data
+    assert data == {"lines": [{"speakerDesignation": "Alice"}, "not-a-line"]}
 
 
 def test_apply_speaker_mapping_to_dote_data_edge_cases():

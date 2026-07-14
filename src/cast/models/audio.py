@@ -6,7 +6,7 @@ from copy import deepcopy
 from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Protocol, cast
+from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
@@ -158,7 +158,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         return paths
 
     @staticmethod
-    def _get_audio_duration(audio_url) -> timedelta:
+    def _get_audio_duration(audio_url: str | Path) -> timedelta:
         # Taken from: http://trac.ffmpeg.org/wiki/FFprobeTips
         cmd = [
             "ffprobe",
@@ -291,7 +291,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         """Set the episode id for this audio file to be able to return audio.episode_url in api."""
         self._episode_id = episode_id
 
-    def get_episode(self, episode_id=None) -> Optional["Episode"]:
+    def get_episode(self, episode_id: int | None = None) -> Optional["Episode"]:
         episodes = self.episodes.all()
         if episode_id is not None:
             episodes = episodes.filter(pk=episode_id)
@@ -344,7 +344,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             # file_field is null
             return 0
 
-    def save(self, *args, **kwargs) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         generate_duration = kwargs.pop("duration", True)
         cache_file_sizes = kwargs.pop("cache_file_sizes", True)
         using = kwargs.get("using")

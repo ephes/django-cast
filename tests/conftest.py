@@ -24,7 +24,7 @@ from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACH
 
 from cast import appsettings
 from cast.devdata import create_transcript
-from cast.models import Audio, ChapterMark, File, ItunesArtWork, Video
+from cast.models import Audio, ChapterMark, File, ItunesArtWork
 from cast.models.theme import _clear_template_base_dir_choices_cache
 
 from .factories import (
@@ -38,8 +38,14 @@ from .factories import (
 )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def api_client():
+    """A fresh APIClient per test.
+
+    Function-scoped on purpose: a shared client accumulates state (session
+    cookies from ``login()``, forced authentication) and leaks it into later
+    tests, causing order-dependent failures under randomized test ordering.
+    """
     return APIClient()
 
 
@@ -253,28 +259,10 @@ def small_jpeg_io():
 
 
 # Audio testing stuff
-def create_minimal_mp3():
-    mp3 = (
-        b"\xff\xe3\x18\xc4\x00\x00\x00\x03H\x00\x00\x00\x00"
-        b"LAME3.98.2\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-        b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-    )
-    return mp3
-
-
 def read_test_m4a(fixture_dir):
     with open(os.path.join(fixture_dir, "test.m4a"), "rb") as f:
         m4a = f.read()
     return m4a
-
-
-@pytest.fixture()
-def mp3_audio():
-    mp3 = create_minimal_mp3()
-    simple_mp3 = SimpleUploadedFile(name="test.mp3", content=mp3, content_type="audio/mpeg")
-    return simple_mp3
 
 
 @pytest.fixture()
@@ -365,13 +353,6 @@ def image(db, image_1px):
     image = Image(title="test", file=image_1px, collection=collection)
     image.save()
     return image
-
-
-@pytest.fixture()
-def video_with_poster(user, minimal_mp4, image_1px):
-    video = Video(user=user, original=minimal_mp4, poster=image_1px)
-    video.save()
-    return video
 
 
 @pytest.fixture()
@@ -497,8 +478,23 @@ def post_data_wagtail():
         "body-0-type": "overview",
         "body-0-value-0-deleted": "",
         "body-0-value-0-order": "0",
-        "body-0-value-0-type": "heading",
-        "body-0-value-0-value": "overview heading",
+        "body-0-value-0-type": "paragraph",
+        "body-0-value-0-value": json.dumps(
+            {
+                "blocks": [
+                    {
+                        "key": "00000",
+                        "text": "overview heading",
+                        "type": "header-two",
+                        "depth": 0,
+                        "inlineStyleRanges": [],
+                        "entityRanges": [],
+                        "data": {},
+                    }
+                ],
+                "entityMap": {},
+            }
+        ),
         "body-0-value-count": "1",
         "body-count": "1",
         "slug": "new-post",
@@ -514,8 +510,8 @@ def python_body():
             "type": "overview",
             "value": [
                 {
-                    "type": "heading",
-                    "value": "in_all heading",
+                    "type": "paragraph",
+                    "value": "<h2>in_all heading</h2>",
                 }
             ],
         },
@@ -523,8 +519,8 @@ def python_body():
             "type": "detail",
             "value": [
                 {
-                    "type": "heading",
-                    "value": "only_in_detail heading",
+                    "type": "paragraph",
+                    "value": "<h2>only_in_detail heading</h2>",
                 }
             ],
         },
@@ -574,17 +570,6 @@ def post(blog, body):
     return PostFactory(
         owner=blog.owner,
         parent=blog,
-        title="test entry",
-        slug="test-entry",
-        body=body,
-    )
-
-
-@pytest.fixture()
-def post_in_podcast(podcast, body):
-    return PostFactory(
-        owner=podcast.owner,
-        parent=podcast,
         title="test entry",
         slug="test-entry",
         body=body,

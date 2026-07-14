@@ -9,12 +9,12 @@ from django.urls import reverse
 
 from cast.forms import KnownSpeakerSegmentReviewForm
 from cast.models import Transcript
-from cast.models.transcript import (
+from cast.transcripts import known_speakers, webvtt
+from cast.transcripts.dote import dote_timestamp_to_ms
+from cast.transcripts.known_speakers import (
     KNOWN_SPEAKER_DECISION_CORRECT,
     KNOWN_SPEAKER_DECISION_REJECT,
     KNOWN_SPEAKER_EDITOR_DECISION_FIELD,
-    _dote_timestamp_to_ms,
-    _webvtt_timestamp_to_ms,
 )
 from cast.views.transcript import get_known_speaker_review_rows, get_known_speaker_text_by_start_ms
 
@@ -70,18 +70,18 @@ SPEAKERS = {
 
 
 def test_dote_timestamp_to_ms():
-    assert _dote_timestamp_to_ms("00:00:10,000") == 10000
-    assert _dote_timestamp_to_ms("01:02:03.500") == 3723500
-    assert _dote_timestamp_to_ms("bad") is None
-    assert _dote_timestamp_to_ms(None) is None
+    assert dote_timestamp_to_ms("00:00:10,000") == 10000
+    assert dote_timestamp_to_ms("01:02:03.500") == 3723500
+    assert dote_timestamp_to_ms("bad") is None
+    assert dote_timestamp_to_ms(None) is None
 
 
 def test_webvtt_timestamp_to_ms():
-    assert _webvtt_timestamp_to_ms("00:00:10.000") == 10000
-    assert _webvtt_timestamp_to_ms("01:02:03.500") == 3723500
-    assert _webvtt_timestamp_to_ms("00:10.5") == 10500
-    assert _webvtt_timestamp_to_ms("bad") is None
-    assert _webvtt_timestamp_to_ms(None) is None
+    assert webvtt.webvtt_timestamp_to_ms("00:00:10.000") == 10000
+    assert webvtt.webvtt_timestamp_to_ms("01:02:03.500") == 3723500
+    assert webvtt.webvtt_timestamp_to_ms("00:10.5") == 10500
+    assert webvtt.webvtt_timestamp_to_ms("bad") is None
+    assert webvtt.webvtt_timestamp_to_ms(None) is None
 
 
 @pytest.mark.django_db
@@ -112,14 +112,14 @@ def test_review_summary_ignores_confident_segment_without_name(audio):
 
 
 def test_known_speaker_editor_decision_normalization():
-    assert Transcript._normalize_known_speaker_editor_decision(None) is None
-    assert Transcript._normalize_known_speaker_editor_decision({"action": "unknown", "speaker": "Alice"}) is None
-    assert Transcript._normalize_known_speaker_editor_decision({"action": "correct", "speaker": "  "}) is None
-    assert Transcript._normalize_known_speaker_editor_decision({"action": "reject", "speaker": "Alice"}) == {
+    assert known_speakers.normalize_editor_decision(None) is None
+    assert known_speakers.normalize_editor_decision({"action": "unknown", "speaker": "Alice"}) is None
+    assert known_speakers.normalize_editor_decision({"action": "correct", "speaker": "  "}) is None
+    assert known_speakers.normalize_editor_decision({"action": "reject", "speaker": "Alice"}) == {
         "action": "reject",
         "speaker": "",
     }
-    assert Transcript._normalize_known_speaker_editor_decision({"action": "approve", "speaker": " Alice "}) == {
+    assert known_speakers.normalize_editor_decision({"action": "approve", "speaker": " Alice "}) == {
         "action": "approve",
         "speaker": "Alice",
     }
@@ -423,7 +423,7 @@ def test_apply_counts_already_labeled_matching_vtt_without_rewriting(audio):
 def test_apply_webvtt_skips_matched_cue_without_payload():
     content = "WEBVTT\n\n00:00:10.000 --> 00:00:11.000\n\n"
 
-    rewritten_content, applied, changed = Transcript._apply_suggestions_to_webvtt_content(content, {10000: "Johannes"})
+    rewritten_content, applied, changed = webvtt.apply_suggestions_to_content(content, {10000: "Johannes"})
 
     assert applied == 0
     assert not changed
@@ -609,7 +609,7 @@ def test_apply_reject_handles_non_list_transcript_bodies(audio):
 def test_clear_webvtt_skips_matched_cue_without_payload():
     content = "WEBVTT\n\n00:00:10.000 --> 00:00:11.000\n\n"
 
-    rewritten_content, applied, changed = Transcript._clear_suggestions_from_webvtt_content(content, {10000})
+    rewritten_content, applied, changed = webvtt.clear_suggestions_from_content(content, {10000})
 
     assert applied == 0
     assert not changed
@@ -619,7 +619,7 @@ def test_clear_webvtt_skips_matched_cue_without_payload():
 def test_clear_webvtt_counts_unlabeled_payload_without_rewriting():
     content = "WEBVTT\n\n00:00:10.000 --> 00:00:11.000\na\n\n"
 
-    rewritten_content, applied, changed = Transcript._clear_suggestions_from_webvtt_content(content, {10000})
+    rewritten_content, applied, changed = webvtt.clear_suggestions_from_content(content, {10000})
 
     assert applied == 1
     assert not changed

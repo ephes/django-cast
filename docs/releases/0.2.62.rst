@@ -1,0 +1,185 @@
+0.2.62 (2026-07-14)
+-------------------
+
+- Normalize embedded ICC profiles to compact sRGB for gallery thumbnail
+  renditions by default using a new reusable ``srgb`` Wagtail image operation.
+  Uploaded originals, regular image renditions, and gallery modal/full-size
+  renditions keep their existing color handling; sites can disable the thumbnail
+  policy with ``CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = False``. Gallery
+  rendering falls back to the existing sRGB/non-sRGB counterpart rendition
+  during policy rollouts, preventing empty thumbnail URLs before synchronization.
+  Run ``sync_renditions`` once after deploying a policy change so new thumbnail
+  rendition keys are generated and matching previous thumbnail color-profile
+  keys are cleaned up safely.
+- Add ``CAST_COMMENTS_AUTHOR_EDIT_WINDOW`` to optionally cap anonymous comment
+  author edit/delete eligibility by comment age; the default ``0`` preserves the
+  existing session-bound behavior.
+- Remove django-cast's built-in ``heading`` StreamField block. This is a
+  breaking change for third-party installs: author multi-level headings in
+  ``paragraph`` rich text (``<h2>``/``<h3>``/``<h4>``) going forward. The
+  upgrade migrations automatically convert existing stored ``heading`` blocks
+  in live bodies and page revisions across ``Post``, ``Episode``,
+  ``HomePage``, and ``Post`` subclasses to ``<h2>`` rich-text paragraphs;
+  consumers that reference the built-in ``heading`` block in fixtures or
+  newly-created content should migrate those payloads to ``paragraph`` rich
+  text before upgrading.
+- Set ``TERM=xterm-256color`` inside tox test environments so local runs
+  launched from Ghostty do not print missing ``xterm-ghostty`` terminfo
+  warnings.
+- Constrain installed package dependencies to each tox matrix environment's
+  Django and Wagtail factors, preventing the package-dependency installation
+  phase from silently replacing a tested framework version.
+- Refresh the frontend lockfile and committed bundles with the latest
+  compatible Vite and Vitest patch releases.
+- Point the test settings' extra static files directory at the shipped
+  ``src/cast/static`` tree so tox migrations no longer emit Django's
+  ``staticfiles.W004`` warning.
+- Allow editor API post and episode draft ``PATCH`` requests to send the
+  optimistic concurrency token as a strict ``If-Match: "<revision id>"`` header
+  instead of JSON ``base_revision_id``.
+- Let the editor API create, read, and update Wagtail's ``seo_title`` and
+  ``search_description`` Promote-tab fields for posts and episodes.
+- Give the built-in Bootstrap 4 and plain post/episode templates complete,
+  non-empty search/social metadata: canonical URLs, title/description fallbacks,
+  cover-dependent Twitter cards, conditional image tags, article publication
+  and modification timestamps, ``og:site_name``, and
+  ``BlogPosting``/``PodcastEpisode`` JSON-LD. External themes must opt into the
+  new shared partial separately.
+- Let the editor API round-trip custom ``Post.body`` blocks configured through
+  ``CAST_POST_BODY_BLOCKS`` for their ``overview`` or ``detail`` section.
+  Custom ``ListBlock`` values use the author-facing list shape instead of
+  Wagtail's internal ``type: item`` wrappers, and invalid custom values are
+  reported through the normal editor validation envelope.
+- Avoid deep-copying Podlove and DOTe transcript JSON during public speaker
+  sanitization when all speaker labels are already public or when the transcript
+  contains no speaker metadata.
+- Fix ``Blog.last_build_date`` crashing with ``IndexError`` on blogs and
+  podcasts without any published posts; it now falls back to the page's first
+  publication date or the current time, so feeds for empty blogs render.
+- Fix the podcast feed's RSS ``<category>`` element: it now emits the first
+  entry of the blog's ``keywords`` field when keywords are set (the previous
+  guard checked a nonexistent ``categories`` attribute and always produced an
+  empty category).
+- Declare explicit ``permission_classes = (AllowAny,)`` on the public API views
+  (Podlove detail, player config, facet counts, theme list, theme update) so
+  intended anonymous access no longer depends on the DRF project default and
+  cannot be broken by a host site setting restrictive default permissions.
+- Remove dead tooling files (``bootstrap.md``, ``.travis.yml``, ``setup.cfg``,
+  ``runtests.py``, ``javascript/jest.config.js``, ``command_lines.txt``); the
+  ``commands.py`` ``test`` and ``mypy`` subcommands now invoke pytest and the
+  configured mypy directly.
+- Stop pinning the ``pytest-randomly`` seed so the test order actually
+  randomizes, and fix the two test-isolation bugs this surfaced (a shared API
+  client leaking session cookies between tests, and a monkeypatched
+  ``USE_THREADEDCOMMENTS`` baking the wrong comment form base class when the
+  forms module was first imported under the patch).
+- Clean up packaging and type-check metadata: drop the contradictory MIT
+  license classifier and a duplicated classifier, check types against Python
+  3.11 (the support floor), and remove the legacy mypy django-stubs plugin
+  table.
+- Make ``Post.get_description`` side-effect free: the feed/social-card body
+  template is now passed as a rendering argument instead of being stored on
+  the instance, so a post or episode rendered after its description was
+  generated no longer leaks the ``post_body.html`` partial into the full page
+  render.
+- Wrap ``Video.save`` poster generation in a transaction like ``Audio.save``,
+  so a failed poster derivation no longer leaves a half-saved video row.
+- Add ``sync_media`` and ``create_renditions`` keyword arguments to
+  ``Post.save`` (both default ``True``) so bulk operations and migrations can
+  skip media-derivation side effects explicitly.
+- Move the ``HtmxHttpRequest`` typing class to ``cast.http_types``; it stays
+  importable from ``cast.views`` and ``cast.views.htmx_helpers`` for
+  backwards compatibility.
+- Eliminate per-row queries when building blog index snapshots for mixed
+  post/episode listings: page specialization and episode audio now load in
+  bulk, so the query count no longer grows with the number of episodes, and
+  a regression test guards the flat query count.
+- Deduplicate the audio/video/transcript Wagtail-admin media views: the
+  previously triplicated ``index``/``add``/``edit``/``delete``/``chooser``/
+  ``chosen``/``chooser_upload`` views now share one parametrized
+  implementation in ``cast.views.media``. URL names, templates, contexts,
+  messages, and chooser modal workflows are unchanged.
+- Fix the video chooser upload view ignoring the ``CAST_CHOOSER_PAGINATION``
+  setting: it paginated with a hardcoded page size of 10 instead of
+  ``CHOOSER_PAGINATION`` like every other chooser view (invisible under the
+  default of 10, wrong for sites that override the setting).
+- Extract the transcript domain into a new ``cast.transcripts`` package: the
+  WebVTT/Podlove/DOTe rewrite logic, speaker-sample selection, voice-reference
+  derivation, and known-speaker handling now live in Django-free per-format
+  modules plus a service layer, and the ``Transcript`` model keeps its public
+  API as thin delegates. Public names such as ``time_to_seconds``,
+  ``convert_dote_to_podcastindex_transcript``, and the ``KNOWN_SPEAKER_*``
+  constants remain importable from ``cast.models.transcript``.
+- Refactor the transcript admin edit view to dispatch its POST actions through
+  a declarative action→handler map, and deduplicate the
+  ``episode_from_latest_revision`` helper that was copied between the
+  transcript and Voxhelm admin views. Messages, redirects, and form behavior
+  are unchanged.
+- Centralize the static ``CAST_*`` setting defaults in a single registry in
+  ``cast.appsettings``: the scattered inline ``getattr(settings, ...)``
+  defaults now resolve through one accessor (still read at call time, so
+  ``override_settings`` and runtime changes keep working), and the
+  ``cast.E001`` type check derives from the registry instead of a separately
+  maintained table. Defaults and check coverage are unchanged.
+- Document all previously undocumented settings in the settings reference,
+  including ``CAST_AUDIO_PLAYER``, ``CAST_EDITOR_SCOPES``,
+  ``CAST_POST_BODY_BLOCKS``, the comment form CSS-class and moderator
+  settings, and the remaining styleguide tunables.
+- Split the Voxhelm integration into a ``cast.voxhelm`` subpackage with
+  dedicated ``settings`` (the site → Django setting → environment precedence
+  chain), ``client`` (HTTP transport), ``task_refs``, and ``service``
+  (orchestration) modules. The transcript-generation status helpers move to
+  ``cast.transcripts.generation_status``, which removes the circular import
+  between ``cast.models`` and the Voxhelm code (a static test now guards that
+  nothing imported during model initialisation depends on ``cast.voxhelm``).
+  Every previously public name remains importable from ``cast.voxhelm``.
+- Show the "Generate transcript" action on the episode and audio edit pages
+  only when Voxhelm is actually configured (API base and key resolvable via
+  site settings, Django settings, or environment variables) for the request's
+  site. Transcript generation status stays visible regardless, and direct
+  POST requests keep reporting missing configuration as friendly error
+  messages.
+- Deduplicate ``feeds.py``: the shared ``item_description``/``item_link``/
+  ``item_pubdate`` methods and the Atom stylesheet ``write()`` now live in one
+  place, the iTunes/Podcast-Index generator mixins are statically typed
+  (no more ``# type: ignore`` or defensive ``try/except``), and podcast feed
+  XML output is unchanged.
+- Complete the strict mypy annotation rollout. The configured mypy source set
+  now enables both ``disallow_incomplete_defs`` and
+  ``disallow_untyped_defs`` globally after the final blocks, page model, and
+  styleguide slices reached clean project-level probes.
+- Blog (non-podcast) RSS and Atom feeds now emit a stable per-entry
+  identifier and publication dates: RSS items gain ``<pubDate>`` and a
+  ``<guid isPermaLink="false">`` set to the post's UUID, and Atom entries gain
+  ``<updated>`` and a UUID ``<id>``. Feed readers may show existing blog
+  entries as new once, after which the UUID identifier survives slug and URL
+  changes.
+- Document ``cast.api.views`` as a frozen legacy API surface (including the
+  bare-text ``POST /api/upload_video/`` response); new integrations should use
+  the editor API for structured errors, scoped authorization, and ``If-Match``
+  revision handling.
+- Stop shipping test-only settings in the installed package. The former
+  ``cast.settings`` module (committed ``SECRET_KEY``, ``tests.urls`` root
+  URLconf, MD5 hasher) now lives entirely in ``tests/settings.py``, and
+  ``dev_settings.py`` is renamed to ``dev_tools.py`` to reflect its role as a
+  feature-flag resolver rather than a settings module. ``django-environ`` is
+  dropped from the dependencies. This is an internal packaging change with no
+  effect on configuring a real django-cast site.
+- Give the repository cache serialization an explicit ``type`` discriminator
+  instead of guessing a cached object's class from which keys are present.
+  Blog/podcast and post/episode entries now record their type and deserialize
+  by it, with a fallback that keeps entries cached by earlier versions working.
+- Generate ``django-cast-quickstart`` project files from packaged templates
+  instead of large inline Python strings, and add a smoke test that the
+  generated project passes Django's system check. The quickstart command's
+  user-visible behavior is unchanged.
+- Emit inline Podlove Simple Chapters in podcast RSS and Atom feeds for
+  episodes with chapter marks, while leaving chapterless feed XML unchanged.
+- Add Podcasting 2.0 external chapters JSON documents and feed references via
+  ``podcast:chapters`` using ``application/json+chapters`` endpoints.
+- Document tags and categories as supported, default-on content-organization
+  primitives and drop the "beta / not yet implemented" framing around faceted
+  navigation. The recommended model is categories for a small, stable set of
+  groupings and tags for many, fast-changing labels; both power the blog and
+  podcast list-page facets. This is a documentation and test-coverage change
+  only — no behavior, setting, or schema change for existing sites.

@@ -4,18 +4,21 @@ import uuid
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from wagtail.blocks import RichTextBlock
+from wagtail.blocks import Block, RichTextBlock
 from wagtail.images import get_image_model
 from wagtail.images.permissions import permission_policy as image_permission_policy
 
+from ...post_body_blocks import POST_BODY_SECTIONS, configured_content_blocks
 from .errors import EditorValidationError
 
-SUPPORTED_BODY_BLOCKS = frozenset({"heading", "paragraph", "code", "image", "gallery", "audio", "video"})
+SUPPORTED_BODY_BLOCKS = frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
 SUPPORTED_OVERVIEW_BLOCKS = SUPPORTED_BODY_BLOCKS
 
 # A single shared RichTextBlock used to validate/normalize paragraph HTML through
 # the same path Wagtail uses on admin save.
 _PARAGRAPH_BLOCK = RichTextBlock()
+_CUSTOM_BLOCK_CONVERSION_ERRORS = (TypeError, ValueError, KeyError, AttributeError)
+_CUSTOM_BLOCK_READ_ERRORS = (DjangoValidationError, *_CUSTOM_BLOCK_CONVERSION_ERRORS)
 
 
 def get_choosable_object(obj_id: Any, user: Any, *, queryset: Any, policy: Any) -> Any | None:
@@ -133,6 +136,82 @@ def _preserved_unsupported_block(
     return dict(existing_block), existing_index, {}
 
 
+def _content_section(path_prefix: str) -> str | None:
+    section = path_prefix.split(".", 1)[0]
+    if section not in POST_BODY_SECTIONS:
+        return None
+    return section
+
+
+def _custom_block_map(section: str | None) -> dict[str, Block]:
+    if section is None:
+        return {}
+    return {name: block for name, block in configured_content_blocks(section)}
+
+
+def _error_items(exc: DjangoValidationError) -> list[dict[str, str]]:
+    messages = getattr(exc, "messages", None) or [str(exc)]
+    code = getattr(exc, "code", None) or "invalid"
+    return [{"code": str(code), "message": str(message)} for message in messages]
+
+
+def _flatten_django_validation_error(exc: DjangoValidationError, path: str) -> dict[str, list[dict[str, str]]]:
+    flat: dict[str, list[dict[str, str]]] = {}
+    block_errors = getattr(exc, "block_errors", None)
+    if isinstance(block_errors, dict):
+        for key, child in block_errors.items():
+            if isinstance(child, DjangoValidationError):
+                child_path = f"{path}.{key}"
+                for sub_path, items in _flatten_django_validation_error(child, child_path).items():
+                    flat.setdefault(sub_path, []).extend(items)
+
+    non_block_errors = getattr(exc, "non_block_errors", None)
+    if isinstance(non_block_errors, list):
+        for child in non_block_errors:
+            if isinstance(child, DjangoValidationError):
+                for sub_path, items in _flatten_django_validation_error(child, path).items():
+                    flat.setdefault(sub_path, []).extend(items)
+
+    error_dict = getattr(exc, "error_dict", None)
+    if isinstance(error_dict, dict):
+        for key, children in error_dict.items():
+            child_path = f"{path}.{key}"
+            for child in children:
+                if isinstance(child, DjangoValidationError):
+                    for sub_path, items in _flatten_django_validation_error(child, child_path).items():
+                        flat.setdefault(sub_path, []).extend(items)
+
+    if flat:
+        return flat
+    return {path: _error_items(exc)}
+
+
+def _custom_block_validation_errors(exc: DjangoValidationError, *, base: str) -> dict[str, list[dict[str, str]]]:
+    return _flatten_django_validation_error(exc, f"{base}.value")
+
+
+def _custom_block_conversion_error(exc: Exception, *, base: str) -> dict[str, list[dict[str, str]]]:
+    return {f"{base}.value": [{"code": "invalid", "message": str(exc) or "Invalid custom block value."}]}
+
+
+def _custom_author_value(block_def: Block, value: Any) -> Any:
+    python_value = block_def.to_python(value)
+    cleaned = block_def.clean(python_value)
+    if type(block_def).get_api_representation is not Block.get_api_representation:
+        return block_def.get_api_representation(cleaned)
+    return _unwrap_list_item_values(block_def.get_prep_value(cleaned))
+
+
+def _unwrap_list_item_values(value: Any) -> Any:
+    if isinstance(value, list):
+        if all(isinstance(item, dict) and item.get("type") == "item" and "value" in item for item in value):
+            return [_unwrap_list_item_values(item["value"]) for item in value]
+        return [_unwrap_list_item_values(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _unwrap_list_item_values(item) for key, item in value.items()}
+    return value
+
+
 def author_blocks_to_section(
     blocks: list[dict], *, user: Any, path_prefix: str, existing_section: list[dict] | None = None
 ) -> list[dict]:
@@ -146,6 +225,7 @@ def author_blocks_to_section(
     errors: dict[str, list[dict[str, str]]] = {}
     result: list[dict] = []
     preserved_unsupported_indexes: set[int] = set()
+    custom_blocks = _custom_block_map(_content_section(path_prefix))
 
     if not isinstance(blocks, list):
         raise EditorValidationError(
@@ -159,6 +239,11 @@ def author_blocks_to_section(
             continue
         block_type = block.get("type")
         value = block.get("value")
+        if not isinstance(block_type, str):
+            errors[f"{base}.type"] = [
+                {"code": "unsupported_block_type", "message": f"Block type {block_type!r} is not supported."}
+            ]
+            continue
 
         if block_type == "unsupported":
             preserved, existing_index, placeholder_errors = _preserved_unsupported_block(
@@ -179,18 +264,26 @@ def author_blocks_to_section(
             continue
 
         elif block_type not in SUPPORTED_BODY_BLOCKS:
-            errors[f"{base}.type"] = [
-                {"code": "unsupported_block_type", "message": f"Block type {block_type!r} is not supported."}
-            ]
+            custom_block = custom_blocks.get(block_type)
+            if custom_block is None:
+                errors[f"{base}.type"] = [
+                    {"code": "unsupported_block_type", "message": f"Block type {block_type!r} is not supported."}
+                ]
+                continue
+            try:
+                python_value = custom_block.to_python(value)
+                cleaned = custom_block.clean(python_value)
+                prepared = custom_block.get_prep_value(cleaned)
+            except DjangoValidationError as exc:
+                errors.update(_custom_block_validation_errors(exc, base=base))
+                continue
+            except _CUSTOM_BLOCK_CONVERSION_ERRORS as exc:
+                errors.update(_custom_block_conversion_error(exc, base=base))
+                continue
+            result.append({"type": block_type, "value": prepared})
             continue
 
-        if block_type == "heading":
-            if not isinstance(value, str):
-                errors[f"{base}.value"] = [{"code": "invalid", "message": "Expected a string value."}]
-                continue
-            result.append({"type": "heading", "value": value})
-
-        elif block_type == "paragraph":
+        if block_type == "paragraph":
             if not isinstance(value, str):
                 errors[f"{base}.value"] = [{"code": "invalid", "message": "Expected a string value."}]
                 continue
@@ -294,10 +387,11 @@ def section_to_author_blocks(
 ) -> list[dict]:
     """Inverse of :func:`author_blocks_to_section` for supported block types."""
     author: list[dict] = []
+    custom_blocks = _custom_block_map(_content_section(path_prefix))
     for index, block in enumerate(section_value):
         block_type = block.get("type")
         value = block.get("value")
-        if block_type in ("heading", "paragraph"):
+        if block_type == "paragraph":
             author.append({"type": block_type, "value": value})
         elif block_type == "code":
             if (
@@ -327,6 +421,13 @@ def section_to_author_blocks(
                 author.append({"type": "gallery", "value": [{"id": item["value"]} for item in items]})
             else:
                 author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
+        elif block_type in custom_blocks:
+            try:
+                author_value = _custom_author_value(custom_blocks[block_type], value)
+            except _CUSTOM_BLOCK_READ_ERRORS:
+                author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
+            else:
+                author.append({"type": block_type, "value": author_value})
         else:
             author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
     return author

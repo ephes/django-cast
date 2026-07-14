@@ -1,10 +1,11 @@
+from django.http import HttpRequest, HttpResponse
 from django.template import TemplateDoesNotExist
 from django.views import csrf, defaults
 
 from cast.models import TemplateBaseDirectory
 
 
-def get_template_base_directory(request):
+def get_template_base_directory(request: HttpRequest) -> str:
     """Get the template base directory for the current request, ignoring all exceptions"""
     try:
         return TemplateBaseDirectory.for_request(request).name
@@ -14,13 +15,13 @@ def get_template_base_directory(request):
         return "plain"
 
 
-def get_template_name(request, base_template_name):
+def get_template_name(request: HttpRequest, base_template_name: str) -> str:
     """Get the template name for the current request"""
     template_base_dir = get_template_base_directory(request)
     return f"cast/{template_base_dir}/{base_template_name}"
 
 
-def page_not_found(request, exception):
+def page_not_found(request: HttpRequest, exception: Exception) -> HttpResponse:
     """Just call the default page_not_found view, but with a custom template"""
     try:
         return defaults.page_not_found(request, exception, template_name=get_template_name(request, "404.html"))
@@ -28,7 +29,7 @@ def page_not_found(request, exception):
         return defaults.page_not_found(request, exception)
 
 
-def server_error(request):
+def server_error(request: HttpRequest) -> HttpResponse:
     """Just call the default server_error view, but with a custom template"""
     try:
         return defaults.server_error(request, template_name=get_template_name(request, "500.html"))
@@ -36,7 +37,7 @@ def server_error(request):
         return defaults.server_error(request)
 
 
-def bad_request(request, exception):
+def bad_request(request: HttpRequest, exception: Exception) -> HttpResponse:
     """Just call the default bad_request view, but with a custom template"""
     try:
         return defaults.bad_request(request, exception, template_name=get_template_name(request, "400.html"))
@@ -44,7 +45,7 @@ def bad_request(request, exception):
         return defaults.bad_request(request, exception)
 
 
-def permission_denied(request, exception):
+def permission_denied(request: HttpRequest, exception: Exception) -> HttpResponse:
     """Just call the default permission_denied view, but with a custom template"""
     try:
         return defaults.permission_denied(request, exception, template_name=get_template_name(request, "403.html"))
@@ -52,7 +53,7 @@ def permission_denied(request, exception):
         return defaults.permission_denied(request, exception)
 
 
-def csrf_failure(request, reason=""):
+def csrf_failure(request: HttpRequest, reason: str = "") -> HttpResponse:
     """Just call the default csrf_failure view, but with a custom template"""
     try:
         return csrf.csrf_failure(request, reason, template_name=get_template_name(request, "403_csrf.html"))

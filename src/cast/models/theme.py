@@ -1,13 +1,14 @@
 import warnings
 from pathlib import Path
 
-from django.conf import settings
 from django.db import models
 from django.http import HttpRequest
 from django.template import engines
 from django.template.loaders.base import Loader as BaseLoader
 from django.utils.translation import gettext_lazy as _
 from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
+
+from cast import appsettings
 
 # Process-lifetime cache for theme choices.  Themes are discovered from the
 # filesystem and settings at import/first-call time; changes require a worker
@@ -164,10 +165,10 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
         seen.add(template_name.value)  # type: ignore[misc]
 
     # handle custom choices via settings
-    for template_name, display_name in getattr(settings, "CAST_CUSTOM_THEMES", []):
-        if template_name not in seen:
-            choices.append((template_name, display_name))
-            seen.add(template_name)
+    for custom_template_name, display_name in appsettings.CAST_CUSTOM_THEMES:
+        if custom_template_name not in seen:
+            choices.append((custom_template_name, display_name))
+            seen.add(custom_template_name)
 
     # search for template base directories
     template_directories = get_template_directories()

@@ -12,6 +12,7 @@ HasAudioByID: TypeAlias = dict[int, bool]
 AudiosByPostID: TypeAlias = dict[int, set[int]]
 AudioById: TypeAlias = dict[int, "Audio"]
 TranscriptByAudioId: TypeAlias = dict[int, "Transcript"]
+ChaptersByAudioId: TypeAlias = dict[int, list[dict[str, str]]]
 VideosByPostID: TypeAlias = dict[int, set[int]]
 VideoById: TypeAlias = dict[int, "Video"]
 ImagesByPostID: TypeAlias = dict[int, set[int]]
@@ -59,6 +60,7 @@ class CachableBlogData(TypedDict):
     videos: dict[int, dict[str, Any]]
     images: dict[int, dict[str, Any]]
     transcripts: dict[int, dict[str, Any]]
+    chapters: ChaptersByAudioId
     podcast_audio_by_episode_id: dict[int, dict[str, Any]]
     renditions_for_posts: SerializedRenditions
     images_by_post_id: ImagesByPostID

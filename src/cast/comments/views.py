@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import django_comments
 from django.apps import apps
@@ -13,6 +13,7 @@ from django.http import (
     HttpResponseForbidden,
     HttpResponseNotFound,
     JsonResponse,
+    QueryDict,
 )
 from django.template.loader import render_to_string
 from django.utils.html import escape
@@ -106,7 +107,7 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
     return _ajax_result(request, form, "post", comment, object_id=data.get("object_pk"))
 
 
-def _resolve_comment_target(data, using: str | None = None) -> tuple[object | None, HttpResponse | None]:
+def _resolve_comment_target(data: QueryDict, using: str | None = None) -> tuple[object | None, HttpResponse | None]:
     ctype = data.get("content_type")
     object_pk = data.get("object_pk")
     if ctype is None or object_pk is None:
@@ -234,7 +235,7 @@ def _author_action_guard(request: HttpRequest, action: str) -> HttpResponse | No
 
 
 def _load_locked_actionable(
-    request: HttpRequest, model, comment_id: str, using: str | None
+    request: HttpRequest, model: type[Any], comment_id: str, using: str | None
 ) -> BaseComment | HttpResponse:
     """Inside an open transaction: lock the comment and confirm it is still
     actionable (public, not removed, not answered). Returns the locked comment, or
@@ -268,7 +269,7 @@ def _rendered_comment_json(request: HttpRequest, comment: BaseComment, extra: di
     return JsonResponse(payload)
 
 
-def _validate_comment_text(data) -> tuple[str | None, HttpResponse | None]:
+def _validate_comment_text(data: QueryDict) -> tuple[str | None, HttpResponse | None]:
     """Validate only the editable text + honeypot; identity fields are immutable."""
     if data.get("honeypot"):
         return None, CommentPostBadRequest("The comment form failed security verification.")

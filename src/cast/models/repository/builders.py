@@ -31,8 +31,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
+    from cast.http_types import HtmxHttpRequest
     from cast.models import Blog, Post
-    from cast.views import HtmxHttpRequest
 
     from .types import CachableBlogData
 
@@ -93,7 +93,7 @@ def apply_cover_fallback(
     return cover_image_url, cover_alt_text
 
 
-def get_facet_choices(fields: dict[str, HasChoices], field_name) -> list[Choice]:
+def get_facet_choices(fields: dict[str, HasChoices], field_name: str) -> list[Choice]:
     """Return non-empty filter choices for a facet field, or an empty list."""
     if field_name in fields:
         return [(k, v) for k, v in fields[field_name].choices if k != ""]
@@ -194,6 +194,7 @@ def add_queryset_data(data: dict[str, Any], queryset_data: PostQuerySnapshot) ->
         episode_id: serialize_audio(audio) for episode_id, audio in queryset_data.podcast_audio_by_episode_id.items()
     }
     data["transcripts"] = transcripts
+    data["chapters"] = queryset_data.chapters_by_audio_id
     data["cover_by_post_id"] = queryset_data.cover_by_post_id
     data["cover_alt_by_post_id"] = queryset_data.cover_alt_by_post_id
     data["has_audio_by_id"] = queryset_data.has_audio_by_id

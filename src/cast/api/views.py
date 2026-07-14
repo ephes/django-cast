@@ -1,3 +1,12 @@
+"""Legacy django-cast API surface with frozen response contracts.
+
+This module intentionally preserves its existing response shapes for current
+clients, including ``VideoCreateView`` returning a bare-text ``"<pk>"`` body with
+``201 Created``. New clients should use ``cast.api.editor.*`` endpoints, which
+provide structured errors, scoped authorization, and ``If-Match`` revision
+conflict handling. This freeze follows the 2026-06-25 media-detail plan.
+"""
+
 import hashlib
 import json
 import logging
@@ -25,6 +34,7 @@ from wagtail.images.api.v2.views import ImagesAPIViewSet
 from ..audio_access import authorize_audio_access, page_grants_audio_access, page_is_unrestricted_public
 from ..filters import PostFilterset
 from ..forms import SelectThemeForm, VideoForm
+from ..http_types import HtmxHttpRequest
 from ..models import (
     Audio,
     Blog,
@@ -37,7 +47,6 @@ from ..models import (
 from ..modal_facet_counts import get_modal_facet_counts
 from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
-from ..views import HtmxHttpRequest
 from ..views.theme import set_template_base_dir
 from .serializers import (
     AudioPodloveSerializer,
@@ -126,8 +135,9 @@ class AudioDetailView(generics.RetrieveDestroyAPIView):
 class AudioPodloveDetailView(generics.RetrieveAPIView):
     queryset = Audio.objects.all()
     serializer_class = AudioPodloveSerializer
+    permission_classes = (AllowAny,)
 
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         instance = self.get_object()
         post_id = kwargs.get("post_id")
         episode_id = request.query_params.get("episode_id")
@@ -171,7 +181,7 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
     queryset = Audio.objects.all()
     permission_classes = (AllowAny,)
 
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         audio = self.get_object()
         post_id = kwargs.get("post_id") or request.query_params.get("post_id")
         post = self._get_authorized_post(post_id, audio, request)
@@ -227,7 +237,9 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
 
 
 class PlayerConfig(generics.RetrieveAPIView):
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    permission_classes = (AllowAny,)
+
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         template_base_dir = get_template_base_dir(request, None)
         color_scheme = request.query_params.get("color_scheme")
         config = build_podlove_player_config(template_base_dir=template_base_dir, color_scheme=color_scheme)
@@ -237,6 +249,7 @@ class PlayerConfig(generics.RetrieveAPIView):
 class FacetCountListView(generics.ListAPIView):
     serializer_class = SimpleBlogSerializer
     pagination_class = StandardResultsSetPagination
+    permission_classes = (AllowAny,)
 
     def get_queryset(self) -> QuerySet[Blog]:
         return Blog.objects.all().live().public().order_by("-first_published_at")
@@ -244,11 +257,12 @@ class FacetCountListView(generics.ListAPIView):
 
 class FacetCountsDetailView(generics.RetrieveAPIView):
     serializer_class = FacetCountSerializer
+    permission_classes = (AllowAny,)
 
     def get_queryset(self) -> QuerySet[Blog]:
         return Blog.objects.all().live().public()
 
-    def retrieve(self, request: Request, *args, **kwargs) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         if request.query_params.get("mode") == "modal":
             blog = self.get_object()
             payload = get_modal_facet_counts(blog, request.query_params)
@@ -260,7 +274,7 @@ class CommentTrainingDataView(APIView):
     permission_classes = (IsAdminUser,)
 
     @staticmethod
-    def get(request, _format: Any = None) -> JsonResponse:
+    def get(request: Request, _format: Any = None) -> JsonResponse:
         """
         Return training data for comment classification.
         """
@@ -274,10 +288,12 @@ class ThemeListView(generics.ListAPIView):
     This is used by the theme switcher for the vue frontend for example.
     """
 
+    permission_classes = (AllowAny,)
+
     def get_queryset(self) -> None:
         return None
 
-    def list(self, request: Request, *args, **kwargs) -> Response:
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         choices = get_template_base_dir_choices()
         request = cast(HtmxHttpRequest, request)
         template_base_dir = get_template_base_dir(request, None)
@@ -294,7 +310,9 @@ class UpdateThemeView(APIView):
     Update the selected theme.
     """
 
-    def post(self, request: Request, *args, **kwargs) -> Response:
+    permission_classes = (AllowAny,)
+
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         if not isinstance(request.data, dict):
             return Response({"error": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -318,12 +336,13 @@ class RemoveNullBytesMixin:
 
     request: HttpRequest
 
-    def cleanup_null_bytes(self):
+    def cleanup_null_bytes(self) -> None:
         for key, value in self.request.GET.items():
+            value = cast(str, value)
             if "\x00" in value:
                 mutable_copy = self.request.GET.copy()
                 mutable_copy[key] = value.replace("\x00", "")
-                self.request.GET = mutable_copy
+                cast(Any, self.request).GET = mutable_copy
 
     def filter_queryset(self, queryset: QuerySet) -> QuerySet:
         self.cleanup_null_bytes()
@@ -370,7 +389,7 @@ class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
         filterset = PostFilterset(data=original_get_params, queryset=queryset)
         return filterset.qs
 
-    def get_queryset(self):
+    def get_queryset(self) -> QuerySet[Any]:
         self._extend_known_query_parameters()
         self._apply_template_base_dir_override()
         if self.request.GET.dict().get("use_post_filter", "false") == "true":

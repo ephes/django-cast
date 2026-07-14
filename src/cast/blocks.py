@@ -1,6 +1,6 @@
 from abc import abstractmethod
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Protocol, Union
+from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union
 
 from django.db.models import Model, QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
@@ -29,7 +29,10 @@ from .renditions import (
 
 if TYPE_CHECKING:
     from .models import Audio, Video
-    from .widgets import AdminVideoChooser
+    from .widgets import AdminAudioChooser, AdminVideoChooser
+
+
+_T = TypeVar("_T")
 
 
 def get_srcset_images_for_slots(
@@ -174,11 +177,11 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
             return [alt_text]
         return []
 
-    def bulk_to_python(self, items):
+    def bulk_to_python(self, items: _T) -> _T:
         """Overwrite this method to avoid database queries."""
         return items
 
-    def extract_references(self, value):
+    def extract_references(self, value: Any) -> Iterator[tuple[type[Model], str, str, str]]:
         yield self.model_class, str(value), "", ""
 
 
@@ -262,7 +265,7 @@ class GalleryBlock(ListBlock):
             parsed.append(item["value"])
         return parsed
 
-    def get_form_state(self, value):
+    def get_form_state(self, value: Any) -> Any:
         """
         I don't know why this is needed, but it is needed to make the editor work
         for galleries. Do not try to remove it, or at least test if galleries are
@@ -305,14 +308,14 @@ class GalleryBlockWithLayout(StructBlock):
         label = "Gallery with Layout"
         template = "cast/gallery.html"
 
-    def extract_references(self, value):
+    def extract_references(self, value: Any) -> list[tuple[type[Model], str, str, str]]:
         # We don't have the gallery id at this point and not overwriting
         # this method will return a concatenated string of all image items
         # which will lead to postgres complaining about the length of the
         # `wagtailcore_referenceindex.to_object_id` field.
         return []
 
-    def get_template(self, value=None, context=None):
+    def get_template(self, value: dict[str, Any] | None = None, context: dict[str, Any] | None = None) -> str:
         default_template_name = super().get_template(value, context)
         layout = "default"
         if value is not None:
@@ -325,7 +328,10 @@ class GalleryBlockWithLayout(StructBlock):
         return get_block_template(default_template_name, context, file_name=template_file_name)
 
     @staticmethod
-    def _get_images_from_repository(repository: HasImagesAndRenditions, values):
+    def _get_images_from_repository(
+        repository: HasImagesAndRenditions,
+        values: dict[str, Any],
+    ) -> dict[str, Any]:
         images = []
         for item in values["gallery"]:
             if isinstance(item, dict) and item.get("type") == "item":
@@ -336,12 +342,12 @@ class GalleryBlockWithLayout(StructBlock):
         values["gallery"] = images
         return values
 
-    def bulk_to_python(self, values):
+    def bulk_to_python(self, values: _T) -> _T:
         """Postpone the fetching of the database objects to the get_context method."""
         return values
 
     @staticmethod
-    def bulk_to_python_from_database(values):
+    def bulk_to_python_from_database(values: dict[str, Any]) -> dict[str, Any]:
         image_ids_or_images = list(filter(None, values["gallery"]))
         if len(image_ids_or_images) == 0:
             return values
@@ -357,13 +363,17 @@ class GalleryBlockWithLayout(StructBlock):
         values["gallery"] = [images_by_id[pk] for pk in image_ids if pk in images_by_id]
         return values
 
-    def from_repository_to_python(self, repository: HasImagesAndRenditions, values):
+    def from_repository_to_python(
+        self,
+        repository: HasImagesAndRenditions,
+        values: dict[str, Any],
+    ) -> dict[str, Any]:
         try:
             return self._get_images_from_repository(repository, values)
         except KeyError:
             return self.bulk_to_python_from_database(values)
 
-    def get_context(self, value, parent_context: dict | None = None):
+    def get_context(self, value: dict[str, Any], parent_context: dict[str, Any] | None = None) -> dict[str, Any]:
         assert parent_context is not None
         repository = parent_context["repository"]
         value = self.from_repository_to_python(repository, value)
@@ -372,24 +382,24 @@ class GalleryBlockWithLayout(StructBlock):
 
 
 class RepositoryChooserBlock(ChooserGetPrepValueMixin, ChooserBlock):
-    def bulk_to_python(self, values):
+    def bulk_to_python(self, values: _T) -> _T:
         """
         Postpone the fetching of the database objects to the get_context method
         because the repository is not available in the bulk_to_python method.
         """
         return values
 
-    def extract_references(self, value):
+    def extract_references(self, value: Any) -> Iterator[tuple[type[Model], str, str, str]]:
         yield self.model_class, str(value), "", ""
 
     @abstractmethod
     def from_repository_to_python(self, repository: Any, value: int) -> Model:
         raise NotImplementedError
 
-    def get_context(self, value, parent_context=None):
+    def get_context(self, value: int, parent_context: Any = None) -> dict[str, Any]:
         repository = parent_context["repository"]
-        value = self.from_repository_to_python(repository, value)
-        return super().get_context(value, parent_context=parent_context)
+        resolved_value = self.from_repository_to_python(repository, value)
+        return super().get_context(resolved_value, parent_context=parent_context)
 
 
 class HasVideos(Protocol):
@@ -427,7 +437,7 @@ class HasAudios(Protocol):
 
 
 class AudioChooserBlock(RepositoryChooserBlock):
-    def get_template(self, value=None, context=None):
+    def get_template(self, value: Any = None, context: dict[str, Any] | None = None) -> str:
         default_template_name = super().get_template(value, context)
         return get_block_template(default_template_name, context, file_name="audio.html")
 
@@ -438,7 +448,7 @@ class AudioChooserBlock(RepositoryChooserBlock):
         return Audio
 
     @cached_property
-    def widget(self):
+    def widget(self) -> "AdminAudioChooser":
         from .widgets import AdminAudioChooser
 
         return AdminAudioChooser()
@@ -455,7 +465,7 @@ class AudioChooserBlock(RepositoryChooserBlock):
         except KeyError:
             return super().to_python(value)
 
-    def get_prep_value(self, value):
+    def get_prep_value(self, value: Model | int | None) -> int | None:
         """
         This is called with an int value when a page with audio is retrieved
         via the API like this: /api/wagtail/pages/67/
@@ -469,7 +479,7 @@ class CodeBlock(StructBlock):
     language = CharBlock(help_text="The language of the code block")
     source = TextBlock(rows=8, help_text="The source code of the block")
 
-    def render_basic(self, value: dict | None, context=None) -> str:
+    def render_basic(self, value: dict[str, str] | None, context: dict[str, Any] | None = None) -> str:
         if value is not None:
             try:
                 lexer = get_lexer_by_name(value["language"], stripall=True)

@@ -45,6 +45,7 @@ from .snapshot import PostQuerySnapshot, cache_page_url
 from .types import (
     AudioById,
     AudiosByPostID,
+    ChaptersByAudioId,
     Choice,
     CoverAltByPostID,
     CoverURLByPostID,
@@ -66,6 +67,7 @@ __all__ = [
     "AudioById",
     "AudiosByPostID",
     "BlogIndexContext",
+    "ChaptersByAudioId",
     "Choice",
     "CoverAltByPostID",
     "CoverURLByPostID",

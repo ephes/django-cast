@@ -184,7 +184,10 @@ The class computes a *fitting width* for each slot by comparing the
 image's aspect ratio with the slot's aspect ratio, then generates
 ``RenditionFilter`` objects for each slot/format/pixel-density combination
 (1x, 2x, 3x). Renditions that would be nearly as large as the original
-are skipped.
+are skipped. Gallery thumbnail slots can also include django-cast's custom
+``srgb`` Wagtail operation before any ``format-*`` conversion, so profiled
+thumbnail renditions use compact sRGB ICC profiles while modal/full-size
+renditions preserve their existing color handling.
 
 Convenience constructors:
 
@@ -233,15 +236,21 @@ The full rendering pipeline works as follows:
 2. Each image block (``CastImageChooserBlock`` or ``GalleryBlockWithLayout``)
    creates a ``RenditionFilters`` instance for the image.
 3. The filter strings are matched against prefetched renditions. In the
-   normal path all required renditions are already present. If a rendition
-   is missing (e.g. the image was not in the repository), Wagtail's
-   ``image.get_rendition()`` is called as a fallback.
+   normal path all required renditions are already present. While the gallery
+   thumbnail sRGB policy is being enabled or disabled, a missing requested
+   thumbnail rendition temporarily uses its existing sRGB/non-sRGB counterpart
+   instead of emitting an empty image URL.
 4. The ``get_image_for_slot()`` method produces an ``ImageForSlot`` object
    that is attached to the image and passed to the template context.
 5. Theme templates use the ``ImageForSlot`` attributes to render
    ``<picture>`` elements with appropriate ``<source>`` and ``<img>`` tags.
 
-To create missing renditions in bulk (e.g. after changing slot
-dimensions), use the management command::
+To create missing renditions in bulk (e.g. after changing slot dimensions,
+image formats, or gallery thumbnail color-profile policy), run this one-off
+management command after deploying the specification change::
 
     python manage.py sync_renditions
+
+The counterpart fallback keeps existing thumbnails visible until this command
+finishes; synchronization is still required to serve the newly configured
+renditions and clean up superseded thumbnail policy keys.

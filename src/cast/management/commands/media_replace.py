@@ -1,3 +1,5 @@
+from argparse import ArgumentParser
+from typing import Any
 from uuid import uuid4
 
 from django.core.files.storage import FileSystemStorage
@@ -16,7 +18,7 @@ class Command(BaseCommand):
         "(requires production and backup storage backends configured)"
     )
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument("paths", nargs="+", type=str)
         parser.add_argument(
             "--dry-run",
@@ -31,7 +33,7 @@ class Command(BaseCommand):
             help="Confirm destructive writes to production storage.",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         production, _ = get_production_and_backup_storage()
         fs_storage = FileSystemStorage()
         dry_run = options["dry_run"]

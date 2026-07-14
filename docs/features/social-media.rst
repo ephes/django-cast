@@ -21,11 +21,13 @@ uses a two-level fallback for the cover image:
 
 If neither is set, no image meta tags are emitted.
 
-The social preview image is generated as a **1200x630 JPEG** rendition using
-Wagtail's focal-point-aware cropping (rendition spec:
-``fill-1200x630|format-jpeg|jpegquality-75``). This matches the 1.91:1
-aspect ratio recommended by most social platforms. The URL is always emitted
-as an absolute URL so social scrapers can fetch it.
+The social preview image uses a **1200x630 JPEG** rendition through Wagtail's
+focal-point-aware cropping (rendition spec:
+``fill-1200x630|format-jpeg|jpegquality-75``). This matches the 1.91:1 aspect
+ratio recommended by most social platforms. Wagtail does not upscale a smaller
+source, so use an image at least 1200x630 when those exact output dimensions are
+required. The URL and actual rendition dimensions are emitted so social
+scrapers can fetch and describe the result correctly.
 
 To customize the social preview image for a post, set the **Cover image**
 field in the Wagtail editor. Choose an image with a
@@ -42,13 +44,18 @@ Open Graph and Twitter Card Meta Tags
 
 Post templates emit meta tags inside a ``{% block social_meta %}`` block,
 which is nested inside ``{% block meta %}``. Theme authors can override this
-block to customize social meta output.
+block to customize social meta output. The default post metadata is rendered by
+``cast/includes/post_social_meta.html`` so the built-in Bootstrap 4 and plain
+themes share the same fallbacks and structured-data contract. External themes
+must opt into that partial; cast-bootstrap5 0.0.77 does so, while other themes
+retain their own metadata behavior until updated.
 
 Blog Posts
 ----------
 
-Posts use the ``summary_large_image`` Twitter card type. The following meta
-tags are generated:
+Posts use the ``summary_large_image`` Twitter card type when a social cover is
+available and the image-optional ``summary`` type otherwise. The following
+meta tags are generated:
 
 .. list-table::
    :header-rows: 1
@@ -57,11 +64,11 @@ tags are generated:
    * - Meta Tag
      - Source
    * - ``twitter:card``
-     - ``"summary_large_image"``
+     - ``"summary_large_image"`` with a cover, otherwise ``"summary"``
    * - ``twitter:title``
-     - ``page.seo_title``
+     - ``page.seo_title``, falling back to ``page.title``
    * - ``twitter:description``
-     - ``page.search_description``
+     - ``page.search_description``, falling back to ``page.title``
    * - ``twitter:image``
      - ``social_cover_image_url`` (1200x630 rendition)
    * - ``twitter:image:alt``
@@ -69,9 +76,9 @@ tags are generated:
    * - ``og:url``
      - ``absolute_page_url``
    * - ``og:title``
-     - ``page.seo_title``
+     - ``page.seo_title``, falling back to ``page.title``
    * - ``og:description``
-     - ``page.search_description``
+     - ``page.search_description``, falling back to ``page.title``
    * - ``og:image``
      - ``social_cover_image_url``
    * - ``og:image:alt``
@@ -82,22 +89,37 @@ tags are generated:
      - ``social_cover_image_height`` (only if image exists)
    * - ``og:type``
      - ``"article"``
-   * - ``og:updated_time``
-     - ``updated_timestamp``
+   * - ``og:site_name``
+     - Parent blog title
+   * - ``article:published_time``
+     - First publication time, falling back to the post's visible date
+   * - ``article:modified_time``
+     - Last publication time, falling back to the post's visible date
+
+Post pages also emit a canonical link and ``BlogPosting`` JSON-LD containing
+the canonical URL, title, description, publication/modification dates, author,
+and social image when available. Image tags are omitted entirely when neither
+the post nor its parent blog has a cover; empty image URLs are not emitted.
 
 The ``seo_title`` and ``search_description`` fields are standard Wagtail
-page fields. Set them in the **Promote** tab of the Wagtail editor. If
-``search_description`` is empty, some themes fall back to ``page.title``.
+page fields. Set them in the **Promote** tab of the Wagtail editor or through
+the editor API. Empty fields fall back to ``page.title`` so older content never
+emits blank Open Graph or Twitter titles/descriptions, though a concise explicit
+description remains strongly recommended.
 
 Podcast Episodes
 ----------------
 
-Episodes with an attached ``podcast_audio`` file override the
-``social_meta`` block to use the `Twitter Player Card
+Episodes with an attached ``podcast_audio`` file reuse the shared title,
+description, image, timestamp, and canonical metadata. When a social cover is
+also available they select the `Twitter Player Card
 <https://developer.x.com/en/docs/twitter-for-websites/cards/overview/player-card>`_
-type. This enables inline audio playback directly in the Twitter/X timeline.
+type, enabling inline audio playback directly in the Twitter/X timeline. A
+coverless audio episode falls back to an image-optional ``summary`` card because
+Player Cards require an image. Both paths emit ``PodcastEpisode`` rather than
+``BlogPosting`` JSON-LD and use absolute player/audio URLs.
 
-In addition to the standard tags above, episodes add:
+In addition to the shared tags above, episodes add:
 
 .. list-table::
    :header-rows: 1
@@ -120,8 +142,10 @@ In addition to the standard tags above, episodes add:
    * - ``og:audio``
      - ``episode.podcast_audio.m4a.url``
 
-If the episode has no audio file, the template falls back to the standard
-post meta tags (``summary_large_image`` card).
+If the episode has no audio file, the template falls back to the standard post
+metadata, including the cover-dependent ``summary_large_image``/``summary``
+choice. If it has audio but no cover, Open Graph still receives ``og:audio``
+while Twitter receives the valid non-player ``summary`` card.
 
 .. image:: ../images/twitter_card.png
   :width: 400
@@ -166,7 +190,7 @@ To customize the social meta tags in your theme, override the
    {% block social_meta %}
      <!-- your custom meta tags -->
      <meta name="twitter:card" content="summary_large_image">
-     <meta name="twitter:title" content="{{ page.seo_title }}">
+     <meta name="twitter:title" content="{{ page.seo_title|default:page.title }}">
      <!-- ... -->
    {% endblock social_meta %}
 

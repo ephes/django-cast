@@ -7,7 +7,6 @@ from collections.abc import Callable
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
-from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q, QuerySet
 from django.urls import NoReverseMatch, reverse
@@ -21,6 +20,7 @@ from wagtail.images.permissions import permission_policy as image_permission_pol
 from wagtail.models import Collection
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
+from ... import appsettings
 from ...forms import AudioForm, get_video_form
 from ...media_probe import media_probe_budget
 from ...models import Audio, Video
@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
 video_permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
 
-EDITOR_MEDIA_PROBE_SECONDS = 10
-EDITOR_MEDIA_UPLOAD_LOCK_SECONDS = 7200
+EDITOR_MEDIA_PROBE_SECONDS = appsettings.CAST_SETTING_REGISTRY["CAST_EDITOR_MEDIA_PROBE_SECONDS"].default
+EDITOR_MEDIA_UPLOAD_LOCK_SECONDS = appsettings.CAST_SETTING_REGISTRY["CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS"].default
 AUDIO_FILE_FIELDS = ("m4a", "mp3", "oga", "opus")
 
 
@@ -271,7 +271,7 @@ def _flat_error(code: str, detail: str, *, http_status: int) -> Response:
 
 
 def _editor_media_probe_seconds() -> float:
-    return float(getattr(settings, "CAST_EDITOR_MEDIA_PROBE_SECONDS", EDITOR_MEDIA_PROBE_SECONDS))
+    return float(appsettings.CAST_EDITOR_MEDIA_PROBE_SECONDS)
 
 
 class EditorMediaListMixin:
@@ -431,7 +431,7 @@ class EditorVideoListCreateView(EditorMediaListMixin, EditorAPIView):
 def _with_upload_lock(user: Any, callback: Callable[[], Response]) -> Response:
     key = f"cast:editor-media-upload:{user.pk}"
     owner = uuid.uuid4().hex
-    timeout = int(getattr(settings, "CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS", EDITOR_MEDIA_UPLOAD_LOCK_SECONDS))
+    timeout = int(appsettings.CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS)
     if not cache.add(key, owner, timeout=timeout):
         return _flat_error("rate_limited", "Another audio or video upload is already in progress.", http_status=429)
     try:

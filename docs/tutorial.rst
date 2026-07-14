@@ -41,7 +41,7 @@ Creating a Blog
 5. **Publish**
 
    - Click "Publish" to make your blog live
-   - Your blog is now accessible at http://localhost:8000/tech-blog/
+   - Your blog is now accessible at ``http://localhost:8000/tech-blog/``
 
 Creating Your First Post
 ========================

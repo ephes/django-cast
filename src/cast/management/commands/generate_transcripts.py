@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from argparse import ArgumentParser
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 
-from ...models import Audio, Episode
+from ...models import Audio, Episode, Transcript
 from ...voxhelm import VoxhelmError, VoxhelmTranscriptService, transcript_complete
 
 
@@ -41,7 +42,7 @@ class Command(BaseCommand):
             help="Regenerate transcripts even when all transcript files already exist.",
         )
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         episode_ids = list(options["episode_id"])
         audio_ids = list(options["audio_id"])
         if not episode_ids and not audio_ids:
@@ -88,7 +89,7 @@ class Command(BaseCommand):
             raise CommandError(f"{errors} transcript generations failed.")
 
     @staticmethod
-    def _get_existing_transcript(*, audio: Audio):
+    def _get_existing_transcript(*, audio: Audio) -> Transcript | None:
         try:
             return audio.transcript
         except ObjectDoesNotExist:

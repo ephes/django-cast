@@ -13,15 +13,19 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Next
 
-- [ ] Editor API remote media import safety design
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Open Questions)
-  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
-    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
-    for agents but safe for production sites.
-  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
-    documented, with a recommended first implementation slice or an explicit deferral.
+- [ ] Extract post description rendering from the model
+  - Related to: Model-layer decoupling (phase 2) below.
+  - Scope: move the HTML description-rendering implementation into a presenter module, update django-cast's feed and
+    Wagtail API serializer callers to use it directly, and retain `Post.get_description()` as a compatibility wrapper.
+    Keep media derivation and the `Post.save()`/async decision out of this slice.
+  - Expected code: `src/cast/presenters.py`, `src/cast/models/pages.py`, and `src/cast/feeds.py`.
+  - Expected tests: focused presenter/model compatibility coverage in `tests/models/posts_test.py` and existing feed,
+    post-detail, and API rendering coverage where call ownership changes.
+  - Sibling check: `../homepage/homepage/core/webmention_integration.py` calls `Post.get_description()` directly;
+    preserve that call in this slice through the compatibility wrapper. The theme repositories do not call the method.
+  - Done when: description rendering is implemented outside the model, django-cast's direct callers use the presenter,
+    output and query behavior are unchanged, the public compatibility method remains covered, docs/release notes match,
+    and `just check` passes.
 
 ## Research / Shaping
 
@@ -32,50 +36,70 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     contracts, accessibility constraints, and a first implementation slice.
 
 - [ ] Revisit onboarding and authoring workflows
+  - Design record:
+    [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
   - Scope: review the existing `django-cast-quickstart`, `example/scripts/bootstrap_example_data.py`, and
-    `ensure_reference_site` workflows and decide what onboarding should mean for django-cast users: new project
-    setup, local development setup, editor onboarding, or assisted content authoring.
-  - Notes: include "try django-cast with your own podcast feed" as one possible getting-started path, built on
-    top of the podcast feed import workflow.
-  - Done when: the current workflows are documented in one place, gaps are listed, and follow-up items are split
-    into concrete implementation tasks.
+    `ensure_reference_site` workflows and decide what onboarding should mean for django-cast users: new developer
+    project setup, local development setup, editor onboarding, assisted content authoring, or an installed desktop
+    product.
+  - Notes: the paths are now deliberately separate. `django-cast-quickstart` remains developer-facing; the example
+    bootstrap/reference site remain development and theme-test tooling; a private sibling Cast Studio product is
+    researching an offline-capable, no-signup macOS Electron application for non-developers. Cast Studio's first proof
+    is blog + image authoring through Wagtail, not a custom editor. Include "try django-cast with your own podcast
+    feed" as a later Cast Studio/getting-started path built on the podcast feed import workflow. The quickstart
+    template-drift implementation slice landed on 2026-07-06: generated project files now come from packaged templates
+    and a smoke test verifies the generated project boots through Django's system check.
+  - Done when: the current workflows and audiences are documented in one place, gaps are listed, Cast Studio-specific
+    work is kept out of core unless it proves generic, and django-cast follow-ups are split into concrete implementation
+    tasks.
 
 - [ ] Local authoring and sync workflow
+  - Design record:
+    [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
   - Scope: research whether django-cast should support a local-first editing workflow where content can be pulled
     from a production site, edited locally, previewed, and synced back safely.
   - Notes: compare API-based sync, database snapshot/restore, Wagtail revisions, management commands, and a
-    desktop/app wrapper. Avoid direct production database mutation as the default path.
+    desktop/app wrapper. Avoid direct production database mutation as the default path. This is not a dependency for
+    Cast Studio's local Electron playground: that product packages the complete Django/Wagtail site and edits its local
+    database through Wagtail. A future **Put this site online** action still requires a separate portable import or
+    hosted-trial design and must never overwrite a production database with local SQLite.
   - Done when: tradeoffs are documented for data ownership, conflict resolution, media files, revision history,
     authentication, rollback, and production safety, with a recommended first slice.
 
-- [ ] Example desktop authoring application
+- [ ] Example external desktop authoring client
   - Depends on: programmatic content editing API and local authoring/sync workflow shaping.
-  - Scope: evaluate whether an example desktop app would make django-cast easier to use for local content authoring
-    and sync.
-  - Notes: candidates include Electron, Tauri, or a local web app/PWA wrapper. The app should be treated as an
-    example client for the content editing API, not as a replacement for Wagtail admin.
-  - Done when: there is a small prototype or design note showing how the app would authenticate, list content,
-    edit drafts, preview posts, sync changes, and handle conflicts.
-
-- [ ] Anonymous comment author edit hard limits
-  - PRD: [backlog/2026-06-21-anonymous-comment-self-editing.md](backlog/2026-06-21-anonymous-comment-self-editing.md)
-  - Status: implemented and tested (reviewed clean) — backend, browser frontend (templates + AJAX JS), and user
-    docs/release notes all landed.
-  - Scope: decide whether to add the deferred persistent edit-count cap, configurable hard time-window, both, or
-    neither for the already shipped session-bound author edit/delete feature.
-  - Done when: the decision is recorded and any accepted limit has settings, validation/checks, tests, docs, and
-    release notes.
+  - Related to:
+    [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
+  - Scope: evaluate whether an example desktop client for a remote django-cast site would improve offline, multi-site,
+    specialized media, or agent-assisted authoring workflows.
+  - Notes: this is distinct from Cast Studio. Cast Studio is initially a distribution/lifecycle shell around a complete
+    local Django/Wagtail site and uses Wagtail admin as its editor; it does not need the editor API or a second content
+    editor for its first proof. Candidates for this separate external client include Electron, Tauri, or a PWA.
+  - Done when: concrete demand exists and there is a small prototype or design note showing how the client would
+    authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
 
-- [ ] Editor API optional If-Match/ETag conflict tokens
+- [ ] Model-layer decoupling (architecture review H1/H2/M1/M8)
+  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
+  - Status: phase 1 landed on 2026-07-02 — `HtmxHttpRequest` lives in `cast/http_types.py` (models no longer import
+    from views), `get_description` is side-effect free, `Video.save` is transactional, and `Post.save` has
+    `sync_media`/`create_renditions` opt-outs.
+  - Scope: phase 2 — extract description rendering and media derivation into presenter/service modules (and decide
+    on async), and invert the remaining model→blocks/filters imports. (The mixed blog-index snapshot N+1 (M8) was
+    fixed on 2026-07-02 with a flat-query-count guard test.)
+  - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
+
+- [ ] Editor API remote media import safety design
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Conflict Detection)
-  - Scope: add `If-Match`/ETag as an equivalent transport for the existing `base_revision_id` conflict semantics on
-    `PATCH`, without changing the JSON-body contract that already works.
-  - Done when: the header transport maps to the same `revision_conflict` behavior, both transports are documented, and
-    tests cover header- and body-supplied base revisions.
+    (see Open Questions)
+  - Status: deferred for now.
+  - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
+    (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
+    for agents but safe for production sites.
+  - Done when: the safety constraints, request/response contract, and reuse of existing media validation/probing are
+    documented, with a recommended first implementation slice or an explicit deferral.
 
 - [ ] Editor API media replacement workflows
   - PRD:
@@ -100,16 +124,17 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
     (see Body Serialization)
+  - Status: deferred (reconfirmed 2026-07-07). The converter change is small, but the effort and risk are
+    concentrated in the oEmbed provider fetch at author time (network egress / SSRF surface, mocked-provider
+    tests) — a security decision about a block type the maintainer does not use. The one candidate consumer,
+    daybook, posts overview author blocks through this API but renders archive items (incl. watched videos) as
+    prose links by design, not embeds, so there is no consumer demand today. Revisit only if daybook (or another
+    editor-API client) decides to render items as embedded players/cards; if so, lean toward store-the-URL /
+    defer-resolution-to-render validation to avoid per-post provider fetches.
   - Scope: add `embed` as an author-facing body block in the editor converter, specifying URL validation and provider
     behavior. Stored `embed` blocks are currently preserved only as unsupported placeholders.
   - Done when: the `embed` value/validation contract is specified, the converter accepts and round-trips it, and tests
     cover valid/invalid embed URLs and provider behavior.
-
-- [ ] Optimize public transcript speaker sanitization copies
-  - Scope: avoid deep-copying large transcript structures on public player/transcript requests when all speaker
-    labels are already public or when no speaker metadata is present.
-  - Done when: Podlove and DOTe sanitizers preserve current output, keep stored files untouched, and skip copying
-    for no-op requests with focused tests.
 
 - [ ] Default theme design improvements
   - Scope: improve the built-in theme design while keeping theme contracts stable for existing sites.
@@ -126,63 +151,26 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
     existing feed compatibility.
 
-- [ ] Chapter marks in podcast feeds
-  - Related to: Paged feeds, Podcast feed import, and the custom audio player.
-  - Scope: expose existing `ChapterMark` data in the podcast RSS/Atom feeds using both Podlove Simple Chapters
-    (`<psc:chapters>` with inline `<psc:chapter start=… title=…/>` elements, `xmlns:psc="http://podlove.org/simple-chapters"`)
-    and Podcasting 2.0 chapters (`<podcast:chapters>` referencing an external `application/json+chapters` document in the
-    existing `xmlns:podcast` namespace).
-  - Notes: chapter data already exists per episode (`ChapterMark`, parsed from audio files and shown in the player) but is
-    not written to the feed yet; feed namespaces/elements live in `src/cast/feeds.py` (`ITunesElements`,
-    `PodcastIndexElements`). Open question for the PC2.0 form: where to serve the chapters JSON file from (new view/URL,
-    similar to the existing transcript URLs) versus only emitting inline Podlove chapters. Keep emission conditional so
-    episodes without chapter marks produce no extra elements.
-  - Done when: feeds emit Podlove Simple Chapters inline and a `podcast:chapters` reference (with the JSON document served
-    from a stable URL), namespaces are declared, behavior is documented, and tests cover episodes with and without chapter
-    marks plus existing-feed compatibility.
-
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
-  - Status: deferred for now.
+  - Related design:
+    [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
+  - Status: deferred for django-cast core and not part of Cast Studio's first blog proof. The `../django-chat`
+    site-specific importer is now the concrete reference for provenance, idempotency, limited/dry-run operation,
+    streaming media copy, sanitization, SSRF protection, and fixture-only tests. Cast Studio should prove a generic
+    RSS-first contract in its own repo before shared services or models are promoted into django-cast.
   - Related to: Revisit onboarding and authoring workflows.
   - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
   - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on stable
     feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.
-
-- [ ] Tags/categories and faceted navigation completion
-  - Scope: decide whether tags, categories, or both should remain public organization primitives and finish the beta
-    faceted navigation behavior.
-  - Done when: the intended model is documented, stale beta wording is removed, and filters/navigation have focused
-    tests.
 
 - [ ] Promote soft-required theme templates to strict requirements
   - Scope: make currently soft-required theme templates strictly required after the deprecation period.
   - Done when: theme discovery enforces the final required template set and the theme docs/release notes explain the
     migration path.
 
-- [ ] Persistent player generic rollout decision
-  - Notes: [backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)
-  - Related to: [backlog/2026-06-02-custom-audio-player.md](backlog/2026-06-02-custom-audio-player.md)
-  - Scope: decide whether the python-podcast staging proof should become a reusable django-cast/cast-bootstrap5 API,
-    remain python-podcast-specific, or be closed as a staging-only experiment.
-  - Done when: the generic theme contract/API work is split into concrete implementation items or explicitly deferred.
-
 - [ ] Podcast contributor follow-up options
   - Notes: [backlog/2026-05-12-podcast-episode-contributors.md](backlog/2026-05-12-podcast-episode-contributors.md)
   - Scope: consider default contributors, public contributor detail pages, assignment notes, broader role taxonomy,
     and API fields for external themes.
   - Done when: follow-up options are either split into concrete ready items or explicitly deferred.
-
-- [ ] Consider stricter mypy annotation checks
-  - Scope: evaluate enabling `disallow_incomplete_defs = true` and/or `disallow_untyped_defs = true` incrementally,
-    likely per module first instead of project-wide.
-  - Notes: a quick probe showed `disallow_incomplete_defs` currently reports 123 errors in 30 files, while
-    `disallow_untyped_defs` reports 219 errors in 48 files; `src/cast/feeds.py` alone reports 21 and 24 errors
-    respectively.
-  - Done when: the preferred strictness level and rollout strategy are documented, and at least one initial
-    module is either cleaned up or explicitly excluded/deferred.
-
-- [ ] Documentation polish pass
-  - Notes: [backlog/2025-07-11-documentation-polish.md](backlog/2025-07-11-documentation-polish.md)
-  - Scope: retire the stale documentation task list by checking remaining docs structure, links, and warnings.
-  - Done when: docs build cleanly and remaining docs TODOs are either implemented or intentionally removed.

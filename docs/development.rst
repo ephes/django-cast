@@ -458,7 +458,7 @@ The project uses type hints throughout the codebase. When adding new code, pleas
 
 Configuration for mypy is in ``pyproject.toml``. Key settings include:
 
-- ``python_version = "3.14"``
+- ``python_version = "3.11"``
 - ``ignore_missing_imports = true``
 - ``plugins = ["mypy_django_plugin.main"]``
 

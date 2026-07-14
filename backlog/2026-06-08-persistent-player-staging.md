@@ -2,14 +2,20 @@
 
 ## Status
 
-**Implemented as a python-podcast-local staging proof (2026-06-08).** The proof
-keeps one live `<cast-audio-player>` alive across enhanced navigation on the
-python-podcast `pp` theme. django-cast and cast-bootstrap5 are **unchanged** —
-the proof composes only the existing public custom-player HTML contract
-(`json_script` payload + `<cast-audio-player data-payload>` + `<cast-transcript>`
-/`<cast-chapters>`), so it needed no django-cast internals or new django-cast
-APIs. See "Implementation Log" at the bottom for what was built, what was proven,
-and what a generic rollout would require.
+**Implemented in python-podcast and retained there (final decision 2026-07-14).**
+The proof grew into python-podcast's production player across its `pp` and
+Bootstrap 5 themes. django-cast and cast-bootstrap5 remain **unchanged**: the
+site composes the existing public custom-player HTML contract (`json_script`
+payload + `<cast-audio-player data-payload>` + `<cast-transcript>` /
+`<cast-chapters>`), so it needs no django-cast internals or new core API.
+
+Generic rollout is explicitly deferred until a second site or theme wants the
+behavior. The manager owns site-specific enhanced-navigation exclusions, swap
+boundaries, history/focus/scroll policy, dock presentation, and overview-card
+behavior; moving that implementation into django-cast now would turn one site's
+policy into a premature framework contract. A future second adopter should use
+this implementation as evidence, identify the actually shared seam, and promote
+only that seam. See "Implementation Log" below for what was built and proven.
 
 The text below is the original PRD / implementation spec. It is deliberately
 scoped to a staging proof on `python-podcast.staging.django-cast.com`; it is not
@@ -232,11 +238,14 @@ For the staging proof:
   the original episode-body position while physically outside the swapped content
   is deferred until after the lifecycle is proven.
 
-## Open Questions
+## Generic rollout decision
 
-- If the python-podcast-only manager proves successful, what is the smallest
-  generic django-cast/cast-bootstrap5 API that would let other server-rendered
-  themes adopt it without copying site-specific navigation rules?
+- Keep the manager, theme overrides, navigation policy, and dock UI in
+  python-podcast.
+- Keep django-cast's existing custom-player payload/components contract as the
+  reusable boundary; it already proved sufficient without private imports.
+- Revisit extraction only after a second consumer exists and exposes concrete
+  duplication. No django-cast or cast-bootstrap5 implementation item remains.
 
 ## Sibling Repo Impact
 

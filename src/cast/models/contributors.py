@@ -2,6 +2,7 @@ from typing import Any
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.files.storage import Storage
 from django.db import models
 from django.http import HttpRequest
 from django.urls import reverse_lazy
@@ -96,7 +97,7 @@ class Contributor(ClusterableModel):
         return self.avatar.get_rendition(self.AVATAR_RENDITION_FILTER).url
 
 
-def get_voice_reference_storage():
+def get_voice_reference_storage() -> Storage:
     """Return the storage backend for private contributor voice-reference clips.
 
     Production deployments should configure a protected (non-public) storage

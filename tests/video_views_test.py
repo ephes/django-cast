@@ -147,7 +147,7 @@ class TestVideoIndex:
             video.save()
             video_models.append(video)
         index_url = reverse("castvideo:index")
-        with patch("cast.views.video.MENU_ITEM_PAGINATION", return_value=1):
+        with patch("cast.views.media.MENU_ITEM_PAGINATION", return_value=1):
             r = admin_client.get(index_url, {"p": "1"})
         videos = r.context["videos"]
 
@@ -155,7 +155,7 @@ class TestVideoIndex:
         assert len(videos) == 1
         assert videos[0] == video_models[-1]
 
-        with patch("cast.views.video.MENU_ITEM_PAGINATION", return_value=1):
+        with patch("cast.views.media.MENU_ITEM_PAGINATION", return_value=1):
             r = admin_client.get(index_url, {"p": "2"})
         videos = r.context["videos"]
 
@@ -376,7 +376,7 @@ class TestVideoChooser:
             video.save()
             video_models.append(video)
         chooser_url = reverse("castvideo:chooser")
-        with patch("cast.views.video.CHOOSER_PAGINATION", return_value=1):
+        with patch("cast.views.media.CHOOSER_PAGINATION", return_value=1):
             r = admin_client.get(chooser_url, {"p": "1"})
         videos = r.context["videos"]
 
@@ -384,7 +384,7 @@ class TestVideoChooser:
         assert len(videos) == 1
         assert videos[0] == video_models[-1]
 
-        with patch("cast.views.video.CHOOSER_PAGINATION", return_value=1):
+        with patch("cast.views.media.CHOOSER_PAGINATION", return_value=1):
             r = admin_client.get(chooser_url, {"p": "2"})
         videos = r.context["videos"]
 
@@ -403,6 +403,25 @@ class TestVideoChooserUpload:
         assert r.status_code == 200
         content = r.content.decode("utf-8")
         assert video.title in content
+
+    def test_get_video_chooser_upload_respects_chooser_pagination(self, admin_client, user):
+        for i in range(2):
+            Video.objects.create(user=user, title=f"video {i}")
+
+        with patch("cast.views.media.CHOOSER_PAGINATION", 1):
+            r = admin_client.get(reverse("castvideo:chooser_upload"))
+
+        assert r.status_code == 200
+        assert len(r.context["videos"]) == 1
+
+    def test_get_video_chooser_upload_uses_default_chooser_pagination(self, admin_client, user):
+        for i in range(11):
+            Video.objects.create(user=user, title=f"video {i}")
+
+        r = admin_client.get(reverse("castvideo:chooser_upload"))
+
+        assert r.status_code == 200
+        assert len(r.context["videos"]) == 10
 
     def test_post_upload_video_form_invalid(self, admin_client):
         upload_url = reverse("castvideo:chooser_upload")

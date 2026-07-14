@@ -27,29 +27,21 @@ Content Sections
 Available Blocks
 ----------------
 
-Heading Block
-~~~~~~~~~~~~~
+Headings in Rich Text
+~~~~~~~~~~~~~~~~~~~~~
 
-Simple section headings for organizing content.
+Django Cast no longer provides a standalone ``heading`` StreamField block.
+Author headings inside the ``paragraph`` rich-text block instead. Wagtail's
+rich text supports ``h2``, ``h3``, and ``h4`` headings, so authors can choose
+the appropriate level for the document outline.
 
-**Type**: ``heading``
-
-**Usage**:
-
-.. code-block:: python
-
-    ("heading", blocks.CharBlock(classname="full title"))
-
-**Features**:
-
-- Plain text headings
-- Full-width display
-- Useful for section breaks
+Existing stored ``heading`` blocks are converted automatically by the upgrade
+migration to ``paragraph`` blocks containing ``<h2>…</h2>`` rich text.
 
 Paragraph Block
 ~~~~~~~~~~~~~~~
 
-Rich text content with formatting options.
+Rich text content with formatting options, including headings.
 
 **Type**: ``paragraph``
 
@@ -61,6 +53,7 @@ Rich text content with formatting options.
 
 **Features**:
 
+- Headings (``h2``, ``h3``, ``h4``)
 - Bold, italic, links
 - Lists (ordered/unordered)
 - Standard Wagtail rich text features
@@ -267,7 +260,6 @@ Each block type has a default template that can be overridden:
     templates/
     └── cast/
         ├── blocks/
-        │   ├── heading.html
         │   ├── paragraph.html
         │   └── code.html
         ├── image/
@@ -440,7 +432,7 @@ Content Structure
 
 1. Use **overview** for summaries that appear in feeds
 2. Place main content in **detail** section
-3. Use headings to organize long content
+3. Use rich-text headings to organize long content
 4. Prefer native media blocks over embeds when possible
 
 Performance
@@ -472,8 +464,7 @@ When importing content:
         post.body.stream_block,
         [
             ("overview", {
-                "heading": "Welcome",
-                "paragraph": "<p>Introduction text</p>"
+                "paragraph": "<h2>Welcome</h2><p>Introduction text</p>"
             }),
             ("detail", {
                 "paragraph": "<p>Main content</p>",
@@ -499,12 +490,8 @@ StreamField content is available via the API as structured JSON:
                 "type": "overview",
                 "value": [
                     {
-                        "type": "heading",
-                        "value": "My Post Title"
-                    },
-                    {
                         "type": "paragraph",
-                        "value": "<p>Summary text...</p>"
+                        "value": "<h2>My Post Title</h2><p>Summary text...</p>"
                     }
                 ]
             }

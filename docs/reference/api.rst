@@ -33,6 +33,15 @@ Public endpoints (no authentication required) include:
 - Wagtail pages and images
 - Facet counts
 
+Legacy API
+----------
+
+The non-editor ``cast.api.views`` endpoints are a legacy API surface with frozen
+response contracts for existing clients. That includes ``POST /api/upload_video/``
+returning its historical bare-text ``"<pk>"`` body with ``201 Created``. New
+integrations should use the editor API below for structured errors, scoped
+authorization, and ``If-Match`` revision handling.
+
 Endpoints
 ---------
 
@@ -385,6 +394,8 @@ Request fields:
   ``Podcast`` the caller may add to.
 - ``title`` (required): page title.
 - ``slug`` (optional): URL slug; auto-derived from ``title`` if omitted.
+- ``seo_title`` (optional): Wagtail Promote-tab title used for search and social previews.
+- ``search_description`` (optional): Wagtail Promote-tab description used for search and social previews.
 - ``visible_date`` (optional): ISO 8601 datetime string.
 - ``cover_image`` (optional): ``{"id": <image id>, "alt_text": "…"}``.
 - ``tags`` (optional): list of tag name strings.
@@ -399,7 +410,7 @@ Body block types accepted in ``overview`` and ``detail``:
 .. code-block:: json
 
     [
-        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<h2>Notes</h2>"},
         {"type": "paragraph", "value": "<p>Rich-text HTML.</p>"},
         {"type": "code",      "value": {"language": "python",
                                         "source": "print('hi')"}},
@@ -409,17 +420,36 @@ Body block types accepted in ``overview`` and ``detail``:
         {"type": "video",     "value": {"id": 43}}
     ]
 
+Sites can expose additional section-specific custom block types through
+``CAST_POST_BODY_BLOCKS``. For a configured custom block, clients send the
+block's author-facing value directly, not Wagtail's internal StreamField
+storage wrappers. For example, a custom ``ListBlock(StructBlock(...))`` value is
+sent as a plain JSON list of objects; clients do not send ``{"type": "item",
+"id": "...", "value": ...}`` list-item wrappers. Custom block values are
+converted through the configured Wagtail block's ``to_python()``, ``clean()``,
+and ``get_prep_value()`` methods on write, and are returned in an editor-facing
+representation on read.
+
+Custom blocks are a trusted site-level extension point. The editor API enforces
+the built-in media blocks' per-user ``choose`` permissions, but it cannot infer
+permissions for arbitrary object references inside custom block values. A
+custom block that references images, pages, snippets, or media should enforce
+its own validation and permission semantics, or should not be exposed to editor
+API clients.
+
 Stored body blocks that this API version cannot safely edit are returned as
 ``{"type": "unsupported", "value": {"stored_type": "...", "position":
-"detail.0"}}`` placeholders. This includes custom or unsupported block types
-such as ``embed``, and supported block types whose stored value cannot be
-represented as an editable authoring block, such as deleted or inaccessible
-media references, empty or malformed galleries, or malformed code blocks. To
-preserve one of these blocks while replacing a section, send the placeholder
-back with the same ``stored_type`` and ``position``. The placeholder may move to
-a different index in the submitted section; ``position`` identifies the original
-stored block to preserve. Omitting a placeholder removes that stored block as
-part of the full-section replacement.
+"detail.0"}}`` placeholders. This includes unsupported block types such as
+``embed``, no-longer-configured custom blocks, configured custom blocks whose
+stored value can no longer be converted safely, and supported block types whose
+stored value cannot be represented as an editable authoring block, such as
+deleted or inaccessible media references, empty or malformed galleries, or
+malformed code blocks. To preserve one of these blocks while replacing a
+section, send the placeholder back with the same ``stored_type`` and
+``position``. The placeholder may move to a different index in the submitted
+section; ``position`` identifies the original stored block to preserve.
+Omitting a placeholder removes that stored block as part of the full-section
+replacement.
 
 Full create request example:
 
@@ -429,12 +459,14 @@ Full create request example:
       "parent": {"id": 123},
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "seo_title": "Weeknotes 2026-25",
+      "search_description": "A concise summary of this week's main theme.",
       "visible_date": "2026-06-19T18:00:00+02:00",
       "cover_image": {"id": 456, "alt_text": "Notebook and laptop on a desk"},
       "tags": ["weeknotes"],
       "categories": [],
       "overview": [
-        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<h2>Notes</h2>"},
         {"type": "paragraph", "value": "<p>Shipped the first draft.</p>"},
         {"type": "code",      "value": {"language": "python",
                                         "source": "print(\"hello\")"}},
@@ -455,13 +487,15 @@ Success response (``201 Created``):
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "seo_title": "Weeknotes 2026-25",
+      "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
       "visible_date": "2026-06-19T18:00:00+02:00",
       "tags": ["weeknotes"],
       "categories": [],
       "cover_image": {"id": 456, "alt_text": "Notebook and laptop on a desk"},
       "overview": [
-        {"type": "heading",   "value": "Notes"},
+        {"type": "paragraph", "value": "<h2>Notes</h2>"},
         {"type": "paragraph", "value": "<p>Shipped the first draft.</p>"},
         {"type": "code",      "value": {"language": "python",
                                         "source": "print(\"hello\")"}},
@@ -514,18 +548,21 @@ and have edit permission for the page.
 
 Creates a new Wagtail draft revision for an existing ``Post``.  The request
 must include the ``latest_revision_id`` returned by ``GET`` or the previous
-write response as ``base_revision_id``.  Omitted fields are left unchanged; a
-provided ``overview`` or ``detail`` replaces that whole section, including when
-the supplied value is an empty list. Omitted sections and unsupported/custom
-top-level body sections are preserved. At least one mutable field besides
-``base_revision_id`` is required; ``publish: false`` does not count as a
-mutable field and ``publish: true`` is rejected as unsupported.
+write response as ``base_revision_id`` or as an ``If-Match`` request header.
+Omitted fields are left unchanged; a provided ``overview`` or ``detail``
+replaces that whole section, including when the supplied value is an empty list.
+Omitted sections and unsupported/custom top-level body sections are preserved.
+At least one mutable field besides the revision token is required; ``publish:
+false`` does not count as a mutable field and ``publish: true`` is rejected as
+unsupported.
 
 Update fields:
 
-- ``base_revision_id`` (required): optimistic concurrency token.
+- ``base_revision_id`` (optional when ``If-Match`` is supplied): optimistic concurrency token.
 - ``title`` (optional): page title.
 - ``slug`` (optional): URL slug; must remain unique under the same parent.
+- ``seo_title`` (optional): Wagtail Promote-tab title; send ``""`` to clear it.
+- ``search_description`` (optional): Wagtail Promote-tab description; send ``""`` to clear it.
 - ``visible_date`` (optional): ISO 8601 datetime string.
 - ``cover_image`` (optional): ``{"id": <image id>, "alt_text": "…"}``, or
   ``null`` to clear the draft cover image.
@@ -542,10 +579,31 @@ Example update request:
     {
       "base_revision_id": 6543,
       "title": "Updated draft title",
+      "seo_title": "Updated search title",
+      "search_description": "A concise updated summary.",
       "overview": [
         {"type": "paragraph", "value": "<p>Updated draft text.</p>"}
       ]
     }
+
+Instead of putting the token in the JSON body, clients may send the same
+revision id as a strict ``If-Match`` header:
+
+.. code-block:: text
+
+    If-Match: "6543"
+
+Only a single strong quoted integer token is accepted; optional surrounding
+whitespace is ignored. Bare integers (``If-Match: 6543``), weak ETags
+(``W/"6543"``), wildcard ``*``, blank values, and comma-separated ETag lists are
+rejected with the normal ``validation_error`` envelope. If both
+``base_revision_id`` and ``If-Match`` are supplied, they must carry the same
+revision id. This endpoint uses
+``If-Match`` only as an alternate transport for django-cast's revision token:
+malformed or contradictory tokens return ``400 validation_error`` and stale
+valid tokens return ``409 revision_conflict``. It does not emit response
+``ETag`` headers in this API version, and it intentionally does not use
+``412 Precondition Failed``.
 
 A stale base revision returns ``409 Conflict``:
 
@@ -580,6 +638,8 @@ The success response is the normal editor post shape plus publish metadata:
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "seo_title": "Weeknotes 2026-25",
+      "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
       "visible_date": "2026-06-19T18:00:00+02:00",
       "tags": ["weeknotes"],
@@ -665,7 +725,7 @@ Example create request:
       "slug": "episode-12",
       "tags": ["interview"],
       "overview": [
-        {"type": "heading", "value": "Show notes"}
+        {"type": "paragraph", "value": "<h2>Show notes</h2>"}
       ],
       "podcast_audio": {"id": 321},
       "episode_number": 12,
@@ -678,9 +738,11 @@ Example create request:
 The response is the standard editor draft shape (``id``, ``type`` of
 ``cast.Episode``, the shared post fields, ``preview_url``/``edit_url``, and an
 ``api_url`` of ``/api/editor/episodes/{id}/``) plus the episode-specific fields
-above. ``PATCH`` requires ``base_revision_id``, preserves omitted fields and
-sections, and keeps the empty-update guard, exactly like posts; ``parent`` is
-immutable.
+above. ``PATCH`` requires the same revision token, preserves omitted fields and
+sections, and keeps the empty-update guard, exactly like posts. As with posts,
+the token may be sent as ``base_revision_id`` in the JSON body or as
+``If-Match: "<latest_revision_id>"``, with the same strict syntax and
+validation behavior. ``parent`` is immutable.
 
 The episode publish action mirrors the post publish action::
 

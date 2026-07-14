@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -43,7 +45,7 @@ class TranscriptGeneration(models.Model):
         source_url: str,
         task_result_id: str,
         site: Site | None,
-        requested_by,
+        requested_by: Any | None,
     ) -> None:
         self.task_ref = task_ref
         self.voxhelm_job_id = voxhelm_job_id

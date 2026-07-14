@@ -28,6 +28,7 @@ from wagtail.images.models import Image
 from wagtail.images.models import Rendition
 from wagtail.models import Page, Site
 
+from cast import appsettings
 from cast.devdata import (
     add_audio_to_body,
     add_gallery_to_body,
@@ -211,7 +212,7 @@ def styleguide(request: HtmxHttpRequest) -> HttpResponse:
 
 
 def _styleguide_is_enabled() -> bool:
-    from cast.dev_settings import dev_tools_enabled
+    from cast.dev_tools import dev_tools_enabled
 
     return dev_tools_enabled()
 
@@ -371,7 +372,7 @@ def _ensure_site() -> Site:
     return Site.objects.create(hostname="localhost", port=80, root_page=root_page, is_default_site=True)
 
 
-def _ensure_blog(site: Site, user) -> Blog:
+def _ensure_blog(site: Site, user: User) -> Blog:
     default_theme = _styleguide_default_theme()
     blog = Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).first()
     if blog is None:
@@ -402,7 +403,7 @@ def _styleguide_post_date(now: datetime, months_back: int) -> datetime:
 
 def _ensure_posts(
     blog: Blog,
-    user,
+    user: User,
     media: StyleguideMedia,
     galleries: list[Gallery],
     *,
@@ -478,7 +479,7 @@ def _ensure_styleguide_tags_and_categories(posts: list[Post]) -> None:
         post.save()
 
 
-def _ensure_podcast(site: Site, user) -> Podcast:
+def _ensure_podcast(site: Site, user: User) -> Podcast:
     default_theme = _styleguide_default_theme()
     podcast = Podcast.objects.filter(slug=STYLEGUIDE_PODCAST_SLUG).first()
     if podcast is None:
@@ -501,7 +502,7 @@ def _ensure_podcast(site: Site, user) -> Podcast:
 
 def _ensure_episode(
     podcast: Podcast,
-    user,
+    user: User,
     media: StyleguideMedia,
     galleries: list[Gallery],
     transcript_seed: dict[str, Any] | None,
@@ -601,13 +602,13 @@ def _styleguide_default_theme() -> str:
     return _find_fallback_theme(available)
 
 
-def _create_styleguide_galleries(images: list[Image] | None, user) -> list[Gallery]:
+def _create_styleguide_galleries(images: list[Image] | None, user: User) -> list[Gallery]:
     galleries: list[Gallery] = []
     if images:
         image_ids = [image.pk for image in images if image and image.pk]
         images_by_id = {image.pk: image for image in Image.objects.filter(pk__in=image_ids)}
         ordered_images = [images_by_id[image_id] for image_id in image_ids if image_id in images_by_id]
-        chunk_size = int(getattr(settings, "CAST_STYLEGUIDE_GALLERY_CHUNK_SIZE", 6))
+        chunk_size = int(appsettings.CAST_STYLEGUIDE_GALLERY_CHUNK_SIZE)
         for start in range(0, len(ordered_images), chunk_size):
             chunk = ordered_images[start : start + chunk_size]
             if not chunk:  # pragma: no cover
@@ -639,7 +640,7 @@ def _create_styleguide_media(
     audio: Audio | None = None,
     gallery: Gallery | None = None,
     gallery_images: list[Image] | None = None,
-    user=None,
+    user: Any = None,
 ) -> StyleguideMedia:
     if gallery is None:
         if gallery_images is None or len(gallery_images) == 0:
@@ -743,13 +744,13 @@ def _styleguide_transcript_data() -> dict[str, Any]:
 
 
 def _styleguide_transcript_excerpt(data: dict[str, Any]) -> dict[str, Any]:
-    max_segments = int(getattr(settings, "CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS", 2))
+    max_segments = int(appsettings.CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS)
     transcripts = list(data.get("transcripts", []))
     return {**data, "transcripts": transcripts[:max_segments]}
 
 
 def _styleguide_body_gallery_limit() -> int:
-    return int(getattr(settings, "CAST_STYLEGUIDE_BODY_GALLERY_LIMIT", 1))
+    return int(appsettings.CAST_STYLEGUIDE_BODY_GALLERY_LIMIT)
 
 
 def _ensure_podlove_transcript(audio: Audio, data: dict[str, Any]) -> Transcript:
@@ -1034,11 +1035,11 @@ class _StyleguideTranscriptParser(HTMLParser):
 
 
 def _styleguide_remote_media_enabled() -> bool:
-    return bool(getattr(settings, "CAST_STYLEGUIDE_REMOTE_MEDIA", False))
+    return bool(appsettings.CAST_STYLEGUIDE_REMOTE_MEDIA)
 
 
 def _styleguide_setting_list(name: str) -> list[str]:
-    value = getattr(settings, name, None)
+    value = getattr(appsettings, name)
     if value is None:
         return []
     if isinstance(value, (list, tuple)):
@@ -1053,34 +1054,34 @@ def _styleguide_image_source_urls() -> list[str]:
 
 
 def _styleguide_podcast_source_url() -> str | None:
-    url = getattr(settings, "CAST_STYLEGUIDE_PODCAST_SOURCE_URL", None)
+    url = appsettings.CAST_STYLEGUIDE_PODCAST_SOURCE_URL
     return str(url) if url else None
 
 
 def _styleguide_transcript_source_url() -> str | None:
-    url = getattr(settings, "CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL", None)
+    url = appsettings.CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL
     return str(url) if url else None
 
 
 def _styleguide_video_source_url() -> str | None:
-    url = getattr(settings, "CAST_STYLEGUIDE_VIDEO_SOURCE_URL", None)
+    url = appsettings.CAST_STYLEGUIDE_VIDEO_SOURCE_URL
     return str(url) if url else None
 
 
 def _styleguide_remote_timeout() -> float:
-    return float(getattr(settings, "CAST_STYLEGUIDE_REMOTE_TIMEOUT", 8))
+    return float(appsettings.CAST_STYLEGUIDE_REMOTE_TIMEOUT)
 
 
 def _styleguide_remote_image_limit() -> int:
-    return int(getattr(settings, "CAST_STYLEGUIDE_IMAGE_LIMIT", 6))
+    return int(appsettings.CAST_STYLEGUIDE_IMAGE_LIMIT)
 
 
 def _styleguide_generate_renditions() -> bool:
-    return bool(getattr(settings, "CAST_STYLEGUIDE_GENERATE_RENDITIONS", False))
+    return bool(appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS)
 
 
 def _styleguide_transcript_max_segments() -> int:
-    return int(getattr(settings, "CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS", 12))
+    return int(appsettings.CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS)
 
 
 def _styleguide_request(url: str) -> Request:
@@ -1269,7 +1270,7 @@ def _extract_transcript_data(html: str) -> dict[str, Any] | None:
     return {"version": 1, "transcripts": segments}
 
 
-def _get_or_create_remote_image(url: str, user) -> Image | None:
+def _get_or_create_remote_image(url: str, user: User) -> Image | None:
     title = f"Styleguide source: {url}"
     existing = Image.objects.filter(title=title).first()
     if existing is not None:
@@ -1293,7 +1294,7 @@ def _get_or_create_remote_image(url: str, user) -> Image | None:
     return image
 
 
-def _backfill_legacy_styleguide_audio_titles(user) -> None:
+def _backfill_legacy_styleguide_audio_titles(user: User) -> None:
     """Migrate legacy 'Styleguide source: <url>' titles to clean display titles."""
     prefix = "Styleguide source: "
     for audio in Audio.objects.filter(user=user, title__startswith=prefix):
@@ -1308,7 +1309,7 @@ def _backfill_legacy_styleguide_audio_titles(user) -> None:
         audio.save()
 
 
-def _get_or_create_remote_audio(url: str, user) -> Audio | None:
+def _get_or_create_remote_audio(url: str, user: User) -> Audio | None:
     _backfill_legacy_styleguide_audio_titles(user)
     filename = urlparse(url).path.rsplit("/", 1)[-1] or "styleguide-audio.m4a"
     stem = filename.rsplit(".", 1)[0] if "." in filename else filename
@@ -1363,7 +1364,7 @@ def _styleguide_remote_html_pages(urls: list[str]) -> list[tuple[str, str]]:
     return pages
 
 
-def _fetch_styleguide_remote_gallery_media(user) -> tuple[list[Image] | None, list[str] | None]:
+def _fetch_styleguide_remote_gallery_media(user: User) -> tuple[list[Image] | None, list[str] | None]:
     gallery_images: list[Image] = []
     image_urls: list[str] = []
     gallery_blocks: list[str] = []
@@ -1392,7 +1393,7 @@ def _fetch_styleguide_remote_video_media() -> tuple[str | None, str | None]:
 
 
 def _fetch_styleguide_remote_podcast_media(
-    user,
+    user: User,
     transcript_url: str | None,
 ) -> tuple[Audio | None, dict[str, Any] | None, Image | None, str | None]:
     podcast_url = _styleguide_podcast_source_url()
@@ -1430,7 +1431,7 @@ def _fetch_styleguide_remote_podcast_media(
 
 
 def _fetch_styleguide_remote_transcript_media(
-    user,
+    user: User,
     *,
     transcript_url: str | None,
     transcript_data: dict[str, Any] | None,
@@ -1451,7 +1452,7 @@ def _fetch_styleguide_remote_transcript_media(
     return transcript_data, cover_image
 
 
-def _fetch_styleguide_remote_media(user) -> StyleguideRemoteMedia:
+def _fetch_styleguide_remote_media(user: User) -> StyleguideRemoteMedia:
     if not _styleguide_remote_media_enabled():
         return _empty_styleguide_remote_media()
 

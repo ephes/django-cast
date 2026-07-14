@@ -8,9 +8,9 @@ session auth in the first slice, and authorizes with Wagtail page permissions. T
 list (heading, paragraph, code, image, gallery).
 
 Slice 2 implemented (2026-06-23): **updating drafts** via `PATCH /api/editor/posts/{id}/` with revision-based conflict
-detection (`409`). `PATCH` requires `base_revision_id`, saves a new Wagtail draft revision, leaves omitted fields
+detection (`409`). `PATCH` requires a revision token, saves a new Wagtail draft revision, leaves omitted fields
 untouched, replaces the whole `overview` section when supplied, and supports explicit `cover_image: null` to clear the
-draft cover image.
+draft cover image. The token may be sent as body `base_revision_id` or as a strict `If-Match` request header.
 
 Slice 3 implemented (2026-06-25): **editor media uploads and full body-section editing**. The slice added authenticated
 editor endpoints for listing/uploading Wagtail images, django-cast audio, and django-cast video; upload collection
@@ -31,18 +31,18 @@ and public URL metadata, and keeps `publish: true` rejected on create/update.
 Remaining follow-ups beyond slice 4 (triaged 2026-06-29 into concrete `BACKLOG.md` items instead of one broad bucket):
 
 - **Episode draft endpoints — implemented (2026-06-29).** Draft-only `POST/GET/PATCH /api/editor/episodes/` for
-  `Episode` pages under a `Podcast` parent. See "Episode Endpoints (Next Implementation Slice)" below for the detailed
+  `Episode` pages under a `Podcast` parent. See "Episode Endpoints (Implemented Slice)" below for the detailed
   contract and shipped status.
-- **Episode publish action — next, draft endpoints now shipped.** `POST /api/editor/episodes/{id}/publish/`
-  mirroring the post publish action plus the episode-specific `podcast_audio`-required gate.
+- **Episode publish action — implemented (2026-06-30).** `POST /api/editor/episodes/{id}/publish/`
+  mirrors the post publish action plus the episode-specific `podcast_audio`-required gate.
 - **Rendered-preview endpoint — shaping.** Server-rendered draft preview for token-only/non-admin clients that cannot
   use the admin-session `preview_url`.
 - **Scoped-token / IndieAuth scope mapping — shaping.** The generic action→required-scope mapping; see Authentication
   And Permissions and Open Questions.
 - **Remote media import — shaping.** Importing media from remote URLs behind server-side safety constraints; see Open
   Questions.
-- **Optional `If-Match`/ETag conflict tokens — later.** An equivalent header transport for the existing
-  `base_revision_id` conflict semantics; see Conflict Detection.
+- **Optional `If-Match` conflict tokens — implemented (2026-07-01).** Equivalent request-header transport for the
+  existing `base_revision_id` conflict semantics; see Conflict Detection.
 - **Media replacement workflows — later.** Replacing an existing media object's file versus only creating new objects;
   see Open Questions.
 - **Optional Markdown convenience input — later.** An optional `*_markdown` input converted server-side into the
@@ -262,8 +262,8 @@ cast API rather than in a consumer site:
     return `validation_error` on `collection` with code `invalid`. Whole-request upload authorization failures use `permission_denied`; submitted
     collection values that are missing or unusable use the distinct field-level code `collection_permission_denied`.
 
-Episode endpoints (the selected next slice and its ready publish follow-up) mirror the same shape; see
-"Episode Endpoints (Next Implementation Slice)" below for the detailed contract:
+Episode endpoints (now implemented, along with their publish follow-up) mirror the same shape; see
+"Episode Endpoints (Implemented Slice)" below for the detailed contract:
 
 - `POST /api/editor/episodes/`
 - `GET /api/editor/episodes/{id}/`
@@ -294,8 +294,8 @@ The existing read API is not a substitute for the editor `GET` endpoints, becaus
   created.
 - It exposes raw StreamField plus rendered `html_overview`/`html_detail`, not the normalized authoring source the write
   API round-trips. Safe patching of an existing draft needs that authoring representation, not rendered HTML.
-- It does not expose revision metadata such as `latest_revision_id`, which the implemented `base_revision_id` conflict
-  detection depends on. Optional `If-Match`/ETag support remains deferred.
+- It does not expose revision metadata such as `latest_revision_id`, which the implemented `base_revision_id` /
+  `If-Match` conflict detection depends on.
 - No existing endpoint lists `Blog`/`Podcast` pages filtered by the caller's add-child permission;
   `GET /api/editor/parents/` fills that gap.
 
@@ -457,11 +457,11 @@ media/detail slice that adds the editor media endpoints described below:
   empty section. Omit a section on PATCH to preserve its current internal representation.
 - `PATCH /api/editor/posts/{id}/` also applies the explicit `publish` guard: omitted or `false` is accepted, malformed
   values are normal field validation errors, and `true` returns the `validation_error` envelope with code `unsupported` at
-  field path `publish` without publishing. A syntactically valid PATCH that only supplies `base_revision_id` and no
-  editable field remains a 400 `validation_error` on `non_field_errors` with code `required`, matching the current
-  slice-2 behavior. `publish: false` is not an editable field for this guard, so `{base_revision_id, publish: false}` is
-  still an empty update and returns `non_field_errors`/`required`; `publish: true` takes the explicit
-  `publish`/`unsupported` validation path.
+  field path `publish` without publishing. A syntactically valid PATCH that only supplies the body `base_revision_id` or
+  header `If-Match` token and no editable field remains a 400 `validation_error` on `non_field_errors` with code
+  `required`, matching the current slice-2 behavior. `publish: false` is not an editable field for this guard, so
+  `{base_revision_id, publish: false}` is still an empty update and returns `non_field_errors`/`required`;
+  `publish: true` takes the explicit `publish`/`unsupported` validation path.
 - Section updates must preserve the other section and any unsupported/custom top-level sections in `Post.body`.
   Unsupported/custom top-level sections may come from existing data, future settings, or downstream customizations even
   though django-cast's built-in sections are `overview` and `detail`; the editor API must not drop sections it does not
@@ -821,10 +821,12 @@ the client may need to display.
 
 ## Conflict Detection
 
-Update requests must include `base_revision_id` in the JSON body. Optional `If-Match`/ETag support can be added later as
-an equivalent token transport, but it is not part of the implemented contract yet. If the current latest revision differs
-from the client's base revision, the API returns `409 Conflict` with enough metadata for the client to reload and ask for
-human review.
+Update requests must include a revision token: either `base_revision_id` in the JSON body or a strict `If-Match` request
+header containing the same revision id as a single strong quoted integer, such as `"6543"`. If both transports are
+supplied, they must match. Malformed or contradictory header values use the editor `validation_error` envelope; stale
+valid tokens return `409 Conflict` with enough metadata for the client to reload and ask for human review. The editor API
+does not emit response `ETag` headers or use `412 Precondition Failed` in this version; clients discover the token from
+`latest_revision_id` in the JSON response.
 
 Example update:
 
@@ -949,11 +951,11 @@ The canonical client loop is **GET the draft → edit the returned `overview` bl
 
 1. Add `PATCH /api/editor/posts/{id}/` on the existing detail view, authorized by Wagtail `can_edit` on the *specific*
    page (same authorization model as the read endpoint), and kept authentication-mechanism agnostic.
-2. Require a base-revision token. Accept `base_revision_id` in the JSON body (an `If-Match`/ETag header carrying the
-   same id may be added later as an equivalent). Before applying any change, compare it to the page's current
-   `latest_revision_id`; if they differ, return `409 Conflict` with code `revision_conflict` and the metadata in
-   "Conflict Detection" (`current_revision_id`, `submitted_base_revision_id`, the site's admin edit URL). A request
-   without a base-revision token is a `validation_error`, not a silent overwrite.
+2. Require a base-revision token. Accept `base_revision_id` in the JSON body or an `If-Match` header carrying the same id
+   as a strict quoted integer. Before applying any change, compare it to the page's current `latest_revision_id`; if they
+   differ, return `409 Conflict` with code `revision_conflict` and the metadata in "Conflict Detection"
+   (`current_revision_id`, `submitted_base_revision_id`, the site's admin edit URL). A request without a base-revision
+   token is a `validation_error`, not a silent overwrite.
 3. Partial-update semantics for the implemented slice-2 contract: accept the same fields as create (`title`, `slug`,
    `visible_date`, `tags`, `categories`, `cover_image`, `overview`), all optional; only provided fields change, omitted
    fields are left untouched. `parent` is intentionally immutable on `PATCH`; moving a post between parents is out of
@@ -1017,7 +1019,7 @@ Markdown input, and rendered-preview endpoints out of scope; publishing landed l
    `GET` returns both sections; `PATCH` can replace either section independently while preserving omitted sections and
    any unsupported/custom top-level sections.
 7. Keep the first two slices' draft/revision semantics unchanged: create and update save Wagtail draft revisions,
-   return the new `latest_revision_id`, never publish, and continue to require `base_revision_id` for `PATCH`.
+   return the new `latest_revision_id`, never publish, and continue to require a revision token for `PATCH`.
 8. Update `docs/reference/api.rst`, the current release notes file, and this planning note when the slice is
    implemented. The API reference and release notes must explicitly call out the neutral media-reference `not_found`
    message/error-collapse behavior if this slice changes existing image or audio reference error text. At the time of
@@ -1030,15 +1032,15 @@ Markdown input, and rendered-preview endpoints out of scope; publishing landed l
    tightening for already-shipped image/audio body references, not only neutral message changes. The API reference must
    also explicitly document `rate_limited`/HTTP 429, `cleanup_failed`/HTTP 500, and `probe_timeout`/HTTP 422.
 
-## Episode Endpoints (Next Implementation Slice)
+## Episode Endpoints (Implemented Slice)
 
 Status: draft create/read/update implemented (2026-06-29): `POST /api/editor/episodes/`,
 `GET /api/editor/episodes/{id}/`, and `PATCH /api/editor/episodes/{id}/` for `Episode` pages under a `Podcast` parent.
-Episodes reuse the post body converter, media-reference `choose` checks, `base_revision_id` conflict detection, and the
+Episodes reuse the post body converter, media-reference `choose` checks, revision-token conflict detection, and the
 draft-only `publish` guard, and add the episode-specific fields (`podcast_audio`, `episode_number`, `episode_type`,
 `season`, `keywords`, `explicit`, `block`). A non-podcast parent and a foreign-podcast `season` return structured
 errors, and `GET /api/editor/parents/` now points podcasts at the episode create endpoint. The episode **publish**
-action is still pending; it is tracked in `BACKLOG.md` as "Editor API episode publish action" (`Next`).
+action later landed as `POST /api/editor/episodes/{id}/publish/` with the episode-specific `podcast_audio` gate.
 
 This slice brings posts' create/read/update/publish surface to podcast episodes. It is the closest parity follow-up
 after the post editor API and reuses almost all of it; the new work is the episode-specific fields, the `Podcast`
@@ -1048,7 +1050,7 @@ parent requirement, and the publish-time `podcast_audio` rule.
 
 `Episode` is a concrete subclass of `Post` (see `src/cast/models/pages.py`). It shares `Post.body`
 (`overview`/`detail`), tags, categories, cover image, `visible_date`, slug, and Wagtail draft/revision semantics, so the
-existing body converter, media-reference `choose` checks, `base_revision_id` conflict detection, draft-only `publish`
+existing body converter, media-reference `choose` checks, revision-token conflict detection, draft-only `publish`
 guard, and structured error envelopes carry over unchanged. `Episode.parent_page_types = ["cast.Podcast"]`, and
 `GET /api/editor/parents/` already lists podcasts the caller may add to. The implementer should preflight whether to add
 dedicated `/api/editor/episodes/` views (mirroring the post views) or to generalize the existing post views; dedicated
@@ -1088,7 +1090,7 @@ Beyond the inherited post fields, an episode adds (all defined on `Episode` in `
   true` with the existing `validation_error`/`unsupported` guard.
 - `GET /api/editor/episodes/{id}/`: return editable metadata, normalized `overview`/`detail`, revision metadata, admin
   URLs, and the episode-specific fields.
-- `PATCH /api/editor/episodes/{id}/`: require `base_revision_id`, preserve omitted fields/sections, support clearing
+- `PATCH /api/editor/episodes/{id}/`: require a revision token, preserve omitted fields/sections, support clearing
   `podcast_audio`/`season` with explicit `null`, and keep the empty-update guard. `parent` stays immutable, like posts.
 
 ### Publish action (ready follow-up)
@@ -1155,8 +1157,8 @@ Beyond the inherited post fields, an episode adds (all defined on `Episode` in `
 - `POST` or `PATCH` with `publish: true` returns `validation_error` on `publish` with code `unsupported` and does not
   publish the page.
 - Updating with a stale `base_revision_id` returns `409 Conflict` and does not change the page.
-- A `PATCH` with a matching `base_revision_id` saves a new draft revision, returns the new `latest_revision_id`, and
-  leaves the page unpublished (`live` stays `false`).
+- A `PATCH` with a matching body `base_revision_id` or `If-Match` revision token saves a new draft revision, returns the
+  new `latest_revision_id`, and leaves the page unpublished (`live` stays `false`).
 - A `PATCH` updates only the fields it sends; omitted fields (title, tags, cover image, overview, detail) are left
   unchanged.
 - A provided `overview` on update round-trips through the read endpoint after Wagtail's normal rich-text
@@ -1220,7 +1222,7 @@ Resolved (2026-06-22):
 - **Markdown** — demoted to an optional later convenience behind an optional dependency, not part of the first slice.
 
 Still open (each remaining content-editing follow-up is now tracked as a concrete `BACKLOG.md` item; see the triaged
-list near the top of this PRD and the "Episode Endpoints (Next Implementation Slice)" section):
+list near the top of this PRD and the "Episode Endpoints (Implemented Slice)" section):
 
 - ~~What action→required-scope mapping should django-cast expose for scoped-token backends (a single content scope
   versus separate create/update/publish scopes)?~~ **Resolved (2026-06-30):** two logical scopes `write`/`publish`
@@ -1245,8 +1247,8 @@ list near the top of this PRD and the "Episode Endpoints (Next Implementation Sl
 
 Resolved by update slice (2026-06-23):
 
-- The first update slice accepts `base_revision_id` in the JSON body; `If-Match`/ETag support remains a later
-  compatibility option.
+- The first update slice accepted `base_revision_id` in the JSON body; `If-Match` support later landed as an equivalent
+  request-header transport.
 - `PATCH` clears collection fields by sending an explicit empty list and clears the cover image by sending
   `cover_image: null`; omitted fields are left unchanged.
 - Update remained `overview`-only in that slice; this is superseded by the 2026-06-25 media/detail planning below.

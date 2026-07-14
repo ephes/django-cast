@@ -18,8 +18,8 @@ def test_video_chooser_get_value_data_value_not_none(video):
 
 def test_video_chooser_render_js_init():
     avc = AdminVideoChooser()
-    js = avc.render_js_init(1, "name", None)
-    assert js == "createVideoChooser(1);"
+    js = avc.render_js_init("id_video", "name", None)
+    assert js == 'createVideoChooser("id_video");'
 
 
 @pytest.mark.django_db
@@ -37,5 +37,5 @@ def test_audio_chooser_get_value_data_value_not_none(audio):
 
 def test_audio_chooser_render_js_init():
     avc = AdminAudioChooser()
-    js = avc.render_js_init(1, "name", None)
-    assert js == "createAudioChooser(1);"
+    js = avc.render_js_init("id_audio", "name", None)
+    assert js == 'createAudioChooser("id_audio");'

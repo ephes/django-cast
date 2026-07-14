@@ -14,11 +14,11 @@ Theme resolution order:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
-from collections.abc import Mapping
 
-from django.conf import settings
+from cast import appsettings
 
 DEFAULT_PODLOVE_THEME: dict[str, Any] = {
     "tokens": {
@@ -208,7 +208,7 @@ def _resolve_theme_config(*, template_base_dir: str | None, color_scheme: str) -
 
 
 def _get_theme_overrides() -> Mapping[str, Any]:
-    return getattr(settings, "CAST_PODLOVE_PLAYER_THEMES", {})
+    return appsettings.CAST_PODLOVE_PLAYER_THEMES
 
 
 def _select_override(

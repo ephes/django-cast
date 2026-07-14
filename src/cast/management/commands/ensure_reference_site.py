@@ -10,13 +10,14 @@ Works regardless of the ``CAST_ENABLE_DEV_TOOLS`` setting since it
 creates *data*, not views.
 """
 
-from typing import cast
+from argparse import ArgumentParser
+from typing import Any, cast
 
 from django.core.management.base import BaseCommand, CommandError
 from django.test import RequestFactory
 
+from cast.http_types import HtmxHttpRequest
 from cast.models import Blog, Episode, Podcast, Post, get_template_base_dir_choices
-from cast.views.htmx_helpers import HtmxHttpRequest
 from cast.views.styleguide import (
     STYLEGUIDE_BLOG_SLUG,
     STYLEGUIDE_EPISODE_SLUG,
@@ -31,7 +32,7 @@ from cast.views.styleguide import (
 class Command(BaseCommand):
     help = "Create or update the reference site with demo blog and podcast content."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "--theme",
             default=None,
@@ -53,7 +54,7 @@ class Command(BaseCommand):
             help="Generate missing image renditions while creating content.",
         )
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         theme = options.get("theme")
         available = {slug for slug, _name in get_template_base_dir_choices()}
         if theme is None:

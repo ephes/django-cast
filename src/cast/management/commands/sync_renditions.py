@@ -1,6 +1,7 @@
-from argparse import RawTextHelpFormatter
+from argparse import ArgumentParser, RawTextHelpFormatter
+from typing import Any
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand, CommandError, CommandParser
 from rich.progress import track
 from wagtail.images.models import Image, Rendition
 
@@ -12,7 +13,7 @@ class Command(BaseCommand):
     help = """
 What does it mean to sync the renditions for all posts?
     - create missing renditions
-    - delete obsolete renditions
+    - delete previous/next gallery thumbnail sRGB-policy counterpart renditions
 
 Optional arguments:
     --post-slug: sync renditions for a specific post
@@ -21,18 +22,18 @@ Optional arguments:
 By default all posts are synced.
     """
 
-    def create_parser(self, *args, **kwargs):
-        parser = super().create_parser(*args, **kwargs)
+    def create_parser(self, prog_name: str, subcommand: str, **kwargs: Any) -> CommandParser:
+        parser = super().create_parser(prog_name, subcommand, **kwargs)
         parser.formatter_class = RawTextHelpFormatter
         return parser
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser: ArgumentParser) -> None:
         # Optional argument for a post slug
         parser.add_argument("--post-slug", type=str, help="Sync renditions for a specific post")
         # Optional argument for a blog slug
         parser.add_argument("--blog-slug", type=str, help="Sync renditions for posts in a specific blog")
 
-    def handle(self, *args, **options):
+    def handle(self, *args: Any, **options: Any) -> None:
         post_slug = options.get("post_slug")
         blog_slug = options.get("blog_slug")
 
@@ -55,8 +56,8 @@ By default all posts are synced.
         all_images = Post.get_all_images_from_queryset(posts_queryset)
         obsolete_renditions, missing_renditions = get_obsolete_and_missing_rendition_strings(all_images)
         Rendition.objects.filter(id__in=obsolete_renditions).delete()
-        missing_renditions = list(missing_renditions.items())
-        print("len missing renditions: ", len(missing_renditions))
-        for image_id, filter_specs in track(missing_renditions, description="create missing renditions"):
+        missing_rendition_items = list(missing_renditions.items())
+        print("len missing renditions: ", len(missing_rendition_items))
+        for image_id, filter_specs in track(missing_rendition_items, description="create missing renditions"):
             image = Image.objects.get(id=image_id)
             image.get_renditions(*filter_specs)

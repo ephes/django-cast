@@ -1,9 +1,12 @@
 """Tests for anonymous comment self-editing and deletion (author edits feature)."""
 
+from datetime import datetime, timedelta
 from importlib import import_module
+from types import SimpleNamespace
 
 import pytest
 from django.conf import settings as dj_settings
+from django.utils import timezone
 
 from cast.comments import author_edits
 
@@ -94,6 +97,37 @@ class TestOwnership:
 class TestEligibility:
     pytestmark = pytest.mark.django_db
 
+    def test_author_edit_window_disabled_allows_any_submit_date(self, comment, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 0
+        comment.submit_date = None
+        assert author_edits.comment_within_author_window(comment) is True
+
+    def test_author_edit_window_allows_comment_within_window(self, comment, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        now = timezone.now()
+        comment.submit_date = now - timedelta(seconds=59)
+        assert author_edits.comment_within_author_window(comment, now=now) is True
+
+    def test_author_edit_window_boundary_is_inclusive(self, comment, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        now = timezone.now()
+        comment.submit_date = now - timedelta(seconds=60)
+        assert author_edits.comment_within_author_window(comment, now=now) is True
+
+    def test_author_edit_window_rejects_expired_comment(self, comment, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        now = timezone.now()
+        comment.submit_date = now - timedelta(seconds=61)
+        assert author_edits.comment_within_author_window(comment, now=now) is False
+
+    def test_author_edit_window_rejects_unusable_submit_date(self, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        now = timezone.now()
+        assert author_edits.comment_within_author_window(object(), now=now) is False
+        assert author_edits.comment_within_author_window(SimpleNamespace(submit_date=None), now=now) is False
+        assert author_edits.comment_within_author_window(SimpleNamespace(submit_date="bad"), now=now) is False
+        assert author_edits.comment_within_author_window(SimpleNamespace(submit_date=datetime.max), now=now) is False
+
     def test_public_unanswered_comment_is_actionable(self, comment):
         assert author_edits.comment_is_actionable(comment) is True
 
@@ -121,6 +155,11 @@ class TestEligibility:
             is_removed=True,
         )
         reply.save()
+        assert author_edits.comment_is_actionable(comment) is False
+
+    def test_expired_comment_is_not_actionable(self, comment, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        comment.submit_date = timezone.now() - timedelta(seconds=61)
         assert author_edits.comment_is_actionable(comment) is False
 
     def test_comment_has_reply_false_without_threadedcomments(self, comment, mocker):
@@ -282,6 +321,23 @@ class TestEditEndpoint:
         assert r.status_code == 403
         comment.refresh_from_db()
         assert comment.comment != "sneaky edit"
+
+    def test_expired_comment_cannot_be_edited(self, client, comment, settings, feature_on):
+        from django.urls import reverse
+
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        comment.submit_date = timezone.now() - timedelta(seconds=61)
+        comment.save(update_fields=["submit_date"])
+        original_text = comment.comment
+        seed_ownership(client, comment)
+        r = client.post(
+            reverse("comments-edit-comment-ajax"),
+            {"comment_id": str(comment.pk), "comment": "late edit"},
+            **AJAX,
+        )
+        assert r.status_code == 403
+        comment.refresh_from_db()
+        assert comment.comment == original_text
 
     def test_empty_text_is_rejected(self, client, comment, feature_on):
         from django.urls import reverse
@@ -485,6 +541,17 @@ class TestRenderCommentContext:
         html = client.get(post.get_url()).content.decode("utf-8")
         assert "comment-edit-link" not in html
 
+    def test_render_comment_list_no_controls_for_owned_expired_comment(
+        self, client, post, comment, comments_enabled, settings, feature_on
+    ):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        comment.submit_date = timezone.now() - timedelta(seconds=61)
+        comment.save(update_fields=["submit_date"])
+        seed_ownership(client, comment)
+        html = client.get(post.get_url()).content.decode("utf-8")
+        assert "comment-edit-link" not in html
+        assert "comment-delete-link" not in html
+
 
 class TestActionContext:
     pytestmark = pytest.mark.django_db
@@ -506,6 +573,13 @@ class TestActionContext:
 
     def test_unowned_comment_is_not_editable(self, client, comment, feature_on):
         ctx = author_edits.comment_action_context(self._request(client, comment, owned=False), comment)
+        assert ctx["can_edit"] is False
+        assert ctx["can_delete"] is False
+
+    def test_owned_expired_comment_is_not_editable(self, client, comment, settings, feature_on):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        comment.submit_date = timezone.now() - timedelta(seconds=61)
+        ctx = author_edits.comment_action_context(self._request(client, comment), comment)
         assert ctx["can_edit"] is False
         assert ctx["can_delete"] is False
 
@@ -549,6 +623,16 @@ class TestReplyCoordination:
 
     def test_reply_to_healthy_parent_succeeds(self, client, post, comment, comments_enabled, feature_on):
         r = post_a_comment(client, post, text="a reply", parent=comment)
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+
+    def test_reply_to_expired_author_edit_parent_succeeds(
+        self, client, post, comment, comments_enabled, settings, feature_on
+    ):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        comment.submit_date = timezone.now() - timedelta(seconds=61)
+        comment.save(update_fields=["submit_date"])
+        r = post_a_comment(client, post, text="a reply after edit window", parent=comment)
         assert r.status_code == 200
         assert r.json()["success"] is True
 
@@ -632,6 +716,7 @@ class TestTunablesCheck:
 
     def test_valid_tunables_pass(self, settings):
         settings.CAST_COMMENTS_OWNED_IDS_CAP = 100
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 3600
         settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 10
         settings.CAST_COMMENTS_EDIT_RATE_WINDOW = 30
         assert self._check() == []
@@ -640,12 +725,24 @@ class TestTunablesCheck:
         settings.CAST_COMMENTS_OWNED_IDS_CAP = -5
         assert [e.id for e in self._check()] == ["cast.E007"]
 
+    def test_negative_author_edit_window_flagged(self, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = -1
+        assert [e.id for e in self._check()] == ["cast.E007"]
+
     def test_non_integer_value_flagged(self, settings):
         settings.CAST_COMMENTS_EDIT_RATE_LIMIT = "lots"
         assert [e.id for e in self._check()] == ["cast.E007"]
 
+    def test_non_integer_author_edit_window_flagged(self, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = "lots"
+        assert [e.id for e in self._check()] == ["cast.E007"]
+
     def test_bool_value_flagged(self, settings):
         settings.CAST_COMMENTS_EDIT_RATE_WINDOW = True
+        assert [e.id for e in self._check()] == ["cast.E007"]
+
+    def test_bool_author_edit_window_flagged(self, settings):
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = True
         assert [e.id for e in self._check()] == ["cast.E007"]
 
     def test_zero_window_flagged(self, settings):
@@ -653,8 +750,9 @@ class TestTunablesCheck:
         settings.CAST_COMMENTS_EDIT_RATE_WINDOW = 0
         assert [e.id for e in self._check()] == ["cast.E007"]
 
-    def test_zero_cap_and_limit_pass(self, settings):
+    def test_zero_cap_limit_and_author_edit_window_pass(self, settings):
         settings.CAST_COMMENTS_OWNED_IDS_CAP = 0
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 0
         settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 0
         assert self._check() == []
 
@@ -907,6 +1005,24 @@ class TestDeleteEndpoint:
         assert r.status_code == 403
         comment.refresh_from_db()
         assert comment.is_removed is False
+
+    def test_expired_comment_cannot_be_deleted(self, client, comment, settings, feature_on):
+        from django.urls import reverse
+
+        settings.CAST_COMMENTS_AUTHOR_EDIT_WINDOW = 60
+        comment.submit_date = timezone.now() - timedelta(seconds=61)
+        comment.save(update_fields=["submit_date"])
+        seed_ownership(client, comment)
+        r = client.post(
+            reverse("comments-delete-comment-ajax"),
+            {"comment_id": str(comment.pk)},
+            **AJAX,
+        )
+        assert r.status_code == 403
+        comment.refresh_from_db()
+        assert comment.is_removed is False
+        assert comment.is_public is True
+        assert str(comment.pk) not in author_edits.deleted_comment_pks()
 
     def test_already_removed_comment_cannot_be_deleted(self, client, comment, feature_on):
         # Preserves moderation evidence: an author cannot erase a removed comment.

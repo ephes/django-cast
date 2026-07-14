@@ -76,7 +76,7 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
             "api_token": forms.PasswordInput(render_value=False),
         }
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         if self.instance.pk and self.instance.api_token:
             self.fields["api_token"].help_text = _(

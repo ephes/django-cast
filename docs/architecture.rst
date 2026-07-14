@@ -112,6 +112,50 @@ Cast models are organized into:
 
    - ``SpamFilter``: Naive Bayes spam detection
 
+Domain Packages and Import Boundaries
+-------------------------------------
+
+Two subsystems are factored into standalone packages with deliberate,
+test-enforced import boundaries so the model layer stays free of upward and
+cyclic dependencies.
+
+**Transcripts** (``cast/transcripts/``)
+  Format handling is split into layers by what each may import:
+
+  - Pure, Django-free format modules (``parsing``, ``webvtt``, ``podlove``,
+    ``dote``, ``known_speakers``) import neither Django nor ``cast.models``.
+  - ``services.py`` holds model-facing orchestration but performs **no runtime**
+    ``cast.models`` import (type hints are ``TYPE_CHECKING``-only, and it works
+    through related managers), so ``models/transcript.py`` → ``services`` stays
+    acyclic.
+  - ``editing.py`` holds view-facing editor orchestration and is imported only
+    by views, so it may import models freely.
+
+  ``Transcript`` keeps its full public API as thin delegates; the model class
+  and its migrations stay in ``cast.models.transcript``.
+
+**Voxhelm** (``cast/voxhelm/``)
+  Transcription-backend integration lives in its own subpackage. A subprocess
+  test pins the invariant that ``django.setup()`` (which imports ``cast.models``)
+  must **not** import ``cast.voxhelm``.
+
+  ``cast/voxhelm_tasks.py`` deliberately keeps its module path: django-tasks
+  stores the task path in database rows (moving it would strand queued work
+  across an upgrade), and ``@task(backend="cast_transcripts")`` resolves — and
+  *fails* — its TASKS backend **at import time** when that backend is not
+  configured. The function-body import of the completion task inside
+  ``enqueue_audio_transcript_generation`` is therefore the load-bearing
+  optionality seam: installs that never enqueue never need the ``cast_transcripts``
+  backend.
+
+  There is intentionally **no** ``[voxhelm]`` packaging extra. ``django-tasks``
+  stays a hard dependency (it is lightweight, and making it optional would trade
+  clean ``ImproperlyConfigured``/no-op degradation for ``ImportError`` crashes in
+  half-configured installs). The optionality that matters is behavioral: models
+  and migrations are unconditional (Django model discovery cannot be optional),
+  and the TASKS backend is only required at first enqueue. The worker itself
+  ships behind the separate ``transcript-worker`` extra.
+
 StreamField Structure
 ---------------------
 
@@ -128,7 +172,7 @@ This allows showing just the overview on index pages and full content on detail 
 
 Available block types include:
 
-- Text blocks (heading, paragraph, code)
+- Text blocks (paragraph rich text, code)
 - Media blocks (image, gallery, video, audio)
 - Embed blocks (HTML, external embeds)
 

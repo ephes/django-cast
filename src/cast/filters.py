@@ -267,7 +267,7 @@ class CountChoicesMixin:
 class CategoryFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
     field_class = SlugChoicesField
 
-    def filter(self, qs: models.QuerySet, value: str):
+    def filter(self, qs: models.QuerySet, value: str) -> models.QuerySet:
         # Check if value is provided (not None and not an empty list)
         if value:
             return qs.filter(categories__slug__in=[value])
@@ -287,7 +287,7 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
     field_class = SlugChoicesField
     facet_count_key = "tags"
 
-    def filter(self, qs: models.QuerySet, value: str):
+    def filter(self, qs: models.QuerySet, value: str) -> models.QuerySet:
         # Check if value is provided (not None and not an empty list)
         if value:
             return qs.filter(tags__slug__in=[value])
@@ -363,9 +363,10 @@ class PostFilterset(django_filters.FilterSet):
         label="Date",
         widget=django_filters.widgets.DateRangeWidget(attrs={"type": "date"}),  # type: ignore
     )
-    # FIXME Maybe use ModelMultipleChoiceFilter for categories? Couldn't get it to work for now, though.
-    #   - one problem was that after setting choices via the choices parameter, Django randomly
-    #     complained about models not being available before app start etc.
+    # Note: this deliberately does not use ModelMultipleChoiceFilter for categories.
+    #   Setting choices via the ``choices`` parameter made Django intermittently complain
+    #   about models not being available before app startup, so the choices are instead
+    #   populated from the facet counts (via CountChoicesMixin) after the queryset is filtered.
     category_facets = CategoryFacetFilter(
         field_name="category_facets",
         label="Categories",

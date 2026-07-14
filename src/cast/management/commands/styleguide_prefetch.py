@@ -1,21 +1,22 @@
-from typing import cast
+from argparse import ArgumentParser
+from typing import Any, cast
 
 from django.core.management.base import BaseCommand, CommandError
 from django.test import RequestFactory
 
+from cast.http_types import HtmxHttpRequest
+from cast.models import get_template_base_dir_choices
 from cast.views.styleguide import (
     _build_styleguide_data,
     _styleguide_context,
     _styleguide_default_theme,
 )
-from cast.models import get_template_base_dir_choices
-from cast.views.htmx_helpers import HtmxHttpRequest
 
 
 class Command(BaseCommand):
     help = "Prefetch styleguide demo data and build gallery renditions."
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument(
             "--theme",
             default=None,
@@ -27,7 +28,7 @@ class Command(BaseCommand):
             help="Generate missing renditions while prefetching.",
         )
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         theme = options.get("theme")
         available = {slug for slug, _name in get_template_base_dir_choices()}
         if theme is None:

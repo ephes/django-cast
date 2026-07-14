@@ -16,6 +16,39 @@ CAST_COMMENTS_ENABLED
 
 Whether or not to enable comments on the site. Defaults to ``False``.
 
+CAST_COMMENTS_EXCLUDE_FIELDS
+============================
+
+Tuple of comment model field names to hide from the public comment form.
+Defaults to an empty tuple ``()``. Existing deployments that still define
+``FLUENT_COMMENTS_EXCLUDE_FIELDS`` are supported as a legacy fallback when the
+``CAST_*`` setting is not present.
+
+CAST_COMMENTS_DEFAULT_MODERATOR
+===============================
+
+Dotted path to the moderator class used by the comments app. Defaults to
+``"cast.moderation.Moderator"``. Existing deployments that still define
+``FLUENT_COMMENTS_DEFAULT_MODERATOR`` are supported as a legacy fallback when
+the ``CAST_*`` setting is not present.
+
+CAST_COMMENTS_FORM_CSS_CLASS
+============================
+
+CSS classes applied to the rendered comment form wrapper. Defaults to
+``"comments-form form-horizontal"``.
+
+CAST_COMMENTS_LABEL_CSS_CLASS
+=============================
+
+CSS classes applied to comment form labels. Defaults to ``"col-sm-2"``.
+
+CAST_COMMENTS_FIELD_CSS_CLASS
+=============================
+
+CSS classes applied to comment form field containers. Defaults to
+``"col-sm-10"``.
+
 .. _cast_comments_allow_author_edits:
 
 CAST_COMMENTS_ALLOW_AUTHOR_EDITS
@@ -31,6 +64,22 @@ because comment ownership is tracked in the session and a client-carried list
 cannot be revoked. See :ref:`comments_author_edits` for the full behaviour and
 privacy notes.
 
+.. _cast_comments_author_edit_window:
+
+CAST_COMMENTS_AUTHOR_EDIT_WINDOW
+================================
+
+Optional hard time window, in integer seconds, for author edit/delete actions.
+Defaults to ``0``, which means there is no additional hard time cap beyond the
+same-browser session, reply, visibility, and rate-limit rules. A positive value
+applies to both edit and delete, counted from the comment's submission time.
+Only relevant when
+:ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
+enabled. The value must be a non-negative integer; invalid values are reported
+by the cast system checks as ``cast.E007``.
+
+.. _cast_comments_owned_ids_cap:
+
 CAST_COMMENTS_OWNED_IDS_CAP
 ===========================
 
@@ -40,6 +89,8 @@ entries are dropped once the cap is reached. Defaults to ``200``; ``0`` means
 :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
 enabled.
 
+.. _cast_comments_edit_rate_limit:
+
 CAST_COMMENTS_EDIT_RATE_LIMIT
 =============================
 
@@ -48,6 +99,8 @@ The maximum number of author edit/delete actions allowed per session within
 **disables** rate limiting. Only relevant when
 :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
 enabled.
+
+.. _cast_comments_edit_rate_window:
 
 CAST_COMMENTS_EDIT_RATE_WINDOW
 ==============================
@@ -121,6 +174,53 @@ Defaults to ``[(1110, 740), (120, 80)]``.
 .. code-block:: python
 
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(1110, 740), (120, 80)]
+
+CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB
+=======================================
+
+Whether gallery thumbnail renditions should normalize embedded ICC profiles to
+compact sRGB profiles. Defaults to ``True``. Only the thumbnail slot (the
+second entry in ``CAST_GALLERY_IMAGE_SLOT_DIMENSIONS``) is affected;
+modal/full-size gallery renditions and regular image renditions preserve their
+existing color handling.
+
+.. code-block:: python
+
+    CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = True
+
+Changing this setting changes the generated Wagtail rendition filter specs. Run
+``sync_renditions`` once after deployment to create the new renditions and
+remove the matching previous/next thumbnail color-profile rendition
+records/files safely. Until that synchronization completes, gallery rendering
+uses an existing counterpart rendition so thumbnails remain visible.
+
+****************
+Post Body Blocks
+****************
+
+CAST_POST_BODY_BLOCKS
+=====================
+
+Custom Wagtail ``Post.body`` blocks to append to the built-in block list.
+Defaults to unset/``None``, which means only the built-in blocks are available.
+The setting must be a dict with optional ``"overview"`` and ``"detail"`` keys;
+each value is a list or tuple of dotted no-argument factory paths. Each factory
+must return ``(name, block)`` where ``name`` is a new, non-empty block name and
+``block`` is a ``wagtail.blocks.Block`` instance; names must not duplicate each
+other or the built-in block names.
+
+.. code-block:: python
+
+    CAST_POST_BODY_BLOCKS = {
+        "overview": ["myapp.blocks.teaser_block"],
+        "detail": ["myapp.blocks.callout_block"],
+    }
+
+Configured blocks are also available to the editor API for their configured
+section. Editor API clients send custom block values in the block's
+author-facing JSON shape; they do not send Wagtail's internal ``ListBlock``
+item wrappers. Custom blocks that reference images, pages, snippets, or media
+are responsible for their own validation and permission semantics.
 
 *************
 Transcription
@@ -268,8 +368,8 @@ site:
 Templates
 *********
 
-Custom Theme Configuration
-==========================
+CAST_CUSTOM_THEMES
+==================
 
 To configure custom themes for the site, use the ``CAST_CUSTOM_THEMES`` setting.
 By default, it is set to an empty list ``[]``. Each theme requires two elements:
@@ -291,9 +391,9 @@ within your templates folder and place your templates inside.
 CAST_FOLLOW_LINKS
 =================
 
-Optional mapping of follow links shown in the navbar. Supported keys are
-``rss``, ``mastodon``, ``github``, ``bluesky``, ``linkedin``, ``email``,
-and ``apple_podcasts``.
+Optional mapping of follow links shown in the navbar. Defaults to an empty
+mapping ``{}``. Supported keys are ``rss``, ``mastodon``, ``github``,
+``bluesky``, ``linkedin``, ``email``, and ``apple_podcasts``.
 
 When a blog context is available, the ``rss`` value is always set to the
 blog-specific XML feed URL, overriding any value from settings. A
@@ -321,13 +421,24 @@ subscribe link to Apple Podcasts.
         "email": "mailto:hello@example.com",
     }
 
+CAST_AUDIO_PLAYER
+=================
+
+Audio player implementation used when rendering audio blocks. Defaults to
+``"podlove"``. Valid values are ``"podlove"`` for the Podlove Web Player and
+``"custom"`` for django-cast's dependency-free custom web-component player.
+When ``"custom"`` is selected, themes should load the custom player asset and
+use the ``use_custom_audio_player`` context flag; Podlove theme overrides are
+only used by the Podlove player.
+
 CAST_PODLOVE_PLAYER_THEMES
 ==========================
 
 Optional overrides for the Podlove Web Player theme config returned by
-``/api/audios/player_config/``. The setting is a mapping keyed by template base
-directory name (or ``default``). Each entry can define a shared ``tokens``/``fonts``
-override or per-scheme overrides under ``light`` and ``dark``.
+``/api/audios/player_config/``. Defaults to an empty mapping ``{}``. The
+setting is a mapping keyed by template base directory name (or ``default``).
+Each entry can define a shared ``tokens``/``fonts`` override or per-scheme
+overrides under ``light`` and ``dark``.
 
 .. code-block:: python
 
@@ -389,19 +500,72 @@ When enabled, the styleguide can fetch real-world media (images, audio, transcri
 from configured source URLs. Defaults to ``False``. This is intended for local
 development only.
 
-Related settings:
+CAST_STYLEGUIDE_IMAGE_SOURCE_URLS
+=================================
 
-- ``CAST_STYLEGUIDE_IMAGE_SOURCE_URLS``: list of page URLs to scrape for gallery images.
-- ``CAST_STYLEGUIDE_VIDEO_SOURCE_URL``: page URL to scrape for a video source.
-- ``CAST_STYLEGUIDE_PODCAST_SOURCE_URL``: episode detail URL used to locate audio.
-- ``CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL``: transcript page URL for transcript segments.
-- ``CAST_STYLEGUIDE_IMAGE_LIMIT``: max number of gallery images to import (default ``6``).
-- ``CAST_STYLEGUIDE_REMOTE_TIMEOUT``: network timeout in seconds (default ``8``).
-- ``CAST_STYLEGUIDE_GENERATE_RENDITIONS``: generate missing renditions while building styleguide galleries
-  (default ``False``).
-- ``CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS``: max transcript segments to keep (default ``12``).
-- ``CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS``: max transcript segments to show in the
-  audio preview (default ``2``).
+Page URL or list/tuple of page URLs the styleguide can scrape for gallery
+images when ``CAST_STYLEGUIDE_REMOTE_MEDIA`` is enabled. Defaults to an empty
+list ``[]`` when unset.
+
+CAST_STYLEGUIDE_VIDEO_SOURCE_URL
+================================
+
+Page URL the styleguide can scrape for a video source when remote media is
+enabled. Defaults to ``None``.
+
+CAST_STYLEGUIDE_PODCAST_SOURCE_URL
+==================================
+
+Episode detail URL the styleguide can scrape to locate audio and Podlove player
+data when remote media is enabled. Defaults to ``None``.
+
+CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL
+=====================================
+
+Transcript page URL the styleguide can scrape for transcript segments when
+remote media is enabled. Defaults to ``None``.
+
+CAST_STYLEGUIDE_REMOTE_TIMEOUT
+==============================
+
+Network timeout, in seconds, for styleguide remote-media fetches. Defaults to
+``8``.
+
+CAST_STYLEGUIDE_IMAGE_LIMIT
+===========================
+
+Maximum number of remote gallery images the styleguide imports from scraped
+pages. Defaults to ``6``.
+
+CAST_STYLEGUIDE_GENERATE_RENDITIONS
+===================================
+
+Whether the styleguide should generate missing image renditions while building
+styleguide galleries. Defaults to ``False``.
+
+CAST_STYLEGUIDE_GALLERY_CHUNK_SIZE
+==================================
+
+Number of imported remote gallery images grouped into each generated styleguide
+gallery. Defaults to ``6``.
+
+CAST_STYLEGUIDE_BODY_GALLERY_LIMIT
+==================================
+
+Maximum number of generated gallery blocks inserted into styleguide body
+content. Defaults to ``1``.
+
+CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS
+=======================================
+
+Maximum number of transcript segments retained from a fetched Podlove payload
+for styleguide seed data. Defaults to ``12``.
+
+CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS
+===========================================
+
+Maximum number of transcript segments shown in the styleguide audio preview.
+Defaults to ``2``.
 
 ********
 Storages
@@ -455,6 +619,13 @@ Uploaded contributor voice-reference clips and the private
 when configured. If that dedicated alias is omitted, they fall back to
 ``cast_private_media`` or the same non-public local private-media fallback.
 
+CAST_PRIVATE_MEDIA_ROOT
+=======================
+
+Filesystem root used by the fallback private media storage when the
+``cast_private_media`` storage alias is not configured. Defaults to an empty
+string ``""``; with that default, django-cast uses a local
+``cast-private-media`` directory next to ``MEDIA_ROOT``.
 
 CAST_AUDIO_UPLOAD_MAX_BYTES
 ===========================
@@ -491,6 +662,23 @@ Required audio duration probing failures are returned as ``probe_timeout`` or
 ``probe_failed``; optional audio chapter extraction and video poster generation
 degrade without failing the upload.
 
+CAST_EDITOR_SCOPES
+==================
+
+Mapping from editor API permission buckets to OAuth/IndieAuth scope strings.
+Defaults to one write bucket accepting ``"write"``, ``"create"``, or
+``"update"``, and one publish bucket accepting ``"publish"``. django-cast does
+not split create and update internally, so the standard IndieAuth ``create`` and
+``update`` scopes both satisfy the write requirement; ``media`` and other
+issuer-specific aliases are intentionally not bundled and can be mapped here by
+the site.
+
+.. code-block:: python
+
+    CAST_EDITOR_SCOPES = {
+        "write": {"write", "create", "update", "posts:write"},
+        "publish": {"publish", "posts:publish"},
+    }
 
 ******************
 Faceted Navigation
@@ -547,10 +735,12 @@ Practical recommendations:
 Repository
 **********
 
-How to fetch data from the database. By default, the repository fetches
-all the data using optimized sql. If you want to fetch data using the
-Django ORM, you can set the ``CAST_REPOSITORY`` variable in your settings
-to ``"django"``.
+CAST_REPOSITORY
+===============
+
+How to fetch data from the database. Defaults to ``"default"``, which uses
+optimized SQL. If you want to fetch data using the Django ORM, set
+``CAST_REPOSITORY`` to ``"django"``.
 
 .. code-block:: python
 

@@ -83,8 +83,20 @@ Image Renditions
 sync_renditions
 ---------------
 
-Create missing image renditions and delete obsolete ones. This is useful
-after changing image slot dimension settings or adding new image formats.
+Create missing image renditions. This is useful after changing image slot
+dimension settings, adding new image formats, or changing rendition policy such
+as ``CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB``. Because rendition filter specs
+are part of Wagtail's rendition keys, enabling or disabling gallery thumbnail
+sRGB normalization creates new thumbnail rendition keys; this command creates
+the new files and removes the previous/next sRGB-policy counterpart keys for the
+same thumbnail specs. Uploaded originals, Wagtail admin renditions, and custom
+site renditions with unrelated filter specs are preserved.
+
+Run this as a one-off migration step after a deployment that changes rendition
+specifications or policy; it is not required for every normal application
+deployment. During an sRGB policy transition, rendering falls back to an
+existing predecessor/successor thumbnail rendition until synchronization has
+created the requested key.
 
 .. code-block:: bash
 

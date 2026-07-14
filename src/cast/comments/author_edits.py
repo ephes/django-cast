@@ -8,9 +8,17 @@ solely by the comment id (as a string) being present in the current session's
 
 from __future__ import annotations
 
+from collections.abc import Collection, Iterable
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any
+
 from django.conf import settings
+from django.http import HttpRequest
 
 from . import appsettings
+
+if TYPE_CHECKING:
+    from .models import CommentAuthorMeta
 
 SESSION_KEY = "cast_owned_comments"
 
@@ -36,7 +44,7 @@ def author_edits_enabled() -> bool:
     return True
 
 
-def record_owned_id(session, pk) -> None:
+def record_owned_id(session: Any, pk: object) -> None:
     """Record ownership of a freshly created comment in the session.
 
     The comment's primary key is stored as a string (the JSON session serializer
@@ -57,12 +65,12 @@ def record_owned_id(session, pk) -> None:
     session.modified = True
 
 
-def owns_id(session, pk) -> bool:
+def owns_id(session: Any, pk: object) -> bool:
     """True when the current session created the comment with this id."""
     return str(pk) in session.get(SESSION_KEY, [])
 
 
-def comment_has_reply(comment) -> bool:
+def comment_has_reply(comment: Any) -> bool:
     """True when another comment answers this one (any moderation state).
 
     Replies are counted regardless of visibility: a pending/spam reply could be
@@ -80,16 +88,42 @@ def comment_has_reply(comment) -> bool:
     return django_comments.get_model().objects.using(db).filter(parent_id=comment.pk).exists()
 
 
-def comment_is_actionable(comment) -> bool:
+def comment_within_author_window(comment: Any, now: datetime | None = None) -> bool:
+    """True when the comment is still inside the configured author-action window."""
+    window = appsettings.AUTHOR_EDIT_WINDOW
+    if window <= 0:
+        return True
+
+    submit_date = getattr(comment, "submit_date", None)
+    if not isinstance(submit_date, datetime):
+        return False
+
+    from django.utils import timezone
+
+    if now is None:
+        now = timezone.now()
+    try:
+        return submit_date + timedelta(seconds=window) >= now
+    except (AttributeError, OverflowError, TypeError, ValueError):
+        return False
+
+
+def comment_is_actionable(comment: Any) -> bool:
     """The non-ownership half of the eligibility predicate.
 
     A comment may be edited or deleted by its owner only while it is still
-    publicly visible and has not been answered.
+    publicly visible, has not been answered, and remains inside the optional
+    hard author-action window.
     """
-    return bool(comment.is_public) and not bool(comment.is_removed) and not comment_has_reply(comment)
+    return (
+        bool(comment.is_public)
+        and not bool(comment.is_removed)
+        and not comment_has_reply(comment)
+        and comment_within_author_window(comment)
+    )
 
 
-def _meta_model():
+def _meta_model() -> type[CommentAuthorMeta]:
     # CommentAuthorMeta is a distinct model: its database is chosen by Django's
     # database router (the default DB in single-database deployments, which is the
     # supported configuration), not inherited from the comment's ``using`` override.
@@ -102,7 +136,7 @@ def _meta_model():
     return CommentAuthorMeta
 
 
-def mark_edited(comment) -> None:
+def mark_edited(comment: Any) -> None:
     """Record that a comment was edited by its author (persistent boolean)."""
     model = _meta_model()
     meta, _created = model.objects.get_or_create(comment_pk=str(comment.pk))
@@ -111,7 +145,7 @@ def mark_edited(comment) -> None:
         meta.save(update_fields=["edited"])
 
 
-def mark_deleted(comment, when=None) -> None:
+def mark_deleted(comment: Any, when: datetime | None = None) -> None:
     """Record an author deletion so it can be excluded from spam training."""
     from django.utils import timezone
 
@@ -121,17 +155,17 @@ def mark_deleted(comment, when=None) -> None:
     meta.save(update_fields=["deleted_at"])
 
 
-def clear_deleted(pk) -> None:
+def clear_deleted(pk: object) -> None:
     """Clear the author-deletion marker (used when staff restore a comment)."""
     _meta_model().objects.filter(comment_pk=str(pk)).update(deleted_at=None)
 
 
-def delete_meta(pk) -> None:
+def delete_meta(pk: object) -> None:
     """Remove the metadata row entirely (used when a comment is hard-deleted)."""
     _meta_model().objects.filter(comment_pk=str(pk)).delete()
 
 
-def rate_limited(request, action: str) -> bool:
+def rate_limited(request: HttpRequest, action: str) -> bool:
     """Cache-based per-session/IP rate limit for edit/delete (no new dependency).
 
     Counts every attempt (including denied ones) so the endpoint cannot be used
@@ -159,7 +193,7 @@ def deleted_comment_pks() -> set[str]:
     return set(model.objects.filter(deleted_at__isnull=False).values_list("comment_pk", flat=True))
 
 
-def edited_pks_for(pks) -> set[str]:
+def edited_pks_for(pks: Iterable[object]) -> set[str]:
     """The subset of the given comment PKs that carry an ``edited`` marker."""
     wanted = {str(pk) for pk in pks}
     if not wanted:
@@ -168,7 +202,9 @@ def edited_pks_for(pks) -> set[str]:
     return set(model.objects.filter(comment_pk__in=wanted, edited=True).values_list("comment_pk", flat=True))
 
 
-def comment_action_context(request, comment, edited_pks=None) -> dict:
+def comment_action_context(
+    request: HttpRequest, comment: Any, edited_pks: Collection[str] | None = None
+) -> dict[str, bool]:
     """Per-comment UI flags for the templates: whether the current session may
     edit/delete this comment, and whether it carries an 'edited' marker."""
     if not author_edits_enabled():

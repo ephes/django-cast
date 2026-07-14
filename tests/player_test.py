@@ -461,6 +461,13 @@ class TestSettingsAndChecks:
         settings.CAST_AUDIO_PLAYER = "custom"
         assert check_cast_audio_player_settings() == []
 
+    def test_audio_player_value_check_passes_when_unset(self):
+        assert check_cast_audio_player_settings() == []
+
+    def test_audio_player_value_check_skips_explicit_none(self, settings):
+        settings.CAST_AUDIO_PLAYER = None
+        assert check_cast_audio_player_settings() == []
+
     def test_audio_player_value_check_fails_for_invalid(self, settings):
         settings.CAST_AUDIO_PLAYER = "bogus"
         errors = check_cast_audio_player_settings()

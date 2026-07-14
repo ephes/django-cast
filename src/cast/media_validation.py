@@ -2,13 +2,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from cast import appsettings
 
-DEFAULT_AUDIO_UPLOAD_MAX_BYTES = 512 * 1024 * 1024
-DEFAULT_VIDEO_UPLOAD_MAX_BYTES = 2 * 1024 * 1024 * 1024
+
+DEFAULT_AUDIO_UPLOAD_MAX_BYTES = appsettings.CAST_SETTING_REGISTRY["CAST_AUDIO_UPLOAD_MAX_BYTES"].default
+DEFAULT_VIDEO_UPLOAD_MAX_BYTES = appsettings.CAST_SETTING_REGISTRY["CAST_VIDEO_UPLOAD_MAX_BYTES"].default
 GENERIC_CONTENT_TYPES = {"application/octet-stream", "binary/octet-stream"}
 QUICKTIME_TOP_LEVEL_ATOMS = {b"free", b"mdat", b"moov", b"wide"}
 
@@ -77,7 +78,7 @@ def validate_audio_upload(uploaded_file: Any | None, *, audio_format: str) -> No
     validate_media_upload(
         uploaded_file,
         spec=spec,
-        max_bytes=int(getattr(settings, "CAST_AUDIO_UPLOAD_MAX_BYTES", DEFAULT_AUDIO_UPLOAD_MAX_BYTES)),
+        max_bytes=int(appsettings.CAST_AUDIO_UPLOAD_MAX_BYTES),
         media_label=f"{audio_format.upper()} audio",
     )
 
@@ -88,7 +89,7 @@ def validate_video_upload(uploaded_file: Any | None) -> None:
     validate_media_upload(
         uploaded_file,
         spec=VIDEO_UPLOAD_SPEC,
-        max_bytes=int(getattr(settings, "CAST_VIDEO_UPLOAD_MAX_BYTES", DEFAULT_VIDEO_UPLOAD_MAX_BYTES)),
+        max_bytes=int(appsettings.CAST_VIDEO_UPLOAD_MAX_BYTES),
         media_label="Video",
     )
 

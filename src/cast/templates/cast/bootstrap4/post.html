@@ -23,31 +23,15 @@
   {% if blog.noindex %}
     <meta name="robots" content="noindex">
   {% endif %}
+  <link rel="canonical" href="{{ absolute_page_url }}">
   {% block social_meta %}
-    <!-- twitter card / opengraph -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ page.seo_title }}">
-    <meta name="twitter:image" content="{{ social_cover_image_url }}">
-    <meta name="twitter:image:alt" content="{{ cover_alt_text }}">
-    <meta name="twitter:description" content="{{ page.search_description|default:page.title }}">
-
-    <meta property="og:url" content="{{ absolute_page_url }}">
-    <meta property="og:title" content="{{ page.seo_title }}">
-    <meta property="og:image" content="{{ social_cover_image_url }}">
-    <meta property="og:image:alt" content="{{ cover_alt_text }}">
-    {% if social_cover_image_url %}
-      <meta property="og:image:width" content="{{ social_cover_image_width }}">
-      <meta property="og:image:height" content="{{ social_cover_image_height }}">
-    {% endif %}
-    <meta property="og:type" content="article">
-    <meta property="og:description" content="{{ page.search_description|default:page.title }}">
-    <meta property="og:updated_time" content="{{ updated_timestamp }}">
+    {% include "cast/includes/post_social_meta.html" %}
   {% endblock social_meta %}
 {% endblock %}
 
 {% block body_class %}template-blogpage{% endblock %}
 
-{% block title %}{{ page.title }}{% endblock title %}
+{% block title %}{{ page.seo_title|default:page.title }}{% endblock title %}
 
 {% block content %}
   <main>

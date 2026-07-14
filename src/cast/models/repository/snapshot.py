@@ -9,6 +9,7 @@ from wagtail.models import Site
 from .types import (
     AudioById,
     AudiosByPostID,
+    ChaptersByAudioId,
     CoverAltByPostID,
     CoverURLByPostID,
     HasAudioByID,
@@ -23,7 +24,15 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from cast.models import Post
+    from cast.models import Audio, Post
+
+
+def _serialize_chaptermarks(audio: "Audio") -> list[dict[str, str]]:
+    """Serialize prefetched chapter marks without issuing ordering queries."""
+    return [
+        {"start": chaptermark.start.isoformat(), "title": chaptermark.title}
+        for chaptermark in sorted(audio.chaptermarks.all(), key=lambda mark: mark.start)
+    ]
 
 
 def cache_page_url(post_id: int, url: str) -> None:
@@ -60,6 +69,7 @@ class PostQuerySnapshot:
         audios: AudioById,  # used in blocks
         podcast_audio_by_episode_id: AudioById,  # used in podcast rss feed for podcast:transcript elements
         transcript_by_audio_id: TranscriptByAudioId,  # used in podcast rss feed for podcast:transcript elements
+        chapters_by_audio_id: ChaptersByAudioId,  # used in podcast feeds for chapter elements
         images: ImageById,
         videos: VideoById,
         audios_by_post_id: AudiosByPostID,
@@ -81,6 +91,7 @@ class PostQuerySnapshot:
         self.audios_by_post_id = audios_by_post_id
         self.podcast_audio_by_episode_id = podcast_audio_by_episode_id
         self.transcript_by_audio_id = transcript_by_audio_id
+        self.chapters_by_audio_id = chapters_by_audio_id
         self.videos_by_post_id = videos_by_post_id
         self.images_by_post_id = images_by_post_id
         self.owner_username_by_id = owner_username_by_id
@@ -102,12 +113,14 @@ class PostQuerySnapshot:
         primary post and media lookup dicts. Renditions are collected
         separately via ``Post.get_all_renditions_from_queryset``.
         """
-        from ..pages import Episode
+        from ..pages import Episode, Post
 
-        queryset = queryset.select_related("owner", "cover_image")
+        queryset = queryset.select_related("owner", "cover_image", "content_type")
         queryset_model = getattr(queryset, "model", None)
         if isinstance(queryset_model, type) and issubclass(queryset_model, Episode):
-            queryset = queryset.select_related("podcast_audio__transcript", "season")
+            queryset = queryset.select_related("podcast_audio__transcript", "season").prefetch_related(
+                "podcast_audio__chaptermarks"
+            )
         queryset = queryset.prefetch_related(
             "audios",
             "images",
@@ -124,16 +137,48 @@ class PostQuerySnapshot:
         audios_by_post_id: AudiosByPostID = {}
         podcast_audio_by_episode_id: AudioById = {}
         transcript_by_audio_id: TranscriptByAudioId = {}
+        chapters_by_audio_id: ChaptersByAudioId = {}
         videos_by_post_id: VideosByPostID = {}
         images_by_post_id: ImagesByPostID = {}
         page_url_by_id: PageUrlByID = {}
         absolute_page_url_by_id: PageUrlByID = {}
         episode_by_id: dict[int, Episode] = {}
-        for post in queryset:
-            specific_post = post.specific
+        posts = list(queryset)
+        specific_post_by_id: PostByID = {}
+        pks_by_specific_model: dict[type[Post], list[int]] = {}
+        for post in posts:
+            specific_model_attr = getattr(post, "specific_class", None)
+            if not isinstance(specific_model_attr, type) or not issubclass(specific_model_attr, Post):
+                specific_post_by_id[post.pk] = post.specific
+                continue
+            specific_model = cast(type[Post], specific_model_attr)
+            if isinstance(post, specific_model):
+                specific_post_by_id[post.pk] = post
+            else:
+                pks_by_specific_model.setdefault(specific_model, []).append(post.pk)
+        for specific_model, pks in pks_by_specific_model.items():
+            specific_queryset = specific_model._default_manager.filter(pk__in=pks)
+            if issubclass(specific_model, Episode):
+                specific_queryset = specific_queryset.select_related(
+                    "podcast_audio__transcript", "season"
+                ).prefetch_related("podcast_audio__chaptermarks")
+            specific_post_by_id.update(specific_queryset.in_bulk(pks))
+
+        for post in posts:
+            specific_post = specific_post_by_id[post.pk]
             post_by_id[post.pk] = specific_post
             owner_username_by_id[post.pk] = post.owner.username
-            has_audio_by_id[post.pk] = post.has_audio
+            audios_count = 0
+            try:
+                audios_count = post.audios.count()
+            except (AttributeError, ValueError):
+                pass
+            if getattr(post, "audio_in_body", False) or audios_count > 0:
+                has_audio_by_id[post.pk] = True
+            elif isinstance(specific_post, Episode):
+                has_audio_by_id[post.pk] = specific_post.podcast_audio_id is not None
+            else:
+                has_audio_by_id[post.pk] = False
             page_url_by_id[post.pk] = post.get_url(request=request, current_site=site)
             absolute_page_url_by_id[post.pk] = post.full_url
             cover_image_url = ""
@@ -155,6 +200,9 @@ class PostQuerySnapshot:
                 podcast_audio = specific_post.podcast_audio
                 if podcast_audio is not None:
                     podcast_audio_by_episode_id[post.pk] = podcast_audio
+                    marks = _serialize_chaptermarks(podcast_audio)
+                    if marks:
+                        chapters_by_audio_id[podcast_audio.pk] = marks
                     try:
                         transcript_by_audio_id[podcast_audio.pk] = podcast_audio.transcript
                     except ObjectDoesNotExist:
@@ -183,8 +231,6 @@ class PostQuerySnapshot:
             for episode_id, episode in episode_by_id.items():
                 episode._visible_contributor_assignments = assignments_by_episode_id[episode_id]
 
-        from ..pages import Post
-
         return cls(
             post_queryset=queryset,
             post_by_id=post_by_id,
@@ -194,6 +240,7 @@ class PostQuerySnapshot:
             audios_by_post_id=audios_by_post_id,
             podcast_audio_by_episode_id=podcast_audio_by_episode_id,
             transcript_by_audio_id=transcript_by_audio_id,
+            chapters_by_audio_id=chapters_by_audio_id,
             videos_by_post_id=videos_by_post_id,
             images_by_post_id=images_by_post_id,
             has_audio_by_id=has_audio_by_id,

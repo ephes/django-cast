@@ -65,19 +65,21 @@
             </li>
           </ul>
         </form>
-        {% if user_can_generate_transcript %}
+        {% if user_can_generate_transcript or transcript_generation_status %}
           <div class="nice-padding-left cast-transcript-actions">
-            <form action="{{ generate_transcript_url }}" method="post" class="cast-transcript-actions__form">
-              {% csrf_token %}
-              <input type="hidden" name="next" value="{{ request.get_full_path }}" />
-              <button
-                class="button button-secondary"
-                type="submit"
-                {% if transcript_generation_active %}disabled{% endif %}
-              >
-                {% trans "Generate transcript" %}
-              </button>
-            </form>
+            {% if user_can_generate_transcript %}
+              <form action="{{ generate_transcript_url }}" method="post" class="cast-transcript-actions__form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+                <button
+                  class="button button-secondary"
+                  type="submit"
+                  {% if transcript_generation_active %}disabled{% endif %}
+                >
+                  {% trans "Generate transcript" %}
+                </button>
+              </form>
+            {% endif %}
             {% include "cast/audio/_transcript_status.html" %}
           </div>
         {% endif %}

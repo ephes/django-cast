@@ -3,11 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, TypeAlias
 
-from django.conf import settings
 from django.utils.module_loading import import_string
 from wagtail import blocks
 from wagtail.embeds.blocks import EmbedBlock
 
+from cast import appsettings
 from cast.blocks import (
     AudioChooserBlock,
     CastImageChooserBlock,
@@ -19,7 +19,6 @@ from cast.blocks import (
 POST_BODY_BLOCKS_SETTING = "CAST_POST_BODY_BLOCKS"
 POST_BODY_SECTIONS = frozenset({"overview", "detail"})
 DEFAULT_CONTENT_BLOCK_NAMES = (
-    "heading",
     "paragraph",
     "code",
     "image",
@@ -36,7 +35,6 @@ PostBodyBlockFactory: TypeAlias = Callable[[], ContentBlockDefinition]
 def default_content_blocks() -> list[ContentBlockDefinition]:
     """Return fresh instances of django-cast's built-in Post.body blocks."""
     return [
-        ("heading", blocks.CharBlock(classname="full title")),
         ("paragraph", blocks.RichTextBlock()),
         ("code", CodeBlock(icon="code")),
         ("image", CastImageChooserBlock(template="cast/image/image.html")),
@@ -48,7 +46,7 @@ def default_content_blocks() -> list[ContentBlockDefinition]:
 
 
 def _setting_value() -> Any:
-    return getattr(settings, POST_BODY_BLOCKS_SETTING, None)
+    return appsettings.CAST_POST_BODY_BLOCKS
 
 
 def _setting_section_path(section: str, index: int | None = None) -> str:

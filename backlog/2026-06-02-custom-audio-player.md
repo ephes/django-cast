@@ -178,10 +178,9 @@ The Podlove Web Player is a ~138 KB Vue app rendered inside an iframe, causing:
 
 - **Styling ceiling.** Podlove bakes styling into inline `style` attributes set by
   Vue at runtime and does not emit CSS custom properties; DOMPurify strips injected
-  `<style>`. `../django-chat` documents (in
-  `docs/superpowers/handoffs/2026-05-17-player-restyling-research.md`) three failed
-  attempts to match the player to site branding from outside the iframe — even
-  fixing text/background contrast is effectively impossible.
+  `<style>`. Prior restyling research (2026-05-17) recorded three failed attempts to
+  match the player to site branding from outside the iframe — even fixing
+  text/background contrast is effectively impossible.
 - **Load cost and the facade.** Because the player is heavy, integrations gate it
   behind a hover/click facade (`podlove_load_mode`). That is exactly the
   "tab/hover to load" behavior we want to remove.

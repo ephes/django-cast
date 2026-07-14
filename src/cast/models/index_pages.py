@@ -12,6 +12,7 @@ from django.http import Http404
 from django.http.request import QueryDict
 from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.api import APIField
@@ -23,9 +24,9 @@ from cast import appsettings
 from cast.player import audio_player_context_flags
 from cast.follow_links import get_follow_links
 from cast.filters import PostFilterset, get_active_facets, has_active_filters
+from cast.http_types import HtmxHttpRequest
 from cast.models.itunes import ItunesArtWork
 
-from ..views import HtmxHttpRequest
 from .pages import Post
 from .repository import BlogIndexContext
 from .theme import get_template_base_dir, get_template_base_dir_choices
@@ -156,13 +157,13 @@ class Blog(Page):
     subpage_types = ["cast.Post"]
     is_podcast = False
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.title
 
     def get_template_base_dir(self, request: HtmxHttpRequest) -> str:
         return get_template_base_dir(request, self.template_base_dir)
 
-    def get_template(self, request: HtmxHttpRequest, *args, **kwargs) -> str:
+    def get_template(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> str:
         template_base_dir = kwargs.get("template_base_dir", None)
         if template_base_dir is None:
             template_base_dir = self.get_template_base_dir(request)
@@ -183,7 +184,12 @@ class Blog(Page):
         cached = getattr(self, "_last_build_date", None)
         if cached is not None:
             return cached
-        return Post.objects.live().public().descendant_of(self).order_by("-visible_date")[0].visible_date
+        newest_post = Post.objects.live().public().descendant_of(self).order_by("-visible_date").first()
+        if newest_post is not None:
+            return newest_post.visible_date
+        if self.first_published_at is not None:
+            return self.first_published_at
+        return timezone.now()
 
     @property
     def author_name(self) -> str:
@@ -328,7 +334,7 @@ class Blog(Page):
         context["root_nav_links"] = repository.root_nav_links
         return context
 
-    def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
+    def get_context(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         context["repository"] = repository = self.get_repository(request, kwargs)
         # now that we have the repository, we can set the template base dir
@@ -359,7 +365,7 @@ class Blog(Page):
             # fetch data using Django models as a fall back
             return BlogIndexContext.create_from_django_models(request=request, blog=self)
 
-    def serve(self, request: HtmxHttpRequest, *args, **kwargs) -> TemplateResponse:
+    def serve(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> TemplateResponse:
         kwargs["repository"] = repository = self.get_repository(request, kwargs)
         kwargs["template_base_dir"] = repository.template_base_dir
         return super().serve(request, *args, **kwargs)
@@ -475,7 +481,7 @@ class Podcast(Blog):
         except json.decoder.JSONDecodeError:
             return {}
 
-    def get_context(self, request: HtmxHttpRequest, *args, **kwargs) -> ContextDict:
+    def get_context(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
         context["podcast"] = self  # convenience
         return context

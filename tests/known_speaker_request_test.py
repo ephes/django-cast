@@ -115,7 +115,7 @@ def test_client_submit_job_omits_known_speakers_when_diarization_disabled(mocker
 
 
 def test_reference_entry_for_source_range(mocker):
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
     reference = SimpleNamespace(
         is_source_range=True,
         source_audio_id=7,
@@ -133,7 +133,7 @@ def test_reference_entry_for_source_range(mocker):
 
 
 def test_reference_entry_source_range_skipped_when_url_unresolvable(mocker):
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", side_effect=VoxhelmError("no url"))
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", side_effect=VoxhelmError("no url"))
     reference = SimpleNamespace(
         is_source_range=True,
         source_audio_id=7,
@@ -216,7 +216,7 @@ def approved_range_reference(contributor, audio, start, end, **kwargs):
 
 @pytest.mark.django_db
 def test_build_references_groups_approved_references_by_contributor(mocker, audio):
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
     johannes = Contributor.objects.create(display_name="Johannes", slug="johannes")
     dominik = Contributor.objects.create(display_name="Dominik", slug="dominik")
     approved_range_reference(johannes, audio, "10.0", "20.0")
@@ -236,7 +236,7 @@ def test_build_references_groups_approved_references_by_contributor(mocker, audi
 
 @pytest.mark.django_db
 def test_build_references_excludes_hidden_contributor_without_optin(mocker, audio):
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
     hidden = Contributor.objects.create(display_name="Hidden", slug="hidden", visible=False)
     approved_range_reference(hidden, audio, "1.0", "2.0")
     assert build_known_speaker_references(episode_with(hidden)) == []
@@ -244,7 +244,7 @@ def test_build_references_excludes_hidden_contributor_without_optin(mocker, audi
 
 @pytest.mark.django_db
 def test_build_references_includes_hidden_contributor_when_opted_in(mocker, audio):
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/pp.m4a")
     hidden = Contributor.objects.create(display_name="Hidden", slug="hidden", visible=False)
     approved_range_reference(hidden, audio, "1.0", "2.0", allow_for_hidden_contributor=True)
     known = build_known_speaker_references(episode_with(hidden))
@@ -263,7 +263,7 @@ def test_build_references_skips_contributor_without_resolvable_references(mocker
         status=ContributorVoiceReference.Status.APPROVED,
         consent_confirmed=True,
     )
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", side_effect=VoxhelmError("no url"))
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", side_effect=VoxhelmError("no url"))
     assert build_known_speaker_references(episode_with(speaker)) == []
 
 
@@ -308,7 +308,7 @@ def test_optional_artifact_path_variants():
 @pytest.mark.django_db
 def test_submit_for_audio_sends_known_speakers(settings, user, m4a_audio, mocker, audio):
     settings.MEDIA_URL = "https://media.example.com/"
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", return_value="https://cdn.example/ref.m4a")
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/ref.m4a")
     johannes = Contributor.objects.create(display_name="Johannes", slug="johannes")
     approved_range_reference(johannes, audio, "10.0", "20.0")
     client = VoxhelmClient(
@@ -330,7 +330,7 @@ def test_submit_for_audio_sends_known_speakers(settings, user, m4a_audio, mocker
 @pytest.mark.django_db
 def test_submit_for_audio_omits_known_speakers_when_disabled(settings, mocker, audio):
     settings.MEDIA_URL = "https://media.example.com/"
-    mocker.patch("cast.voxhelm.resolve_audio_source_url", return_value="https://cdn.example/ref.m4a")
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/ref.m4a")
     johannes = Contributor.objects.create(display_name="Johannes", slug="johannes")
     approved_range_reference(johannes, audio, "10.0", "20.0")
     # diarization on, but known_speaker_enabled off -> no strategy/known_speakers.

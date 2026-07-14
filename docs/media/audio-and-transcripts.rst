@@ -175,6 +175,15 @@ responses are still served through django-cast views that authorize the related
 episode/audio and sanitize public speaker labels, but the stored artifact
 content itself is publishable for public episodes.
 
+Authorization serves an object only when it is anchored to a live episode/post
+whose Wagtail view restrictions the request satisfies (the *public path*), or
+when the requesting user has ``can_edit`` on a referencing page (the *editor
+path*, which covers Wagtail preview and never-published drafts). A supplied
+``episode_id``/``post_id`` anchor must actually reference the requested object
+and satisfy one of those paths; a missing, mismatched, or non-public anchor is
+rejected rather than silently ignored. Every denial returns ``Http404`` (never
+``403``) so object existence is not leaked.
+
 Configure ``STORAGES["cast_public_transcripts"]`` for production when transcript
 artifacts should use a dedicated public storage backend or prefix. If that alias
 is omitted, django-cast uses an explicitly configured ``cast_private_media``
@@ -196,6 +205,12 @@ transcript generation directly from:
 
 * an episode edit view
 * an audio edit view
+
+The "Generate transcript" action only appears when Voxhelm is configured for
+the request's site — the API base URL and API key must resolve through site
+settings, Django settings, or environment variables. Transcript generation
+status stays visible on both edit surfaces even when the configuration is
+later removed.
 
 The admin request now returns after the Voxhelm batch job has been submitted
 and a local completion task has been queued. Editors see local
@@ -333,7 +348,7 @@ them from the Wagtail contributor snippet under *Voice references (private)*.
 Each reference is either an uploaded clean-solo clip **or** a source range into
 existing audio, never both:
 
-- A *source range* points at an existing :class:`Audio` object with
+- A *source range* points at an existing ``Audio`` object with
   ``start_seconds`` and ``end_seconds`` (start must be before end).
 - An *uploaded clip* is stored through a protected storage backend. Configure a
   non-public backend under the ``"cast_voice_references"`` alias in

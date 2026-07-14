@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Any, Optional, cast
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, cast
 
 from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
@@ -18,11 +19,19 @@ from .serialization import (
     deserialize_video,
 )
 from .snapshot import PostQuerySnapshot, cache_page_url, clear_cached_page_urls
-from .types import AudioById, CachableBlogData, ImageById, LinkTuples, RenditionsForPosts, VideoById
+from .types import AudioById, CachableBlogData, ChaptersByAudioId, ImageById, LinkTuples, RenditionsForPosts, VideoById
 
 if TYPE_CHECKING:
+    from cast.http_types import HtmxHttpRequest
     from cast.models import Audio, Blog, Episode, Post, Transcript
-    from cast.views import HtmxHttpRequest
+
+
+_Value = TypeVar("_Value")
+
+
+def _int_keyed(mapping: Mapping[Any, _Value]) -> dict[int, _Value]:
+    """Return a copy of a serialized map with integer primary-key keys."""
+    return {int(key): value for key, value in mapping.items()}
 
 
 class PostDetailContext:
@@ -108,7 +117,7 @@ class PostDetailContext:
             root_nav_links=[(p.get_url(), p.title) for p in blog.get_root().get_children().live()],
             has_audio=post.has_audio,
             page_url=post.get_url(request=request),
-            absolute_page_url=post.get_full_url(request=request),
+            absolute_page_url=cast(str, post.get_full_url(request=request)),
             owner_username=owner_username,
             blog_url=_blog_url_from_referer(request, blog.get_url(request=request)),
             cover_image_url=cover_image_url,
@@ -133,9 +142,11 @@ class EpisodeFeedContext:
         *,
         podcast_audio: "Audio",
         transcript: Optional["Transcript"],
+        chapters: list[dict[str, str]],
     ) -> None:
         self.podcast_audio = podcast_audio
         self.transcript = transcript
+        self.chapters = chapters
 
 
 class FeedContext:
@@ -269,40 +280,62 @@ class FeedContext:
         template_base_dir = data["template_base_dir"]
         post_by_id = {}
         podcast_fields = ["podcast_audio", "block", "keywords", "explicit", "episode_number", "episode_type", "season"]
-        for post_pk, post_data in data["post_by_id"].items():
-            is_podcast = any(field in post_data for field in podcast_fields)
+        for raw_post_pk, post_data in data["post_by_id"].items():
+            post_pk = int(raw_post_pk)
+            if "type" in post_data:
+                is_podcast = post_data["type"] == "episode"
+            else:
+                # Legacy cache entries without the explicit discriminator fall back to key-sniffing.
+                # This fallback can be removed after one release.
+                is_podcast = any(field in post_data for field in podcast_fields)
             if is_podcast:
                 post_by_id[post_pk] = deserialize_episode(post_data)
             else:
                 post_by_id[post_pk] = deserialize_post(post_data)
-        post_queryset = [post_by_id[post_pk] for post_pk in data["posts"]]
-        audios = {audio_pk: deserialize_audio(audio_data) for audio_pk, audio_data in data["audios"].items()}
-        images = {image_pk: deserialize_image(image_data) for image_pk, image_data in data["images"].items()}
-        videos = {video_pk: deserialize_video(video_data) for video_pk, video_data in data["videos"].items()}
+        post_queryset = [post_by_id[int(post_pk)] for post_pk in data["posts"]]
+        audios = {
+            audio_pk: deserialize_audio(audio_data) for audio_pk, audio_data in _int_keyed(data["audios"]).items()
+        }
+        images = {
+            image_pk: deserialize_image(image_data) for image_pk, image_data in _int_keyed(data["images"]).items()
+        }
+        videos = {
+            video_pk: deserialize_video(video_data) for video_pk, video_data in _int_keyed(data["videos"]).items()
+        }
         podcast_audios = {
             episode_pk: deserialize_audio(audio_data)
-            for episode_pk, audio_data in data.get("podcast_audio_by_episode_id", {}).items()
+            for episode_pk, audio_data in _int_keyed(data.get("podcast_audio_by_episode_id", {})).items()
         }
         transcripts = {
             audio_pk: deserialize_transcript(transcript_data)
-            for audio_pk, transcript_data in data.get("transcripts", {}).items()
+            for audio_pk, transcript_data in _int_keyed(data.get("transcripts", {})).items()
         }
+        chapters: ChaptersByAudioId = {int(audio_pk): marks for audio_pk, marks in data.get("chapters", {}).items()}
 
-        renditions_for_posts = deserialize_renditions(data["renditions_for_posts"])
+        renditions_for_posts = deserialize_renditions(_int_keyed(data["renditions_for_posts"]))
+        audios_by_post_id = _int_keyed(data["audios_by_post_id"])
+        videos_by_post_id = _int_keyed(data["videos_by_post_id"])
+        images_by_post_id = _int_keyed(data["images_by_post_id"])
+        owner_username_by_id = _int_keyed(data["owner_username_by_id"])
+        has_audio_by_id = _int_keyed(data["has_audio_by_id"])
+        page_url_by_id = _int_keyed(data["page_url_by_id"])
+        absolute_page_url_by_id = _int_keyed(data["absolute_page_url_by_id"])
+        cover_by_post_id = _int_keyed(data["cover_by_post_id"])
+        cover_alt_by_post_id = _int_keyed(data["cover_alt_by_post_id"])
 
         user_model = get_user_model()
         for post in post_queryset:
             post._media_lookup = build_media_lookup(
                 post.pk,
-                images_by_post_id=data["images_by_post_id"],
-                videos_by_post_id=data["videos_by_post_id"],
-                audios_by_post_id=data["audios_by_post_id"],
+                images_by_post_id=images_by_post_id,
+                videos_by_post_id=videos_by_post_id,
+                audios_by_post_id=audios_by_post_id,
                 images=images,
                 videos=videos,
                 audios=audios,
             )
-            post.owner = user_model(username=data["owner_username_by_id"][post.pk])
-            post.page_url = data["page_url_by_id"][post.pk]
+            post.owner = user_model(username=owner_username_by_id[post.pk])
+            post.page_url = page_url_by_id[post.pk]
 
         queryset_data = PostQuerySnapshot(
             post_queryset=post_queryset,
@@ -310,18 +343,19 @@ class FeedContext:
             audios=audios,
             images=images,
             videos=videos,
-            audios_by_post_id=data["audios_by_post_id"],
+            audios_by_post_id=audios_by_post_id,
             podcast_audio_by_episode_id=podcast_audios,
             transcript_by_audio_id=transcripts,
-            videos_by_post_id=data["videos_by_post_id"],
-            images_by_post_id=data["images_by_post_id"],
-            owner_username_by_id=data["owner_username_by_id"],
-            has_audio_by_id=data["has_audio_by_id"],
+            chapters_by_audio_id=chapters,
+            videos_by_post_id=videos_by_post_id,
+            images_by_post_id=images_by_post_id,
+            owner_username_by_id=owner_username_by_id,
+            has_audio_by_id=has_audio_by_id,
             renditions_for_posts=renditions_for_posts,
-            page_url_by_id=data["page_url_by_id"],
-            absolute_page_url_by_id=data["absolute_page_url_by_id"],
-            cover_by_post_id=data["cover_by_post_id"],
-            cover_alt_by_post_id=data["cover_alt_by_post_id"],
+            page_url_by_id=page_url_by_id,
+            absolute_page_url_by_id=absolute_page_url_by_id,
+            cover_by_post_id=cover_by_post_id,
+            cover_alt_by_post_id=cover_alt_by_post_id,
         )
         root_nav_links = data["root_nav_links"]
         return cls(
@@ -365,9 +399,11 @@ class FeedContext:
         episode_id = episode.pk if episode.pk is not None else episode.id
         podcast_audio = self.queryset_data.podcast_audio_by_episode_id[episode_id]
         transcript = self.queryset_data.transcript_by_audio_id.get(podcast_audio.id, None)
+        chapters = self.queryset_data.chapters_by_audio_id.get(podcast_audio.id, [])
         return EpisodeFeedContext(
             podcast_audio=podcast_audio,
             transcript=transcript,
+            chapters=chapters,
         )
 
 
@@ -439,7 +475,13 @@ class BlogIndexContext:
         blog_cover_image_url = data.get("blog_cover_image_url", "")
         blog_cover_alt_text = data.get("blog_cover_alt_text", "")
         for post_pk, post_data in data["post_by_id"].items():
-            if "podcast_audio" in post_data:
+            if "type" in post_data:
+                is_episode = post_data["type"] == "episode"
+            else:
+                # Legacy cache entries without the explicit discriminator fall back to key-sniffing.
+                # This fallback can be removed after one release.
+                is_episode = "podcast_audio" in post_data
+            if is_episode:
                 post_by_id[post_pk] = deserialize_episode(post_data)
             else:
                 post_by_id[post_pk] = deserialize_post(post_data)
@@ -486,6 +528,7 @@ class BlogIndexContext:
             audios_by_post_id=data["audios_by_post_id"],
             podcast_audio_by_episode_id={},  # not needed for blog
             transcript_by_audio_id={},  # not needed for blog
+            chapters_by_audio_id={},  # not needed for blog
             videos_by_post_id=data["videos_by_post_id"],
             images_by_post_id=data["images_by_post_id"],
             owner_username_by_id=data["owner_username_by_id"],

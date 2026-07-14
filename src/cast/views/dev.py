@@ -10,7 +10,7 @@ from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 
-from cast.dev_settings import dev_tools_enabled
+from cast.dev_tools import dev_tools_enabled
 from cast.models.theme import get_template_base_dir_choices
 
 DEFAULT_THEME_COMPARE_PATH = "/styleguide-blog/"

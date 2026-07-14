@@ -86,7 +86,9 @@ class NaiveBayes:
         return self
 
     @staticmethod
-    def update_probabilities(probabilities: Probabilities, counts_per_label: Counts, number_of_all_words: int):
+    def update_probabilities(
+        probabilities: Probabilities, counts_per_label: Counts, number_of_all_words: int
+    ) -> Probabilities:
         updated_probabilities = {}
         for label, prior_probability in probabilities.items():
             word_count = counts_per_label.get(label, 0.5)
@@ -109,7 +111,7 @@ class NaiveBayes:
             return None
         return sorted(((prob, label) for label, prob in probabilities.items()), reverse=True)[0][1]
 
-    def dict(self):
+    def dict(self) -> dict[str, Any]:
         return {
             "class": "NaiveBayes",
             "prior_probabilities": self.prior_probabilities,
@@ -130,12 +132,12 @@ class ModelEncoder(DjangoJSONEncoder):
 
 
 class ModelDecoder(json.JSONDecoder):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["object_hook"] = self.model_decode
         super().__init__(*args, **kwargs)
 
     @staticmethod
-    def model_decode(obj):
+    def model_decode(obj: dict[str, Any]) -> Any:
         if obj.get("class") == "NaiveBayes":
             del obj["class"]
             return NaiveBayes(**obj)
@@ -232,7 +234,6 @@ class Evaluation:
     def calc_performance(self, results: dict[str, Counts]) -> dict[str, Performance]:
         """Calc precision, recall and f1 for each label."""
         performance = {}
-        print("results: ", results)
         for label, result in results.items():
             precision, recall, f1 = self.get_precision_recall_f1(result)
             performance[label] = {

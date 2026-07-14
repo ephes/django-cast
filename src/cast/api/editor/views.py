@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from django.http import HttpResponse
 from django.urls import reverse
@@ -12,7 +12,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ...models import Blog, Episode, Podcast, Post, Season
+from ...models import Audio, Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
 from .body import (
     author_blocks_to_overview,
@@ -58,6 +58,45 @@ class EditorAPIView(APIView):
         return editor_exception_handler
 
 
+def _if_match_revision_id(request: Request) -> int | None:
+    value = request.headers.get("If-Match")
+    if value is None:
+        return None
+    value = value.strip()
+    if not (value.startswith('"') and value.endswith('"')):
+        raise EditorValidationError(
+            {"If-Match": [{"code": "invalid", "message": 'If-Match must be a quoted revision id such as "123".'}]}
+        )
+    revision_id = value[1:-1]
+    if not (revision_id.isascii() and revision_id.isdigit()):
+        raise EditorValidationError(
+            {"If-Match": [{"code": "invalid", "message": 'If-Match must be a quoted revision id such as "123".'}]}
+        )
+    return int(revision_id)
+
+
+def _submitted_base_revision_id(request: Request, data: dict[str, Any]) -> int:
+    body_revision_id = cast(int | None, data.get("base_revision_id"))
+    header_revision_id = _if_match_revision_id(request)
+    if body_revision_id is None and header_revision_id is None:
+        raise EditorValidationError({"base_revision_id": [{"code": "required", "message": "This field is required."}]})
+    if body_revision_id is not None and header_revision_id is not None and body_revision_id != header_revision_id:
+        raise EditorValidationError(
+            {
+                "If-Match": [
+                    {
+                        "code": "mismatch",
+                        "message": "If-Match must match base_revision_id when both are supplied.",
+                    }
+                ]
+            }
+        )
+    if body_revision_id is None:
+        assert header_revision_id is not None
+        return header_revision_id
+    return body_revision_id
+
+
 class ParentsListView(EditorAPIView):
     required_scopes = {"GET": None}
 
@@ -88,7 +127,7 @@ class PostEditorMixin:
     body_section_order = ("overview", "detail")
     detail_url_name = "cast:api:editor_post_detail"
 
-    def _get_parent(self, parent_id: int):
+    def _get_parent(self, parent_id: int) -> Blog:
         blog = Blog.objects.filter(pk=parent_id).first()
         if blog is None:
             raise EditorValidationError(
@@ -96,7 +135,7 @@ class PostEditorMixin:
             )
         return blog.specific
 
-    def _get_post(self, pk: int, user: Any, *, denied_message: str):
+    def _get_post(self, pk: int, user: Any, *, denied_message: str) -> Post:
         post = Post.objects.filter(pk=pk).first()
         if post is None:
             raise EditorNotFound("Post not found.")
@@ -116,7 +155,7 @@ class PostEditorMixin:
                 {"slug": [{"code": "duplicate", "message": f"Slug {slug!r} is already used here."}]}
             )
 
-    def _resolve_cover_image(self, cover: dict[str, Any] | None, user: Any):
+    def _resolve_cover_image(self, cover: dict[str, Any] | None, user: Any) -> tuple[Any | None, str]:
         if not cover:
             return None, ""
         image = get_choosable_image(cover["id"], user)
@@ -132,7 +171,7 @@ class PostEditorMixin:
             )
         return image, cover.get("alt_text", "")
 
-    def _resolve_categories(self, ids: list[int]):
+    def _resolve_categories(self, ids: list[int]) -> list[PostCategory]:
         if not ids:
             return []
         found_by_id = {category.pk: category for category in PostCategory.objects.filter(pk__in=ids)}
@@ -189,6 +228,8 @@ class PostEditorMixin:
             "type": content_post._meta.label,
             "title": content_post.title,
             "slug": content_post.slug,
+            "seo_title": content_post.seo_title,
+            "search_description": content_post.search_description,
             "parent": {"id": post.get_parent().id},
             "visible_date": content_post.visible_date,
             "tags": [tag.name for tag in content_post.tags.all()],
@@ -298,6 +339,8 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         post = Post(
             title=title,
             slug=slug,
+            seo_title=data["seo_title"],
+            search_description=data["search_description"],
             owner=user,
             live=False,
             cover_image=cover_image,
@@ -334,6 +377,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         serializer = PostUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        submitted_base_revision_id = _submitted_base_revision_id(request, data)
         user = request.user
         if data.get("publish"):
             raise EditorValidationError(
@@ -346,7 +390,6 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
 
         post = self._get_post(pk, user, denied_message="You cannot edit this draft.")
         current_revision_id = post.latest_revision_id
-        submitted_base_revision_id = data["base_revision_id"]
         edit_url = reverse("wagtailadmin_pages:edit", args=[post.id])
         if current_revision_id != submitted_base_revision_id:
             raise EditorRevisionConflict(
@@ -361,6 +404,10 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         if "slug" in data:
             self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+        if "seo_title" in data:
+            draft.seo_title = data["seo_title"]
+        if "search_description" in data:
+            draft.search_description = data["search_description"]
         if "visible_date" in data:
             draft.visible_date = data["visible_date"]
         if "cover_image" in data:
@@ -417,7 +464,7 @@ class EpisodeEditorMixin(PostEditorMixin):
 
     detail_url_name = "cast:api:editor_episode_detail"
 
-    def _get_parent(self, parent_id: int):
+    def _get_parent(self, parent_id: int) -> Podcast:
         parent = super()._get_parent(parent_id)
         if not isinstance(parent, Podcast):
             raise EditorValidationError(
@@ -435,7 +482,7 @@ class EpisodeEditorMixin(PostEditorMixin):
             raise EditorPermissionDenied(denied_message, parent_id=None)
         return episode
 
-    def _resolve_podcast_audio(self, ref: dict[str, Any] | None, user: Any):
+    def _resolve_podcast_audio(self, ref: dict[str, Any] | None, user: Any) -> Audio | None:
         if not ref:
             return None
         audio = get_choosable_audio(ref["id"], user)
@@ -447,7 +494,7 @@ class EpisodeEditorMixin(PostEditorMixin):
             )
         return audio
 
-    def _resolve_season(self, ref: dict[str, Any] | None, podcast: Podcast):
+    def _resolve_season(self, ref: dict[str, Any] | None, podcast: Podcast) -> Season | None:
         if not ref:
             return None
         # Filter by podcast in the query so a missing season and a season belonging to
@@ -540,6 +587,8 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         episode = Episode(
             title=title,
             slug=slug,
+            seo_title=data["seo_title"],
+            search_description=data["search_description"],
             owner=user,
             live=False,
             cover_image=cover_image,
@@ -575,6 +624,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         serializer = EpisodeUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        submitted_base_revision_id = _submitted_base_revision_id(request, data)
         user = request.user
         if data.get("publish"):
             raise EditorValidationError(
@@ -587,7 +637,6 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
 
         episode = self._get_episode(pk, user, denied_message="You cannot edit this draft.")
         current_revision_id = episode.latest_revision_id
-        submitted_base_revision_id = data["base_revision_id"]
         edit_url = reverse("wagtailadmin_pages:edit", args=[episode.id])
         if current_revision_id != submitted_base_revision_id:
             raise EditorRevisionConflict(
@@ -604,6 +653,10 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if "slug" in data:
             self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+        if "seo_title" in data:
+            draft.seo_title = data["seo_title"]
+        if "search_description" in data:
+            draft.search_description = data["search_description"]
         if "visible_date" in data:
             draft.visible_date = data["visible_date"]
         if "cover_image" in data:
