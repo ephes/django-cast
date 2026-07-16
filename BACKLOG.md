@@ -10,14 +10,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   `docs/releases/`; implementation history belongs in git.
 - Use `Depends on` for blocking relationships and `Related to` for non-blocking cross-links.
 - GitHub issues are optional for public coordination, but local planning starts here.
+- The implemented typeahead architecture, performance measurements, and UX rationale remain available in
+  [backlog/2026-07-16-typeahead-search.md](backlog/2026-07-16-typeahead-search.md).
 
 ## Research / Shaping
-
-- [ ] Typeahead search
-  - Scope: research whether current full-text search is fast enough for typeahead, what API/frontend surface is
-    needed, and how to keep it optional for themes.
-  - Done when: there is a short implementation note with benchmark expectations, proposed endpoints or context
-    contracts, accessibility constraints, and a first implementation slice.
 
 - [ ] Revisit onboarding and authoring workflows
   - Design record:

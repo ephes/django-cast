@@ -184,6 +184,9 @@ class TestBlogModel:
     def test_facet_counts_api_url(self, blog):
         assert blog.facet_counts_api_url == reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
 
+    def test_search_suggestions_api_url(self, blog):
+        assert blog.search_suggestions_api_url == reverse("cast:api:search-suggestions-detail", kwargs={"pk": blog.pk})
+
     def test_theme_list_api_url(self, blog):
         assert blog.theme_list_api_url == reverse("cast:api:theme-list")
 

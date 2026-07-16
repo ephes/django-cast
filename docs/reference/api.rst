@@ -297,6 +297,39 @@ Notes:
 - ``o`` is accepted for URL-state parity but does not change modal counts.
 - ``date_after``/``date_before`` are part of the list filterset, but are not currently applied in modal mode.
 
+Title-prefix suggestions
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Return a bounded list of public post destinations whose titles match a prefix::
+
+    GET /api/search-suggestions/{blog_id}/?search=py
+
+The optional ``date_facets``, ``tag_facets``, and ``category_facets`` params
+constrain suggestions in the same way as the blog filters. Search text is
+normalized through django-cast's modelsearch guard. Queries shorter than two
+characters return an empty list.
+
+Example response::
+
+    {
+        "query": "py",
+        "suggestions": [
+            {
+                "id": 42,
+                "title": "Python performance",
+                "url": "/blog/python-performance/",
+                "visible_date": "2026-07-10T09:00:00+00:00"
+            }
+        ]
+    }
+
+Suggestions match titles only, are ordered by most recently published first,
+and are capped at eight. They are destinations rather than a preview of the
+committed full-text result set: selecting one should navigate directly to its
+``url``. The response is marked ``private, no-store``. Themes can discover the
+blog-scoped endpoint through ``page.search_suggestions_api_url`` and treat it as
+a progressive enhancement of the existing GET search form.
+
 Theme Management
 ~~~~~~~~~~~~~~~~
 

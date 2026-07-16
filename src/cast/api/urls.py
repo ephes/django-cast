@@ -59,6 +59,11 @@ urlpatterns: list[Any] = [
     # facet counts
     path("facet_counts/", views.FacetCountListView.as_view(), name="facet-counts-list"),
     re_path(r"facet_counts/(?P<pk>\d+)/?$", views.FacetCountsDetailView.as_view(), name="facet-counts-detail"),
+    path(
+        "search-suggestions/<int:pk>/",
+        views.SearchSuggestionsView.as_view(),
+        name="search-suggestions-detail",
+    ),
     # comment training data
     path("comment_training_data/", views.CommentTrainingDataView.as_view(), name="comment-training-data"),
     # themes

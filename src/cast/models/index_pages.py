@@ -287,6 +287,10 @@ class Blog(Page):
         return reverse("cast:api:facet-counts-detail", kwargs={"pk": self.pk})
 
     @property
+    def search_suggestions_api_url(self) -> str:
+        return reverse("cast:api:search-suggestions-detail", kwargs={"pk": self.pk})
+
+    @property
     def theme_list_api_url(self) -> str:
         return reverse("cast:api:theme-list")
 

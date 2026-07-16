@@ -3,3 +3,5 @@
 
 - Move post-description rendering into ``cast.presenters.render_post_description`` and have feeds and rendered
   Wagtail API fields use the presenter directly. ``Post.get_description()`` remains as a compatible wrapper.
+- Add a bounded, facet-aware title-prefix suggestion endpoint for optional theme typeahead interfaces. Suggestions
+  include public post destinations only, use recent-first ordering, and keep existing full-text form search unchanged.
