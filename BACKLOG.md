@@ -11,22 +11,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - Use `Depends on` for blocking relationships and `Related to` for non-blocking cross-links.
 - GitHub issues are optional for public coordination, but local planning starts here.
 
-## Next
-
-- [ ] Extract post description rendering from the model
-  - Related to: Model-layer decoupling (phase 2) below.
-  - Scope: move the HTML description-rendering implementation into a presenter module, update django-cast's feed and
-    Wagtail API serializer callers to use it directly, and retain `Post.get_description()` as a compatibility wrapper.
-    Keep media derivation and the `Post.save()`/async decision out of this slice.
-  - Expected code: `src/cast/presenters.py`, `src/cast/models/pages.py`, and `src/cast/feeds.py`.
-  - Expected tests: focused presenter/model compatibility coverage in `tests/models/posts_test.py` and existing feed,
-    post-detail, and API rendering coverage where call ownership changes.
-  - Sibling check: `../homepage/homepage/core/webmention_integration.py` calls `Post.get_description()` directly;
-    preserve that call in this slice through the compatibility wrapper. The theme repositories do not call the method.
-  - Done when: description rendering is implemented outside the model, django-cast's direct callers use the presenter,
-    output and query behavior are unchanged, the public compatibility method remains covered, docs/release notes match,
-    and `just check` passes.
-
 ## Research / Shaping
 
 - [ ] Typeahead search
@@ -84,11 +68,12 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
   - Status: phase 1 landed on 2026-07-02 — `HtmxHttpRequest` lives in `cast/http_types.py` (models no longer import
     from views), `get_description` is side-effect free, `Video.save` is transactional, and `Post.save` has
-    `sync_media`/`create_renditions` opt-outs.
-  - Scope: phase 2 — extract description rendering and media derivation into presenter/service modules (and decide
-    on async), and invert the remaining model→blocks/filters imports. (The mixed blog-index snapshot N+1 (M8) was
-    fixed on 2026-07-02 with a flat-query-count guard test.)
-  - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
+    `sync_media`/`create_renditions` opt-outs. Post-description rendering moved to `cast.presenters` on 2026-07-16;
+    `Post.get_description()` remains only as a compatibility wrapper.
+  - Scope: phase 2 remaining — extract media derivation into service modules (and decide on async), and invert the
+    remaining model→blocks/filters imports. (The mixed blog-index snapshot N+1 (M8) was fixed on 2026-07-02 with a
+    flat-query-count guard test.)
+  - Done when: save-side effects are explicit service calls and the remaining inverted presentation imports are gone.
 
 - [ ] Editor API remote media import safety design
   - PRD:

@@ -17,7 +17,6 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import smart_str
-from django.utils.html import escape
 from django.utils.translation import gettext_lazy as _
 from django_comments import get_model as get_comment_model
 from modelcluster.contrib.taggit import ClusterTaggableManager
@@ -45,6 +44,7 @@ from cast.blocks import (
 from cast.http_types import HtmxHttpRequest
 from cast.models import get_or_create_gallery
 from cast.post_body_blocks import configured_content_blocks, default_content_blocks
+from cast.presenters import render_post_description
 from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
 from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
@@ -137,7 +137,8 @@ class HtmlField(Field):
             raw_value = getattr(request, "GET", {}).get("render_for_feed")
             if raw_value is not None:
                 render_for_feed = str(raw_value).lower() not in {"0", "false", "no"}
-        return post.get_description(
+        return render_post_description(
+            post,
             request=self.context["request"],
             render_detail=self.render_detail,
             render_for_feed=render_for_feed,
@@ -635,25 +636,16 @@ class Post(Page):
         remove_newlines: bool = True,
         repository: PostDetailContext | None = None,
     ) -> str:
-        """
-        Get a description for the feed or twitter player card. Needs to be
-        a method because the feed is able to pass the actual request object.
-        """
-        request = cast(HtmxHttpRequest, request)
-        if repository is None:
-            repository = self.get_repository(request, {})
-        description = self.serve(
-            request,
+        """Compatibility wrapper for :func:`cast.presenters.render_post_description`."""
+        return render_post_description(
+            self,
+            request=request,
             render_detail=render_detail,
-            repository=repository,
             render_for_feed=render_for_feed,
-            local_template_name="post_body.html",
-        ).rendered_content
-        if remove_newlines:
-            description = description.replace("\n", "")
-        if escape_html:
-            description = escape(description)
-        return description
+            escape_html=escape_html,
+            remove_newlines=remove_newlines,
+            repository=repository,
+        )
 
     def get_absolute_url(self) -> str:
         """This is needed for django-fluentcomments."""

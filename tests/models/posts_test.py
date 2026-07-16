@@ -197,25 +197,34 @@ class TestPostModel:
         post.page_url = "/from-context/"
         assert post.get_full_url() == "/from-context/"
 
-    def test_get_description_escape(self, mocker, simple_request, post):
-        class Rendered:
-            rendered_content = "<h1>foo</h1>"
+    def test_get_description_delegates_to_presenter(self, mocker, simple_request, post):
+        expected_html = "<h1>foo</h1>"
+        repository = mocker.sentinel.repository
+        render = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
 
-        mocker.patch("cast.models.Post.serve", return_value=Rendered())
-        description = post.get_description(request=simple_request, escape_html=True)
-        assert "&lt" in description
+        description = post.get_description(
+            request=simple_request,
+            render_detail=True,
+            render_for_feed=False,
+            escape_html=False,
+            remove_newlines=False,
+            repository=repository,
+        )
 
-    def test_get_description_newlines(self, mocker, simple_request, post):
-        class Rendered:
-            rendered_content = "<h1>foo</h1>\n"
-
-        mocker.patch("cast.models.Post.serve", return_value=Rendered())
-        description = post.get_description(request=simple_request, remove_newlines=False)
-        assert "\n" in description
+        assert description == expected_html
+        render.assert_called_once_with(
+            post,
+            request=simple_request,
+            render_detail=True,
+            render_for_feed=False,
+            escape_html=False,
+            remove_newlines=False,
+            repository=repository,
+        )
 
     def test_overview_html(self, mocker):
         expected_html = "<h1>foo</h1>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=False)
         html_field._context = {"request": "foobar"}
         overview = html_field.to_representation(Post())
@@ -227,7 +236,7 @@ class TestPostModel:
 
     def test_detail_html(self, mocker):
         expected_html = "<h1>foo</h1><p>bar</p>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=True)
         html_field._context = {"request": "foobar"}
         detail = html_field.to_representation(Post())
@@ -239,7 +248,7 @@ class TestPostModel:
 
     def test_detail_html_respects_render_for_feed_param(self, mocker, rf):
         expected_html = "<h1>foo</h1><p>bar</p>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=True)
         html_field._context = {"request": rf.get("/?render_for_feed=false")}
         detail = html_field.to_representation(Post())
@@ -248,7 +257,7 @@ class TestPostModel:
 
     def test_detail_html_without_request_uses_default_render_for_feed(self, mocker):
         expected_html = "<h1>foo</h1><p>bar</p>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=True)
         html_field._context = {"request": None}
         detail = html_field.to_representation(Post())

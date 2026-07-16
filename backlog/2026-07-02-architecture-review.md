@@ -58,10 +58,12 @@ unit-testable without a request/template stack, and mutating `_local_template_na
 footgun. Direction: move template-name resolution and description rendering into the view/feed layer or a presenter;
 keep the model to fields, persistence, and pure derivations.
 
-Fix note (partial, 2026-07-02): `get_description` is now side-effect free — the body template travels as a `serve`
-kwarg and the `_local_template_name` machinery is gone (it was a real bug: instances rendered after a description
-kept the feed partial). Full presenter extraction remains open (phase 2 of the model-layer decoupling backlog
-item).
+Fix note (2026-07-16): `get_description` first became side-effect free on 2026-07-02 — the body template travels as
+a `serve` kwarg and the `_local_template_name` machinery is gone (it was a real bug: instances rendered after a
+description kept the feed partial). The rendering implementation now lives in
+`cast.presenters.render_post_description`; feeds and rendered Wagtail API fields call it directly, while
+`Post.get_description` remains as a compatibility wrapper for external callers. Other request-aware presentation
+responsibilities on `Post`, including template and cover-image selection, remain future decoupling work.
 
 ### H2. `save()` overrides do expensive, surprising work on every write
 

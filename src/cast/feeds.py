@@ -18,6 +18,7 @@ from wagtail.images.models import Image
 
 from cast import appsettings
 from cast.http_types import HtmxHttpRequest
+from cast.presenters import render_post_description
 from cast.site_lookup import get_site_specific_page_or_404
 
 from .models import Audio, Blog, EpisodeContributor, Podcast, Post
@@ -137,8 +138,12 @@ class RepositoryMixin(Feed):
         repository = None
         if self.repository is not None:
             repository = self.repository.get_post_detail_repository(item)
-        item.description = item.get_description(
-            request=self.request, render_detail=True, escape_html=False, repository=repository
+        item.description = render_post_description(
+            item,
+            request=self.request,
+            render_detail=True,
+            escape_html=False,
+            repository=repository,
         )
         return item.description
 

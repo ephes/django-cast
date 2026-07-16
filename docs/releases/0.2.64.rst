@@ -1,2 +1,5 @@
 0.2.64 (unreleased)
 -------------------
+
+- Move post-description rendering into ``cast.presenters.render_post_description`` and have feeds and rendered
+  Wagtail API fields use the presenter directly. ``Post.get_description()`` remains as a compatible wrapper.

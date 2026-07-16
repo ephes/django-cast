@@ -154,7 +154,7 @@ episodes because episodes use ``Post.body``.
 
 - ``sync_media_ids()``: Syncs media from StreamField to relationships
 - ``get_all_images()``: Returns all images including from galleries
-- ``get_description()``: Renders content for feeds and meta tags
+- ``get_description()``: Compatibility wrapper for the post-description presenter
 - ``get_repository()``: Returns optimized data repository
 
 **Properties:**
@@ -172,11 +172,12 @@ Since you can set a base directory for templates, the `get_template`
 method is overridden to get the base directory from the request and
 return the correct template.
 
-To be able to render the description of a post without the base template,
-there's a `_local_template_name` attribute set on the `Post` class that
-can be used to override the template name. This is used for example in
-the `get_description` method to render the description of the post using
-the `post_body.html` template for the feed and the twitter card.
+Post descriptions for feeds, cards, and rendered API fields are produced by
+``cast.presenters.render_post_description``. The presenter renders the post
+with the ``post_body.html`` template and accepts options for detail content,
+feed rendering, HTML escaping, and newline removal. ``Post.get_description``
+remains available as a compatibility wrapper, while django-cast's feed and
+Wagtail API callers use the presenter directly.
 
 API-Fields
 ----------
