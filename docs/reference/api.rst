@@ -403,6 +403,39 @@ editor API. Manage them on the podcast page in Wagtail or through the Django
 admin; editor API episode endpoints only manage episode-level publishing
 metadata.
 
+**Look up one editable post by parent and slug**::
+
+    GET /api/editor/posts/?parent=123&slug=weeknotes-2026-25
+
+Returns the normal editor post object for the exact ``Post`` direct child whose
+stored slug exactly matches ``slug`` under the exact ``Blog``/``Podcast`` parent
+id. Slug matching uses each post's latest editable revision, not only the
+materialized live page row, so an unpublished slug edit is immediately findable
+under its new value. This is a deterministic single-object lookup, not a list or
+search endpoint, and it is not paginated. Both filters must occur exactly once:
+``parent`` must be a positive integer and ``slug`` must be a valid slug. Unknown,
+duplicate, missing, or malformed filters return the standard ``validation_error``
+envelope; an unknown parent or no exact direct-child match returns ``404
+not_found``. Legacy data with more than one editable latest revision matching the
+same parent and slug fails closed as ``409 ambiguous_lookup``.
+
+The caller must be authenticated, have Wagtail admin access, and have edit
+permission for the matching post. A matching post that the caller cannot edit
+returns ``403 permission_denied`` and is never serialized. As with the id-based
+read endpoint, the response uses the latest editable revision, so a live post
+with unpublished changes has ``live: true`` and ``status: "draft"``. This is a
+read-only action, requires no token scope, and does not expose publishing or
+change create behavior on the same collection URL.
+
+Post creation performs a no-op write to the selected parent inside the same
+transaction as the sibling slug check and child insertion, then reloads the
+parent's tree metadata. PostgreSQL therefore holds the parent row's write lock;
+SQLite holds its database write lock. Concurrent creators for the same parent and
+slug serialize on both supported backends: one succeeds and the other receives
+the normal duplicate-slug validation response, which lookup-first clients can
+resolve deterministically (subject to the deployment's normal database lock
+timeout rather than an application-level fallback).
+
 **Create a draft post**::
 
     POST /api/editor/posts/
@@ -983,6 +1016,7 @@ Authorization uses standard Wagtail page permissions:
 
 - ``GET /api/editor/parents/`` — lists pages where the caller has
   add-child permission.
+- ``GET /api/editor/posts/?parent=…&slug=…`` — requires edit permission for the exact matching direct-child post.
 - ``POST /api/editor/posts/`` — requires add-child permission on the
   selected parent.
 - ``GET /api/editor/posts/{id}/`` — requires edit permission for the page.

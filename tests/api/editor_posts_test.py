@@ -63,6 +63,175 @@ def superuser(django_user_model):
     )
 
 
+class TestEditorPostLookup:
+    pytestmark = pytest.mark.django_db
+
+    def _url(self, parent_id, slug):
+        return reverse("cast:api:editor_post_create") + f"?parent={parent_id}&slug={slug}"
+
+    def test_requires_authentication(self, api_client, blog):
+        response = api_client.get(self._url(blog.id, "weeknotes"))
+
+        assert response.status_code in (401, 403)
+
+    def test_requires_wagtail_admin_access(self, api_client, blog):
+        user = page_permission_user(codenames=("change_page",))
+        api_client.force_authenticate(user=user)
+
+        response = api_client.get(self._url(blog.id, "weeknotes"))
+
+        assert response.status_code == 403
+        assert response.json()["code"] == "permission_denied"
+
+    @pytest.mark.parametrize(
+        ("query", "field"),
+        [
+            ("slug=weeknotes", "parent"),
+            ("parent=not-an-id&slug=weeknotes", "parent"),
+            ("parent=0&slug=weeknotes", "parent"),
+            ("parent=1", "slug"),
+            ("parent=1&slug=not%20a%20slug", "slug"),
+        ],
+    )
+    def test_rejects_missing_or_malformed_filters(self, api_client, admin_user, query, field):
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.get(reverse("cast:api:editor_post_create") + f"?{query}")
+
+        assert response.status_code == 400
+        assert response.json()["code"] == "validation_error"
+        assert field in response.json()["errors"]
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "parent=1&parent=2&slug=weeknotes",
+            "parent=1&slug=one&slug=two",
+            "parent=1&slug=weeknotes&search=extra",
+        ],
+    )
+    def test_rejects_duplicate_or_unknown_filters(self, api_client, admin_user, query):
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.get(reverse("cast:api:editor_post_create") + f"?{query}")
+
+        assert response.status_code == 400
+        assert response.json()["code"] == "validation_error"
+
+    @pytest.mark.parametrize("parent_id", [999999, None])
+    def test_unknown_parent_or_no_match_returns_404(self, api_client, blog, admin_user, parent_id):
+        api_client.force_authenticate(user=admin_user)
+        parent_id = blog.id if parent_id is None else parent_id
+
+        response = api_client.get(self._url(parent_id, "missing-post"))
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Post not found."}
+
+    def test_returns_normal_editor_shape_for_exact_draft(self, api_client, blog, admin_user):
+        api_client.force_authenticate(user=admin_user)
+        create_response = api_client.post(
+            reverse("cast:api:editor_post_create"),
+            {
+                "parent": {"id": blog.id},
+                "title": "Lookup draft",
+                "slug": "lookup-draft",
+                "tags": ["weeknotes"],
+                "overview": [{"type": "paragraph", "value": "<p>Draft.</p>"}],
+            },
+            format="json",
+        )
+        assert create_response.status_code == 201, create_response.content
+
+        response = api_client.get(self._url(blog.id, "lookup-draft"))
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == create_response.json()["id"]
+        assert data["type"] == "cast.Post"
+        assert data["parent"] == {"id": blog.id}
+        assert data["slug"] == "lookup-draft"
+        assert data["overview"] == [{"type": "paragraph", "value": "<p>Draft.</p>"}]
+        assert data["latest_revision_id"] == create_response.json()["latest_revision_id"]
+        assert data["live"] is False
+        assert data["status"] == "draft"
+
+    def test_returns_latest_unpublished_revision_of_live_post(self, api_client, blog, admin_user):
+        post = PostFactory(parent=blog, owner=admin_user, title="Live title", slug="live-with-draft")
+        draft = post.get_latest_revision_as_object()
+        draft.title = "Unpublished title"
+        revision = draft.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.get(self._url(blog.id, "live-with-draft"))
+
+        assert response.status_code == 200
+        assert response.json()["title"] == "Unpublished title"
+        assert response.json()["latest_revision_id"] == revision.id
+        assert response.json()["live"] is True
+        assert response.json()["status"] == "draft"
+
+    def test_lookup_matches_latest_unpublished_slug_not_materialized_slug(self, api_client, blog, admin_user):
+        post = PostFactory(parent=blog, owner=admin_user, title="Original", slug="original-slug", live=False)
+        draft = post.get_latest_revision_as_object()
+        draft.slug = "latest-draft-slug"
+        draft.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+
+        old_response = api_client.get(self._url(blog.id, "original-slug"))
+        new_response = api_client.get(self._url(blog.id, "latest-draft-slug"))
+
+        assert old_response.status_code == 404
+        assert new_response.status_code == 200
+        assert new_response.json()["id"] == post.id
+        assert new_response.json()["slug"] == "latest-draft-slug"
+
+    def test_lookup_rejects_ambiguous_latest_draft_slug(self, api_client, blog, admin_user):
+        for stored_slug in ("stored-one", "stored-two"):
+            post = PostFactory(parent=blog, owner=admin_user, title=stored_slug, slug=stored_slug, live=False)
+            draft = post.get_latest_revision_as_object()
+            draft.slug = "shared-draft-slug"
+            draft.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.get(self._url(blog.id, "shared-draft-slug"))
+
+        assert response.status_code == 409
+        assert response.json()["code"] == "ambiguous_lookup"
+
+    def test_scopes_lookup_to_exact_direct_parent(self, api_client, blog, admin_user):
+        other_blog = BlogFactory(parent=blog.get_parent(), owner=admin_user, slug="other-blog")
+        post = PostFactory(parent=other_blog, owner=admin_user, title="Other post", slug="same-slug")
+        nested = Post(title="Nested", slug="nested-post", owner=admin_user)
+        post.add_child(instance=nested)
+        non_post = Page(title="Not a post", slug="not-a-post", owner=admin_user)
+        blog.add_child(instance=non_post)
+        api_client.force_authenticate(user=admin_user)
+
+        for slug in ("same-slug", "nested-post", "not-a-post"):
+            response = api_client.get(self._url(blog.id, slug))
+            assert response.status_code == 404
+
+    def test_slug_match_is_case_sensitive(self, api_client, blog, admin_user):
+        PostFactory(parent=blog, owner=admin_user, title="Exact case", slug="Exact-Case")
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.get(self._url(blog.id, "exact-case"))
+
+        assert response.status_code == 404
+
+    def test_matching_post_requires_edit_permission(self, api_client, blog, admin_user):
+        PostFactory(parent=blog, owner=admin_user, title="Private draft", slug="private-draft")
+        stranger = UserFactory()
+        grant_wagtail_admin_access(stranger)
+        api_client.force_authenticate(user=stranger)
+
+        response = api_client.get(self._url(blog.id, "private-draft"))
+
+        assert response.status_code == 403
+        assert response.json()["code"] == "permission_denied"
+
+
 class TestEditorPostDetail:
     pytestmark = pytest.mark.django_db
 

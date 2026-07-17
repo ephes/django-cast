@@ -5,3 +5,9 @@
   Wagtail API fields use the presenter directly. ``Post.get_description()`` remains as a compatible wrapper.
 - Add a bounded, facet-aware title-prefix suggestion endpoint for optional theme typeahead interfaces. Suggestions
   include public post destinations only, use recent-first ordering, and keep existing full-text form search unchanged.
+- Add an authenticated editor API lookup for one post by exact direct parent id and slug. It returns the normal
+  draft-aware editor shape only when the caller can edit the matching direct child, uses the existing scope and
+  structured error rules, follows unpublished slug edits, rejects ambiguous/duplicate query input, and adds no
+  list/search or publishing behavior. A transactional parent no-op write serializes parent-scoped creation on
+  PostgreSQL and SQLite so competing same-slug creators converge through the existing duplicate-slug response and
+  lookup contract.

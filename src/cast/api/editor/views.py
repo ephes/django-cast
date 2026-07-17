@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, cast
 
+from django.db import transaction
+from django.db.models import F
 from django.http import HttpResponse
 from django.urls import reverse
 from django.utils.text import slugify
@@ -35,6 +37,7 @@ from .serializers import (
     EpisodeUpdateSerializer,
     ParentSerializer,
     PostCreateSerializer,
+    PostLookupSerializer,
     PostUpdateSerializer,
 )
 
@@ -303,7 +306,54 @@ class PostEditorMixin:
 
 
 class PostCreateView(PostEditorMixin, EditorAPIView):
-    required_scopes = {"POST": "write"}
+    required_scopes = {"GET": None, "POST": "write"}
+
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        expected = {"parent", "slug"}
+        errors: dict[str, list[dict[str, str]]] = {}
+        unknown = sorted(set(request.query_params) - expected)
+        if unknown:
+            errors["non_field_errors"] = [
+                {"code": "unknown", "message": f"Unknown query parameter(s): {', '.join(unknown)}."}
+            ]
+        lookup_data = {}
+        for field in expected:
+            values = request.query_params.getlist(field)
+            if len(values) != 1:
+                errors[field] = [
+                    {"code": "cardinality", "message": f"Query parameter {field!r} must occur exactly once."}
+                ]
+            else:
+                lookup_data[field] = values[0]
+        if errors:
+            raise EditorValidationError(errors)
+
+        serializer = PostLookupSerializer(data=lookup_data)
+        serializer.is_valid(raise_exception=True)
+        parent_id = serializer.validated_data["parent"]
+        slug = serializer.validated_data["slug"]
+
+        parent = Blog.objects.filter(pk=parent_id).first()
+        if parent is None:
+            raise EditorNotFound("Post not found.")
+        matches = []
+        for candidate in Post.objects.child_of(parent):
+            post = candidate.specific
+            content_post = post.get_latest_revision_as_object()
+            if content_post.slug == slug:
+                matches.append((post, content_post))
+        if not matches:
+            raise EditorNotFound("Post not found.")
+        if any(not post.permissions_for_user(request.user).can_edit() for post, _ in matches):
+            raise EditorPermissionDenied("You cannot view this draft.", parent_id=None)
+        if len(matches) > 1:
+            raise EditorFlatError(
+                "ambiguous_lookup",
+                "More than one editable post has this latest draft slug under the requested parent.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        post, content_post = matches[0]
+        return Response(self._serialize(post, user=request.user, content_post=content_post))
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = PostCreateSerializer(data=request.data)
@@ -322,8 +372,6 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
 
         title = data["title"]
         slug = data.get("slug") or slugify(title)
-        self._check_unique_slug(parent, slug)
-
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
         overview_value = author_blocks_to_overview(data["overview"], user=user)
@@ -336,29 +384,41 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         # Assign body as a JSON string (the proven pattern in tests/conftest.py);
         # the StreamField parses it on access. ``overview_value`` is the list of
         # internal block dicts produced by author_blocks_to_overview().
-        post = Post(
-            title=title,
-            slug=slug,
-            seo_title=data["seo_title"],
-            search_description=data["search_description"],
-            owner=user,
-            live=False,
-            cover_image=cover_image,
-            cover_alt_text=cover_alt_text,
-            body=json.dumps(body_sections),
-        )
-        if data.get("visible_date") is not None:
-            post.visible_date = data["visible_date"]
-        parent.add_child(instance=post)
-        if data["tags"]:
-            post.tags.add(*data["tags"])
-        if categories:
-            post.categories.set(categories)
-        if data["tags"] or categories:
-            # ClusterTaggableManager / ParentalManyToManyField accumulate changes
-            # in memory; flush them so the created page row and first revision agree.
-            post.save()
-        revision = post.save_revision(user=user)
+        with transaction.atomic():
+            from wagtail.models import Page
+
+            # An actual no-op write is portable where SELECT FOR UPDATE is not:
+            # PostgreSQL locks this row and SQLite takes its database write lock.
+            # Reload after waiting so treebeard sees the current numchild/path
+            # metadata before checking the slug and inserting the child.
+            updated = Page.objects.filter(pk=parent.pk).update(numchild=F("numchild"))
+            if updated != 1:
+                raise EditorNotFound("Post parent not found.")
+            parent = self._get_parent(parent.pk)
+            self._check_unique_slug(parent, slug)
+            post = Post(
+                title=title,
+                slug=slug,
+                seo_title=data["seo_title"],
+                search_description=data["search_description"],
+                owner=user,
+                live=False,
+                cover_image=cover_image,
+                cover_alt_text=cover_alt_text,
+                body=json.dumps(body_sections),
+            )
+            if data.get("visible_date") is not None:
+                post.visible_date = data["visible_date"]
+            parent.add_child(instance=post)
+            if data["tags"]:
+                post.tags.add(*data["tags"])
+            if categories:
+                post.categories.set(categories)
+            if data["tags"] or categories:
+                # ClusterTaggableManager / ParentalManyToManyField accumulate changes
+                # in memory; flush them so the created page row and first revision agree.
+                post.save()
+            revision = post.save_revision(user=user)
 
         return Response(
             self._serialize(post, user=user, content_post=post, revision=revision),

@@ -3,7 +3,12 @@
 Date: 2026-06-19
 
 Status: Slice 1 implemented (2026-06-22): `GET /api/editor/parents/`, `POST /api/editor/posts/`, and
-`GET /api/editor/posts/{id}/` are shipped. The API is authentication-mechanism agnostic, authenticates with Django
+`GET /api/editor/posts/{id}/` are shipped. An exact, permission-checked direct-parent plus slug lookup on
+`GET /api/editor/posts/?parent=…&slug=…` was added on 2026-07-18 for deterministic draft find-or-create clients; it is
+not a generic list/search endpoint. It matches the latest editable revision, rejects ambiguous query/cardinality and
+legacy duplicate-draft matches, and a transactional parent no-op write serializes same-slug create races on both
+PostgreSQL and SQLite. The API is
+authentication-mechanism agnostic, authenticates with Django
 session auth in the first slice, and authorizes with Wagtail page permissions. The body contract is a structured block
 list (heading, paragraph, code, image, gallery).
 

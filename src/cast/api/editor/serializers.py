@@ -19,6 +19,11 @@ class CoverImageSerializer(serializers.Serializer):
     alt_text = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class PostLookupSerializer(serializers.Serializer):
+    parent = serializers.IntegerField(min_value=1)
+    slug = serializers.SlugField()
+
+
 class PostCreateSerializer(serializers.Serializer):
     parent = ParentRefSerializer()
     title = serializers.CharField()

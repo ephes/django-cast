@@ -722,6 +722,28 @@ class TestEditorPostCreate:
         assert body["code"] == "validation_error"
         assert "parent" in body["errors"]
 
+    def test_parent_disappearing_before_transactional_lock_is_not_found(
+        self, api_client, blog, admin_user, monkeypatch
+    ):
+        from wagtail.models import Page
+
+        class MissingParentQuery:
+            def update(self, **kwargs):
+                assert set(kwargs) == {"numchild"}
+                return 0
+
+        monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.post(
+            reverse("cast:api:editor_post_create"),
+            self._payload(blog, slug="parent-race"),
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Post parent not found."}
+
     def test_missing_required_field_uses_envelope(self, api_client, blog, admin_user):
         api_client.force_authenticate(user=admin_user)
         url = reverse("cast:api:editor_post_create")

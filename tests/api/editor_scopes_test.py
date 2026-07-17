@@ -321,8 +321,11 @@ class TestEditorScopeEnforcement:
         created = self._create_draft(api_client, blog, admin_user)
         # A token scoped only for publish can still GET (reads need no scope).
         api_client.force_authenticate(user=admin_user, token=_FakeScopedToken("publish"))
-        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
-        assert api_client.get(url, format="json").status_code == 200
+        detail_url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        lookup_url = reverse("cast:api:editor_post_create") + f"?parent={blog.id}&slug=scope-draft"
+
+        assert api_client.get(detail_url, format="json").status_code == 200
+        assert api_client.get(lookup_url, format="json").status_code == 200
 
     def test_cast_editor_scopes_override_is_honoured(self, api_client, blog, admin_user, settings):
         # Rename the write scope to match a site's issuer vocabulary.
@@ -355,5 +358,5 @@ class TestEditorScopeEnforcement:
     def test_unsupported_method_is_405_not_403(self, api_client, admin_user):
         # GET on a POST-only view must return 405 Method Not Allowed, not a scope 403.
         api_client.force_authenticate(user=admin_user)
-        response = api_client.get(reverse("cast:api:editor_post_create"), format="json")
+        response = api_client.get(reverse("cast:api:editor_post_publish", kwargs={"pk": 999999}), format="json")
         assert response.status_code == 405
