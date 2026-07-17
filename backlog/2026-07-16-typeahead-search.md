@@ -203,8 +203,9 @@ Use the WAI-ARIA editable combobox/listbox pattern:
 - Escape closes suggestions and preserves text; in the Bootstrap modal a second
   Escape may close the modal;
 - Tab closes suggestions without selecting;
-- typing closes the current suggestion list, clears the active option, and does
-  not steal focus;
+- typing clears the active option without stealing focus; when a settled list
+  is already open, keep it visible but temporarily non-selectable while the
+  matching response is pending so routine prefix refinement does not flicker;
 - use at least 44-pixel pointer targets and a scrollable list of roughly six
   visible rows on mobile;
 - use a suggestion-specific polite live region rather than sharing the facet
@@ -217,8 +218,9 @@ Suggested request behavior:
 - start with a 200-250 ms trailing debounce and tune from measurements;
 - abort the previous request and also reject responses whose echoed query no
   longer matches the input;
-- clear old suggestions as soon as the query changes so a stale destination
-  cannot be selected while a new request is in flight;
+- clear the active suggestion as soon as the query changes and make the
+  previously rendered list busy and non-selectable while a new request is in
+  flight; replace or close it when the matching response settles;
 - show a loading indicator only after a short delay;
 - use a page-lifetime LRU cache keyed by normalized query plus facet state;
 - treat aborted requests as normal;
