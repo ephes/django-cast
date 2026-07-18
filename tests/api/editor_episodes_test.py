@@ -453,6 +453,50 @@ class TestEditorEpisodeUpdate:
         assert response.status_code == 400
         assert response.json()["errors"]["publish"][0]["code"] == "unsupported"
 
+    def test_draft_only_patch_locks_and_accepts_unpublished_episode(self, api_client, podcast, admin_user, mocker):
+        created = self._create(api_client, podcast, admin_user)
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+        lock = mocker.patch.object(Post.objects, "select_for_update", wraps=Post.objects.select_for_update)
+
+        response = api_client.patch(
+            url,
+            {
+                "base_revision_id": created["latest_revision_id"],
+                "require_unpublished": True,
+                "title": "Still a draft episode",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["live"] is False
+        assert response.json()["title"] == "Still a draft episode"
+        lock.assert_called_once_with()
+
+    def test_draft_only_patch_rejects_published_episode(self, api_client, podcast, admin_user):
+        created = self._create(api_client, podcast, admin_user)
+        episode = Episode.objects.get(pk=created["id"])
+        episode.get_latest_revision().publish(user=admin_user)
+        episode.refresh_from_db()
+        revision_id = episode.latest_revision_id
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {
+                "base_revision_id": revision_id,
+                "require_unpublished": True,
+                "title": "Must not be written",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.json()["code"] == "published_post"
+        episode.refresh_from_db()
+        assert episode.latest_revision_id == revision_id
+        assert episode.get_latest_revision_as_object().title != "Must not be written"
+
     def test_stale_base_revision_returns_conflict(self, api_client, podcast, admin_user):
         created = self._create(api_client, podcast, admin_user)
         episode = Episode.objects.get(id=created["id"])

@@ -41,6 +41,7 @@ class PostCreateSerializer(serializers.Serializer):
 
 class PostUpdateSerializer(serializers.Serializer):
     base_revision_id = serializers.IntegerField(required=False)
+    require_unpublished = serializers.BooleanField(required=False, default=False)
     title = serializers.CharField(required=False)
     slug = serializers.SlugField(required=False)
     seo_title = serializers.CharField(required=False, allow_blank=True, max_length=255)

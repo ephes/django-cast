@@ -11,3 +11,6 @@
   list/search or publishing behavior. A transactional parent no-op write serializes parent-scoped creation on
   PostgreSQL and SQLite so competing same-slug creators converge through the existing duplicate-slug response and
   lookup contract.
+- Add the optional ``require_unpublished`` precondition to post and episode editor PATCH requests. When enabled,
+  published pages are rejected with ``409 published_post``; live-state and revision checks are serialized with the
+  draft revision write so draft-only automation cannot race a concurrent publish.

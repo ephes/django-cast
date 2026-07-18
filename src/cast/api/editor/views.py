@@ -138,8 +138,9 @@ class PostEditorMixin:
             )
         return blog.specific
 
-    def _get_post(self, pk: int, user: Any, *, denied_message: str) -> Post:
-        post = Post.objects.filter(pk=pk).first()
+    def _get_post(self, pk: int, user: Any, *, denied_message: str, for_update: bool = False) -> Post:
+        posts = Post.objects.select_for_update() if for_update else Post.objects
+        post = posts.filter(pk=pk).first()
         if post is None:
             raise EditorNotFound("Post not found.")
         post = post.specific
@@ -433,6 +434,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         post = self._get_post(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(post, user=request.user))
 
+    @transaction.atomic
     def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         serializer = PostUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -443,12 +445,12 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
             raise EditorValidationError(
                 {"publish": [{"code": "unsupported", "message": "Publishing is not available in this API version."}]}
             )
-        if not (set(data) - {"base_revision_id", "publish"}):
+        if not (set(data) - {"base_revision_id", "publish", "require_unpublished"}):
             raise EditorValidationError(
                 {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
             )
 
-        post = self._get_post(pk, user, denied_message="You cannot edit this draft.")
+        post = self._get_post(pk, user, denied_message="You cannot edit this draft.", for_update=True)
         current_revision_id = post.latest_revision_id
         edit_url = reverse("wagtailadmin_pages:edit", args=[post.id])
         if current_revision_id != submitted_base_revision_id:
@@ -456,6 +458,12 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
                 current_revision_id=current_revision_id,
                 submitted_base_revision_id=submitted_base_revision_id,
                 edit_url=edit_url,
+            )
+        if data["require_unpublished"] and post.live:
+            raise EditorFlatError(
+                "published_post",
+                "This post is already live; the requested draft-only update was refused.",
+                status_code=status.HTTP_409_CONFLICT,
             )
 
         draft = post.get_latest_revision().as_object()
@@ -532,10 +540,11 @@ class EpisodeEditorMixin(PostEditorMixin):
             )
         return parent
 
-    def _get_episode(self, pk: int, user: Any, *, denied_message: str) -> Episode:
+    def _get_episode(self, pk: int, user: Any, *, denied_message: str, for_update: bool = False) -> Episode:
         # ``.specific()`` resolves the typed subclass row in the same query, so a
         # plain ``Post`` and a missing page both fall through to the not-found path.
-        episode = Post.objects.filter(pk=pk).specific().first()
+        episodes = Post.objects.select_for_update() if for_update else Post.objects
+        episode = episodes.filter(pk=pk).specific().first()
         if not isinstance(episode, Episode):
             raise EditorNotFound("Episode not found.")
         if not episode.permissions_for_user(user).can_edit():
@@ -680,6 +689,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         episode = self._get_episode(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(episode, user=request.user))
 
+    @transaction.atomic
     def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         serializer = EpisodeUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -690,12 +700,12 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
             raise EditorValidationError(
                 {"publish": [{"code": "unsupported", "message": "Publishing is not available in this API version."}]}
             )
-        if not (set(data) - {"base_revision_id", "publish"}):
+        if not (set(data) - {"base_revision_id", "publish", "require_unpublished"}):
             raise EditorValidationError(
                 {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
             )
 
-        episode = self._get_episode(pk, user, denied_message="You cannot edit this draft.")
+        episode = self._get_episode(pk, user, denied_message="You cannot edit this draft.", for_update=True)
         current_revision_id = episode.latest_revision_id
         edit_url = reverse("wagtailadmin_pages:edit", args=[episode.id])
         if current_revision_id != submitted_base_revision_id:
@@ -703,6 +713,12 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
                 current_revision_id=current_revision_id,
                 submitted_base_revision_id=submitted_base_revision_id,
                 edit_url=edit_url,
+            )
+        if data["require_unpublished"] and episode.live:
+            raise EditorFlatError(
+                "published_post",
+                "This episode is already live; the requested draft-only update was refused.",
+                status_code=status.HTTP_409_CONFLICT,
             )
 
         # ``parent`` is immutable on PATCH, so the season constraint resolves against

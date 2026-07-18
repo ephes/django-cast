@@ -625,6 +625,11 @@ unsupported.
 Update fields:
 
 - ``base_revision_id`` (optional when ``If-Match`` is supplied): optimistic concurrency token.
+- ``require_unpublished`` (optional, default ``false``): when ``true``, reject
+  the update with ``409 published_post`` if the page is live. The live-state
+  check and revision-token check run under the same transactional row lock as
+  the new revision, so a concurrent publish cannot slip between validation and
+  the draft write.
 - ``title`` (optional): page title.
 - ``slug`` (optional): URL slug; must remain unique under the same parent.
 - ``seo_title`` (optional): Wagtail Promote-tab title; send ``""`` to clear it.
@@ -644,12 +649,24 @@ Example update request:
 
     {
       "base_revision_id": 6543,
+      "require_unpublished": true,
       "title": "Updated draft title",
       "seo_title": "Updated search title",
       "search_description": "A concise updated summary.",
       "overview": [
         {"type": "paragraph", "value": "<p>Updated draft text.</p>"}
       ]
+    }
+
+Automation that is allowed to edit drafts but must never write after publication
+should always send ``require_unpublished: true``. A page that is already live is
+left unchanged and returns:
+
+.. code-block:: json
+
+    {
+      "code": "published_post",
+      "detail": "This post is already live; the requested draft-only update was refused."
     }
 
 Instead of putting the token in the JSON body, clients may send the same
@@ -744,8 +761,9 @@ posts use the standard ``not_found`` envelope.
 Podcast episodes have dedicated draft create/read/update endpoints that mirror
 the post endpoints. ``Episode`` is a ``Post`` subclass, so the body
 (``overview``/``detail``), ``tags``, ``categories``, ``cover_image``,
-``visible_date``, ``slug``, revision/``base_revision_id`` conflict detection, the
-draft-only ``publish`` guard, and the structured error envelopes all behave
+``visible_date``, ``slug``, revision/``base_revision_id`` conflict detection,
+the atomic ``require_unpublished`` precondition, the draft-only ``publish``
+guard, and the structured error envelopes all behave
 exactly as documented for posts above. The endpoints are::
 
     POST  /api/editor/episodes/
