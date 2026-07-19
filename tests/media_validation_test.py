@@ -4,6 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from cast.forms import AudioForm, VideoForm
+from cast.media_derivation import save_audio_with_derivations, save_video_with_derivations
 from cast.media_validation import validate_audio_upload, validate_video_upload
 from cast.models import Audio, Video
 
@@ -181,7 +182,7 @@ def test_audio_save_rejects_invalid_upload_before_ffprobe(user, mocker):
     audio = Audio(user=user, m4a=upload("clip.m4a", b"not a media file", "audio/mp4"))
 
     with pytest.raises(ValidationError):
-        audio.save()
+        save_audio_with_derivations(audio)
 
     get_duration.assert_not_called()
     assert Audio.objects.count() == 0
@@ -193,7 +194,7 @@ def test_video_save_rejects_invalid_upload_before_ffmpeg(user, mocker):
     video = Video(user=user, title="clip", original=upload("clip.mp4", b"not a media file", "video/mp4"))
 
     with pytest.raises(ValidationError):
-        video.save()
+        save_video_with_derivations(video)
 
     create_poster.assert_not_called()
     assert Video.objects.count() == 0

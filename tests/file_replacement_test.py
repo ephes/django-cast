@@ -164,6 +164,20 @@ def test_new_field_success_does_not_delete_old_file(django_capture_on_commit_cal
     ]
 
 
+def test_staged_replacement_uses_requested_database_alias(mocker) -> None:
+    storage = RecordingStorage()
+    replacements = StagedFileReplacementGroup()
+    model = RecordingModel(storage)
+    atomic = mocker.patch("cast.file_replacement.transaction.atomic")
+    on_commit = mocker.patch("cast.file_replacement.transaction.on_commit")
+
+    replacements.save_model(model, using="archive")
+
+    atomic.assert_called_once_with(using="archive")
+    assert on_commit.call_args.kwargs == {"using": "archive"}
+    assert storage.events == [("db_save", None)]
+
+
 def test_rollback_restores_same_name_replacement_without_deleting_file() -> None:
     storage = RecordingStorage(files={"same-name.json"})
     field = RecordingField(storage, "replacement-name.json")

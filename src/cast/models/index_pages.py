@@ -2,13 +2,10 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 
-import django.forms.forms
 from django.core.validators import MinValueValidator
-from django.core.paginator import InvalidPage, Page as DjangoPage, Paginator
 from django.db import models
-from django.http import Http404
 from django.http.request import QueryDict
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -21,9 +18,18 @@ from wagtail.images.models import Image
 from wagtail.models import Page, PageManager
 
 from cast import appsettings
-from cast.player import audio_player_context_flags
-from cast.follow_links import get_follow_links
-from cast.filters import PostFilterset, get_active_facets, has_active_filters
+from cast.blog_index import (
+    apply_repository_context,
+    cover_image_context,
+    create_blog_filterset,
+    create_theme_form,
+    next_and_previous_pages,
+    other_get_params,
+    pagination_context,
+    present_blog_index_context,
+    published_posts_for_index,
+    unfiltered_published_posts,
+)
 from cast.http_types import HtmxHttpRequest
 from cast.models.itunes import ItunesArtWork
 
@@ -32,6 +38,12 @@ from .repository import BlogIndexContext
 from .theme import get_template_base_dir, get_template_base_dir_choices
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from django.core.paginator import Page as DjangoPage
+    from django.forms import Form
+
+    from cast.blog_index import PostFilterset
 
 
 ContextDict = dict[str, Any]
@@ -199,84 +211,25 @@ class Blog(Page):
 
     @property
     def unfiltered_published_posts(self) -> models.QuerySet[Post]:
-        if self.pk is None:
-            # this blog is not saved to database yet, therefore it has no posts
-            return Post.objects.none()
-        return Post.objects.live().public().descendant_of(self).order_by("-visible_date")
+        return unfiltered_published_posts(self)
 
-    def get_filterset(self, get_params: QueryDict) -> PostFilterset:
-        return PostFilterset(data=get_params, queryset=self.unfiltered_published_posts)
+    def get_filterset(self, get_params: QueryDict) -> "PostFilterset":
+        return create_blog_filterset(self, get_params)
 
     @staticmethod
     def get_published_posts(filtered_posts: models.QuerySet) -> models.QuerySet[Post]:
-        queryset = filtered_posts
-        queryset = queryset.select_related("owner", "cover_image")
-        queryset = queryset.prefetch_related(
-            "audios",
-            "images",
-            "videos",
-            "galleries",
-            "galleries__images",
-            "images__renditions",
-            "galleries__images__renditions",
-        )
-        return queryset
+        return published_posts_for_index(filtered_posts)
 
     @staticmethod
-    def get_next_and_previous_pages(page: DjangoPage) -> dict[str, int | None | bool]:
-        previous_page_number = None
-        has_previous = page.has_previous()
-        if has_previous:
-            previous_page_number = page.previous_page_number()
-        has_next = page.has_next()
-        next_page_number = None
-        if has_next:
-            next_page_number = page.next_page_number()
-        return {
-            "has_previous": has_previous,
-            "previous_page_number": previous_page_number,
-            "has_next": has_next,
-            "next_page_number": next_page_number,
-        }
+    def get_next_and_previous_pages(page: "DjangoPage") -> dict[str, int | None | bool]:
+        return next_and_previous_pages(page)
 
     def get_pagination_context(self, posts_queryset: models.QuerySet["Post"], get_params: QueryDict) -> ContextDict:
-        paginator = Paginator(posts_queryset, appsettings.POST_LIST_PAGINATION)
-        page_from_url = "1"
-        if "page" in get_params:
-            page_from_url = str(get_params["page"])
-        try:
-            page_number = int(page_from_url)
-        except ValueError:
-            if page_from_url == "last":
-                page_number = paginator.num_pages
-            else:
-                raise Http404(_("Page is not “last”, nor can it be converted to an int."))
-        try:
-            page = paginator.page(page_number)
-        except InvalidPage as e:
-            raise Http404(
-                _("Invalid page (%(page_number)s): %(message)s") % {"page_number": page_number, "message": str(e)}
-            )
-        page_range = page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1)  # type: ignore
-        pagination_context = {
-            "ellipsis": paginator.ELLIPSIS,  # type: ignore
-            "page_number": page.number,
-            "page_range": list(page_range),
-            "object_list": page.object_list,
-            "is_paginated": page.has_other_pages(),
-        }
-        pagination_context |= self.get_next_and_previous_pages(page)
-        return pagination_context
+        return pagination_context(posts_queryset, get_params)
 
     @staticmethod
     def get_other_get_params(get_params: QueryDict) -> str:
-        filtered_get_params = {k: str(v) for k, v in get_params.items() if k != "page"}
-        new_get_params = QueryDict("", mutable=True)
-        new_get_params.update(filtered_get_params)
-        parameters = new_get_params.urlencode()
-        if len(parameters) > 0:
-            parameters = f"&{parameters}"
-        return parameters
+        return other_get_params(get_params)
 
     @property
     def wagtail_api_pages_url(self) -> str:
@@ -311,53 +264,20 @@ class Blog(Page):
     def pagination_page_size(self) -> int:
         return appsettings.POST_LIST_PAGINATION
 
-    def get_theme_form(self, next_path: str, template_base_dir: str) -> django.forms.forms.Form:
-        from ..forms import SelectThemeForm
-
-        return SelectThemeForm(
-            initial={
-                "template_base_dir": template_base_dir,
-                "next": next_path,
-            }
-        )
+    def get_theme_form(self, next_path: str, template_base_dir: str) -> "Form":
+        return create_theme_form(next_path, template_base_dir)
 
     def get_cover_image_context(self) -> dict[str, str]:
-        context = {"cover_image_url": "", "cover_alt_text": ""}
-        if self.cover_image is not None:
-            context["cover_image_url"] = cast(Image, self.cover_image).file.url
-            context["cover_alt_text"] = self.cover_alt_text
-        return context
+        return cover_image_context(self)
 
     @staticmethod
     def get_context_from_repository(context: ContextDict, repository: BlogIndexContext) -> ContextDict:
-        context |= repository.pagination_context  # includes object_list
-        context["filterset"] = repository.filterset
-        context["template_base_dir"] = repository.template_base_dir
-        context["use_audio_player"] = repository.use_audio_player
-        context.update(audio_player_context_flags(enabled=repository.use_audio_player))
-        context["root_nav_links"] = repository.root_nav_links
-        return context
+        return apply_repository_context(context, repository)
 
     def get_context(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)
-        context["repository"] = repository = self.get_repository(request, kwargs)
-        # now that we have the repository, we can set the template base dir
-        # to avoid db queries in context_processors
-        request.cast_site_template_base_dir = repository.template_base_dir
-        get_params = request.GET.copy()
-        context = self.get_context_from_repository(context, repository)
-        context["posts"] = context["object_list"]  # convenience
-        context["blog"] = self
-        context["canonical_url"] = self.full_url
-        context["has_selectable_themes"] = True
-        context["parameters"] = self.get_other_get_params(get_params)
-        context["theme_form"] = self.get_theme_form(request.path, context["template_base_dir"])
-        context["template_base_dir_choices"] = context["theme_form"].fields["template_base_dir"].choices  # type: ignore
-        context["next_url"] = request.get_full_path()
-        context["follow_links"] = get_follow_links(self)
-        context["active_facets"] = get_active_facets(context["filterset"], request)
-        context["has_active_filters"] = has_active_filters(context["filterset"], request)
-        return context
+        repository = self.get_repository(request, kwargs)
+        return present_blog_index_context(blog=self, request=request, context=context, repository=repository)
 
     def get_repository(self, request: HtmxHttpRequest, kwargs: dict[str, Any]) -> BlogIndexContext:
         if "repository" in kwargs:

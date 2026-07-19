@@ -136,6 +136,25 @@ which wraps a list of image choosers with an optional layout selector:
         # ...
     ])
 
+Programmatic Post Updates
+-------------------------
+
+Wagtail preview and publication prepare built-in media relationships and image
+renditions automatically. A direct model save deliberately has no media I/O.
+When code changes a post body outside those Wagtail boundaries, prepare its
+media explicitly after persistence:
+
+.. code-block:: python
+
+    from cast.post_media import prepare_post_media
+
+    post.body = updated_body
+    post.save()
+    prepare_post_media(post)
+
+The preparation step is synchronous because previews and repository rendering
+need the derived relationships and renditions immediately.
+
 .. _rendition_system:
 
 Rendition System Internals

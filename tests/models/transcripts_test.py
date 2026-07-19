@@ -54,6 +54,7 @@ def test_transcript_data_missing_files(tmp_path, settings):
     transcript.dote.name = "cast_transcript/missing_dote.json"
     assert transcript.podlove_data == {}
     assert transcript.dote_data == {}
+    assert transcript.transcript_artifact_fingerprint() == ""
 
 
 @pytest.fixture

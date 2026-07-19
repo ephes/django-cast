@@ -65,7 +65,7 @@ description kept the feed partial). The rendering implementation now lives in
 `Post.get_description` remains as a compatibility wrapper for external callers. Other request-aware presentation
 responsibilities on `Post`, including template and cover-image selection, remain future decoupling work.
 
-### H2. `save()` overrides do expensive, surprising work on every write
+### H2. `save()` overrides do expensive, surprising work on every write — Fixed (2026-07-19)
 
 - `Post.save` runs `sync_media_ids()` and `create_missing_renditions_for_posts([self])` on every save
   (pages.py:691-695) — file I/O as a side effect of saving a row.
@@ -79,6 +79,22 @@ Direction: move media derivation to signals/async tasks or explicit services; ma
 Fix note (partial, 2026-07-02): `Video.save` now wraps poster generation in `transaction.atomic` like `Audio.save`,
 and `Post.save` gained `sync_media`/`create_renditions` opt-out kwargs (defaults unchanged). Moving the derivation
 work to services/async remains open (phase 2).
+
+Fix note (2026-07-19): Post media relationship synchronization and responsive-rendition preparation moved to the
+explicit synchronous `cast.post_media.prepare_post_media` service. Wagtail preview calls it before rendering and a
+Wagtail publication signal covers admin, editor API, scheduled, bulk, copy, and other publication paths. Plain
+`Post.save()` no longer performs media I/O; its legacy `sync_media` and `create_renditions` kwargs remain explicit
+opt-ins but default to `False`. Repository rendering needs these derived values immediately, so this work deliberately
+stays synchronous rather than moving to background tasks.
+
+Fix note (2026-07-19): audio duration/file-size extraction, video poster generation, and transcript speaker-mapping
+synchronization now live behind the explicit transactional services in `cast.media_derivation`. Django/Wagtail admin
+forms, both API generations, transcript artifact replacement, development data, and styleguide media creation invoke
+those services at their orchestration boundaries. Plain `Audio.save()`, `Video.save()`, and `Transcript.save()` calls
+only persist fields. The old audio `duration`/`cache_file_sizes` and video `poster` kwargs remain explicit opt-in
+compatibility adapters; transcript callers can similarly opt in with `sync_speaker_mappings=True`. These operations
+remain synchronous because upload validation must precede persistence and editor/API responses require the derived
+metadata immediately.
 
 ### H3. `Transcript` is a 1575-line model containing file-format parsers — Fixed (2026-07-02)
 
@@ -156,6 +172,16 @@ neutral module; let presentation import models, not the reverse.
 
 Fix note (2026-07-02): `HtmxHttpRequest` moved to `cast/http_types.py` (re-exported from `cast.views` for
 compatibility); no `views` imports remain in `src/cast/models/`. The blocks/filters import inversion remains open.
+
+Fix note (2026-07-18): blog-index filterset construction, optimized post selection, pagination, cover context, and
+template-context assembly moved to `cast.blog_index`. Repository builders/contexts and the facet-count API use the
+extracted services directly; the existing `Blog` methods remain thin compatibility adapters. No direct
+`cast.filters` import remains in `models/index_pages.py`.
+
+Fix note (2026-07-19): `ContentBlock` and the HomePage block schema moved to `cast.post_body_blocks`, with the
+historical `cast.models.pages.ContentBlock` path retained as an import alias and explicit deconstruction path for
+external callers and serialized migrations. Model modules no longer import `cast.blocks` or `cast.filters`; an AST
+guard prevents those inverted dependencies from returning.
 
 ### M2. Settings resolution fragmented across five or six mechanisms
 

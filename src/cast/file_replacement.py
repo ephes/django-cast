@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
@@ -8,6 +9,8 @@ from uuid import uuid4
 
 from django.core.files.base import ContentFile
 from django.db import transaction
+
+from cast.media_derivation import normalize_model_save_arguments
 
 COMPOUND_SUFFIXES = (".podlove.json", ".dote.json", ".speakers.json")
 GENERATED_SUFFIX_RE = re.compile(r"(?:-[0-9a-f]{12})+$")
@@ -37,11 +40,21 @@ class StagedFileReplacementGroup:
         self.replacements.append(replacement)
         return replacement
 
-    def save_model(self, model: Any, *args: Any, **kwargs: Any) -> None:
+    def save_model(
+        self,
+        model: Any,
+        *args: Any,
+        save: Callable[..., None] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        save_kwargs, using = normalize_model_save_arguments(model, args, kwargs)
         try:
-            with transaction.atomic():
-                model.save(*args, **kwargs)
-                transaction.on_commit(self.delete_old_files)
+            with transaction.atomic(using=using):
+                if save is None:
+                    model.save(**save_kwargs)
+                else:
+                    save(model, **save_kwargs)
+                transaction.on_commit(self.delete_old_files, using=using)
         except Exception:
             self.rollback()
             raise

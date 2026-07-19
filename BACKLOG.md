@@ -60,17 +60,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
-- [ ] Model-layer decoupling (architecture review H1/H2/M1/M8)
-  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
-  - Status: phase 1 landed on 2026-07-02 — `HtmxHttpRequest` lives in `cast/http_types.py` (models no longer import
-    from views), `get_description` is side-effect free, `Video.save` is transactional, and `Post.save` has
-    `sync_media`/`create_renditions` opt-outs. Post-description rendering moved to `cast.presenters` on 2026-07-16;
-    `Post.get_description()` remains only as a compatibility wrapper.
-  - Scope: phase 2 remaining — extract media derivation into service modules (and decide on async), and invert the
-    remaining model→blocks/filters imports. (The mixed blog-index snapshot N+1 (M8) was fixed on 2026-07-02 with a
-    flat-query-count guard test.)
-  - Done when: save-side effects are explicit service calls and the remaining inverted presentation imports are gone.
-
 - [ ] Editor API remote media import safety design
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)

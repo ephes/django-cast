@@ -249,6 +249,16 @@ class TestTranscriptForm:
         form = TranscriptForm({"audio": audio.id}, {"podlove": podlove_transcript})
         assert form.is_valid()
 
+    def test_save_commit_false_defers_persistence_and_derivation(self, audio, mocker):
+        save_with_derivations = mocker.patch("cast.forms.save_transcript_with_derivations")
+        form = TranscriptForm({"audio": audio.id})
+        assert form.is_valid()
+
+        transcript = form.save(commit=False)
+
+        assert transcript.pk is None
+        save_with_derivations.assert_not_called()
+
     def test_podlove_invalid_json(self, audio):
         podlove = SimpleUploadedFile("podlove.json", b"not json", content_type="application/json")
         form = TranscriptForm({"audio": audio.id}, {"podlove": podlove})

@@ -9,9 +9,15 @@ from wagtail.blocks import StreamValue
 from wagtail.blocks.definition_lookup import BlockDefinitionLookup
 
 from cast.models import Blog
-from cast.models.pages import ContentBlock, HtmlField, Post
+from cast.models.pages import ContentBlock as LegacyContentBlock
+from cast.models.pages import HtmlField, Post
 from cast.models.repository import PostDetailContext
-from cast.post_body_blocks import configured_content_blocks, default_content_blocks
+from cast.post_body_blocks import (
+    ContentBlock,
+    configured_content_blocks,
+    default_content_blocks,
+    homepage_content_blocks,
+)
 from tests.factories import PostFactory
 
 
@@ -24,6 +30,14 @@ DEFAULT_BLOCK_NAMES = [
     "video",
     "audio",
 ]
+
+
+def test_content_block_keeps_legacy_model_import_path():
+    assert LegacyContentBlock is ContentBlock
+
+
+def test_homepage_content_blocks_match_existing_schema():
+    assert [name for name, _block in homepage_content_blocks()] == ["paragraph", "image", "gallery"]
 
 
 def _custom_body_stream_value(raw_body):

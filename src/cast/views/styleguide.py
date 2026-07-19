@@ -62,6 +62,8 @@ from cast.models.image_renditions import (
     get_obsolete_and_missing_rendition_strings,
 )
 from cast.models.repository import BlogIndexContext
+from cast.post_media import prepare_post_media
+from cast.media_derivation import save_audio_with_derivations, save_transcript_with_derivations
 from .htmx_helpers import HtmxHttpRequest
 
 STYLEGUIDE_BLOG_SLUG = "styleguide-blog"
@@ -446,6 +448,7 @@ def _ensure_posts(
             if needs_save:
                 post.save()
         post = _ensure_live(post)
+        prepare_post_media(post)
         posts.append(Post.objects.get(pk=post.pk).specific)
     return posts
 
@@ -556,6 +559,7 @@ def _ensure_episode(
         # Transcript may exist without podlove data; fall back to the seed payload for rendering.
         transcript_data = transcript.podlove_data or transcript_seed
     episode = _ensure_live(episode)
+    prepare_post_media(episode)
     return Episode.objects.get(pk=episode.pk).specific, transcript_data
 
 
@@ -759,8 +763,8 @@ def _ensure_podlove_transcript(audio: Audio, data: dict[str, Any]) -> Transcript
         transcript = Transcript.objects.create(audio=audio)
     if not transcript.podlove or transcript.podlove_data != data:
         podlove_content = json.dumps(data, indent=2)
-        transcript.podlove.save("podlove.json", ContentFile(podlove_content))
-        transcript.save()
+        transcript.podlove.save("podlove.json", ContentFile(podlove_content), save=False)
+        save_transcript_with_derivations(transcript)
     return transcript
 
 
@@ -1335,8 +1339,8 @@ def _get_or_create_remote_audio(url: str, user: User) -> Audio | None:
     except Exception:
         return None
     audio = Audio(user=user, title=clean_title, data={"styleguide_source_url": url})
-    audio.m4a.save(filename, ContentFile(content), save=True)
-    audio.save()
+    audio.m4a.save(filename, ContentFile(content), save=False)
+    save_audio_with_derivations(audio)
     return audio
 
 

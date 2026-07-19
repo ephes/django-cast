@@ -24,12 +24,10 @@ from modelcluster.fields import ParentalKey, ParentalManyToManyField
 from rest_framework.fields import Field
 from slugify import slugify
 from taggit.models import TaggedItemBase
-from wagtail import blocks
 from wagtail.admin.forms import WagtailAdminPageForm
 from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
 from wagtail.api import APIField
 from wagtail.fields import StreamField
-from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import Image, Rendition
 from wagtail.models import Page, PageManager, Site
 from wagtail.search import index
@@ -37,17 +35,18 @@ from wagtail.search import index
 from cast import appsettings
 from cast.player import audio_player_context_flags
 from cast.follow_links import get_follow_links
-from cast.blocks import (
-    CastImageChooserBlock,
-    GalleryBlock,
-)
 from cast.http_types import HtmxHttpRequest
-from cast.models import get_or_create_gallery
-from cast.post_body_blocks import configured_content_blocks, default_content_blocks
+from cast.post_media import (
+    media_ids_from_body,
+    prepare_post_media,
+    sync_media_ids as _sync_media_id_changes,
+    synchronize_post_media,
+)
+from cast.post_body_blocks import ContentBlock, homepage_content_blocks
 from cast.presenters import render_post_description
 from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
-from .image_renditions import ImagesWithType, create_missing_renditions_for_posts
+from .image_renditions import ImagesWithType
 from .repository import (
     AudioById,
     EpisodeFeedContext,
@@ -73,41 +72,12 @@ SOCIAL_COVER_RENDITION_SPEC = "fill-1200x630|format-jpeg|jpegquality-75"
 PODLOVE_POSTER_RENDITION_SPEC = "max-512x512|format-webp"
 
 
-class ContentBlock(blocks.StreamBlock):
-    def __init__(self, *, section: str, **kwargs: Any) -> None:
-        self.section = section
-        super().__init__(default_content_blocks() + configured_content_blocks(section), **kwargs)
-
-    def deconstruct(self) -> tuple[str, list[Any], dict[str, str]]:
-        return ("cast.models.pages.ContentBlock", [], {"section": self.section})
-
-    def deconstruct_with_lookup(self, lookup: Any) -> tuple[str, list[Any], dict[str, str]]:
-        return self.deconstruct()
-
-    @classmethod
-    def construct_from_lookup(cls, lookup: Any, *args: Any, **kwargs: Any) -> "ContentBlock":
-        return cls(*args, **kwargs)
-
-    class Meta:
-        icon = "form"
-
-
 TypeToIdSet = dict[str, set[int]]
 
 
 def sync_media_ids(from_database: TypeToIdSet, from_body: TypeToIdSet) -> tuple[TypeToIdSet, TypeToIdSet]:
-    to_add, to_remove = {}, {}
-    all_media_types = set(from_database.keys()).union(from_body.keys())
-    for media_type in all_media_types:
-        in_database_ids = from_database.get(media_type, set())
-        in_body_ids = from_body.get(media_type, set())
-        ids_to_add = in_body_ids - in_database_ids
-        if len(ids_to_add) > 0:
-            to_add[media_type] = ids_to_add
-        ids_to_remove = in_database_ids - in_body_ids
-        if len(ids_to_remove) > 0:
-            to_remove[media_type] = ids_to_remove
-    return to_add, to_remove
+    """Compatibility adapter for :func:`cast.post_media.sync_media_ids`."""
+    return _sync_media_id_changes(from_database, from_body)
 
 
 class PostTag(TaggedItemBase):
@@ -452,51 +422,15 @@ class Post(Page):
         return {k: set(v) for k, v in self.media_lookup.items()}
 
     def _media_ids_from_body(self, body: StreamField) -> TypeToIdSet:
-        from_body: TypeToIdSet = {}
-        for content_block in body:
-            for block in content_block.value:
-                if block.block_type == "gallery":
-                    images = block.value.get("gallery", [])
-                    image_ids = []
-                    for image in images:
-                        if isinstance(image, dict) and "value" in image:
-                            image_ids.append(image["value"])
-                        elif isinstance(image, Image):
-                            image_ids.append(image.pk)
-                        elif isinstance(image, int):
-                            image_ids.append(image)
-                    media_model = get_or_create_gallery(image_ids)
-                else:
-                    media_model = block.value
-                if block.block_type in self.media_model_lookup:
-                    if media_model is not None:
-                        if hasattr(media_model, "id"):
-                            from_body.setdefault(block.block_type, set()).add(media_model.id)
-                        elif isinstance(media_model, int):
-                            media_model_class = self.media_model_lookup[block.block_type]
-                            if media_model_class._default_manager.filter(pk=media_model).exists():
-                                from_body.setdefault(block.block_type, set()).add(media_model)
-                        else:
-                            raise ValueError(f"media model {media_model} is not an instance of int or a model")
-        return from_body
+        return media_ids_from_body(self, body)
 
     @property
     def media_ids_from_body(self) -> TypeToIdSet:
         return self._media_ids_from_body(self.body)
 
     def sync_media_ids(self) -> None:
-        media_attr_lookup = self.media_attr_lookup
-        to_add, to_remove = sync_media_ids(self.media_ids_from_db, self.media_ids_from_body)
-
-        # add new ids
-        for media_type, ids in to_add.items():
-            for media_id in ids:
-                media_attr_lookup[media_type].add(media_id)
-
-        # remove obsolete ids
-        for media_type, ids in to_remove.items():
-            for media_id in ids:
-                media_attr_lookup[media_type].remove(media_id)
+        """Compatibility adapter for :func:`cast.post_media.synchronize_post_media`."""
+        synchronize_post_media(self)
 
     # helper methods for image rendition syncing
     @staticmethod
@@ -677,21 +611,18 @@ class Post(Page):
         # will not have the correct media ids and fail to get the correct
         # renditions and fail with a w1110 not found rendition key error.
         try:
-            self.sync_media_ids()  # raises ValueError
-            create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset in preview
+            prepare_post_media(self)
         except ValueError:
             # will be raised on wagtail preview because page_ptr is not set
             pass
         return super().serve_preview(request, mode_name)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        sync_media = kwargs.pop("sync_media", True)
-        create_renditions = kwargs.pop("create_renditions", True)
+        sync_media = kwargs.pop("sync_media", False)
+        create_renditions = kwargs.pop("create_renditions", False)
         save_return = super().save(*args, **kwargs)
-        if sync_media:
-            self.sync_media_ids()
-        if create_renditions:
-            create_missing_renditions_for_posts(iter([self]))  # needed for images src / srcset
+        if sync_media or create_renditions:
+            prepare_post_media(self, sync_media=sync_media, create_renditions=create_renditions)
         return save_return
 
 
@@ -1017,14 +948,7 @@ class Episode(Post):
 
 
 class HomePage(Page):
-    body = StreamField(
-        [
-            ("paragraph", blocks.RichTextBlock()),
-            ("image", CastImageChooserBlock(template="cast/image/image.html")),
-            ("gallery", GalleryBlock(ImageChooserBlock())),
-        ],
-        use_json_field=True,
-    )
+    body = StreamField(homepage_content_blocks(), use_json_field=True)
     alias_for_page: models.ForeignKey = models.ForeignKey(
         Page,
         related_name="aliases_homepage",

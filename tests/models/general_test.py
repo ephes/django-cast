@@ -175,6 +175,40 @@ class TestBlogModel:
         assert context["has_previous"] is True
         assert context["previous_page_number"] == 1
 
+    def test_blog_index_service_compatibility_adapters(self, blog, monkeypatch):
+        get_params = QueryDict("search=python")
+        filtered_posts = object()
+        posts_queryset = object()
+        repository = object()
+        context = {"existing": True}
+
+        monkeypatch.setattr(
+            "cast.models.index_pages.create_blog_filterset",
+            lambda candidate, params: (candidate, params),
+        )
+        monkeypatch.setattr(
+            "cast.models.index_pages.published_posts_for_index",
+            lambda candidate: ("published", candidate),
+        )
+        monkeypatch.setattr(
+            "cast.models.index_pages.pagination_context",
+            lambda candidate, params: (candidate, params),
+        )
+        monkeypatch.setattr(
+            "cast.models.index_pages.create_theme_form",
+            lambda next_path, template_base_dir: (next_path, template_base_dir),
+        )
+        monkeypatch.setattr(
+            "cast.models.index_pages.apply_repository_context",
+            lambda candidate, repo: (candidate, repo),
+        )
+
+        assert blog.get_filterset(get_params) == (blog, get_params)
+        assert Blog.get_published_posts(filtered_posts) == ("published", filtered_posts)
+        assert blog.get_pagination_context(posts_queryset, get_params) == (posts_queryset, get_params)
+        assert blog.get_theme_form("/next/", "plain") == ("/next/", "plain")
+        assert Blog.get_context_from_repository(context, repository) == (context, repository)
+
     def test_wagtail_api_pages_url(self, blog):
         assert blog.wagtail_api_pages_url == "/cast/api/wagtail/pages/"
 

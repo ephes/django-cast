@@ -7,6 +7,14 @@ from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
 
+from cast.blog_index import (
+    cover_image_context,
+    create_blog_filterset,
+    create_cached_blog_filterset,
+    pagination_context,
+    published_posts_for_index,
+)
+
 from .builders import _blog_url_from_referer, apply_cover_fallback, build_media_lookup, data_for_blog_cachable
 from .serialization import (
     deserialize_audio,
@@ -541,13 +549,7 @@ class BlogIndexContext:
         )
         root_nav_links = data["root_nav_links"]
 
-        from ...filters import PostFilterset
-
-        filterset = PostFilterset(data["filterset"]["get_params"])
-        filterset.filters["date_facets"].set_field_choices(data["filterset"]["date_facets_choices"])
-        filterset.filters["category_facets"].set_field_choices(data["filterset"]["category_facets_choices"])
-        filterset.filters["tag_facets"].set_field_choices(data["filterset"]["tag_facets_choices"])
-        delattr(filterset, "_form")
+        filterset = create_cached_blog_filterset(data["filterset"])
 
         blog = deserialize_blog(data["blog"])
         if (last_build_date := data.get("last_build_date")) is not None:
@@ -569,11 +571,11 @@ class BlogIndexContext:
         # The page-link cache is request-scoped and repopulated by this repository.
         clear_cached_page_urls()
         get_params = request.GET.copy()
-        filterset = blog.get_filterset(get_params)
-        pagination_context = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
+        filterset = create_blog_filterset(blog, get_params)
+        pagination = pagination_context(published_posts_for_index(filterset.qs), get_params)
         use_audio_player = False
-        blog_cover_context = blog.get_cover_image_context()
-        for post in pagination_context["object_list"]:
+        blog_cover_context = cover_image_context(blog)
+        for post in pagination["object_list"]:
             post.page_url = post.get_url(request)
             cover_image_url = ""
             if post.cover_image is not None:
@@ -596,12 +598,12 @@ class BlogIndexContext:
             for page in site.root_page.get_children().live():
                 root_nav_links.append((page.get_url(request), page.title))
         queryset_data = PostQuerySnapshot.create_from_post_queryset(
-            request=request, site=site, queryset=pagination_context["object_list"]
+            request=request, site=site, queryset=pagination["object_list"]
         )
         return cls(
             blog=blog,
             filterset=filterset,
-            pagination_context=pagination_context,
+            pagination_context=pagination,
             template_base_dir=template_base_dir,
             use_audio_player=use_audio_player,
             root_nav_links=root_nav_links,

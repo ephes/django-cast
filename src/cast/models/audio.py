@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import subprocess
-from copy import deepcopy
 from collections.abc import Iterable
 from datetime import timedelta
 from pathlib import Path
@@ -10,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
-from django.db import models, transaction
+from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
@@ -20,12 +19,13 @@ from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
 from ..media_probe import run_media_probe
-from ..media_validation import validate_audio_upload
 
 if TYPE_CHECKING:
     from .pages import Episode
 
 logger = logging.getLogger(__name__)
+
+_SAVE_OPTION_UNSET = object()
 
 
 class AudioDurationProbeError(Exception):
@@ -345,37 +345,25 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             return 0
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        generate_duration = kwargs.pop("duration", True)
-        cache_file_sizes = kwargs.pop("cache_file_sizes", True)
-        using = kwargs.get("using")
-        if generate_duration:
-            for audio_format, field in self.uploaded_audio_files:
-                if not getattr(field, "_committed", True):
-                    validate_audio_upload(field.file, audio_format=audio_format)
-        # Keep metadata enrichment and persistence all-or-nothing to avoid
-        # partially updated rows when duration/filesize caching fails.
-        with transaction.atomic(using=using):
-            # Save first to ensure files exist on storage before enrichment runs.
-            super().save(*args, **kwargs)
+        duration = kwargs.pop("duration", _SAVE_OPTION_UNSET)
+        cache_file_sizes = kwargs.pop("cache_file_sizes", _SAVE_OPTION_UNSET)
+        if duration is not _SAVE_OPTION_UNSET or cache_file_sizes is not _SAVE_OPTION_UNSET:
+            generate_duration = True if duration is _SAVE_OPTION_UNSET else bool(duration)
+            should_cache_file_sizes = True if cache_file_sizes is _SAVE_OPTION_UNSET else bool(cache_file_sizes)
+            if not generate_duration and not should_cache_file_sizes:
+                super().save(*args, **kwargs)
+                return
+            from cast.media_derivation import save_audio_with_derivations
 
-            update_fields = []
-            if generate_duration and self.duration is None:
-                logger.info("save audio duration")
-                self.create_duration()
-                if self.duration is not None:
-                    update_fields.append("duration")
-
-            if cache_file_sizes:
-                old_data = deepcopy(self.data)
-                self.size_to_metadata()
-                if old_data != self.data:
-                    update_fields.append("data")
-
-            if update_fields:
-                save_kwargs: dict[str, object] = {"update_fields": update_fields}
-                if using is not None:
-                    save_kwargs["using"] = using
-                super().save(**save_kwargs)
+            save_audio_with_derivations(
+                self,
+                *args,
+                generate_duration=generate_duration,
+                cache_file_sizes=should_cache_file_sizes,
+                **kwargs,
+            )
+            return
+        super().save(*args, **kwargs)
 
 
 def sync_chapter_marks(

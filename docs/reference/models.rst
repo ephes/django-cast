@@ -152,7 +152,8 @@ episodes because episodes use ``Post.body``.
 
 **Key Methods:**
 
-- ``sync_media_ids()``: Syncs media from StreamField to relationships
+- ``sync_media_ids()``: Compatibility adapter that explicitly syncs built-in
+  StreamField media to relationships
 - ``get_all_images()``: Returns all images including from galleries
 - ``get_description()``: Compatibility wrapper for the post-description presenter
 - ``get_repository()``: Returns optimized data repository
@@ -268,6 +269,10 @@ Comprehensive audio file management with multiple format support.
 - ``get_file_size(format)``: Returns size for specific format
 - ``get_chaptermark_data_from_file()``: Extracts embedded chapters
 
+Use ``cast.media_derivation.save_audio_with_derivations()`` when a programmatic
+write must validate an upload and derive duration and file-size metadata.
+``Audio.save()`` itself only persists fields.
+
 **Properties:**
 
 - ``audio``: List of available formats for player
@@ -297,7 +302,7 @@ Time-based chapters for audio navigation.
 Video
 =====
 
-Video file management with automatic poster generation.
+Video file management with explicit poster generation that built-in upload workflows invoke automatically.
 
 .. code-block:: python
 
@@ -313,6 +318,10 @@ Video file management with automatic poster generation.
 - ``create_poster()``: Generates thumbnail using ffmpeg
 - ``get_mime_type()``: Returns MIME type from extension
 - ``_get_video_dimensions()``: Extracts video dimensions
+
+Use ``cast.media_derivation.save_video_with_derivations()`` when a programmatic
+write must validate the upload and generate a poster. ``Video.save()`` itself
+only persists fields.
 
 **Properties:**
 
@@ -404,6 +413,10 @@ Multi-format transcripts for audio accessibility.
 - ``podlove_data``: Parsed Podlove format data
 - ``dote_data``: Parsed DOTe format data
 - ``podcastindex_data``: Converted to podcast index format
+
+Use ``cast.media_derivation.save_transcript_with_derivations()`` after changing
+transcript artifacts when durable speaker mappings must be synchronized.
+``Transcript.save()`` itself only persists fields.
 
 PostCategory
 ============
@@ -639,11 +652,43 @@ Special Behaviors
 Media Synchronization
 =====================
 
-Posts automatically sync media references from built-in StreamField media blocks
-to ManyToMany relationships using the ``sync_media_ids()`` method. This happens
-on save and ensures built-in image, gallery, video, and audio blocks are
-properly associated for queries. Media references inside custom
-``CAST_POST_BODY_BLOCKS`` blocks are not synced automatically.
+Post publication and Wagtail preview prepare media references from built-in
+StreamField blocks through ``cast.post_media.prepare_post_media()``. This keeps
+the image, gallery, video, and audio ManyToMany relationships ready for
+repository queries and creates required image renditions synchronously.
+
+A plain programmatic ``Post.save()`` only persists the model. Code that changes
+``Post.body`` outside Wagtail's preview/publication workflow must call
+``prepare_post_media(post)`` explicitly after saving. The legacy
+``sync_media`` and ``create_renditions`` save keyword arguments remain as
+explicit opt-ins, but now default to ``False``. Media references inside custom
+``CAST_POST_BODY_BLOCKS`` blocks are not synchronized automatically.
+
+Derived Media Metadata
+======================
+
+Audio duration and file-size metadata, video posters, and transcript speaker
+mappings are also explicit synchronous operations. The built-in admin forms and
+API upload endpoints invoke the appropriate service automatically. Programmatic
+callers should use:
+
+.. code-block:: python
+
+    from cast.media_derivation import (
+        save_audio_with_derivations,
+        save_transcript_with_derivations,
+        save_video_with_derivations,
+    )
+
+    save_audio_with_derivations(audio)
+    save_video_with_derivations(video)
+    save_transcript_with_derivations(transcript)
+
+Plain ``Audio.save()``, ``Video.save()``, and ``Transcript.save()`` calls do no
+probing, poster generation, or speaker-mapping synchronization. The legacy
+audio ``duration``/``cache_file_sizes`` and video ``poster`` save keywords
+remain explicit opt-ins. ``Transcript.save(sync_speaker_mappings=True)`` is the
+equivalent compatibility form for transcript writes.
 
 Rendition Management
 ====================

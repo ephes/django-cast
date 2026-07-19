@@ -65,21 +65,24 @@ class TestPostModel:
         assert template_base_dir == post.blog.get_template_base_dir(simple_request)
         get_parent_mock.assert_not_called()
 
-    def test_post_save_side_effects_can_be_skipped(self, monkeypatch, post):
-        """Post.save media derivation must be skippable for bulk operations (architecture review H2)."""
-        import cast.models.pages as pages_module
+    def test_post_save_media_derivation_is_explicit_opt_in(self, monkeypatch, post):
+        """Post.save is pure by default but retains explicit compatibility kwargs."""
+        import cast.post_media as post_media_module
+        from cast.models import image_renditions
 
         sync_calls, rendition_calls = [], []
-        monkeypatch.setattr(type(post), "sync_media_ids", lambda self: sync_calls.append(1))
         monkeypatch.setattr(
-            pages_module, "create_missing_renditions_for_posts", lambda posts: rendition_calls.append(1)
+            post_media_module, "synchronize_post_media", lambda candidate: sync_calls.append(candidate.pk)
+        )
+        monkeypatch.setattr(
+            image_renditions, "create_missing_renditions_for_posts", lambda posts: rendition_calls.append(1)
         )
 
-        post.save(sync_media=False, create_renditions=False)
+        post.save()
         assert sync_calls == [] and rendition_calls == []
 
-        post.save()
-        assert sync_calls == [1] and rendition_calls == [1]
+        post.save(sync_media=True, create_renditions=True)
+        assert sync_calls == [post.pk] and rendition_calls == [1]
 
     def test_post_has_audio(self, post):
         assert post.has_audio is False
@@ -931,7 +934,7 @@ class TestPostModel:
         assert post.media_lookup == post._media_lookup
 
     def test_ignore_value_error_in_serve_preview_during_sync_media_ids(self, rf, mocker, post):
-        mocker.patch("cast.models.Post.sync_media_ids", side_effect=ValueError())
+        mocker.patch("cast.post_media.synchronize_post_media", side_effect=ValueError())
         request = rf.get("/")
         post.serve_preview(request, "")
         assert post.media_lookup == {"audio": {}, "image": {}, "video": {}, "gallery": {}}

@@ -6,12 +6,14 @@ from typing import Any, TypeAlias
 from django.utils.module_loading import import_string
 from wagtail import blocks
 from wagtail.embeds.blocks import EmbedBlock
+from wagtail.images.blocks import ImageChooserBlock
 
 from cast import appsettings
 from cast.blocks import (
     AudioChooserBlock,
     CastImageChooserBlock,
     CodeBlock,
+    GalleryBlock,
     GalleryBlockWithLayout,
     VideoChooserBlock,
 )
@@ -32,6 +34,27 @@ ContentBlockDefinition: TypeAlias = tuple[str, blocks.Block]
 PostBodyBlockFactory: TypeAlias = Callable[[], ContentBlockDefinition]
 
 
+class ContentBlock(blocks.StreamBlock):
+    """Top-level Post.body section block with stable migration serialization."""
+
+    def __init__(self, *, section: str, **kwargs: Any) -> None:
+        self.section = section
+        super().__init__(default_content_blocks() + configured_content_blocks(section), **kwargs)
+
+    def deconstruct(self) -> tuple[str, list[Any], dict[str, str]]:
+        return ("cast.models.pages.ContentBlock", [], {"section": self.section})
+
+    def deconstruct_with_lookup(self, lookup: Any) -> tuple[str, list[Any], dict[str, str]]:
+        return self.deconstruct()
+
+    @classmethod
+    def construct_from_lookup(cls, lookup: Any, *args: Any, **kwargs: Any) -> "ContentBlock":
+        return cls(*args, **kwargs)
+
+    class Meta:
+        icon = "form"
+
+
 def default_content_blocks() -> list[ContentBlockDefinition]:
     """Return fresh instances of django-cast's built-in Post.body blocks."""
     return [
@@ -42,6 +65,15 @@ def default_content_blocks() -> list[ContentBlockDefinition]:
         ("embed", EmbedBlock()),
         ("video", VideoChooserBlock(template="cast/video/video.html", icon="media")),
         ("audio", AudioChooserBlock(template="cast/audio/audio.html", icon="media")),
+    ]
+
+
+def homepage_content_blocks() -> list[ContentBlockDefinition]:
+    """Return the stable built-in HomePage.body block schema."""
+    return [
+        ("paragraph", blocks.RichTextBlock()),
+        ("image", CastImageChooserBlock(template="cast/image/image.html")),
+        ("gallery", GalleryBlock(ImageChooserBlock())),
     ]
 
 

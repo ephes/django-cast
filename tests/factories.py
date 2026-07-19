@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from wagtail.models import Site
 
 from cast.models import Blog, Episode, Gallery, HomePage, Podcast, Post, Video
+from cast.post_media import prepare_post_media
 
 
 class SiteFactory(factory.django.DjangoModelFactory):
@@ -45,6 +46,8 @@ class PageFactory(factory.django.DjangoModelFactory):
         parent = kwargs.pop("parent")
         page = model_class(*args, **kwargs)
         parent.add_child(instance=page)
+        if isinstance(page, Post):
+            prepare_post_media(page)
         return page
 
 

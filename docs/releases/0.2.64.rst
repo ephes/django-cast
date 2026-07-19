@@ -14,3 +14,12 @@
 - Add the optional ``require_unpublished`` precondition to post and episode editor PATCH requests. When enabled,
   published pages are rejected with ``409 published_post``; live-state and revision checks are serialized with the
   draft revision write so draft-only automation cannot race a concurrent publish.
+- Move Post StreamField media synchronization and rendition preparation to the explicit
+  ``cast.post_media.prepare_post_media`` service. Wagtail previews and every publication path call the service;
+  direct programmatic ``Post.save()`` calls now perform no media I/O unless their legacy ``sync_media`` or
+  ``create_renditions`` keyword is explicitly enabled. Programmatic body updates should save first and then call
+  ``prepare_post_media(post)``.
+- Move audio duration/file-size extraction, video poster generation, and transcript speaker-mapping synchronization
+  to explicit transactional services in ``cast.media_derivation``. Built-in admin and API upload paths call them
+  automatically; plain programmatic ``Audio.save()``, ``Video.save()``, and ``Transcript.save()`` calls now persist
+  fields without media probing or derived-data I/O.

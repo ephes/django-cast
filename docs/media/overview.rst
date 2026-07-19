@@ -88,7 +88,7 @@ Comprehensive audio file management with podcast support.
 Video
 ~~~~~
 
-Video file support with automatic poster generation.
+Video file support with automatic poster generation in built-in upload workflows.
 
 **Features**:
 
@@ -102,9 +102,12 @@ Video file support with automatic poster generation.
 
 .. code-block:: python
 
-    # Customize poster extraction time
-    video.poster_seconds = 5.0  # Extract at 5 seconds
-    video.create_poster()       # Regenerate poster
+    from cast.media_derivation import save_video_with_derivations
+
+    # Clear and durably regenerate at a different extraction time.
+    video.poster = None
+    video.poster_seconds = 5.0
+    save_video_with_derivations(video)
 
 Files
 ~~~~~
@@ -291,17 +294,21 @@ Automatic poster frame extraction:
 
 .. code-block:: python
 
-    # Generate poster at upload
-    video = Video.objects.create(
+    from cast.media_derivation import save_video_with_derivations
+    from cast.models import Video
+
+    # Persist the upload and generate its poster.
+    video = Video(
         user=request.user,
         title="My Video",
         original=video_file
     )
-    # Poster created automatically
+    save_video_with_derivations(video)
 
-    # Regenerate with different timestamp
+    # Clear and durably regenerate with a different timestamp.
+    video.poster = None
     video.poster_seconds = 10.0
-    video.create_poster()
+    save_video_with_derivations(video)
 
 Dimension Detection
 ~~~~~~~~~~~~~~~~~~~

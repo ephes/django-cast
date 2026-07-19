@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils import translation
 
 from cast.devdata import create_transcript
+from cast.media_derivation import save_transcript_with_derivations
 from cast.views import transcript as transcript_views
 from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
 from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptSpeakerMapping
@@ -203,7 +204,7 @@ class TestTranscriptSpeakerMapping:
             }
         ).encode("utf-8")
         transcript.podlove.save("replacement.json", ContentFile(replacement), save=False)
-        transcript.save()
+        save_transcript_with_derivations(transcript)
 
         mappings = {mapping.speaker_label: mapping for mapping in transcript.speaker_mappings.all()}
         assert mappings["Speaker 1"].active
@@ -217,7 +218,7 @@ class TestTranscriptSpeakerMapping:
 
         reappearing = json.dumps({"transcripts": [{"speaker": "Speaker 3", "voice": "Speaker 3", "text": "Back"}]})
         transcript.podlove.save("reappearing.json", ContentFile(reappearing.encode("utf-8")), save=False)
-        transcript.save()
+        save_transcript_with_derivations(transcript)
 
         mappings = {mapping.speaker_label: mapping for mapping in transcript.speaker_mappings.all()}
         assert mappings["Speaker 3"].active
@@ -233,7 +234,7 @@ class TestTranscriptSpeakerMapping:
         transcript.sync_speaker_mappings()
 
         transcript.podlove.save("empty.json", ContentFile(b'{"transcripts": []}'), save=False)
-        transcript.save()
+        save_transcript_with_derivations(transcript)
         inactive_mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
         assert not inactive_mapping.active
 

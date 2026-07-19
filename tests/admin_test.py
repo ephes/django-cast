@@ -7,12 +7,13 @@ from django.urls import reverse
 
 from cast.admin import (
     AdminUserMixin,
+    AudioAdmin,
     SpamfilterModelAdmin,
     VideoModelAdmin,
     cache_file_sizes,
     retrain,
 )
-from cast.models import Contributor, ContributorLink, EpisodeContributor, SpamFilter, Video
+from cast.models import Audio, Contributor, ContributorLink, EpisodeContributor, SpamFilter, Video
 from cast.wagtail_hooks import ContributorMenuItem, register_contributor_menu_item
 
 
@@ -51,17 +52,17 @@ def test_video_model_admin_calc_poster(mocker):
     class MockedForm:
         cleaned_data = {"poster": False}
 
-    mocked_super = mocker.patch("cast.admin.ModelAdmin.save_model")
+    save_video = mocker.patch("cast.admin.save_video_with_derivations")
     vma = VideoModelAdmin(Video, None)
 
     # change=True, poster=False -> calc_poster=False
     vma.save_model(None, Video(), MockedForm(), True)
-    processed_video = mocked_super.call_args[0][1]
+    processed_video = save_video.call_args.args[0]
     assert not processed_video.calc_poster
 
     # change=False, poster=False -> calc_poster=True
     vma.save_model(None, Video(), MockedForm(), False)
-    processed_video = mocked_super.call_args[0][1]
+    processed_video = save_video.call_args.args[0]
     assert processed_video.calc_poster
 
 
@@ -78,6 +79,15 @@ def test_cache_file_sizes():
     spy = SpyAudio()
     cache_file_sizes(None, None, [spy])
     assert spy.cached
+
+
+def test_audio_model_admin_uses_derivation_service(mocker, audio):
+    save_audio = mocker.patch("cast.admin.save_audio_with_derivations")
+    audio_admin = AudioAdmin(Audio, None)
+
+    audio_admin.save_model(None, audio, None, False)
+
+    save_audio.assert_called_once_with(audio)
 
 
 def test_admin_user_mixin():

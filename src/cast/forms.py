@@ -23,6 +23,11 @@ from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
 from .media_validation import validate_audio_upload, validate_video_upload
+from .media_derivation import (
+    save_audio_with_derivations,
+    save_transcript_with_derivations,
+    save_video_with_derivations,
+)
 from .models import (
     Audio,
     ChapterMark,
@@ -62,6 +67,13 @@ class VideoUploadValidationMixin:
         if isinstance(original, UploadedFile):
             validate_video_upload(original)
         return original
+
+    def save(self, commit: bool = True) -> Video:
+        video = super().save(commit=False)  # type: ignore[misc]
+        if commit:
+            save_video_with_derivations(video)
+            self._save_m2m()  # type: ignore[attr-defined]
+        return video
 
 
 class VideoForm(VideoUploadValidationMixin, forms.ModelForm):
@@ -258,8 +270,10 @@ class AudioForm(BaseCollectionMemberForm):
         ChapterMark.objects.sync_chaptermarks(audio, chaptermarks)
 
     def save(self, commit: bool = True) -> Audio:
-        audio = super().save(commit=commit)
+        audio = super().save(commit=False)
         if commit:
+            save_audio_with_derivations(audio)
+            self._save_m2m()
             self.save_chaptermarks(audio)
         return audio
 
@@ -325,6 +339,13 @@ class TranscriptForm(BaseCollectionMemberForm):
         if not header.startswith("WEBVTT"):
             raise ValidationError(_("WebVTT transcripts must start with the WEBVTT header."))
         return vtt
+
+    def save(self, commit: bool = True) -> Transcript:
+        transcript = super().save(commit=False)
+        if commit:
+            save_transcript_with_derivations(transcript)
+            self._save_m2m()
+        return transcript
 
     @staticmethod
     def _load_json(uploaded_file: UploadedFile | IO[str] | IO[bytes], *, field_label: str) -> Any:
