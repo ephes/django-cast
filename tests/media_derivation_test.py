@@ -1,5 +1,6 @@
+import warnings
+
 import pytest
-from django.utils.deprecation import RemovedInDjango60Warning
 
 from cast.api.serializers import AudioSerializer, VideoSerializer
 from cast.media_derivation import (
@@ -124,8 +125,9 @@ def test_derivation_services_normalize_positional_save_arguments(audio, video, m
     audio_save = mocker.patch.object(audio, "save")
     video_save = mocker.patch.object(video, "save")
     atomic = mocker.patch("cast.media_derivation.transaction.atomic")
+    mocker.patch("cast.media_derivation.DJANGO_VERSION", (5, 2))
 
-    with pytest.warns(RemovedInDjango60Warning):
+    with pytest.warns(DeprecationWarning) as caught_warnings:
         save_audio_with_derivations(
             audio,
             False,
@@ -135,7 +137,8 @@ def test_derivation_services_normalize_positional_save_arguments(audio, video, m
             generate_duration=False,
             cache_file_sizes=False,
         )
-    with pytest.warns(RemovedInDjango60Warning):
+    assert caught_warnings[0].filename == __file__
+    with pytest.warns(DeprecationWarning):
         save_video_with_derivations(video, False, False, "archive", None, generate_poster=False)
 
     assert atomic.call_args_list[0].kwargs == {"using": "archive"}
@@ -155,6 +158,115 @@ def test_derivation_services_normalize_positional_save_arguments(audio, video, m
         using="archive",
         update_fields=None,
     )
+
+
+def test_derivation_services_accept_positional_save_arguments_before_django_51(audio, mocker):
+    audio_save = mocker.patch.object(audio, "save")
+    mocker.patch("cast.media_derivation.transaction.atomic")
+    mocker.patch("cast.media_derivation.DJANGO_VERSION", (5, 0))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        save_audio_with_derivations(
+            audio,
+            False,
+            False,
+            "archive",
+            None,
+            generate_duration=False,
+            cache_file_sizes=False,
+        )
+
+    audio_save.assert_called_once_with(
+        duration=False,
+        cache_file_sizes=False,
+        force_insert=False,
+        force_update=False,
+        using="archive",
+        update_fields=None,
+    )
+
+
+def test_derivation_services_preserve_default_keyword_duplicates_on_django_51_and_52(audio, mocker):
+    audio_save = mocker.patch.object(audio, "save")
+    mocker.patch("cast.media_derivation.transaction.atomic")
+    mocker.patch("cast.media_derivation.DJANGO_VERSION", (5, 2))
+
+    with pytest.warns(DeprecationWarning):
+        save_audio_with_derivations(
+            audio,
+            True,
+            True,
+            "archive",
+            ["duration"],
+            force_insert=False,
+            force_update=False,
+            using=None,
+            update_fields=None,
+            generate_duration=False,
+            cache_file_sizes=False,
+        )
+
+    audio_save.assert_called_once_with(
+        duration=False,
+        cache_file_sizes=False,
+        force_insert=True,
+        force_update=True,
+        using="archive",
+        update_fields=["duration"],
+    )
+
+
+def test_derivation_services_reject_non_default_keyword_duplicates_on_django_51_and_52(audio, mocker):
+    mocker.patch("cast.media_derivation.DJANGO_VERSION", (5, 2))
+
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(TypeError, match="got multiple values for argument 'force_insert'"):
+            save_audio_with_derivations(
+                audio,
+                False,
+                force_insert=True,
+                generate_duration=False,
+                cache_file_sizes=False,
+            )
+
+
+@pytest.mark.parametrize(
+    ("args", "kwargs", "message"),
+    [
+        ((False, False, "default", None, "extra"), {}, "takes from 1 to 5 positional arguments"),
+        ((False,), {"force_insert": True}, "got multiple values for argument 'force_insert'"),
+    ],
+)
+def test_derivation_services_reject_invalid_legacy_positional_save_arguments(
+    audio,
+    mocker,
+    args,
+    kwargs,
+    message,
+):
+    mocker.patch("cast.media_derivation.DJANGO_VERSION", (5, 0))
+
+    with pytest.raises(TypeError, match=message):
+        save_audio_with_derivations(
+            audio,
+            *args,
+            generate_duration=False,
+            cache_file_sizes=False,
+            **kwargs,
+        )
+
+
+def test_derivation_services_reject_positional_save_arguments_on_django_6(audio, mocker):
+    mocker.patch("cast.media_derivation.DJANGO_VERSION", (6, 0))
+
+    with pytest.raises(TypeError, match="takes 1 positional argument but 2 were given"):
+        save_audio_with_derivations(
+            audio,
+            False,
+            generate_duration=False,
+            cache_file_sizes=False,
+        )
 
 
 @pytest.mark.django_db()
@@ -195,8 +307,9 @@ def test_transcript_derivation_service_normalizes_positional_update_fields(audio
     save = mocker.patch.object(transcript, "save")
     sync_speaker_mappings = mocker.patch.object(transcript, "sync_speaker_mappings")
     atomic = mocker.patch("cast.media_derivation.transaction.atomic")
+    mocker.patch("cast.media_derivation.DJANGO_VERSION", (5, 2))
 
-    with pytest.warns(RemovedInDjango60Warning):
+    with pytest.warns(DeprecationWarning):
         save_transcript_with_derivations(transcript, False, False, "archive", ["speakers"])
 
     atomic.assert_called_once_with(using="archive")

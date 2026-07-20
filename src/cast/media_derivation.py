@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
+from django import VERSION as DJANGO_VERSION
 from django.db import router, transaction
+from django.utils import deprecation
 
 from .media_validation import validate_audio_upload, validate_video_upload
 
@@ -18,28 +21,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS = ("podlove", "dote", "vtt")
+MODEL_SAVE_ARGUMENT_NAMES = ("force_insert", "force_update", "using", "update_fields")
+MODEL_SAVE_ARGUMENT_DEFAULTS = {
+    "force_insert": False,
+    "force_update": False,
+    "using": None,
+    "update_fields": None,
+}
+POSITIONAL_SAVE_DEPRECATION_WARNING: type[Warning] = getattr(
+    deprecation,
+    "RemovedInDjango60Warning",
+    DeprecationWarning,
+)
+
+
+def _normalize_positional_model_save_arguments(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Apply the installed Django version's ``Model.save()`` positional-argument contract."""
+    if DJANGO_VERSION >= (6, 0):
+        total_len_args = len(args) + 1
+        raise TypeError(f"Model.save() takes 1 positional argument but {total_len_args} were given")
+
+    if DJANGO_VERSION >= (5, 1):
+        warnings.warn(
+            "Passing positional arguments to save() is deprecated",
+            POSITIONAL_SAVE_DEPRECATION_WARNING,
+            stacklevel=4,
+        )
+
+    total_len_args = len(args) + 1
+    max_len_args = len(MODEL_SAVE_ARGUMENT_NAMES) + 1
+    if total_len_args > max_len_args:
+        raise TypeError(
+            f"Model.save() takes from 1 to {max_len_args} positional arguments but {total_len_args} were given"
+        )
+
+    normalized = dict(kwargs)
+    for argument_name, argument_value in zip(MODEL_SAVE_ARGUMENT_NAMES, args, strict=False):
+        if argument_name in normalized and (
+            DJANGO_VERSION < (5, 1) or normalized[argument_name] is not MODEL_SAVE_ARGUMENT_DEFAULTS[argument_name]
+        ):
+            raise TypeError(f"Model.save() got multiple values for argument '{argument_name}'")
+        normalized[argument_name] = argument_value
+    return normalized
 
 
 def normalize_model_save_arguments(
     model: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> tuple[dict[str, Any], str]:
     """Normalize Django's deprecated positional save arguments and resolve the write alias."""
-    normalized = dict(kwargs)
-    if args:
-        force_insert, force_update, using, update_fields = model._parse_save_params(
-            *args,
-            method_name="save",
-            force_insert=normalized.pop("force_insert", False),
-            force_update=normalized.pop("force_update", False),
-            using=normalized.pop("using", None),
-            update_fields=normalized.pop("update_fields", None),
-        )
-        normalized.update(
-            force_insert=force_insert,
-            force_update=force_update,
-            using=using,
-            update_fields=update_fields,
-        )
+    normalized = _normalize_positional_model_save_arguments(args, kwargs) if args else dict(kwargs)
     using = normalized.get("using")
     if not using:
         state = getattr(model, "_state", None)
