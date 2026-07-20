@@ -147,6 +147,7 @@ class TestEditorPostPublish:
         assert post.live_revision_id == created["latest_revision_id"]
         assert data["published_revision_id"] == created["latest_revision_id"]
         assert data["latest_revision_id"] == created["latest_revision_id"]
+        assert data["previous_revision_id"] is None
         assert data["live"] is True
         assert data["status"] == "live"
         assert data["edit_url"].endswith(f"/pages/{post.id}/edit/")
@@ -167,6 +168,7 @@ class TestEditorPostPublish:
         post.refresh_from_db()
         assert post.live is True
         assert post.has_unpublished_changes is False
+        live_revision_id = post.latest_revision_id
 
         draft = post.get_latest_revision_as_object()
         draft.title = "Updated draft title"
@@ -191,6 +193,7 @@ class TestEditorPostPublish:
         assert data["title"] == "Updated draft title"
         assert data["overview"] == [{"type": "paragraph", "value": "<p>Published draft.</p>"}]
         assert data["published_revision_id"] == draft_revision.id
+        assert data["previous_revision_id"] == live_revision_id
         assert data["status"] == "live"
 
     def test_live_page_without_unpublished_draft_is_rejected(self, api_client, blog, admin_user):

@@ -4,7 +4,7 @@ import json
 from typing import Any, Callable, cast
 
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q, Subquery
 from django.http import HttpResponse
 from django.urls import reverse
 from django.utils.text import slugify
@@ -98,6 +98,23 @@ def _submitted_base_revision_id(request: Request, data: dict[str, Any]) -> int:
         assert header_revision_id is not None
         return header_revision_id
     return body_revision_id
+
+
+def _previous_page_revision_id(post: Post, revision_id: int | None) -> int | None:
+    """Return the immediately preceding revision id for this page."""
+    if revision_id is None:
+        return None
+    target_created_at = post.revisions.filter(pk=revision_id).values("created_at")[:1]
+    previous = (
+        post.revisions.filter(
+            Q(created_at__lt=Subquery(target_created_at))
+            | Q(created_at=Subquery(target_created_at), pk__lt=revision_id)
+        )
+        .order_by("-created_at", "-pk")
+        .values_list("pk", flat=True)
+        .first()
+    )
+    return cast(int | None, previous)
 
 
 class ParentsListView(EditorAPIView):
@@ -246,6 +263,7 @@ class PostEditorMixin:
                 self._section_value(content_post, "detail"), path_prefix="detail", user=user
             ),
             "latest_revision_id": latest_revision_id,
+            "previous_revision_id": _previous_page_revision_id(post, latest_revision_id),
             "live": post.live,
             "status": "live" if post.live and not post.has_unpublished_changes else "draft",
             "preview_url": reverse("wagtailadmin_pages:view_draft", args=[post.id]),

@@ -1,18 +1,23 @@
 # ruff: noqa: F401,F811,I001
 import json
 import subprocess
+from datetime import timedelta
 
 import pytest
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import Group, Permission
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
 
 from cast import media_probe
 from cast.api.editor import media as editor_media
+from cast.api.editor import views as editor_views
 from cast.api.editor.body import (
     SUPPORTED_OVERVIEW_BLOCKS,
     _media_ref_is_available,
@@ -153,6 +158,7 @@ class TestEditorPostLookup:
         assert data["slug"] == "lookup-draft"
         assert data["overview"] == [{"type": "paragraph", "value": "<p>Draft.</p>"}]
         assert data["latest_revision_id"] == create_response.json()["latest_revision_id"]
+        assert data["previous_revision_id"] == create_response.json()["previous_revision_id"]
         assert data["live"] is False
         assert data["status"] == "draft"
 
@@ -582,6 +588,7 @@ class TestEditorPostUpdate:
         assert response.status_code == 200, response.content
         data = response.json()
         assert data["latest_revision_id"] != created["latest_revision_id"]
+        assert data["previous_revision_id"] == created["latest_revision_id"]
         assert data["title"] == "Retitled draft"
         assert data["slug"] == "editable-draft"
         assert data["tags"] == ["weeknotes"]
@@ -590,6 +597,44 @@ class TestEditorPostUpdate:
             {"type": "paragraph", "value": "<p>Original text.</p>"},
         ]
         assert data["live"] is False
+
+    def test_patch_predecessor_is_relative_to_the_exact_serialized_revision(
+        self, api_client, blog, admin_user, monkeypatch
+    ):
+        from cast.api.editor.views import PostEditorMixin
+
+        created = self._create(api_client, blog, admin_user, slug="exact-response-revision")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        original_serialize = PostEditorMixin._serialize
+        later_revision_ids = []
+
+        def serialize_after_later_revision(self, post, *, user, content_post=None, revision=None):
+            assert revision is not None
+            later_draft = post.get_latest_revision_as_object()
+            later_draft.title = "Later same-page revision"
+            later_revision_ids.append(later_draft.save_revision(user=user).id)
+            return original_serialize(
+                self,
+                post,
+                user=user,
+                content_post=content_post,
+                revision=revision,
+            )
+
+        monkeypatch.setattr(PostEditorMixin, "_serialize", serialize_after_later_revision)
+
+        response = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "Serialized update"},
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["title"] == "Serialized update"
+        assert data["latest_revision_id"] != later_revision_ids[0]
+        assert data["previous_revision_id"] == created["latest_revision_id"]
+        assert Post.objects.get(pk=created["id"]).latest_revision_id == later_revision_ids[0]
 
     def test_patch_saves_new_revision_and_round_trips(self, api_client, blog, superuser, image):
         category = PostCategory.objects.create(name="Updated", slug="updated")
@@ -707,6 +752,92 @@ class TestEditorPostUpdate:
         data = second.json()
         assert data["title"] == "Second update"
         assert data["latest_revision_id"] != first["latest_revision_id"]
+        assert data["previous_revision_id"] == first["latest_revision_id"]
+
+    def test_revision_predecessor_is_page_scoped_with_global_revisions_interleaved(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user, slug="page-revision-order")
+        target_url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        unrelated = PostFactory(
+            parent=blog,
+            owner=admin_user,
+            title="Unrelated revisions",
+            slug="unrelated-revisions",
+            live=False,
+        )
+        unrelated.save_revision(user=admin_user)
+
+        first = api_client.patch(
+            target_url,
+            {"base_revision_id": created["latest_revision_id"], "title": "First target update"},
+            format="json",
+        ).json()
+        unrelated.save_revision(user=admin_user)
+        second_response = api_client.patch(
+            target_url,
+            {"base_revision_id": first["latest_revision_id"], "title": "Second target update"},
+            format="json",
+        )
+
+        assert second_response.status_code == 200, second_response.content
+        second = second_response.json()
+        assert second["previous_revision_id"] == first["latest_revision_id"]
+        assert second["previous_revision_id"] != second["latest_revision_id"] - 1
+
+        detail = api_client.get(target_url).json()
+        lookup_url = reverse("cast:api:editor_post_create") + f"?parent={blog.id}&slug=page-revision-order"
+        lookup = api_client.get(lookup_url).json()
+        assert (detail["latest_revision_id"], detail["previous_revision_id"]) == (
+            second["latest_revision_id"],
+            first["latest_revision_id"],
+        )
+        assert (lookup["latest_revision_id"], lookup["previous_revision_id"]) == (
+            detail["latest_revision_id"],
+            detail["previous_revision_id"],
+        )
+
+    def test_revision_predecessor_uses_wagtail_timestamp_then_primary_key_order(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user, slug="page-revision-chronology")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        first = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "First update"},
+            format="json",
+        ).json()
+        second = api_client.patch(
+            url,
+            {"base_revision_id": first["latest_revision_id"], "title": "Second update"},
+            format="json",
+        ).json()
+        post = Post.objects.get(pk=created["id"])
+        now = timezone.now()
+        post.revisions.filter(pk=created["latest_revision_id"]).update(created_at=now - timedelta(days=1))
+        post.revisions.filter(pk=first["latest_revision_id"]).update(created_at=now - timedelta(days=2))
+        post.revisions.filter(pk=second["latest_revision_id"]).update(created_at=now)
+
+        detail = api_client.get(url)
+
+        assert detail.status_code == 200, detail.content
+        assert detail.json()["latest_revision_id"] == second["latest_revision_id"]
+        assert detail.json()["previous_revision_id"] == created["latest_revision_id"]
+        assert created["latest_revision_id"] < first["latest_revision_id"]
+
+    def test_revision_predecessor_uses_one_id_only_query(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user, slug="page-revision-query-shape")
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        updated = api_client.patch(
+            url,
+            {"base_revision_id": created["latest_revision_id"], "title": "Updated"},
+            format="json",
+        ).json()
+        post = Post.objects.get(pk=created["id"])
+
+        with CaptureQueriesContext(connection) as queries:
+            predecessor = editor_views._previous_page_revision_id(post, updated["latest_revision_id"])
+
+        assert predecessor == created["latest_revision_id"]
+        assert len(queries) == 1
+        selected_columns = queries[0]["sql"].upper().partition(" FROM ")[0]
+        assert '"CONTENT"' not in selected_columns
 
     def test_patch_live_page_reports_unpublished_draft_status(self, api_client, blog, admin_user):
         from tests.factories import PostFactory

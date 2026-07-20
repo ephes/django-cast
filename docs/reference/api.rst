@@ -571,12 +571,27 @@ Success response (``201 Created``):
         {"type": "video", "value": {"id": 43}}
       ],
       "latest_revision_id": 6543,
+      "previous_revision_id": null,
       "live": false,
       "status": "draft",
       "preview_url": "/admin/pages/987/view_draft/",
       "edit_url": "/admin/pages/987/edit/",
       "api_url": "/api/editor/posts/987/"
     }
+
+``previous_revision_id`` is content-free, page-local recovery and concurrency
+evidence. It is the positive id of the revision immediately preceding the
+serialized ``latest_revision_id`` for that same page, or ``null`` when the
+serialized revision is the page's first revision. Global revision ids are not
+consecutive per page, so clients must not derive this value by subtracting one.
+For example, a client recovering an atomic title/slug migration can require both
+the expected current identity and ``previous_revision_id`` equal to its expected
+base revision before treating the latest revision as its single immediate
+write. A later edit that retains the migrated identity will no longer satisfy
+that predecessor check. This field reveals no revision content or additional
+history metadata beyond that one predecessor id. It is evidence only: it is not
+an authorization token and does not replace editor authentication, Wagtail
+permissions, or the PATCH revision precondition.
 
 **Read a draft post**::
 
@@ -733,6 +748,7 @@ The success response is the normal editor post shape plus publish metadata:
       ],
       "detail": [],
       "latest_revision_id": 6543,
+      "previous_revision_id": null,
       "live": true,
       "status": "live",
       "preview_url": "/admin/pages/987/view_draft/",
@@ -822,7 +838,8 @@ Example create request:
 The response is the standard editor draft shape (``id``, ``type`` of
 ``cast.Episode``, the shared post fields, ``preview_url``/``edit_url``, and an
 ``api_url`` of ``/api/editor/episodes/{id}/``) plus the episode-specific fields
-above. ``PATCH`` requires the same revision token, preserves omitted fields and
+above, including the page-local ``previous_revision_id`` recovery evidence.
+``PATCH`` requires the same revision token, preserves omitted fields and
 sections, and keeps the empty-update guard, exactly like posts. As with posts,
 the token may be sent as ``base_revision_id`` in the JSON body or as
 ``If-Match: "<latest_revision_id>"``, with the same strict syntax and

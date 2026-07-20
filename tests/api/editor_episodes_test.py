@@ -101,6 +101,7 @@ class TestEditorEpisodeCreate:
         assert data["type"] == "cast.Episode"
         assert data["parent"]["id"] == podcast.id
         assert data["latest_revision_id"] == episode.latest_revision_id
+        assert data["previous_revision_id"] is None
         assert data["api_url"].endswith(f"/editor/episodes/{episode.id}/")
         assert data["edit_url"].endswith(f"/pages/{episode.id}/edit/")
         # episode-specific fields are present with model defaults for a bare draft
@@ -130,6 +131,7 @@ class TestEditorEpisodeCreate:
             "overview",
             "detail",
             "latest_revision_id",
+            "previous_revision_id",
             "live",
             "status",
             "preview_url",
@@ -407,6 +409,7 @@ class TestEditorEpisodeUpdate:
         data = response.json()
         assert data["title"] == "Header revision"
         assert data["latest_revision_id"] != created["latest_revision_id"]
+        assert data["previous_revision_id"] == created["latest_revision_id"]
 
     def test_patch_rejects_mismatched_if_match_and_body_revision(self, api_client, podcast, admin_user):
         created = self._create(api_client, podcast, admin_user)
@@ -769,6 +772,7 @@ class TestEditorEpisodePublish:
         assert episode.has_unpublished_changes is False
         assert episode.live_revision_id == created["latest_revision_id"]
         assert data["published_revision_id"] == created["latest_revision_id"]
+        assert data["previous_revision_id"] is None
         assert data["type"] == "cast.Episode"
         assert data["live"] is True
         assert data["status"] == "live"

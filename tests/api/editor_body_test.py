@@ -688,6 +688,7 @@ class TestEditorPostCreate:
         assert data["type"] == "cast.Post"
         assert data["parent"]["id"] == blog.id
         assert data["latest_revision_id"] == post.latest_revision_id
+        assert data["previous_revision_id"] is None
         assert data["edit_url"].endswith(f"/pages/{post.id}/edit/")
         assert data["preview_url"].endswith(f"/pages/{post.id}/view_draft/")
         assert data["api_url"].endswith(f"/editor/posts/{post.id}/")
