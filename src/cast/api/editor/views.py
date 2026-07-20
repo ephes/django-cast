@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, Callable, cast
 
 from django.db import transaction
@@ -100,6 +102,28 @@ def _submitted_base_revision_id(request: Request, data: dict[str, Any]) -> int:
     return body_revision_id
 
 
+@contextmanager
+def _use_editor_slug_uniqueness(page: Any) -> Iterator[None]:
+    """Replace only Wagtail's persisted-row slug check for an editor API save.
+
+    Wagtail calls this private check from both ``add_child`` and ``save_revision``.
+    The editor API owns the revision-aware equivalent when accepting a slug;
+    overriding the method on this instance keeps every other model validation in
+    place on later revision saves too.
+    """
+    method_name = "_check_slug_is_unique"
+    had_override = method_name in page.__dict__
+    previous = page.__dict__.get(method_name)
+    page.__dict__[method_name] = lambda: None
+    try:
+        yield
+    finally:
+        if had_override:
+            page.__dict__[method_name] = previous
+        else:
+            page.__dict__.pop(method_name, None)
+
+
 def _previous_page_revision_id(post: Post, revision_id: int | None) -> int | None:
     """Return the immediately preceding revision id for this page."""
     if revision_id is None:
@@ -165,13 +189,38 @@ class PostEditorMixin:
             raise EditorPermissionDenied(denied_message, parent_id=None)
         return post
 
+    def _lock_parent_for_slug_check(self, parent: Any, *, noun: str) -> Any:
+        """Serialize a sibling slug decision and reload current tree metadata.
+
+        The caller must keep its transaction open from this lock through the
+        revision write. An actual no-op write is portable where
+        ``SELECT FOR UPDATE`` is not: PostgreSQL locks this parent row and SQLite
+        takes its database write lock.
+        """
+        from wagtail.models import Page
+
+        updated = Page.objects.filter(pk=parent.pk).update(numchild=F("numchild"))
+        if updated != 1:
+            raise EditorNotFound(f"{noun} parent not found.")
+        return self._get_parent(parent.pk)
+
     def _check_unique_slug(self, parent: Any, slug: str, *, exclude_id: int | None = None) -> None:
         from wagtail.models import Page
 
-        siblings = Page.objects.child_of(parent).filter(slug=slug)
+        siblings = Page.objects.child_of(parent)
         if exclude_id is not None:
             siblings = siblings.exclude(pk=exclude_id)
-        if siblings.exists():
+        # Draft-only edits leave Page.slug unchanged, so compare the slug stored in
+        # each sibling's latest revision. A live page's persisted slug remains
+        # reserved until its rename is published because that is still its public
+        # URL. The JSON key lookup keeps the rest of the revision content (including
+        # the body) out of Python; pages without a revision fall back to their
+        # persisted slug.
+        if siblings.filter(
+            Q(latest_revision__content__slug=slug)
+            | Q(live=True, slug=slug)
+            | Q(latest_revision__isnull=True, slug=slug)
+        ).exists():
             raise EditorValidationError(
                 {"slug": [{"code": "duplicate", "message": f"Slug {slug!r} is already used here."}]}
             )
@@ -404,16 +453,7 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         # the StreamField parses it on access. ``overview_value`` is the list of
         # internal block dicts produced by author_blocks_to_overview().
         with transaction.atomic():
-            from wagtail.models import Page
-
-            # An actual no-op write is portable where SELECT FOR UPDATE is not:
-            # PostgreSQL locks this row and SQLite takes its database write lock.
-            # Reload after waiting so treebeard sees the current numchild/path
-            # metadata before checking the slug and inserting the child.
-            updated = Page.objects.filter(pk=parent.pk).update(numchild=F("numchild"))
-            if updated != 1:
-                raise EditorNotFound("Post parent not found.")
-            parent = self._get_parent(parent.pk)
+            parent = self._lock_parent_for_slug_check(parent, noun="Post")
             self._check_unique_slug(parent, slug)
             post = Post(
                 title=title,
@@ -428,16 +468,17 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
             )
             if data.get("visible_date") is not None:
                 post.visible_date = data["visible_date"]
-            parent.add_child(instance=post)
-            if data["tags"]:
-                post.tags.add(*data["tags"])
-            if categories:
-                post.categories.set(categories)
-            if data["tags"] or categories:
-                # ClusterTaggableManager / ParentalManyToManyField accumulate changes
-                # in memory; flush them so the created page row and first revision agree.
-                post.save()
-            revision = post.save_revision(user=user)
+            with _use_editor_slug_uniqueness(post):
+                parent.add_child(instance=post)
+                if data["tags"]:
+                    post.tags.add(*data["tags"])
+                if categories:
+                    post.categories.set(categories)
+                if data["tags"] or categories:
+                    # ClusterTaggableManager / ParentalManyToManyField accumulate changes
+                    # in memory; flush them so the created page row and first revision agree.
+                    post.save()
+                revision = post.save_revision(user=user)
 
         return Response(
             self._serialize(post, user=user, content_post=post, revision=revision),
@@ -488,7 +529,8 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         if "title" in data:
             draft.title = data["title"]
         if "slug" in data:
-            self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
+            parent = self._lock_parent_for_slug_check(draft.get_parent(), noun="Post")
+            self._check_unique_slug(parent, data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
         if "seo_title" in data:
             draft.seo_title = data["seo_title"]
@@ -514,7 +556,8 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         if body_replacements:
             draft.body = self._body_sections_with_replacements(draft, body_replacements)
 
-        revision = draft.save_revision(user=user)
+        with _use_editor_slug_uniqueness(draft):
+            revision = draft.save_revision(user=user)
         post.refresh_from_db()
         return Response(self._serialize(post, user=user, content_post=draft, revision=revision))
 
@@ -660,7 +703,6 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
 
         title = data["title"]
         slug = data.get("slug") or slugify(title)
-        self._check_unique_slug(parent, slug)
 
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
@@ -685,14 +727,18 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         self._apply_episode_metadata(episode, data, user, get_podcast=lambda: parent)
         if data.get("visible_date") is not None:
             episode.visible_date = data["visible_date"]
-        parent.add_child(instance=episode)
-        if data["tags"]:
-            episode.tags.add(*data["tags"])
-        if categories:
-            episode.categories.set(categories)
-        if data["tags"] or categories:
-            episode.save()
-        revision = episode.save_revision(user=user)
+        with transaction.atomic():
+            parent = self._lock_parent_for_slug_check(parent, noun="Episode")
+            self._check_unique_slug(parent, slug)
+            with _use_editor_slug_uniqueness(episode):
+                parent.add_child(instance=episode)
+                if data["tags"]:
+                    episode.tags.add(*data["tags"])
+                if categories:
+                    episode.categories.set(categories)
+                if data["tags"] or categories:
+                    episode.save()
+                revision = episode.save_revision(user=user)
 
         return Response(
             self._serialize(episode, user=user, content_post=episode, revision=revision),
@@ -745,7 +791,8 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if "title" in data:
             draft.title = data["title"]
         if "slug" in data:
-            self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
+            parent = self._lock_parent_for_slug_check(draft.get_parent(), noun="Episode")
+            self._check_unique_slug(parent, data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
         if "seo_title" in data:
             draft.seo_title = data["seo_title"]
@@ -772,7 +819,8 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if body_replacements:
             draft.body = self._body_sections_with_replacements(draft, body_replacements)
 
-        revision = draft.save_revision(user=user)
+        with _use_editor_slug_uniqueness(draft):
+            revision = draft.save_revision(user=user)
         episode.refresh_from_db()
         return Response(self._serialize(episode, user=user, content_post=draft, revision=revision))
 

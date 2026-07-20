@@ -36,6 +36,17 @@ from cast.models.snippets import PostCategory
 from tests.factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory, UserFactory
 
 
+def test_editor_slug_uniqueness_scope_restores_existing_instance_override():
+    page = type("PageDouble", (), {})()
+    original = lambda: "original"  # noqa: E731
+    page.__dict__["_check_slug_is_unique"] = original
+
+    with editor_views._use_editor_slug_uniqueness(page):
+        assert page._check_slug_is_unique() is None
+
+    assert page.__dict__["_check_slug_is_unique"] is original
+
+
 def grant_wagtail_admin_access(user) -> None:
     permission = Permission.objects.get(codename="access_admin", content_type__app_label="wagtailadmin")
     user.user_permissions.add(permission)
@@ -492,6 +503,28 @@ class TestEditorPostUpdate:
         assert response.json()["title"] == "Still a draft"
         lock.assert_called_once_with()
 
+    def test_slug_patch_locks_parent_and_handles_disappearance(self, api_client, blog, admin_user, monkeypatch):
+        created = self._create(api_client, blog, admin_user)
+
+        class MissingParentQuery:
+            def update(self, **kwargs):
+                assert set(kwargs) == {"numchild"}
+                return 0
+
+        monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
+        response = api_client.patch(
+            reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]}),
+            {
+                "base_revision_id": created["latest_revision_id"],
+                "slug": "serialized-post-slug",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Post parent not found."}
+        assert Post.objects.get(pk=created["id"]).latest_revision_id == created["latest_revision_id"]
+
     def test_draft_only_patch_rejects_post_published_before_row_lock(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
         post = Post.objects.get(pk=created["id"]).specific
@@ -574,6 +607,101 @@ class TestEditorPostUpdate:
         assert body["submitted_base_revision_id"] == created["latest_revision_id"]
         detail = api_client.get(url, format="json").json()
         assert detail["title"] == "Human draft"
+
+    def test_draft_rename_vacates_slug_for_another_draft(self, api_client, blog, admin_user):
+        draft_a = self._create(api_client, blog, admin_user, title="Draft A", slug="draft-slug-x")
+        draft_b = self._create(api_client, blog, admin_user, title="Draft B", slug="draft-slug-b")
+        url_a = reverse("cast:api:editor_post_detail", kwargs={"pk": draft_a["id"]})
+        url_b = reverse("cast:api:editor_post_detail", kwargs={"pk": draft_b["id"]})
+
+        renamed_a = api_client.patch(
+            url_a,
+            {
+                "base_revision_id": draft_a["latest_revision_id"],
+                "require_unpublished": True,
+                "slug": "draft-slug-y",
+            },
+            format="json",
+        )
+        renamed_b = api_client.patch(
+            url_b,
+            {
+                "base_revision_id": draft_b["latest_revision_id"],
+                "require_unpublished": True,
+                "slug": "draft-slug-x",
+            },
+            format="json",
+        )
+
+        assert renamed_a.status_code == 200, renamed_a.content
+        assert renamed_b.status_code == 200, renamed_b.content
+        assert renamed_a.json()["slug"] == "draft-slug-y"
+        assert renamed_b.json()["slug"] == "draft-slug-x"
+        stored_a = Post.objects.get(pk=draft_a["id"])
+        stored_b = Post.objects.get(pk=draft_b["id"])
+        assert (stored_a.slug, stored_b.slug) == ("draft-slug-x", "draft-slug-b")
+        assert stored_a.live is stored_b.live is False
+
+    def test_patch_rejects_slug_used_by_siblings_latest_draft(self, api_client, blog, admin_user):
+        sibling = self._create(api_client, blog, admin_user, title="Sibling", slug="sibling-stored-slug")
+        candidate = self._create(api_client, blog, admin_user, title="Candidate", slug="candidate-slug")
+        sibling_url = reverse("cast:api:editor_post_detail", kwargs={"pk": sibling["id"]})
+        candidate_url = reverse("cast:api:editor_post_detail", kwargs={"pk": candidate["id"]})
+        sibling_rename = api_client.patch(
+            sibling_url,
+            {
+                "base_revision_id": sibling["latest_revision_id"],
+                "slug": "sibling-latest-draft-slug",
+            },
+            format="json",
+        )
+        assert sibling_rename.status_code == 200, sibling_rename.content
+        assert Post.objects.get(pk=sibling["id"]).slug == "sibling-stored-slug"
+
+        response = api_client.patch(
+            candidate_url,
+            {
+                "base_revision_id": candidate["latest_revision_id"],
+                "slug": "sibling-latest-draft-slug",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.json()["errors"]["slug"][0]["code"] == "duplicate"
+        assert Post.objects.get(pk=candidate["id"]).latest_revision_id == candidate["latest_revision_id"]
+
+    def test_live_slug_and_unpublished_rename_slug_are_both_reserved(self, api_client, blog, admin_user):
+        live_post = PostFactory(
+            parent=blog,
+            owner=admin_user,
+            title="Live sibling",
+            slug="live-public-slug",
+        )
+        live_draft = live_post.get_latest_revision_as_object()
+        live_draft.slug = "live-unpublished-rename"
+        live_draft.save_revision(user=admin_user)
+        candidate = self._create(api_client, blog, admin_user, title="Candidate", slug="live-candidate")
+        candidate_url = reverse("cast:api:editor_post_detail", kwargs={"pk": candidate["id"]})
+
+        for reserved_slug in ("live-public-slug", "live-unpublished-rename"):
+            response = api_client.patch(
+                candidate_url,
+                {
+                    "base_revision_id": candidate["latest_revision_id"],
+                    "slug": reserved_slug,
+                },
+                format="json",
+            )
+
+            assert response.status_code == 400
+            assert response.json()["errors"]["slug"][0]["code"] == "duplicate"
+
+        live_post.refresh_from_db()
+        assert live_post.live is True
+        assert live_post.slug == "live-public-slug"
+        assert live_post.get_latest_revision_as_object().slug == "live-unpublished-rename"
+        assert Post.objects.get(pk=candidate["id"]).latest_revision_id == candidate["latest_revision_id"]
 
     def test_patch_updates_only_sent_fields(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)

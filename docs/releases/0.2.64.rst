@@ -14,6 +14,11 @@
 - Add the optional ``require_unpublished`` precondition to post and episode editor PATCH requests. When enabled,
   published pages are rejected with ``409 published_post``; live-state and revision checks are serialized with the
   draft revision write so draft-only automation cannot race a concurrent publish.
+- Correct post and episode editor slug uniqueness checks to use each sibling's latest editable revision. Draft-only
+  renames now vacate the old slug for a later draft create or rename, while slugs used by another latest draft remain
+  rejected even when that sibling's persisted page row still has an older slug. Persisted slugs of live pages remain
+  reserved until their rename drafts are published. Parent-scoped serialization covers both create and rename paths,
+  so concurrent sibling mutations cannot make the same slug decision.
 - Add ``previous_revision_id`` to the shared post and episode editor response shape. It identifies the immediately
   preceding revision for that page (or ``null`` for the first revision), giving crash-recovering clients content-free
   evidence that the serialized latest revision is the single page revision after an expected base without assuming

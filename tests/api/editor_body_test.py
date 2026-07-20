@@ -810,7 +810,36 @@ class TestEditorPostCreate:
         assert first.status_code == 201
         second = api_client.post(url, self._payload(blog), format="json")
         assert second.status_code == 400
-        assert "slug" in second.json()["errors"]
+        assert second.json()["errors"]["slug"][0]["code"] == "duplicate"
+
+    def test_create_uses_latest_draft_slug_for_uniqueness(self, api_client, blog, admin_user):
+        existing = PostFactory(
+            parent=blog,
+            owner=admin_user,
+            title="Existing post",
+            slug="post-stored-slug",
+            live=False,
+        )
+        draft = existing.get_latest_revision_as_object()
+        draft.slug = "post-latest-draft-slug"
+        draft.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_create")
+
+        vacated = api_client.post(
+            url,
+            self._payload(blog, title="Vacated slug", slug="post-stored-slug"),
+            format="json",
+        )
+        occupied = api_client.post(
+            url,
+            self._payload(blog, title="Occupied slug", slug="post-latest-draft-slug"),
+            format="json",
+        )
+
+        assert vacated.status_code == 201, vacated.content
+        assert occupied.status_code == 400
+        assert occupied.json()["errors"]["slug"][0]["code"] == "duplicate"
 
     def test_visible_date_is_applied(self, api_client, blog, admin_user):
         api_client.force_authenticate(user=admin_user)
