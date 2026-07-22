@@ -422,8 +422,9 @@ same parent and slug fails closed as ``409 ambiguous_lookup``.
 The caller must be authenticated, have Wagtail admin access, and have edit
 permission for the matching post. A matching post that the caller cannot edit
 returns ``403 permission_denied`` and is never serialized. As with the id-based
-read endpoint, the response uses the latest editable revision, so a live post
-with unpublished changes has ``live: true`` and ``status: "draft"``. This is a
+read endpoint, the response uses the latest editable revision. A page with an
+approved Wagtail publication schedule has ``status: "scheduled"``; otherwise a
+live post with unpublished changes has ``live: true`` and ``status: "draft"``. This is a
 read-only action, requires no token scope, and does not expose publishing or
 change create behavior on the same collection URL.
 
@@ -553,6 +554,7 @@ Success response (``201 Created``):
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "page_slug": "weeknotes-2026-25",
       "seo_title": "Weeknotes 2026-25",
       "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
@@ -592,6 +594,12 @@ that predecessor check. This field reveals no revision content or additional
 history metadata beyond that one predecessor id. It is evidence only: it is not
 an authorization token and does not replace editor authentication, Wagtail
 permissions, or the PATCH revision precondition.
+
+``page_slug`` is the slug persisted on Wagtail's page row, while ``slug`` is
+the slug in the serialized editable revision. They are equal for unpublished
+pages created or renamed through the editor API. A live page with an unpublished
+rename keeps its public row slug in ``page_slug`` until publication, while
+``slug`` reports the editable draft value.
 
 **Read a draft post**::
 
@@ -641,12 +649,19 @@ Update fields:
 
 - ``base_revision_id`` (optional when ``If-Match`` is supplied): optimistic concurrency token.
 - ``require_unpublished`` (optional, default ``false``): when ``true``, reject
-  the update with ``409 published_post`` if the page is live. The live-state
-  check and revision-token check run under the same transactional row lock as
-  the new revision, so a concurrent publish cannot slip between validation and
-  the draft write.
+  the update with ``409 published_post`` if the page is live or ``409
+  scheduled_post`` if any Wagtail revision is approved for scheduled
+  publication. The live/scheduled-state check and revision-token check run
+  under the same transactional page-row lock as the new revision; all existing
+  page revisions are locked before their schedule fields are inspected. A
+  concurrent publish or schedule cannot
+  slip between validation and the draft write.
 - ``title`` (optional): page title.
-- ``slug`` (optional): URL slug; must remain unique under the same parent.
+- ``slug`` (optional): URL slug; both the persisted page-row and latest-draft
+  slug namespaces must remain unique under the same parent. For an unpublished
+  page, PATCH updates the persisted row slug atomically with the new revision;
+  failure rolls back both. A live page retains its public row slug until the
+  rename revision is published.
 - ``seo_title`` (optional): Wagtail Promote-tab title; send ``""`` to clear it.
 - ``search_description`` (optional): Wagtail Promote-tab description; send ``""`` to clear it.
 - ``visible_date`` (optional): ISO 8601 datetime string.
@@ -674,8 +689,8 @@ Example update request:
     }
 
 Automation that is allowed to edit drafts but must never write after publication
-should always send ``require_unpublished: true``. A page that is already live is
-left unchanged and returns:
+or scheduling should always send ``require_unpublished: true``. A page that is
+already live is left unchanged and returns:
 
 .. code-block:: json
 
@@ -683,6 +698,10 @@ left unchanged and returns:
       "code": "published_post",
       "detail": "This post is already live; the requested draft-only update was refused."
     }
+
+A scheduled page is likewise left unchanged and returns ``409`` with code
+``scheduled_post``. Post and episode responses expose this state as ``status:
+"scheduled"`` even when ``live`` is false.
 
 Instead of putting the token in the JSON body, clients may send the same
 revision id as a strict ``If-Match`` header:
@@ -736,6 +755,7 @@ The success response is the normal editor post shape plus publish metadata:
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "page_slug": "weeknotes-2026-25",
       "seo_title": "Weeknotes 2026-25",
       "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
@@ -1046,6 +1066,8 @@ appear in the public Wagtail pages API until explicitly published. Updating an
 already-live page creates an unpublished draft revision and returns
 ``status: "draft"`` while ``live`` stays ``true``. Use
 ``POST /api/editor/posts/{id}/publish/`` to publish the latest draft revision.
+An approved future publication is returned as ``status: "scheduled"`` and is
+rejected by PATCH when ``require_unpublished`` is true.
 
 Authorization uses standard Wagtail page permissions:
 

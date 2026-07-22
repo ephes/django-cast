@@ -19,16 +19,24 @@ USE_TZ = True
 SECRET_KEY = "mbmcf(_0(y@^nlf6w#1nq%s7&nzcfvx#ok$iwu8)i^d+^96h*="
 
 TEST_DATABASE_NAME = os.environ.get("CAST_TEST_DB", "tests/test_database.sqlite3")
+TEST_DATABASE_ENGINE = os.environ.get("CAST_TEST_DB_ENGINE", "django.db.backends.sqlite3")
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
+        "ENGINE": TEST_DATABASE_ENGINE,
         "NAME": TEST_DATABASE_NAME,
         # if this is not set, an in memory database is used
         # for tests by default _get_test_db_name
         "TEST": {"NAME": TEST_DATABASE_NAME},
     },
 }
+if TEST_DATABASE_ENGINE == "django.db.backends.postgresql":
+    DATABASES["default"].update(
+        USER=os.environ.get("CAST_TEST_DB_USER", "postgres"),
+        PASSWORD=os.environ.get("CAST_TEST_DB_PASSWORD", ""),
+        HOST=os.environ.get("CAST_TEST_DB_HOST", "127.0.0.1"),
+        PORT=os.environ.get("CAST_TEST_DB_PORT", "5432"),
+    )
 
 ROOT_URLCONF = "tests.urls"
 

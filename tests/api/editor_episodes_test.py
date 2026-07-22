@@ -123,6 +123,7 @@ class TestEditorEpisodeCreate:
             "type",
             "title",
             "slug",
+            "page_slug",
             "parent",
             "visible_date",
             "tags",
@@ -203,7 +204,7 @@ class TestEditorEpisodeCreate:
         assert second.status_code == 400
         assert second.json()["errors"]["slug"][0]["code"] == "duplicate"
 
-    def test_create_uses_latest_draft_slug_for_uniqueness(self, api_client, podcast, admin_user):
+    def test_create_reserves_persisted_and_latest_draft_slugs(self, api_client, podcast, admin_user):
         existing = EpisodeFactory(
             parent=podcast,
             owner=admin_user,
@@ -217,20 +218,20 @@ class TestEditorEpisodeCreate:
         api_client.force_authenticate(user=admin_user)
         url = reverse("cast:api:editor_episode_create")
 
-        vacated = api_client.post(
+        persisted = api_client.post(
             url,
-            self._payload(podcast, title="Vacated slug", slug="episode-stored-slug"),
+            self._payload(podcast, title="Persisted slug", slug="episode-stored-slug"),
             format="json",
         )
-        occupied = api_client.post(
+        draft = api_client.post(
             url,
-            self._payload(podcast, title="Occupied slug", slug="episode-latest-draft-slug"),
+            self._payload(podcast, title="Draft slug", slug="episode-latest-draft-slug"),
             format="json",
         )
 
-        assert vacated.status_code == 201, vacated.content
-        assert occupied.status_code == 400
-        assert occupied.json()["errors"]["slug"][0]["code"] == "duplicate"
+        for response in (persisted, draft):
+            assert response.status_code == 400
+            assert response.json()["errors"]["slug"][0]["code"] == "duplicate"
 
     def test_episode_specific_fields_round_trip(self, api_client, podcast, superuser, audio):
         season = Season.objects.create(podcast=podcast, number=2, name="Second season")
@@ -610,7 +611,7 @@ class TestEditorEpisodeUpdate:
         assert body["current_revision_id"] == human_revision.id
         assert body["submitted_base_revision_id"] == created["latest_revision_id"]
 
-    def test_patch_uses_siblings_latest_draft_slug_for_uniqueness(self, api_client, podcast, admin_user):
+    def test_patch_reserves_siblings_persisted_and_latest_draft_slugs(self, api_client, podcast, admin_user):
         sibling = EpisodeFactory(
             parent=podcast,
             owner=admin_user,
@@ -624,28 +625,22 @@ class TestEditorEpisodeUpdate:
         candidate = self._create(api_client, podcast, admin_user, slug="episode-candidate")
         url = reverse("cast:api:editor_episode_detail", kwargs={"pk": candidate["id"]})
 
-        vacated = api_client.patch(
-            url,
-            {
-                "base_revision_id": candidate["latest_revision_id"],
-                "slug": "episode-sibling-stored",
-            },
-            format="json",
-        )
-        assert vacated.status_code == 200, vacated.content
-        assert vacated.json()["slug"] == "episode-sibling-stored"
-        occupied = api_client.patch(
-            url,
-            {
-                "base_revision_id": vacated.json()["latest_revision_id"],
-                "slug": "episode-sibling-latest",
-            },
-            format="json",
-        )
+        responses = [
+            api_client.patch(
+                url,
+                {
+                    "base_revision_id": candidate["latest_revision_id"],
+                    "slug": slug,
+                },
+                format="json",
+            )
+            for slug in ("episode-sibling-stored", "episode-sibling-latest")
+        ]
 
         assert Episode.objects.get(pk=sibling.pk).slug == "episode-sibling-stored"
-        assert occupied.status_code == 400
-        assert occupied.json()["errors"]["slug"][0]["code"] == "duplicate"
+        for response in responses:
+            assert response.status_code == 400
+            assert response.json()["errors"]["slug"][0]["code"] == "duplicate"
 
     def test_patch_updates_episode_fields(self, api_client, podcast, superuser, audio):
         season = Season.objects.create(podcast=podcast, number=3)
@@ -711,6 +706,31 @@ class TestEditorEpisodeUpdate:
         assert data["overview"] == overview
         assert data["detail"] == detail
         assert data["visible_date"].startswith("2026-06-29T")
+
+    def test_live_episode_patch_keeps_public_page_slug_until_publish(self, api_client, podcast, admin_user):
+        episode = EpisodeFactory(
+            parent=podcast,
+            owner=admin_user,
+            title="Live episode",
+            slug="episode-public-slug",
+        )
+        revision = episode.save_revision(user=admin_user, changed=False)
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.patch(
+            reverse("cast:api:editor_episode_detail", kwargs={"pk": episode.id}),
+            {
+                "base_revision_id": revision.id,
+                "slug": "episode-draft-rename",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["slug"] == "episode-draft-rename"
+        assert response.json()["page_slug"] == "episode-public-slug"
+        episode.refresh_from_db()
+        assert episode.slug == "episode-public-slug"
 
     def test_patch_can_clear_promote_text_and_rejects_overlong_title(self, api_client, podcast, superuser):
         created = self._create(api_client, podcast, superuser, slug="episode-promote-validation")

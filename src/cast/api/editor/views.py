@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import Any, Callable, cast
 
 from django.db import transaction
@@ -102,28 +100,6 @@ def _submitted_base_revision_id(request: Request, data: dict[str, Any]) -> int:
     return body_revision_id
 
 
-@contextmanager
-def _use_editor_slug_uniqueness(page: Any) -> Iterator[None]:
-    """Replace only Wagtail's persisted-row slug check for an editor API save.
-
-    Wagtail calls this private check from both ``add_child`` and ``save_revision``.
-    The editor API owns the revision-aware equivalent when accepting a slug;
-    overriding the method on this instance keeps every other model validation in
-    place on later revision saves too.
-    """
-    method_name = "_check_slug_is_unique"
-    had_override = method_name in page.__dict__
-    previous = page.__dict__.get(method_name)
-    page.__dict__[method_name] = lambda: None
-    try:
-        yield
-    finally:
-        if had_override:
-            page.__dict__[method_name] = previous
-        else:
-            page.__dict__.pop(method_name, None)
-
-
 def _previous_page_revision_id(post: Post, revision_id: int | None) -> int | None:
     """Return the immediately preceding revision id for this page."""
     if revision_id is None:
@@ -210,19 +186,45 @@ class PostEditorMixin:
         siblings = Page.objects.child_of(parent)
         if exclude_id is not None:
             siblings = siblings.exclude(pk=exclude_id)
-        # Draft-only edits leave Page.slug unchanged, so compare the slug stored in
-        # each sibling's latest revision. A live page's persisted slug remains
-        # reserved until its rename is published because that is still its public
-        # URL. The JSON key lookup keeps the rest of the revision content (including
-        # the body) out of Python; pages without a revision fall back to their
-        # persisted slug.
-        if siblings.filter(
-            Q(latest_revision__content__slug=slug)
-            | Q(live=True, slug=slug)
-            | Q(latest_revision__isnull=True, slug=slug)
-        ).exists():
+        # Wagtail validates edits against persisted Page.slug values, while editor
+        # lookup follows the latest draft. Reserve both namespaces so an API write
+        # can never create a draft that the Wagtail admin cannot validate. The JSON
+        # key lookup keeps the rest of each revision (including the body) out of
+        # Python.
+        if siblings.filter(Q(latest_revision__content__slug=slug) | Q(slug=slug)).exists():
             raise EditorValidationError(
                 {"slug": [{"code": "duplicate", "message": f"Slug {slug!r} is already used here."}]}
+            )
+
+    @staticmethod
+    def _has_approved_schedule(post: Post, *, for_update: bool = False) -> bool:
+        """Return whether Wagtail has approved any revision for scheduled publication.
+
+        PATCH already holds the page-row lock before calling this with
+        ``for_update=True``. Locking existing revision rows as well means schedule
+        cancellation and approval cannot race the draft-only decision; creating a
+        new scheduled revision must update the same locked page row before it can
+        become the page's current revision.
+        """
+        if not for_update:
+            return post.revisions.filter(approved_go_live_at__isnull=False).exists()
+        locked_schedules = post.revisions.select_for_update().values_list("id", "approved_go_live_at")
+        return any(approved_go_live_at is not None for _, approved_go_live_at in locked_schedules)
+
+    def _enforce_draft_only(self, post: Post, *, required: bool, noun: str) -> None:
+        if not required:
+            return
+        if post.live:
+            raise EditorFlatError(
+                "published_post",
+                f"This {noun} is already live; the requested draft-only update was refused.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        if self._has_approved_schedule(post, for_update=True):
+            raise EditorFlatError(
+                "scheduled_post",
+                f"This {noun} is scheduled for publication; the requested draft-only update was refused.",
+                status_code=status.HTTP_409_CONFLICT,
             )
 
     def _resolve_cover_image(self, cover: dict[str, Any] | None, user: Any) -> tuple[Any | None, str]:
@@ -293,11 +295,19 @@ class PostEditorMixin:
         if content_post.cover_image_id is not None:
             cover = {"id": content_post.cover_image_id, "alt_text": content_post.cover_alt_text}
 
+        if self._has_approved_schedule(post):
+            publication_status = "scheduled"
+        elif post.live and not post.has_unpublished_changes:
+            publication_status = "live"
+        else:
+            publication_status = "draft"
+
         data = {
             "id": post.id,
             "type": content_post._meta.label,
             "title": content_post.title,
             "slug": content_post.slug,
+            "page_slug": post.slug,
             "seo_title": content_post.seo_title,
             "search_description": content_post.search_description,
             "parent": {"id": post.get_parent().id},
@@ -314,7 +324,7 @@ class PostEditorMixin:
             "latest_revision_id": latest_revision_id,
             "previous_revision_id": _previous_page_revision_id(post, latest_revision_id),
             "live": post.live,
-            "status": "live" if post.live and not post.has_unpublished_changes else "draft",
+            "status": publication_status,
             "preview_url": reverse("wagtailadmin_pages:view_draft", args=[post.id]),
             "edit_url": reverse("wagtailadmin_pages:edit", args=[post.id]),
             "api_url": reverse(self.detail_url_name, kwargs={"pk": post.id}),
@@ -468,17 +478,16 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
             )
             if data.get("visible_date") is not None:
                 post.visible_date = data["visible_date"]
-            with _use_editor_slug_uniqueness(post):
-                parent.add_child(instance=post)
-                if data["tags"]:
-                    post.tags.add(*data["tags"])
-                if categories:
-                    post.categories.set(categories)
-                if data["tags"] or categories:
-                    # ClusterTaggableManager / ParentalManyToManyField accumulate changes
-                    # in memory; flush them so the created page row and first revision agree.
-                    post.save()
-                revision = post.save_revision(user=user)
+            parent.add_child(instance=post)
+            if data["tags"]:
+                post.tags.add(*data["tags"])
+            if categories:
+                post.categories.set(categories)
+            if data["tags"] or categories:
+                # ClusterTaggableManager / ParentalManyToManyField accumulate changes
+                # in memory; flush them so the created page row and first revision agree.
+                post.save()
+            revision = post.save_revision(user=user)
 
         return Response(
             self._serialize(post, user=user, content_post=post, revision=revision),
@@ -518,12 +527,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
                 submitted_base_revision_id=submitted_base_revision_id,
                 edit_url=edit_url,
             )
-        if data["require_unpublished"] and post.live:
-            raise EditorFlatError(
-                "published_post",
-                "This post is already live; the requested draft-only update was refused.",
-                status_code=status.HTTP_409_CONFLICT,
-            )
+        self._enforce_draft_only(post, required=data["require_unpublished"], noun="post")
 
         draft = post.get_latest_revision().as_object()
         if "title" in data:
@@ -532,6 +536,9 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
             parent = self._lock_parent_for_slug_check(draft.get_parent(), noun="Post")
             self._check_unique_slug(parent, data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+            if not post.live:
+                post.slug = data["slug"]
+                post.save(update_fields=["slug", "url_path"])
         if "seo_title" in data:
             draft.seo_title = data["seo_title"]
         if "search_description" in data:
@@ -556,8 +563,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         if body_replacements:
             draft.body = self._body_sections_with_replacements(draft, body_replacements)
 
-        with _use_editor_slug_uniqueness(draft):
-            revision = draft.save_revision(user=user)
+        revision = draft.save_revision(user=user)
         post.refresh_from_db()
         return Response(self._serialize(post, user=user, content_post=draft, revision=revision))
 
@@ -730,15 +736,14 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         with transaction.atomic():
             parent = self._lock_parent_for_slug_check(parent, noun="Episode")
             self._check_unique_slug(parent, slug)
-            with _use_editor_slug_uniqueness(episode):
-                parent.add_child(instance=episode)
-                if data["tags"]:
-                    episode.tags.add(*data["tags"])
-                if categories:
-                    episode.categories.set(categories)
-                if data["tags"] or categories:
-                    episode.save()
-                revision = episode.save_revision(user=user)
+            parent.add_child(instance=episode)
+            if data["tags"]:
+                episode.tags.add(*data["tags"])
+            if categories:
+                episode.categories.set(categories)
+            if data["tags"] or categories:
+                episode.save()
+            revision = episode.save_revision(user=user)
 
         return Response(
             self._serialize(episode, user=user, content_post=episode, revision=revision),
@@ -778,12 +783,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
                 submitted_base_revision_id=submitted_base_revision_id,
                 edit_url=edit_url,
             )
-        if data["require_unpublished"] and episode.live:
-            raise EditorFlatError(
-                "published_post",
-                "This episode is already live; the requested draft-only update was refused.",
-                status_code=status.HTTP_409_CONFLICT,
-            )
+        self._enforce_draft_only(episode, required=data["require_unpublished"], noun="episode")
 
         # ``parent`` is immutable on PATCH, so the season constraint resolves against
         # the episode's existing podcast parent — fetched lazily only when a season is sent.
@@ -794,6 +794,9 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
             parent = self._lock_parent_for_slug_check(draft.get_parent(), noun="Episode")
             self._check_unique_slug(parent, data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+            if not episode.live:
+                episode.slug = data["slug"]
+                episode.save(update_fields=["slug", "url_path"])
         if "seo_title" in data:
             draft.seo_title = data["seo_title"]
         if "search_description" in data:
@@ -819,8 +822,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if body_replacements:
             draft.body = self._body_sections_with_replacements(draft, body_replacements)
 
-        with _use_editor_slug_uniqueness(draft):
-            revision = draft.save_revision(user=user)
+        revision = draft.save_revision(user=user)
         episode.refresh_from_db()
         return Response(self._serialize(episode, user=user, content_post=draft, revision=revision))
 

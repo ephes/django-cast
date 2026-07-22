@@ -12,13 +12,15 @@
   PostgreSQL and SQLite so competing same-slug creators converge through the existing duplicate-slug response and
   lookup contract.
 - Add the optional ``require_unpublished`` precondition to post and episode editor PATCH requests. When enabled,
-  published pages are rejected with ``409 published_post``; live-state and revision checks are serialized with the
-  draft revision write so draft-only automation cannot race a concurrent publish.
-- Correct post and episode editor slug uniqueness checks to use each sibling's latest editable revision. Draft-only
-  renames now vacate the old slug for a later draft create or rename, while slugs used by another latest draft remain
-  rejected even when that sibling's persisted page row still has an older slug. Persisted slugs of live pages remain
-  reserved until their rename drafts are published. Parent-scoped serialization covers both create and rename paths,
-  so concurrent sibling mutations cannot make the same slug decision.
+  published pages are rejected with ``409 published_post`` and pages with an approved Wagtail publication schedule
+  are rejected with ``409 scheduled_post``. Responses expose scheduled state explicitly, and live/scheduled-state and
+  revision checks are serialized with the draft revision write so draft-only automation cannot race publication or
+  scheduling.
+- Correct post and episode editor slug uniqueness checks to reserve both each sibling's persisted Wagtail page-row slug
+  and latest editable revision slug. Renaming an unpublished page now updates its row slug atomically with the new
+  revision, so the old slug is vacated without leaving a draft that Wagtail admin validation cannot preview or save.
+  Live pages retain their persisted public slug until publication. Parent-scoped serialization covers both create and
+  rename paths, and editor responses expose the content-free ``page_slug`` so clients can verify row/revision alignment.
 - Add ``previous_revision_id`` to the shared post and episode editor response shape. It identifies the immediately
   preceding revision for that page (or ``null`` for the first revision), giving crash-recovering clients content-free
   evidence that the serialized latest revision is the single page revision after an expected base without assuming

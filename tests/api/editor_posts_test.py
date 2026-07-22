@@ -1,19 +1,21 @@
 # ruff: noqa: F401,F811,I001
 import json
 import subprocess
+import threading
 from datetime import timedelta
 
 import pytest
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import Group, Permission
-from django.db import connection
+from django.db import close_old_connections, connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
-from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
+from rest_framework.test import APIClient
+from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page, Revision
 
 from cast import media_probe
 from cast.api.editor import media as editor_media
@@ -34,17 +36,6 @@ from cast.models import Audio, Episode, Post, Season, Video
 from cast.models.snippets import PostCategory
 
 from tests.factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory, UserFactory
-
-
-def test_editor_slug_uniqueness_scope_restores_existing_instance_override():
-    page = type("PageDouble", (), {})()
-    original = lambda: "original"  # noqa: E731
-    page.__dict__["_check_slug_is_unique"] = original
-
-    with editor_views._use_editor_slug_uniqueness(page):
-        assert page._check_slug_is_unique() is None
-
-    assert page.__dict__["_check_slug_is_unique"] is original
 
 
 def grant_wagtail_admin_access(user) -> None:
@@ -549,6 +540,120 @@ class TestEditorPostUpdate:
         assert post.latest_revision_id == revision_id
         assert post.get_latest_revision_as_object().title != "Must not be written"
 
+    def test_scheduled_post_is_reported_and_rejected_by_draft_only_patch(self, api_client, blog, admin_user):
+        created = self._create(api_client, blog, admin_user)
+        post = Post.objects.get(pk=created["id"]).specific
+        scheduled = post.get_latest_revision_as_object()
+        scheduled.go_live_at = timezone.now() + timedelta(days=1)
+        scheduled_revision = scheduled.save_revision(user=admin_user)
+        scheduled_revision.publish(user=admin_user)
+        scheduled_revision.refresh_from_db()
+        assert scheduled_revision.approved_go_live_at is not None
+
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        api_client.force_authenticate(user=admin_user)
+        detail = api_client.get(url, format="json")
+        response = api_client.patch(
+            url,
+            {
+                "base_revision_id": scheduled_revision.id,
+                "require_unpublished": True,
+                "title": "Must not replace the schedule",
+            },
+            format="json",
+        )
+
+        assert detail.status_code == 200
+        assert detail.json()["status"] == "scheduled"
+        assert detail.json()["live"] is False
+        assert response.status_code == 409
+        assert response.json()["code"] == "scheduled_post"
+        post.refresh_from_db()
+        assert post.latest_revision_id == scheduled_revision.id
+        assert post.get_latest_revision_as_object().title != "Must not replace the schedule"
+
+    @pytest.mark.django_db(transaction=True)
+    @pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL row-lock semantics")
+    def test_postgres_schedule_approval_serializes_with_draft_only_patch(
+        self, api_client, blog, admin_user, monkeypatch
+    ):
+        created = self._create(api_client, blog, admin_user)
+        revision_id = created["latest_revision_id"]
+        url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
+        revisions_locked = threading.Event()
+        release_patch = threading.Event()
+        schedule_update_started = threading.Event()
+        schedule_update_finished = threading.Event()
+        thread_errors = []
+        responses = []
+        original_schedule_check = editor_views.PostEditorMixin._has_approved_schedule
+
+        def pause_after_revision_locks(post, *, for_update=False):
+            scheduled = original_schedule_check(post, for_update=for_update)
+            if for_update:
+                revisions_locked.set()
+                assert release_patch.wait(timeout=5)
+            return scheduled
+
+        monkeypatch.setattr(
+            editor_views.PostEditorMixin,
+            "_has_approved_schedule",
+            staticmethod(pause_after_revision_locks),
+        )
+
+        def patch_draft():
+            close_old_connections()
+            try:
+                client = APIClient()
+                client.force_authenticate(user=type(admin_user).objects.get(pk=admin_user.pk))
+                responses.append(
+                    client.patch(
+                        url,
+                        {
+                            "base_revision_id": revision_id,
+                            "require_unpublished": True,
+                            "title": "Serialized draft update",
+                        },
+                        format="json",
+                    )
+                )
+            except Exception as exc:  # pragma: no cover - surfaced by the assertion below
+                thread_errors.append(exc)
+            finally:
+                close_old_connections()
+
+        def approve_existing_revision():
+            close_old_connections()
+            try:
+                assert revisions_locked.wait(timeout=5)
+                with transaction.atomic():
+                    revision = Revision.objects.get(pk=revision_id)
+                    revision.approved_go_live_at = timezone.now() + timedelta(days=1)
+                    schedule_update_started.set()
+                    revision.save(update_fields=["approved_go_live_at"])
+                schedule_update_finished.set()
+            except Exception as exc:  # pragma: no cover - surfaced by the assertion below
+                thread_errors.append(exc)
+            finally:
+                close_old_connections()
+
+        patch_thread = threading.Thread(target=patch_draft)
+        schedule_thread = threading.Thread(target=approve_existing_revision)
+        patch_thread.start()
+        assert revisions_locked.wait(timeout=5)
+        schedule_thread.start()
+        assert schedule_update_started.wait(timeout=5)
+        assert not schedule_update_finished.wait(timeout=0.25)
+        release_patch.set()
+        patch_thread.join(timeout=5)
+        schedule_thread.join(timeout=5)
+
+        assert not patch_thread.is_alive() and not schedule_thread.is_alive()
+        assert thread_errors == []
+        assert responses[0].status_code == 200, responses[0].content
+        assert schedule_update_finished.is_set()
+        assert Revision.objects.get(pk=revision_id).approved_go_live_at is not None
+
     def test_patch_publish_true_is_rejected(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
@@ -636,11 +741,41 @@ class TestEditorPostUpdate:
         assert renamed_a.status_code == 200, renamed_a.content
         assert renamed_b.status_code == 200, renamed_b.content
         assert renamed_a.json()["slug"] == "draft-slug-y"
+        assert renamed_a.json()["page_slug"] == "draft-slug-y"
         assert renamed_b.json()["slug"] == "draft-slug-x"
+        assert renamed_b.json()["page_slug"] == "draft-slug-x"
         stored_a = Post.objects.get(pk=draft_a["id"])
         stored_b = Post.objects.get(pk=draft_b["id"])
-        assert (stored_a.slug, stored_b.slug) == ("draft-slug-x", "draft-slug-b")
+        assert (stored_a.slug, stored_b.slug) == ("draft-slug-y", "draft-slug-x")
+        assert stored_a.url_path.endswith("/draft-slug-y/")
+        assert stored_b.url_path.endswith("/draft-slug-x/")
         assert stored_a.live is stored_b.live is False
+
+    def test_unpublished_page_slug_rolls_back_if_revision_save_fails(self, api_client, blog, admin_user, monkeypatch):
+        created = self._create(api_client, blog, admin_user, slug="before-rollback")
+        original_save_revision = Post.save_revision
+
+        def fail_renamed_revision(page, *args, **kwargs):
+            if page.pk == created["id"] and page.slug == "after-rollback":
+                raise RuntimeError("revision write failed")
+            return original_save_revision(page, *args, **kwargs)
+
+        monkeypatch.setattr(Post, "save_revision", fail_renamed_revision)
+
+        with pytest.raises(RuntimeError, match="revision write failed"):
+            api_client.patch(
+                reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]}),
+                {
+                    "base_revision_id": created["latest_revision_id"],
+                    "require_unpublished": True,
+                    "slug": "after-rollback",
+                },
+                format="json",
+            )
+
+        persisted = Post.objects.get(pk=created["id"])
+        assert persisted.slug == "before-rollback"
+        assert persisted.latest_revision_id == created["latest_revision_id"]
 
     def test_patch_rejects_slug_used_by_siblings_latest_draft(self, api_client, blog, admin_user):
         sibling = self._create(api_client, blog, admin_user, title="Sibling", slug="sibling-stored-slug")
@@ -656,7 +791,7 @@ class TestEditorPostUpdate:
             format="json",
         )
         assert sibling_rename.status_code == 200, sibling_rename.content
-        assert Post.objects.get(pk=sibling["id"]).slug == "sibling-stored-slug"
+        assert Post.objects.get(pk=sibling["id"]).slug == "sibling-latest-draft-slug"
 
         response = api_client.patch(
             candidate_url,
@@ -702,6 +837,31 @@ class TestEditorPostUpdate:
         assert live_post.slug == "live-public-slug"
         assert live_post.get_latest_revision_as_object().slug == "live-unpublished-rename"
         assert Post.objects.get(pk=candidate["id"]).latest_revision_id == candidate["latest_revision_id"]
+
+    def test_live_page_patch_keeps_public_page_slug_until_publish(self, api_client, blog, admin_user):
+        live_post = PostFactory(
+            parent=blog,
+            owner=admin_user,
+            title="Live post",
+            slug="live-public-slug",
+        )
+        revision = live_post.save_revision(user=admin_user, changed=False)
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.patch(
+            reverse("cast:api:editor_post_detail", kwargs={"pk": live_post.id}),
+            {
+                "base_revision_id": revision.id,
+                "slug": "live-draft-rename",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["slug"] == "live-draft-rename"
+        assert response.json()["page_slug"] == "live-public-slug"
+        live_post.refresh_from_db()
+        assert live_post.slug == "live-public-slug"
 
     def test_patch_updates_only_sent_fields(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
@@ -795,6 +955,7 @@ class TestEditorPostUpdate:
         assert data["latest_revision_id"] != created["latest_revision_id"]
         assert data["title"] == "Updated draft"
         assert data["slug"] == "updated-draft"
+        assert data["page_slug"] == "updated-draft"
         assert data["seo_title"] == "Updated search title"
         assert data["search_description"] == "Updated search and social description."
         assert data["tags"] == ["weeknotes", "updated"]
@@ -824,7 +985,7 @@ class TestEditorPostUpdate:
 
         stored_post = Post.objects.get(id=created["id"])
         assert stored_post.title == "Editable draft"
-        assert stored_post.slug == "all-fields"
+        assert stored_post.slug == "updated-draft"
         assert stored_post.cover_image_id is None
 
     def test_patch_can_clear_promote_text(self, api_client, blog, admin_user):
