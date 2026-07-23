@@ -4,6 +4,37 @@ Installation
 
 Django Cast can be installed as a standalone project or integrated into an existing Django application.
 
+*****************
+Choose a Workflow
+*****************
+
+django-cast has several setup and demonstration tools for different audiences:
+
+**Start a new developer project**
+  Use ``django-cast-quickstart``. It generates a Django project and starts a
+  development server, so it still assumes Python, ``uv`` or ``pip``, and a
+  terminal. It is not a production deployment tool.
+
+**Add django-cast to an existing Django project**
+  Follow :ref:`the integration instructions <integrating-into-existing-projects>`
+  below and configure the package explicitly in the host project.
+
+**Work on django-cast itself**
+  Use ``example/scripts/bootstrap_example_data.py`` to create disposable blog
+  and podcast content for the repository's example project. See
+  :doc:`development` for the contributor workflow.
+
+**Develop or test a theme**
+  Run the ``ensure_reference_site`` management command in a configured Django
+  project. It creates repeatable content that exercises django-cast's theme
+  templates; see :doc:`reference/management-commands`.
+
+An experimental sibling product, Cast Studio, is exploring a packaged desktop
+application for non-developers. It is separate from django-cast and is not a
+currently available installation path. Cast Studio-specific desktop lifecycle,
+authentication, backup, and onboarding behavior do not belong in the
+``django-cast-quickstart`` workflow.
+
 **************
 Prerequisites
 **************
@@ -20,7 +51,8 @@ Before you begin, ensure you have:
 New Project Setup
 ******************
 
-The fastest way to start with django-cast is using the ``django-cast-quickstart`` command:
+The fastest way for a developer to start a new django-cast project is the
+``django-cast-quickstart`` command:
 
 .. code-block:: shell
 
@@ -73,6 +105,8 @@ Once the server is running, you can:
 1. **Access the Wagtail admin** at ``http://localhost:8000/cms/``
 2. **Access the Django admin** at ``http://localhost:8000/admin/``
 3. **View your site** at ``http://localhost:8000/``
+
+.. _integrating-into-existing-projects:
 
 ***********************************
 Integrating Into Existing Projects

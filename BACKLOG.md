@@ -15,24 +15,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
-- [ ] Revisit onboarding and authoring workflows
-  - Design record:
-    [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
-  - Scope: review the existing `django-cast-quickstart`, `example/scripts/bootstrap_example_data.py`, and
-    `ensure_reference_site` workflows and decide what onboarding should mean for django-cast users: new developer
-    project setup, local development setup, editor onboarding, assisted content authoring, or an installed desktop
-    product.
-  - Notes: the paths are now deliberately separate. `django-cast-quickstart` remains developer-facing; the example
-    bootstrap/reference site remain development and theme-test tooling; a private sibling Cast Studio product is
-    researching an offline-capable, no-signup macOS Electron application for non-developers. Cast Studio's first proof
-    is blog + image authoring through Wagtail, not a custom editor. Include "try django-cast with your own podcast
-    feed" as a later Cast Studio/getting-started path built on the podcast feed import workflow. The quickstart
-    template-drift implementation slice landed on 2026-07-06: generated project files now come from packaged templates
-    and a smoke test verifies the generated project boots through Django's system check.
-  - Done when: the current workflows and audiences are documented in one place, gaps are listed, Cast Studio-specific
-    work is kept out of core unless it proves generic, and django-cast follow-ups are split into concrete implementation
-    tasks.
-
 - [ ] Local authoring and sync workflow
   - Design record:
     [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
@@ -129,7 +111,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     site-specific importer is now the concrete reference for provenance, idempotency, limited/dry-run operation,
     streaming media copy, sanitization, SSRF protection, and fixture-only tests. Cast Studio should prove a generic
     RSS-first contract in its own repo before shared services or models are promoted into django-cast.
-  - Related to: Revisit onboarding and authoring workflows.
   - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
   - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on stable
     feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.

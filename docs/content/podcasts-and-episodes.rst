@@ -66,8 +66,9 @@ image will be used.
 Podcast Audio
 -------------
 
-The `podcast_audio` field is required for an episode. It is used for the
-enclosure tag in the podcast feed.
+The `podcast_audio` field may be empty while an episode is a draft, but the
+built-in Wagtail form requires it when publishing. It supplies the enclosure
+for the episode in the podcast feed.
 
 Promote > Title
 ---------------
@@ -156,9 +157,9 @@ Explicit
 
 Explicit content is set in the podcast feed as the iTunes explicit tag. The available options are:
 
-- **Yes**: Content is suitable for the age group it's rated for
-- **No**: Content does not contain anything explicit and is safe for general audiences
-- **Explicit**: Contains adult content or strong language, not recommended for younger audiences
+- **Yes**: Mark the episode as explicit
+- **No**: Mark the episode as not explicit
+- **Clean**: Mark an edited or censored version as clean
 
 Block
 -----

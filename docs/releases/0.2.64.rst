@@ -1,6 +1,10 @@
 0.2.64 (unreleased)
 -------------------
 
+- Clarify the separate onboarding workflows for new developer projects,
+  django-cast contributors, theme developers, and the experimental Cast Studio
+  desktop product. Correct stale tutorial guidance for headings, comments,
+  podcast feed paths, explicit values, and content organization.
 - Move post-description rendering into ``cast.presenters.render_post_description`` and have feeds and rendered
   Wagtail API fields use the presenter directly. ``Post.get_description()`` remains as a compatible wrapper.
 - Add a bounded, facet-aware title-prefix suggestion endpoint for optional theme typeahead interfaces. Suggestions

@@ -35,8 +35,8 @@ Creating a Blog
 
 4. **Configure Blog Settings**
 
-   - **Comments enabled**: Configure via Django Admin (http://localhost:8000/admin/)
-   - **Template base dir**: Choose from pre-installed themes ("bootstrap4" or "plain")
+   - **Comments enabled**: Choose whether this blog permits comments
+   - **Template base dir**: Choose a built-in theme (``bootstrap4`` or ``plain``)
 
 5. **Publish**
 
@@ -74,14 +74,17 @@ Creating Your First Post
 
    For each section, you can add:
 
-   - **Heading**: Section headers
-   - **Paragraph**: Rich text content
+   - **Paragraph**: Rich text content, including ``h2``, ``h3``, and ``h4`` headings
    - **Image**: Single responsive image
    - **Gallery**: Multiple images with lightbox
    - **Code**: Syntax-highlighted code blocks
    - **Video**: Embedded video files
    - **Audio**: Embedded audio with player
    - **Embed**: External content (YouTube, etc.)
+
+   django-cast no longer provides a standalone Heading block. Add headings
+   inside a Paragraph block with Wagtail's rich-text heading controls so the
+   document level is explicit.
 
 5. **Add Media**
 
@@ -145,12 +148,12 @@ Creating Your First Episode
 3. **Episode Details**
 
    - **Title**: Episode title
-   - **Podcast Audio**: Upload your audio file (required)
+   - **Podcast Audio**: Upload your audio file; drafts may omit it, but publishing requires it
    - **Keywords**: Episode-specific keywords
    - **Explicit**: Episode content rating:
-     - **Yes**: Content is suitable for the age group it's rated for
-     - **No**: Content does not contain anything explicit and is safe for general audiences
-     - **Explicit**: Contains adult content or strong language, not recommended for younger audiences
+     - **Yes**: Mark the episode as explicit
+     - **No**: Mark the episode as not explicit
+     - **Clean**: Mark an edited or censored version as clean
    - **Block**: Check to prevent iTunes distribution
 
 4. **Add Show Notes**
@@ -187,12 +190,13 @@ Creating Your First Episode
 RSS Feed Setup
 ********************
 
-Your podcast RSS feeds are automatically generated for each audio format:
+Your podcast RSS feeds are generated from the podcast slug for each audio
+format. For a podcast whose slug is ``my-podcast``, the URLs are:
 
-- **MP3 Feed**: ``/feed/podcast/mp3/rss.xml``
-- **M4A Feed**: ``/feed/podcast/m4a/rss.xml``
-- **OGG Feed**: ``/feed/podcast/oga/rss.xml``
-- **OPUS Feed**: ``/feed/podcast/opus/rss.xml``
+- **MP3 Feed**: ``/my-podcast/feed/podcast/mp3/rss.xml``
+- **M4A Feed**: ``/my-podcast/feed/podcast/m4a/rss.xml``
+- **OGG Feed**: ``/my-podcast/feed/podcast/oga/rss.xml``
+- **OPUS Feed**: ``/my-podcast/feed/podcast/opus/rss.xml``
 
 Each feed contains episodes with audio files in the corresponding format. Submit your preferred feed URL to podcast directories like Apple Podcasts, Spotify, etc.
 
@@ -240,12 +244,11 @@ Content Organization
 
 - **Categories**: Use for major topic areas
 - **Tags**: Use for specific topics
-- **Series**: Create related post series
 
 Theme Customization
 ===================
 
-- Choose from pre-installed themes ("bootstrap4", "plain")
+- Choose from the built-in themes (``bootstrap4`` and ``plain``)
 - Install new themes via PyPI
 - Select theme in blog's "Template base dir" setting
 

@@ -35,7 +35,6 @@ site.
 
 ## Related Backlog
 
-- Revisit onboarding and authoring workflows.
 - Paged feeds, if large imported archives expose feed size or pagination limits.
 - Podcast contributor follow-up options, if feeds include people metadata that
   maps to django-cast contributors.
