@@ -39,3 +39,6 @@
   automatically; plain programmatic ``Audio.save()``, ``Video.save()``, and ``Transcript.save()`` calls now persist
   fields without media probing or derived-data I/O. The services follow the installed Django version's
   ``Model.save()`` positional-argument contract without relying on Django's removed private parsing helpers.
+- Fix a 500 error when rendering a gallery that contains an empty or unresolvable image slot - for example during
+  page preview or from a saved draft revision, where Wagtail defers required-field validation and an unfilled image
+  chooser ends up as ``None``. Such entries are now skipped instead of crashing the gallery.

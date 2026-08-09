@@ -207,7 +207,8 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     Add the thumbnail and modal image data to each image of the gallery and then
     the images to the context.
     """
-    images_list = list(images)  # Ensure it's a list
+    # Drop empty slots - Wagtail may hand us None entries for unfilled or deleted image choosers
+    images_list = [image for image in images if image is not None]
     add_image_thumbnails(images_list, context=context)
     for index, image in enumerate(images_list):
         image.prev = f"gallery-{images_list[index - 1].pk}" if index > 0 else ""
@@ -334,8 +335,15 @@ class GalleryBlockWithLayout(StructBlock):
     ) -> dict[str, Any]:
         images = []
         for item in values["gallery"]:
+            if item is None:
+                # empty image chooser slot -> skip it
+                continue
             if isinstance(item, dict) and item.get("type") == "item":
-                images.append(repository.image_by_id[item["value"]])
+                if (image_id := item["value"]) is None:
+                    # serialized empty image chooser slot -> skip it
+                    continue
+                # missing ids have to raise a KeyError to trigger the database fallback
+                images.append(repository.image_by_id[image_id])
             else:
                 # it's an Image object
                 images.append(item)
@@ -348,15 +356,21 @@ class GalleryBlockWithLayout(StructBlock):
 
     @staticmethod
     def bulk_to_python_from_database(values: dict[str, Any]) -> dict[str, Any]:
+        # empty image chooser slots are None -> drop them
         image_ids_or_images = list(filter(None, values["gallery"]))
         if len(image_ids_or_images) == 0:
+            values["gallery"] = []
             return values
         if isinstance(image_ids_or_images[0], Image):
+            values["gallery"] = image_ids_or_images
             return values
-        image_ids_or_images = [item["value"] for item in image_ids_or_images]
-        assert isinstance(image_ids_or_images[0], int)
+        # serialized empty image chooser slots have a null value -> drop them, too
+        image_ids = [item["value"] for item in image_ids_or_images if item["value"] is not None]
+        if len(image_ids) == 0:
+            values["gallery"] = []
+            return values
+        assert isinstance(image_ids[0], int)
         # we have to fetch the images from the database
-        image_ids = image_ids_or_images
         # Fetch all images in one query but preserve the order
         images_by_id = {img.pk: img for img in Image.objects.filter(pk__in=image_ids)}
         # Reconstruct the list in the original order, allowing duplicates

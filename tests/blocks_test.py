@@ -2,6 +2,7 @@ from typing import cast
 from types import SimpleNamespace
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.template.loader import get_template
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image
@@ -385,6 +386,84 @@ def test_gallery_block_with_layout_get_context():
         )
 
 
+def test_gallery_image_chooser_block_clean_none_with_deferred_validation():
+    """
+    Explains how None ends up in a gallery: Wagtail's page preview calls
+    defer_required_fields() on the form which propagates down the block tree
+    and makes an empty image chooser slot clean to None instead of raising.
+    """
+    block = GalleryImageChooserBlock()
+    with pytest.raises(ValidationError):
+        block.clean(None)
+
+    block.defer_required_validation()
+    try:
+        assert block.clean(None) is None
+    finally:
+        block.restore_deferred_validation()
+
+    with pytest.raises(ValidationError):
+        block.clean(None)
+
+
+def test_gallery_block_with_layout_get_images_from_repository_skips_none():
+    block = GalleryBlockWithLayout()
+
+    values = block._get_images_from_repository(None, {"gallery": [None]})
+    assert values["gallery"] == []
+
+    # a saved draft revision serializes an empty slot as a null value -> skip it
+    # without touching the repository (which is None here and would raise)
+    values = block._get_images_from_repository(None, {"gallery": [{"type": "item", "value": None}]})
+    assert values["gallery"] == []
+
+
+def test_gallery_block_with_layout_bulk_to_python_from_database_skips_none():
+    block = GalleryBlockWithLayout()
+
+    # only empty slots -> empty gallery
+    values = block.bulk_to_python_from_database({"gallery": [None]})
+    assert values == {"gallery": []}
+
+    # real images mixed with an empty slot -> only the real images
+    image = Image(id=1, title="Some image", collection=None)
+    values = block.bulk_to_python_from_database({"gallery": [image, None]})
+    assert values == {"gallery": [image]}
+
+    # only serialized empty slots -> empty gallery
+    values = block.bulk_to_python_from_database({"gallery": [{"type": "item", "value": None}]})
+    assert values == {"gallery": []}
+
+
+@pytest.mark.django_db
+def test_gallery_block_with_layout_bulk_to_python_from_database_skips_null_items(image):
+    block = GalleryBlockWithLayout()
+
+    values = block.bulk_to_python_from_database(
+        {"gallery": [{"type": "item", "value": None}, {"type": "item", "value": image.pk}]}
+    )
+    assert values == {"gallery": [image]}
+
+    values = block.bulk_to_python_from_database(
+        {"gallery": [{"type": "item", "value": image.pk}, {"type": "item", "value": None}]}
+    )
+    assert values == {"gallery": [image]}
+
+
+@pytest.mark.django_db
+def test_gallery_block_with_layout_get_context_skips_none(image):
+    """A gallery containing an empty image chooser slot has to render without raising."""
+    block = GalleryBlockWithLayout()
+
+    context = block.get_context(
+        {"gallery": [image, None], "layout": "default"},
+        parent_context={"repository": GalleryProxyRepository(), "template_base_dir": "bootstrap4"},
+    )
+
+    assert context["images"] == [image]
+    assert context["image_pks"] == str(image.pk)
+
+
 def test_prepare_context_for_gallery_sets_prev_next(monkeypatch):
     class Image:
         def __init__(self, pk: int):
@@ -407,6 +486,22 @@ def test_prepare_context_for_gallery_sets_prev_next(monkeypatch):
     assert result["images"][1].next == "gallery-3"
     assert result["images"][2].prev == "gallery-2"
     assert result["images"][2].next == ""
+
+
+def test_prepare_context_for_gallery_skips_none(monkeypatch):
+    class Image:
+        def __init__(self, pk: int):
+            self.pk = pk
+
+    def fake_add_image_thumbnails(_images, *, context):
+        return None
+
+    monkeypatch.setattr("cast.blocks.add_image_thumbnails", fake_add_image_thumbnails)
+    result = prepare_context_for_gallery([Image(1), None, Image(2)], {})
+
+    assert result["image_pks"] == "1,2"
+    assert result["images"][0].next == "gallery-2"
+    assert result["images"][1].prev == "gallery-1"
 
 
 @pytest.mark.django_db
