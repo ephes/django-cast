@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, cast
+from collections.abc import Callable
+from typing import Any, cast
 
 from django.db import transaction
 from django.db.models import F, Q, Subquery

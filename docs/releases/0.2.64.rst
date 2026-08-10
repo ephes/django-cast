@@ -48,6 +48,13 @@
   full-text search. django-cast now wraps the backend's match expression in a ``Lookup`` from
   ``cast.modelsearch_compat``, applied on Django 6.1 and later when the cast app is loaded. The shim will be removed
   once ``modelsearch`` ships a fix.
+- Update the ``django-upgrade`` pre-commit hook to 1.31.1, which rewrites the audio player-transcript API route from
+  ``re_path`` to ``path`` with an ``<int:pk>`` converter. The generated URL is unchanged, so clients and reverse
+  lookups are unaffected; the view now receives ``pk`` as an ``int`` instead of a string. Running every hook across
+  the full tree also applied pending ``pyupgrade`` and ``DjHTML`` fixes: ``Callable`` is imported from
+  ``collections.abc``, forward-reference annotations are unquoted in modules using ``from __future__ import
+  annotations``, and four templates were reindented. Vendored (``htmx.min.js``) and vite-generated bundles are now
+  excluded from the hooks so they stay byte-identical to their upstream releases and build output.
 - Fix a 500 error when rendering a gallery that contains an empty or unresolvable image slot - for example during
   page preview or from a saved draft revision, where Wagtail defers required-field validation and an unfilled image
   chooser ends up as ``None``. Such entries are now skipped instead of crashing the gallery.

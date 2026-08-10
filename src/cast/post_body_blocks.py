@@ -48,7 +48,7 @@ class ContentBlock(blocks.StreamBlock):
         return self.deconstruct()
 
     @classmethod
-    def construct_from_lookup(cls, lookup: Any, *args: Any, **kwargs: Any) -> "ContentBlock":
+    def construct_from_lookup(cls, lookup: Any, *args: Any, **kwargs: Any) -> ContentBlock:
         return cls(*args, **kwargs)
 
     class Meta:

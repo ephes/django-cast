@@ -50,8 +50,8 @@ urlpatterns: list[Any] = [
         views.AudioPodloveDetailView.as_view(),
         name="audio_podlove_detail",
     ),
-    re_path(
-        r"^audios/(?P<pk>\d+)/player-transcript/$",
+    path(
+        "audios/<int:pk>/player-transcript/",
         views.AudioPlayerTranscriptView.as_view(),
         name="audio_player_transcript",
     ),
