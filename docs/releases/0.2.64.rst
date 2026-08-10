@@ -62,3 +62,15 @@
 - Fix a 500 error when rendering a gallery that contains an empty or unresolvable image slot - for example during
   page preview or from a saved draft revision, where Wagtail defers required-field validation and an unfilled image
   chooser ends up as ``None``. Such entries are now skipped instead of crashing the gallery.
+- Recreate the reused test database automatically when it no longer matches the code. The suite runs with
+  ``--reuse-db`` and ``--no-migrations``, so ``tests/test_database.sqlite3`` is built straight from the models and
+  its schema was never updated afterwards; a new cast migration or an upgraded dependency shipping migrations of its
+  own left developers with confusing failures until they deleted the file by hand. ``tests/conftest.py`` now
+  fingerprints the migration files and the current model state of every installed app into
+  ``tests/test_database.sqlite3.fingerprint`` and drops the database when the fingerprint changes, so pytest-django
+  creates a fresh one. The fingerprint is only recorded after a run whose database creation completed, so an
+  interrupted run cannot leave a half-built database that passes the check. This also removes the need for tox's
+  ``manage.py migrate`` step, which is gone from the test environments - mixing a migration-built database with a
+  models-built one broke on the second run. The new ``migrations-oldest`` and ``migrations-latest`` tox environments
+  keep checking that the migration graph applies cleanly to an empty throwaway database at both ends of the
+  supported dependency range (Django 4.2 + Wagtail 7.0 and Django 6.1 + newest Wagtail).

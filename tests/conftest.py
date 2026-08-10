@@ -1,13 +1,17 @@
+import hashlib
 import io
 import json
 import os
+import re
 import shutil
 from copy import deepcopy
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 import pytz
+from django.apps import apps
 from django.contrib.auth.models import Group, Permission
 from django.conf import settings as django_settings
 from django.core.cache import cache
@@ -36,6 +40,146 @@ from .factories import (
     UserFactory,
     VideoFactory,
 )
+
+
+_dropped_stale_test_db = False
+_test_db_fingerprint = None
+_test_db_ready = False
+
+# Memory addresses in reprs of default callables, validators etc. differ per
+# process and would make every fingerprint unique.
+_MEMORY_ADDRESS_RE = re.compile(r" at 0x[0-9a-f]+")
+
+
+def _reusable_test_db_path():
+    """Path of the reused sqlite test database, or None if it is not file based sqlite."""
+    database = django_settings.DATABASES["default"]
+    if "sqlite3" not in database["ENGINE"]:
+        return None
+    name = database.get("TEST", {}).get("NAME") or database["NAME"]
+    if not name or str(name) == ":memory:" or str(name).startswith("file:"):
+        return None
+    return Path(name)
+
+
+def _sqlite_db_has_tables(db_path):
+    """Whether the sqlite file exists and contains at least one table.
+
+    Uses the sqlite3 module directly in read-only mode: a Django connection
+    would create an empty file as a side effect.
+    """
+    import sqlite3
+
+    if not db_path.is_file():
+        return False
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            (count,) = con.execute("SELECT count(*) FROM sqlite_master WHERE type='table'").fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+    return count > 0
+
+
+def _schema_fingerprint():
+    """Hash what the test database schema is built from.
+
+    ``--no-migrations`` builds the schema straight from the current models, so
+    their state is what has to match the reused database. The migration files
+    are hashed as well: they change together with dependency upgrades and are
+    the cheapest signal for them.
+    """
+    from django.db.migrations.state import ProjectState
+
+    digest = hashlib.sha256()
+    for app_config in sorted(apps.get_app_configs(), key=lambda config: config.label):
+        migrations_dir = Path(app_config.path) / "migrations"
+        if not migrations_dir.is_dir():
+            continue
+        for migration in sorted(migrations_dir.glob("*.py")):
+            digest.update(f"{app_config.label}/{migration.name}".encode())
+            digest.update(migration.read_bytes())
+    state = ProjectState.from_apps(apps)
+    for model_key in sorted(state.models):
+        model_state = state.models[model_key]
+        digest.update(repr(model_key).encode())
+        for field_name, field in model_state.fields.items():
+            description = _MEMORY_ADDRESS_RE.sub("", repr(field.deconstruct()))
+            digest.update(f"{field_name}:{description}".encode())
+        options = _MEMORY_ADDRESS_RE.sub("", repr(sorted(model_state.options.items(), key=lambda item: item[0])))
+        digest.update(options.encode())
+    return digest.hexdigest()
+
+
+def pytest_configure(config):
+    """Drop the reused test database when it no longer matches the code.
+
+    ``--reuse-db`` keeps the database file between runs and ``--no-migrations``
+    builds it straight from the models, so nothing ever updates its schema.
+    A new cast migration, a model edit, or an upgraded dependency therefore
+    left developers with cryptic failures until they deleted the file by hand.
+    Remembering which schema state built the database and deleting it when
+    that changes makes pytest-django create it from scratch instead.
+    """
+    global _dropped_stale_test_db, _test_db_fingerprint
+
+    db_path = _reusable_test_db_path()
+    if db_path is None:
+        return
+    fingerprint_path = db_path.with_name(f"{db_path.name}.fingerprint")
+    _test_db_fingerprint = _schema_fingerprint()
+    stored = fingerprint_path.read_text() if fingerprint_path.is_file() else None
+    if stored != _test_db_fingerprint and db_path.is_file():
+        # sqlite keeps its journal/wal/shm data in sibling files
+        for stale in [db_path, *db_path.parent.glob(f"{db_path.name}-*")]:
+            stale.unlink(missing_ok=True)
+        _dropped_stale_test_db = True
+    # The fingerprint only means something next to a completely built database.
+    # Whenever this run is going to (re)build one - because the stored value
+    # was stale, the file is absent or table-less, or ``--create-db`` asks for
+    # it - remove the record now and let pytest_sessionfinish write it back
+    # after the build completed. An interrupted build then leaves no
+    # fingerprint behind, so the next run drops the partial file.
+    if (
+        stored != _test_db_fingerprint
+        or not _sqlite_db_has_tables(db_path)
+        or config.getoption("--create-db", default=False)
+    ):
+        fingerprint_path.unlink(missing_ok=True)
+
+
+@pytest.fixture(scope="session")
+def django_db_setup(django_db_setup):
+    """Observe that pytest-django finished creating (or verifying) the database.
+
+    Only after this fixture has run is the database known to be complete -
+    a pytest exit status cannot distinguish failed tests from a failed
+    database setup, so it must not gate the fingerprint on its own.
+    """
+    global _test_db_ready
+    _test_db_ready = True
+    yield
+
+
+def pytest_sessionfinish(session):
+    """Record the schema fingerprint once database creation is known to have completed."""
+    if _test_db_fingerprint is None or not _test_db_ready:
+        return
+    db_path = _reusable_test_db_path()
+    # A session whose collected tests never used the database sets up no
+    # database at all - never fingerprint an empty or partial file.
+    if db_path is None or not _sqlite_db_has_tables(db_path):
+        return
+    db_path.with_name(f"{db_path.name}.fingerprint").write_text(_test_db_fingerprint)
+
+
+def pytest_report_header():
+    """Explain the slower run when the database had to be thrown away."""
+    if _dropped_stale_test_db:
+        return "test database: schema state changed, dropped the reused database"
+    return None
 
 
 @pytest.fixture()
@@ -71,7 +215,15 @@ def remove_stale_media_files():
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_wagtail_roots(django_db_setup, django_db_blocker):
-    """Bootstrap Wagtail essentials when the test DB starts empty."""
+    """Bootstrap Wagtail essentials when the test DB starts empty.
+
+    When the collected tests don't use the database, pytest-django sets up no
+    database at all, so there is no schema to bootstrap into - and nothing that
+    would need the roots. Skip instead of failing on the missing tables.
+    """
+    db_path = _reusable_test_db_path()
+    if db_path is not None and not _sqlite_db_has_tables(db_path):
+        return
     with django_db_blocker.unblock():
         language_code = getattr(django_settings, "LANGUAGE_CODE", "en")
         locale, _created = Locale.objects.get_or_create(language_code=language_code)
@@ -146,6 +298,11 @@ def ensure_wagtail_roots(django_db_setup, django_db_blocker):
 
 @pytest.fixture(scope="session")
 def baseline_site_root_paths_cache(django_db_setup, django_db_blocker):
+    # When the collected tests don't use the database, pytest-django sets up
+    # no database at all - an empty baseline is fine for such a session.
+    db_path = _reusable_test_db_path()
+    if db_path is not None and not _sqlite_db_has_tables(db_path):
+        return []
     with django_db_blocker.unblock():
         root_paths = Site.get_site_root_paths()
     return [tuple(root_path) for root_path in root_paths]
