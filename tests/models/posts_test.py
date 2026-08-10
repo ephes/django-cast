@@ -582,7 +582,10 @@ class TestPostModel:
 
         html = link_field.widget.render("link", str(link.pk), attrs={"id": "link"})
 
-        assert '<option value="">---------</option>' in html
+        # The empty choice label is Django's own and changed in Django 6.1, so only assert
+        # that the empty option is rendered without a contributor id.
+        assert '<option value="">' in html
+        assert '<option value="" data-cast-contributor-id' not in html
         assert f'<option value="{link.pk}" selected data-cast-contributor-id="{contributor.pk}">' in html
         assert f'<option value="{other_link.pk}" data-cast-contributor-id="{other_contributor.pk}">' in html
 

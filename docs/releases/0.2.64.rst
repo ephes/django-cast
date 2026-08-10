@@ -43,6 +43,11 @@
   Python code blocks inside Markdown files, which reformatted four documentation and backlog files. It also widened
   its implicit default lint rule set, so the linted rule selection (``E4``, ``E7``, ``E9``, ``F``) is now pinned
   explicitly in ``pyproject.toml`` and no longer depends on the installed Ruff version.
+- Add support for Django 6.1. Django 6.1 only compiles ``Exists``, ``Lookup`` and ``WhereNode`` conditions bare on
+  backends without a native boolean field, so ``modelsearch`` (up to 1.3.1) produced invalid SQL for every SQLite
+  full-text search. django-cast now wraps the backend's match expression in a ``Lookup`` from
+  ``cast.modelsearch_compat``, applied on Django 6.1 and later when the cast app is loaded. The shim will be removed
+  once ``modelsearch`` ships a fix.
 - Fix a 500 error when rendering a gallery that contains an empty or unresolvable image slot - for example during
   page preview or from a saved draft revision, where Wagtail defers required-field validation and an unfilled image
   chooser ends up as ``None``. Such entries are now skipped instead of crashing the gallery.
