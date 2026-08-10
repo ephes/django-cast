@@ -140,7 +140,7 @@ existing feeds stay byte-stable trivially.
        ```python
        if podcast_audio is not None:
            podcast_audio_by_episode_id[post.pk] = podcast_audio
-           marks = _serialize_chaptermarks(podcast_audio)   # transcript-independent
+           marks = _serialize_chaptermarks(podcast_audio)  # transcript-independent
            if marks:
                chapters_by_audio_id[podcast_audio.pk] = marks
            try:
@@ -276,9 +276,8 @@ feed via `<podcast:chapters>`.
    ```python
    audio = get_object_or_404(Audio, pk=pk)
    authorize_audio_access(request, audio=audio, explicit_anchor_id=request.GET.get("episode_id"))
-   chapters = build_chapters(audio)              # [{"start": int, "title": str}]
-   data = {"version": "1.2.0",
-           "chapters": [{"startTime": c["start"], "title": c["title"]} for c in chapters]}
+   chapters = build_chapters(audio)  # [{"start": int, "title": str}]
+   data = {"version": "1.2.0", "chapters": [{"startTime": c["start"], "title": c["title"]} for c in chapters]}
    return JsonResponse(data, content_type="application/json+chapters")
    ```
    (`JsonResponse` forwards `content_type` to `HttpResponse`, overriding its `application/json`

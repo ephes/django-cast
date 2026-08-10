@@ -106,6 +106,7 @@ def test_with_screenshot(page: Page, live_server):
     page.goto(live_server.url)
     page.screenshot(path="screenshot.png")
 
+
 # Enable tracing in conftest.py
 @pytest.fixture(scope="function")
 def page(context):

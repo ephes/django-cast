@@ -87,7 +87,7 @@ dev = [
     "pytest-mock",
     "pytest-randomly",
     "pytz",
-    "ruff",
+    "ruff >= 0.16.2",  # 0.16 formats Python code blocks in markdown; CI uses latest
     "tox",
     "tox-uv",
     "typer",
@@ -111,6 +111,11 @@ exclude = ["*.ipynb", "*/migrations/*"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.ruff.lint]
+# Ruff 0.16 widened its implicit default rule set; pin the selection the project
+# has always linted against so the CI gate does not depend on the ruff version.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.ruff.lint.isort]
 force-single-line = false

@@ -150,8 +150,7 @@ def default_content_blocks():
 Add a configured-block loader:
 
 ```python
-def configured_content_blocks(section: str):
-    ...
+def configured_content_blocks(section: str): ...
 ```
 
 Change `ContentBlock` to accept its section and to deconstruct back to the
