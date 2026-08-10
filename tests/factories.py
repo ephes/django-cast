@@ -44,6 +44,9 @@ class PageFactory(factory.django.DjangoModelFactory):
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
         parent = kwargs.pop("parent")
+        # treebeard < 5 derives the new path from the in-memory parent, so a parent
+        # that got children added through another instance would produce a duplicate path
+        parent.refresh_from_db(fields=["path", "depth", "numchild"])
         page = model_class(*args, **kwargs)
         parent.add_child(instance=page)
         if isinstance(page, Post):

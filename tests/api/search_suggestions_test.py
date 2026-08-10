@@ -2,6 +2,8 @@ import json
 from datetime import datetime
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from wagtail.models import PageViewRestriction
@@ -168,7 +170,12 @@ def test_query_count_is_flat(django_assert_num_queries, blog, site):
     ]
     get_search_suggestions(blog=blog, params={"search": "py"}, current_site=site)
 
-    with django_assert_num_queries(2):
+    # the absolute number of queries depends on the wagtail search backend, so compare
+    # a single match against a full page of matches instead of hardcoding it
+    with CaptureQueriesContext(connection) as single_match:
+        get_search_suggestions(blog=blog, params={"search": "python result 7"}, current_site=site)
+
+    with django_assert_num_queries(len(single_match.captured_queries)):
         result = get_search_suggestions(blog=blog, params={"search": "py"}, current_site=site)
 
     assert [suggestion["id"] for suggestion in result["suggestions"]] == [post.pk for post in reversed(posts)]

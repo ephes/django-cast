@@ -386,6 +386,10 @@ def test_gallery_block_with_layout_get_context():
         )
 
 
+@pytest.mark.skipif(
+    not hasattr(GalleryImageChooserBlock, "defer_required_validation"),
+    reason="wagtail 7.0 has no deferred required validation api",
+)
 def test_gallery_image_chooser_block_clean_none_with_deferred_validation():
     """
     Explains how None ends up in a gallery: Wagtail's page preview calls

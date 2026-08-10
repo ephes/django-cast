@@ -22,7 +22,6 @@ if TYPE_CHECKING:
             query: str,
             *,
             order_by_relevance: bool,
-            order_by: str,
         ) -> Any: ...
 
 else:
@@ -89,12 +88,12 @@ def get_search_suggestions(
     if len(query) < TYPEAHEAD_MIN_QUERY_LENGTH:
         return {"query": query, "suggestions": []}
 
-    autocomplete_queryset = cast(AutocompleteQuerySet, blog.unfiltered_published_posts)
-    search_results = autocomplete_queryset.autocomplete(
-        query,
-        order_by_relevance=False,
-        order_by="-last_published_at",
-    )
+    # the default -visible_date ordering is not indexed for search, so reorder by an
+    # indexed field before searching - the autocomplete order_by keyword doing this
+    # for us only exists on modelsearch based backends (wagtail >= 7.1)
+    posts_by_recency = blog.unfiltered_published_posts.order_by("-last_published_at")
+    autocomplete_queryset = cast(AutocompleteQuerySet, posts_by_recency)
+    search_results = autocomplete_queryset.autocomplete(query, order_by_relevance=False)
     queryset = _apply_facets(search_results.get_queryset(), params).order_by("-last_published_at", "-pk")
     posts = list(queryset[:TYPEAHEAD_RESULT_LIMIT])
     return {

@@ -55,6 +55,10 @@
   ``collections.abc``, forward-reference annotations are unquoted in modules using ``from __future__ import
   annotations``, and four templates were reindented. Vendored (``htmx.min.js``) and vite-generated bundles are now
   excluded from the hooks so they stay byte-identical to their upstream releases and build output.
+- Restore compatibility with Wagtail 7.0, which the project advertises as supported. The search suggestion
+  endpoint passed an ``order_by`` keyword to ``autocomplete()`` that only exists on the ``modelsearch`` based
+  backends shipped from Wagtail 7.1 on. The suggestion queryset is now ordered by ``last_published_at`` before the
+  autocomplete call instead, which works on every supported backend and keeps the recent-first result order.
 - Fix a 500 error when rendering a gallery that contains an empty or unresolvable image slot - for example during
   page preview or from a saved draft revision, where Wagtail defers required-field validation and an unfilled image
   chooser ends up as ``None``. Such entries are now skipped instead of crashing the gallery.
