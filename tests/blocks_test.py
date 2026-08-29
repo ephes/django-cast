@@ -635,3 +635,49 @@ def test_gallery_image_chooser_block_searchable_content_empty():
 def test_cast_image_chooser_block_searchable_content_empty():
     block = CastImageChooserBlock()
     assert block.get_searchable_content(None) == []
+
+
+def test_cast_image_chooser_block_render_none_returns_empty():
+    """
+    Wagtail's preview defers required validation, so an unfilled image chooser
+    cleans to None. Rendering it must yield an empty string instead of taking
+    the whole page down with an AttributeError.
+    """
+    block = CastImageChooserBlock()
+    assert block.render(None, context={"repository": EmptyImageRepository()}) == ""
+
+
+@pytest.mark.django_db
+def test_cast_image_chooser_block_render_missing_image_returns_empty():
+    """A stale pk from a since-deleted image renders as empty instead of raising."""
+    # wire the template like default_content_blocks() does, so get_context runs
+    block = CastImageChooserBlock(template="cast/image/image.html")
+    missing_pk = 999999
+    assert not Image.objects.filter(pk=missing_pk).exists()
+    assert block.render(missing_pk, context={"repository": EmptyImageRepository()}) == ""
+
+
+def test_gallery_block_get_prep_value_drops_empty_slots():
+    """
+    An empty chooser slot serializes as a null item. get_form_state() hides it
+    from the editor, so once stored it could never be removed by hand - drop it
+    on save instead.
+    """
+    from wagtail.blocks.list_block import ListValue
+
+    block = GalleryBlock(GalleryImageChooserBlock())
+    value = ListValue(
+        block,
+        values=[
+            # a preview form cleans to Image instances and None for empty slots
+            Image(id=4594, title="Native image", collection=None),
+            # bulk_to_python postpones conversion, so stored values reach
+            # get_prep_value as raw item dicts (see GalleryImageChooserBlock)
+            {"type": "item", "value": 4595},
+            # a stored empty chooser slot is a null-valued item dict
+            {"type": "item", "value": None},
+            None,
+        ],
+    )
+    prepped = block.get_prep_value(value)
+    assert [item["value"] for item in prepped] == [4594, 4595]

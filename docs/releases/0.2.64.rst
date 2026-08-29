@@ -1,6 +1,16 @@
 0.2.64 (unreleased)
 -------------------
 
+- Render empty or stale image blocks as empty instead of crashing the page.
+  Wagtail's preview defers required validation, so an unfilled image chooser
+  cleans to ``None`` and reached ``CastImageChooserBlock.get_context`` as
+  ``None``, failing the whole page render (preview, publish response, and any
+  page embedding the post body) with an ``AttributeError``; a pk pointing at a
+  since-deleted image failed the same way with ``Image.DoesNotExist``. Both now
+  render as an empty string, the missing-image case with a logged warning.
+  ``GalleryBlock.get_prep_value`` additionally drops serialized empty chooser
+  slots on save - ``get_form_state()`` hides them from the editor, so once
+  stored they could never be removed by hand while breaking every render.
 - Add support for Wagtail 8.0. Template base directory choices on ``Blog`` and
   ``TemplateBaseDirectory`` are now passed as a callable so they are evaluated
   lazily instead of at model import time - Wagtail 8 imports models from

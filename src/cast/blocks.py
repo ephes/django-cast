@@ -1,3 +1,4 @@
+import logging
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
     from .models import Audio, Video
     from .widgets import AdminAudioChooser, AdminVideoChooser
 
+
+logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
@@ -155,6 +158,20 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
                 fetched_renditions[filter_spec] = image.get_rendition(filter_spec)
         return image, fetched_renditions
 
+    def render(self, value: AbstractImage | int | None, context: dict | None = None) -> str:
+        # An empty image chooser slot arrives here as None - Wagtail's preview
+        # calls defer_required_fields() on the form, which makes an unfilled
+        # required chooser clean to None instead of raising. A stale pk from a
+        # since-deleted image raises Image.DoesNotExist. Render nothing in both
+        # cases: one broken slot must not take down the whole page.
+        if value is None:
+            return ""
+        try:
+            return super().render(value, context=context)
+        except Image.DoesNotExist:
+            logger.warning("Image block references missing image %r; rendering it as empty.", value)
+            return ""
+
     def get_context(self, image_or_pk: int | Image, parent_context: dict) -> dict:
         assert parent_context is not None
         if isinstance(image_or_pk, int):
@@ -277,6 +294,22 @@ class GalleryBlock(ListBlock):
             image_ids = self.dict_images_to_id_list(not_none_values)
             return super().get_form_state(image_ids)
         return super().get_form_state(value)
+
+    def get_prep_value(self, value: Any) -> Any:
+        """
+        Drop empty image chooser slots on save. Wagtail's preview defers required
+        validation, so an unfilled chooser serializes as a null item; once stored,
+        get_form_state() hides it from the editor and it can never be removed by
+        hand while it keeps breaking every render of the page.
+        """
+        prepped = super().get_prep_value(value)
+        if isinstance(prepped, list):
+            return [
+                item
+                for item in prepped
+                if item is not None and not (isinstance(item, dict) and item.get("value") is None)
+            ]
+        return prepped
 
     def get_template(self, images: QuerySet[AbstractImage] | None = None, context: dict | None = None) -> str:
         default_template_name = super().get_template(images, context)
