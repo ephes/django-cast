@@ -361,7 +361,7 @@ than the schema. Recreating the database as shown above resets both.
 Because the suite never applies a migration, a migration that does not apply cleanly would go
 unnoticed. The ``migrations-oldest`` and ``migrations-latest`` tox environments cover that by
 running the full migration graph against an empty throwaway database, once with the oldest
-supported dependency combination (Django 4.2, Wagtail 7.0) and once with the newest:
+supported dependency combination (Django 5.2, Wagtail 7.0) and once with the newest:
 
 .. code-block:: bash
 

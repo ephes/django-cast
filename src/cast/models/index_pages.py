@@ -118,8 +118,9 @@ class Blog(Page):
             "Whether to add a noindex meta tag to this page and all subpages excluding them from search engines."
         ),
     )
+    # callable choices defer evaluation until the app registry is ready (see theme.py)
     template_base_dir: models.CharField = models.CharField(
-        choices=get_template_base_dir_choices(),
+        choices=get_template_base_dir_choices,
         max_length=128,
         default=None,
         null=True,

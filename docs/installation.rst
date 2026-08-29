@@ -42,7 +42,7 @@ Prerequisites
 Before you begin, ensure you have:
 
 - Python 3.11 or higher
-- Django 4.2 or higher
+- Django 5.2 or higher
 - Wagtail 7.0 or higher
 - `uv <https://docs.astral.sh/uv/>`_ (recommended) or pip
 - `ffmpeg <https://ffmpeg.org/download.html>`_ (optional, for video/audio processing)

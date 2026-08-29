@@ -50,7 +50,9 @@ from cast.renditions import IMAGE_TYPE_TO_SLOTS, Height, Width
 def test_code_block_value(value, expected):
     block = CodeBlock()
     rendered = block.render_basic(value)
-    assert rendered == expected
+    # Pygments 2.21 stopped escaping single quotes; normalize both sides so the
+    # test passes with older and newer Pygments versions.
+    assert rendered.replace("&#39;", "'") == expected.replace("&#39;", "'")
 
 
 @pytest.mark.parametrize(

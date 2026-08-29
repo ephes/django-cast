@@ -229,8 +229,11 @@ class TemplateBaseDirectory(BaseSiteSetting):
     the wagtail admin.
     """
 
+    # choices is passed as a callable so evaluation is deferred until the app
+    # registry is ready - Wagtail 8 loads models from wagtailcore_tags at
+    # import time, so initializing template engines during model import fails.
     name: models.CharField = models.CharField(
-        choices=get_template_base_dir_choices(),
+        choices=get_template_base_dir_choices,
         max_length=128,
         default=TemplateName.BOOTSTRAP4,
         help_text=_(

@@ -17,7 +17,6 @@ keywords = [
 classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.2",
     "Framework :: Django :: 6.0",
     "Framework :: Django :: 6.1",
@@ -36,7 +35,7 @@ classifiers = [
 
 dependencies = [
     "crispy-bootstrap4",  # bootstrap4 theme
-    "django>=4.2,<7",  # Django itself
+    "django>=5.2,<7",  # Django itself
     "django-crispy-forms",  # bootstrap4 theme
     "django-contrib-comments",  # comments framework
     "django-filter",  # filter section on blog index
@@ -51,7 +50,7 @@ dependencies = [
     "python-slugify",  # slugify for page slugs
     "rich",  # progress bars for management commands
     "setuptools",  # required by django-model-utils for python >= 3.12 :/
-    "wagtail>=7.0,<8",  # wagtail itself
+    "wagtail>=7.0,<9",  # wagtail itself
 ]
 
 [project.optional-dependencies]
