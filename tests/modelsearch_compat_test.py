@@ -6,11 +6,12 @@ from cast.modelsearch_compat import MatchCondition, apply_modelsearch_sqlite_mat
 try:
     from modelsearch.backends.database.sqlite import sqlite as modelsearch_sqlite
     from modelsearch.backends.database.sqlite.query import MatchExpression
-except (ImportError, ImproperlyConfigured):
+except (ImportError, ImproperlyConfigured, LookupError):
     modelsearch_sqlite = MatchExpression = None  # type: ignore[assignment]
 
 requires_modelsearch = pytest.mark.skipif(
-    modelsearch_sqlite is None, reason="Wagtail registers the modelsearch app only from 7.1 on"
+    modelsearch_sqlite is None,
+    reason="Wagtail registers the modelsearch app only from 7.1 on; sqlite backend needs a SQLite database",
 )
 
 

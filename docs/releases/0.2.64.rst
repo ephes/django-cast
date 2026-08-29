@@ -8,6 +8,10 @@
   old eager evaluation fail with ``AppRegistryNotReady``. The telepath
   ``register`` import moved to ``wagtail.admin.telepath`` (with a fallback for
   Wagtail 7.0).
+- The modelsearch SQLite compatibility patch is now skipped on non-SQLite
+  databases: importing the sqlite backend raises ``LookupError`` on PostgreSQL
+  because the ``SQLiteFTSIndexEntry`` model is never defined there, which
+  crashed app startup on Django 6.1 deployments using PostgreSQL.
 - Drop support for Django 4.2 and 5.0/5.1; the minimum supported version is now
   Django 5.2 LTS. Django 4.2 reached end of extended support in April 2026.
 - Clarify the separate onboarding workflows for new developer projects,

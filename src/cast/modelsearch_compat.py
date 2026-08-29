@@ -53,9 +53,11 @@ def apply_modelsearch_sqlite_match_patch(django_version: tuple[Any, ...] = DJANG
         return False
     try:
         from modelsearch.backends.database.sqlite import sqlite as modelsearch_sqlite
-    except (ImportError, ImproperlyConfigured):  # pragma: no cover - modelsearch may not be installed or configured
+    except (ImportError, ImproperlyConfigured, LookupError):  # pragma: no cover - sqlite backend unavailable
         # Importing the backend needs the ``modelsearch`` app itself: Wagtail only delegates
         # search to it from 7.1 on, and it may be missing from ``INSTALLED_APPS`` entirely.
+        # On non-SQLite databases (e.g. PostgreSQL) the ``SQLiteFTSIndexEntry`` model is never
+        # defined, so the import raises ``LookupError`` - the patch is not needed there either.
         return False
     if modelsearch_sqlite.MatchExpression is build_match_condition:
         return False
