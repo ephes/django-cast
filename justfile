@@ -112,9 +112,9 @@ docs:
 pre-commit:
     uv run pre-commit run --all-files
 
-# Run tox for multi-environment testing
-tox:
-    uv run tox
+# Run tox environments in parallel (pass a worker count or "auto" to override)
+tox parallelism="6":
+    uv run tox p -p {{parallelism}}
 
 # Run JavaScript tests (Vitest)
 js-test:

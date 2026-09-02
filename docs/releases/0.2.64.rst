@@ -96,5 +96,6 @@
   ``manage.py migrate`` step, which is gone from the test environments - mixing a migration-built database with a
   models-built one broke on the second run. The new ``migrations-oldest`` and ``migrations-latest`` tox environments
   keep checking that the migration graph applies cleanly to an empty throwaway database at both ends of the
-  supported dependency range (Django 5.2 + Wagtail 7.0 and Django 6.1 + newest Wagtail).
+  supported dependency range (Django 5.2 + Wagtail 7.0 and Django 6.1 + newest Wagtail). Tox environments now also
+  use isolated public and private media roots, allowing the full matrix to run safely with six parallel workers.
 - Refresh compatible frontend build dependencies and rebuild the shipped JavaScript assets.

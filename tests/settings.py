@@ -85,8 +85,8 @@ STATICFILES_FINDERS = [
 # MEDIA CONFIGURATION
 # ------------------------------------------------------------------------------
 # Keep test uploads out of src/cast/media; tests/conftest.py cleans this path.
-MEDIA_ROOT = str(TESTS_DIR / "media")
-CAST_PRIVATE_MEDIA_ROOT = str(TESTS_DIR / "private-media")
+MEDIA_ROOT = os.environ.get("CAST_TEST_MEDIA_ROOT", str(TESTS_DIR / "media"))
+CAST_PRIVATE_MEDIA_ROOT = os.environ.get("CAST_TEST_PRIVATE_MEDIA_ROOT", str(TESTS_DIR / "private-media"))
 
 # See: https://docs.djangoproject.com/en/dev/ref/settings/#media-url
 MEDIA_URL = "/media/"

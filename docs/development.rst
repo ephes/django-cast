@@ -398,7 +398,9 @@ Use tox to test against multiple Django and Wagtail versions:
 .. code-block:: bash
 
    $ just tox
-   # or directly: uv run tox
+   # use a different worker count when needed
+   $ just tox 4
+   # or directly: uv run tox p -p 6
 
 To test a specific environment:
 
@@ -406,10 +408,11 @@ To test a specific environment:
 
    $ uv run tox -e py312-django52-wagtail70
 
-Each environment keeps its own database under ``.tox`` and self-heals the same way the local one
-does. ``uv run tox -e migrations-oldest,migrations-latest`` checks that the migration graph
-applies to an empty database at both ends of the supported dependency range, and
-``uv run tox -e cleanup`` removes every test database.
+Each environment keeps its own database, public media root, and private media root under ``.tox``.
+This isolation lets the default ``just tox`` recipe safely run six environments concurrently without
+one test session deleting another's uploaded files. ``uv run tox -e migrations-oldest,migrations-latest``
+checks that the migration graph applies to an empty database at both ends of the supported dependency
+range, and ``uv run tox -e cleanup`` removes every test database and media root.
 
 Code Quality
 ============
