@@ -1,3 +1,4 @@
+import logging
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
     from .models import Audio, Video
     from .widgets import AdminAudioChooser, AdminVideoChooser
 
+
+logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
@@ -155,6 +158,20 @@ class CastImageChooserBlock(ChooserGetPrepValueMixin, ImageChooserBlock):
                 fetched_renditions[filter_spec] = image.get_rendition(filter_spec)
         return image, fetched_renditions
 
+    def render(self, value: AbstractImage | int | None, context: dict | None = None) -> str:
+        # An empty image chooser slot arrives here as None - Wagtail's preview
+        # calls defer_required_fields() on the form, which makes an unfilled
+        # required chooser clean to None instead of raising. A stale pk from a
+        # since-deleted image raises Image.DoesNotExist. Render nothing in both
+        # cases: one broken slot must not take down the whole page.
+        if value is None:
+            return ""
+        try:
+            return super().render(value, context=context)
+        except Image.DoesNotExist:
+            logger.warning("Image block references missing image %r; rendering it as empty.", value)
+            return ""
+
     def get_context(self, image_or_pk: int | Image, parent_context: dict) -> dict:
         assert parent_context is not None
         if isinstance(image_or_pk, int):
@@ -207,7 +224,8 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     Add the thumbnail and modal image data to each image of the gallery and then
     the images to the context.
     """
-    images_list = list(images)  # Ensure it's a list
+    # Drop empty slots - Wagtail may hand us None entries for unfilled or deleted image choosers
+    images_list = [image for image in images if image is not None]
     add_image_thumbnails(images_list, context=context)
     for index, image in enumerate(images_list):
         image.prev = f"gallery-{images_list[index - 1].pk}" if index > 0 else ""
@@ -277,6 +295,18 @@ class GalleryBlock(ListBlock):
             return super().get_form_state(image_ids)
         return super().get_form_state(value)
 
+    def get_prep_value(self, value: Any) -> Any:
+        """
+        Drop empty image chooser slots on save. Wagtail's preview defers required
+        validation, so an unfilled chooser serializes as a null item; once stored,
+        get_form_state() hides it from the editor and it can never be removed by
+        hand while it keeps breaking every render of the page.
+        """
+        prepped = super().get_prep_value(value)
+        return [
+            item for item in prepped if item is not None and not (isinstance(item, dict) and item.get("value") is None)
+        ]
+
     def get_template(self, images: QuerySet[AbstractImage] | None = None, context: dict | None = None) -> str:
         default_template_name = super().get_template(images, context)
         return get_block_template(default_template_name, context, file_name="gallery.html")
@@ -334,8 +364,15 @@ class GalleryBlockWithLayout(StructBlock):
     ) -> dict[str, Any]:
         images = []
         for item in values["gallery"]:
+            if item is None:
+                # empty image chooser slot -> skip it
+                continue
             if isinstance(item, dict) and item.get("type") == "item":
-                images.append(repository.image_by_id[item["value"]])
+                if (image_id := item["value"]) is None:
+                    # serialized empty image chooser slot -> skip it
+                    continue
+                # missing ids have to raise a KeyError to trigger the database fallback
+                images.append(repository.image_by_id[image_id])
             else:
                 # it's an Image object
                 images.append(item)
@@ -348,15 +385,21 @@ class GalleryBlockWithLayout(StructBlock):
 
     @staticmethod
     def bulk_to_python_from_database(values: dict[str, Any]) -> dict[str, Any]:
+        # empty image chooser slots are None -> drop them
         image_ids_or_images = list(filter(None, values["gallery"]))
         if len(image_ids_or_images) == 0:
+            values["gallery"] = []
             return values
         if isinstance(image_ids_or_images[0], Image):
+            values["gallery"] = image_ids_or_images
             return values
-        image_ids_or_images = [item["value"] for item in image_ids_or_images]
-        assert isinstance(image_ids_or_images[0], int)
+        # serialized empty image chooser slots have a null value -> drop them, too
+        image_ids = [item["value"] for item in image_ids_or_images if item["value"] is not None]
+        if len(image_ids) == 0:
+            values["gallery"] = []
+            return values
+        assert isinstance(image_ids[0], int)
         # we have to fetch the images from the database
-        image_ids = image_ids_or_images
         # Fetch all images in one query but preserve the order
         images_by_id = {img.pk: img for img in Image.objects.filter(pk__in=image_ids)}
         # Reconstruct the list in the original order, allowing duplicates

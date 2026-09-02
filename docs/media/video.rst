@@ -4,9 +4,9 @@
 Video
 *****
 
-Django Cast provides video file management with automatic poster frame
-extraction, dimension detection, and integration with Wagtail's StreamField
-editor.
+Django Cast provides video file management with poster frame extraction,
+dimension detection, and integration with Wagtail's StreamField editor. The
+built-in upload workflows generate posters automatically.
 
 .. _video_model:
 
@@ -34,9 +34,10 @@ timestamps).
 Poster Generation
 =================
 
-Each time a video is saved, Django Cast checks whether a poster image
-already exists. If not, it automatically extracts a single frame to use
-as the poster.
+The built-in admin and API upload workflows check whether a poster image
+already exists and, when needed, extract a single frame to use as the poster.
+Programmatic callers opt into the same workflow with
+``save_video_with_derivations()``.
 
 Requirements
 ------------
@@ -55,8 +56,9 @@ system ``PATH``:
 How It Works
 ------------
 
-1. On ``Video.save()``, the ``create_poster()`` method is called
-   automatically.
+1. ``cast.media_derivation.save_video_with_derivations(video)`` persists the
+   video and calls ``create_poster()``. A plain ``Video.save()`` only persists
+   fields.
 2. If a poster already exists or the class attribute ``calc_poster`` is
    ``False``, the step is skipped.
 3. ``FFprobe`` is used to detect the original video dimensions (width and
@@ -70,15 +72,16 @@ If FFmpeg or FFprobe is not installed (or the command fails for any other
 reason), the error is logged and the video is saved without a poster.
 Poster generation never raises an exception to the caller.
 
-You can regenerate the poster for a video by clearing the existing poster
-and calling ``create_poster()``:
+You can durably regenerate the poster for a video by clearing the existing
+poster and saving through ``save_video_with_derivations()``:
 
 .. code-block:: python
 
+    from cast.media_derivation import save_video_with_derivations
+
     video.poster = None
     video.poster_seconds = 5.0   # extract at 5 seconds instead
-    video.create_poster()
-    video.save(poster=False)     # save without re-triggering poster generation
+    save_video_with_derivations(video)
 
 To create posters for all videos that are currently missing one, use the
 management command::
@@ -89,8 +92,8 @@ management command::
 
     This command only fills in **missing** posters. If a poster already
     exists it is kept. To force regeneration for a specific video, clear
-    its poster first (``video.poster = None; video.save(poster=False)``)
-    and then re-run the command or call ``video.create_poster()``.
+    its poster first, persist that change, and then re-run the command or call
+    ``save_video_with_derivations(video)``.
 
 .. _video_dimensions:
 

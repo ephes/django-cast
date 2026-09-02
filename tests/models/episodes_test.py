@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from cast import appsettings
 from cast.devdata import create_transcript
+from cast.media_derivation import save_video_with_derivations
 from cast.models import Audio, Blog, Contributor, ContributorLink, EpisodeContributor, File, Podcast, Season
 from cast.models.contributors import ContributorLinkSelect
 from cast.models.pages import (
@@ -606,7 +607,7 @@ def test_video_save_rolls_back_row_when_poster_generation_fails(monkeypatch, min
     monkeypatch.setattr(Video, "create_poster", boom)
     video = Video(user=user, original=minimal_mp4)
     with pytest.raises(RuntimeError):
-        video.save()
+        save_video_with_derivations(video)
     assert Video.objects.count() == 0
 
 
@@ -617,7 +618,7 @@ def test_video_save_with_force_insert_does_not_attempt_second_insert(mocker, use
 
     video = Video(user=user, title="force-insert video", original=minimal_mp4)
     create_poster = mocker.patch.object(video, "create_poster", side_effect=fake_create_poster)
-    video.save(force_insert=True)
+    save_video_with_derivations(video, force_insert=True)
 
     assert video.pk is not None
     create_poster.assert_called_once()
@@ -641,7 +642,7 @@ def test_video_save_propagates_using_on_poster_update(mocker, user):
 
     mocker.patch.object(video, "create_poster", side_effect=fake_create_poster)
 
-    video.save(using="default")
+    save_video_with_derivations(video, using="default")
 
     assert save_calls[0]["using"] == "default"
     assert save_calls[1]["using"] == "default"

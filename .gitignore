@@ -85,6 +85,7 @@ tests/*.sqlite3
 db.sqlite3
 tests/test_database.sqlite3
 tests/test_database.sqlite3-journal
+tests/test_database.sqlite3.fingerprint
 
 # virtualenv
 .venv

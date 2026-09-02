@@ -18,7 +18,7 @@ from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.utils.cache import patch_vary_headers
+from django.utils.cache import patch_cache_control, patch_vary_headers
 from django.views.generic import CreateView
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
@@ -30,6 +30,7 @@ from rest_framework.views import APIView
 from wagtail.api.v2.router import WagtailAPIRouter
 from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.images.api.v2.views import ImagesAPIViewSet
+from wagtail.models import Site
 
 from ..audio_access import authorize_audio_access, page_grants_audio_access, page_is_unrestricted_public
 from ..filters import PostFilterset
@@ -47,6 +48,7 @@ from ..models import (
 from ..modal_facet_counts import get_modal_facet_counts
 from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
+from ..search_suggestions import get_search_suggestions
 from ..views.theme import set_template_base_dir
 from .serializers import (
     AudioPodloveSerializer,
@@ -268,6 +270,20 @@ class FacetCountsDetailView(generics.RetrieveAPIView):
             payload = get_modal_facet_counts(blog, request.query_params)
             return Response(payload)
         return super().retrieve(request, *args, **kwargs)
+
+
+class SearchSuggestionsView(APIView):
+    """Return bounded title-prefix destinations for a public Blog or Podcast."""
+
+    permission_classes = (AllowAny,)
+
+    def get(self, request: Request, pk: int) -> Response:
+        blog = get_object_or_404(Blog.objects.live().public(), pk=pk)
+        current_site = Site.find_for_request(request._request)
+        payload = get_search_suggestions(blog=blog, params=request.query_params, current_site=current_site)
+        response = Response(payload)
+        patch_cache_control(response, private=True, no_store=True)
+        return response
 
 
 class CommentTrainingDataView(APIView):

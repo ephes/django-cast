@@ -194,14 +194,17 @@ Available Content Blocks
 
 Both sections support these built-in block types:
 
-- **Heading**: Section headers for organization
-- **Paragraph**: Rich text with formatting, links, and inline images
-- **Image**: Single responsive images with captions
+- **Paragraph**: Rich text with formatting, links, lists, and ``h2``/``h3``/``h4`` headings
+- **Image**: Single responsive images
 - **Gallery**: Multiple images with lightbox functionality
 - **Embed**: External content (YouTube, Twitter, etc.)
 - **Video**: Self-hosted video files
 - **Audio**: Audio files with the Podlove Web Player
 - **Code**: Syntax-highlighted code blocks
+
+django-cast no longer provides a standalone Heading block. Authors add
+headings inside Paragraph blocks with Wagtail's rich-text heading controls so
+the heading level is part of the content.
 
 Projects can append site-specific blocks to either section with
 ``CAST_POST_BODY_BLOCKS``. Custom blocks render through the same post detail,

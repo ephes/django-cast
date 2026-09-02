@@ -10,6 +10,7 @@ from wagtail.models import CollectionMember
 from wagtail.search import index
 
 from cast.file_replacement import StagedFileReplacementGroup
+from cast.media_derivation import TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS
 
 from ..private_storage import get_transcript_storage
 from ..transcripts import dote, known_speakers, parsing, podlove, services, speaker_samples, voice_references, webvtt
@@ -28,8 +29,6 @@ from ..transcripts.speaker_samples import TranscriptSpeakerSample
 from ..transcripts.voice_references import TranscriptVoiceReferenceCandidate
 from . import Audio
 from .contributors import Contributor, get_voice_reference_storage
-
-TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS = ("podlove", "dote", "vtt")
 
 
 class Transcript(CollectionMember, index.Indexed, models.Model):
@@ -84,16 +83,19 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         permissions = (("choose_transcript", "Can choose transcript"),)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        update_fields = kwargs.get("update_fields")
+        sync_speaker_mappings = kwargs.pop("sync_speaker_mappings", False)
+        if sync_speaker_mappings:
+            from cast.media_derivation import save_transcript_with_derivations
+
+            save_transcript_with_derivations(self, *args, **kwargs)
+            return
         super().save(*args, **kwargs)
-        if self._should_sync_speaker_mappings(update_fields):
-            self.sync_speaker_mappings()
 
     @staticmethod
     def _should_sync_speaker_mappings(update_fields: Any) -> bool:
-        if update_fields is None:
-            return True
-        return bool(set(update_fields).intersection((*TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS, "audio")))
+        from cast.media_derivation import should_sync_transcript_speaker_mappings
+
+        return should_sync_transcript_speaker_mappings(update_fields)
 
     def get_all_paths(self) -> set[str]:
         paths = set()

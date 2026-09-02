@@ -297,6 +297,39 @@ Notes:
 - ``o`` is accepted for URL-state parity but does not change modal counts.
 - ``date_after``/``date_before`` are part of the list filterset, but are not currently applied in modal mode.
 
+Title-prefix suggestions
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Return a bounded list of public post destinations whose titles match a prefix::
+
+    GET /api/search-suggestions/{blog_id}/?search=py
+
+The optional ``date_facets``, ``tag_facets``, and ``category_facets`` params
+constrain suggestions in the same way as the blog filters. Search text is
+normalized through django-cast's modelsearch guard. Queries shorter than two
+characters return an empty list.
+
+Example response::
+
+    {
+        "query": "py",
+        "suggestions": [
+            {
+                "id": 42,
+                "title": "Python performance",
+                "url": "/blog/python-performance/",
+                "visible_date": "2026-07-10T09:00:00+00:00"
+            }
+        ]
+    }
+
+Suggestions match titles only, are ordered by most recently published first,
+and are capped at eight. They are destinations rather than a preview of the
+committed full-text result set: selecting one should navigate directly to its
+``url``. The response is marked ``private, no-store``. Themes can discover the
+blog-scoped endpoint through ``page.search_suggestions_api_url`` and treat it as
+a progressive enhancement of the existing GET search form.
+
 Theme Management
 ~~~~~~~~~~~~~~~~
 
@@ -369,6 +402,40 @@ Podcast-level feed settings such as ``itunes_type`` are not edited through the
 editor API. Manage them on the podcast page in Wagtail or through the Django
 admin; editor API episode endpoints only manage episode-level publishing
 metadata.
+
+**Look up one editable post by parent and slug**::
+
+    GET /api/editor/posts/?parent=123&slug=weeknotes-2026-25
+
+Returns the normal editor post object for the exact ``Post`` direct child whose
+stored slug exactly matches ``slug`` under the exact ``Blog``/``Podcast`` parent
+id. Slug matching uses each post's latest editable revision, not only the
+materialized live page row, so an unpublished slug edit is immediately findable
+under its new value. This is a deterministic single-object lookup, not a list or
+search endpoint, and it is not paginated. Both filters must occur exactly once:
+``parent`` must be a positive integer and ``slug`` must be a valid slug. Unknown,
+duplicate, missing, or malformed filters return the standard ``validation_error``
+envelope; an unknown parent or no exact direct-child match returns ``404
+not_found``. Legacy data with more than one editable latest revision matching the
+same parent and slug fails closed as ``409 ambiguous_lookup``.
+
+The caller must be authenticated, have Wagtail admin access, and have edit
+permission for the matching post. A matching post that the caller cannot edit
+returns ``403 permission_denied`` and is never serialized. As with the id-based
+read endpoint, the response uses the latest editable revision. A page with an
+approved Wagtail publication schedule has ``status: "scheduled"``; otherwise a
+live post with unpublished changes has ``live: true`` and ``status: "draft"``. This is a
+read-only action, requires no token scope, and does not expose publishing or
+change create behavior on the same collection URL.
+
+Post creation performs a no-op write to the selected parent inside the same
+transaction as the sibling slug check and child insertion, then reloads the
+parent's tree metadata. PostgreSQL therefore holds the parent row's write lock;
+SQLite holds its database write lock. Concurrent creators for the same parent and
+slug serialize on both supported backends: one succeeds and the other receives
+the normal duplicate-slug validation response, which lookup-first clients can
+resolve deterministically (subject to the deployment's normal database lock
+timeout rather than an application-level fallback).
 
 **Create a draft post**::
 
@@ -487,6 +554,7 @@ Success response (``201 Created``):
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "page_slug": "weeknotes-2026-25",
       "seo_title": "Weeknotes 2026-25",
       "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
@@ -505,12 +573,33 @@ Success response (``201 Created``):
         {"type": "video", "value": {"id": 43}}
       ],
       "latest_revision_id": 6543,
+      "previous_revision_id": null,
       "live": false,
       "status": "draft",
       "preview_url": "/admin/pages/987/view_draft/",
       "edit_url": "/admin/pages/987/edit/",
       "api_url": "/api/editor/posts/987/"
     }
+
+``previous_revision_id`` is content-free, page-local recovery and concurrency
+evidence. It is the positive id of the revision immediately preceding the
+serialized ``latest_revision_id`` for that same page, or ``null`` when the
+serialized revision is the page's first revision. Global revision ids are not
+consecutive per page, so clients must not derive this value by subtracting one.
+For example, a client recovering an atomic title/slug migration can require both
+the expected current identity and ``previous_revision_id`` equal to its expected
+base revision before treating the latest revision as its single immediate
+write. A later edit that retains the migrated identity will no longer satisfy
+that predecessor check. This field reveals no revision content or additional
+history metadata beyond that one predecessor id. It is evidence only: it is not
+an authorization token and does not replace editor authentication, Wagtail
+permissions, or the PATCH revision precondition.
+
+``page_slug`` is the slug persisted on Wagtail's page row, while ``slug`` is
+the slug in the serialized editable revision. They are equal for unpublished
+pages created or renamed through the editor API. A live page with an unpublished
+rename keeps its public row slug in ``page_slug`` until publication, while
+``slug`` reports the editable draft value.
 
 **Read a draft post**::
 
@@ -559,8 +648,20 @@ unsupported.
 Update fields:
 
 - ``base_revision_id`` (optional when ``If-Match`` is supplied): optimistic concurrency token.
+- ``require_unpublished`` (optional, default ``false``): when ``true``, reject
+  the update with ``409 published_post`` if the page is live or ``409
+  scheduled_post`` if any Wagtail revision is approved for scheduled
+  publication. The live/scheduled-state check and revision-token check run
+  under the same transactional page-row lock as the new revision; all existing
+  page revisions are locked before their schedule fields are inspected. A
+  concurrent publish or schedule cannot
+  slip between validation and the draft write.
 - ``title`` (optional): page title.
-- ``slug`` (optional): URL slug; must remain unique under the same parent.
+- ``slug`` (optional): URL slug; both the persisted page-row and latest-draft
+  slug namespaces must remain unique under the same parent. For an unpublished
+  page, PATCH updates the persisted row slug atomically with the new revision;
+  failure rolls back both. A live page retains its public row slug until the
+  rename revision is published.
 - ``seo_title`` (optional): Wagtail Promote-tab title; send ``""`` to clear it.
 - ``search_description`` (optional): Wagtail Promote-tab description; send ``""`` to clear it.
 - ``visible_date`` (optional): ISO 8601 datetime string.
@@ -578,6 +679,7 @@ Example update request:
 
     {
       "base_revision_id": 6543,
+      "require_unpublished": true,
       "title": "Updated draft title",
       "seo_title": "Updated search title",
       "search_description": "A concise updated summary.",
@@ -585,6 +687,21 @@ Example update request:
         {"type": "paragraph", "value": "<p>Updated draft text.</p>"}
       ]
     }
+
+Automation that is allowed to edit drafts but must never write after publication
+or scheduling should always send ``require_unpublished: true``. A page that is
+already live is left unchanged and returns:
+
+.. code-block:: json
+
+    {
+      "code": "published_post",
+      "detail": "This post is already live; the requested draft-only update was refused."
+    }
+
+A scheduled page is likewise left unchanged and returns ``409`` with code
+``scheduled_post``. Post and episode responses expose this state as ``status:
+"scheduled"`` even when ``live`` is false.
 
 Instead of putting the token in the JSON body, clients may send the same
 revision id as a strict ``If-Match`` header:
@@ -638,6 +755,7 @@ The success response is the normal editor post shape plus publish metadata:
       "type": "cast.Post",
       "title": "Weeknotes 2026-25",
       "slug": "weeknotes-2026-25",
+      "page_slug": "weeknotes-2026-25",
       "seo_title": "Weeknotes 2026-25",
       "search_description": "A concise summary of this week's main theme.",
       "parent": {"id": 123},
@@ -650,6 +768,7 @@ The success response is the normal editor post shape plus publish metadata:
       ],
       "detail": [],
       "latest_revision_id": 6543,
+      "previous_revision_id": null,
       "live": true,
       "status": "live",
       "preview_url": "/admin/pages/987/view_draft/",
@@ -678,8 +797,9 @@ posts use the standard ``not_found`` envelope.
 Podcast episodes have dedicated draft create/read/update endpoints that mirror
 the post endpoints. ``Episode`` is a ``Post`` subclass, so the body
 (``overview``/``detail``), ``tags``, ``categories``, ``cover_image``,
-``visible_date``, ``slug``, revision/``base_revision_id`` conflict detection, the
-draft-only ``publish`` guard, and the structured error envelopes all behave
+``visible_date``, ``slug``, revision/``base_revision_id`` conflict detection,
+the atomic ``require_unpublished`` precondition, the draft-only ``publish``
+guard, and the structured error envelopes all behave
 exactly as documented for posts above. The endpoints are::
 
     POST  /api/editor/episodes/
@@ -738,7 +858,8 @@ Example create request:
 The response is the standard editor draft shape (``id``, ``type`` of
 ``cast.Episode``, the shared post fields, ``preview_url``/``edit_url``, and an
 ``api_url`` of ``/api/editor/episodes/{id}/``) plus the episode-specific fields
-above. ``PATCH`` requires the same revision token, preserves omitted fields and
+above, including the page-local ``previous_revision_id`` recovery evidence.
+``PATCH`` requires the same revision token, preserves omitted fields and
 sections, and keeps the empty-update guard, exactly like posts. As with posts,
 the token may be sent as ``base_revision_id`` in the JSON body or as
 ``If-Match: "<latest_revision_id>"``, with the same strict syntax and
@@ -945,11 +1066,14 @@ appear in the public Wagtail pages API until explicitly published. Updating an
 already-live page creates an unpublished draft revision and returns
 ``status: "draft"`` while ``live`` stays ``true``. Use
 ``POST /api/editor/posts/{id}/publish/`` to publish the latest draft revision.
+An approved future publication is returned as ``status: "scheduled"`` and is
+rejected by PATCH when ``require_unpublished`` is true.
 
 Authorization uses standard Wagtail page permissions:
 
 - ``GET /api/editor/parents/`` — lists pages where the caller has
   add-child permission.
+- ``GET /api/editor/posts/?parent=…&slug=…`` — requires edit permission for the exact matching direct-child post.
 - ``POST /api/editor/posts/`` — requires add-child permission on the
   selected parent.
 - ``GET /api/editor/posts/{id}/`` — requires edit permission for the page.

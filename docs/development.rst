@@ -335,17 +335,37 @@ Or manually:
 Test Database Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The test database is reused between test runs for performance. If you've added new migrations:
+The test database ``tests/test_database.sqlite3`` is reused between test runs for performance
+(``--reuse-db``) and is built directly from the models rather than by applying migrations
+(``--no-migrations``). Nothing updates the schema of a database that already exists, so it goes
+stale whenever the models change - when you add a cast migration, switch branches, or upgrade a
+dependency such as Wagtail that ships migrations of its own.
+
+You do not have to clean that up by hand. ``tests/conftest.py`` records a fingerprint of every
+installed app's migration files next to the database in
+``tests/test_database.sqlite3.fingerprint``. When the fingerprint no longer matches, the database
+file is deleted at the start of the run and pytest-django creates a fresh one. Recreating it takes
+a few seconds, and a run where nothing changed pays only the cost of hashing the migration files.
+
+To force a rebuild anyway - for instance after tests left unwanted rows behind - delete the file
+or use pytest's own flag:
 
 .. code-block:: bash
 
-   $ rm tests/test_database.sqlite3  # Remove old test database
-   $ uv run python manage.py migrate  # Recreate with new migrations (uses tests.settings)
+   $ uv run pytest --create-db
 
 If you see widespread 404s or IntegrityErrors in tests (especially around Wagtail page URLs),
-the reused test database or Wagtail's site-root path cache may be stale. In that case,
-recreate the test database using the steps above to reset the site root path cache and
-avoid leftover pages or slug collisions.
+Wagtail's site-root path cache or leftover pages from an interrupted run may be to blame rather
+than the schema. Recreating the database as shown above resets both.
+
+Because the suite never applies a migration, a migration that does not apply cleanly would go
+unnoticed. The ``migrations-oldest`` and ``migrations-latest`` tox environments cover that by
+running the full migration graph against an empty throwaway database, once with the oldest
+supported dependency combination (Django 5.2, Wagtail 7.0) and once with the newest:
+
+.. code-block:: bash
+
+   $ uv run tox -e migrations-oldest,migrations-latest
 
 JavaScript Tests
 ----------------
@@ -378,13 +398,21 @@ Use tox to test against multiple Django and Wagtail versions:
 .. code-block:: bash
 
    $ just tox
-   # or directly: uv run tox
+   # use a different worker count when needed
+   $ just tox 4
+   # or directly: uv run tox p -p 6
 
 To test a specific environment:
 
 .. code-block:: bash
 
-   $ uv run tox -e py312-django42-wagtail70
+   $ uv run tox -e py312-django52-wagtail70
+
+Each environment keeps its own database, public media root, and private media root under ``.tox``.
+This isolation lets the default ``just tox`` recipe safely run six environments concurrently without
+one test session deleting another's uploaded files. ``uv run tox -e migrations-oldest,migrations-latest``
+checks that the migration graph applies to an empty database at both ends of the supported dependency
+range, and ``uv run tox -e cleanup`` removes every test database and media root.
 
 Code Quality
 ============

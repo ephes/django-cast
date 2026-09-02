@@ -1,9 +1,14 @@
+from datetime import timedelta
+
 import pytest
+from django.core.management import call_command
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from cast.devdata import create_image
 from cast.models import Gallery, get_or_create_gallery, sync_media_ids
+from cast.post_media import prepare_post_media, prepare_published_post_media
 
 
 @pytest.mark.parametrize(
@@ -40,7 +45,113 @@ def test_post_media_sync(post_with_gallery, python_body, body):
     post.body = body
     post.save()
     gallery_ids_in_db = {g.id for g in post.galleries.all()}
+    assert gallery_id in gallery_ids_in_db
+
+    prepare_post_media(post)
+    gallery_ids_in_db = {g.id for g in post.galleries.all()}
     assert gallery_id not in gallery_ids_in_db
+
+
+@pytest.mark.django_db()
+def test_publishing_prepares_post_media(post_with_image):
+    image = post_with_image.images.first()
+    post_with_image.images.remove(image)
+
+    post_with_image.save_revision().publish()
+
+    assert image in post_with_image.images.all()
+
+
+@pytest.mark.django_db()
+def test_scheduling_initial_publication_defers_media_preparation(monkeypatch, blog, body_with_image):
+    from tests.factories import PostFactory
+
+    calls = []
+    monkeypatch.setattr("cast.post_media.prepare_post_media", calls.append)
+    post = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="future post",
+        slug="future-post",
+        live=False,
+        first_published_at=None,
+        go_live_at=timezone.now() + timedelta(days=1),
+        body=body_with_image,
+    )
+    calls.clear()
+
+    post.save_revision().publish()
+
+    assert calls == []
+
+
+@pytest.mark.django_db()
+def test_scheduled_publication_prepares_media_when_post_goes_live(monkeypatch, blog, body_with_image):
+    from tests.factories import PostFactory
+
+    calls = []
+    monkeypatch.setattr("cast.post_media.prepare_post_media", calls.append)
+    due = timezone.now() - timedelta(minutes=1)
+    post = PostFactory(
+        owner=blog.owner,
+        parent=blog,
+        title="due post",
+        slug="due-post",
+        live=False,
+        first_published_at=None,
+        go_live_at=due,
+        body=body_with_image,
+    )
+    calls.clear()
+    post.save_revision(approved_go_live_at=due)
+
+    call_command("publish_scheduled", verbosity=0)
+
+    assert [candidate.pk for candidate in calls] == [post.pk]
+
+
+@pytest.mark.django_db()
+def test_scheduling_live_post_update_does_not_prepare_media_early(monkeypatch, post_with_image):
+    calls = []
+    monkeypatch.setattr("cast.post_media.prepare_post_media", calls.append)
+    post_with_image.go_live_at = timezone.now() + timedelta(days=1)
+
+    post_with_image.save_revision().publish()
+
+    assert calls == []
+
+
+def test_published_media_handler_ignores_non_posts():
+    prepare_published_post_media(sender=object, instance=object())
+
+
+def test_post_sync_media_ids_compatibility_adapter(mocker):
+    from cast.models import Post
+
+    synchronize = mocker.patch("cast.models.pages.synchronize_post_media")
+    post = Post()
+
+    post.sync_media_ids()
+
+    synchronize.assert_called_once_with(post)
+
+
+def test_prepare_post_media_can_disable_both_operations():
+    prepare_post_media(object(), sync_media=False, create_renditions=False)
+
+
+@pytest.mark.django_db()
+def test_media_sync_accepts_image_instances_in_gallery_blocks(image):
+    class GalleryBlock:
+        block_type = "gallery"
+        value = {"gallery": [image]}
+
+    class ContentBlock:
+        value = [GalleryBlock()]
+
+    from cast.models.pages import Post
+
+    assert Post()._media_ids_from_body([ContentBlock()])["gallery"]
 
 
 def test_get_or_create_gallery_empty_image_ids():

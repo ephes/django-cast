@@ -7,6 +7,8 @@ from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
 
+from cast.blog_index import create_blog_filterset, pagination_context, published_posts_for_index
+
 from .serialization import (
     serialize_audio,
     serialize_blog,
@@ -227,13 +229,13 @@ def data_for_blog_cachable(
     # filters and pagination
     if is_paginated:
         get_params = request.GET.copy()
-        filterset = blog.get_filterset(get_params)
+        filterset = create_blog_filterset(blog, get_params)
         data["filterset"] = {"get_params": get_params.dict()}
         date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
         data["filterset"]["date_facets_choices"] = date_facet_choices
         data["filterset"]["category_facets_choices"] = get_facet_choices(filterset.form.fields, "category_facets")
         data["filterset"]["tag_facets_choices"] = get_facet_choices(filterset.form.fields, "tag_facets")
-        data["pagination_context"] = blog.get_pagination_context(blog.get_published_posts(filterset.qs), get_params)
+        data["pagination_context"] = pagination_context(published_posts_for_index(filterset.qs), get_params)
     # queryset data
     if post_queryset is None:
         post_queryset = data["pagination_context"]["object_list"]

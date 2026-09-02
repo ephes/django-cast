@@ -13,6 +13,7 @@ from cast.models.transcript_generation import TranscriptGeneration
 from cast.transcripts.generation_status import get_transcript_generation
 
 from ..file_replacement import StagedFileReplacementGroup, stage_file_replacement
+from ..media_derivation import save_transcript_with_derivations
 from .client import TERMINAL_JOB_STATES, VoxhelmClient
 from .exceptions import VoxhelmError
 from .task_refs import resolve_audio_task_ref
@@ -396,7 +397,7 @@ class VoxhelmTranscriptService:
             replacements.stage(transcript.vtt, f"{file_stem}.vtt", vtt)
             if speakers is not None:
                 replacements.stage(transcript.speakers, f"{file_stem}.speakers.json", speakers)
-            replacements.save_model(transcript)
+            replacements.save_model(transcript, save=save_transcript_with_derivations)
         except Exception:
             replacements.rollback()
             raise

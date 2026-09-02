@@ -688,6 +688,7 @@ class TestEditorPostCreate:
         assert data["type"] == "cast.Post"
         assert data["parent"]["id"] == blog.id
         assert data["latest_revision_id"] == post.latest_revision_id
+        assert data["previous_revision_id"] is None
         assert data["edit_url"].endswith(f"/pages/{post.id}/edit/")
         assert data["preview_url"].endswith(f"/pages/{post.id}/view_draft/")
         assert data["api_url"].endswith(f"/editor/posts/{post.id}/")
@@ -721,6 +722,28 @@ class TestEditorPostCreate:
         body = response.json()
         assert body["code"] == "validation_error"
         assert "parent" in body["errors"]
+
+    def test_parent_disappearing_before_transactional_lock_is_not_found(
+        self, api_client, blog, admin_user, monkeypatch
+    ):
+        from wagtail.models import Page
+
+        class MissingParentQuery:
+            def update(self, **kwargs):
+                assert set(kwargs) == {"numchild"}
+                return 0
+
+        monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.post(
+            reverse("cast:api:editor_post_create"),
+            self._payload(blog, slug="parent-race"),
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Post parent not found."}
 
     def test_missing_required_field_uses_envelope(self, api_client, blog, admin_user):
         api_client.force_authenticate(user=admin_user)
@@ -787,7 +810,36 @@ class TestEditorPostCreate:
         assert first.status_code == 201
         second = api_client.post(url, self._payload(blog), format="json")
         assert second.status_code == 400
-        assert "slug" in second.json()["errors"]
+        assert second.json()["errors"]["slug"][0]["code"] == "duplicate"
+
+    def test_create_reserves_persisted_and_latest_draft_slugs(self, api_client, blog, admin_user):
+        existing = PostFactory(
+            parent=blog,
+            owner=admin_user,
+            title="Existing post",
+            slug="post-stored-slug",
+            live=False,
+        )
+        draft = existing.get_latest_revision_as_object()
+        draft.slug = "post-latest-draft-slug"
+        draft.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_post_create")
+
+        persisted = api_client.post(
+            url,
+            self._payload(blog, title="Persisted slug", slug="post-stored-slug"),
+            format="json",
+        )
+        draft = api_client.post(
+            url,
+            self._payload(blog, title="Draft slug", slug="post-latest-draft-slug"),
+            format="json",
+        )
+
+        for response in (persisted, draft):
+            assert response.status_code == 400
+            assert response.json()["errors"]["slug"][0]["code"] == "duplicate"
 
     def test_visible_date_is_applied(self, api_client, blog, admin_user):
         api_client.force_authenticate(user=admin_user)

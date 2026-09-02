@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 
+from cast.media_derivation import save_audio_with_derivations
 from cast.models.audio import Audio, ChapterMark, sync_chapter_marks
 
 
@@ -211,6 +212,13 @@ class TestAudioModel:
         audio.size_to_metadata()
         assert audio.data["size"]["m4a"] == expected_size
 
+    def test_missing_audio_file_size_is_not_cached(self, audio, mocker):
+        mocker.patch.object(audio.m4a.storage, "size", side_effect=FileNotFoundError)
+
+        audio.size_to_metadata()
+
+        assert "m4a" not in audio.data["size"]
+
     def test_read_audio_file_size_from_cache(self, audio):
         # when size is not in cache, it should be read from file
         expected_file_size = audio.m4a.size
@@ -238,7 +246,7 @@ class TestAudioModel:
         mocker.patch.object(audio, "size_to_metadata", side_effect=RuntimeError("boom"))
 
         with pytest.raises(RuntimeError, match="boom"):
-            audio.save()
+            save_audio_with_derivations(audio)
 
         assert Audio.objects.filter(title=title).count() == 0
 
@@ -250,7 +258,7 @@ class TestAudioModel:
         mocker.patch.object(audio, "size_to_metadata")
         audio.duration = None
 
-        audio.save()
+        save_audio_with_derivations(audio)
 
         assert base_save.call_count == 2
 
@@ -259,7 +267,7 @@ class TestAudioModel:
         mocker.patch("cast.models.audio.Audio._get_audio_duration", return_value=expected_duration)
 
         audio = Audio(user=user, m4a=m4a_audio, title="duration-and-size")
-        audio.save()
+        save_audio_with_derivations(audio)
         audio.refresh_from_db()
 
         assert audio.duration == expected_duration
@@ -273,7 +281,7 @@ class TestAudioModel:
         mocker.patch.object(audio, "size_to_metadata")
         audio.duration = None
 
-        audio.save(using="default")
+        save_audio_with_derivations(audio, using="default")
 
         assert base_save.call_count == 2
         assert base_save.call_args.kwargs["using"] == "default"
@@ -283,7 +291,7 @@ class TestAudioModel:
         audio.duration = timedelta(seconds=1)
         audio.data = {"size": {"m4a": audio.m4a.size}}
 
-        audio.save()
+        save_audio_with_derivations(audio)
 
         assert base_save.call_count == 1
 
@@ -293,7 +301,7 @@ class TestAudioModel:
         mocker.patch.object(audio, "size_to_metadata", side_effect=lambda: audio.data.update({"size": {"m4a": 1}}))
         audio.duration = None
 
-        audio.save()
+        save_audio_with_derivations(audio)
 
         assert base_save.call_count == 2
         assert "duration" not in base_save.call_args.kwargs["update_fields"]

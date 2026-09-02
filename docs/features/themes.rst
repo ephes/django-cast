@@ -362,6 +362,10 @@ templates:
 ``filterset``
     The search/filter form (django-filter ``FilterSet``).
 
+``page.search_suggestions_api_url``
+    Blog-scoped JSON endpoint for optional title-prefix destination
+    suggestions. Themes may ignore it and keep ordinary GET form submission.
+
 ``canonical_url``
     Canonical URL for the current page.
 

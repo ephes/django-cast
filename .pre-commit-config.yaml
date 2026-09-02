@@ -1,4 +1,6 @@
-exclude: "^.*(migrations|fluent_comments).*$"
+# Vendored (htmx.min.js) and vite-generated bundles are excluded so hooks don't
+# introduce churn against upstream releases and `vite build` output.
+exclude: "^.*(migrations|fluent_comments).*$|^src/cast/static/cast/(vite/|js/.*\\.min\\.js)"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -14,12 +16,12 @@ repos:
       - id: pyupgrade
         args: [--py311-plus]
   - repo: https://github.com/adamchainz/django-upgrade
-    rev: 1.30.0
+    rev: 1.31.1
     hooks:
       - id: django-upgrade
         args: [--target-version, "4.2"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.16.2
     hooks:
       - id: ruff
         args: [--fix]

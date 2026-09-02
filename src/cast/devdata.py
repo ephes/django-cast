@@ -12,6 +12,8 @@ from wagtail.images.models import Image
 from wagtail.models import Site
 
 from cast.models import Audio, Blog, Episode, Gallery, Podcast, Post, Transcript, Video
+from cast.post_media import prepare_post_media
+from cast.media_derivation import save_transcript_with_derivations
 
 
 class _Auto:
@@ -123,6 +125,7 @@ def create_post(*, blog: Blog = Auto, body: str = Auto, num: int = 1) -> Post:
         body=body or json.dumps(create_python_body()),
     )
     blog.add_child(instance=post)
+    prepare_post_media(post)
     return post
 
 
@@ -139,6 +142,7 @@ def create_episode(*, blog: Blog = Auto, body: str = Auto, num: int = 1, podcast
         body=body or json.dumps(create_python_body()),
     )
     blog.add_child(instance=episode)
+    prepare_post_media(episode)
     return episode
 
 
@@ -243,15 +247,15 @@ def create_transcript(*, audio: Audio = Auto, podlove: dict = Auto, vtt: str = A
     transcript = Transcript.objects.create(audio=audio)
     if podlove:
         podlove_content = json.dumps(podlove, indent=2)
-        transcript.podlove.save("podlove.json", ContentFile(podlove_content))
-        transcript.save()
+        transcript.podlove.save("podlove.json", ContentFile(podlove_content), save=False)
+        save_transcript_with_derivations(transcript)
     if vtt:
-        transcript.vtt.save("test.vtt", ContentFile(vtt))
-        transcript.save()
+        transcript.vtt.save("test.vtt", ContentFile(vtt), save=False)
+        save_transcript_with_derivations(transcript)
     if dote:
         dote_content = json.dumps(dote, indent=2)
-        transcript.dote.save("dote.json", ContentFile(dote_content))
-        transcript.save()
+        transcript.dote.save("dote.json", ContentFile(dote_content), save=False)
+        save_transcript_with_derivations(transcript)
 
     return transcript
 

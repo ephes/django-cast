@@ -21,7 +21,7 @@ def episode_type_consumes_number(episode_type: str) -> bool:
     return episode_type in {"", "full"}
 
 
-def _get_episode_podcast(episode: "Episode") -> "Podcast | None":
+def _get_episode_podcast(episode: Episode) -> Podcast | None:
     from cast.models import Podcast
 
     try:
@@ -36,7 +36,7 @@ def _get_episode_podcast(episode: "Episode") -> "Podcast | None":
     return None
 
 
-def _is_first_publish_candidate(episode: "Episode", podcast: "Podcast") -> bool:
+def _is_first_publish_candidate(episode: Episode, podcast: Podcast) -> bool:
     if not podcast.automatic_episode_numbering_enabled:
         return False
     if episode.live or episode.first_published_at is not None:
@@ -46,7 +46,7 @@ def _is_first_publish_candidate(episode: "Episode", podcast: "Podcast") -> bool:
     return episode.episode_number is None and episode_type_consumes_number(episode.episode_type)
 
 
-def _used_episode_numbers(podcast: "Podcast", episode: "Episode") -> set[int]:
+def _used_episode_numbers(podcast: Podcast, episode: Episode) -> set[int]:
     from cast.models import Episode
 
     return set(
@@ -57,7 +57,7 @@ def _used_episode_numbers(podcast: "Podcast", episode: "Episode") -> set[int]:
     )
 
 
-def _next_available_episode_number(podcast: "Podcast", episode: "Episode") -> int:
+def _next_available_episode_number(podcast: Podcast, episode: Episode) -> int:
     episode_number = podcast.next_episode_number
     used_numbers = _used_episode_numbers(podcast, episode)
     while episode_number in used_numbers:
@@ -65,14 +65,14 @@ def _next_available_episode_number(podcast: "Podcast", episode: "Episode") -> in
     return episode_number
 
 
-def _update_revision_episode_number(revision: "Revision | None", episode_number: int) -> None:
+def _update_revision_episode_number(revision: Revision | None, episode_number: int) -> None:
     if revision is None:
         return
     revision.content["episode_number"] = episode_number
     revision.save(update_fields=["content"])
 
 
-def _current_publish_state(episode: "Episode") -> tuple[bool, int | None, int | None]:
+def _current_publish_state(episode: Episode) -> tuple[bool, int | None, int | None]:
     from cast.models import Episode
 
     current = (
@@ -88,9 +88,9 @@ def _current_publish_state(episode: "Episode") -> tuple[bool, int | None, int | 
 
 
 def _should_preserve_current_episode_number(
-    episode: "Episode",
-    revision: "Revision | None",
-    previous_revision: "Revision | None",
+    episode: Episode,
+    revision: Revision | None,
+    previous_revision: Revision | None,
     already_published: bool,
     current_episode_number: int | None,
     live_revision_id: int | None,
@@ -103,9 +103,9 @@ def _should_preserve_current_episode_number(
 
 
 def assign_episode_number_for_publish(
-    episode: "Episode",
-    revision: "Revision | None" = None,
-    previous_revision: "Revision | None" = None,
+    episode: Episode,
+    revision: Revision | None = None,
+    previous_revision: Revision | None = None,
 ) -> int | None:
     podcast = _get_episode_podcast(episode)
     if podcast is None:
@@ -159,7 +159,7 @@ def _validate_publish_revision_api(publish_revision: Any) -> None:
 def _publish_revision_and_object(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-) -> tuple["Revision", Any, "Revision | None"]:
+) -> tuple[Revision, Any, Revision | None]:
     arguments = dict(zip(_PUBLISH_REVISION_PARAMETER_NAMES, args, strict=False))
     arguments.update(kwargs)
     return arguments["revision"], arguments["object"], arguments.get("previous_revision")

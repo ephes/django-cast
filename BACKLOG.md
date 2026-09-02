@@ -10,48 +10,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   `docs/releases/`; implementation history belongs in git.
 - Use `Depends on` for blocking relationships and `Related to` for non-blocking cross-links.
 - GitHub issues are optional for public coordination, but local planning starts here.
-
-## Next
-
-- [ ] Extract post description rendering from the model
-  - Related to: Model-layer decoupling (phase 2) below.
-  - Scope: move the HTML description-rendering implementation into a presenter module, update django-cast's feed and
-    Wagtail API serializer callers to use it directly, and retain `Post.get_description()` as a compatibility wrapper.
-    Keep media derivation and the `Post.save()`/async decision out of this slice.
-  - Expected code: `src/cast/presenters.py`, `src/cast/models/pages.py`, and `src/cast/feeds.py`.
-  - Expected tests: focused presenter/model compatibility coverage in `tests/models/posts_test.py` and existing feed,
-    post-detail, and API rendering coverage where call ownership changes.
-  - Sibling check: `../homepage/homepage/core/webmention_integration.py` calls `Post.get_description()` directly;
-    preserve that call in this slice through the compatibility wrapper. The theme repositories do not call the method.
-  - Done when: description rendering is implemented outside the model, django-cast's direct callers use the presenter,
-    output and query behavior are unchanged, the public compatibility method remains covered, docs/release notes match,
-    and `just check` passes.
+- The implemented typeahead architecture, performance measurements, and UX rationale remain available in
+  [backlog/2026-07-16-typeahead-search.md](backlog/2026-07-16-typeahead-search.md).
 
 ## Research / Shaping
-
-- [ ] Typeahead search
-  - Scope: research whether current full-text search is fast enough for typeahead, what API/frontend surface is
-    needed, and how to keep it optional for themes.
-  - Done when: there is a short implementation note with benchmark expectations, proposed endpoints or context
-    contracts, accessibility constraints, and a first implementation slice.
-
-- [ ] Revisit onboarding and authoring workflows
-  - Design record:
-    [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
-  - Scope: review the existing `django-cast-quickstart`, `example/scripts/bootstrap_example_data.py`, and
-    `ensure_reference_site` workflows and decide what onboarding should mean for django-cast users: new developer
-    project setup, local development setup, editor onboarding, assisted content authoring, or an installed desktop
-    product.
-  - Notes: the paths are now deliberately separate. `django-cast-quickstart` remains developer-facing; the example
-    bootstrap/reference site remain development and theme-test tooling; a private sibling Cast Studio product is
-    researching an offline-capable, no-signup macOS Electron application for non-developers. Cast Studio's first proof
-    is blog + image authoring through Wagtail, not a custom editor. Include "try django-cast with your own podcast
-    feed" as a later Cast Studio/getting-started path built on the podcast feed import workflow. The quickstart
-    template-drift implementation slice landed on 2026-07-06: generated project files now come from packaged templates
-    and a smoke test verifies the generated project boots through Django's system check.
-  - Done when: the current workflows and audiences are documented in one place, gaps are listed, Cast Studio-specific
-    work is kept out of core unless it proves generic, and django-cast follow-ups are split into concrete implementation
-    tasks.
 
 - [ ] Local authoring and sync workflow
   - Design record:
@@ -79,16 +41,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
-
-- [ ] Model-layer decoupling (architecture review H1/H2/M1/M8)
-  - Notes: [backlog/2026-07-02-architecture-review.md](backlog/2026-07-02-architecture-review.md)
-  - Status: phase 1 landed on 2026-07-02 — `HtmxHttpRequest` lives in `cast/http_types.py` (models no longer import
-    from views), `get_description` is side-effect free, `Video.save` is transactional, and `Post.save` has
-    `sync_media`/`create_renditions` opt-outs.
-  - Scope: phase 2 — extract description rendering and media derivation into presenter/service modules (and decide
-    on async), and invert the remaining model→blocks/filters imports. (The mixed blog-index snapshot N+1 (M8) was
-    fixed on 2026-07-02 with a flat-query-count guard test.)
-  - Done when: save-side effects are explicit service calls and description rendering lives outside the model.
 
 - [ ] Editor API remote media import safety design
   - PRD:
@@ -159,7 +111,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     site-specific importer is now the concrete reference for provenance, idempotency, limited/dry-run operation,
     streaming media copy, sanitization, SSRF protection, and fixture-only tests. Cast Studio should prove a generic
     RSS-first contract in its own repo before shared services or models are promoted into django-cast.
-  - Related to: Revisit onboarding and authoring workflows.
   - Scope: design and implement a safe way to import an existing public podcast RSS feed into django-cast.
   - Done when: there is a documented import workflow, clear field-mapping rules, duplicate detection based on stable
     feed item identifiers, tests with representative podcast feeds, and guidance for unsupported metadata.

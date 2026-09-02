@@ -1,0 +1,101 @@
+0.2.64 (2026-09-02)
+-------------------
+
+- Render empty or stale image blocks as empty instead of crashing the page.
+  Wagtail's preview defers required validation, so an unfilled image chooser
+  cleans to ``None`` and reached ``CastImageChooserBlock.get_context`` as
+  ``None``, failing the whole page render (preview, publish response, and any
+  page embedding the post body) with an ``AttributeError``; a pk pointing at a
+  since-deleted image failed the same way with ``Image.DoesNotExist``. Both now
+  render as an empty string, the missing-image case with a logged warning.
+  ``GalleryBlock.get_prep_value`` additionally drops serialized empty chooser
+  slots on save - ``get_form_state()`` hides them from the editor, so once
+  stored they could never be removed by hand while breaking every render.
+- Add support for Wagtail 8.0. Template base directory choices on ``Blog`` and
+  ``TemplateBaseDirectory`` are now passed as a callable so they are evaluated
+  lazily instead of at model import time - Wagtail 8 imports models from
+  ``wagtailcore_tags`` while the app registry is still loading, which made the
+  old eager evaluation fail with ``AppRegistryNotReady``. The telepath
+  ``register`` import moved to ``wagtail.admin.telepath`` (with a fallback for
+  Wagtail 7.0).
+- The modelsearch SQLite compatibility patch is now skipped on non-SQLite
+  databases: importing the sqlite backend raises ``LookupError`` on PostgreSQL
+  because the ``SQLiteFTSIndexEntry`` model is never defined there, which
+  crashed app startup on Django 6.1 deployments using PostgreSQL.
+- Drop support for Django 4.2 and 5.0/5.1; the minimum supported version is now
+  Django 5.2 LTS. Django 4.2 reached end of extended support in April 2026.
+- Clarify the separate onboarding workflows for new developer projects,
+  django-cast contributors, theme developers, and the experimental Cast Studio
+  desktop product. Correct stale tutorial guidance for headings, comments,
+  podcast feed paths, explicit values, and content organization.
+- Move post-description rendering into ``cast.presenters.render_post_description`` and have feeds and rendered
+  Wagtail API fields use the presenter directly. ``Post.get_description()`` remains as a compatible wrapper.
+- Add a bounded, facet-aware title-prefix suggestion endpoint for optional theme typeahead interfaces. Suggestions
+  include public post destinations only, use recent-first ordering, and keep existing full-text form search unchanged.
+- Add an authenticated editor API lookup for one post by exact direct parent id and slug. It returns the normal
+  draft-aware editor shape only when the caller can edit the matching direct child, uses the existing scope and
+  structured error rules, follows unpublished slug edits, rejects ambiguous/duplicate query input, and adds no
+  list/search or publishing behavior. A transactional parent no-op write serializes parent-scoped creation on
+  PostgreSQL and SQLite so competing same-slug creators converge through the existing duplicate-slug response and
+  lookup contract.
+- Add the optional ``require_unpublished`` precondition to post and episode editor PATCH requests. When enabled,
+  published pages are rejected with ``409 published_post`` and pages with an approved Wagtail publication schedule
+  are rejected with ``409 scheduled_post``. Responses expose scheduled state explicitly, and live/scheduled-state and
+  revision checks are serialized with the draft revision write so draft-only automation cannot race publication or
+  scheduling.
+- Correct post and episode editor slug uniqueness checks to reserve both each sibling's persisted Wagtail page-row slug
+  and latest editable revision slug. Renaming an unpublished page now updates its row slug atomically with the new
+  revision, so the old slug is vacated without leaving a draft that Wagtail admin validation cannot preview or save.
+  Live pages retain their persisted public slug until publication. Parent-scoped serialization covers both create and
+  rename paths, and editor responses expose the content-free ``page_slug`` so clients can verify row/revision alignment.
+- Add ``previous_revision_id`` to the shared post and episode editor response shape. It identifies the immediately
+  preceding revision for that page (or ``null`` for the first revision), giving crash-recovering clients content-free
+  evidence that the serialized latest revision is the single page revision after an expected base without assuming
+  globally consecutive revision ids. It is recovery/concurrency evidence, not authorization.
+- Move Post StreamField media synchronization and rendition preparation to the explicit
+  ``cast.post_media.prepare_post_media`` service. Wagtail previews and every publication path call the service;
+  direct programmatic ``Post.save()`` calls now perform no media I/O unless their legacy ``sync_media`` or
+  ``create_renditions`` keyword is explicitly enabled. Programmatic body updates should save first and then call
+  ``prepare_post_media(post)``.
+- Move audio duration/file-size extraction, video poster generation, and transcript speaker-mapping synchronization
+  to explicit transactional services in ``cast.media_derivation``. Built-in admin and API upload paths call them
+  automatically; plain programmatic ``Audio.save()``, ``Video.save()``, and ``Transcript.save()`` calls now persist
+  fields without media probing or derived-data I/O. The services follow the installed Django version's
+  ``Model.save()`` positional-argument contract without relying on Django's removed private parsing helpers.
+- Require Ruff 0.16.2 or newer for development and update the ``ruff`` pre-commit hook to match. Ruff 0.16 formats
+  Python code blocks inside Markdown files, which reformatted four documentation and backlog files. It also widened
+  its implicit default lint rule set, so the linted rule selection (``E4``, ``E7``, ``E9``, ``F``) is now pinned
+  explicitly in ``pyproject.toml`` and no longer depends on the installed Ruff version.
+- Add support for Django 6.1. Django 6.1 only compiles ``Exists``, ``Lookup`` and ``WhereNode`` conditions bare on
+  backends without a native boolean field, so ``modelsearch`` (up to 1.3.1) produced invalid SQL for every SQLite
+  full-text search. django-cast now wraps the backend's match expression in a ``Lookup`` from
+  ``cast.modelsearch_compat``, applied on Django 6.1 and later when the cast app is loaded. The shim will be removed
+  once ``modelsearch`` ships a fix.
+- Update the ``django-upgrade`` pre-commit hook to 1.31.1, which rewrites the audio player-transcript API route from
+  ``re_path`` to ``path`` with an ``<int:pk>`` converter. The generated URL is unchanged, so clients and reverse
+  lookups are unaffected; the view now receives ``pk`` as an ``int`` instead of a string. Running every hook across
+  the full tree also applied pending ``pyupgrade`` and ``DjHTML`` fixes: ``Callable`` is imported from
+  ``collections.abc``, forward-reference annotations are unquoted in modules using ``from __future__ import
+  annotations``, and four templates were reindented. Vendored (``htmx.min.js``) and vite-generated bundles are now
+  excluded from the hooks so they stay byte-identical to their upstream releases and build output.
+- Restore compatibility with Wagtail 7.0, which the project advertises as supported. The search suggestion
+  endpoint passed an ``order_by`` keyword to ``autocomplete()`` that only exists on the ``modelsearch`` based
+  backends shipped from Wagtail 7.1 on. The suggestion queryset is now ordered by ``last_published_at`` before the
+  autocomplete call instead, which works on every supported backend and keeps the recent-first result order.
+- Fix a 500 error when rendering a gallery that contains an empty or unresolvable image slot - for example during
+  page preview or from a saved draft revision, where Wagtail defers required-field validation and an unfilled image
+  chooser ends up as ``None``. Such entries are now skipped instead of crashing the gallery.
+- Recreate the reused test database automatically when it no longer matches the code. The suite runs with
+  ``--reuse-db`` and ``--no-migrations``, so ``tests/test_database.sqlite3`` is built straight from the models and
+  its schema was never updated afterwards; a new cast migration or an upgraded dependency shipping migrations of its
+  own left developers with confusing failures until they deleted the file by hand. ``tests/conftest.py`` now
+  fingerprints the migration files and the current model state of every installed app into
+  ``tests/test_database.sqlite3.fingerprint`` and drops the database when the fingerprint changes, so pytest-django
+  creates a fresh one. The fingerprint is only recorded after a run whose database creation completed, so an
+  interrupted run cannot leave a half-built database that passes the check. This also removes the need for tox's
+  ``manage.py migrate`` step, which is gone from the test environments - mixing a migration-built database with a
+  models-built one broke on the second run. The new ``migrations-oldest`` and ``migrations-latest`` tox environments
+  keep checking that the migration graph applies cleanly to an empty throwaway database at both ends of the
+  supported dependency range (Django 5.2 + Wagtail 7.0 and Django 6.1 + newest Wagtail). Tox environments now also
+  use isolated public and private media roots, allowing the full matrix to run safely with six parallel workers.
+- Refresh compatible frontend build dependencies and rebuild the shipped JavaScript assets.

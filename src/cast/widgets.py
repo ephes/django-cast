@@ -17,7 +17,11 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.staticfiles import versioned_static
 from wagtail.admin.widgets import BaseChooser, BaseChooserAdapter
-from wagtail.telepath import register
+
+try:
+    from wagtail.admin.telepath import register
+except ImportError:  # pragma: no cover - Wagtail 7.0 fallback, removed in Wagtail 8
+    from wagtail.telepath import register
 
 from .models import Audio, Video
 

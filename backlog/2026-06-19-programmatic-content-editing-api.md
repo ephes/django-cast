@@ -3,7 +3,12 @@
 Date: 2026-06-19
 
 Status: Slice 1 implemented (2026-06-22): `GET /api/editor/parents/`, `POST /api/editor/posts/`, and
-`GET /api/editor/posts/{id}/` are shipped. The API is authentication-mechanism agnostic, authenticates with Django
+`GET /api/editor/posts/{id}/` are shipped. An exact, permission-checked direct-parent plus slug lookup on
+`GET /api/editor/posts/?parent=…&slug=…` was added on 2026-07-18 for deterministic draft find-or-create clients; it is
+not a generic list/search endpoint. It matches the latest editable revision, rejects ambiguous query/cardinality and
+legacy duplicate-draft matches, and a transactional parent no-op write serializes same-slug create races on both
+PostgreSQL and SQLite. The API is
+authentication-mechanism agnostic, authenticates with Django
 session auth in the first slice, and authorizes with Wagtail page permissions. The body contract is a structured block
 list (heading, paragraph, code, image, gallery).
 
@@ -11,6 +16,12 @@ Slice 2 implemented (2026-06-23): **updating drafts** via `PATCH /api/editor/pos
 detection (`409`). `PATCH` requires a revision token, saves a new Wagtail draft revision, leaves omitted fields
 untouched, replaces the whole `overview` section when supplied, and supports explicit `cover_image: null` to clear the
 draft cover image. The token may be sent as body `base_revision_id` or as a strict `If-Match` request header.
+Unpublished slug renames materialize the Wagtail page-row slug in the same
+transaction, reserve both persisted-row and latest-revision sibling slugs, and
+return `page_slug` so clients can verify row/revision alignment. Live-page draft
+renames keep the published row slug until publication. `require_unpublished`
+rejects both live pages and pages with an approved Wagtail publication schedule;
+responses expose the latter as `status: "scheduled"`.
 
 Slice 3 implemented (2026-06-25): **editor media uploads and full body-section editing**. The slice added authenticated
 editor endpoints for listing/uploading Wagtail images, django-cast audio, and django-cast video; upload collection

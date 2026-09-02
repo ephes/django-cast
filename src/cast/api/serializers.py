@@ -4,6 +4,9 @@ from typing import Any, Literal, Union
 
 from rest_framework import serializers
 
+from cast.blog_index import create_blog_filterset
+from cast.media_derivation import save_audio_with_derivations, save_video_with_derivations
+
 from ..models import Audio, Blog, Video
 from ..transcript_sanitization import (
     apply_public_speaker_mapping_to_podlove_data,
@@ -24,6 +27,11 @@ class VideoSerializer(serializers.HyperlinkedModelSerializer):
         model = Video
         fields = ("id", "url", "original", "poster", "poster_thumbnail")
 
+    def create(self, validated_data: dict[str, Any]) -> Video:
+        video = Video(**validated_data)
+        save_video_with_derivations(video)
+        return video
+
 
 class AudioSerializer(serializers.HyperlinkedModelSerializer):
     url = serializers.HyperlinkedIdentityField(view_name="cast:api:audio_detail")
@@ -32,6 +40,11 @@ class AudioSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Audio
         fields = ("id", "name", "file_formats", "url", "podlove", "mp3")
+
+    def create(self, validated_data: dict[str, Any]) -> Audio:
+        audio = Audio(**validated_data)
+        save_audio_with_derivations(audio)
+        return audio
 
 
 class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
@@ -173,7 +186,7 @@ class FacetCountSerializer(SimpleBlogSerializer):
         }
         """
         get_params = self.context["request"].GET.copy()
-        filterset = instance.get_filterset(get_params)
+        filterset = create_blog_filterset(instance, get_params)
 
         # transform date facets
         date_facets: FacetList = []

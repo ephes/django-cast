@@ -166,7 +166,9 @@ git commit -m "# Add per-comment action context for author-edit UI"
 class TestRenderCommentContext:
     pytestmark = pytest.mark.django_db
 
-    def test_render_comment_list_marks_owned_comment_editable(self, client, post, comment, comments_enabled, feature_on):
+    def test_render_comment_list_marks_owned_comment_editable(
+        self, client, post, comment, comments_enabled, feature_on
+    ):
         # Own the comment in the client session, then render the post detail page.
         seed_ownership(client, comment)
         html = client.get(post.get_url()).content.decode("utf-8")

@@ -406,7 +406,8 @@ Media Sync Limits
 ~~~~~~~~~~~~~~~~~
 
 The first custom-block extension point does not add media extraction hooks.
-``Post.sync_media_ids()`` still syncs only django-cast's built-in ``image``,
+``cast.post_media.prepare_post_media()`` and the compatibility
+``Post.sync_media_ids()`` adapter sync only django-cast's built-in ``image``,
 ``gallery``, ``video``, and ``audio`` blocks to the post media relationships.
 Custom blocks can render chooser values normally, but their media references are
 not added to ``Post.images``, ``Post.galleries``, ``Post.videos``, or

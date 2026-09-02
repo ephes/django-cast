@@ -940,13 +940,21 @@ def test_podcast_feed_rss_omits_category_when_keywords_blank(client, episode, us
 def test_podcast_feed_item_description_repository_none(mocker):
     # given a podcast feed with repository None
     item = mocker.MagicMock()
+    render = mocker.patch("cast.feeds.render_post_description", return_value="<p>description</p>")
     feed = PodcastFeed()
     feed.repository = None
     feed.request = mocker.MagicMock()
     # when calling item_description
-    feed.item_description(item)
-    # then item.get_description should be called, but not self.repository.get_post_detail_repository
-    item.get_description.assert_called_once()
+    description = feed.item_description(item)
+    # then the presenter should be called without resolving a detail repository from the feed
+    assert description == "<p>description</p>"
+    render.assert_called_once_with(
+        item,
+        request=feed.request,
+        render_detail=True,
+        escape_html=False,
+        repository=None,
+    )
 
 
 def test_podcsat_feed_link_repository_is_none(mocker):

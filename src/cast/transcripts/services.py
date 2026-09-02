@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from django.utils import timezone
 
 from cast.file_replacement import StagedFileReplacementGroup
+from cast.media_derivation import save_transcript_with_derivations
 
 from . import dote, known_speakers, parsing, podlove, speaker_samples, voice_references, webvtt
 
@@ -123,9 +124,9 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
                 applied += transcript._apply_suggestions_to_webvtt(names_by_start_ms, replacements=replacements)
         if applied:
             if replacements.replacements:
-                replacements.save_model(transcript)
+                replacements.save_model(transcript, save=save_transcript_with_derivations)
             else:
-                transcript.save()
+                save_transcript_with_derivations(transcript)
     except Exception:
         replacements.rollback()
         raise
@@ -172,7 +173,11 @@ def save_known_speaker_editor_decisions(
     replacements = StagedFileReplacementGroup()
     try:
         transcript._write_speakers_data(data, replacements=replacements)
-        replacements.save_model(transcript, update_fields=["speakers"])
+        replacements.save_model(
+            transcript,
+            update_fields=["speakers"],
+            save=save_transcript_with_derivations,
+        )
     except Exception:
         replacements.rollback()
         raise
@@ -217,7 +222,11 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
 
         if not changed_fields:
             return False
-        replacements.save_model(transcript, update_fields=changed_fields)
+        replacements.save_model(
+            transcript,
+            update_fields=changed_fields,
+            save=save_transcript_with_derivations,
+        )
     except Exception:
         replacements.rollback()
         raise

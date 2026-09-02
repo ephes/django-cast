@@ -5,6 +5,7 @@ from django.contrib import admin
 from django.contrib.admin import ModelAdmin
 from django.db.models import QuerySet
 
+from .media_derivation import save_audio_with_derivations, save_video_with_derivations
 from .models import (
     Audio,
     Blog,
@@ -112,6 +113,9 @@ class AudioAdmin(AdminUserMixin, ModelAdmin):
     fields = ("user", "title", "subtitle", "m4a", "mp3", "oga", "opus", "data")
     actions = [cache_file_sizes]
 
+    def save_model(self, request: "HttpRequest", obj: Audio, form: "Form", change: bool) -> None:
+        save_audio_with_derivations(obj)
+
 
 @admin.register(ChapterMark)
 class ChapterMarkModelAdmin(AdminUserMixin, ModelAdmin):
@@ -128,7 +132,7 @@ class VideoModelAdmin(AdminUserMixin, ModelAdmin):
         if change and not form.cleaned_data["poster"]:
             logger.info("poster was cleared")
             obj.calc_poster = False
-        super().save_model(request, obj, form, change)
+        save_video_with_derivations(obj)
 
 
 @admin.register(Gallery)

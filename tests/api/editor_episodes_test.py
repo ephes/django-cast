@@ -101,6 +101,7 @@ class TestEditorEpisodeCreate:
         assert data["type"] == "cast.Episode"
         assert data["parent"]["id"] == podcast.id
         assert data["latest_revision_id"] == episode.latest_revision_id
+        assert data["previous_revision_id"] is None
         assert data["api_url"].endswith(f"/editor/episodes/{episode.id}/")
         assert data["edit_url"].endswith(f"/pages/{episode.id}/edit/")
         # episode-specific fields are present with model defaults for a bare draft
@@ -122,6 +123,7 @@ class TestEditorEpisodeCreate:
             "type",
             "title",
             "slug",
+            "page_slug",
             "parent",
             "visible_date",
             "tags",
@@ -130,6 +132,7 @@ class TestEditorEpisodeCreate:
             "overview",
             "detail",
             "latest_revision_id",
+            "previous_revision_id",
             "live",
             "status",
             "preview_url",
@@ -155,6 +158,26 @@ class TestEditorEpisodeCreate:
         assert response.status_code == 400
         assert "parent" in response.json()["errors"]
 
+    def test_parent_disappearing_before_transactional_lock_is_not_found(
+        self, api_client, podcast, admin_user, monkeypatch
+    ):
+        class MissingParentQuery:
+            def update(self, **kwargs):
+                assert set(kwargs) == {"numchild"}
+                return 0
+
+        monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.post(
+            reverse("cast:api:editor_episode_create"),
+            self._payload(podcast, slug="parent-race"),
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Episode parent not found."}
+
     def test_rejects_caller_without_add_permission(self, api_client, podcast):
         stranger = UserFactory()
         grant_wagtail_admin_access(stranger)
@@ -179,7 +202,36 @@ class TestEditorEpisodeCreate:
         assert first.status_code == 201
         second = api_client.post(url, self._payload(podcast), format="json")
         assert second.status_code == 400
-        assert "slug" in second.json()["errors"]
+        assert second.json()["errors"]["slug"][0]["code"] == "duplicate"
+
+    def test_create_reserves_persisted_and_latest_draft_slugs(self, api_client, podcast, admin_user):
+        existing = EpisodeFactory(
+            parent=podcast,
+            owner=admin_user,
+            title="Existing episode",
+            slug="episode-stored-slug",
+            live=False,
+        )
+        draft = existing.get_latest_revision_as_object()
+        draft.slug = "episode-latest-draft-slug"
+        draft.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_episode_create")
+
+        persisted = api_client.post(
+            url,
+            self._payload(podcast, title="Persisted slug", slug="episode-stored-slug"),
+            format="json",
+        )
+        draft = api_client.post(
+            url,
+            self._payload(podcast, title="Draft slug", slug="episode-latest-draft-slug"),
+            format="json",
+        )
+
+        for response in (persisted, draft):
+            assert response.status_code == 400
+            assert response.json()["errors"]["slug"][0]["code"] == "duplicate"
 
     def test_episode_specific_fields_round_trip(self, api_client, podcast, superuser, audio):
         season = Season.objects.create(podcast=podcast, number=2, name="Second season")
@@ -407,6 +459,7 @@ class TestEditorEpisodeUpdate:
         data = response.json()
         assert data["title"] == "Header revision"
         assert data["latest_revision_id"] != created["latest_revision_id"]
+        assert data["previous_revision_id"] == created["latest_revision_id"]
 
     def test_patch_rejects_mismatched_if_match_and_body_revision(self, api_client, podcast, admin_user):
         created = self._create(api_client, podcast, admin_user)
@@ -453,6 +506,72 @@ class TestEditorEpisodeUpdate:
         assert response.status_code == 400
         assert response.json()["errors"]["publish"][0]["code"] == "unsupported"
 
+    def test_draft_only_patch_locks_and_accepts_unpublished_episode(self, api_client, podcast, admin_user, mocker):
+        created = self._create(api_client, podcast, admin_user)
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+        lock = mocker.patch.object(Post.objects, "select_for_update", wraps=Post.objects.select_for_update)
+
+        response = api_client.patch(
+            url,
+            {
+                "base_revision_id": created["latest_revision_id"],
+                "require_unpublished": True,
+                "title": "Still a draft episode",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["live"] is False
+        assert response.json()["title"] == "Still a draft episode"
+        lock.assert_called_once_with()
+
+    def test_slug_patch_locks_parent_and_handles_disappearance(self, api_client, podcast, admin_user, monkeypatch):
+        created = self._create(api_client, podcast, admin_user)
+
+        class MissingParentQuery:
+            def update(self, **kwargs):
+                assert set(kwargs) == {"numchild"}
+                return 0
+
+        monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
+        response = api_client.patch(
+            reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]}),
+            {
+                "base_revision_id": created["latest_revision_id"],
+                "slug": "serialized-episode-slug",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"code": "not_found", "detail": "Episode parent not found."}
+        assert Episode.objects.get(pk=created["id"]).latest_revision_id == created["latest_revision_id"]
+
+    def test_draft_only_patch_rejects_published_episode(self, api_client, podcast, admin_user):
+        created = self._create(api_client, podcast, admin_user)
+        episode = Episode.objects.get(pk=created["id"])
+        episode.get_latest_revision().publish(user=admin_user)
+        episode.refresh_from_db()
+        revision_id = episode.latest_revision_id
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]})
+
+        response = api_client.patch(
+            url,
+            {
+                "base_revision_id": revision_id,
+                "require_unpublished": True,
+                "title": "Must not be written",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.json()["code"] == "published_post"
+        episode.refresh_from_db()
+        assert episode.latest_revision_id == revision_id
+        assert episode.get_latest_revision_as_object().title != "Must not be written"
+
     def test_stale_base_revision_returns_conflict(self, api_client, podcast, admin_user):
         created = self._create(api_client, podcast, admin_user)
         episode = Episode.objects.get(id=created["id"])
@@ -491,6 +610,37 @@ class TestEditorEpisodeUpdate:
         assert body["code"] == "revision_conflict"
         assert body["current_revision_id"] == human_revision.id
         assert body["submitted_base_revision_id"] == created["latest_revision_id"]
+
+    def test_patch_reserves_siblings_persisted_and_latest_draft_slugs(self, api_client, podcast, admin_user):
+        sibling = EpisodeFactory(
+            parent=podcast,
+            owner=admin_user,
+            title="Sibling episode",
+            slug="episode-sibling-stored",
+            live=False,
+        )
+        sibling_draft = sibling.get_latest_revision_as_object()
+        sibling_draft.slug = "episode-sibling-latest"
+        sibling_draft.save_revision(user=admin_user)
+        candidate = self._create(api_client, podcast, admin_user, slug="episode-candidate")
+        url = reverse("cast:api:editor_episode_detail", kwargs={"pk": candidate["id"]})
+
+        responses = [
+            api_client.patch(
+                url,
+                {
+                    "base_revision_id": candidate["latest_revision_id"],
+                    "slug": slug,
+                },
+                format="json",
+            )
+            for slug in ("episode-sibling-stored", "episode-sibling-latest")
+        ]
+
+        assert Episode.objects.get(pk=sibling.pk).slug == "episode-sibling-stored"
+        for response in responses:
+            assert response.status_code == 400
+            assert response.json()["errors"]["slug"][0]["code"] == "duplicate"
 
     def test_patch_updates_episode_fields(self, api_client, podcast, superuser, audio):
         season = Season.objects.create(podcast=podcast, number=3)
@@ -556,6 +706,31 @@ class TestEditorEpisodeUpdate:
         assert data["overview"] == overview
         assert data["detail"] == detail
         assert data["visible_date"].startswith("2026-06-29T")
+
+    def test_live_episode_patch_keeps_public_page_slug_until_publish(self, api_client, podcast, admin_user):
+        episode = EpisodeFactory(
+            parent=podcast,
+            owner=admin_user,
+            title="Live episode",
+            slug="episode-public-slug",
+        )
+        revision = episode.save_revision(user=admin_user, changed=False)
+        api_client.force_authenticate(user=admin_user)
+
+        response = api_client.patch(
+            reverse("cast:api:editor_episode_detail", kwargs={"pk": episode.id}),
+            {
+                "base_revision_id": revision.id,
+                "slug": "episode-draft-rename",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200, response.content
+        assert response.json()["slug"] == "episode-draft-rename"
+        assert response.json()["page_slug"] == "episode-public-slug"
+        episode.refresh_from_db()
+        assert episode.slug == "episode-public-slug"
 
     def test_patch_can_clear_promote_text_and_rejects_overlong_title(self, api_client, podcast, superuser):
         created = self._create(api_client, podcast, superuser, slug="episode-promote-validation")
@@ -725,6 +900,7 @@ class TestEditorEpisodePublish:
         assert episode.has_unpublished_changes is False
         assert episode.live_revision_id == created["latest_revision_id"]
         assert data["published_revision_id"] == created["latest_revision_id"]
+        assert data["previous_revision_id"] is None
         assert data["type"] == "cast.Episode"
         assert data["live"] is True
         assert data["status"] == "live"

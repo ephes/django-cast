@@ -74,6 +74,7 @@ def create_podcast(slug: str, title: str):
 def create_episode(*, podcast, index: int, transcript_entries: int):
     from cast.devdata import add_audio_to_body, create_audio, create_python_body, create_transcript
     from cast.models import Episode
+    from cast.post_media import prepare_post_media
 
     owner = podcast.owner
     audio = create_audio(user=owner)
@@ -88,6 +89,7 @@ def create_episode(*, podcast, index: int, transcript_entries: int):
         body=json.dumps(body),
     )
     podcast.add_child(instance=episode)
+    prepare_post_media(episode)
     episode.save_revision().publish()
     return episode
 

@@ -2,9 +2,10 @@
 
 Date: 2026-07-09
 
-Status: research/design record. Cast Studio planning lives in a private sibling
-repository; this note keeps django-cast's public backlog self-contained and
-records only the decisions and possible core implications.
+Status: complete boundary decision (2026-07-22). Cast Studio planning and any
+implementation live in a private sibling repository; this historical record
+keeps django-cast's public backlog self-contained and records only the
+decisions and possible core implications.
 
 ## Summary
 
@@ -14,6 +15,18 @@ Python, Git, repositories, command-line setup, or account signup.
 
 It is a separate product and deployment target, not an Electron shell to add to
 the django-cast package repository.
+
+The onboarding review is complete. The supported paths have distinct audiences:
+
+- ``django-cast-quickstart`` generates new developer projects;
+- ``example/scripts/bootstrap_example_data.py`` prepares disposable content for
+  django-cast contributors;
+- ``ensure_reference_site`` creates repeatable theme-development and visual-test
+  content;
+- Cast Studio owns the possible installed, non-developer desktop experience.
+
+Local-to-hosted synchronization and an external editor client remain separate
+research topics. Neither is required by Cast Studio's first local blog proof.
 
 The first proof is deliberately narrow:
 
@@ -164,14 +177,11 @@ These are not accepted django-cast implementation tasks yet:
 Each should be shaped and justified separately rather than added preemptively
 for Cast Studio.
 
-## Done when
+## Completion
 
-This design record is complete when:
-
-- the private Cast Studio spec has passed independent review;
-- django-cast's backlog distinguishes developer onboarding, local desktop
-  packaging, external API clients, and local-to-hosted sync;
-- the first Cast Studio proof can proceed without an unrecorded django-cast core
-  dependency;
-- any newly discovered core requirement is split into its own concrete backlog
-  item with consumer-site checks.
+The private Cast Studio specification has reviewed requirements and can proceed
+without an unrecorded django-cast core dependency. django-cast's documentation
+now distinguishes the developer quickstart, contributor example bootstrap,
+theme reference site, and separate desktop product. The remaining local sync,
+external client, and podcast import questions stay as explicit backlog items;
+no speculative desktop capability is accepted into django-cast core.

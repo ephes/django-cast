@@ -65,21 +65,24 @@ class TestPostModel:
         assert template_base_dir == post.blog.get_template_base_dir(simple_request)
         get_parent_mock.assert_not_called()
 
-    def test_post_save_side_effects_can_be_skipped(self, monkeypatch, post):
-        """Post.save media derivation must be skippable for bulk operations (architecture review H2)."""
-        import cast.models.pages as pages_module
+    def test_post_save_media_derivation_is_explicit_opt_in(self, monkeypatch, post):
+        """Post.save is pure by default but retains explicit compatibility kwargs."""
+        import cast.post_media as post_media_module
+        from cast.models import image_renditions
 
         sync_calls, rendition_calls = [], []
-        monkeypatch.setattr(type(post), "sync_media_ids", lambda self: sync_calls.append(1))
         monkeypatch.setattr(
-            pages_module, "create_missing_renditions_for_posts", lambda posts: rendition_calls.append(1)
+            post_media_module, "synchronize_post_media", lambda candidate: sync_calls.append(candidate.pk)
+        )
+        monkeypatch.setattr(
+            image_renditions, "create_missing_renditions_for_posts", lambda posts: rendition_calls.append(1)
         )
 
-        post.save(sync_media=False, create_renditions=False)
+        post.save()
         assert sync_calls == [] and rendition_calls == []
 
-        post.save()
-        assert sync_calls == [1] and rendition_calls == [1]
+        post.save(sync_media=True, create_renditions=True)
+        assert sync_calls == [post.pk] and rendition_calls == [1]
 
     def test_post_has_audio(self, post):
         assert post.has_audio is False
@@ -197,25 +200,34 @@ class TestPostModel:
         post.page_url = "/from-context/"
         assert post.get_full_url() == "/from-context/"
 
-    def test_get_description_escape(self, mocker, simple_request, post):
-        class Rendered:
-            rendered_content = "<h1>foo</h1>"
+    def test_get_description_delegates_to_presenter(self, mocker, simple_request, post):
+        expected_html = "<h1>foo</h1>"
+        repository = mocker.sentinel.repository
+        render = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
 
-        mocker.patch("cast.models.Post.serve", return_value=Rendered())
-        description = post.get_description(request=simple_request, escape_html=True)
-        assert "&lt" in description
+        description = post.get_description(
+            request=simple_request,
+            render_detail=True,
+            render_for_feed=False,
+            escape_html=False,
+            remove_newlines=False,
+            repository=repository,
+        )
 
-    def test_get_description_newlines(self, mocker, simple_request, post):
-        class Rendered:
-            rendered_content = "<h1>foo</h1>\n"
-
-        mocker.patch("cast.models.Post.serve", return_value=Rendered())
-        description = post.get_description(request=simple_request, remove_newlines=False)
-        assert "\n" in description
+        assert description == expected_html
+        render.assert_called_once_with(
+            post,
+            request=simple_request,
+            render_detail=True,
+            render_for_feed=False,
+            escape_html=False,
+            remove_newlines=False,
+            repository=repository,
+        )
 
     def test_overview_html(self, mocker):
         expected_html = "<h1>foo</h1>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=False)
         html_field._context = {"request": "foobar"}
         overview = html_field.to_representation(Post())
@@ -227,7 +239,7 @@ class TestPostModel:
 
     def test_detail_html(self, mocker):
         expected_html = "<h1>foo</h1><p>bar</p>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=True)
         html_field._context = {"request": "foobar"}
         detail = html_field.to_representation(Post())
@@ -239,7 +251,7 @@ class TestPostModel:
 
     def test_detail_html_respects_render_for_feed_param(self, mocker, rf):
         expected_html = "<h1>foo</h1><p>bar</p>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=True)
         html_field._context = {"request": rf.get("/?render_for_feed=false")}
         detail = html_field.to_representation(Post())
@@ -248,7 +260,7 @@ class TestPostModel:
 
     def test_detail_html_without_request_uses_default_render_for_feed(self, mocker):
         expected_html = "<h1>foo</h1><p>bar</p>"
-        mock = mocker.patch("cast.models.Post.get_description", return_value=expected_html)
+        mock = mocker.patch("cast.models.pages.render_post_description", return_value=expected_html)
         html_field = HtmlField(source="*", render_detail=True)
         html_field._context = {"request": None}
         detail = html_field.to_representation(Post())
@@ -570,7 +582,10 @@ class TestPostModel:
 
         html = link_field.widget.render("link", str(link.pk), attrs={"id": "link"})
 
-        assert '<option value="">---------</option>' in html
+        # The empty choice label is Django's own and changed in Django 6.1, so only assert
+        # that the empty option is rendered without a contributor id.
+        assert '<option value="">' in html
+        assert '<option value="" data-cast-contributor-id' not in html
         assert f'<option value="{link.pk}" selected data-cast-contributor-id="{contributor.pk}">' in html
         assert f'<option value="{other_link.pk}" data-cast-contributor-id="{other_contributor.pk}">' in html
 
@@ -922,7 +937,7 @@ class TestPostModel:
         assert post.media_lookup == post._media_lookup
 
     def test_ignore_value_error_in_serve_preview_during_sync_media_ids(self, rf, mocker, post):
-        mocker.patch("cast.models.Post.sync_media_ids", side_effect=ValueError())
+        mocker.patch("cast.post_media.synchronize_post_media", side_effect=ValueError())
         request = rf.get("/")
         post.serve_preview(request, "")
         assert post.media_lookup == {"audio": {}, "image": {}, "video": {}, "gallery": {}}

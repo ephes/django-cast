@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, cast
+from collections.abc import Callable
+from typing import Any, cast
 
+from django.db import transaction
+from django.db.models import F, Q, Subquery
 from django.http import HttpResponse
 from django.urls import reverse
 from django.utils.text import slugify
@@ -35,6 +38,7 @@ from .serializers import (
     EpisodeUpdateSerializer,
     ParentSerializer,
     PostCreateSerializer,
+    PostLookupSerializer,
     PostUpdateSerializer,
 )
 
@@ -97,6 +101,23 @@ def _submitted_base_revision_id(request: Request, data: dict[str, Any]) -> int:
     return body_revision_id
 
 
+def _previous_page_revision_id(post: Post, revision_id: int | None) -> int | None:
+    """Return the immediately preceding revision id for this page."""
+    if revision_id is None:
+        return None
+    target_created_at = post.revisions.filter(pk=revision_id).values("created_at")[:1]
+    previous = (
+        post.revisions.filter(
+            Q(created_at__lt=Subquery(target_created_at))
+            | Q(created_at=Subquery(target_created_at), pk__lt=revision_id)
+        )
+        .order_by("-created_at", "-pk")
+        .values_list("pk", flat=True)
+        .first()
+    )
+    return cast(int | None, previous)
+
+
 class ParentsListView(EditorAPIView):
     required_scopes = {"GET": None}
 
@@ -135,8 +156,9 @@ class PostEditorMixin:
             )
         return blog.specific
 
-    def _get_post(self, pk: int, user: Any, *, denied_message: str) -> Post:
-        post = Post.objects.filter(pk=pk).first()
+    def _get_post(self, pk: int, user: Any, *, denied_message: str, for_update: bool = False) -> Post:
+        posts = Post.objects.select_for_update() if for_update else Post.objects
+        post = posts.filter(pk=pk).first()
         if post is None:
             raise EditorNotFound("Post not found.")
         post = post.specific
@@ -144,15 +166,66 @@ class PostEditorMixin:
             raise EditorPermissionDenied(denied_message, parent_id=None)
         return post
 
+    def _lock_parent_for_slug_check(self, parent: Any, *, noun: str) -> Any:
+        """Serialize a sibling slug decision and reload current tree metadata.
+
+        The caller must keep its transaction open from this lock through the
+        revision write. An actual no-op write is portable where
+        ``SELECT FOR UPDATE`` is not: PostgreSQL locks this parent row and SQLite
+        takes its database write lock.
+        """
+        from wagtail.models import Page
+
+        updated = Page.objects.filter(pk=parent.pk).update(numchild=F("numchild"))
+        if updated != 1:
+            raise EditorNotFound(f"{noun} parent not found.")
+        return self._get_parent(parent.pk)
+
     def _check_unique_slug(self, parent: Any, slug: str, *, exclude_id: int | None = None) -> None:
         from wagtail.models import Page
 
-        siblings = Page.objects.child_of(parent).filter(slug=slug)
+        siblings = Page.objects.child_of(parent)
         if exclude_id is not None:
             siblings = siblings.exclude(pk=exclude_id)
-        if siblings.exists():
+        # Wagtail validates edits against persisted Page.slug values, while editor
+        # lookup follows the latest draft. Reserve both namespaces so an API write
+        # can never create a draft that the Wagtail admin cannot validate. The JSON
+        # key lookup keeps the rest of each revision (including the body) out of
+        # Python.
+        if siblings.filter(Q(latest_revision__content__slug=slug) | Q(slug=slug)).exists():
             raise EditorValidationError(
                 {"slug": [{"code": "duplicate", "message": f"Slug {slug!r} is already used here."}]}
+            )
+
+    @staticmethod
+    def _has_approved_schedule(post: Post, *, for_update: bool = False) -> bool:
+        """Return whether Wagtail has approved any revision for scheduled publication.
+
+        PATCH already holds the page-row lock before calling this with
+        ``for_update=True``. Locking existing revision rows as well means schedule
+        cancellation and approval cannot race the draft-only decision; creating a
+        new scheduled revision must update the same locked page row before it can
+        become the page's current revision.
+        """
+        if not for_update:
+            return post.revisions.filter(approved_go_live_at__isnull=False).exists()
+        locked_schedules = post.revisions.select_for_update().values_list("id", "approved_go_live_at")
+        return any(approved_go_live_at is not None for _, approved_go_live_at in locked_schedules)
+
+    def _enforce_draft_only(self, post: Post, *, required: bool, noun: str) -> None:
+        if not required:
+            return
+        if post.live:
+            raise EditorFlatError(
+                "published_post",
+                f"This {noun} is already live; the requested draft-only update was refused.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        if self._has_approved_schedule(post, for_update=True):
+            raise EditorFlatError(
+                "scheduled_post",
+                f"This {noun} is scheduled for publication; the requested draft-only update was refused.",
+                status_code=status.HTTP_409_CONFLICT,
             )
 
     def _resolve_cover_image(self, cover: dict[str, Any] | None, user: Any) -> tuple[Any | None, str]:
@@ -223,11 +296,19 @@ class PostEditorMixin:
         if content_post.cover_image_id is not None:
             cover = {"id": content_post.cover_image_id, "alt_text": content_post.cover_alt_text}
 
+        if self._has_approved_schedule(post):
+            publication_status = "scheduled"
+        elif post.live and not post.has_unpublished_changes:
+            publication_status = "live"
+        else:
+            publication_status = "draft"
+
         data = {
             "id": post.id,
             "type": content_post._meta.label,
             "title": content_post.title,
             "slug": content_post.slug,
+            "page_slug": post.slug,
             "seo_title": content_post.seo_title,
             "search_description": content_post.search_description,
             "parent": {"id": post.get_parent().id},
@@ -242,8 +323,9 @@ class PostEditorMixin:
                 self._section_value(content_post, "detail"), path_prefix="detail", user=user
             ),
             "latest_revision_id": latest_revision_id,
+            "previous_revision_id": _previous_page_revision_id(post, latest_revision_id),
             "live": post.live,
-            "status": "live" if post.live and not post.has_unpublished_changes else "draft",
+            "status": publication_status,
             "preview_url": reverse("wagtailadmin_pages:view_draft", args=[post.id]),
             "edit_url": reverse("wagtailadmin_pages:edit", args=[post.id]),
             "api_url": reverse(self.detail_url_name, kwargs={"pk": post.id}),
@@ -303,7 +385,54 @@ class PostEditorMixin:
 
 
 class PostCreateView(PostEditorMixin, EditorAPIView):
-    required_scopes = {"POST": "write"}
+    required_scopes = {"GET": None, "POST": "write"}
+
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        expected = {"parent", "slug"}
+        errors: dict[str, list[dict[str, str]]] = {}
+        unknown = sorted(set(request.query_params) - expected)
+        if unknown:
+            errors["non_field_errors"] = [
+                {"code": "unknown", "message": f"Unknown query parameter(s): {', '.join(unknown)}."}
+            ]
+        lookup_data = {}
+        for field in expected:
+            values = request.query_params.getlist(field)
+            if len(values) != 1:
+                errors[field] = [
+                    {"code": "cardinality", "message": f"Query parameter {field!r} must occur exactly once."}
+                ]
+            else:
+                lookup_data[field] = values[0]
+        if errors:
+            raise EditorValidationError(errors)
+
+        serializer = PostLookupSerializer(data=lookup_data)
+        serializer.is_valid(raise_exception=True)
+        parent_id = serializer.validated_data["parent"]
+        slug = serializer.validated_data["slug"]
+
+        parent = Blog.objects.filter(pk=parent_id).first()
+        if parent is None:
+            raise EditorNotFound("Post not found.")
+        matches = []
+        for candidate in Post.objects.child_of(parent):
+            post = candidate.specific
+            content_post = post.get_latest_revision_as_object()
+            if content_post.slug == slug:
+                matches.append((post, content_post))
+        if not matches:
+            raise EditorNotFound("Post not found.")
+        if any(not post.permissions_for_user(request.user).can_edit() for post, _ in matches):
+            raise EditorPermissionDenied("You cannot view this draft.", parent_id=None)
+        if len(matches) > 1:
+            raise EditorFlatError(
+                "ambiguous_lookup",
+                "More than one editable post has this latest draft slug under the requested parent.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        post, content_post = matches[0]
+        return Response(self._serialize(post, user=request.user, content_post=content_post))
 
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = PostCreateSerializer(data=request.data)
@@ -322,8 +451,6 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
 
         title = data["title"]
         slug = data.get("slug") or slugify(title)
-        self._check_unique_slug(parent, slug)
-
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
         overview_value = author_blocks_to_overview(data["overview"], user=user)
@@ -336,29 +463,32 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         # Assign body as a JSON string (the proven pattern in tests/conftest.py);
         # the StreamField parses it on access. ``overview_value`` is the list of
         # internal block dicts produced by author_blocks_to_overview().
-        post = Post(
-            title=title,
-            slug=slug,
-            seo_title=data["seo_title"],
-            search_description=data["search_description"],
-            owner=user,
-            live=False,
-            cover_image=cover_image,
-            cover_alt_text=cover_alt_text,
-            body=json.dumps(body_sections),
-        )
-        if data.get("visible_date") is not None:
-            post.visible_date = data["visible_date"]
-        parent.add_child(instance=post)
-        if data["tags"]:
-            post.tags.add(*data["tags"])
-        if categories:
-            post.categories.set(categories)
-        if data["tags"] or categories:
-            # ClusterTaggableManager / ParentalManyToManyField accumulate changes
-            # in memory; flush them so the created page row and first revision agree.
-            post.save()
-        revision = post.save_revision(user=user)
+        with transaction.atomic():
+            parent = self._lock_parent_for_slug_check(parent, noun="Post")
+            self._check_unique_slug(parent, slug)
+            post = Post(
+                title=title,
+                slug=slug,
+                seo_title=data["seo_title"],
+                search_description=data["search_description"],
+                owner=user,
+                live=False,
+                cover_image=cover_image,
+                cover_alt_text=cover_alt_text,
+                body=json.dumps(body_sections),
+            )
+            if data.get("visible_date") is not None:
+                post.visible_date = data["visible_date"]
+            parent.add_child(instance=post)
+            if data["tags"]:
+                post.tags.add(*data["tags"])
+            if categories:
+                post.categories.set(categories)
+            if data["tags"] or categories:
+                # ClusterTaggableManager / ParentalManyToManyField accumulate changes
+                # in memory; flush them so the created page row and first revision agree.
+                post.save()
+            revision = post.save_revision(user=user)
 
         return Response(
             self._serialize(post, user=user, content_post=post, revision=revision),
@@ -373,6 +503,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         post = self._get_post(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(post, user=request.user))
 
+    @transaction.atomic
     def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         serializer = PostUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -383,12 +514,12 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
             raise EditorValidationError(
                 {"publish": [{"code": "unsupported", "message": "Publishing is not available in this API version."}]}
             )
-        if not (set(data) - {"base_revision_id", "publish"}):
+        if not (set(data) - {"base_revision_id", "publish", "require_unpublished"}):
             raise EditorValidationError(
                 {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
             )
 
-        post = self._get_post(pk, user, denied_message="You cannot edit this draft.")
+        post = self._get_post(pk, user, denied_message="You cannot edit this draft.", for_update=True)
         current_revision_id = post.latest_revision_id
         edit_url = reverse("wagtailadmin_pages:edit", args=[post.id])
         if current_revision_id != submitted_base_revision_id:
@@ -397,13 +528,18 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
                 submitted_base_revision_id=submitted_base_revision_id,
                 edit_url=edit_url,
             )
+        self._enforce_draft_only(post, required=data["require_unpublished"], noun="post")
 
         draft = post.get_latest_revision().as_object()
         if "title" in data:
             draft.title = data["title"]
         if "slug" in data:
-            self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
+            parent = self._lock_parent_for_slug_check(draft.get_parent(), noun="Post")
+            self._check_unique_slug(parent, data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+            if not post.live:
+                post.slug = data["slug"]
+                post.save(update_fields=["slug", "url_path"])
         if "seo_title" in data:
             draft.seo_title = data["seo_title"]
         if "search_description" in data:
@@ -472,10 +608,11 @@ class EpisodeEditorMixin(PostEditorMixin):
             )
         return parent
 
-    def _get_episode(self, pk: int, user: Any, *, denied_message: str) -> Episode:
+    def _get_episode(self, pk: int, user: Any, *, denied_message: str, for_update: bool = False) -> Episode:
         # ``.specific()`` resolves the typed subclass row in the same query, so a
         # plain ``Post`` and a missing page both fall through to the not-found path.
-        episode = Post.objects.filter(pk=pk).specific().first()
+        episodes = Post.objects.select_for_update() if for_update else Post.objects
+        episode = episodes.filter(pk=pk).specific().first()
         if not isinstance(episode, Episode):
             raise EditorNotFound("Episode not found.")
         if not episode.permissions_for_user(user).can_edit():
@@ -573,7 +710,6 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
 
         title = data["title"]
         slug = data.get("slug") or slugify(title)
-        self._check_unique_slug(parent, slug)
 
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
@@ -598,14 +734,17 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         self._apply_episode_metadata(episode, data, user, get_podcast=lambda: parent)
         if data.get("visible_date") is not None:
             episode.visible_date = data["visible_date"]
-        parent.add_child(instance=episode)
-        if data["tags"]:
-            episode.tags.add(*data["tags"])
-        if categories:
-            episode.categories.set(categories)
-        if data["tags"] or categories:
-            episode.save()
-        revision = episode.save_revision(user=user)
+        with transaction.atomic():
+            parent = self._lock_parent_for_slug_check(parent, noun="Episode")
+            self._check_unique_slug(parent, slug)
+            parent.add_child(instance=episode)
+            if data["tags"]:
+                episode.tags.add(*data["tags"])
+            if categories:
+                episode.categories.set(categories)
+            if data["tags"] or categories:
+                episode.save()
+            revision = episode.save_revision(user=user)
 
         return Response(
             self._serialize(episode, user=user, content_post=episode, revision=revision),
@@ -620,6 +759,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         episode = self._get_episode(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(episode, user=request.user))
 
+    @transaction.atomic
     def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         serializer = EpisodeUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -630,12 +770,12 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
             raise EditorValidationError(
                 {"publish": [{"code": "unsupported", "message": "Publishing is not available in this API version."}]}
             )
-        if not (set(data) - {"base_revision_id", "publish"}):
+        if not (set(data) - {"base_revision_id", "publish", "require_unpublished"}):
             raise EditorValidationError(
                 {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
             )
 
-        episode = self._get_episode(pk, user, denied_message="You cannot edit this draft.")
+        episode = self._get_episode(pk, user, denied_message="You cannot edit this draft.", for_update=True)
         current_revision_id = episode.latest_revision_id
         edit_url = reverse("wagtailadmin_pages:edit", args=[episode.id])
         if current_revision_id != submitted_base_revision_id:
@@ -644,6 +784,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
                 submitted_base_revision_id=submitted_base_revision_id,
                 edit_url=edit_url,
             )
+        self._enforce_draft_only(episode, required=data["require_unpublished"], noun="episode")
 
         # ``parent`` is immutable on PATCH, so the season constraint resolves against
         # the episode's existing podcast parent — fetched lazily only when a season is sent.
@@ -651,8 +792,12 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if "title" in data:
             draft.title = data["title"]
         if "slug" in data:
-            self._check_unique_slug(draft.get_parent(), data["slug"], exclude_id=draft.id)
+            parent = self._lock_parent_for_slug_check(draft.get_parent(), noun="Episode")
+            self._check_unique_slug(parent, data["slug"], exclude_id=draft.id)
             draft.slug = data["slug"]
+            if not episode.live:
+                episode.slug = data["slug"]
+                episode.save(update_fields=["slug", "url_path"])
         if "seo_title" in data:
             draft.seo_title = data["seo_title"]
         if "search_description" in data:

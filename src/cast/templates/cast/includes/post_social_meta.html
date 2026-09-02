@@ -37,10 +37,10 @@
         {% if structured_data_type == "PodcastEpisode" %}"name"{% else %}"headline"{% endif %}: "{{ social_title|escapejs }}",
         "description": "{{ social_description|escapejs }}",
         "url": "{{ absolute_page_url|escapejs }}"{% if published_time %},
-        "datePublished": "{{ published_time|date:'c' }}"{% endif %}{% if modified_time %},
-        "dateModified": "{{ modified_time|date:'c' }}"{% endif %}{% if blog.author_name %},
-        "author": {"@type": "Person", "name": "{{ blog.author_name|escapejs }}"}{% endif %}{% if social_cover_image_url %},
-        "image": "{{ social_cover_image_url|escapejs }}"{% endif %}
+          "datePublished": "{{ published_time|date:'c' }}"{% endif %}{% if modified_time %},
+            "dateModified": "{{ modified_time|date:'c' }}"{% endif %}{% if blog.author_name %},
+              "author": {"@type": "Person", "name": "{{ blog.author_name|escapejs }}"}{% endif %}{% if social_cover_image_url %},
+                "image": "{{ social_cover_image_url|escapejs }}"{% endif %}
       }
     </script>
   {% endwith %}
