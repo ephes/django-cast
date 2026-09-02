@@ -303,13 +303,9 @@ class GalleryBlock(ListBlock):
         hand while it keeps breaking every render of the page.
         """
         prepped = super().get_prep_value(value)
-        if isinstance(prepped, list):
-            return [
-                item
-                for item in prepped
-                if item is not None and not (isinstance(item, dict) and item.get("value") is None)
-            ]
-        return prepped
+        return [
+            item for item in prepped if item is not None and not (isinstance(item, dict) and item.get("value") is None)
+        ]
 
     def get_template(self, images: QuerySet[AbstractImage] | None = None, context: dict | None = None) -> str:
         default_template_name = super().get_template(images, context)

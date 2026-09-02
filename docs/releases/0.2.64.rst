@@ -1,4 +1,4 @@
-0.2.64 (unreleased)
+0.2.64 (2026-09-02)
 -------------------
 
 - Render empty or stale image blocks as empty instead of crashing the page.
@@ -96,4 +96,5 @@
   ``manage.py migrate`` step, which is gone from the test environments - mixing a migration-built database with a
   models-built one broke on the second run. The new ``migrations-oldest`` and ``migrations-latest`` tox environments
   keep checking that the migration graph applies cleanly to an empty throwaway database at both ends of the
-  supported dependency range (Django 4.2 + Wagtail 7.0 and Django 6.1 + newest Wagtail).
+  supported dependency range (Django 5.2 + Wagtail 7.0 and Django 6.1 + newest Wagtail).
+- Refresh compatible frontend build dependencies and rebuild the shipped JavaScript assets.

@@ -681,3 +681,6 @@ def test_gallery_block_get_prep_value_drops_empty_slots():
     )
     prepped = block.get_prep_value(value)
     assert [item["value"] for item in prepped] == [4594, 4595]
+
+    # Wagtail normalizes a missing list value to an empty list.
+    assert block.get_prep_value(None) == []

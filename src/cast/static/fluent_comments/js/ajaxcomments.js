@@ -1,5 +1,5 @@
 (function() {
-	//#region \0@oxc-project+runtime@0.139.0/helpers/esm/asyncToGenerator.js
+	//#region \0@oxc-project+runtime@0.147.0/helpers/esm/asyncToGenerator.js
 	function asyncGeneratorStep(n, t, e, r, o, a, c) {
 		try {
 			var i = n[a](c), u = i.value;
@@ -240,15 +240,16 @@
 					form.dataset.commentBusy = "0";
 					if (waiting) waiting.style.display = "none";
 					removeErrors(form);
-					if (data.success) if (preview) commentPreview(data);
-					else {
-						resetForm(form);
-						const hadPreview = removePreview(data);
-						const newComment = addComment(data);
-						if (hadPreview && newComment) newComment.style.display = "";
-						onCommentPosted(data);
-					}
-					else showErrors(form, data.errors || {});
+					if (data.success) {
+						if (preview) commentPreview(data);
+						else {
+							resetForm(form);
+							const hadPreview = removePreview(data);
+							const newComment = addComment(data);
+							if (hadPreview && newComment) newComment.style.display = "";
+							onCommentPosted(data);
+						}
+					} else showErrors(form, data.errors || {});
 				} catch (err) {
 					form.dataset.commentBusy = "0";
 					if (waiting) waiting.style.display = "none";

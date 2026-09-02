@@ -404,7 +404,7 @@ To test a specific environment:
 
 .. code-block:: bash
 
-   $ uv run tox -e py312-django42-wagtail70
+   $ uv run tox -e py312-django52-wagtail70
 
 Each environment keeps its own database under ``.tox`` and self-heals the same way the local one
 does. ``uv run tox -e migrations-oldest,migrations-latest`` checks that the migration graph
