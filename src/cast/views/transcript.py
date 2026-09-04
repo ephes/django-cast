@@ -293,11 +293,19 @@ def _handle_known_speaker_apply(
     transcript: Transcript,
     speaker_mapping_context: editing.SpeakerMappingContext,
 ) -> HttpResponse | EditFormState:
-    applied = transcript.apply_known_speaker_suggestions()
+    # The quick action promises to apply confident suggestions only. Do not
+    # smooth uncertain gaps here: a rapid speaker hand-off can sit between two
+    # confident segments from the same person, and carrying that name across
+    # would silently publish a wrong attribution. Editors can resolve uncertain
+    # rows explicitly in the segment review form.
+    applied = transcript.apply_known_speaker_suggestions(smooth=False)
     if applied:
         messages.success(
             request,
-            _("Applied known-speaker names to {0} public transcript entries.").format(applied),
+            _(
+                "Applied known-speaker names to {0} public transcript entries. "
+                "Uncertain segments were left unchanged for review."
+            ).format(applied),
         )
     else:
         messages.warning(request, _("No confident known-speaker suggestions were available to apply."))

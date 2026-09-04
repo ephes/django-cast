@@ -308,7 +308,7 @@
               <li>{{ name }}: {{ count }} {% trans "confident segments" %}</li>
             {% endfor %}
           </ul>
-          <p>{% trans "The bulk action applies known-speaker names to public Podlove, DOTe, and WebVTT output by start time and may smooth uncertain segments between confident speakers. Use the segment review table to override a segment or leave it blank." %}</p>
+          <p>{% trans "The bulk action applies confident known-speaker names to public Podlove, DOTe, and WebVTT output by start time and leaves uncertain segments unchanged. Use the segment review table to resolve or clear an uncertain segment." %}</p>
           <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
             {% csrf_token %}
             <input type="hidden" name="action" value="apply-known-speakers" />

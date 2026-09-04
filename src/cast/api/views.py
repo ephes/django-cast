@@ -193,11 +193,12 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
         payload = build_player_payload(audio, post=post, request=request, inline_transcript=False)
         cues = payload["transcript"]["cues"]
 
-        # Cache so re-opening the transcript after navigation doesn't refetch.
         # A strong ETag over the *sanitized* cues stays correct across transcript
-        # edits and contributor/speaker-mapping changes; Cache-Control lets the
-        # browser serve from its HTTP cache within the window (no request), and a
-        # cheap 304 covers revalidation after it. The content is already public.
+        # edits and contributor/speaker-mapping changes. Public responses get a
+        # short freshness window: transcript labels are editorial content, so
+        # serving an hour-old attribution is not acceptable, while immediate
+        # repeat opens should not rebuild the full sanitized payload. Revalidation
+        # returns a small 304 response when the cues are unchanged.
         serialized = json.dumps(cues, ensure_ascii=False, sort_keys=True)
         etag = f'"{hashlib.sha256(serialized.encode("utf-8")).hexdigest()}"'
         if_none_match = request.headers.get("If-None-Match", "")
@@ -214,7 +215,7 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
     def _set_cache_headers(response: Response, post: Post) -> None:
         specific = getattr(post, "specific", post)
         if page_is_unrestricted_public(specific):
-            response["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
+            response["Cache-Control"] = "public, max-age=30, must-revalidate"
             return
         response["Cache-Control"] = "private, no-store"
         patch_vary_headers(response, ("Cookie", "Authorization"))

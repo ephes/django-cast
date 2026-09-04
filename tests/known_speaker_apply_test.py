@@ -4,6 +4,7 @@ import copy
 import json
 
 import pytest
+from django.contrib.messages import get_messages
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
@@ -768,14 +769,50 @@ class TestKnownSpeakerReviewView:
         assert response.status_code == 200
         assert b"Known-speaker suggestions" in response.content
         assert b"Save segment decisions" in response.content
+        assert b"leaves uncertain segments unchanged" in response.content
 
     def test_apply_action_labels_public_output(self, admin_client, audio):
-        transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, speakers=SPEAKERS)
+        speakers = copy.deepcopy(SPEAKERS)
+        speakers["segments"][2]["speaker"] = "Johannes"
+        podlove = copy.deepcopy(PODLOVE)
+        podlove["transcripts"][1].update(speaker="Carlton", voice="Carlton")
+        dote = copy.deepcopy(DOTE)
+        dote["lines"][1]["speakerDesignation"] = "Carlton"
+        vtt = VTT.replace("\nb\n\n", "\n<v Carlton>b\n\n")
+        transcript = make_transcript(audio, podlove=podlove, dote=dote, vtt=vtt, speakers=speakers)
         response = admin_client.post(
             reverse("cast-transcript:edit", args=(transcript.id,)),
             {"action": "apply-known-speakers"},
         )
         assert response.status_code == 302
+        feedback = [str(message).strip() for message in get_messages(response.wsgi_request)]
+        assert feedback == [
+            "Applied known-speaker names to 6 public transcript entries. "
+            "Uncertain segments were left unchanged for review."
+        ]
+        transcript.refresh_from_db()
+        # The quick action applies only confident suggestions. The uncertain
+        # middle hand-off keeps its existing editor-assigned name.
+        assert [segment["speaker"] for segment in transcript.podlove_data["transcripts"]] == [
+            "Johannes",
+            "Carlton",
+            "Johannes",
+        ]
+        assert [segment["voice"] for segment in transcript.podlove_data["transcripts"]] == [
+            "Johannes",
+            "Carlton",
+            "Johannes",
+        ]
+        assert [line["speakerDesignation"] for line in transcript.dote_data["lines"]] == [
+            "Johannes",
+            "Carlton",
+            "Johannes",
+        ]
+        with transcript.vtt.open("r") as vtt_file:
+            public_vtt = vtt_file.read()
+        assert "<v Johannes>a" in public_vtt
+        assert "<v Carlton>b" in public_vtt
+        assert "<v Johannes>c" in public_vtt
 
     def test_review_action_corrects_segment_and_preserves_raw_sidecar(self, admin_client, audio):
         speakers = copy.deepcopy(SPEAKERS)

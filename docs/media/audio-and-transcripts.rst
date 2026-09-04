@@ -113,6 +113,13 @@ normalization and the public speaker-label sanitization (the same applied to the
 Podlove API output) run only in this endpoint, so non-public speaker labels and
 raw ``podlove_data`` never leak.
 
+Public transcript responses include a strong ``ETag`` and a short shared-cache
+freshness window (``Cache-Control: public, max-age=30, must-revalidate``).
+Browsers, reverse proxies, and CDNs may reuse the response for 30 seconds, then
+must revalidate it; unchanged cues receive a small ``304`` while speaker
+corrections replace the cached response after at most that short window.
+Restricted or preview responses remain private and uncacheable.
+
 Theming tokens
 --------------
 
@@ -418,8 +425,13 @@ distribution. The bulk *Approve and apply confident suggestions* action writes
 resolved speaker names into the public Podlove ``speaker``/``voice``, DOTe
 ``speakerDesignation``, and matching WebVTT cue voice labels, matched to
 transcript segments or cues by start time. Confident suggestions are used
-directly; by default uncertain segments between known speakers are smoothed from
-the surrounding confident speaker so the public artifacts stay consistent.
+directly; the Wagtail action explicitly leaves uncertain segments unchanged for
+review. Programmatic callers retain the existing smoothing default and should
+pass ``smooth=False`` to
+``Transcript.apply_known_speaker_suggestions(...)`` when they need the same
+confident-only behavior. Smoothing fills uncertain gaps from the surrounding
+confident speaker so the public transcript has continuous labels, but it can
+misattribute a rapid hand-off between confident segments from the same person.
 
 Editors can also review individual segments in the same panel. For each
 segment they can keep the bulk result, choose a speaker from the returned

@@ -1,3 +1,10 @@
 0.2.65 (unreleased)
 -------------------
 
+- Reduce the public custom-player transcript cache freshness window from one
+  hour to 30 seconds and require revalidation afterward, so transcript and
+  contributor/speaker-mapping edits do not remain stale while immediate repeat
+  opens avoid rebuilding the full sanitized payload.
+- Make the known-speaker quick-apply action publish confident suggestions only.
+  Uncertain hand-offs remain unchanged until an editor reviews them instead of
+  being filled from a surrounding confident speaker automatically.
