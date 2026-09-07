@@ -7,7 +7,11 @@ from xml.etree import ElementTree
 import feedparser
 import pytest
 import pytz
+from django.conf import settings as django_settings
+from django.contrib.sites import models as sites_models
+from django.contrib.sites.models import Site as DjangoSite
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404
 from django.urls import resolve, reverse
 from wagtail.models import PageViewRestriction
@@ -1162,44 +1166,153 @@ def test_get_repository_replaces_used_predefined_repository(mocker):
     create_repository.assert_called_once_with(data={})
 
 
-def test_cache_site_for_feed_without_site_id(settings, rf):
+@pytest.mark.django_db
+def test_feed_uses_request_host_without_replacing_configured_site(client, post, use_dummy_cache_backend):
+    configured_site, _created = DjangoSite.objects.update_or_create(
+        pk=django_settings.SITE_ID,
+        defaults={"domain": "canonical.example", "name": "Canonical"},
+    )
+    site_cache_backup = sites_models.SITE_CACHE.copy()
+    try:
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        response = client.get(feed_url, HTTP_HOST="example.com")
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert f"http://example.com{feed_url}" in content
+        assert "canonical.example" not in content
+        assert DjangoSite.objects.get_current().pk == configured_site.pk
+        assert DjangoSite.objects.get_current().domain == "canonical.example"
+        assert DjangoSite.objects.get(pk=configured_site.pk).domain == "canonical.example"
+    finally:
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_cached_feed_response_is_scoped_to_request_host(client, post, settings, mocker):
+    settings.ALLOWED_HOSTS = [*settings.ALLOWED_HOSTS, "alternate.example"]
+    DjangoSite.objects.update_or_create(
+        pk=django_settings.SITE_ID,
+        defaults={"domain": "canonical.example", "name": "Canonical"},
+    )
+    feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+    render_feed = mocker.spy(LatestEntriesFeed, "get_feed")
+    site_cache_backup = sites_models.SITE_CACHE.copy()
+    cache.clear()
+    try:
+        first = client.get(feed_url, HTTP_HOST="example.com")
+        first_cached = client.get(feed_url, HTTP_HOST="example.com")
+        second = client.get(feed_url, HTTP_HOST="alternate.example")
+
+        assert first.status_code == 200
+        assert first_cached.content == first.content
+        assert second.status_code == 200
+        assert render_feed.call_count == 2
+        assert f"http://example.com{feed_url}" in first.content.decode()
+        second_content = second.content.decode()
+        assert f"http://alternate.example{feed_url}" in second_content
+        assert f"http://example.com{feed_url}" not in second_content
+    finally:
+        cache.clear()
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_feed_missing_django_site_row_raises_configuration_error(client, post, use_dummy_cache_backend):
+    DjangoSite.objects.filter(pk=django_settings.SITE_ID).delete()
+    site_cache_backup = sites_models.SITE_CACHE.copy()
+    try:
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        with pytest.raises(ImproperlyConfigured, match="requires a django.contrib.sites Site"):
+            client.get(feed_url)
+    finally:
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_feed_without_site_id_uses_matching_django_site(client, post, settings, use_dummy_cache_backend):
     settings.SITE_ID = None
-
-    LatestEntriesFeed._cache_site_for_feed(rf.get("/"))
-
-
-def test_cache_site_for_feed_uses_existing_cache(settings, rf):
-    from django.contrib.sites import models as sites_models
-    from django.contrib.sites.models import Site as DjangoSite
-
-    site_id = 998
-    settings.SITE_ID = site_id
-    cache_backup = sites_models.SITE_CACHE.copy()
-    sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain="example.com", name="example.com")
+    matching_site, _created = DjangoSite.objects.get_or_create(domain="example.com", defaults={"name": "Request Host"})
+    site_cache_backup = sites_models.SITE_CACHE.copy()
     try:
-        LatestEntriesFeed._cache_site_for_feed(rf.get("/"))
-        assert sites_models.SITE_CACHE[site_id].domain == "example.com"
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        response = client.get(feed_url, HTTP_HOST="example.com")
+
+        assert response.status_code == 200
+        assert f"http://example.com{feed_url}" in response.content.decode()
+        assert DjangoSite.objects.get_current(response.wsgi_request) == matching_site
     finally:
         sites_models.SITE_CACHE.clear()
-        sites_models.SITE_CACHE.update(cache_backup)
+        sites_models.SITE_CACHE.update(site_cache_backup)
 
 
-def test_cache_site_for_feed_without_get_host(settings):
-    from django.contrib.sites import models as sites_models
-
-    class DummyRequest:
-        pass
-
-    site_id = 999
-    settings.SITE_ID = site_id
-    cache_backup = sites_models.SITE_CACHE.copy()
+@pytest.mark.django_db
+def test_feed_without_site_id_and_matching_site_raises_configuration_error(
+    client, post, settings, use_dummy_cache_backend
+):
+    settings.SITE_ID = None
+    settings.ALLOWED_HOSTS = [*settings.ALLOWED_HOSTS, "missing.example"]
+    DjangoSite.objects.filter(domain="missing.example").delete()
+    site_cache_backup = sites_models.SITE_CACHE.copy()
     try:
-        sites_models.SITE_CACHE.pop(site_id, None)
-        LatestEntriesFeed._cache_site_for_feed(DummyRequest())
-        assert sites_models.SITE_CACHE[site_id].domain == "localhost"
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        with pytest.raises(ImproperlyConfigured, match="requires a django.contrib.sites Site"):
+            client.get(feed_url, HTTP_HOST="missing.example")
     finally:
         sites_models.SITE_CACHE.clear()
-        sites_models.SITE_CACHE.update(cache_backup)
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_feed_without_django_sites_app_uses_request_site(client, post, use_dummy_cache_backend, mocker):
+    mocker.patch("django.contrib.sites.shortcuts.apps.is_installed", return_value=False)
+    get_current = mocker.patch.object(
+        DjangoSite.objects,
+        "get_current",
+        side_effect=AssertionError("Django Site manager must not be used"),
+    )
+    feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+    response = client.get(feed_url, HTTP_HOST="example.com")
+
+    assert response.status_code == 200
+    assert f"http://example.com{feed_url}" in response.content.decode()
+    get_current.assert_not_called()
+
+
+def test_feed_preserves_absolute_repository_blog_url(rf, mocker):
+    repository = mocker.MagicMock(blog_url="https://canonical.example/blog/")
+    feed = LatestEntriesFeed(repository=repository)
+    feed.request = rf.get("/blog/feed/rss.xml", HTTP_HOST="alternate.example")
+
+    assert feed.link() == "https://canonical.example/blog/"
+
+
+def test_atom_podcast_feed_uses_request_host_for_relative_blog_url(rf, mocker):
+    repository = mocker.MagicMock(blog_url="/podcast/")
+    feed = AtomPodcastFeed(repository=repository)
+    feed.request = rf.get("/podcast/feed/podcast/mp3/atom.xml", HTTP_HOST="example.com")
+
+    assert feed.link() == "http://example.com/podcast/"
+
+
+def test_atom_podcast_feed_keeps_canonical_feed_identity(mocker):
+    feed = AtomPodcastFeed()
+    feed.object = mocker.MagicMock()
+    feed.object.get_full_url.return_value = "https://canonical.example/podcast/"
+
+    assert feed.feed_guid(feed.object) == "https://canonical.example/podcast/"
 
 
 @pytest.mark.django_db

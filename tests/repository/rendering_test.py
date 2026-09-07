@@ -512,6 +512,7 @@ def test_render_blog_feed_with_data_from_cache_without_hitting_the_database(rf, 
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
+    DjangoSite.objects.get_current()
     reset_queries()
     # with connection.execute_wrapper(blocker):
     response = LatestEntriesFeed(repository=repository)(request, slug=blog.slug)
@@ -557,6 +558,7 @@ def test_render_podcast_feed_with_data_from_cache_without_hitting_the_database(r
 
     # When we render the blog index
     # call this once without blocker to populate SITE_CACHE
+    DjangoSite.objects.get_current()
     reset_queries()
     # with connection.execute_wrapper(blocker):
     response = RssPodcastFeed(repository=repository)(request, slug=blog.slug, audio_format="mp3")

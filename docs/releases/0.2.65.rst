@@ -20,6 +20,15 @@
   ``POST`` without storing the upload. New clients should use the permission-aware
   editor media upload endpoints; the separate legacy ``/api/upload_video/``
   endpoint remains available during migration.
+- Stop feed requests from replacing Django's process-wide current Site with
+  the request host. Feed self URLs, relative channel links, and host-scoped
+  cached responses still use the request host validated by ``ALLOWED_HOSTS``;
+  a missing configured ``django_site`` row now raises a clear configuration
+  error instead of being hidden by synthetic global cache state. The first
+  feed render in a process may perform the normal Django Site lookup. Sites
+  with this error must create the row referenced by ``SITE_ID`` or correct
+  ``SITE_ID`` to reference an existing row.
+
 - Create a fresh RSS or Atom feed renderer for every cache miss, preventing
   concurrent requests from mixing blog, request, repository, or podcast-format
   state while preserving generated-response caching.
