@@ -674,12 +674,11 @@ class TestReplyCoordination:
         assert r.status_code == 400
         assert get_comments_model().objects.count() == before
 
-    def test_stock_non_ajax_reply_is_blocked_when_feature_enabled(
+    def test_stock_non_ajax_reply_is_allowed_when_feature_enabled(
         self, client, post, comment, comments_enabled, feature_on
     ):
-        # The unlocked stock reply path is closed entirely while the feature is on:
-        # replies (parent set) must go through the AJAX endpoint. The parent here is
-        # perfectly healthy, yet the stock reply is still rejected.
+        # The wrapper now locks and revalidates the parent, so a healthy reply can
+        # safely use the regular no-JavaScript endpoint too.
         import re
 
         from django.urls import reverse
@@ -701,8 +700,9 @@ class TestReplyCoordination:
         }
         before = get_comments_model().objects.count()
         r = client.post(reverse("comments-post-comment"), data)  # no AJAX header → stock view
-        assert r.status_code == 400
-        assert get_comments_model().objects.count() == before
+        assert r.status_code == 302
+        assert get_comments_model().objects.count() == before + 1
+        assert get_comments_model().objects.filter(parent=comment, comment="stock reply").exists()
 
 
 class TestTunablesCheck:

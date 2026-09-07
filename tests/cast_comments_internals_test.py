@@ -383,6 +383,386 @@ def _valid_comment_payload(post):
     }
 
 
+def _reply_payload(post, parent):
+    data = _valid_comment_payload(post)
+    data["parent"] = str(parent.pk)
+    return data
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("author_edits", [False, True])
+def test_post_comment_ajax_rejects_parent_from_another_target(
+    client, post, blog, settings, comments_enabled, author_edits
+):
+    from tests.factories import PostFactory
+
+    settings.CAST_COMMENTS_ALLOW_AUTHOR_EDITS = author_edits
+    from cast.comments import author_edits as author_edit_helpers
+
+    assert author_edit_helpers.author_edits_enabled() is author_edits
+    other_post = PostFactory(parent=blog, title="Other post", slug="other-comment-post", comments_enabled=True)
+    parent = get_comments_model().objects.create(
+        content_object=other_post, site_id=settings.SITE_ID, comment="private ancestor"
+    )
+
+    response = client.post(
+        reverse("comments-post-comment-ajax"),
+        _reply_payload(post, parent),
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.filter(parent=parent).count() == 0
+
+
+@pytest.mark.django_db
+def test_post_comment_ajax_rejects_cross_site_parent(client, post, settings, comments_enabled):
+    from django.contrib.sites.models import Site
+
+    other_site = Site.objects.create(domain="ajax-comments.example", name="AJAX Comments")
+    parent = get_comments_model().objects.create(content_object=post, site=other_site, comment="cross-site ancestor")
+
+    response = client.post(
+        reverse("comments-post-comment-ajax"),
+        _reply_payload(post, parent),
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.filter(parent=parent).count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("is_public", "is_removed"), [(False, False), (True, True)])
+def test_post_comment_ajax_rejects_hidden_parent(client, post, settings, comments_enabled, is_public, is_removed):
+    parent = get_comments_model().objects.create(
+        content_object=post,
+        site_id=settings.SITE_ID,
+        comment="hidden ancestor",
+        is_public=is_public,
+        is_removed=is_removed,
+    )
+
+    response = client.post(
+        reverse("comments-post-comment-ajax"),
+        _reply_payload(post, parent),
+        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+    )
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.filter(parent=parent).count() == 0
+
+
+@pytest.mark.django_db
+def test_post_comment_rejects_cross_site_parent(client, post, settings, comments_enabled):
+    from django.contrib.sites.models import Site
+
+    other_site = Site.objects.create(domain="comments.example", name="Comments")
+    parent = get_comments_model().objects.create(content_object=post, site=other_site, comment="cross-site ancestor")
+
+    response = client.post(reverse("comments-post-comment"), _reply_payload(post, parent))
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.filter(parent=parent).count() == 0
+
+
+@pytest.mark.django_db
+def test_post_comment_rejects_parent_from_another_target(client, post, blog, settings, comments_enabled):
+    from tests.factories import PostFactory
+
+    other_post = PostFactory(parent=blog, title="Other stock post", slug="other-stock-comment-post")
+    parent = get_comments_model().objects.create(
+        content_object=other_post, site_id=settings.SITE_ID, comment="foreign ancestor"
+    )
+
+    response = client.post(reverse("comments-post-comment"), _reply_payload(post, parent))
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.filter(parent=parent).count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("is_public", "is_removed"), [(False, False), (True, True)])
+def test_post_comment_rejects_hidden_parent(client, post, settings, comments_enabled, is_public, is_removed):
+    parent = get_comments_model().objects.create(
+        content_object=post,
+        site_id=settings.SITE_ID,
+        comment="hidden ancestor",
+        is_public=is_public,
+        is_removed=is_removed,
+    )
+
+    response = client.post(reverse("comments-post-comment"), _reply_payload(post, parent))
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.filter(parent=parent).count() == 0
+
+
+@pytest.mark.django_db
+def test_post_comment_rejects_missing_parent(client, post, comments_enabled):
+    data = _valid_comment_payload(post)
+    data["parent"] = "99999999"
+
+    response = client.post(reverse("comments-post-comment"), data)
+
+    assert response.status_code == 400
+    assert get_comments_model().objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_post_comment_allows_valid_reply(client, post, settings, comments_enabled):
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible ancestor"
+    )
+
+    response = client.post(reverse("comments-post-comment"), _reply_payload(post, parent))
+
+    assert response.status_code == 302
+    assert get_comments_model().objects.filter(parent=parent, comment="Hello").exists()
+
+
+@pytest.mark.django_db
+def test_post_comment_reply_requires_csrf(client, post, settings, comments_enabled):
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible ancestor"
+    )
+    settings.MIDDLEWARE = [
+        middleware for middleware in settings.MIDDLEWARE if middleware != "django.middleware.csrf.CsrfViewMiddleware"
+    ]
+    client.handler.enforce_csrf_checks = True
+
+    response = client.post(reverse("comments-post-comment"), _reply_payload(post, parent))
+
+    assert response.status_code == 403
+    assert not get_comments_model().objects.filter(parent=parent).exists()
+
+
+@pytest.mark.django_db
+def test_post_comment_reply_delegates_invalid_form_to_stock_view(client, post, settings, comments_enabled):
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible ancestor"
+    )
+    data = _reply_payload(post, parent)
+    data["security_hash"] += "invalid"
+
+    response = client.post(reverse("comments-post-comment"), data)
+
+    assert response.status_code == 400
+    assert not get_comments_model().objects.filter(parent=parent).exists()
+
+
+@pytest.mark.django_db
+def test_post_comment_reply_preview_delegates_to_stock_view(client, post, settings, comments_enabled):
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible ancestor"
+    )
+    data = _reply_payload(post, parent)
+    data["preview"] = "1"
+
+    response = client.post(reverse("comments-post-comment"), data)
+
+    assert response.status_code == 200
+    assert b"Preview" in response.content
+    assert not get_comments_model().objects.filter(parent=parent).exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("name", "email", "expected_name", "expected_email"),
+    [
+        ("", "", None, None),
+        ("Given Name", "", "Given Name", None),
+        ("", "given@example.com", None, "given@example.com"),
+    ],
+)
+def test_post_comment_authenticated_reply_fills_identity(
+    client, post, user, settings, comments_enabled, name, email, expected_name, expected_email
+):
+    raw_password = user._password
+    user.first_name = "Account"
+    user.last_name = "Owner"
+    user.email = "account-owner@example.com"
+    user.save(update_fields=["first_name", "last_name", "email"])
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible ancestor"
+    )
+    assert client.login(username=user.username, password=raw_password)
+    data = _reply_payload(post, parent)
+    data["name"] = name
+    data["email"] = email
+
+    response = client.post(reverse("comments-post-comment"), data)
+
+    assert response.status_code == 302
+    saved = get_comments_model().objects.get(parent=parent)
+    expected_saved_name = expected_name if expected_name is not None else user.get_full_name()
+    expected_saved_email = expected_email if expected_email is not None else user.email
+    assert saved.user == user
+    assert saved.user_name == expected_saved_name
+    assert saved.user_email == expected_saved_email
+
+
+@pytest.mark.django_db
+def test_post_comment_reply_signal_can_reject(client, post, settings, comments_enabled):
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible ancestor"
+    )
+
+    def reject_reply(sender, comment, request, **kwargs):
+        return False
+
+    signals.comment_will_be_posted.connect(reject_reply, dispatch_uid="reject_stock_reply_test")
+    try:
+        response = client.post(reverse("comments-post-comment"), _reply_payload(post, parent))
+    finally:
+        signals.comment_will_be_posted.disconnect(dispatch_uid="reject_stock_reply_test")
+
+    assert response.status_code == 400
+    assert not get_comments_model().objects.filter(parent=parent).exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("is_public", "is_removed"), [(False, False), (True, True)])
+def test_safe_fill_tree_filters_hidden_ancestor_without_dropping_paginated_reply(
+    post, settings, is_public, is_removed
+):
+    grandparent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible grandparent"
+    )
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, parent=grandparent, comment="hidden ancestor"
+    )
+    reply = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, parent=parent, comment="visible reply"
+    )
+    parent.is_public = is_public
+    parent.is_removed = is_removed
+    parent.save(update_fields=["is_public", "is_removed"])
+
+    html = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+        Context({"comment_list": [reply], "request": None})
+    )
+
+    assert "hidden ancestor" not in html
+    assert "visible grandparent" not in html
+    assert "visible reply" in html
+    assert html.count('<ul class="comment-list-wrapper">') == html.count("</ul>")
+
+    html_with_root = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+        Context({"comment_list": [grandparent, reply], "request": None})
+    )
+    assert "visible grandparent" in html_with_root
+    assert "hidden ancestor" not in html_with_root
+    assert "visible reply" in html_with_root
+    assert html_with_root.count('<ul class="comment-list-wrapper">') == html_with_root.count("</ul>")
+
+    from cast.comments.templatetags.fluent_comments_tags import safe_fill_tree
+
+    rendered = safe_fill_tree([grandparent, reply])
+    assert rendered[-1].parent_id == grandparent.pk
+
+
+@pytest.mark.django_db
+def test_safe_fill_tree_clears_primed_excluded_parent_cache(post, settings):
+    from cast.comments.templatetags.fluent_comments_tags import safe_fill_tree
+
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="hidden ancestor", is_public=False
+    )
+    reply = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, parent=parent, comment="visible reply"
+    )
+    reply = get_comments_model().objects.select_related("parent").get(pk=reply.pk)
+    original_tree_path = reply.tree_path
+    assert reply.parent == parent
+    assert "parent" in reply._state.fields_cache
+
+    (rendered_reply,) = safe_fill_tree([reply])
+
+    assert rendered_reply.parent_id is None
+    assert rendered_reply.parent is None
+    assert reply.parent_id == parent.pk
+    assert reply.tree_path == original_tree_path
+    assert reply.parent == parent
+
+
+@pytest.mark.django_db
+def test_safe_fill_tree_filters_malformed_cross_target_ancestor(post, blog, settings):
+    from threadedcomments.models import PATH_SEPARATOR
+    from tests.factories import PostFactory
+
+    other_post = PostFactory(parent=blog, title="Other post", slug="other-render-post")
+    foreign_parent = get_comments_model().objects.create(
+        content_object=other_post, site_id=settings.SITE_ID, comment="foreign ancestor"
+    )
+    reply = get_comments_model().objects.create(content_object=post, site_id=settings.SITE_ID, comment="visible reply")
+    get_comments_model().objects.filter(pk=reply.pk).update(
+        tree_path=PATH_SEPARATOR.join((foreign_parent.tree_path, reply.tree_path))
+    )
+    reply.refresh_from_db()
+
+    html = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+        Context({"comment_list": [reply], "request": None})
+    )
+
+    assert "foreign ancestor" not in html
+    assert "visible reply" in html
+    assert html.count('<ul class="comment-list-wrapper">') == html.count("</ul>")
+
+
+@pytest.mark.django_db
+def test_threadedcomments_fill_tree_is_replaced_with_safe_filter(post, blog, settings):
+    from threadedcomments.models import PATH_SEPARATOR
+    from tests.factories import PostFactory
+
+    other_post = PostFactory(parent=blog, title="Other override post", slug="other-override-post")
+    foreign_parent = get_comments_model().objects.create(
+        content_object=other_post, site_id=settings.SITE_ID, comment="foreign ancestor"
+    )
+    reply = get_comments_model().objects.create(content_object=post, site_id=settings.SITE_ID, comment="visible reply")
+    get_comments_model().objects.filter(pk=reply.pk).update(
+        tree_path=PATH_SEPARATOR.join((foreign_parent.tree_path, reply.tree_path))
+    )
+    reply.refresh_from_db()
+
+    html = Template(
+        "{% load threadedcomments_tags %}{% for item in comments|fill_tree %}{{ item.comment }}{% endfor %}"
+    ).render(Context({"comments": [reply]}))
+
+    assert "foreign ancestor" not in html
+    assert "visible reply" in html
+
+
+@pytest.mark.django_db
+def test_safe_fill_tree_ignores_invalid_path_segment(post, settings):
+    reply = get_comments_model().objects.create(content_object=post, site_id=settings.SITE_ID, comment="visible reply")
+    get_comments_model().objects.filter(pk=reply.pk).update(tree_path=f"invalid/{reply.tree_path}")
+    reply.refresh_from_db()
+
+    html = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+        Context({"comment_list": [reply], "request": None})
+    )
+
+    assert "visible reply" in html
+
+
+@pytest.mark.django_db
+def test_safe_fill_tree_keeps_visible_ancestor_for_paginated_reply(post, settings):
+    parent = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, comment="visible ancestor"
+    )
+    reply = get_comments_model().objects.create(
+        content_object=post, site_id=settings.SITE_ID, parent=parent, comment="visible reply"
+    )
+
+    html = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+        Context({"comment_list": [reply], "request": None})
+    )
+
+    assert "visible ancestor" in html
+    assert "visible reply" in html
+
+
 @pytest.mark.django_db
 def test_post_comment_ajax_requires_ajax_header(client):
     ajax_url = reverse("comments-post-comment-ajax")

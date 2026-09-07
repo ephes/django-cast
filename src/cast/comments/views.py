@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import django_comments
 from django.apps import apps
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.sites.shortcuts import get_current_site
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import transaction
 from django.http import (
@@ -22,6 +24,7 @@ from django.views.decorators.http import require_POST
 from django_comments import signals
 from django_comments.forms import COMMENT_MAX_LENGTH
 from django_comments.views.comments import CommentPostBadRequest
+from django_comments.views.utils import next_redirect
 
 from . import appsettings, author_edits
 from .utils import comments_are_open, get_comment_context_data, get_comment_template_name
@@ -75,10 +78,9 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
         if response is False:
             return CommentPostBadRequest(f"comment_will_be_posted receiver {receiver.__name__} killed the comment")
 
-    feature_on = author_edits.author_edits_enabled()
     parent_id = getattr(comment, "parent_id", None)
 
-    if feature_on and parent_id:
+    if parent_id:
         # Coordinate with delete on the parent row: lock it and reject a reply to
         # a parent that is no longer a valid target (removed or author-deleted), so
         # no child is created under a deleted parent. (An *edited* but still-public
@@ -93,9 +95,10 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
                 # side of an outer join. We only need to lock the comment row.
                 parent = comment_model.objects.using(using).select_related(None).select_for_update().get(pk=parent_id)
             except comment_model.DoesNotExist:
-                return CommentPostBadRequest("The parent comment no longer exists.")
-            if not parent.is_public or parent.is_removed:
-                return CommentPostBadRequest("The parent comment is no longer available.")
+                return CommentPostBadRequest("The parent comment is not available for this object.")
+            error = _validate_comment_parent(comment, parent)
+            if error is not None:
+                return error
             comment.save(using=using)
     else:
         comment.save(using=using)
@@ -193,6 +196,39 @@ def _ajax_result(
     return JsonResponse(json_return)
 
 
+def _validate_comment_parent(comment: BaseComment, parent: BaseComment) -> HttpResponse | None:
+    """Require a reply parent to be visible and inside the comment's target boundary."""
+    if not _parent_matches(comment.content_type_id, comment.object_pk, comment.site_id, parent):
+        return CommentPostBadRequest("The parent comment is not available for this object.")
+    return None
+
+
+def _parent_matches(content_type_id: int, object_pk: object, site_id: int, parent: BaseComment) -> bool:
+    return (
+        parent.content_type_id == content_type_id
+        and str(parent.object_pk) == str(object_pk)
+        and parent.site_id == site_id
+        and parent.is_public
+        and not parent.is_removed
+    )
+
+
+def _validate_locked_parent_for_target(
+    target: Any, parent_id: str, site_id: int, using: str | None
+) -> HttpResponse | None:
+    """Lock and validate a stock-post parent before the third-party view saves."""
+    comment_model = django_comments.get_model()
+    try:
+        parent = comment_model.objects.using(using).select_related(None).select_for_update().get(pk=parent_id)
+    except (comment_model.DoesNotExist, ValueError, TypeError, ValidationError):
+        return CommentPostBadRequest("The parent comment is not available for this object.")
+
+    expected_content_type = ContentType.objects.db_manager(using).get_for_model(target)
+    if not _parent_matches(expected_content_type.pk, target.pk, site_id, parent):
+        return CommentPostBadRequest("The parent comment is not available for this object.")
+    return None
+
+
 def _render_errors(field: BoundField) -> str:
     template = f"{appsettings.CRISPY_TEMPLATE_PACK}/layout/field_errors.html"
     return render_to_string(
@@ -281,26 +317,52 @@ def _validate_comment_text(data: QueryDict) -> tuple[str | None, HttpResponse | 
     return text, None
 
 
+@csrf_protect
+@require_POST
 def post_comment(request: HttpRequest, next: str | None = None, using: str | None = None) -> HttpResponse:
     """Stock ``django_comments`` post view, overriding its URL.
 
-    The AJAX reply path locks the parent row to coordinate with edit/delete so a
-    reply cannot land under a concurrently removed/author-deleted parent. The
-    stock non-AJAX path has no such lock, so while the author-edits feature is
-    enabled we reject replies here and require the AJAX endpoint, closing that
-    public bypass. Top-level comments still post through the stock view normally.
-    CSRF and method checks are enforced by the wrapped stock view's decorators.
+    Reply parents are locked and checked against the signed target before the
+    third-party view saves. This applies independently of author-edit support.
+    CSRF and method checks are enforced on this wrapper before target resolution.
     """
     from django_comments.views.comments import post_comment as stock_post_comment
 
-    if request.method == "POST":
-        if author_edits.author_edits_enabled() and request.POST.get("parent"):
-            return CommentPostBadRequest("Replies must be posted through the reply form.")
-        target, error = _resolve_comment_target(request.POST, using)
-        if error is not None:
-            return error
-        if not comments_are_open(target):
-            return CommentPostBadRequest("Comments are closed for this object.")
+    target, error = _resolve_comment_target(request.POST, using)
+    if error is not None:
+        return error
+    if not comments_are_open(target):
+        return CommentPostBadRequest("Comments are closed for this object.")
+    parent_id = request.POST.get("parent")
+    if parent_id:
+        data = request.POST.copy()
+        if request.user.is_authenticated:
+            if not data.get("name", ""):
+                data["name"] = request.user.get_full_name() or request.user.get_username()
+            if not data.get("email", ""):
+                data["email"] = request.user.email
+        form = django_comments.get_form()(target, data=data)
+        if form.security_errors() or form.errors or "preview" in data:
+            return stock_post_comment(request, next=next, using=using)
+
+        current_site = cast(Any, get_current_site(request))
+        comment = form.get_comment_object(site_id=current_site.id)
+        comment.ip_address = request.META.get("REMOTE_ADDR", None) or None
+        if request.user.is_authenticated:
+            comment.user = request.user
+
+        responses = signals.comment_will_be_posted.send(sender=comment.__class__, comment=comment, request=request)
+        for receiver, response in responses:
+            if response is False:
+                return CommentPostBadRequest(f"comment_will_be_posted receiver {receiver.__name__} killed the comment")
+
+        with transaction.atomic(using=using):
+            error = _validate_locked_parent_for_target(target, parent_id, current_site.id, using)
+            if error is not None:
+                return error
+            comment.save(using=using)
+        signals.comment_was_posted.send(sender=comment.__class__, comment=comment, request=request)
+        return next_redirect(request, fallback=next or "comments-comment-done", c=comment.pk)
     return stock_post_comment(request, next=next, using=using)
 
 

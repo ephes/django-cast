@@ -129,8 +129,17 @@ When threaded mode is active:
 - The comment form includes a hidden ``parent`` field.
 - Each rendered comment shows a "reply" link that sets the ``parent`` value via
   the JavaScript layer (see :ref:`comments_ajax_posting`).
-- The comment list template uses ``fill_tree`` and ``annotate_tree`` filters
-  from ``threadedcomments`` to produce nested ``<ul>`` markup.
+- The comment list template fills paginated ancestor paths only with visible
+  comments from the same content object and site, then uses
+  ``annotate_tree`` from ``threadedcomments`` to produce nested ``<ul>`` markup.
+  Reply submission enforces the same boundary for both AJAX and regular posts.
+  Existing custom templates that use the legacy ``fill_tree`` filter inherit
+  this protection when the Cast comments app starts; new overrides can call
+  ``safe_fill_tree`` explicitly before ``annotate_tree``.
+- If moderation hides a comment in the middle of an ancestor path, descendants
+  remain visible. A visible ancestor above the hidden comment is used as the
+  rendered parent only when it is already present in the current comment-list
+  slice; no ancestor is fetched across the hidden comment.
 - The flat list template (``flat_list.html``) is used when threaded comments are
   disabled.
 
@@ -305,12 +314,12 @@ Scope and limitations
   themes). A single-page or API-driven comment UI (for example a custom front end
   consuming the comment API) does not receive the controls automatically and would
   need its own integration.
-- While the feature is enabled, **threaded replies must be posted through the
-  AJAX endpoint** (the reply form). The plain non-JavaScript ``POST`` to the
-  stock comment view is rejected for replies, because only the AJAX path locks
-  the parent row to coordinate with concurrent edit/delete. Top-level comments
-  still post without JavaScript. If your site relies on no-JavaScript threaded
-  replies, keep the feature disabled.
+- Threaded replies posted through either the AJAX endpoint or the regular
+  non-JavaScript endpoint lock and revalidate the parent before saving. A reply
+  is rejected if moderation has hidden or removed its parent in the meantime.
+  Both endpoints leave their reply-save transaction before running post-save
+  notification receivers. An outer transaction such as ``ATOMIC_REQUESTS`` can
+  still extend the transaction and parent-row lock in the usual way.
 
 Optional tunables limit abuse and bound eligibility/session size (all only
 apply when the feature is enabled):

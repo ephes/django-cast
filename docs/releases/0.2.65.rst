@@ -29,6 +29,15 @@
   password, or group restrictions. These shared-cache endpoints now serve only
   unrestricted public feed roots.
 
+- Bind threaded-comment replies to a visible parent on the same content object
+  and site. Comment rendering now applies the same boundary while filling an
+  ancestor path, preventing malformed historical trees or later moderation of
+  a parent from exposing hidden comments. Valid replies and paginated thread
+  context continue to render normally. Existing custom threaded comment-list
+  templates using ``fill_tree`` inherit the safe implementation automatically;
+  new templates can use ``safe_fill_tree`` explicitly.
+  Regular non-JavaScript replies are now accepted when anonymous author edits
+  are enabled because that path now locks and validates the parent too.
 - Fix stored cross-site scripting through editor API rich-text writes. Paragraphs
   and nested custom rich-text blocks now pass through Wagtail's feature-based
   HTML conversion before validation. Raw-HTML custom inputs are rejected;
