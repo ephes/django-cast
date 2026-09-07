@@ -1,6 +1,12 @@
 0.2.65 (unreleased)
 -------------------
 
+- Make the legacy ``/api/audios/`` and ``/api/videos/`` collection endpoints
+  read-only. Their unsupported create paths failed after writing uploaded files,
+  leaving storage objects without database records. They now return ``405`` for
+  ``POST`` without storing the upload. New clients should use the permission-aware
+  editor media upload endpoints; the separate legacy ``/api/upload_video/``
+  endpoint remains available during migration.
 - Fix stored cross-site scripting through editor API rich-text writes. Paragraphs
   and nested custom rich-text blocks now pass through Wagtail's feature-based
   HTML conversion before validation. Raw-HTML custom inputs are rejected;

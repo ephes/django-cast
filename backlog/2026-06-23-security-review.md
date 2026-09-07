@@ -482,6 +482,10 @@ Resolution:
 - Added ``CAST_AUDIO_UPLOAD_MAX_BYTES`` and ``CAST_VIDEO_UPLOAD_MAX_BYTES`` settings with documented defaults.
 - Regression tests cover invalid extension, invalid magic bytes, oversized uploads, direct model saves, and the video
   upload API path.
+- Subsequent hardening (2026-09-07) made the unsupported legacy ``/api/audios/`` and ``/api/videos/`` collection
+  create methods return ``405``. Those paths omitted the required owner and could write a storage object before the
+  database insert failed. Supported editor uploads remain the migration target; ``/api/upload_video/`` remains for
+  existing legacy clients.
 
 ### SEC-2026-013: `media_stale --delete` can delete managed private files or unrelated storage keys
 

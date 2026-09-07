@@ -19,7 +19,7 @@ from cast.api.views import (
     ThemeListView,
 )
 from cast.devdata import create_transcript, generate_blog_with_media
-from cast.models import Audio, Contributor, EpisodeContributor, PostCategory, TranscriptSpeakerMapping
+from cast.models import Audio, Contributor, EpisodeContributor, PostCategory, TranscriptSpeakerMapping, Video
 
 from tests.factories import PostFactory, UserFactory
 
@@ -69,6 +69,19 @@ class TestBlogVideo:
         # dont redirect to login page
         assert r.status_code == 200
         assert "results" in r.json()
+
+    def test_video_list_endpoint_rejects_create_without_storing_file(self, api_client, minimal_mp4, mocker):
+        user = UserFactory()
+        api_client.login(username=user.username, password="password")
+        storage_save = mocker.spy(Video._meta.get_field("original").storage, "save")
+
+        r = api_client.post(self.list_url, {"original": minimal_mp4}, format="multipart")
+
+        assert r.status_code == 405
+        assert r.headers["Allow"] == "GET, HEAD, OPTIONS"
+        assert not Audio.objects.filter(user=user).exists()
+        assert not Video.objects.filter(user=user).exists()
+        storage_save.assert_not_called()
 
     def test_video_detail_endpoint_for_other_user_returns_404(self, api_client, video):
         requester = UserFactory()
@@ -145,6 +158,19 @@ class TestBlogAudio:
         # dont redirect to login page
         assert r.status_code == 200
         assert "results" in r.json()
+
+    def test_audio_list_endpoint_rejects_create_without_storing_file(self, api_client, mp3_audio, mocker):
+        user = UserFactory()
+        api_client.login(username=user.username, password="password")
+        storage_save = mocker.spy(Audio._meta.get_field("mp3").storage, "save")
+
+        r = api_client.post(self.list_url, {"mp3": mp3_audio}, format="multipart")
+
+        assert r.status_code == 405
+        assert r.headers["Allow"] == "GET, HEAD, OPTIONS"
+        assert not Audio.objects.filter(user=user).exists()
+        assert not Video.objects.filter(user=user).exists()
+        storage_save.assert_not_called()
 
     def test_audio_detail_endpoint_for_other_user_returns_404(self, api_client, audio):
         requester = UserFactory()

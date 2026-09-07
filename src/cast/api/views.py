@@ -94,7 +94,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 200
 
 
-class VideoListView(generics.ListCreateAPIView):
+class VideoListView(generics.ListAPIView):
     serializer_class = VideoSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
@@ -114,7 +114,7 @@ class VideoDetailView(generics.RetrieveDestroyAPIView):
         return Video.objects.filter(user=user)
 
 
-class AudioListView(generics.ListCreateAPIView):
+class AudioListView(generics.ListAPIView):
     serializer_class = AudioSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)

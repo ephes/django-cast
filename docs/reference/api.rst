@@ -42,6 +42,12 @@ returning its historical bare-text ``"<pk>"`` body with ``201 Created``. New
 integrations should use the editor API below for structured errors, scoped
 authorization, and ``If-Match`` revision handling.
 
+The legacy ``/api/videos/`` and ``/api/audios/`` collection endpoints are
+read-only. ``POST`` requests return ``405 Method Not Allowed``. Use
+``POST /api/editor/media/videos/`` or ``POST /api/editor/media/audios/`` for
+permission-checked uploads. Existing legacy video clients can continue using
+``POST /api/upload_video/`` while they migrate.
+
 Endpoints
 ---------
 
