@@ -86,3 +86,57 @@ def test_editor_episode_create_reads_custom_overview_block_without_internal_wrap
     data = response.json()
     assert data["type"] == "cast.Episode"
     assert data["overview"] == [{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}]
+
+
+@pytest.mark.django_db
+@override_settings(CAST_POST_BODY_BLOCKS=CUSTOM_BLOCK_SETTINGS)
+@pytest.mark.parametrize("kind", ["post", "episode"])
+def test_custom_rich_text_is_sanitized_on_create_and_patch(api_client, blog, podcast, admin_user, kind):
+    api_client.force_authenticate(user=admin_user)
+    parent = blog if kind == "post" else podcast
+    link = {**WEEKNOTE_LINK, "description": '<p onclick="alert(1)">Safe</p>'}
+    value = [{"type": "weeknote_links", "value": [link]}]
+    response = api_client.post(
+        reverse(f"cast:api:editor_{kind}_create"),
+        {"parent": {"id": parent.pk}, "title": "Safe custom text", "overview": value, "detail": value},
+        format="json",
+    )
+    assert response.status_code == 201, response.content
+    created = response.json()
+    for section in ("overview", "detail"):
+        assert created[section][0]["value"][0]["description"] == "<p>Safe</p>"
+    detail_url = reverse(f"cast:api:editor_{kind}_detail", kwargs={"pk": created["id"]})
+    response = api_client.patch(
+        detail_url,
+        {"base_revision_id": created["latest_revision_id"], "overview": value, "detail": value},
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    for section in ("overview", "detail"):
+        assert api_client.get(detail_url).json()[section][0]["value"][0]["description"] == "<p>Safe</p>"
+
+
+@pytest.mark.django_db
+@override_settings(CAST_POST_BODY_BLOCKS=CUSTOM_BLOCK_SETTINGS)
+def test_custom_rich_text_conversion_errors_keep_nested_paths(api_client, blog, admin_user):
+    api_client.force_authenticate(user=admin_user)
+    link = {**WEEKNOTE_LINK, "description": "<p><b><i>Unbalanced</b></i></p>"}
+    response = api_client.post(
+        reverse("cast:api:editor_post_create"),
+        {
+            "parent": {"id": blog.pk},
+            "title": "Invalid custom text",
+            "overview": [
+                {"type": "paragraph", "value": 123},
+                {"type": "weeknote_links", "value": [link]},
+                {"type": "paragraph", "value": False},
+            ],
+        },
+        format="json",
+    )
+    assert response.status_code == 400, response.content
+    assert response.json()["errors"] == {
+        "overview.0.value": [{"code": "invalid", "message": "Expected a string value."}],
+        "overview.1.value.0.description": [{"code": "invalid", "message": "Invalid rich text."}],
+        "overview.2.value": [{"code": "invalid", "message": "Expected a string value."}],
+    }

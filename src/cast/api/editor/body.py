@@ -4,19 +4,17 @@ import uuid
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from wagtail.blocks import Block, RichTextBlock
+from wagtail.blocks import Block
 from wagtail.images import get_image_model
 from wagtail.images.permissions import permission_policy as image_permission_policy
 
-from ...post_body_blocks import POST_BODY_SECTIONS, configured_content_blocks
+from ...post_body_blocks import POST_BODY_SECTIONS, configured_content_blocks, default_content_blocks
 from .errors import EditorValidationError
+from .richtext import sanitize_block_value
 
 SUPPORTED_BODY_BLOCKS = frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
 SUPPORTED_OVERVIEW_BLOCKS = SUPPORTED_BODY_BLOCKS
 
-# A single shared RichTextBlock used to validate/normalize paragraph HTML through
-# the same path Wagtail uses on admin save.
-_PARAGRAPH_BLOCK = RichTextBlock()
 _CUSTOM_BLOCK_CONVERSION_ERRORS = (TypeError, ValueError, KeyError, AttributeError)
 _CUSTOM_BLOCK_READ_ERRORS = (DjangoValidationError, *_CUSTOM_BLOCK_CONVERSION_ERRORS)
 
@@ -232,6 +230,7 @@ def author_blocks_to_section(
             {path_prefix: [{"code": "invalid", "message": f"{path_prefix} must be a list of blocks."}]}
         )
 
+    paragraph_block = dict(default_content_blocks())["paragraph"]
     for index, block in enumerate(blocks):
         base = f"{path_prefix}.{index}"
         if not isinstance(block, dict) or "type" not in block:
@@ -272,8 +271,12 @@ def author_blocks_to_section(
                 continue
             try:
                 python_value = custom_block.to_python(value)
+                python_value = sanitize_block_value(custom_block, python_value, path=f"{base}.value")
                 cleaned = custom_block.clean(python_value)
                 prepared = custom_block.get_prep_value(cleaned)
+            except EditorValidationError as exc:
+                errors.update(exc.error_map)
+                continue
             except DjangoValidationError as exc:
                 errors.update(_custom_block_validation_errors(exc, base=base))
                 continue
@@ -287,15 +290,19 @@ def author_blocks_to_section(
             if not isinstance(value, str):
                 errors[f"{base}.value"] = [{"code": "invalid", "message": "Expected a string value."}]
                 continue
-            # Validate/normalize the rich text through Wagtail's block clean path,
-            # the same path the admin uses on save.
             try:
-                cleaned = _PARAGRAPH_BLOCK.clean(_PARAGRAPH_BLOCK.to_python(value))
+                python_value = sanitize_block_value(
+                    paragraph_block, paragraph_block.to_python(value), path=f"{base}.value"
+                )
+                cleaned = paragraph_block.clean(python_value)
+            except EditorValidationError as exc:
+                errors.update(exc.error_map)
+                continue
             except DjangoValidationError as exc:
                 message = "; ".join(exc.messages) or "Invalid rich text."
                 errors[f"{base}.value"] = [{"code": "invalid", "message": message}]
                 continue
-            result.append({"type": "paragraph", "value": _PARAGRAPH_BLOCK.get_prep_value(cleaned)})
+            result.append({"type": "paragraph", "value": paragraph_block.get_prep_value(cleaned)})
 
         elif block_type == "code":
             if not isinstance(value, dict):

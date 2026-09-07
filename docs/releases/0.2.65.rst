@@ -1,6 +1,20 @@
 0.2.65 (unreleased)
 -------------------
 
+- Fix stored cross-site scripting through editor API rich-text writes. Paragraphs
+  and nested custom rich-text blocks now pass through Wagtail's feature-based
+  HTML conversion before validation. Raw-HTML custom inputs are rejected;
+  malformed rich text returns a structured 400. Returned HTML is normalized:
+  formatting outside the configured rich-text features becomes ordinary text
+  (enable features such as ``blockquote`` and ``code`` to retain them).
+  Supplied Draftail comment-anchor keys are retained without adding random keys.
+  Inline image/oEmbed markup returns an ``inline_embed`` validation error
+  instead of being silently removed; even
+  existing admin-authored inline media must be moved to structured media blocks
+  before resubmitting its section. Existing pages and historical
+  revisions are not rewritten: operators should review stored content and
+  restorable revisions before lifting temporary API restrictions. See the
+  editor API section in :doc:`../reference/api` for the exact scope.
 - Reduce the public custom-player transcript cache freshness window from one
   hour to 30 seconds and require revalidation afterward, so transcript and
   contributor/speaker-mapping edits do not remain stale while immediate repeat

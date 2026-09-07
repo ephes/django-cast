@@ -15,6 +15,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
+- [ ] Audit existing editor API rich text and historical revisions
+  - Design record:
+    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
+  - Scope: provide read-only tooling to inspect published content, drafts, and restorable revisions after the
+    editor API sanitization fix. Normalization differences alone must not be reported as proof of an attack.
+  - Done when: operators can locate potentially unsafe historical content and follow a documented remediation
+    workflow without silently rewriting pages or destroying revision history.
+
 - [ ] Local authoring and sync workflow
   - Design record:
     [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
@@ -41,6 +49,19 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
+
+- [ ] Editor API preservation of paragraphs containing inline media
+  - Related design:
+    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
+  - Scope: consider exposing existing paragraphs with inline media as unsupported placeholders, so clients can
+    preserve them while editing neighboring blocks. New inline embeds remain rejected by the write API.
+  - Done when: the read/preservation contract is specified and tested without allowing clients to forge or change
+    preserved content or bypass sanitization on new writes.
+
+- [ ] Editor API aggregate validation errors within custom containers
+  - Scope: collect multiple malformed rich-text/raw-HTML errors within a single custom StructBlock/ListBlock/StreamBlock.
+    Errors across sibling section blocks already accumulate; nested sanitization currently reports its first failure.
+  - Done when: nested error paths are reported together and remain compatible with normal Wagtail block validation.
 
 - [ ] Editor API remote media import safety design
   - PRD:

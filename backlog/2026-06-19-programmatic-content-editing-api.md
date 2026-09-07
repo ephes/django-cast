@@ -2,6 +2,16 @@
 
 Date: 2026-06-19
 
+Security correction (2026-09-07): the original references below to Wagtail's
+"normal normalization/sanitization" described the intended contract, but the
+implementation only called `RichTextBlock.clean()`, which does not sanitize
+HTML. The fix explicitly runs ContentState conversion for submitted built-in
+and nested custom rich text, rejects raw HTML blocks, and excludes inline
+image/oEmbed features in favor of the permission-checked structured blocks.
+See [the analysis and implementation plan](2026-09-07-editor-richtext-sanitization.md)
+and `docs/reference/api.rst` for the current contract and historical-content
+limitations. The older save-path claims below are superseded by this correction.
+
 Status: Slice 1 implemented (2026-06-22): `GET /api/editor/parents/`, `POST /api/editor/posts/`, and
 `GET /api/editor/posts/{id}/` are shipped. An exact, permission-checked direct-parent plus slug lookup on
 `GET /api/editor/posts/?parent=…&slug=…` was added on 2026-07-18 for deterministic draft find-or-create clients; it is

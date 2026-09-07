@@ -451,9 +451,49 @@ plus episode-specific fields; see **Episode endpoints** below.
 Referenced media — ``cover_image`` and inline ``image``, ``gallery``,
 ``audio``, and ``video`` blocks — must be choosable by the caller. Missing and
 inaccessible media references are reported the same way (``not_found``) so the
-API does not leak objects outside the caller's permissions. ``paragraph`` HTML
-is validated through Wagtail's rich-text block, the same path the admin uses on
-save.
+API does not leak objects outside the caller's permissions.
+
+``paragraph`` HTML is sanitized on create and PATCH through Wagtail's
+ContentState converter before normal block validation. The converter rebuilds
+HTML from the block's rich-text features, using the selected editor's
+``OPTIONS.features`` or Wagtail's default features when the block does not
+specify them. Disallowed elements, attributes, and link schemes are removed;
+their text may remain as ordinary text. Malformed input that cannot be converted
+returns ``400 validation_error`` at the affected value path. There is no fallback
+to storing the original input.
+
+The response contains normalized HTML, which can differ from the request:
+``<p onclick="alert(1)">Text</p>`` becomes ``<p>Text</p>``. Supplied Draftail
+``data-block-key`` values are retained so existing rich-text comment anchors
+survive a round trip; API writes do not add generated keys to unkeyed HTML. Supported page and
+document links retain Wagtail's internal reference format. Inline image and
+oEmbed features are excluded from API rich text, even if enabled in the admin;
+use the structured image/gallery/audio/video blocks with their permission and
+media checks. A submitted ``<embed>`` tag returns a field-specific validation
+error with code ``inline_embed`` rather than silently removing inline media. This also applies to
+resubmitting existing admin-authored paragraphs: move inline media to structured
+blocks before sending that section, or omit the section from PATCH. Rich-text
+conversion does not fetch remote embed providers.
+
+Page/document links whose targets have been deleted retain their reference IDs
+on write, following Wagtail's broken-link behavior; a missing target does not
+make an otherwise valid rich-text write fail.
+
+Formatting outside the resolved feature list is reduced to ordinary text.
+For example, sites using Wagtail's defaults must enable ``blockquote`` and
+``code`` in their rich-text editor options if API writes should preserve those
+formats. Review the feature list before resubmitting existing content.
+
+.. warning::
+
+   This protection applies to submitted rich text on new API writes. Upgrading
+   does not sanitize existing page bodies, drafts, or historical revisions.
+   GET and previews still use stored content, PATCH preserves omitted sections,
+   and restoring an old revision can restore unsafe HTML. Sites that previously
+   exposed this API should review existing content and restorable revisions,
+   including published content, before removing temporary access restrictions.
+   Resubmitting a section sanitizes its editable rich text; it does not clean
+   preserved unsupported blocks, other sections, or revision history.
 
 Request fields:
 
@@ -495,14 +535,24 @@ sent as a plain JSON list of objects; clients do not send ``{"type": "item",
 "id": "...", "value": ...}`` list-item wrappers. Custom block values are
 converted through the configured Wagtail block's ``to_python()``, ``clean()``,
 and ``get_prep_value()`` methods on write, and are returned in an editor-facing
-representation on read.
+representation on read. Before ``clean()``, the API also sanitizes
+``RichTextBlock`` values recursively inside ``StructBlock``, ``ListBlock``, and
+``StreamBlock`` containers. Empty optional rich text stays empty. Submitted
+``RawHTMLBlock`` values at the top level or nested in these three container types
+are rejected with a field-specific validation error.
 
 Custom blocks are a trusted site-level extension point. The editor API enforces
 the built-in media blocks' per-user ``choose`` permissions, but it cannot infer
 permissions for arbitrary object references inside custom block values. A
 custom block that references images, pages, snippets, or media should enforce
 its own validation and permission semantics, or should not be exposed to editor
-API clients.
+API clients. Custom HTML rendering, custom block methods and rich-text converter
+plugins remain trusted application code. The API cannot infer HTML stored in
+arbitrary string fields or make unsafe custom rendering safe. Non-API writes
+and preserved unsupported placeholders are outside this write-time protection.
+Other custom container types, such as ``TypedTableBlock``, are not traversed;
+their implementation must sanitize nested HTML itself, or the site must not
+expose them through this API.
 
 Stored body blocks that this API version cannot safely edit are returned as
 ``{"type": "unsupported", "value": {"stored_type": "...", "position":
