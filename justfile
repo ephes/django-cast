@@ -65,6 +65,16 @@ test-fast:
 test-slow:
     uv run pytest -m slow
 
+# Audit the exact runtime dependency resolution, including optional extras
+audit-dependencies:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    runtime_requirements="$(mktemp "${TMPDIR:-/tmp}/django-cast-runtime.XXXXXX")"
+    trap 'rm -f "$runtime_requirements"' EXIT
+    # --locked rejects a stale ignored lock instead of auditing an outdated resolution.
+    uv export --locked --all-extras --no-dev --no-hashes --no-emit-project > "$runtime_requirements"
+    uvx --from pip-audit==2.10.1 pip-audit --requirement "$runtime_requirements" --no-deps --disable-pip --strict
+
 # Run a specific test (pass path or node id)
 test-one TARGET:
     uv run pytest {{TARGET}} -v

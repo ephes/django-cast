@@ -379,6 +379,11 @@ dependency and env-var lists are gone. The runtime-dependency audit found every 
 `django-model-utils` on Python ≥ 3.12, so it was left in place (a scratch-venv removal proof is the residual).
 `django-environ` was already removed in the M6 slice.
 
+Fix note (2026-09-07, fixed): the scratch-environment proof confirmed django-model-utils 4.4 and newer no longer
+imports `pkg_resources`, so its published floor now carries that compatibility guarantee and the direct `setuptools`
+dependency is removed. The wider runtime audit also established security floors for the audited dependency stack and
+added scheduled checks for both current runtime resolutions and advisory-fixed releases.
+
 ### M12. Undocumented settings and quickstart template drift — Partially fixed (2026-07-03)
 
 Twelve of the ~51 user-facing `CAST_*` settings are missing from `docs/reference/settings.rst` (including

@@ -1,6 +1,19 @@
 0.2.65 (unreleased)
 -------------------
 
+- Raise supported dependency floors to patched releases for the packages in the
+  runtime security audit. Vulnerable Wagtail patch releases and the unpatched
+  7.1 and 7.2 branches are excluded while preserving patched Wagtail 7.0 LTS,
+  7.3, 7.4, and 8.0 support. Django REST framework, Pillow, pillow-heif,
+  Pygments, requests, urllib3, idna, soupsieve, and sqlparse now have direct
+  published security floors, so applications with older pins must refresh
+  their dependency resolution when upgrading. CI audits both the current
+  resolution and the fixed releases identified by the dependency advisories.
+- Upgrade supported Wagtail releases past its restricted-collection image API
+  disclosure. The regression suite verifies that images below a restricted
+  collection do not expose their title or download URL to anonymous clients.
+- Remove the obsolete direct ``setuptools`` dependency. django-model-utils 4.4
+  or newer no longer relies on ``pkg_resources`` at runtime.
 - Make the legacy ``/api/audios/`` and ``/api/videos/`` collection endpoints
   read-only. Their unsupported create paths failed after writing uploaded files,
   leaving storage objects without database records. They now return ``405`` for

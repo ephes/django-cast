@@ -51,11 +51,19 @@ Create a virtual environment and install all dependencies:
    $ just install
    # or directly: uv sync
 
-This command will:
+The install command will:
 
 - Create a virtual environment if one doesn't exist
 - Install django-cast in editable mode
 - Install all development dependencies
+
+The repository intentionally does not track ``uv.lock`` because its test matrix
+resolves several supported Django and Wagtail branches. After ``uv sync``, audit
+the frozen local runtime resolution, including optional extras, with:
+
+.. code-block:: console
+
+   $ just audit-dependencies
 
 Setting Up the JavaScript Environment
 -------------------------------------
