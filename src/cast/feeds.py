@@ -19,7 +19,7 @@ from wagtail.images.models import Image
 from cast import appsettings
 from cast.http_types import HtmxHttpRequest
 from cast.presenters import render_post_description
-from cast.site_lookup import get_site_specific_page_or_404
+from cast.site_lookup import get_site_specific_unrestricted_page_or_404
 
 from .models import Audio, Blog, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext
@@ -223,7 +223,7 @@ class LatestEntriesFeed(RepositoryMixin):
             if not self.repository.used:
                 blog = self.repository.blog
         if blog is None:
-            blog = get_site_specific_page_or_404(Blog, request, slug=slug)
+            blog = get_site_specific_unrestricted_page_or_404(Blog, request, slug=slug)
         self.object = blog
         return self.object
 
@@ -458,7 +458,7 @@ class PodcastFeed(RepositoryMixin):
             if not self.repository.used and isinstance(self.repository.blog, Podcast):
                 blog = self.repository.blog
         if blog is None:
-            blog = get_site_specific_page_or_404(Podcast, request, slug=slug)
+            blog = get_site_specific_unrestricted_page_or_404(Podcast, request, slug=slug)
         self.object = blog
         self.request = cast(HtmxHttpRequest, request)  # need request for item.serve(request) later on
         return self.object

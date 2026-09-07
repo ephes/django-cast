@@ -22,6 +22,12 @@ The navbar RSS icon links to this page instead of the raw XML feed. Custom
 themes without a ``feed_detail.html`` template automatically fall back to the
 plain theme.
 
+Feed XML endpoints use shared response caches, and the feed detail page is also
+public. These endpoints are available only for live blogs and podcasts without
+Wagtail login, password, or group restrictions on the page or any ancestor.
+Restricted pages return 404; django-cast does not expose authenticated private
+feeds.
+
 The template receives the following context variables:
 
 - ``blog`` — the Blog or Podcast instance

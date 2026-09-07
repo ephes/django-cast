@@ -7,6 +7,7 @@ from xml.etree import ElementTree
 import feedparser
 import pytest
 import pytz
+from django.core.cache import cache
 from django.http import Http404
 from django.urls import reverse
 from wagtail.models import PageViewRestriction
@@ -98,6 +99,81 @@ def use_django_repository():
 
 class TestGeneratedFeeds:
     pytestmark = pytest.mark.django_db
+
+    @pytest.mark.parametrize(
+        ("route_name", "is_podcast"),
+        [
+            ("cast:latest_entries_feed", False),
+            ("cast:latest_entries_atom_feed", False),
+            ("cast:feed_detail", False),
+            ("cast:podcast_feed_rss", True),
+            ("cast:podcast_feed_atom", True),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "restriction_type",
+        [PageViewRestriction.LOGIN, PageViewRestriction.PASSWORD, PageViewRestriction.GROUPS],
+    )
+    @pytest.mark.parametrize("inherited", [False, True], ids=["direct", "inherited"])
+    def test_feed_roots_require_unrestricted_public_page(
+        self,
+        client,
+        blog,
+        podcast,
+        site,
+        use_dummy_cache_backend,
+        route_name,
+        is_podcast,
+        restriction_type,
+        inherited,
+    ):
+        feed_root = podcast if is_podcast else blog
+        restricted_page = site.root_page if inherited else feed_root
+        PageViewRestriction.objects.create(page=restricted_page, restriction_type=restriction_type)
+        kwargs = {"slug": feed_root.slug}
+        if "podcast_feed" in route_name:
+            kwargs["audio_format"] = "m4a"
+
+        response = client.get(reverse(route_name, kwargs=kwargs))
+
+        assert response.status_code == 404
+
+    @pytest.mark.parametrize(
+        ("route_name", "is_podcast"),
+        [
+            ("cast:latest_entries_feed", False),
+            ("cast:latest_entries_atom_feed", False),
+            ("cast:podcast_feed_rss", True),
+            ("cast:podcast_feed_atom", True),
+        ],
+    )
+    def test_cached_feed_is_hidden_after_root_becomes_restricted(self, client, post, episode, route_name, is_podcast):
+        cache.clear()
+        try:
+            entry = episode if is_podcast else post
+            feed_root = entry.blog
+            kwargs = {"slug": feed_root.slug}
+            if is_podcast:
+                kwargs["audio_format"] = "m4a"
+            feed_url = reverse(route_name, kwargs=kwargs)
+            first_response = client.get(feed_url)
+            assert first_response.status_code == 200
+            assert entry.title in first_response.content.decode()
+
+            original_title = entry.title
+            entry.title = "updated after feed was cached"
+            entry.save(update_fields=["title"])
+            cached_response = client.get(feed_url)
+            assert original_title in cached_response.content.decode()
+            assert entry.title not in cached_response.content.decode()
+
+            PageViewRestriction.objects.create(page=feed_root, restriction_type=PageViewRestriction.LOGIN)
+
+            response = client.get(feed_url)
+
+            assert response.status_code == 404
+        finally:
+            cache.clear()
 
     def test_get_latest_entries_feed(self, client, post, use_dummy_cache_backend):
         feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})

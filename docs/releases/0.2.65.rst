@@ -7,6 +7,11 @@
   ``POST`` without storing the upload. New clients should use the permission-aware
   editor media upload endpoints; the separate legacy ``/api/upload_video/``
   endpoint remains available during migration.
+- Prevent RSS, Atom, podcast, and feed detail endpoints from exposing metadata
+  for blogs or podcasts protected by direct or inherited Wagtail login,
+  password, or group restrictions. These shared-cache endpoints now serve only
+  unrestricted public feed roots.
+
 - Fix stored cross-site scripting through editor API rich-text writes. Paragraphs
   and nested custom rich-text blocks now pass through Wagtail's feature-based
   HTML conversion before validation. Raw-HTML custom inputs are rejected;
