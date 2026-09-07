@@ -646,8 +646,9 @@ django-cast validates the file container or runs ffmpeg/ffprobe. Defaults to
 CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
 =====================================
 
-Time-to-live, in seconds, for the editor API's per-user audio/video upload
-lock. Defaults to ``7200`` (2 hours). The lock is stored in Django's default
+Time-to-live, in seconds, for the shared editor API and legacy
+``/api/upload_video/`` per-user audio/video upload lock. Defaults to ``7200``
+(2 hours). The lock is stored in Django's default
 cache and is owner-token protected so one request does not release a successor
 lock. Multi-worker deployments need a shared cache backend, such as Redis or
 Memcached; Django's ``LocMemCache`` only coordinates within one process.
@@ -656,8 +657,9 @@ Memcached; Django's ``LocMemCache`` only coordinates within one process.
 CAST_EDITOR_MEDIA_PROBE_SECONDS
 ===============================
 
-Cumulative synchronous ffprobe/ffmpeg budget, in seconds, for one editor API
-audio or video upload after the file has been received. Defaults to ``10``.
+Cumulative synchronous ffprobe/ffmpeg budget, in seconds, for one editor API or
+legacy ``/api/upload_video/`` audio/video upload after the file has been
+received. Defaults to ``10``.
 Required audio duration probing failures are returned as ``probe_timeout`` or
 ``probe_failed``; optional audio chapter extraction and video poster generation
 degrade without failing the upload.
@@ -667,7 +669,8 @@ CAST_EDITOR_SCOPES
 
 Mapping from editor API permission buckets to OAuth/IndieAuth scope strings.
 Defaults to one write bucket accepting ``"write"``, ``"create"``, or
-``"update"``, and one publish bucket accepting ``"publish"``. django-cast does
+``"update"``, one publish bucket accepting ``"publish"``, and one delete bucket
+accepting ``"delete"``. django-cast does
 not split create and update internally, so the standard IndieAuth ``create`` and
 ``update`` scopes both satisfy the write requirement; ``media`` and other
 issuer-specific aliases are intentionally not bundled and can be mapped here by
@@ -678,7 +681,12 @@ the site.
     CAST_EDITOR_SCOPES = {
         "write": {"write", "create", "update", "posts:write"},
         "publish": {"publish", "posts:publish"},
+        "delete": {"delete", "media:delete"},
     }
+
+Overrides replace the complete mapping. Sites that set ``CAST_EDITOR_SCOPES``
+must add a ``delete`` bucket before using scoped tokens with legacy audio/video
+deletion. A missing bucket fails closed with ``403 Forbidden``.
 
 ******************
 Faceted Navigation

@@ -129,6 +129,16 @@ def test_video_form_accepts_valid_mp4_upload():
     assert form.is_valid()
 
 
+def test_video_form_commit_false_defers_derivation(mocker):
+    derive = mocker.patch("cast.forms.save_video_with_derivations")
+    form = VideoForm({}, {"original": upload("clip.mp4", MP4_HEADER, "video/mp4")})
+    assert form.is_valid()
+
+    video = form.save(commit=False)
+    assert video.pk is None
+    derive.assert_not_called()
+
+
 def test_video_form_accepts_valid_mov_upload():
     form = VideoForm({}, {"original": upload("clip.mov", MOV_HEADER, "video/quicktime")})
 
@@ -201,9 +211,9 @@ def test_video_save_rejects_invalid_upload_before_ffmpeg(user, mocker):
 
 
 @pytest.mark.django_db
-def test_api_video_upload_rejects_invalid_media_before_poster(client, user, mocker):
+def test_api_video_upload_rejects_invalid_media_before_poster(client, admin_user, mocker):
     create_poster = mocker.patch("cast.models.video.Video._create_poster")
-    client.login(username=user.username, password=user._password)
+    client.login(username=admin_user.username, password=admin_user._password)
 
     response = client.post(
         reverse("cast:api:upload_video"),

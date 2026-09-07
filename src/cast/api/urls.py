@@ -39,7 +39,7 @@ urlpatterns: list[Any] = [
     re_path(r"^videos/(?P<pk>\d+)/?$", views.VideoDetailView.as_view(), name="video_detail"),
     path(
         "upload_video/",
-        views.VideoCreateView.as_view(),
+        editor_media.LegacyVideoCreateView.as_view(),
         name="upload_video",
     ),
     # audio

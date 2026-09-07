@@ -1,7 +1,7 @@
 """Legacy django-cast API surface with frozen response contracts.
 
 This module intentionally preserves its existing response shapes for current
-clients, including ``VideoCreateView`` returning a bare-text ``"<pk>"`` body with
+clients, including ``cast.api.editor.media.LegacyVideoCreateView`` returning a bare-text ``"<pk>"`` body with
 ``201 Created``. New clients should use ``cast.api.editor.*`` endpoints, which
 provide structured errors, scoped authorization, and ``If-Match`` revision
 conflict handling. This freeze follows the 2026-06-25 media-detail plan.
@@ -13,16 +13,15 @@ import logging
 from collections import OrderedDict
 from typing import Any, cast
 
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.cache import patch_cache_control, patch_vary_headers
-from django.views.generic import CreateView
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -34,7 +33,7 @@ from wagtail.models import Site
 
 from ..audio_access import authorize_audio_access, page_grants_audio_access, page_is_unrestricted_public
 from ..filters import PostFilterset
-from ..forms import SelectThemeForm, VideoForm
+from ..forms import SelectThemeForm
 from ..http_types import HtmxHttpRequest
 from ..models import (
     Audio,
@@ -57,7 +56,7 @@ from .serializers import (
     SimpleBlogSerializer,
     VideoSerializer,
 )
-from .viewmixins import AddRequestUserMixin, FileUploadResponseMixin
+from .editor.scopes import HasEditorScope
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +81,6 @@ def api_root(request: Request) -> Response:
     return Response(OrderedDict(root_api_urls))
 
 
-class VideoCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):  # type: ignore
-    model = Video
-    form_class = VideoForm
-    user_field_name = "user"
-
-
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 40
     page_size_query_param = "pageSize"
@@ -107,11 +100,21 @@ class VideoListView(generics.ListAPIView):
 
 class VideoDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = VideoSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, HasEditorScope)
+    required_scopes = {"GET": None, "DELETE": "delete"}
 
     def get_queryset(self) -> QuerySet[Video]:
         user = self.request.user
         return Video.objects.filter(user=user)
+
+    def perform_destroy(self, instance: Video) -> None:
+        from .editor.media import video_permission_policy
+
+        if not self.request.user.has_perm(
+            "wagtailadmin.access_admin"
+        ) or not video_permission_policy.user_has_permission_for_instance(self.request.user, "delete", instance):
+            raise PermissionDenied("You do not have permission to delete this video.")
+        instance.delete()
 
 
 class AudioListView(generics.ListAPIView):
@@ -127,11 +130,21 @@ class AudioListView(generics.ListAPIView):
 
 class AudioDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = AudioSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, HasEditorScope)
+    required_scopes = {"GET": None, "DELETE": "delete"}
 
     def get_queryset(self) -> QuerySet[Audio]:
         user = self.request.user
         return Audio.objects.filter(user=user)
+
+    def perform_destroy(self, instance: Audio) -> None:
+        from .editor.media import audio_permission_policy
+
+        if not self.request.user.has_perm(
+            "wagtailadmin.access_admin"
+        ) or not audio_permission_policy.user_has_permission_for_instance(self.request.user, "delete", instance):
+            raise PermissionDenied("You do not have permission to delete this audio.")
+        instance.delete()
 
 
 class AudioPodloveDetailView(generics.RetrieveAPIView):

@@ -48,6 +48,27 @@ read-only. ``POST`` requests return ``405 Method Not Allowed``. Use
 permission-checked uploads. Existing legacy video clients can continue using
 ``POST /api/upload_video/`` while they migrate.
 
+Legacy mutations now apply scoped-token and Wagtail permission boundaries.
+``POST /api/upload_video/`` requires Wagtail admin
+access, an available video collection with add permission, and the ``write``
+scope when the authenticating token advertises scopes. It also shares the editor
+audio/video per-user upload lock and cumulative probe budget. If more than one
+upload collection is available, submit its integer ID as ``collection``.
+``DELETE /api/audios/{id}/`` and ``DELETE /api/videos/{id}/`` retain owner
+isolation and additionally require Wagtail admin access, delete permission for
+the object's collection, and the distinct ``delete`` scope for scoped tokens.
+For deletes, an empty, malformed, ``write``-only, or otherwise insufficient
+token scope is denied before mutation. Session authentication and tokens without any scope
+metadata defer to Wagtail permissions.
+
+This hardening changes legacy upload error contracts: unauthenticated requests
+return ``403`` instead of redirecting to login, validation errors use the editor
+``validation_error`` envelope, and a busy upload lock returns ``429`` with code
+``rate_limited``.
+The compatibility endpoint keeps ``title`` optional even when the configured
+video form normally requires it. Other site-specific required video-form fields
+remain required; sites using them should migrate clients to the editor endpoint.
+
 Endpoints
 ---------
 

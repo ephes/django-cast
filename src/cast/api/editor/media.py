@@ -9,6 +9,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from django.core.cache import cache
 from django.db.models import Q, QuerySet
+from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -40,6 +41,8 @@ AUDIO_FILE_FIELDS = ("m4a", "mp3", "oga", "opus")
 
 
 class CollectionMemberForm(Protocol):
+    fields: dict[str, Any]
+
     def is_valid(self) -> bool: ...  # pragma: no cover
 
     def save(self, commit: bool = ...) -> Any: ...  # pragma: no cover
@@ -416,7 +419,7 @@ class EditorVideoListCreateView(EditorMediaListMixin, EditorAPIView):
         form_data = request.data.copy()
         form_data["collection"] = str(collection.pk)
         form_class = cast(CollectionMemberFormClass, get_video_form())
-        form = form_class(form_data, request.FILES, instance=video, user=request.user)
+        form = self._video_form(form_class, form_data, request, video)
         if not form.is_valid():
             raise EditorValidationError(_form_errors(form))
         with media_probe_budget(_editor_media_probe_seconds()):
@@ -426,6 +429,32 @@ class EditorVideoListCreateView(EditorMediaListMixin, EditorAPIView):
                 return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
             return _flat_error("post_save_permission_denied", "Uploaded video is not selectable.", http_status=403)
         return Response(serialize_video(video, user=request.user), status=status.HTTP_201_CREATED)
+
+    def _video_form(
+        self, form_class: CollectionMemberFormClass, form_data: Any, request: Request, video: Video
+    ) -> CollectionMemberForm:
+        return form_class(form_data, request.FILES, instance=video, user=request.user)
+
+
+class LegacyVideoCreateView(EditorVideoListCreateView):
+    """Permission-aware compatibility upload returning the historical bare primary key."""
+
+    http_method_names = ["post", "options"]
+    required_scopes = {"POST": "write"}
+
+    def _video_form(
+        self, form_class: CollectionMemberFormClass, form_data: Any, request: Request, video: Video
+    ) -> CollectionMemberForm:
+        form = form_class(form_data, request.FILES, instance=video, user=request.user)
+        if "title" in form.fields:
+            form.fields["title"].required = False
+        return form
+
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:  # type: ignore[override]
+        response = super().post(request, *args, **kwargs)
+        if response.status_code != status.HTTP_201_CREATED:
+            return response
+        return HttpResponse(str(response.data["id"]), status=status.HTTP_201_CREATED, content_type="text/plain")
 
 
 def _with_upload_lock(user: Any, callback: Callable[[], Response]) -> Response:

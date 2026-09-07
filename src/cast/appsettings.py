@@ -54,6 +54,7 @@ CAST_SETTING_REGISTRY: dict[str, CastSetting] = {
             # NOT bundled here: a site whose issuer uses them maps them in via this setting.
             "write": {"write", "create", "update"},
             "publish": {"publish"},
+            "delete": {"delete"},
         }
     ),
     "CAST_PRIVATE_MEDIA_ROOT": CastSetting(""),

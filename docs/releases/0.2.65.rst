@@ -29,6 +29,22 @@
   with this error must create the row referenced by ``SITE_ID`` or correct
   ``SITE_ID`` to reference an existing row.
 
+- Harden the remaining legacy media mutations. Video uploads now require
+  Wagtail admin and collection upload permissions, honor explicit token write
+  scopes, and share the editor upload lock and probe budget while preserving the
+  historical bare-primary-key success response. Owner-only legacy audio/video
+  deletes now also require Wagtail admin access, collection delete permission, and a distinct
+  ``delete`` scope when a token advertises scopes; empty, malformed, and
+  write-only scoped tokens are denied.
+  Existing ``CAST_EDITOR_SCOPES`` overrides must add the new ``delete`` bucket;
+  a missing bucket fails closed with ``403``. Legacy upload errors now use editor API JSON
+  envelopes, unauthenticated uploads return ``403`` instead of a login redirect,
+  and lock contention returns ``429``. Sites with multiple available video
+  collections must send ``collection`` or receive the ``ambiguous`` validation
+  error.
+  Custom imports must replace the removed ``cast.api.views.VideoCreateView``
+  with ``cast.api.editor.media.LegacyVideoCreateView``. The obsolete
+  ``cast.api.viewmixins`` module and its upload mixins were also removed.
 - Create a fresh RSS or Atom feed renderer for every cache miss, preventing
   concurrent requests from mixing blog, request, repository, or podcast-format
   state while preserving generated-response caching.

@@ -486,6 +486,10 @@ Resolution:
   create methods return ``405``. Those paths omitted the required owner and could write a storage object before the
   database insert failed. Supported editor uploads remain the migration target; ``/api/upload_video/`` remains for
   existing legacy clients.
+- The retained legacy video upload now uses editor-equivalent Wagtail admin/collection permission checks, token write
+  scope enforcement, the shared per-user upload lock, and the cumulative probe budget. Owner-only legacy audio/video
+  deletion now also requires Wagtail admin access, collection delete permission, and an explicit delete scope for
+  scoped tokens.
 
 ### SEC-2026-013: `media_stale --delete` can delete managed private files or unrelated storage keys
 
