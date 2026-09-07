@@ -42,22 +42,22 @@ urlpatterns: list[Any] = [
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",
-        view=public_feed(cache_page(5 * 60)(feeds.LatestEntriesFeed())),
+        view=public_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.LatestEntriesFeed))),
         name="latest_entries_feed",
     ),
     path(
         "<slug:slug>/feed/atom.xml",
-        view=public_feed(cache_page(5 * 60)(feeds.LatestEntriesAtomFeed())),
+        view=public_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.LatestEntriesAtomFeed))),
         name="latest_entries_atom_feed",
     ),
     path(
         "<slug:slug>/feed/podcast/<audio_format>/rss.xml",
-        view=public_feed(cache_page(5 * 60)(feeds.RssPodcastFeed())),
+        view=public_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.RssPodcastFeed))),
         name="podcast_feed_rss",
     ),
     path(
         "<slug:slug>/feed/podcast/<audio_format>/atom.xml",
-        view=public_feed(cache_page(5 * 60)(feeds.AtomPodcastFeed())),
+        view=public_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.AtomPodcastFeed))),
         name="podcast_feed_atom",
     ),
     # Meta views like twitter player cards etc

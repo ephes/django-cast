@@ -193,7 +193,10 @@ Caching
 
 - **Repository-ready data**: repositories can produce JSON-serializable dicts (useful for caching, if configured)
 - **Rendition cache**: Generated image sizes
-- **Feed cache**: Feed endpoints are wrapped with Django's ``cache_page`` (see ``src/cast/urls.py``)
+- **Feed cache**: Feed endpoints are wrapped with Django's ``cache_page`` (see
+  ``src/cast/urls.py``). Cache misses create request-local feed instances so
+  the renderer's request, page, repository, and audio-format state is never
+  shared between concurrent requests.
 
 Media Handling
 --------------

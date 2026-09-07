@@ -7,6 +7,10 @@
   ``POST`` without storing the upload. New clients should use the permission-aware
   editor media upload endpoints; the separate legacy ``/api/upload_video/``
   endpoint remains available during migration.
+- Create a fresh RSS or Atom feed renderer for every cache miss, preventing
+  concurrent requests from mixing blog, request, repository, or podcast-format
+  state while preserving generated-response caching.
+
 - Prevent RSS, Atom, podcast, and feed detail endpoints from exposing metadata
   for blogs or podcasts protected by direct or inherited Wagtail login,
   password, or group restrictions. These shared-cache endpoints now serve only

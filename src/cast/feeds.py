@@ -1,11 +1,13 @@
 import logging
+from collections.abc import Callable
 from datetime import datetime, time
+from functools import update_wrapper
 from typing import Any, Protocol, cast
 
 import django
 from django.contrib.syndication.views import Feed
 from django.db.models import Model, QuerySet
-from django.http import Http404, HttpRequest
+from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.feedgenerator import (
     Atom1Feed,
     Rss201rev2Feed,
@@ -175,6 +177,15 @@ class RepositoryMixin(Feed):
         else:
             domain = "localhost"
         sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain=domain, name=domain)
+
+
+def request_local_feed(feed_class: type[RepositoryMixin]) -> Callable[..., HttpResponse]:
+    """Return a view that creates one mutable feed instance for each cache miss."""
+
+    def view(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        return feed_class()(request, *args, **kwargs)
+
+    return update_wrapper(view, feed_class, updated=())
 
 
 class AtomStylesheetsMixin:
