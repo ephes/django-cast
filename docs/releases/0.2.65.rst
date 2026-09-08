@@ -1,6 +1,9 @@
 0.2.65 (unreleased)
 -------------------
 
+- Declare Python 3.15 support and add it to the CI compatibility matrix with
+  prerelease interpreter support. Matrix jobs run independently so a failure
+  on one Python version does not cancel the others.
 - Enforce Audio chooser permissions throughout transcript administration.
   Transcript forms reject audio from inaccessible collections, and existing
   transcripts linked to such audio are hidden from admin lists and denied at

@@ -101,5 +101,9 @@ Before you submit a pull request, check that it meets these guidelines:
 2. If the pull request adds functionality, the docs should be updated. Put
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
-3. The pull request should work for Python 3.11, 3.12, 3.13, and 3.14.
+3. The pull request should work for Python 3.11, 3.12, 3.13, 3.14, and 3.15.
+   CI tests Python 3.15 allowing prerelease interpreters through
+   ``actions/setup-python``'s ``allow-prereleases: true`` input. This selects
+   release candidates before the final release and stable versions afterward;
+   it does not enable prerelease package dependencies.
 4. Submit pull requests to the ``develop`` branch, not ``main``.

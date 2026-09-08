@@ -198,9 +198,10 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         # Python 3.14 already runs the full just-check equivalent in python-quality.
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.15"]
     steps:
       - uses: actions/checkout@v4
 
@@ -213,6 +214,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
 
       - name: Install ffmpeg
         uses: FedericoCarboni/setup-ffmpeg@v2
