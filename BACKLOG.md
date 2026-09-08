@@ -15,6 +15,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
+- [ ] Triage remaining security hardening observations
+  - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
+  - Scope: manual transcript upload size limits, admin media probe/concurrency
+    limits, publication approval binding, and author self-edit/delete policy
+    after page access revocation.
+  - Done when: each observation has a concrete implementation plan or a recorded
+    decision to retain the current behavior with its constraints documented.
+
 - [ ] Audit existing editor API rich text and historical revisions
   - Design record:
     [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
