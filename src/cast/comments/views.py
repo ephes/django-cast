@@ -27,7 +27,7 @@ from django_comments.views.comments import CommentPostBadRequest
 from django_comments.views.utils import next_redirect
 
 from . import appsettings, author_edits
-from .utils import comments_are_open, get_comment_context_data, get_comment_template_name
+from .utils import comment_target_is_accessible, comments_are_open, get_comment_context_data, get_comment_template_name
 
 if TYPE_CHECKING:
     from django.forms.boundfield import BoundField
@@ -55,6 +55,8 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
         return error
     if not comments_are_open(target):
         return CommentPostBadRequest("Comments are closed for this object.")
+    if not comment_target_is_accessible(target, request):
+        return HttpResponseForbidden("Comments are unavailable for this object.")
 
     is_preview = "preview" in data
     form = django_comments.get_form()(target, data=data, is_preview=is_preview)
@@ -333,6 +335,8 @@ def post_comment(request: HttpRequest, next: str | None = None, using: str | Non
         return error
     if not comments_are_open(target):
         return CommentPostBadRequest("Comments are closed for this object.")
+    if not comment_target_is_accessible(target, request):
+        return HttpResponseForbidden("Comments are unavailable for this object.")
     parent_id = request.POST.get("parent")
     if parent_id:
         data = request.POST.copy()
