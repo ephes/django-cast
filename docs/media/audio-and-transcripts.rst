@@ -175,6 +175,26 @@ feed:
 * `vtt` - WebVTT, a subtitle format in plain text
 * `dote` - DOTE, a json transcript format
 
+Transcript admin permissions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Wagtail transcript administration requires the relevant Transcript collection
+permissions and permission to **choose** the linked Audio. Add and upload forms
+only offer audio the current user may choose, and reject forbidden audio IDs
+submitted directly. Editing a transcript cannot retain or replace its audio
+with an object the user is not allowed to choose.
+
+Existing transcripts linked to inaccessible audio are also excluded from the
+user's transcript admin lists and choosers; direct admin access is denied.
+Grant delegated transcript editors Audio choose permission on the required
+collections as well as their Transcript permissions. A user with access to
+both collections can manage a transcript whose collection differs from its
+audio's collection. This change does not move existing objects or rewrite
+their relationships.
+
+Transcript output and storage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Podlove, WebVTT, and DOTe transcript artifacts are public transcript output.
 They are used by transcript pages, podcast feeds, podcast clients, and the
 custom audio player. Public JSON, WebVTT, PodcastIndex, and HTML transcript

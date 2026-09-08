@@ -20,7 +20,9 @@ from django.utils.translation import gettext_lazy as _
 from wagtail.admin import widgets
 from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
-from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
+from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
+
+from .media_permissions import audio_permission_policy, transcript_permission_policy
 
 from .media_validation import validate_audio_upload, validate_video_upload
 from .media_derivation import (
@@ -196,7 +198,7 @@ class AudioForm(BaseCollectionMemberForm):
     """
 
     chaptermarks = ChapterMarksField(widget=forms.Textarea, required=False)
-    permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
+    permission_policy = audio_permission_policy
 
     class Meta:
         model = Audio
@@ -286,7 +288,13 @@ class TranscriptForm(BaseCollectionMemberForm):
     fields, and WebVTT files must start with the ``WEBVTT`` header.
     """
 
-    permission_policy = CollectionPermissionPolicy(Transcript)
+    permission_policy = transcript_permission_policy
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        user = kwargs.get("user")
+        super().__init__(*args, **kwargs)
+        if user is not None:
+            self.fields["audio"].queryset = audio_permission_policy.instances_user_has_permission_for(user, "choose")
 
     class Meta:
         model = Transcript

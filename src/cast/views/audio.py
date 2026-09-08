@@ -5,17 +5,15 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from modelsearch.backends.base import BaseSearchResults
-from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ..forms import AudioForm
 from ..models import Audio
+from ..media_permissions import audio_permission_policy
 from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from ..voxhelm import voxhelm_configured
 from . import AuthenticatedHttpRequest
 from .media import MediaAdminConfig, MediaAdminViews
 from .voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_audio
-
-audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
 
 
 def delete_old_audio_files(audio: Audio, changed_audio_files: set[str]) -> None:

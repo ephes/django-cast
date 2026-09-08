@@ -12,7 +12,6 @@ from django.template.loader import get_template
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin import messages
-from wagtail.permission_policies.collections import CollectionPermissionPolicy
 from wagtail.search.backends import get_search_backends
 
 from ..forms import (
@@ -38,6 +37,7 @@ from ..models import (
 )
 from ..audio_access import authorize_transcript_access, request_may_view_page
 from ..models.contributors import ContributorVoiceReference
+from ..media_permissions import transcript_permission_policy
 from ..site_lookup import get_site_specific_page_or_404
 from ..transcripts import editing, parsing
 from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
@@ -56,7 +56,6 @@ from .media import MediaAdminConfig, MediaAdminViews
 
 
 TRANSCRIPT_FALLBACK_THEME = "plain"
-transcript_permission_policy = CollectionPermissionPolicy(Transcript)
 
 create_voice_reference_from_candidate = editing.create_voice_reference_from_candidate
 get_speaker_mapping_context = editing.get_speaker_mapping_context

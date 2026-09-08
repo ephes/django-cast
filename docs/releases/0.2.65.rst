@@ -1,6 +1,11 @@
 0.2.65 (unreleased)
 -------------------
 
+- Enforce Audio chooser permissions throughout transcript administration.
+  Transcript forms reject audio from inaccessible collections, and existing
+  transcripts linked to such audio are hidden from admin lists and denied at
+  direct admin URLs. Delegated transcript editors now need Audio choose
+  permission as well as the relevant Transcript collection permissions.
 - Raise supported dependency floors to patched releases for the packages in the
   runtime security audit. Vulnerable Wagtail patch releases and the unpatched
   7.1 and 7.2 branches are excluded while preserving patched Wagtail 7.0 LTS,
