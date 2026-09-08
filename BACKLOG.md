@@ -15,6 +15,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
+- [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
+  - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+  - Scope: prove Post and Episode editing through Wagtail 8's preview API, compare it with the existing editor
+    contract, and identify upstream functionality that can replace Cast implementation without losing automation
+    safeguards or podcast/media behavior. Daybook is owned by us and can change in a coordinated migration;
+    preserving its current API contract is not a prerequisite.
+  - Done when: a tested compatibility matrix and architecture decision identify what to reuse, retain, or report
+    upstream, with concrete follow-up slices and an explicit Wagtail 7 support and client migration policy.
+
 - [ ] Triage remaining security hardening observations
   - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
   - Scope: manual transcript upload size limits, admin media probe/concurrency
