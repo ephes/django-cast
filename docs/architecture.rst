@@ -143,10 +143,14 @@ cyclic dependencies.
   stores the task path in database rows (moving it would strand queued work
   across an upgrade), and ``@task(backend="cast_transcripts")`` resolves — and
   *fails* — its TASKS backend **at import time** when that backend is not
-  configured. The function-body import of the completion task inside
-  ``enqueue_audio_transcript_generation`` is therefore the load-bearing
+  configured. The function-body import of the completion task in
+  ``service._resolve_completion_task``, called first thing by
+  ``enqueue_audio_transcript_generation``, is therefore the load-bearing
   optionality seam: installs that never enqueue never need the ``cast_transcripts``
-  backend.
+  backend. It runs before any remote submission or database write, so a missing
+  backend raises ``ImproperlyConfigured`` instead of stranding a submitted job
+  behind a queued generation row; the ``cast.E009`` system check reports the
+  missing backend up front.
 
   There is intentionally **no** ``[voxhelm]`` packaging extra. ``django-tasks``
   stays a hard dependency (it is lightweight, and making it optional would trade

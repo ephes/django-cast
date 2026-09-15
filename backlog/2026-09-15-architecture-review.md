@@ -286,6 +286,12 @@ documented in tiers that match the code. The remaining problems are concentrated
   `enqueue_audio_transcript_generation`, before any remote work, in a `try` that raises without touching the DB,
   keeping `.enqueue()` inside the existing guard; add a `cast.E009` check erroring when Voxhelm is configured but
   `cast_transcripts` is absent, hinting at `docs/operations/deployment.rst`.
+  Fix note (2026-09-16, fixed): `enqueue_audio_transcript_generation` now calls `_resolve_completion_task()` before
+  the first database read, which keeps the function-body import (the optionality seam) but wraps it so a missing
+  backend raises `ImproperlyConfigured` with no remote submission and no row written; `.enqueue()` stays inside the
+  `mark_failed` guard. `cast.checks.check_voxhelm_transcripts_task_backend` adds `cast.E009`, reading only Django
+  settings and the environment so the check needs no database, and `docs/operations/deployment.rst` documents it.
+  Not done: already-orphaned queued rows are not detected or retried.
 - **X2. Test settings point `TEMPLATES` DIRS into `src/cast/cast` and theme tests write into the package tree**
   (medium, tooling, prior M6) — `tests/settings.py:12`. `APPS_DIR = ROOT_DIR / "cast"` resolves to `src/cast/cast`,
   which does not exist in git (an M6 leftover), and `tests/theme_test.py::create_new_theme` takes the first loader

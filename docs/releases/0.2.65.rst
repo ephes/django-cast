@@ -97,3 +97,11 @@
 - Make the known-speaker quick-apply action publish confident suggestions only.
   Uncertain hand-offs remain unchanged until an editor reviews them instead of
   being filled from a surrounding confident speaker automatically.
+- Resolve the ``cast_transcripts`` Django Tasks backend before submitting a
+  Voxhelm transcription job. A deployment without that ``TASKS`` entry previously
+  submitted the remote job and saved a queued generation row, then failed on the
+  task import, leaving the row permanently queued so every retry reported
+  "already in progress". Transcript generation now fails up front with a
+  configuration message and writes nothing. The new ``cast.E009`` system check
+  reports the missing backend when Voxhelm is configured through Django settings
+  or environment variables.

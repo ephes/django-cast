@@ -68,6 +68,15 @@ Use a distinct ``--worker-id`` per deployed site, for example
 ``python-podcast-transcripts`` for a second site sharing the same codebase.
 The default task backend should remain immediate; only the
 ``cast_transcripts`` backend should point at ``django_tasks_db.DatabaseBackend``.
+``python manage.py check`` reports ``cast.E009`` when Voxhelm credentials
+resolve from Django settings or the environment but ``settings.TASKS`` has no
+``cast_transcripts`` entry. django-cast resolves that backend before submitting a
+transcription job, so a missing entry makes transcript generation fail
+immediately with a configuration message instead of leaving a queued generation
+behind an unfinished remote job. The check reads only Django settings and
+environment variables, because the site-scoped Wagtail ``Voxhelm settings``
+require database access; configure the backend even when the API token lives
+only in Wagtail admin.
 The web process and transcript worker must both receive the Voxhelm
 configuration used for job submission and artifact downloads. For
 deployment-managed secrets, set ``CAST_VOXHELM_API_BASE`` and

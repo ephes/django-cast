@@ -302,3 +302,40 @@ def check_cast_required_middleware(
             id="cast.E003",
         )
     ]
+
+
+@register("cast")
+def check_voxhelm_transcripts_task_backend(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Require the ``cast_transcripts`` TASKS backend once Voxhelm is configured.
+
+    ``cast.voxhelm_tasks`` resolves that backend at import time, so without it the
+    first transcript enqueue fails after the remote job was already submitted.
+    Only the Django-settings and environment layers are inspected: reading the
+    site-scoped ``Voxhelm settings`` model would need database access, which
+    system checks must not require.
+    """
+    # Imported lazily so ``django.setup()`` (which runs ``CastConfig.ready()``)
+    # does not pull in the voxhelm package.
+    from cast.voxhelm.settings import voxhelm_configured
+
+    if not voxhelm_configured():
+        return []
+    if "cast_transcripts" in getattr(settings, "TASKS", {}):
+        return []
+    return [
+        Error(
+            'Voxhelm is configured but settings.TASKS has no "cast_transcripts" backend, '
+            "so queueing transcript completion will fail.",
+            hint=(
+                'Add a "cast_transcripts" entry to settings.TASKS as described in the '
+                '"Transcript Worker" section of the deployment documentation. This check only '
+                "reads Django settings and environment variables, so a site that configures "
+                "Voxhelm solely through Wagtail 'Voxhelm settings' needs the backend as well."
+            ),
+            id="cast.E009",
+        )
+    ]

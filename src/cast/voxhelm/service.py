@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from wagtail.models import Site
 
@@ -403,6 +404,26 @@ class VoxhelmTranscriptService:
             raise
 
 
+def _resolve_completion_task() -> Any:
+    """Import the transcript completion task, reporting a missing TASKS backend as configuration.
+
+    The import stays inside a function on purpose: it is the optionality seam
+    described in ``docs/architecture.rst``, because ``@task(backend="cast_transcripts")``
+    resolves — and fails — its TASKS backend at import time. It is resolved before
+    any remote submission or database write so a missing backend cannot strand a
+    submitted Voxhelm job behind a ``QUEUED`` generation row. ``django_tasks``
+    raises ``InvalidTaskBackendError``, a subclass of ``ImproperlyConfigured``,
+    which the Wagtail admin views already report as a configuration problem.
+    """
+    try:
+        from ..voxhelm_tasks import complete_transcript_generation
+    except ImproperlyConfigured as exc:
+        raise ImproperlyConfigured(
+            f'The "cast_transcripts" TASKS backend is required to queue transcript completion: {exc}'
+        ) from exc
+    return complete_transcript_generation
+
+
 def enqueue_audio_transcript_generation(
     *,
     audio: Audio,
@@ -413,6 +434,7 @@ def enqueue_audio_transcript_generation(
     if audio.pk is None:
         raise VoxhelmError("Audio must be saved before requesting a transcript.")
 
+    complete_transcript_generation = _resolve_completion_task()
     generation = get_transcript_generation(audio)
     if generation is not None and generation.is_active:
         return TranscriptEnqueueResult(generation=generation, enqueued=False)
@@ -451,9 +473,6 @@ def enqueue_audio_transcript_generation(
         site=site,
         requested_by=requested_by,
     )
-    # Deliberately imported at enqueue time: importing voxhelm_tasks requires the "cast_transcripts" TASKS backend to be configured (django-tasks resolves it at decoration).
-    from ..voxhelm_tasks import complete_transcript_generation
-
     try:
         task_result = complete_transcript_generation.enqueue(generation.pk)
     except Exception as exc:

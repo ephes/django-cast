@@ -1,6 +1,7 @@
 # ruff: noqa: F401,F811,I001
 import io
 import json
+import sys
 from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.error import URLError
@@ -333,6 +334,26 @@ def test_enqueue_audio_transcript_generation_requires_saved_audio():
 
     with pytest.raises(VoxhelmError, match="must be saved"):
         enqueue_audio_transcript_generation(audio=unsaved_audio)  # type: ignore[arg-type]
+
+
+@pytest.mark.django_db
+def test_enqueue_audio_transcript_generation_requires_transcripts_task_backend(mocker, audio, site, settings):
+    """A missing "cast_transcripts" backend must fail before any remote job or row exists."""
+    settings.TASKS = {"default": {"BACKEND": "django_tasks.backends.immediate.ImmediateBackend"}}
+    service_cls = mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService")
+    # cast.voxhelm_tasks resolves its TASKS backend at import time, so evict the
+    # already-imported module to reproduce a fresh misconfigured process.
+    saved_module = sys.modules.pop("cast.voxhelm_tasks", None)
+    try:
+        with pytest.raises(ImproperlyConfigured, match="cast_transcripts"):
+            enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=audio.user)
+    finally:
+        sys.modules.pop("cast.voxhelm_tasks", None)
+        if saved_module is not None:
+            sys.modules["cast.voxhelm_tasks"] = saved_module
+
+    service_cls.assert_not_called()
+    assert not TranscriptGeneration.objects.filter(audio=audio).exists()
 
 
 @pytest.mark.django_db
