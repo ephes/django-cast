@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 
 from django.core.exceptions import ValidationError
+from django.db.models.fields.files import FieldFile
 from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -557,17 +558,27 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     return _views.chooser_upload(request)
 
 
+def _read_transcript_artifact(field: FieldFile) -> str | None:
+    """Return the artifact content or None if the field has a name but no file in storage."""
+    try:
+        with field.open("r") as file:
+            return cast(str, file.read())
+    except OSError:
+        return None
+
+
 def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if transcript.podlove:
-        # Open the file and load its contents as JSON
-        with transcript.podlove.open("r") as file:
-            try:
-                data = json.load(file)  # assumes the file content is JSON
-            except json.JSONDecodeError:
-                return HttpResponse("Invalid JSON format in podlove file", status=400)
+        content = _read_transcript_artifact(transcript.podlove)
+        if content is None:
+            return HttpResponse("Podlove file missing", status=404)
+        try:
+            data = json.loads(content)  # assumes the file content is JSON
+        except json.JSONDecodeError:
+            return HttpResponse("Invalid JSON format in podlove file", status=400)
         episode = public_episode_from_request(request, transcript=transcript)
         data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
         data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
@@ -581,22 +592,22 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if not transcript.dote:
         return HttpResponse("podcastindex JSON file not available", status=404)
-    try:
-        episode = public_episode_from_request(request, transcript=transcript)
-        with transcript.dote.open("r") as file:
-            dote_data = json.load(file)
-        if not dote_data:
-            return JsonResponse(dote_data)
-        dote_data = apply_public_speaker_mapping_to_dote_data(dote_data, transcript, episode=episode)
-        dote_data = sanitize_dote_data(
-            dote_data,
-            strict_public_speaker_labels_for_transcript(transcript, episode=episode),
-        )
-        return JsonResponse(convert_dote_to_podcastindex_transcript(dote_data))
-    except (FileNotFoundError, OSError):
+    content = _read_transcript_artifact(transcript.dote)
+    if content is None:
         return HttpResponse("podcastindex JSON file missing", status=404)
+    episode = public_episode_from_request(request, transcript=transcript)
+    try:
+        dote_data = json.loads(content)
     except json.JSONDecodeError:
         return HttpResponse("Invalid JSON format in dote file", status=400)
+    if not dote_data:
+        return JsonResponse(dote_data)
+    dote_data = apply_public_speaker_mapping_to_dote_data(dote_data, transcript, episode=episode)
+    dote_data = sanitize_dote_data(
+        dote_data,
+        strict_public_speaker_labels_for_transcript(transcript, episode=episode),
+    )
+    return JsonResponse(convert_dote_to_podcastindex_transcript(dote_data))
 
 
 def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
@@ -604,9 +615,9 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
     transcript = get_object_or_404(Transcript, pk=pk)
     authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if transcript.vtt:
-        # Open the file and return its contents as WebVTT
-        with transcript.vtt.open("r") as file:
-            content = file.read()
+        content = _read_transcript_artifact(transcript.vtt)
+        if content is None:
+            return HttpResponse("WebVTT file missing", status=404)
         episode = public_episode_from_request(request, transcript=transcript)
         content = apply_public_speaker_mapping_to_webvtt_content(content, transcript, episode=episode)
         content = sanitize_webvtt_content(

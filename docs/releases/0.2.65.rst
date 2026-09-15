@@ -112,3 +112,7 @@
   such an episode is rendered without audio, and the podcast feed keeps
   omitting it. Plain-post and episode serialization now share one field helper
   so the common fields cannot drift apart again.
+- Return ``404`` instead of a server error from the public Podlove JSON and
+  WebVTT transcript endpoints when the stored transcript file is missing from
+  storage. The podcast-index JSON endpoint already behaved this way; all three
+  endpoints now share one artifact read.

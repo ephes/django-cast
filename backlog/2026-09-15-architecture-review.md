@@ -251,6 +251,12 @@ commits paid for twice.
   `TranscriptArtifactUnavailable`/`TranscriptArtifactInvalid` that all five callers map to 404/400, plus a
   missing-file test per format. `_render_transcript_html` is exempt from the missing-file case
   (`Transcript.podlove_data` returns `{}`); it only diverges in shape.
+  Fix note (partial, 2026-09-16): the missing-storage-file half is fixed, including the webvtt twin below. A shared
+  `_read_transcript_artifact` helper in `views/transcript.py` reads the artifact once for all three public endpoints,
+  so a Podlove, DOTe or WebVTT field whose storage file is gone returns 404 instead of 500, with a regression test
+  per format. Still open and deliberately deferred: the `cast/transcripts/public_payloads.py` consolidation with
+  typed `TranscriptArtifactUnavailable`/`TranscriptArtifactInvalid` shared by `_render_transcript_html` and
+  `AudioPodloveSerializer._load_podlove_data`.
 - **V11. Comment posting is duplicated across the AJAX and stock-override views with two parent validators** (medium,
   duplication) — `comments/views.py:343`. `post_comment_ajax` (41-112) and `post_comment` (324-370) each implement
   authenticated name/email fill (already drifted: `username` vs `get_username()`), target resolution,
@@ -274,6 +280,7 @@ commits paid for twice.
 - **V-extra. `webvtt_transcript` 500s on a missing storage file** (medium, bug) — `views/transcript.py:606-608`,
   independent of V10's podlove case; `podcastindex_transcript_json` 404s the same condition and
   `tests/transcripts/podcastindex_webvtt_test.py:148` covers only the dote variant.
+  Fix note (2026-09-16): fixed together with V10's podlove case; see the V10 fix note.
 - **V-extra. A test exists solely to cover an unreachable branch** (low, testing) — `tests/feed_test.py:929-945`
   mocks the XML handler to raise `IndexError` so the dead guard at `feeds.py:325-328` stays covered; V7 must delete
   both together.

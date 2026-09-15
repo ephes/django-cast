@@ -93,6 +93,19 @@ class TestGetTranscriptAsJson:
         assert r.status_code == 400
         assert r.content.decode("utf-8") == "Invalid JSON format in podlove file"
 
+    def test_get_transcript_as_json_missing_podlove_file_returns_404(self, client, episode):
+        # Given a transcript whose podlove file is gone from storage
+        transcript = create_transcript(audio=episode.podcast_audio, podlove={"transcripts": []})
+        transcript.podlove.storage.delete(transcript.podlove.name)
+
+        # When we request the transcript as JSON
+        url = reverse("cast:podlove-transcript-json", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 404 response instead of a server error
+        assert r.status_code == 404
+        assert r.content.decode("utf-8") == "Podlove file missing"
+
     def test_get_transcript_as_json_success(self, client, episode):
         # Given a transcript in podlove format
         podlove = {

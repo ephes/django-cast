@@ -224,6 +224,19 @@ class TestGetTranscriptAsWebVtt:
         assert r.status_code == 404
         assert r.content.decode("utf-8") == "WebVTT file not available"
 
+    def test_get_transcript_as_vtt_missing_vtt_file_returns_404(self, client, episode):
+        # Given a transcript whose vtt file is gone from storage
+        transcript = create_transcript(audio=episode.podcast_audio, vtt="WEBVTT\n")
+        transcript.vtt.storage.delete(transcript.vtt.name)
+
+        # When we request the transcript as WebVTT
+        url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 404 response instead of a server error
+        assert r.status_code == 404
+        assert r.content.decode("utf-8") == "WebVTT file missing"
+
     def test_get_transcript_as_vtt_success(self, client, episode):
         # Given a transcript in vtt format
         vtt = "WEBVTT\n\n00:00:00.620 --> 00:00:05.160\nJa, hallo liebe Hörerinnen und Hörer."
