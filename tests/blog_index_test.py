@@ -34,6 +34,17 @@ class TestBlogIndex:
         assert post not in r.context["posts"]
         assert post.title not in r.content.decode("utf-8")
 
+    def test_episode_without_podcast_audio_in_podcast_index(self, client, episode, monkeypatch):
+        # podcast_audio is nullable, so deleting the audio leaves a live episode without it.
+        monkeypatch.setattr(appsettings, "CAST_REPOSITORY", "default")
+        episode.podcast_audio = None
+        episode.save(update_fields=["podcast_audio"])
+
+        r = client.get(episode.podcast.get_url())
+
+        assert r.status_code == 200
+        assert episode in r.context["posts"]
+
     def test_post_overview_content_in_blog_index_but_not_detail(self, client, post):
         blog_url = post.blog.get_url()
 

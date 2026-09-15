@@ -469,6 +469,28 @@ def test_serialize_deserialize_roundtrip_for_media_types():
 
 
 @pytest.mark.django_db
+def test_serialize_post_keys_are_a_subset_of_serialize_episode_keys(post, episode):
+    """Both serializers build on ``_serialize_post_common``, so they cannot drift apart."""
+    post_keys = set(serialize_post(post))
+    episode_keys = set(serialize_episode(episode))
+
+    assert post_keys <= episode_keys, post_keys - episode_keys
+    assert "last_published_at" in post_keys
+
+
+@pytest.mark.django_db
+def test_serialize_episode_without_podcast_audio(episode):
+    episode.podcast_audio = None
+
+    data = serialize_episode(episode)
+
+    assert data["podcast_audio"] is None
+    rebuilt = deserialize_episode(data)
+    assert rebuilt.podcast_audio is None
+    assert serialize_episode(rebuilt) == data
+
+
+@pytest.mark.django_db
 def test_serialize_deserialize_roundtrip_for_post_types(post, episode):
     post_data = serialize_post(post)
     assert post_data["type"] == "post"

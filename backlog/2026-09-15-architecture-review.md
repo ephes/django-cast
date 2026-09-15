@@ -2,9 +2,10 @@
 
 Date: 2026-09-15
 
-Status: Findings list from a read-only architecture review of `develop` at commit `b36ddd4b`. Nothing is fixed yet;
-the bug and test-hygiene items are implemented as small slices right after this note lands (see "Recommended
-sequence"). The structural themes need shaping first. Security was in scope only where it overlaps correctness — the
+Status: Findings list from a read-only architecture review of `develop` at commit `b36ddd4b`. The bug and
+test-hygiene items are being implemented as small slices in the order given under "Recommended sequence"; an item
+that has landed carries a dated "Fix note" and everything without one is still open. The structural themes need
+shaping first. Security was in scope only where it overlaps correctness — the
 standing observations stay in [2026-09-07-security-review.md](2026-09-07-security-review.md).
 
 Method: four parallel automated review passes (data/domain layer; views/API/feeds/comments; cross-cutting coupling;
@@ -58,6 +59,14 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   silently drops the Atom-required `<updated>` from `cast:podcast_feed_atom` while the blog feed and the `"django"`
   repository keep it (reproduced). Direction: build both dicts from one `_serialize_post_common(post)` (also fixes
   D-extra) plus a podcast twin of `test_latest_entries_atom_feed_entry_has_updated_and_uuid_id`.
+  Fix note (2026-09-16, fixed): `_serialize_post_common(post)` now holds the nine shared post fields and both
+  `serialize_post` and `serialize_episode` build on it, so `last_published_at` reaches the episode dict and
+  `cast:podcast_feed_atom` carries `<updated>` again. `tests/feed_test.py::test_podcast_atom_feed_entry_has_updated`
+  is the podcast twin, pinned to `CAST_REPOSITORY="default"`, and a key-parity test in
+  `tests/repository/serialization_test.py` fails if the two field sets drift apart again. The podcast twin asserts
+  only `atom:updated`, because `AtomPodcastFeed` defines no `item_guid` and its entry ids are page URLs rather than
+  post UUIDs (unchanged, out of scope).
+  Not done: the default-vs-django context parity test named in the recommended sequence; it belongs with D5.
 - **D2. `Post`/`Episode` still own template selection, request-aware URLs, renditions and DRF fields** (medium,
   architecture, prior H1 residual) — `models/pages.py:540`. Still on the model: `get_template`/
   `get_template_base_dir` (266-277), a `get_context` that copies the page and fabricates an owner (396-418),
@@ -143,6 +152,13 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   `PostQuerySnapshot` guards the same access (`snapshot.py:199-207`, `if podcast_audio is not None`); the serializer
   has no equivalent. Direction: make `serialize_episode` emit `None` for an absent audio and have the deserializer
   accept it, alongside D1's shared post-field helper, with a test for an episode whose audio was deleted.
+  Fix note (2026-09-16, fixed): `serialize_episode` emits `"podcast_audio": None` for an absent audio and
+  `deserialize_episode` only rebuilds the audio when the value is not `None`, so both `FeedContext` and
+  `BlogIndexContext` accept it. Covered by `test_episode_without_podcast_audio_in_podcast_index`
+  (`tests/blog_index_test.py`, podcast index 200 under `"default"`) and
+  `test_feeds_do_not_crash_for_episode_without_podcast_audio` (`tests/feed_test.py`, podcast feed still omits the
+  episode, blog feed still lists it), plus a serialize/deserialize round trip.
+  Not done: `views/media.py` still lets you delete audio attached to a live episode (deliberate).
 
 Strengths: H2 genuinely holds, with ffprobe/ffmpeg/rendition work behind explicit transactional services.
 `podcast_numbering.assign_episode_number_for_publish` is a model of careful domain logic (`select_for_update` on the

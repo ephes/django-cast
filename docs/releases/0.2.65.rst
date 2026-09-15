@@ -105,3 +105,10 @@
   configuration message and writes nothing. The new ``cast.E009`` system check
   reports the missing backend when Voxhelm is configured through Django settings
   or environment variables.
+- Include ``last_published_at`` when serializing episodes, so podcast Atom feed
+  entries carry the required ``<updated>`` element on the default repository
+  path as blog Atom feeds already did. Podcast index pages and blog feeds no
+  longer raise an error for a live episode whose podcast audio was removed;
+  such an episode is rendered without audio, and the podcast feed keeps
+  omitting it. Plain-post and episode serialization now share one field helper
+  so the common fields cannot drift apart again.

@@ -358,6 +358,48 @@ class TestGeneratedFeeds:
         assert entry.findtext("atom:updated", namespaces=namespace) is not None
         assert entry.findtext("atom:id", namespaces=namespace) == str(post.uuid)
 
+    def test_podcast_atom_feed_entry_has_updated(self, client, episode, use_dummy_cache_backend, monkeypatch):
+        # Twin of test_latest_entries_atom_feed_entry_has_updated_and_uuid_id for the podcast feed,
+        # pinned to the serializing repository path where <updated> used to go missing.
+        monkeypatch.setattr(appsettings, "CAST_REPOSITORY", "default")
+        episode.last_published_at = episode.visible_date
+        episode.save(update_fields=["last_published_at"])
+        feed_url = reverse(
+            "cast:podcast_feed_atom",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        root = ElementTree.fromstring(response.content.decode("utf-8"))
+        namespace = {"atom": "http://www.w3.org/2005/Atom"}
+        entry = root.find("atom:entry", namespace)
+        assert entry is not None
+        assert entry.findtext("atom:updated", namespaces=namespace) is not None
+
+    def test_feeds_do_not_crash_for_episode_without_podcast_audio(
+        self, client, episode, use_dummy_cache_backend, monkeypatch
+    ):
+        # podcast_audio is nullable, so deleting the audio leaves a live episode without it.
+        monkeypatch.setattr(appsettings, "CAST_REPOSITORY", "default")
+        episode.podcast_audio = None
+        episode.save(update_fields=["podcast_audio"])
+
+        podcast_feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+        podcast_response = client.get(podcast_feed_url)
+        assert podcast_response.status_code == 200
+        # The podcast feed only lists episodes that have audio.
+        assert episode.title not in podcast_response.content.decode("utf-8")
+
+        blog_feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": episode.podcast.slug})
+        blog_response = client.get(blog_feed_url)
+        assert blog_response.status_code == 200
+        assert episode.title in blog_response.content.decode("utf-8")
+
     def test_get_link_if_no_repository(self, blog):
         feed_view = LatestEntriesFeed()
         feed_view.object = blog
