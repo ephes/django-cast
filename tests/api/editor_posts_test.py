@@ -207,6 +207,47 @@ class TestEditorPostLookup:
         assert response.status_code == 409
         assert response.json()["code"] == "ambiguous_lookup"
 
+    def test_lookup_follows_the_database_slug_of_a_published_post(self, api_client, blog, admin_user):
+        # without unpublished changes get_latest_revision_as_object() returns the persisted
+        # row, so a slug changed outside Wagtail wins over the stale revision content
+        post = PostFactory(parent=blog, owner=admin_user, title="Published", slug="revision-slug")
+        post.save_revision(user=admin_user).publish()
+        Post.objects.filter(pk=post.pk).update(slug="database-slug")
+        api_client.force_authenticate(user=admin_user)
+
+        stale_response = api_client.get(self._url(blog.id, "revision-slug"))
+        current_response = api_client.get(self._url(blog.id, "database-slug"))
+
+        assert stale_response.status_code == 404
+        assert current_response.status_code == 200
+        assert current_response.json()["id"] == post.id
+
+    def test_lookup_query_count_does_not_grow_with_sibling_count(
+        self, django_assert_num_queries, api_client, blog, admin_user
+    ):
+        wanted = PostFactory(parent=blog, owner=admin_user, title="Wanted", slug="wanted-draft", live=False)
+        api_client.force_authenticate(user=admin_user)
+        # warm up process wide caches (content types, permissions) before counting
+        assert api_client.get(self._url(blog.id, "wanted-draft")).status_code == 200
+
+        with CaptureQueriesContext(connection) as single_sibling:
+            assert api_client.get(self._url(blog.id, "wanted-draft")).status_code == 200
+
+        for index in range(5):
+            sibling = PostFactory(
+                parent=blog, owner=admin_user, title=f"Other {index}", slug=f"other-{index}", live=False
+            )
+            draft = sibling.get_latest_revision_as_object()
+            draft.slug = f"other-draft-{index}"
+            draft.save_revision(user=admin_user)
+
+        # the siblings are excluded in SQL, so none of their revisions is fetched
+        with django_assert_num_queries(len(single_sibling.captured_queries)):
+            response = api_client.get(self._url(blog.id, "wanted-draft"))
+
+        assert response.status_code == 200
+        assert response.json()["id"] == wanted.id
+
     def test_scopes_lookup_to_exact_direct_parent(self, api_client, blog, admin_user):
         other_blog = BlogFactory(parent=blog.get_parent(), owner=admin_user, slug="other-blog")
         post = PostFactory(parent=other_blog, owner=admin_user, title="Other post", slug="same-slug")

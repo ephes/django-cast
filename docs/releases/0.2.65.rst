@@ -116,3 +116,8 @@
   WebVTT transcript endpoints when the stored transcript file is missing from
   storage. The podcast-index JSON endpoint already behaved this way; all three
   endpoints now share one artifact read.
+- Narrow the editor API post lookup (``GET /api/editor/posts/?parent=&slug=``) in the
+  database before reading revisions. It previously fetched and deserialized the latest
+  revision of every sibling post under the requested parent, so a single lookup in a
+  large blog cost one query pair and one body deserialization per post. Responses,
+  including the ambiguous-slug conflict, are unchanged.

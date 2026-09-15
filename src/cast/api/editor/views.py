@@ -415,8 +415,18 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         parent = Blog.objects.filter(pk=parent_id).first()
         if parent is None:
             raise EditorNotFound("Post not found.")
+        # Narrow the siblings in SQL with the same both-namespaces filter
+        # ``_check_unique_slug`` uses, so a single lookup no longer fetches and
+        # deserializes the latest revision of every sibling. The filter is a superset of
+        # what the Python check below accepts: ``get_latest_revision_as_object`` returns
+        # the revision content only for a page with unpublished changes and otherwise
+        # falls back to the persisted row, so the effective draft slug always lives in
+        # one of the two columns. The Python check stays authoritative because it decides
+        # which column applies and because the database comparison may be collation
+        # dependent; that keeps the ambiguous-lookup semantics unchanged.
+        candidates = Post.objects.child_of(parent).filter(Q(latest_revision__content__slug=slug) | Q(slug=slug))
         matches = []
-        for candidate in Post.objects.child_of(parent):
+        for candidate in candidates:
             post = candidate.specific
             content_post = post.get_latest_revision_as_object()
             if content_post.slug == slug:
