@@ -9,7 +9,6 @@ from cast.apps import CAST_APPS
 django_stubs_ext.monkeypatch()
 
 ROOT_DIR = Path(__file__).resolve().parent.parent / "src" / "cast"
-APPS_DIR = ROOT_DIR / "cast"
 TESTS_DIR = Path(__file__).resolve().parent
 
 DEBUG = False
@@ -68,7 +67,8 @@ TEST_RUNNER = "cast.runner.PytestTestRunner"
 # STATIC FILE CONFIGURATION
 # ------------------------------------------------------------------------------
 # See: https://docs.djangoproject.com/en/dev/ref/settings/#static-root
-STATIC_ROOT = str(ROOT_DIR / "staticfiles")
+# Keep collectstatic output out of the package tree.
+STATIC_ROOT = str(TESTS_DIR / "staticfiles")
 
 # See: https://docs.djangoproject.com/en/dev/ref/settings/#static-url
 STATIC_URL = "/static/"
@@ -100,7 +100,10 @@ TEMPLATES: list[dict[str, Any]] = [
         # See: https://docs.djangoproject.com/en/dev/ref/settings/#std:setting-TEMPLATES-BACKEND
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         # See: https://docs.djangoproject.com/en/dev/ref/settings/#template-dirs
-        "DIRS": [str(APPS_DIR / "templates")],
+        # A tests-owned (normally empty) directory for filesystem template overrides. It must stay
+        # non-empty so code that picks "the first template loader directory" - theme discovery in
+        # particular - lands here instead of inside src/cast.
+        "DIRS": [str(TESTS_DIR / "templates")],
         "OPTIONS": {
             # See: https://docs.djangoproject.com/en/dev/ref/settings/#template-debug
             "debug": DEBUG,

@@ -323,6 +323,12 @@ documented in tiers that match the code. The remaining problems are concentrated
   leaves `.html` files `uv_build` would package. Direction: `DIRS` and `STATIC_ROOT` under `TESTS_DIR`, delete
   `APPS_DIR`, build themes under `tmp_path` with `settings.TEMPLATES` overridden plus the choices-cache clear. The
   residue is an empty directory chain, so a CI guard must look for files, not `git status --porcelain` output.
+  Fix note (2026-09-16, fixed): `tests/settings.py` drops the `APPS_DIR` alias, points `TEMPLATES` DIRS at the
+  tests-owned `tests/templates/` and `STATIC_ROOT` at `tests/staticfiles/`. `tests/theme_test.py` gained a
+  `theme_template_dir` fixture that overrides `settings.TEMPLATES` with a `tmp_path` directory and clears the
+  choices cache around the test, and `create_new_theme` now takes that directory instead of reading the first
+  loader dir, so both theme-creating tests write only under `tmp_path`. The stray empty `src/cast/cast/` chain is
+  gone. Not done: no CI guard yet for source-tree pollution.
 - **X3. `transcript_sanitization.py` duplicates the transcripts package and has already diverged** (medium,
   duplication, prior H3) — `transcript_sanitization.py:13`. This 482-line module (imported by `player.py`,
   `api/serializers.py`, `views/transcript.py`) keeps byte-identical copies of `VOICE_OPENING_RE`,
@@ -507,6 +513,9 @@ The coverage gate produces real tests, not pragma sprawl: 37 `pragma: no cover` 
   files. Direction: delete `runner.py`, its `TEST_RUNNER` line and the omit entry (with a release-notes entry, since
   it is a shipped if undocumented module); simplify `APPS_DIR`; rename the outlier; pin
   `python_files = ["*_test.py"]` — which contradicted `AGENTS.md` until this note's slice fixed the convention there.
+  Fix note (partial, 2026-09-16): the `APPS_DIR`/`TEMPLATES` DIRS half is fixed with X2. Still open: deleting
+  `runner.py` plus its `TEST_RUNNER` line and coverage omit entry, the `STATICFILES_DIRS` duplication, and the
+  `tests/test_heading_migration.py` rename with the `python_files` pin.
 - **T-extra. `AGENTS.md` steered new tests at the naming outlier** (low, docs) — it said new tests use `test_*.py`
   and showed `tests/test_file.py::TestClass::test_case` while 106 of 107 modules use `*_test.py`. Fixed with
   `docs/development.rst:322` in this note's slice; any `python_files` pin (T12) must stay aligned.

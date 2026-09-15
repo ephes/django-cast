@@ -1,9 +1,9 @@
+import copy
 import shutil
 import warnings
 from pathlib import Path
 import pytest
 from django.db.utils import OperationalError
-from django.template import engines
 from django.urls import reverse
 from wagtail.models import Site
 
@@ -21,11 +21,29 @@ from cast.models.theme import (
 )
 
 
-def create_new_theme(name, invalid=False, include_soft_required=True):
-    default_engine = list(engines.all())[0]
-    first_template_dir = Path(list(list(default_engine.engine.template_loaders)[0].get_dirs())[0])
+@pytest.fixture
+def theme_template_dir(tmp_path, settings):
+    """
+    Point the filesystem template loader at a throwaway directory.
 
-    new_base_dir = first_template_dir / "cast" / name
+    Theme discovery scans the configured template directories, so tests that
+    create themes have to write into one of them.  Without this fixture they
+    would write into the package source tree under ``src/cast``.
+    """
+    template_dir = tmp_path / "templates"
+    template_dir.mkdir()
+    templates = copy.deepcopy(settings.TEMPLATES)
+    templates[0]["DIRS"] = [str(template_dir)]
+    settings.TEMPLATES = templates  # rebuilds the template engines
+    _clear_template_base_dir_choices_cache()
+    try:
+        yield template_dir
+    finally:
+        _clear_template_base_dir_choices_cache()
+
+
+def create_new_theme(template_dir: Path, name, invalid=False, include_soft_required=True):
+    new_base_dir = template_dir / "cast" / name
     new_base_dir.mkdir(parents=True, exist_ok=True)
 
     required_names = get_strictly_required_template_names()
@@ -44,7 +62,7 @@ def create_new_theme(name, invalid=False, include_soft_required=True):
     return new_base_dir
 
 
-def test_get_template_base_dir_choices():
+def test_get_template_base_dir_choices(theme_template_dir):
     def get_choice_values():
         _clear_template_base_dir_choices_cache()
         return {choice[0] for choice in get_template_base_dir_choices()}
@@ -56,13 +74,13 @@ def test_get_template_base_dir_choices():
 
     # create an invalid theme
     invalid_name = "invalid"
-    invalid_base_dir = create_new_theme(invalid_name, invalid=True)
+    invalid_base_dir = create_new_theme(theme_template_dir, invalid_name, invalid=True)
     choices_with_invalid_theme = get_choice_values()
     assert invalid_name not in choices_with_invalid_theme
     shutil.rmtree(invalid_base_dir)  # cleanup
 
     # create a valid new theme
-    created_base_dir = create_new_theme(theme_name)
+    created_base_dir = create_new_theme(theme_template_dir, theme_name)
     choices_with_new_theme = get_choice_values()
     assert theme_name in choices_with_new_theme
 
@@ -423,18 +441,14 @@ def test_check_theme_soft_requirements_some_missing(tmp_path):
     assert all(issubclass(warning.category, DeprecationWarning) for warning in w)
 
 
-def test_theme_discovery_still_finds_theme_missing_soft_required():
+def test_theme_discovery_still_finds_theme_missing_soft_required(theme_template_dir):
     """Themes missing soft-required templates are still discovered (with warnings)."""
-    created_base_dir = create_new_theme("soft_missing", include_soft_required=False)
-    try:
-        _clear_template_base_dir_choices_cache()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            choices = {choice[0] for choice in get_template_base_dir_choices()}
-        assert "soft_missing" in choices
-        # At least one DeprecationWarning should have been emitted
-        deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-        assert len(deprecation_warnings) > 0
-    finally:
-        shutil.rmtree(created_base_dir)
-        _clear_template_base_dir_choices_cache()
+    create_new_theme(theme_template_dir, "soft_missing", include_soft_required=False)
+    _clear_template_base_dir_choices_cache()
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        choices = {choice[0] for choice in get_template_base_dir_choices()}
+    assert "soft_missing" in choices
+    # At least one DeprecationWarning should have been emitted
+    deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
+    assert len(deprecation_warnings) > 0
