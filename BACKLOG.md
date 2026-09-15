@@ -15,6 +15,31 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
+- [ ] Architecture review 2026-09-15 follow-ups
+  - Review: [backlog/2026-09-15-architecture-review.md](backlog/2026-09-15-architecture-review.md)
+  - Scope: shape the three structural seams the review identifies as blocking several deferred items. The bug and
+    test-hygiene findings from the same review are being implemented directly and are not tracked here.
+  - Next shaping items:
+    - A **publication policy service** replacing the admin form `clean`, the editor API's episode check, the
+      `PublishRevisionAction` monkeypatch and the `page_published` receiver.
+      Done when: one policy owns the publish decision, all four call sites delegate to it, and publication approval
+      binding and scheduled publishes have a documented place to hook in.
+    - A **media ingestion service** owning upload locks, probe budget, size caps and an SSRF-safe fetch helper.
+      Done when: the editor API, the admin media views, `TranscriptForm` and `media_derivation` share one ingest
+      path, and remote media import has a documented safety contract to build on.
+    - A **transport-neutral content converter** (`cast.content`) with an error collector, decoupled from DRF.
+      Done when: the body converter no longer raises DRF exceptions, nested errors accumulate instead of failing
+      fast, and the editor API is a thin adapter over it.
+  - Done when: each seam is either a concrete ready item with a first slice or an explicitly recorded deferral.
+  - Related to: Evaluate Wagtail v3 API reuse (the first and third seams are its prerequisites).
+
+- [ ] Upstream the modelsearch Django 6.1 MATCH fix and remove the shim
+  - Notes: [backlog/2026-08-10-modelsearch-django61-upstream.md](backlog/2026-08-10-modelsearch-django61-upstream.md)
+  - Scope: report the Django 6.1 `MATCH` compilation break to `modelsearch` upstream, then drop
+    `src/cast/modelsearch_compat.py`, its `apps.py` call and its tests once a fixed release exists.
+  - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
+    against a fixed `modelsearch` release or the version gate and its retention reason are documented.
+
 - [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
   - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
   - Scope: prove Post and Episode editing through Wagtail 8's preview API, compare it with the existing editor

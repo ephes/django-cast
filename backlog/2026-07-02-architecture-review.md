@@ -232,7 +232,7 @@ wiring half landed as a visibility gate: the "Generate transcript" action/button
 `voxhelm_configured()` resolves the API base and key for the request's site; status display and the POST paths'
 friendly misconfiguration errors are unchanged.
 
-### M4. Two inconsistent API generations side by side; implicit AllowAny on writes
+### M4. Two inconsistent API generations side by side; implicit AllowAny on writes — Fixed (2026-07-03)
 
 `api/views.py` (old) mixes four styles: a function view, a Django `CreateView` returning bare-text
 `HttpResponse("{pk}", 201)` (viewmixins.py:14-17), DRF generics, and raw `APIView`, with ad-hoc error shapes and no
@@ -257,7 +257,7 @@ existing clients, and the podlove/player-config/facet-counts/theme response shap
 page-supplied URLs, so migrating their contracts would be a breaking change with no caller demand. The endpoints
 stay frozen-as-legacy rather than rewritten; no open work remains for M4.
 
-### M5. `feeds.py` god module with duplicated feed logic and weak typing
+### M5. `feeds.py` god module with duplicated feed logic and weak typing — Fixed (2026-07-03)
 
 `src/cast/feeds.py` (514 lines): `LatestEntriesFeed.item_description`/`item_link` (187-200) duplicate
 `PodcastFeed`'s (442-455); `write()` is duplicated verbatim (142-149, 369-376); the
@@ -354,7 +354,7 @@ under that directory. The reorganisation is behavior-preserving: the collected s
 identical before and after (2148 tests, verified by an independent suffix-multiset diff against the pre-split
 commit, empty), and every moved test body is unchanged. The `tests/support/` helper-package idea is deferred.
 
-### M11. Packaging and type-check metadata inconsistencies
+### M11. Packaging and type-check metadata inconsistencies — Fixed (2026-09-07)
 
 - Conflicting license classifiers in `pyproject.toml` (BSD at :24, MIT at :28; `LICENSE` says BSD) and
   `Environment :: Web Environment` listed twice.
@@ -384,7 +384,7 @@ imports `pkg_resources`, so its published floor now carries that compatibility g
 dependency is removed. The wider runtime audit also established security floors for the audited dependency stack and
 added scheduled checks for both current runtime resolutions and advisory-fixed releases.
 
-### M12. Undocumented settings and quickstart template drift — Partially fixed (2026-07-03)
+### M12. Undocumented settings and quickstart template drift — Fixed (2026-07-06)
 
 Twelve of the ~51 user-facing `CAST_*` settings are missing from `docs/reference/settings.rst` (including
 `CAST_AUDIO_PLAYER`, `CAST_EDITOR_SCOPES`, `CAST_POST_BODY_BLOCKS`, `CAST_SLUG`, four `CAST_COMMENTS_*`, and the
@@ -412,7 +412,8 @@ verifies it passes Django's system check. The broader onboarding workflow review
   (contributors.py:241-243, 379-381, 285-287), so programmatic writes can raise `ValidationError` unexpectedly and
   admin saves validate twice.
 - `get_template_base_dir_choices()` scans template directories at import time and bakes results into class bodies
-  and migrations (theme.py:151-180, :231; index_pages.py:109); use a callable for `choices=`.
+  and migrations (theme.py:151-180, :231; index_pages.py:109); use a callable for `choices=`. — Fixed: both fields
+  now pass the callable (theme.py:236, index_pages.py:123) and discovery is cached with an explicit clear hook.
 - FIXME-marked smells in pages.py:385, :199, :842. (Fixed 2026-07-02: the stray `print` in
   `Evaluation.calc_performance` (models/moderation.py) and the dead `Post.get_url` passthrough override; the
   `tests/*.sqlite3` gitignore entry from M10 also landed.)
@@ -450,5 +451,7 @@ verifies it passes Django's system check. The broader onboarding workflow review
    risk beyond newly surfaced test-order bugs, which are the point. — Done 2026-07-02.
 3. Pick one structural theme to shape into its own backlog item: the save-side-effects extraction (H2) or the
    media-views deduplication (H4) are the most self-contained. — Done: H2 phase 1 and H4 landed 2026-07-02,
-   H3/M9 and M2/M12 followed 2026-07-02/03. Remaining themes (M3, M4/M5, M6/M7/M10/M11, model-layer phase 2)
-   live as items in `BACKLOG.md`.
+   H3/M9 and M2/M12 followed 2026-07-02/03. The residual themes (H1/M1 model layer, M3 Voxhelm optionality,
+   M6 dev-code packaging, M7 serialization field lists, M10 test-suite size) were re-verified and re-scoped by
+   [2026-09-15-architecture-review.md](2026-09-15-architecture-review.md), which supersedes this note as the
+   tracking record for them; they were never carried into `BACKLOG.md` as individual items.

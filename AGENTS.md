@@ -10,7 +10,7 @@
 ## Build, Test, and Development Commands
 - List commands: `just --list` (or plain `just`).
 - Install deps: `uv sync` (or `just install`).
-- Run tests: `just test` (runs `uv run coverage run -m pytest` and `uv run coverage report`, and fails if coverage is below 100%); target specific tests with `just test-one tests/test_file.py::TestClass::test_case`.
+- Run tests: `just test` (runs `uv run coverage run -m pytest` and `uv run coverage report`, and fails if coverage is below 100%); target specific tests with `just test-one tests/models/posts_test.py::TestPostModel::test_post_slug`.
 - Type checks: `uv run mypy` (or `just typecheck`).
 - Lint/format: `just lint` runs `ruff check --fix .` and `ruff format .` (line length 119).
 - Coverage: `just coverage` runs tests with coverage and opens HTML report.
@@ -27,7 +27,8 @@
 - Keep Django/Wagtail app boundaries clean: models in `models/`, API in `api/`, templates in `templates/cast/`.
 
 ## Testing Guidelines
-- New behaviors need Pytest coverage under `tests/` with `test_*.py`; mirror module paths for discoverability.
+- New behaviors need Pytest coverage under `tests/` in `*_test.py` modules (e.g. `tests/models/posts_test.py`);
+  mirror module paths for discoverability.
 - Tests run with coverage via `uv run coverage run -m pytest` and `uv run coverage report`; `fail_under = 100` is configured in `pyproject.toml`.
 - Maintain 100% test coverage for the Python test suite.
 - Do not deliver changes if coverage drops below 100%; add tests or adjust coverage exclusions only when justified.

@@ -319,7 +319,7 @@ For specific tests:
 
 .. code-block:: bash
 
-   $ just test-one tests/models_test.py::TestPostModel::test_post_slug
+   $ just test-one tests/models/posts_test.py::TestPostModel::test_post_slug
 
 Test Coverage
 ~~~~~~~~~~~~~
