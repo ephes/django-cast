@@ -1,4 +1,7 @@
+from types import SimpleNamespace
+
 import pytest
+from wagtail.workflows import publish_workflow_state
 
 from cast.models import Episode, Post
 from cast.publication import (
@@ -12,6 +15,7 @@ from cast.publication import (
     install_publication_policy,
     violations_for,
 )
+from tests.factories import EpisodeFactory, HomePageFactory, PostFactory
 
 
 def test_episode_audio_rule_accepts_an_audio_id():
@@ -165,3 +169,134 @@ def test_install_publication_policy_logs_and_skips_unsupported_api(mocker, caplo
     install_publication_policy()
 
     assert "Publication policy publish hook was not installed" in caplog.text
+
+
+@pytest.mark.django_db
+def test_revision_publish_rejects_episode_without_audio(podcast, body):
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Audio-less episode",
+        slug="audio-less-episode",
+        live=False,
+        first_published_at=None,
+        podcast_audio=None,
+        body=body,
+    )
+    revision = episode.save_revision()
+
+    with pytest.raises(PublicationRejected):
+        revision.publish()
+
+    episode.refresh_from_db()
+    assert episode.live is False
+
+
+@pytest.mark.django_db
+def test_revision_publish_validates_revision_content_instead_of_live_row(podcast, audio, body):
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Published episode",
+        slug="published-episode",
+        live=False,
+        first_published_at=None,
+        podcast_audio=audio,
+        body=body,
+    )
+    episode.save_revision().publish()
+    episode.refresh_from_db()
+    live_revision_id = episode.live_revision_id
+    episode.podcast_audio = None
+    audio_less_revision = episode.save_revision()
+
+    with pytest.raises(PublicationRejected):
+        audio_less_revision.publish()
+
+    episode.refresh_from_db()
+    assert episode.live is True
+    assert episode.podcast_audio_id == audio.id
+    assert episode.live_revision_id == live_revision_id
+
+
+@pytest.mark.django_db
+def test_revision_rejection_happens_before_episode_numbering(podcast, body):
+    podcast.automatic_episode_numbering_enabled = True
+    podcast.next_episode_number = 7
+    podcast.save(update_fields=["automatic_episode_numbering_enabled", "next_episode_number"])
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Unnumbered episode",
+        slug="unnumbered-episode",
+        live=False,
+        first_published_at=None,
+        podcast_audio=None,
+        episode_number=None,
+        body=body,
+    )
+    revision = episode.save_revision()
+
+    with pytest.raises(PublicationRejected):
+        revision.publish()
+
+    episode.refresh_from_db()
+    podcast.refresh_from_db()
+    revision.refresh_from_db()
+    assert episode.episode_number is None
+    assert podcast.next_episode_number == 7
+    assert revision.content["episode_number"] is None
+
+
+@pytest.mark.django_db
+def test_workflow_publish_rejects_episode_without_audio(podcast, body):
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Workflow episode",
+        slug="workflow-episode",
+        live=False,
+        first_published_at=None,
+        podcast_audio=None,
+        body=body,
+    )
+    episode.save_revision()
+    workflow_state = SimpleNamespace(content_object=episode)
+
+    with pytest.raises(PublicationRejected):
+        publish_workflow_state(workflow_state)
+
+    episode.refresh_from_db()
+    assert episode.live is False
+
+
+@pytest.mark.django_db
+def test_publish_hook_allows_post_without_consuming_episode_number(podcast, body):
+    podcast.automatic_episode_numbering_enabled = True
+    podcast.next_episode_number = 7
+    podcast.save(update_fields=["automatic_episode_numbering_enabled", "next_episode_number"])
+    post = PostFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Draft post",
+        slug="draft-post",
+        live=False,
+        body=body,
+    )
+
+    post.save_revision().publish()
+
+    post.refresh_from_db()
+    podcast.refresh_from_db()
+    assert post.live is True
+    assert podcast.next_episode_number == 7
+
+
+@pytest.mark.django_db
+def test_publish_hook_allows_non_cast_page(site):
+    page = HomePageFactory(parent=site.root_page, title="Draft home", slug="draft-home", live=False)
+
+    page.save_revision().publish()
+
+    page.refresh_from_db()
+    assert page.live is True

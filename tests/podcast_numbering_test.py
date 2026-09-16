@@ -18,7 +18,7 @@ from cast.podcast_numbering import (
     assign_episode_number_for_publish,
     episode_type_consumes_number,
 )
-from tests.factories import EpisodeFactory, PostFactory
+from tests.factories import EpisodeFactory
 
 
 def enable_numbering(podcast: Podcast, next_number: int = 1) -> None:
@@ -516,17 +516,6 @@ def test_stale_first_publish_does_not_assign_after_disabled_publish_without_numb
     assert revision.content["episode_number"] is None
     podcast.refresh_from_db()
     assert podcast.next_episode_number == 1
-
-
-@pytest.mark.django_db
-def test_publish_hook_leaves_non_episode_pages_alone(blog, body):
-    post = PostFactory(owner=blog.owner, parent=blog, title="Draft post", slug="draft-post", live=False, body=body)
-
-    revision = post.save_revision()
-    revision.publish()
-
-    post.refresh_from_db()
-    assert post.live is True
 
 
 @pytest.mark.django_db

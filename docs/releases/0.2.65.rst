@@ -9,6 +9,13 @@
   transcripts linked to such audio are hidden from admin lists and denied at
   direct admin URLs. Delegated transcript editors now need Audio choose
   permission as well as the relevant Transcript collection permissions.
+- Enforce the episode audio requirement through Wagtail's shared publication
+  path. Bulk publishing, workflow approval, scheduled publication approval,
+  Wagtail APIs, and direct revision publishing now reject an episode without
+  ``podcast_audio`` instead of allowing it to go live. Bulk and workflow
+  rejection currently surface as a Wagtail server error. A legacy invalid
+  revision that was approved before this upgrade can still stop a
+  ``publish_scheduled`` batch until its approval is cleared.
 - Recheck Wagtail page visibility on regular and AJAX comment submissions and
   previews. Retained signed comment forms no longer allow comments after a page
   is unpublished or the visitor loses access through a view restriction.

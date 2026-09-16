@@ -517,8 +517,8 @@ class TestEditorEpisodeUpdate:
         assert response.json() == {"code": "not_found", "detail": "Episode parent not found."}
         assert Episode.objects.get(pk=created["id"]).latest_revision_id == created["latest_revision_id"]
 
-    def test_draft_only_patch_rejects_published_episode(self, api_client, podcast, admin_user):
-        created = self._create(api_client, podcast, admin_user)
+    def test_draft_only_patch_rejects_published_episode(self, api_client, podcast, admin_user, audio):
+        created = self._create(api_client, podcast, admin_user, podcast_audio={"id": audio.id})
         episode = Episode.objects.get(pk=created["id"])
         episode.get_latest_revision().publish(user=admin_user)
         episode.refresh_from_db()

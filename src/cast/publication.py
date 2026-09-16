@@ -133,13 +133,19 @@ def install_publication_policy() -> None:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        from cast.models import Episode
+        from cast.models import Episode, Post
         from cast.podcast_numbering import assign_episode_number_for_publish
 
         revision, object_to_publish, previous_revision = _publish_revision_and_object(args, kwargs)
-        if isinstance(object_to_publish, Episode):
+        if isinstance(object_to_publish, Post):
             with transaction.atomic():
-                assign_episode_number_for_publish(object_to_publish, revision, previous_revision=previous_revision)
+                check_publishable(object_to_publish, revision=revision)
+                if isinstance(object_to_publish, Episode):
+                    assign_episode_number_for_publish(
+                        object_to_publish,
+                        revision,
+                        previous_revision=previous_revision,
+                    )
                 return original(self, *args, **kwargs)
         return original(self, *args, **kwargs)
 
