@@ -226,6 +226,10 @@ def test_invalid_native_rich_text_is_logged_and_rejected(caplog):
     with pytest.raises(EditorValidationError):
         sanitize_rich_text(RichTextBlock(), RichText(123), path="detail.0.value")
     assert "Rejected editor API rich text at detail.0.value" in caplog.text
+    rejection = next(
+        record for record in caplog.records if "Rejected editor API rich text at detail.0.value" in record.getMessage()
+    )
+    assert rejection.name == "cast.content.richtext"
 
 
 def test_nested_custom_rich_text_retains_list_and_stream_ids():
