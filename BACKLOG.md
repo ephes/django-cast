@@ -22,14 +22,20 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Next shaping items:
     - A **publication policy service** replacing the admin form `clean`, the editor API's episode check, the
       `PublishRevisionAction` monkeypatch and the `page_published` receiver.
+      Plan: [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md)
       Done when: one policy owns the publish decision, all four call sites delegate to it, and publication approval
       binding and scheduled publishes have a documented place to hook in.
     - A **media ingestion service** owning upload locks, probe budget, size caps and an SSRF-safe fetch helper.
+      Plan: [backlog/2026-09-16-media-ingestion-service.md](backlog/2026-09-16-media-ingestion-service.md)
       Done when: the editor API, the admin media views, `TranscriptForm` and `media_derivation` share one ingest
       path, and remote media import has a documented safety contract to build on.
     - A **transport-neutral content converter** (`cast.content`) with an error collector, decoupled from DRF.
+      Plan:
+      [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
       Done when: the body converter no longer raises DRF exceptions, nested errors accumulate instead of failing
       fast, and the editor API is a thin adapter over it.
+  - Status: all three plans are proposed and awaiting the maintainer decisions each note lists under "Risks and
+    open questions"; no implementation has started.
   - Done when: each seam is either a concrete ready item with a first slice or an explicitly recorded deferral.
   - Related to: Evaluate Wagtail v3 API reuse (the first and third seams are its prerequisites).
 
@@ -42,6 +48,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
   - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+  - Plan prerequisites: the publication policy and content converter seams —
+    [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and
+    [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
   - Scope: prove Post and Episode editing through Wagtail 8's preview API, compare it with the existing editor
     contract, and identify upstream functionality that can replace Cast implementation without losing automation
     safeguards or podcast/media behavior. Daybook is owned by us and can change in a coordinated migration;

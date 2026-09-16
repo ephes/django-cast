@@ -581,7 +581,10 @@ Low-11 (`slow` marker used by two modules), H6-residual (import-time comment-for
 2. **Then the three seams**, each shaped as its own backlog item before implementation: a **publication policy
    service** (theme 2), a **media ingestion service** with an SSRF-safe fetch helper (theme 3), and a
    **transport-neutral content converter** (theme 4). Each is independently valuable and each unblocks several
-   deferred backlog items.
+   deferred backlog items. All three are now shaped as proposed plans awaiting maintainer decisions:
+   theme 2 → [2026-09-16-publication-policy-service.md](2026-09-16-publication-policy-service.md);
+   theme 3 → [2026-09-16-media-ingestion-service.md](2026-09-16-media-ingestion-service.md);
+   theme 4 → [2026-09-16-transport-neutral-content-converter.md](2026-09-16-transport-neutral-content-converter.md).
 3. **Then the Wagtail v3 evaluation**, measured against those seams rather than today's coupling — the publication
    policy and the DRF-free converter are its prerequisites, so the verdict lands on a codebase where "reuse
    upstream" is a small change rather than a rewrite.
