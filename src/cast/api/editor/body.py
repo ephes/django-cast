@@ -8,6 +8,7 @@ from wagtail.blocks import Block
 from wagtail.images import get_image_model
 from wagtail.images.permissions import permission_policy as image_permission_policy
 
+from ...content.errors import ErrorCollector, flatten_django_validation_error
 from ...post_body_blocks import POST_BODY_SECTIONS, configured_content_blocks, default_content_blocks
 from .errors import EditorValidationError
 from .richtext import sanitize_block_value
@@ -147,45 +148,17 @@ def _custom_block_map(section: str | None) -> dict[str, Block]:
     return {name: block for name, block in configured_content_blocks(section)}
 
 
-def _error_items(exc: DjangoValidationError) -> list[dict[str, str]]:
-    messages = getattr(exc, "messages", None) or [str(exc)]
-    code = getattr(exc, "code", None) or "invalid"
-    return [{"code": str(code), "message": str(message)} for message in messages]
-
-
 def _flatten_django_validation_error(exc: DjangoValidationError, path: str) -> dict[str, list[dict[str, str]]]:
-    flat: dict[str, list[dict[str, str]]] = {}
-    block_errors = getattr(exc, "block_errors", None)
-    if isinstance(block_errors, dict):
-        for key, child in block_errors.items():
-            if isinstance(child, DjangoValidationError):
-                child_path = f"{path}.{key}"
-                for sub_path, items in _flatten_django_validation_error(child, child_path).items():
-                    flat.setdefault(sub_path, []).extend(items)
-
-    non_block_errors = getattr(exc, "non_block_errors", None)
-    if isinstance(non_block_errors, list):
-        for child in non_block_errors:
-            if isinstance(child, DjangoValidationError):
-                for sub_path, items in _flatten_django_validation_error(child, path).items():
-                    flat.setdefault(sub_path, []).extend(items)
-
-    error_dict = getattr(exc, "error_dict", None)
-    if isinstance(error_dict, dict):
-        for key, children in error_dict.items():
-            child_path = f"{path}.{key}"
-            for child in children:
-                if isinstance(child, DjangoValidationError):
-                    for sub_path, items in _flatten_django_validation_error(child, child_path).items():
-                        flat.setdefault(sub_path, []).extend(items)
-
-    if flat:
-        return flat
-    return {path: _error_items(exc)}
+    """Compatibility shim for private editor tests; remove with converter slice 7."""
+    errors = ErrorCollector()
+    errors.extend(flatten_django_validation_error(exc, path))
+    return errors.error_map
 
 
-def _custom_block_validation_errors(exc: DjangoValidationError, *, base: str) -> dict[str, list[dict[str, str]]]:
-    return _flatten_django_validation_error(exc, f"{base}.value")
+def _extend_error_map(errors: ErrorCollector, error_map: dict[str, list[dict[str, str]]]) -> None:
+    for path, items in error_map.items():
+        for item in items:
+            errors.add(path, item["code"], item["message"])
 
 
 def _custom_block_conversion_error(exc: Exception, *, base: str) -> dict[str, list[dict[str, str]]]:
@@ -220,28 +193,25 @@ def author_blocks_to_section(
 
     Raises :class:`EditorValidationError` aggregating every problem with a field-precise path.
     """
-    errors: dict[str, list[dict[str, str]]] = {}
+    errors = ErrorCollector()
     result: list[dict] = []
     preserved_unsupported_indexes: set[int] = set()
     custom_blocks = _custom_block_map(_content_section(path_prefix))
 
     if not isinstance(blocks, list):
-        raise EditorValidationError(
-            {path_prefix: [{"code": "invalid", "message": f"{path_prefix} must be a list of blocks."}]}
-        )
+        errors.add(path_prefix, "invalid", f"{path_prefix} must be a list of blocks.")
+        raise EditorValidationError(errors.error_map)
 
     paragraph_block = dict(default_content_blocks())["paragraph"]
     for index, block in enumerate(blocks):
         base = f"{path_prefix}.{index}"
         if not isinstance(block, dict) or "type" not in block:
-            errors[f"{base}.type"] = [{"code": "required", "message": "Each block needs a 'type'."}]
+            errors.add(f"{base}.type", "required", "Each block needs a 'type'.")
             continue
         block_type = block.get("type")
         value = block.get("value")
         if not isinstance(block_type, str):
-            errors[f"{base}.type"] = [
-                {"code": "unsupported_block_type", "message": f"Block type {block_type!r} is not supported."}
-            ]
+            errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
             continue
 
         if block_type == "unsupported":
@@ -249,13 +219,13 @@ def author_blocks_to_section(
                 value, existing_section=existing_section, base=base, path_prefix=path_prefix
             )
             if placeholder_errors:
-                errors.update(placeholder_errors)
+                _extend_error_map(errors, placeholder_errors)
                 continue
             assert existing_index is not None
             if existing_index in preserved_unsupported_indexes:
-                errors[f"{base}.value.position"] = [
-                    {"code": "duplicate", "message": "Unsupported placeholder position is already preserved."}
-                ]
+                errors.add(
+                    f"{base}.value.position", "duplicate", "Unsupported placeholder position is already preserved."
+                )
                 continue
             preserved_unsupported_indexes.add(existing_index)
             assert preserved is not None
@@ -265,9 +235,7 @@ def author_blocks_to_section(
         elif block_type not in SUPPORTED_BODY_BLOCKS:
             custom_block = custom_blocks.get(block_type)
             if custom_block is None:
-                errors[f"{base}.type"] = [
-                    {"code": "unsupported_block_type", "message": f"Block type {block_type!r} is not supported."}
-                ]
+                errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
                 continue
             try:
                 python_value = custom_block.to_python(value)
@@ -275,20 +243,20 @@ def author_blocks_to_section(
                 cleaned = custom_block.clean(python_value)
                 prepared = custom_block.get_prep_value(cleaned)
             except EditorValidationError as exc:
-                errors.update(exc.error_map)
+                _extend_error_map(errors, exc.error_map)
                 continue
             except DjangoValidationError as exc:
-                errors.update(_custom_block_validation_errors(exc, base=base))
+                errors.extend(flatten_django_validation_error(exc, f"{base}.value"))
                 continue
             except _CUSTOM_BLOCK_CONVERSION_ERRORS as exc:
-                errors.update(_custom_block_conversion_error(exc, base=base))
+                _extend_error_map(errors, _custom_block_conversion_error(exc, base=base))
                 continue
             result.append({"type": block_type, "value": prepared})
             continue
 
         if block_type == "paragraph":
             if not isinstance(value, str):
-                errors[f"{base}.value"] = [{"code": "invalid", "message": "Expected a string value."}]
+                errors.add(f"{base}.value", "invalid", "Expected a string value.")
                 continue
             try:
                 python_value = sanitize_block_value(
@@ -296,24 +264,22 @@ def author_blocks_to_section(
                 )
                 cleaned = paragraph_block.clean(python_value)
             except EditorValidationError as exc:
-                errors.update(exc.error_map)
+                _extend_error_map(errors, exc.error_map)
                 continue
             except DjangoValidationError as exc:
                 message = "; ".join(exc.messages) or "Invalid rich text."
-                errors[f"{base}.value"] = [{"code": "invalid", "message": message}]
+                errors.add(f"{base}.value", "invalid", message)
                 continue
             result.append({"type": "paragraph", "value": paragraph_block.get_prep_value(cleaned)})
 
         elif block_type == "code":
             if not isinstance(value, dict):
-                errors[f"{base}.value"] = [{"code": "invalid", "message": "Expected an object value."}]
+                errors.add(f"{base}.value", "invalid", "Expected an object value.")
                 continue
             block_errors = False
             for key in ("language", "source"):
                 if not isinstance(value.get(key), str) or not value.get(key):
-                    errors[f"{base}.value.{key}"] = [
-                        {"code": "required", "message": f"Code block '{key}' is required."}
-                    ]
+                    errors.add(f"{base}.value.{key}", "required", f"Code block '{key}' is required.")
                     block_errors = True
             if block_errors:
                 continue
@@ -322,26 +288,28 @@ def author_blocks_to_section(
         elif block_type == "image":
             image_id = value.get("id") if isinstance(value, dict) else None
             if not image_choosable_by(image_id, user):
-                errors[f"{base}.value.id"] = [
-                    {"code": "not_found", "message": f"Image {image_id} does not exist or is not accessible."}
-                ]
+                errors.add(
+                    f"{base}.value.id",
+                    "not_found",
+                    f"Image {image_id} does not exist or is not accessible.",
+                )
                 continue
             result.append({"type": "image", "value": image_id})
 
         elif block_type == "gallery":
             if not isinstance(value, list) or not value:
-                errors[f"{base}.value"] = [
-                    {"code": "invalid", "message": "Gallery value must be a non-empty list of image refs."}
-                ]
+                errors.add(f"{base}.value", "invalid", "Gallery value must be a non-empty list of image refs.")
                 continue
             items = []
             gallery_ok = True
             for img_index, ref in enumerate(value):
                 image_id = ref.get("id") if isinstance(ref, dict) else None
                 if not image_choosable_by(image_id, user):
-                    errors[f"{base}.value.{img_index}.id"] = [
-                        {"code": "not_found", "message": f"Image {image_id} does not exist or is not accessible."}
-                    ]
+                    errors.add(
+                        f"{base}.value.{img_index}.id",
+                        "not_found",
+                        f"Image {image_id} does not exist or is not accessible.",
+                    )
                     gallery_ok = False
                     continue
                 items.append({"id": str(uuid.uuid4()), "type": "item", "value": image_id})
@@ -352,19 +320,19 @@ def author_blocks_to_section(
         elif block_type == "audio":
             audio_id = value.get("id") if isinstance(value, dict) else None
             if not audio_choosable_by(audio_id, user):
-                errors[f"{base}.value.id"] = [{"code": "not_found", "message": "Referenced media is not available."}]
+                errors.add(f"{base}.value.id", "not_found", "Referenced media is not available.")
                 continue
             result.append({"type": "audio", "value": audio_id})
 
         else:  # block_type == "video"
             video_id = value.get("id") if isinstance(value, dict) else None
             if not video_choosable_by(video_id, user):
-                errors[f"{base}.value.id"] = [{"code": "not_found", "message": "Referenced media is not available."}]
+                errors.add(f"{base}.value.id", "not_found", "Referenced media is not available.")
                 continue
             result.append({"type": "video", "value": video_id})
 
     if errors:
-        raise EditorValidationError(errors)
+        raise EditorValidationError(errors.error_map)
     return result
 
 
