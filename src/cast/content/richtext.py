@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -21,6 +23,24 @@ _RICH_TEXT_INPUT_ERRORS = (AssertionError, IndexError, KeyError, TypeError, Valu
 
 class _InlineEmbedError(Exception):
     """An inline embed bypassed the structured media boundary."""
+
+
+class _RejectedLeaf(Exception):
+    """Stop fail-fast sanitization after a leaf records an author error."""
+
+
+RichTextLeaf: TypeAlias = blocks.RichTextBlock | blocks.RawHTMLBlock
+LeafFn = Callable[[RichTextLeaf, Any, str], Any]
+
+
+@dataclass(frozen=True)
+class NormalizedRichText:
+    """Read-only normalization result for stored rich text."""
+
+    source: str
+    normalized: str | None
+    classification: Literal["identical", "normalized", "rejected"]
+    errors: dict[str, list[dict[str, str]]]
 
 
 class _RichTextInput(HTMLParser):
@@ -57,7 +77,7 @@ def sanitize_rich_text(
     path: str,
     errors: ErrorCollector,
 ) -> RichText | None:
-    """Rebuild database HTML without accepting raw markup from callers."""
+    """Rebuild database HTML, returning ``None`` exactly when an error is added."""
     # Configuration failures are operator errors, not invalid author input.
     try:
         features = _rich_text_features(block)
@@ -95,31 +115,56 @@ def sanitize_rich_text(
     return RichText(html)
 
 
-def sanitize_block_value(block: blocks.Block, value: Any, *, path: str, errors: ErrorCollector) -> Any:
-    """Sanitize native block values before validation, retaining container IDs."""
-    if isinstance(block, blocks.RawHTMLBlock):
-        errors.add(path, "invalid", "Raw HTML blocks are not accepted by the editor API.")
-        return None
-    if isinstance(block, blocks.RichTextBlock):
-        return sanitize_rich_text(block, value, path=path, errors=errors)
-
-    before = len(errors)
+def map_rich_text_leaves(block: blocks.Block, value: Any, *, path: str, fn: LeafFn) -> Any:
+    """Map leaves in place, retaining IDs; callback failures leave prior mutations."""
+    if isinstance(block, (blocks.RichTextBlock, blocks.RawHTMLBlock)):
+        return fn(block, value, path)
     if isinstance(block, blocks.StructBlock):
         for name, child in block.child_blocks.items():
-            sanitized = sanitize_block_value(child, value[name], path=f"{path}.{name}", errors=errors)
-            if len(errors) > before:
-                return None
-            value[name] = sanitized
+            value[name] = map_rich_text_leaves(child, value[name], path=f"{path}.{name}", fn=fn)
     elif isinstance(block, blocks.ListBlock):
         for index, child in enumerate(value.bound_blocks):
-            sanitized = sanitize_block_value(block.child_block, child.value, path=f"{path}.{index}", errors=errors)
-            if len(errors) > before:
-                return None
-            child.value = sanitized
+            child.value = map_rich_text_leaves(block.child_block, child.value, path=f"{path}.{index}", fn=fn)
     elif isinstance(block, blocks.StreamBlock):
         for index, child in enumerate(value):
-            sanitized = sanitize_block_value(child.block, child.value, path=f"{path}.{index}.value", errors=errors)
-            if len(errors) > before:
-                return None
-            child.value = sanitized
+            child.value = map_rich_text_leaves(child.block, child.value, path=f"{path}.{index}.value", fn=fn)
     return value
+
+
+def sanitize_block_value(block: blocks.Block, value: Any, *, path: str, errors: ErrorCollector) -> Any:
+    """Sanitize native block values before validation, retaining container IDs."""
+
+    def sanitize_leaf(block: RichTextLeaf, value: Any, path: str) -> Any:
+        if isinstance(block, blocks.RawHTMLBlock):
+            errors.add(path, "invalid", "Raw HTML blocks are not accepted by the editor API.")
+            raise _RejectedLeaf
+        before = len(errors)
+        result = sanitize_rich_text(block, value, path=path, errors=errors)
+        if len(errors) > before:
+            raise _RejectedLeaf
+        if result is None:
+            raise RuntimeError("Rich-text sanitization returned no value without recording an error.")
+        return result
+
+    try:
+        return map_rich_text_leaves(block, value, path=path, fn=sanitize_leaf)
+    except _RejectedLeaf:
+        return None
+
+
+def normalize_rich_text(block: blocks.RichTextBlock, source: str) -> NormalizedRichText:
+    """Classify stored rich text without persisting changes or requiring a user."""
+    errors = ErrorCollector()
+    try:
+        result = sanitize_rich_text(block, RichText(source), path="value", errors=errors)
+    except Exception:
+        logger.exception("Unable to normalize stored rich text.")
+        errors.add("value", "normalization_failed", "Rich-text normalization failed.")
+        result = None
+    if result is None and not errors:
+        logger.error("Rich-text normalization returned no value without recording an error.")
+        errors.add("value", "normalization_failed", "Rich-text normalization failed.")
+    if errors or result is None:
+        return NormalizedRichText(source, None, "rejected", errors.error_map)
+    classification: Literal["identical", "normalized"] = "identical" if result.source == source else "normalized"
+    return NormalizedRichText(source, result.source, classification, errors.error_map)
