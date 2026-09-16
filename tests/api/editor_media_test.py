@@ -1,3 +1,4 @@
+import re
 import subprocess
 
 import pytest
@@ -246,6 +247,8 @@ class TestEditorMediaEndpoints:
         data = response.json()
         assert data["title"] == "Uploaded audio"
         assert data["m4a"].startswith("/media/")
+        audio = Audio.objects.get(pk=data["id"])
+        assert re.fullmatch(r"cast_audio/.+-[0-9a-f]{12}\.m4a", audio.m4a.name)
         assert run_probe.call_count == 2
 
         blocked = api_client.post(
@@ -350,7 +353,7 @@ class TestEditorMediaEndpoints:
             "cast.models.audio.run_media_probe",
             side_effect=subprocess.CalledProcessError(returncode=1, cmd="ffprobe"),
         )
-        mocker.patch("cast.api.editor.media._cleanup_media_object", return_value=False)
+        mocker.patch("cast.media_ingest.cleanup_new_media_object", return_value=False)
         api_client.force_authenticate(user=superuser)
         url = reverse("cast:api:editor_media_audios")
 
@@ -402,7 +405,7 @@ class TestEditorMediaEndpoints:
 
     def test_editor_media_probe_budget_setting_is_used(self, api_client, superuser, m4a_audio, mocker, settings):
         settings.CAST_EDITOR_MEDIA_PROBE_SECONDS = 3
-        budget = mocker.patch("cast.api.editor.media.media_probe_budget", wraps=media_probe.media_probe_budget)
+        budget = mocker.patch("cast.media_ingest.media_probe_budget", wraps=media_probe.media_probe_budget)
         mocker.patch(
             "cast.models.audio.run_media_probe",
             side_effect=[
@@ -424,7 +427,7 @@ class TestEditorMediaEndpoints:
             "cast.models.audio.run_media_probe",
             side_effect=subprocess.TimeoutExpired(cmd="ffprobe", timeout=1),
         )
-        mocker.patch("cast.api.editor.media._cleanup_media_object", return_value=False)
+        mocker.patch("cast.media_ingest.cleanup_new_media_object", return_value=False)
         api_client.force_authenticate(user=superuser)
         url = reverse("cast:api:editor_media_audios")
 
@@ -478,7 +481,8 @@ class TestEditorMediaEndpoints:
         assert data["title"] == "Uploaded video"
         assert data["original"].startswith("/media/")
         assert data["poster"].startswith("/media/")
-        assert Video.objects.filter(id=data["id"]).exists()
+        video = Video.objects.get(id=data["id"])
+        assert re.fullmatch(r"cast_videos/.+-[0-9a-f]{12}\.mp4", video.original.name)
 
     def test_video_upload_with_explicit_collection_when_multiple_exist(self, api_client, minimal_mp4, image_1px):
         video_bytes = minimal_mp4.read()
@@ -526,6 +530,22 @@ class TestEditorMediaEndpoints:
         assert data["poster"] is None
         assert Video.objects.filter(id=data["id"]).exists()
         assert run_probe.call_count == 1
+
+    def test_video_ingest_cleanup_failure_uses_editor_error(self, api_client, superuser, minimal_mp4, mocker):
+        mocker.patch(
+            "cast.api.editor.media.ingest_upload",
+            side_effect=media_ingest.MediaIngestCleanupFailed("cleanup failed"),
+        )
+        api_client.force_authenticate(user=superuser)
+
+        response = api_client.post(
+            reverse("cast:api:editor_media_videos"),
+            {"title": "Failed cleanup", "original": minimal_mp4},
+            format="multipart",
+        )
+
+        assert response.status_code == 500
+        assert response.json() == {"code": "cleanup_failed", "detail": "Upload cleanup failed."}
 
     def test_video_upload_form_and_post_save_errors(self, api_client, superuser, minimal_mp4, mocker):
         upload_bytes = minimal_mp4.read()

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import subprocess
 from collections.abc import Callable
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
@@ -21,10 +20,17 @@ from wagtail.permission_policies.collections import CollectionOwnershipPermissio
 
 from ... import appsettings
 from ...forms import AudioForm, get_video_form
-from ...media_ingest import MediaUploadInProgress, cleanup_new_media_object, upload_lock
-from ...media_probe import media_probe_budget
+from ...media_ingest import (
+    MediaIngestCleanupFailed,
+    MediaProbeFailed,
+    MediaProbeTimeout,
+    MediaUploadInProgress,
+    cleanup_new_media_object,
+    editor_policy,
+    ingest_upload,
+    upload_lock,
+)
 from ...models import Audio, Video
-from ...models.audio import AudioDurationProbeError, AudioDurationProbeTimeout
 from ..views import StandardResultsSetPagination
 from .errors import EditorFlatError, EditorValidationError
 from .views import EditorAPIView
@@ -258,10 +264,6 @@ def _flat_error(code: str, detail: str, *, http_status: int) -> Response:
     return Response({"code": code, "detail": detail}, status=http_status)
 
 
-def _editor_media_probe_seconds() -> float:
-    return float(appsettings.CAST_EDITOR_MEDIA_PROBE_SECONDS)
-
-
 class EditorMediaListMixin:
     pagination_class = StandardResultsSetPagination
     allowed_query_params = {"q", "tag", "page", "pageSize", "format"}
@@ -359,16 +361,13 @@ class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
         if not form.is_valid():
             raise EditorValidationError(_form_errors(form))
         try:
-            with media_probe_budget(_editor_media_probe_seconds()):
-                audio = form.save()
-        except (subprocess.TimeoutExpired, AudioDurationProbeTimeout):
-            if not _cleanup_media_object(audio, AUDIO_FILE_FIELDS):
-                return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
+            audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS))
+        except MediaIngestCleanupFailed:
+            return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
+        except MediaProbeTimeout:
             return _flat_error("probe_timeout", "Audio probing exceeded the editor upload budget.", http_status=422)
-        except AudioDurationProbeError:
+        except MediaProbeFailed:
             logger.exception("Editor audio probing failed for upload title=%r", audio.title)
-            if not _cleanup_media_object(audio, AUDIO_FILE_FIELDS):
-                return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
             return _flat_error("probe_failed", "Audio probing failed.", http_status=422)
         if not audio_permission_policy.user_has_permission_for_instance(request.user, "choose", audio):
             if not _cleanup_media_object(audio, AUDIO_FILE_FIELDS):
@@ -407,8 +406,10 @@ class EditorVideoListCreateView(EditorMediaListMixin, EditorAPIView):
         form = self._video_form(form_class, form_data, request, video)
         if not form.is_valid():
             raise EditorValidationError(_form_errors(form))
-        with media_probe_budget(_editor_media_probe_seconds()):
-            video = form.save()
+        try:
+            video = ingest_upload(form, policy=editor_policy(("original", "poster")))
+        except MediaIngestCleanupFailed:
+            return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
         if not video_permission_policy.user_has_permission_for_instance(request.user, "choose", video):
             if not _cleanup_media_object(video, ("original", "poster")):
                 return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)

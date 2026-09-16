@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Any
 
 from django.core.cache import cache
+from django.db import transaction
 
 from . import appsettings
+from .file_replacement import fresh_file_name
+from .media_derivation import normalize_model_save_arguments
+from .media_probe import media_probe_budget
+from .models.audio import AudioDurationProbeError, AudioDurationProbeTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -88,3 +94,39 @@ def cleanup_new_media_object(obj: Any, field_names: tuple[str, ...]) -> bool:
         logger.exception("Media ingest cleanup failed for %s pk=%s", obj._meta.label, getattr(obj, "pk", None))
         return False
     return True
+
+
+def _rename_uncommitted_files(instance: Any, field_names: tuple[str, ...]) -> None:
+    for field_name in field_names:
+        field = getattr(instance, field_name)
+        if field and not field._committed:
+            field.name = fresh_file_name(field.name)
+
+
+def ingest_upload(form: Any, *, policy: IngestPolicy) -> Any:
+    """Persist a validated create form under the shared ingest policy.
+
+    Probing intentionally stays inside the transaction so the row, form-owned
+    relations, and synchronous derivations either commit together or roll back.
+    """
+    instance = form.instance
+    _rename_uncommitted_files(instance, policy.file_fields)
+    _, using = normalize_model_save_arguments(instance, (), {})
+    probe_budget = nullcontext() if policy.probe_seconds is None else media_probe_budget(policy.probe_seconds)
+
+    try:
+        with probe_budget, transaction.atomic(using=using):
+            return form.save()
+    except Exception as exc:
+        if not cleanup_new_media_object(instance, policy.file_fields):
+            logger.exception(
+                "Media ingest failed before cleanup completed for %s pk=%s",
+                instance._meta.label,
+                getattr(instance, "pk", None),
+            )
+            raise MediaIngestCleanupFailed("Media ingest cleanup failed.") from exc
+        if isinstance(exc, (subprocess.TimeoutExpired, AudioDurationProbeTimeout)):
+            raise MediaProbeTimeout("Media probing exceeded the ingest budget.") from exc
+        if isinstance(exc, AudioDurationProbeError):
+            raise MediaProbeFailed("Media probing failed.") from exc
+        raise

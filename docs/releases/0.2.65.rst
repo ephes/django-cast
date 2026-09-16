@@ -3,6 +3,10 @@
 
 - Register ``CAST_MEDIA_PROBE_SECONDS`` (default ``30``) for the shared Wagtail
   admin media ingest policy. Admin views are not wired to enforce it yet.
+- Route editor audio and video creates through the shared media-ingestion
+  service. Stored upload basenames now carry a random suffix so same-named
+  creates cannot overwrite one another on overwrite-capable storage backends;
+  editor API response codes and envelopes are unchanged.
 - Declare Python 3.15 support and add it to the CI compatibility matrix with
   prerelease interpreter support. Matrix jobs run independently so a failure
   on one Python version does not cancel the others.
