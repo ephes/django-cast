@@ -1,20 +1,11 @@
 import pytest
 from django.contrib.auth.models import Group, Permission
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
-from wagtail import blocks
 from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page
 
 from cast.api.editor.body import (
-    SUPPORTED_OVERVIEW_BLOCKS,
-    _content_section,
-    _custom_author_value,
-    _custom_block_map,
-    _flatten_django_validation_error,
-    _media_ref_is_available,
-    _unwrap_list_item_values,
     author_blocks_to_overview,
     author_blocks_to_section,
     overview_to_author_blocks,
@@ -155,68 +146,6 @@ class TestEditorExceptionHandler:
         assert response.data["errors"]["field"][0] == {"code": "invalid", "message": "bad"}
 
 
-class TestEditorCustomBlockHelpers:
-    def test_unknown_path_prefix_has_no_custom_blocks(self):
-        assert _content_section("not-body") is None
-        assert _custom_block_map(None) == {}
-
-    def test_django_validation_error_dict_is_flattened(self):
-        exc = DjangoValidationError({"title": [DjangoValidationError("Bad title", code="invalid")]})
-
-        assert _flatten_django_validation_error(exc, "overview.0.value") == {
-            "overview.0.value.title": [{"code": "invalid", "message": "Bad title"}]
-        }
-
-    def test_wagtail_non_block_errors_are_flattened(self):
-        exc = DjangoValidationError("Container failed")
-        exc.non_block_errors = [DjangoValidationError("Bad list", code="invalid")]
-
-        assert _flatten_django_validation_error(exc, "overview.0.value") == {
-            "overview.0.value": [{"code": "invalid", "message": "Bad list"}]
-        }
-
-    def test_non_validation_children_are_ignored_until_leaf_fallback(self):
-        exc = DjangoValidationError("Container failed")
-        exc.block_errors = {"field": "not a validation error"}
-
-        assert _flatten_django_validation_error(exc, "overview.0.value") == {
-            "overview.0.value": [{"code": "invalid", "message": "Container failed"}]
-        }
-
-    def test_non_validation_non_block_children_are_ignored_until_leaf_fallback(self):
-        exc = DjangoValidationError("Container failed")
-        exc.non_block_errors = ["not a validation error"]
-
-        assert _flatten_django_validation_error(exc, "overview.0.value") == {
-            "overview.0.value": [{"code": "invalid", "message": "Container failed"}]
-        }
-
-    def test_non_validation_error_dict_children_are_ignored_until_leaf_fallback(self):
-        exc = DjangoValidationError("Container failed")
-        exc.error_dict = {"field": ["not a validation error"]}
-
-        assert _flatten_django_validation_error(exc, "overview.0.value") == {
-            "overview.0.value": [{"code": "invalid", "message": "not a validation error"}]
-        }
-
-    def test_base_block_author_value_uses_prep_value_fallback(self):
-        class PlainBlock(blocks.Block):
-            pass
-
-        assert _custom_author_value(PlainBlock(), {"nested": ["value"]}) == {"nested": ["value"]}
-
-    def test_list_item_unwrap_handles_plain_lists_and_nested_dicts(self):
-        assert _unwrap_list_item_values(
-            {
-                "items": [
-                    {"type": "item", "id": "a", "value": {"title": "A"}},
-                    {"type": "item", "id": "b", "value": {"title": "B"}},
-                ],
-                "plain": [1, {"x": 2}],
-            }
-        ) == {"items": [{"title": "A"}, {"title": "B"}], "plain": [1, {"x": 2}]}
-
-
 class TestEditorParents:
     pytestmark = pytest.mark.django_db
 
@@ -277,9 +206,6 @@ class TestEditorParents:
 
 class TestAuthorBlocksToOverview:
     pytestmark = pytest.mark.django_db
-
-    def test_supported_block_set(self):
-        assert SUPPORTED_OVERVIEW_BLOCKS == frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
 
     def test_paragraph_code_pass_through(self, superuser):
         result = author_blocks_to_overview(
@@ -540,10 +466,6 @@ class TestOverviewToAuthorBlocks:
         assert overview_to_author_blocks(internal) == [
             {"type": "unsupported", "value": {"stored_type": "code", "position": "overview.0"}}
         ]
-
-    def test_unknown_media_ref_type_is_invalid(self, superuser):
-        with pytest.raises(ValueError, match="Unsupported media block type"):
-            _media_ref_is_available("unknown", 1, superuser)
 
     def test_unsupported_placeholder_must_match_existing_block(self, superuser):
         existing = [{"type": "embed", "value": "https://example.com"}]

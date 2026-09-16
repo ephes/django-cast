@@ -15,21 +15,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
-- [ ] Architecture review 2026-09-15 follow-ups
-  - Review: [backlog/2026-09-15-architecture-review.md](backlog/2026-09-15-architecture-review.md)
-  - Scope: implement the two remaining structural seams that block several deferred items. The publication-policy
-    seam is complete; the bug and test-hygiene findings from the same review are not tracked here.
-  - Next implementation items:
-    - A **transport-neutral content converter** (`cast.content`) with an error collector, decoupled from DRF.
-      Plan:
-      [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
-      Done when: the body converter no longer raises DRF exceptions, nested errors accumulate instead of failing
-      fast, and the editor API is a thin adapter over it.
-  - Status: the publication-policy and media-ingestion seams are complete. Implement the transport-neutral
-    converter next.
-  - Done when: the remaining converter seam is implemented or explicitly deferred with its constraints recorded.
-  - Related to: Evaluate Wagtail v3 API reuse; its publication prerequisite is complete and the converter remains.
-
 - [ ] Upstream the modelsearch Django 6.1 MATCH fix and remove the shim
   - Notes: [backlog/2026-08-10-modelsearch-django61-upstream.md](backlog/2026-08-10-modelsearch-django61-upstream.md)
   - Scope: report the Django 6.1 `MATCH` compilation break to `modelsearch` upstream, then drop
@@ -39,7 +24,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
   - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-  - Plan prerequisites: the publication policy and content converter seams —
+  - Implemented prerequisites: the publication policy and content converter seams —
     [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and
     [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
   - Scope: prove Post and Episode editing through Wagtail 8's preview API, compare it with the existing editor
@@ -51,12 +36,11 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Triage remaining security hardening observations
   - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
-  - Scope: manual transcript upload size limits, admin media probe/concurrency
-    limits, author self-edit/delete policy after page access revocation, and the
-    accepted backwards-compatible latest-revision behavior for publishers that
-    omit the optional `If-Match` approval binding.
-  - Done when: each observation has a concrete implementation plan or a recorded
-    decision to retain the current behavior with its constraints documented.
+  - Scope: decide whether authors retain self-edit/delete rights after losing
+    access to the target page. The upload limits, media probe/concurrency limits,
+    and optional publication revision binding have been implemented or resolved;
+    the review's hardening observations record the accepted omitted-token race.
+  - Done when: the author action policy is specified and covered by regressions.
 
 - [ ] Audit existing editor API rich text and historical revisions
   - Design record:

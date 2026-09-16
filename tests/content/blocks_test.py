@@ -2,9 +2,8 @@ import pytest
 from django.test import override_settings
 from wagtail import blocks
 
-from cast.api.editor.body import SUPPORTED_BODY_BLOCKS, _media_ref_is_available, author_blocks_to_section
-from cast.api.editor.errors import EditorValidationError
 from cast.content.blocks import (
+    SUPPORTED_BODY_BLOCKS,
     UNSUPPORTED,
     AudioConverter,
     CodeConverter,
@@ -14,9 +13,13 @@ from cast.content.blocks import (
     ImageConverter,
     ParagraphConverter,
     VideoConverter,
+    _custom_author_value,
+    _custom_block_map,
+    _unwrap_list_item_values,
     content_converters,
 )
-from cast.content.errors import ErrorCollector
+from cast.content.convert import author_blocks_to_section
+from cast.content.errors import ContentValidationError, ErrorCollector
 from cast.post_body_blocks import DEFAULT_CONTENT_BLOCK_NAMES
 
 
@@ -57,9 +60,33 @@ def test_custom_block_can_prepare_a_successful_none_value(mocker):
         return_value=[("nullable", NullBlock())],
     )
 
-    assert author_blocks_to_section([{"type": "nullable", "value": None}], user=None, path_prefix="overview") == [
-        {"type": "nullable", "value": None}
-    ]
+    assert author_blocks_to_section(
+        [{"type": "nullable", "value": None}],
+        ctx=ConversionContext(section="overview", user=None),
+    ) == [{"type": "nullable", "value": None}]
+
+
+def test_unknown_section_has_no_custom_blocks():
+    assert _custom_block_map(None) == {}
+
+
+def test_base_block_author_value_uses_prep_value_fallback():
+    class PlainBlock(blocks.Block):
+        pass
+
+    assert _custom_author_value(PlainBlock(), {"nested": ["value"]}) == {"nested": ["value"]}
+
+
+def test_list_item_unwrap_handles_plain_lists_and_nested_dicts():
+    assert _unwrap_list_item_values(
+        {
+            "items": [
+                {"type": "item", "id": "a", "value": {"title": "A"}},
+                {"type": "item", "id": "b", "value": {"title": "B"}},
+            ],
+            "plain": [1, {"x": 2}],
+        }
+    ) == {"items": [{"title": "A"}, {"title": "B"}], "plain": [1, {"x": 2}]}
 
 
 def test_code_converter_validates_and_reads_curated_fields():
@@ -102,29 +129,13 @@ def test_media_converter_preserves_not_found_message_and_skips_read_filter_witho
     assert resolver.call_args_list == [mocker.call(7, ctx.user), mocker.call(7, ctx.user)]
 
 
-@pytest.mark.parametrize(
-    ("block_type", "patch_target"),
-    [
-        ("image", "cast.content.media_refs.get_choosable_image"),
-        ("audio", "cast.content.media_refs.get_choosable_audio"),
-        ("video", "cast.content.media_refs.get_choosable_video"),
-    ],
-)
-def test_compatibility_media_availability_helper(mocker, block_type, patch_target):
-    checker = mocker.patch(patch_target, return_value=True)
-
-    assert _media_ref_is_available(block_type, 7, "user")
-    checker.assert_called_once_with(7, "user")
-
-
 def test_missing_converter_cannot_reinterpret_a_supported_type_as_gallery(mocker):
     mocker.patch("cast.content.convert.content_converters", return_value={})
 
-    with pytest.raises(EditorValidationError) as exc_info:
+    with pytest.raises(ContentValidationError) as exc_info:
         author_blocks_to_section(
             [{"type": "code", "value": [{"id": 1}]}],
-            user=None,
-            path_prefix="overview",
+            ctx=ConversionContext(section="overview", user=None),
         )
 
     assert exc_info.value.error_map == {

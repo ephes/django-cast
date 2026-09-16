@@ -1,6 +1,7 @@
 # Transport-neutral content converter (`cast.content`)
 
-Date: 2026-09-16   Status: Proposed (design record; no implementation yet)
+Date: 2026-09-16   Status: Implemented in commits ``dbe31dfe``, ``6cc07f6d``, ``a37b80f7``, ``6aa5bcba``,
+``1e2baf88``, ``4dfba2ff``, ``909a6ca8``, ``a8d5c465``, ``a187bd59``, and this note's closing test-relocation commit.
 
 ## Problem
 

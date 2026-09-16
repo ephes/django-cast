@@ -2,7 +2,7 @@ import pytest
 from django.test import override_settings
 
 from cast.content.blocks import ConversionContext
-from cast.content.convert import convert_author_blocks
+from cast.content.convert import content_section, convert_author_blocks
 from cast.content.errors import ErrorCollector
 
 
@@ -49,6 +49,10 @@ def test_non_list_input_is_collected_without_raising():
 def test_conversion_requires_a_path_prefix_or_section():
     with pytest.raises(ValueError, match="path_prefix is required when section is None"):
         convert_author_blocks([], ctx=ConversionContext(section=None, user=None), errors=ErrorCollector())
+
+
+def test_content_section_rejects_unknown_path_prefix():
+    assert content_section("not-body") is None
 
 
 @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})

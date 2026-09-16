@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..post_body_blocks import POST_BODY_SECTIONS
 from .blocks import UNSUPPORTED, ConversionContext, content_converters
 from .errors import ContentValidationError, ErrorCollector
 from .placeholders import placeholder_for, resolve_placeholder
+
+
+def content_section(path_prefix: str) -> str | None:
+    """Return the configured Post body section named by a dotted path."""
+    section = path_prefix.split(".", 1)[0]
+    return section if section in POST_BODY_SECTIONS else None
 
 
 def _path_prefix(ctx: ConversionContext) -> str:

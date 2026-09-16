@@ -53,3 +53,39 @@ def test_flatten_django_validation_error_returns_content_errors():
     assert flatten_django_validation_error(exc, "body.0.value") == [
         ContentError("body.0.value.title", "invalid", "Bad title")
     ]
+
+
+def _flattened_error_map(exc: DjangoValidationError) -> dict[str, list[dict[str, str]]]:
+    errors = ErrorCollector()
+    errors.extend(flatten_django_validation_error(exc, "overview.0.value"))
+    return errors.error_map
+
+
+def test_wagtail_non_block_errors_are_flattened():
+    exc = DjangoValidationError("Container failed")
+    exc.non_block_errors = [DjangoValidationError("Bad list", code="invalid")]
+
+    assert _flattened_error_map(exc) == {"overview.0.value": [{"code": "invalid", "message": "Bad list"}]}
+
+
+def test_non_validation_block_children_are_ignored_until_leaf_fallback():
+    exc = DjangoValidationError("Container failed")
+    exc.block_errors = {"field": "not a validation error"}
+
+    assert _flattened_error_map(exc) == {"overview.0.value": [{"code": "invalid", "message": "Container failed"}]}
+
+
+def test_non_validation_non_block_children_are_ignored_until_leaf_fallback():
+    exc = DjangoValidationError("Container failed")
+    exc.non_block_errors = ["not a validation error"]
+
+    assert _flattened_error_map(exc) == {"overview.0.value": [{"code": "invalid", "message": "Container failed"}]}
+
+
+def test_non_validation_error_dict_children_are_ignored_until_leaf_fallback():
+    exc = DjangoValidationError("Container failed")
+    exc.error_dict = {"field": ["not a validation error"]}
+
+    assert _flattened_error_map(exc) == {
+        "overview.0.value": [{"code": "invalid", "message": "not a validation error"}]
+    }
