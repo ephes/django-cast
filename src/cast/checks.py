@@ -304,6 +304,31 @@ def check_cast_required_middleware(
 
 
 @register("cast")
+def check_publication_policy_installed(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Ensure the guarded Wagtail publication boundary was installed."""
+    try:
+        from wagtail.actions.publish_revision import PublishRevisionAction
+    except ImportError:
+        publish_revision = None
+    else:
+        publish_revision = getattr(PublishRevisionAction, "_publish_revision", None)
+
+    if getattr(publish_revision, "_cast_publication_policy_hook", False):
+        return []
+    return [
+        Error(
+            "The django-cast publication policy hook is not installed, so publication rules are not enforced.",
+            hint="Use a supported Wagtail version and inspect startup logs for the publication hook warning.",
+            id="cast.E010",
+        )
+    ]
+
+
+@register("cast")
 def check_voxhelm_transcripts_task_backend(
     app_configs: Sequence[AppConfig] | None = None,
     databases: Sequence[str] | None = None,

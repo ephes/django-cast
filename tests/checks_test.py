@@ -19,6 +19,7 @@ from cast.checks import (
     check_cast_required_middleware,
     check_cast_setting_types,
     check_post_body_block_setting,
+    check_publication_policy_installed,
     check_voxhelm_transcripts_task_backend,
 )
 
@@ -363,6 +364,34 @@ class TestVoxhelmTranscriptsTaskBackendCheck:
         assert [error.id for error in errors] == ["cast.E009"]
         assert "cast_transcripts" in errors[0].msg
         assert "Transcript Worker" in errors[0].hint
+
+
+class TestPublicationPolicyCheck:
+    def test_check_is_registered(self):
+        assert check_publication_policy_installed in registry.get_checks(include_deployment_checks=False)
+
+    def test_no_error_when_publication_policy_is_installed(self):
+        assert check_publication_policy_installed() == []
+
+    def test_error_when_publication_policy_is_not_installed(self, mocker):
+        from wagtail.actions.publish_revision import PublishRevisionAction
+
+        mocker.patch.object(PublishRevisionAction, "_publish_revision", None)
+
+        errors = check_publication_policy_installed()
+
+        assert [error.id for error in errors] == ["cast.E010"]
+        assert "publication policy hook is not installed" in errors[0].msg
+        assert "startup logs" in errors[0].hint
+
+    def test_error_when_wagtail_publish_action_is_unavailable(self, monkeypatch):
+        from wagtail.actions import publish_revision
+
+        monkeypatch.delattr(publish_revision, "PublishRevisionAction")
+
+        errors = check_publication_policy_installed()
+
+        assert [error.id for error in errors] == ["cast.E010"]
 
 
 def test_system_check_is_registered():

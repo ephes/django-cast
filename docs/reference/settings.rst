@@ -3,7 +3,17 @@ Settings
 ########
 
 Documentation of all the configuration variables you can add to your
-``DJANGO_SETTINGS_MODULE`` file.
+``DJANGO_SETTINGS_MODULE`` file, plus system checks for the runtime seams that
+apply those settings safely.
+
+*************
+System checks
+*************
+
+Run ``python manage.py check`` during deployment. The ``cast.E010`` error means
+django-cast could not install its guarded Wagtail publication hook; publication
+rules such as the episode audio requirement are not safely enforced until the
+deployment uses a supported Wagtail version and the startup warning is resolved.
 
 ********
 Comments

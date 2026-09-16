@@ -16,6 +16,10 @@
   rejection currently surface as a Wagtail server error. A legacy invalid
   revision that was approved before this upgrade can still stop a
   ``publish_scheduled`` batch until its approval is cleared.
+- Add the ``cast.E010`` system check for django-cast's guarded Wagtail
+  publication hook. An unsupported Wagtail publish API now fails deployment
+  checks instead of leaving publication rules disabled with only a startup
+  warning.
 - Recheck Wagtail page visibility on regular and AJAX comment submissions and
   previews. Retained signed comment forms no longer allow comments after a page
   is unpublished or the visitor loses access through a view restriction.
