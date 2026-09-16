@@ -38,6 +38,10 @@ site.
 - Paged feeds, if large imported archives expose feed size or pagination limits.
 - Podcast contributor follow-up options, if feeds include people metadata that
   maps to django-cast contributors.
+- The implemented
+  [media-ingestion service](2026-09-16-media-ingestion-service.md) provides the
+  upload and bounded-fetch contracts. Feed import still needs connect-time
+  address pinning and redirect revalidation for attacker-controlled URLs.
 
 ## Concrete Reference: Django Chat
 

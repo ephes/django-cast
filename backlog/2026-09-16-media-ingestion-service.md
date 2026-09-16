@@ -1,6 +1,7 @@
 # Media ingestion service
 
-Date: 2026-09-16   Status: Proposed (design record; no implementation yet)
+Date: 2026-09-16   Status: Implemented in commits ``f1162cf5``, ``7e98f13f``, ``db38dba8``, ``72ddd2dd``,
+``52f9b9f3``, ``8c5928e3``, ``1cf0e857``, ``4f700564``, and this note's closing private-address-policy commit.
 
 ## Problem
 

@@ -217,11 +217,33 @@ Media Pipeline:
 
 4. **Delivery**: Direct or via CDN
 
-Remote byte fetches use ``cast.safe_fetch`` for explicit origin policy,
-redirect control, response-size caps, bounded HTTP error details, and a shared
-error vocabulary. ``FetchPolicy`` reserves ``block_private_addresses``;
-enforcement is not active until the media-ingestion resolution check lands,
-before remote importers are enabled.
+Upload and fetch safety
+~~~~~~~~~~~~~~~~~~~~~~~
+
+All audio, video, and transcript upload transports call
+``cast.media_ingest.ingest_upload``. Audio and video transports acquire the
+shared per-user ``upload_lock`` once, before form binding, and select either an
+editor or admin probe budget. The service randomizes stored basenames, saves
+inside a transaction, removes newly written files after failure, and deletes
+replaced files only after commit. Audio and video form saves continue into
+``cast.media_derivation`` for duration, chapter, and poster processing inside
+that ingest boundary. Future upload transports must use the same service
+instead of saving media forms directly.
+
+Remote byte fetches use ``cast.safe_fetch.fetch_bytes`` with an explicit
+``FetchPolicy``. The policy controls allowed origins, redirects, response and
+error-body byte caps, timeouts, and private-address blocking. When
+``block_private_addresses`` is enabled, addresses that Python's ``ipaddress``
+module classifies as non-global, plus multicast addresses, are rejected before
+the request opens. Redirect following cannot be combined with this check.
+Operator-configured Voxhelm origins deliberately disable it while retaining
+same-origin and size controls.
+
+The resolution check does not pin the connection to the validated address, so
+it is not by itself a complete defense against DNS rebinding. Before accepting
+attacker-controlled URLs, a future importer must extend the ``open_url``
+transport with connect-time address pinning and redirect revalidation, while
+retaining the policy checks above.
 
 API Architecture
 ----------------

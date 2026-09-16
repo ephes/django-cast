@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import ip_address
+from socket import SOCK_STREAM, getaddrinfo
 from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -53,12 +55,13 @@ class FetchPolicy:
     timeout: float
     max_error_bytes: int = 16 * 1024
     follow_redirects: bool = False
-    # Enforced by the private-address resolution check added in slice 8.
     block_private_addresses: bool = True
 
     def __post_init__(self) -> None:
         if self.allowed_origins is not None and self.follow_redirects:
             raise ValueError("Redirects cannot be followed with an origin allowlist.")
+        if self.block_private_addresses and self.follow_redirects:
+            raise ValueError("Redirects cannot be followed when private-address blocking is enabled.")
 
 
 class NoRedirectHandler(HTTPRedirectHandler):
@@ -105,6 +108,24 @@ def read_http_error_detail(exc: HTTPError, *, max_bytes: int) -> str:
     return f"{detail}{suffix}"
 
 
+def _require_public_addresses(hostname: str, port: int) -> None:
+    """Reject hosts resolving to any private or otherwise non-global address."""
+    try:
+        addresses = getaddrinfo(hostname, port, type=SOCK_STREAM)
+    except OSError as exc:
+        raise FetchError(f"Fetch URL host could not be resolved: {exc}") from exc
+    if not addresses:
+        raise FetchError("Fetch URL host did not resolve to an address.")
+    for *_, sockaddr in addresses:
+        address_text = str(sockaddr[0]).partition("%")[0]
+        try:
+            address = ip_address(address_text)
+        except ValueError as exc:
+            raise FetchError("Fetch URL host resolved to an invalid address.") from exc
+        if not address.is_global or address.is_multicast:
+            raise FetchError("Fetch URL host resolved to a private or non-global address.")
+
+
 def fetch_bytes(
     url: str,
     *,
@@ -120,6 +141,14 @@ def fetch_bytes(
         raise FetchError("Fetch URL must use HTTP or HTTPS.")
     if policy.allowed_origins is not None and origin not in policy.allowed_origins:
         raise FetchError("Fetch URL origin is not allowed.")
+    if policy.block_private_addresses:
+        if parts.hostname is None:
+            raise FetchError("Fetch URL must include a host.")
+        try:
+            port = parts.port
+        except ValueError as exc:
+            raise FetchError("Fetch URL has an invalid port.") from exc
+        _require_public_addresses(parts.hostname, port or (443 if parts.scheme.lower() == "https" else 80))
     request = Request(url, data=data, headers=headers or {}, method=method)
     try:
         with open_url(request, timeout=policy.timeout, follow_redirects=policy.follow_redirects) as response:

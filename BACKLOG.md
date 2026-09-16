@@ -20,18 +20,14 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: implement the two remaining structural seams that block several deferred items. The publication-policy
     seam is complete; the bug and test-hygiene findings from the same review are not tracked here.
   - Next implementation items:
-    - A **media ingestion service** owning upload locks, probe budget, size caps and an SSRF-safe fetch helper.
-      Plan: [backlog/2026-09-16-media-ingestion-service.md](backlog/2026-09-16-media-ingestion-service.md)
-      Done when: the editor API, the admin media views, `TranscriptForm` and `media_derivation` share one ingest
-      path, and remote media import has a documented safety contract to build on.
     - A **transport-neutral content converter** (`cast.content`) with an error collector, decoupled from DRF.
       Plan:
       [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
       Done when: the body converter no longer raises DRF exceptions, nested errors accumulate instead of failing
       fast, and the editor API is a thin adapter over it.
-  - Status: the maintainer decisions in all three plans are settled. Implement the media-ingestion seam next, then
-    the transport-neutral converter.
-  - Done when: both remaining seams are implemented or explicitly deferred with their constraints recorded.
+  - Status: the publication-policy and media-ingestion seams are complete. Implement the transport-neutral
+    converter next.
+  - Done when: the remaining converter seam is implemented or explicitly deferred with its constraints recorded.
   - Related to: Evaluate Wagtail v3 API reuse; its publication prerequisite is complete and the converter remains.
 
 - [ ] Upstream the modelsearch Django 6.1 MATCH fix and remove the shim
@@ -115,6 +111,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
     (see Open Questions)
   - Status: deferred for now.
+  - Prerequisite implemented: the shared upload and bounded-fetch contracts are documented in
+    [the media-ingestion service plan](backlog/2026-09-16-media-ingestion-service.md); remote imports must add
+    connect-time address pinning and redirect revalidation before accepting attacker-controlled URLs.
   - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
     (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
     for agents but safe for production sites.

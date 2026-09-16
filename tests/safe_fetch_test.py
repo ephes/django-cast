@@ -1,4 +1,5 @@
 import io
+from socket import SOCK_STREAM
 from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
@@ -27,6 +28,7 @@ def policy(**overrides):
         "max_bytes": 4,
         "max_error_bytes": 4,
         "timeout": 2.5,
+        "block_private_addresses": False,
     }
     values.update(overrides)
     return FetchPolicy(**values)
@@ -87,6 +89,11 @@ def test_fetch_bytes_refuses_redirects_with_origin_allowlist(mocker):
     open_url.assert_not_called()
 
 
+def test_fetch_policy_refuses_redirects_with_private_address_blocking():
+    with pytest.raises(ValueError, match="private-address blocking"):
+        policy(allowed_origins=None, follow_redirects=True, block_private_addresses=True)
+
+
 def test_fetch_bytes_bounds_http_error_detail(mocker):
     error = HTTPError(
         url="https://media.example/file",
@@ -106,6 +113,119 @@ def test_fetch_bytes_wraps_url_error(mocker):
 
     with pytest.raises(FetchError, match="offline"):
         fetch_bytes("https://media.example/file", policy=policy())
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "127.0.0.1",
+        "10.0.0.1",
+        "169.254.1.1",
+        "::1",
+        "fc00::1",
+        "ff02::1",
+    ],
+)
+def test_fetch_bytes_refuses_private_or_non_global_addresses(mocker, address):
+    mocker.patch(
+        "cast.safe_fetch.getaddrinfo",
+        return_value=[(None, None, None, None, (address, 443))],
+    )
+    open_url = mocker.patch("cast.safe_fetch.open_url")
+
+    with pytest.raises(FetchError, match="private or non-global"):
+        fetch_bytes(
+            "https://media.example/file",
+            policy=policy(block_private_addresses=True),
+        )
+
+    open_url.assert_not_called()
+
+
+def test_fetch_policy_blocks_private_addresses_by_default(mocker):
+    mocker.patch(
+        "cast.safe_fetch.getaddrinfo",
+        return_value=[(None, None, None, None, ("127.0.0.1", 443))],
+    )
+    default_policy = FetchPolicy(
+        allowed_origins=None,
+        max_bytes=4,
+        timeout=2.5,
+    )
+
+    with pytest.raises(FetchError, match="private or non-global"):
+        fetch_bytes("https://127.0.0.1/file", policy=default_policy)
+
+
+@pytest.mark.parametrize("url", ["https://127.0.0.1/file", "https://[::1]/file"])
+def test_fetch_bytes_rejects_private_ip_literals_with_real_resolver(url):
+    with pytest.raises(FetchError, match="private or non-global"):
+        fetch_bytes(url, policy=policy(allowed_origins=None, block_private_addresses=True))
+
+
+def test_fetch_bytes_allows_only_public_resolved_addresses(mocker):
+    getaddrinfo = mocker.patch(
+        "cast.safe_fetch.getaddrinfo",
+        return_value=[
+            (None, None, None, None, ("93.184.216.34", 8443)),
+            (None, None, None, None, ("2606:2800:220:1:248:1893:25c8:1946%eth0", 8443)),
+        ],
+    )
+    open_url = mocker.patch("cast.safe_fetch.open_url", return_value=FakeResponse(b"ok"))
+
+    result = fetch_bytes(
+        "https://media.example:8443/file",
+        policy=policy(allowed_origins=None, block_private_addresses=True),
+    )
+
+    assert result == b"ok"
+    getaddrinfo.assert_called_once_with("media.example", 8443, type=SOCK_STREAM)
+    open_url.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("resolver_result", "message"),
+    [
+        (OSError("lookup failed"), "could not be resolved"),
+        ([], "did not resolve"),
+        ([(None, None, None, None, ("invalid", 443))], "invalid address"),
+    ],
+)
+def test_fetch_bytes_refuses_resolution_failures(mocker, resolver_result, message):
+    if isinstance(resolver_result, BaseException):
+        mocker.patch("cast.safe_fetch.getaddrinfo", side_effect=resolver_result)
+    else:
+        mocker.patch("cast.safe_fetch.getaddrinfo", return_value=resolver_result)
+
+    with pytest.raises(FetchError, match=message):
+        fetch_bytes(
+            "https://media.example/file",
+            policy=policy(block_private_addresses=True),
+        )
+
+
+def test_fetch_bytes_refuses_invalid_port_before_resolution(mocker):
+    getaddrinfo = mocker.patch("cast.safe_fetch.getaddrinfo")
+
+    with pytest.raises(FetchError, match="invalid port"):
+        fetch_bytes(
+            "https://media.example:invalid/file",
+            policy=policy(allowed_origins=None, block_private_addresses=True),
+        )
+
+    getaddrinfo.assert_not_called()
+
+
+def test_fetch_bytes_refuses_missing_hostname_before_resolution(mocker):
+    getaddrinfo = mocker.patch("cast.safe_fetch.getaddrinfo")
+
+    with pytest.raises(FetchError, match="include a host"):
+        fetch_bytes(
+            "https://:443/file",
+            policy=policy(allowed_origins=None, block_private_addresses=True),
+        )
+
+    getaddrinfo.assert_not_called()
 
 
 def test_open_url_without_redirects_uses_no_redirect_opener(mocker):
