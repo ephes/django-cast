@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from modelsearch.backends.base import BaseSearchResults
 
 from ..forms import AudioForm
+from ..media_ingest import AUDIO_FILE_FIELDS, admin_policy
 from ..media_permissions import audio_permission_policy
 from ..models import Audio
 from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
@@ -100,6 +101,11 @@ audio_admin_config = MediaAdminConfig(
     chooser_upload_error_message=_("The audio could not be saved due to errors."),
     file_missing_message=_("The file could not be found. Please change the source or delete the audio file"),
     message_arg=_audio_message_arg,
+    ingest_policy=lambda: admin_policy(AUDIO_FILE_FIELDS),
+    upload_in_progress_message=_("Another audio or video upload is already in progress."),
+    probe_timeout_message=_("Audio probing exceeded the upload budget."),
+    probe_failed_message=_("Audio probing failed."),
+    lock_uploads=True,
     edit_form_initial=_audio_edit_form_initial,
     delete_old_files=_delete_old_audio_files,
     get_file_for_size=_audio_file_for_size,

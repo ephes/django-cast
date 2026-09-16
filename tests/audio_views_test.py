@@ -1,3 +1,4 @@
+import subprocess
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -5,6 +6,7 @@ from unittest.mock import patch
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from wagtail.models import Collection, GroupCollectionPermission
@@ -232,6 +234,50 @@ class TestAudioAdd:
 
         # make sure we didn't create an audio
         assert Audio.objects.first() is None
+
+    def test_post_add_audio_refuses_concurrent_upload(self, admin_client, admin_user, m4a_audio):
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
+        try:
+            response = admin_client.post(
+                reverse("castaudio:add"),
+                {"title": "Locked audio", "m4a": m4a_audio},
+            )
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == ["Another audio or video upload is already in progress."]
+        assert not Audio.objects.filter(title="Locked audio").exists()
+
+    @pytest.mark.parametrize(
+        ("probe_result", "message"),
+        [
+            (subprocess.TimeoutExpired(cmd="ffprobe", timeout=1), "Audio probing exceeded the upload budget."),
+            (subprocess.CompletedProcess([], 0, stdout=b"N/A\n"), "Audio probing failed."),
+        ],
+    )
+    def test_post_add_audio_maps_probe_failure_and_cleans_up(
+        self, admin_client, admin_user, m4a_audio, mocker, probe_result, message
+    ):
+        if isinstance(probe_result, Exception):
+            mocker.patch("cast.models.audio.run_media_probe", side_effect=probe_result)
+        else:
+            mocker.patch("cast.models.audio.run_media_probe", return_value=probe_result)
+        storage = Audio._meta.get_field("m4a").storage
+        delete = mocker.spy(storage, "delete")
+
+        response = admin_client.post(
+            reverse("castaudio:add"),
+            {"title": "Failed probe", "m4a": m4a_audio},
+        )
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == [message]
+        assert Audio.objects.count() == 0
+        deleted_name = delete.call_args.args[0]
+        assert not storage.exists(deleted_name)
+        assert cache.get(f"cast:editor-media-upload:{admin_user.pk}") is None
 
     def test_post_add_audio(self, admin_client, minimal_mp4):
         add_url = reverse("castaudio:add")
@@ -483,6 +529,26 @@ class TestAudioChooserUpload:
 
         assert r.status_code == 200
         assert r.context["message"] == "The audio could not be saved due to errors."
+
+    def test_post_upload_audio_refuses_concurrent_upload(self, admin_client, admin_user, m4a_audio):
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
+        try:
+            response = admin_client.post(
+                reverse("castaudio:chooser_upload"),
+                {
+                    "media-chooser-upload-title": "Locked chooser audio",
+                    "media-chooser-upload-m4a": m4a_audio,
+                },
+            )
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 200
+        assert response.context["uploadform"].non_field_errors() == [
+            "Another audio or video upload is already in progress."
+        ]
+        assert not Audio.objects.filter(title="Locked chooser audio").exists()
 
     def test_post_upload_audio(self, admin_client, m4a_audio, settings):
         settings.DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"

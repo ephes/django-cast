@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 
@@ -167,3 +168,18 @@ class TestTranscriptAdd:
         podlove_transcript.seek(0)
         submitted_transcript_content = podlove_transcript.read().decode("utf-8")
         assert saved_transcript_content == submitted_transcript_content
+
+    def test_post_add_transcript_ignores_media_upload_lock(self, admin_client, admin_user, audio, podlove_transcript):
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
+        try:
+            response = admin_client.post(
+                reverse("cast-transcript:add"),
+                {"podlove": podlove_transcript, "audio": audio.pk},
+            )
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 302
+        transcript = Transcript.objects.get(audio=audio)
+        transcript.podlove.delete(save=False)

@@ -26,6 +26,7 @@ from ..forms import (
     TranscriptForm,
     VoiceReferenceCandidateCreateForm,
 )
+from ..media_ingest import TRANSCRIPT_POLICY
 from ..media_permissions import transcript_permission_policy
 from ..models import (
     Blog,
@@ -533,6 +534,10 @@ transcript_admin_config = MediaAdminConfig(
     deleted_message=_("Transcript '{0}' deleted."),
     chooser_upload_error_message=_("The transcript could not be saved due to errors."),
     message_arg=_transcript_message_arg,
+    ingest_policy=lambda: TRANSCRIPT_POLICY,
+    upload_in_progress_message=_("Another upload is already in progress."),
+    probe_timeout_message=_("Media probing exceeded the upload budget."),
+    probe_failed_message=_("Media probing failed."),
 )
 
 _views = MediaAdminViews(transcript_admin_config)

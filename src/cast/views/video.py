@@ -8,6 +8,7 @@ from modelsearch.backends.base import BaseSearchResults
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ..forms import get_video_form
+from ..media_ingest import admin_policy
 from ..models import Video
 from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from . import AuthenticatedHttpRequest
@@ -80,6 +81,11 @@ video_admin_config = MediaAdminConfig(
     chooser_upload_error_message=_("The video could not be saved due to errors."),
     file_missing_message=_("The file could not be found. Please change the source or delete the video file"),
     message_arg=_video_message_arg,
+    ingest_policy=lambda: admin_policy(("original", "poster")),
+    upload_in_progress_message=_("Another audio or video upload is already in progress."),
+    probe_timeout_message=_("Video probing exceeded the upload budget."),
+    probe_failed_message=_("Video probing failed."),
+    lock_uploads=True,
     edit_form_initial=None,
     delete_old_files=_delete_old_video_files,
     get_file_for_size=_video_file_for_size,

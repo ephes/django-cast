@@ -122,6 +122,11 @@ required FFmpeg tools are installed on your application hosts:
 - ``ffprobe`` for audio duration extraction, chapter-mark import, and video dimension detection
 - ``ffmpeg`` for video poster generation
 
+Editor, legacy API, and Wagtail admin audio/video uploads share a per-user
+upload lock stored in Django's default cache. Multi-worker deployments need a
+shared cache backend, such as Redis or Memcached, for that lock to coordinate
+requests across processes; ``LocMemCache`` only coordinates within one process.
+
 For backup and restore of media files, see :doc:`backup` and the
 :ref:`media management commands <cast_management_commands>`.
 

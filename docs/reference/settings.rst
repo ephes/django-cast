@@ -656,11 +656,11 @@ django-cast validates the file container or runs ffmpeg/ffprobe. Defaults to
 CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
 =====================================
 
-Time-to-live, in seconds, for the shared editor API and legacy
-``/api/upload_video/`` per-user audio/video upload lock. Defaults to ``7200``
-(2 hours). The lock is stored in Django's default
-cache and is owner-token protected so one request does not release a successor
-lock. Multi-worker deployments need a shared cache backend, such as Redis or
+Time-to-live, in seconds, for the shared editor API, legacy
+``/api/upload_video/``, and Wagtail admin per-user audio/video upload lock.
+Defaults to ``7200`` (2 hours). The lock is stored in Django's default cache
+and is owner-token protected so one request does not release a successor lock.
+Multi-worker deployments need a shared cache backend, such as Redis or
 Memcached; Django's ``LocMemCache`` only coordinates within one process.
 
 
@@ -678,11 +678,10 @@ degrade without failing the upload.
 CAST_MEDIA_PROBE_SECONDS
 ========================
 
-Registered cumulative synchronous ffprobe/ffmpeg budget, in seconds, for the
-shared Wagtail admin audio and video ingest policy. Defaults to ``30``. Integer
-and floating-point values are accepted. The current admin views are not routed
-through that shared policy yet, so this setting has no effect until that wiring
-lands; they retain their existing per-probe timeout in the meantime.
+Cumulative synchronous ffprobe/ffmpeg budget, in seconds, for one Wagtail
+admin audio or video upload. Defaults to ``30``. Integer and floating-point
+values are accepted. Required audio duration probing fails the upload when the
+budget is exhausted; optional derivation work degrades without failing it.
 
 CAST_EDITOR_SCOPES
 ==================

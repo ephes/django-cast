@@ -21,6 +21,8 @@ from .models.audio import AudioDurationProbeError, AudioDurationProbeTimeout
 
 logger = logging.getLogger(__name__)
 
+AUDIO_FILE_FIELDS = ("m4a", "mp3", "oga", "opus")
+
 
 @dataclass(frozen=True)
 class IngestPolicy:

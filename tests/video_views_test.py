@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import pytest
+from django.core.cache import cache
 from django.urls import reverse
 
 from cast.models import Video
@@ -188,6 +189,21 @@ class TestVideoAdd:
 
         # make sure we didn't create a video
         Video.objects.first() is None
+
+    def test_post_add_video_refuses_concurrent_upload(self, admin_client, admin_user, minimal_mp4):
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
+        try:
+            response = admin_client.post(
+                reverse("castvideo:add"),
+                {"title": "Locked video", "original": minimal_mp4},
+            )
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == ["Another audio or video upload is already in progress."]
+        assert not Video.objects.filter(title="Locked video").exists()
 
     def test_post_add_video(self, admin_client, minimal_mp4):
         add_url = reverse("castvideo:add")

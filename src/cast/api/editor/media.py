@@ -21,6 +21,7 @@ from wagtail.permission_policies.collections import CollectionOwnershipPermissio
 from ... import appsettings
 from ...forms import AudioForm, get_video_form
 from ...media_ingest import (
+    AUDIO_FILE_FIELDS,
     MediaIngestCleanupFailed,
     MediaProbeFailed,
     MediaProbeTimeout,
@@ -42,7 +43,6 @@ video_permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=
 
 EDITOR_MEDIA_PROBE_SECONDS = appsettings.CAST_SETTING_REGISTRY["CAST_EDITOR_MEDIA_PROBE_SECONDS"].default
 EDITOR_MEDIA_UPLOAD_LOCK_SECONDS = appsettings.CAST_SETTING_REGISTRY["CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS"].default
-AUDIO_FILE_FIELDS = ("m4a", "mp3", "oga", "opus")
 
 
 class CollectionMemberForm(Protocol):
