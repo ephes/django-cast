@@ -6,9 +6,10 @@ from typing import Any
 from django.db.models import QuerySet
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
-from .models import Audio, Transcript
+from .models import Audio, Transcript, Video
 
 audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
+video_permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
 
 
 class TranscriptPermissionPolicy(CollectionPermissionPolicy):

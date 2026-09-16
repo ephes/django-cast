@@ -5,78 +5,30 @@ from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from wagtail.blocks import Block
-from wagtail.images import get_image_model
-from wagtail.images.permissions import permission_policy as image_permission_policy
 
+from ...content.blocks import (
+    UNSUPPORTED,
+    ConversionContext,
+    GenericBlockConverter,
+    _custom_author_value as _custom_author_value,
+    _unwrap_list_item_values as _unwrap_list_item_values,
+    content_converters,
+)
 from ...content.errors import ErrorCollector, flatten_django_validation_error
-from ...post_body_blocks import POST_BODY_SECTIONS, configured_content_blocks, default_content_blocks
+from ...content.media_refs import (
+    audio_choosable_by,
+    get_choosable_audio as get_choosable_audio,
+    get_choosable_image as get_choosable_image,
+    get_choosable_object as get_choosable_object,
+    get_choosable_video as get_choosable_video,
+    image_choosable_by,
+    video_choosable_by,
+)
+from ...post_body_blocks import POST_BODY_SECTIONS
 from .errors import EditorValidationError
-from .richtext import sanitize_block_value
 
 SUPPORTED_BODY_BLOCKS = frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
 SUPPORTED_OVERVIEW_BLOCKS = SUPPORTED_BODY_BLOCKS
-
-_CUSTOM_BLOCK_CONVERSION_ERRORS = (TypeError, ValueError, KeyError, AttributeError)
-_CUSTOM_BLOCK_READ_ERRORS = (DjangoValidationError, *_CUSTOM_BLOCK_CONVERSION_ERRORS)
-
-
-def get_choosable_object(obj_id: Any, user: Any, *, queryset: Any, policy: Any) -> Any | None:
-    """Return an object when ``user`` may ``choose`` it, otherwise ``None``.
-
-    Existence and visibility are deliberately collapsed into ``None`` so callers report a single
-    ``not_found`` and never leak the existence of media the caller cannot access.
-    """
-    if not isinstance(obj_id, int) or isinstance(obj_id, bool):
-        return None
-    visible = policy.instances_user_has_permission_for(user, "choose")
-    obj = queryset.filter(pk=obj_id, pk__in=visible.values("pk")).first()
-    if obj is None:
-        return None
-    return obj
-
-
-def get_choosable_image(image_id: Any, user: Any) -> Any | None:
-    """Return the image when it exists and the caller may choose it."""
-    return get_choosable_object(image_id, user, queryset=get_image_model().objects, policy=image_permission_policy)
-
-
-def image_choosable_by(image_id: Any, user: Any) -> bool:
-    """True if the image exists and the caller may choose it (Wagtail image ``choose`` permission)."""
-    return get_choosable_image(image_id, user) is not None
-
-
-def get_choosable_audio(audio_id: Any, user: Any) -> Any | None:
-    """Return the audio when it exists and the caller may choose it."""
-    from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
-
-    from ...models import Audio
-
-    policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
-    return get_choosable_object(audio_id, user, queryset=Audio.objects, policy=policy)
-
-
-def audio_choosable_by(audio_id: Any, user: Any) -> bool:
-    """True if the cast audio exists and the caller may choose it.
-
-    Audio has no dedicated ``choose_audio`` permission, so this uses the same collection-ownership
-    policy the audio chooser is built on: superusers and users with audio collection permissions pass.
-    """
-    return get_choosable_audio(audio_id, user) is not None
-
-
-def get_choosable_video(video_id: Any, user: Any) -> Any | None:
-    """Return the video when it exists and the caller may choose it."""
-    from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
-
-    from ...models import Video
-
-    policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
-    return get_choosable_object(video_id, user, queryset=Video.objects, policy=policy)
-
-
-def video_choosable_by(video_id: Any, user: Any) -> bool:
-    """True if the cast video exists and the caller may choose it."""
-    return get_choosable_video(video_id, user) is not None
 
 
 def _preserved_unsupported_block(
@@ -143,9 +95,11 @@ def _content_section(path_prefix: str) -> str | None:
 
 
 def _custom_block_map(section: str | None) -> dict[str, Block]:
-    if section is None:
-        return {}
-    return {name: block for name, block in configured_content_blocks(section)}
+    return {
+        name: converter.block
+        for name, converter in content_converters(section).items()
+        if isinstance(converter, GenericBlockConverter)
+    }
 
 
 def _flatten_django_validation_error(exc: DjangoValidationError, path: str) -> dict[str, list[dict[str, str]]]:
@@ -161,28 +115,6 @@ def _extend_error_map(errors: ErrorCollector, error_map: dict[str, list[dict[str
             errors.add(path, item["code"], item["message"])
 
 
-def _custom_block_conversion_error(exc: Exception, *, base: str) -> dict[str, list[dict[str, str]]]:
-    return {f"{base}.value": [{"code": "invalid", "message": str(exc) or "Invalid custom block value."}]}
-
-
-def _custom_author_value(block_def: Block, value: Any) -> Any:
-    python_value = block_def.to_python(value)
-    cleaned = block_def.clean(python_value)
-    if type(block_def).get_api_representation is not Block.get_api_representation:
-        return block_def.get_api_representation(cleaned)
-    return _unwrap_list_item_values(block_def.get_prep_value(cleaned))
-
-
-def _unwrap_list_item_values(value: Any) -> Any:
-    if isinstance(value, list):
-        if all(isinstance(item, dict) and item.get("type") == "item" and "value" in item for item in value):
-            return [_unwrap_list_item_values(item["value"]) for item in value]
-        return [_unwrap_list_item_values(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _unwrap_list_item_values(item) for key, item in value.items()}
-    return value
-
-
 def author_blocks_to_section(
     blocks: list[dict], *, user: Any, path_prefix: str, existing_section: list[dict] | None = None
 ) -> list[dict]:
@@ -196,13 +128,14 @@ def author_blocks_to_section(
     errors = ErrorCollector()
     result: list[dict] = []
     preserved_unsupported_indexes: set[int] = set()
-    custom_blocks = _custom_block_map(_content_section(path_prefix))
+    section = _content_section(path_prefix)
+    converters = content_converters(section)
+    ctx = ConversionContext(section=section, user=user, existing_section=existing_section, path_prefix=path_prefix)
 
     if not isinstance(blocks, list):
         errors.add(path_prefix, "invalid", f"{path_prefix} must be a list of blocks.")
         raise EditorValidationError(errors.error_map)
 
-    paragraph_block = dict(default_content_blocks())["paragraph"]
     for index, block in enumerate(blocks):
         base = f"{path_prefix}.{index}"
         if not isinstance(block, dict) or "type" not in block:
@@ -232,47 +165,19 @@ def author_blocks_to_section(
             result.append(preserved)
             continue
 
-        elif block_type not in SUPPORTED_BODY_BLOCKS:
-            custom_block = custom_blocks.get(block_type)
-            if custom_block is None:
-                errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
-                continue
-            try:
-                python_value = custom_block.to_python(value)
-                python_value = sanitize_block_value(custom_block, python_value, path=f"{base}.value")
-                cleaned = custom_block.clean(python_value)
-                prepared = custom_block.get_prep_value(cleaned)
-            except EditorValidationError as exc:
-                _extend_error_map(errors, exc.error_map)
-                continue
-            except DjangoValidationError as exc:
-                errors.extend(flatten_django_validation_error(exc, f"{base}.value"))
-                continue
-            except _CUSTOM_BLOCK_CONVERSION_ERRORS as exc:
-                _extend_error_map(errors, _custom_block_conversion_error(exc, base=base))
-                continue
-            result.append({"type": block_type, "value": prepared})
+        converter = converters.get(block_type)
+        if converter is not None:
+            before = len(errors)
+            prepared = converter.to_stream(value, ctx=ctx, path=f"{base}.value", errors=errors)
+            if len(errors) == before:
+                result.append({"type": block_type, "value": prepared})
             continue
 
-        if block_type == "paragraph":
-            if not isinstance(value, str):
-                errors.add(f"{base}.value", "invalid", "Expected a string value.")
-                continue
-            try:
-                python_value = sanitize_block_value(
-                    paragraph_block, paragraph_block.to_python(value), path=f"{base}.value"
-                )
-                cleaned = paragraph_block.clean(python_value)
-            except EditorValidationError as exc:
-                _extend_error_map(errors, exc.error_map)
-                continue
-            except DjangoValidationError as exc:
-                message = "; ".join(exc.messages) or "Invalid rich text."
-                errors.add(f"{base}.value", "invalid", message)
-                continue
-            result.append({"type": "paragraph", "value": paragraph_block.get_prep_value(cleaned)})
+        if block_type not in SUPPORTED_BODY_BLOCKS:
+            errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
+            continue
 
-        elif block_type == "code":
+        if block_type == "code":
             if not isinstance(value, dict):
                 errors.add(f"{base}.value", "invalid", "Expected an object value.")
                 continue
@@ -362,12 +267,19 @@ def section_to_author_blocks(
 ) -> list[dict]:
     """Inverse of :func:`author_blocks_to_section` for supported block types."""
     author: list[dict] = []
-    custom_blocks = _custom_block_map(_content_section(path_prefix))
+    section = _content_section(path_prefix)
+    converters = content_converters(section)
+    ctx = ConversionContext(section=section, user=user, path_prefix=path_prefix)
     for index, block in enumerate(section_value):
         block_type = block.get("type")
         value = block.get("value")
-        if block_type == "paragraph":
-            author.append({"type": block_type, "value": value})
+        converter = converters.get(block_type) if isinstance(block_type, str) else None
+        if converter is not None:
+            author_value = converter.to_author(value, ctx=ctx)
+            if author_value is UNSUPPORTED:
+                author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
+            else:
+                author.append({"type": block_type, "value": author_value})
         elif block_type == "code":
             if (
                 isinstance(value, dict)
@@ -396,13 +308,6 @@ def section_to_author_blocks(
                 author.append({"type": "gallery", "value": [{"id": item["value"]} for item in items]})
             else:
                 author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
-        elif block_type in custom_blocks:
-            try:
-                author_value = _custom_author_value(custom_blocks[block_type], value)
-            except _CUSTOM_BLOCK_READ_ERRORS:
-                author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
-            else:
-                author.append({"type": block_type, "value": author_value})
         else:
             author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
     return author
