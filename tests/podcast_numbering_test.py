@@ -15,11 +15,8 @@ from cast.podcast_numbering import (
     _get_episode_podcast,
     _is_first_publish_candidate,
     _next_available_episode_number,
-    _publish_revision_and_object,
-    _validate_publish_revision_api,
     assign_episode_number_for_publish,
     episode_type_consumes_number,
-    install_episode_numbering_publish_hook,
 )
 from tests.factories import EpisodeFactory, PostFactory
 
@@ -76,65 +73,6 @@ def publish_episode(episode: Episode):
 )
 def test_episode_type_consumes_number(episode_type, expected):
     assert episode_type_consumes_number(episode_type) is expected
-
-
-def test_publish_revision_and_object_accepts_positional_and_keyword_arguments():
-    positional_revision = object()
-    positional_page = object()
-    positional_previous_revision = object()
-    keyword_revision = object()
-    keyword_page = object()
-    keyword_previous_revision = object()
-
-    assert _publish_revision_and_object(
-        (positional_revision, positional_page, None, True, True, positional_previous_revision),
-        {},
-    ) == (
-        positional_revision,
-        positional_page,
-        positional_previous_revision,
-    )
-    assert _publish_revision_and_object((positional_revision, positional_page), {}) == (
-        positional_revision,
-        positional_page,
-        None,
-    )
-    assert _publish_revision_and_object(
-        (),
-        {"revision": keyword_revision, "object": keyword_page, "previous_revision": keyword_previous_revision},
-    ) == (
-        keyword_revision,
-        keyword_page,
-        keyword_previous_revision,
-    )
-
-
-def test_validate_publish_revision_api_accepts_expected_signature():
-    def publish_revision(self, revision, object, user, changed, log_action, previous_revision=None):
-        pass
-
-    _validate_publish_revision_api(publish_revision)
-
-
-def test_validate_publish_revision_api_rejects_missing_api():
-    with pytest.raises(RuntimeError, match="not available"):
-        _validate_publish_revision_api(None)
-
-
-def test_validate_publish_revision_api_rejects_unsupported_signature():
-    def publish_revision(self, revision, object):
-        pass
-
-    with pytest.raises(RuntimeError, match="missing previous_revision"):
-        _validate_publish_revision_api(publish_revision)
-
-
-def test_validate_publish_revision_api_rejects_unsupported_positional_order():
-    def publish_revision(self, object, revision, user, changed, log_action, previous_revision=None):
-        pass
-
-    with pytest.raises(RuntimeError, match="positional parameter order"):
-        _validate_publish_revision_api(publish_revision)
 
 
 @pytest.mark.django_db
@@ -578,30 +516,6 @@ def test_stale_first_publish_does_not_assign_after_disabled_publish_without_numb
     assert revision.content["episode_number"] is None
     podcast.refresh_from_db()
     assert podcast.next_episode_number == 1
-
-
-@pytest.mark.django_db
-def test_install_episode_numbering_publish_hook_is_idempotent():
-    install_episode_numbering_publish_hook()
-
-    from wagtail.actions.publish_revision import PublishRevisionAction
-
-    wrapped = PublishRevisionAction._publish_revision
-    install_episode_numbering_publish_hook()
-
-    assert PublishRevisionAction._publish_revision is wrapped
-
-
-@pytest.mark.django_db
-def test_install_episode_numbering_publish_hook_logs_and_skips_unsupported_api(mocker, caplog):
-    from wagtail.actions.publish_revision import PublishRevisionAction
-
-    caplog.set_level("WARNING", logger="cast.podcast_numbering")
-    mocker.patch.object(PublishRevisionAction, "_publish_revision", None)
-
-    install_episode_numbering_publish_hook()
-
-    assert "Automatic episode numbering publish hook was not installed" in caplog.text
 
 
 @pytest.mark.django_db
