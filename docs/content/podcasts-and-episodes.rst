@@ -70,6 +70,10 @@ The `podcast_audio` field may be empty while an episode is a draft, but it is
 required when publishing through Wagtail or the editor API. It supplies the
 enclosure for the episode in the podcast feed.
 
+Editor API clients can bind publication to the exact reviewed episode revision
+with the optional ``If-Match`` header described in
+:ref:`the editor publish API <editor_api_publish>`.
+
 If the audio linked from an approved, scheduled episode is deleted before its
 go-live time, django-cast does not publish that scheduled revision. A draft
 episode remains a draft; an already-live episode remains live without applying

@@ -811,6 +811,8 @@ A stale base revision returns ``409 Conflict``:
       "edit_url": "/admin/pages/987/edit/"
     }
 
+.. _editor_api_publish:
+
 **Publish a draft post**::
 
     POST /api/editor/posts/{id}/publish/
@@ -819,9 +821,14 @@ Publishes the latest draft revision for an existing ``Post`` through Wagtail's
 revision publishing path. The caller must be authenticated, have Wagtail admin
 access, be able to edit the target page through the editor API, and have Wagtail
 publish permission for that page. The action does not accept a request body and
-does not use ``If-Match`` or ``base_revision_id`` in this API version; clients
-should ``GET`` the post immediately before presenting a publish action when they
-need to confirm the latest draft content.
+does not use ``base_revision_id`` in the request body. Clients may optionally
+send ``If-Match: "<latest_revision_id>"`` to bind the approval to the revision
+they reviewed. The header uses the same strict quoted-integer syntax and
+``validation_error`` response documented for ``PATCH`` above. A stale token
+returns the same ``409 revision_conflict`` envelope, and the newer revision is
+not published. When the header is omitted, the endpoint remains backwards
+compatible and publishes the latest revision found while holding the page-row
+lock.
 
 The success response is the normal editor post shape plus publish metadata:
 
@@ -948,9 +955,12 @@ The episode publish action mirrors the post publish action::
 
 It publishes the latest draft revision through Wagtail's revision publishing
 path, requires Wagtail admin access plus publish permission for the page, takes
-no request body, and returns the editor episode shape plus ``published_revision_id``
-and ``public_url``. Publishing an episode that is already live with no
-unpublished draft returns the ``no_unpublished_draft`` conflict, just like posts.
+no request body, and returns the editor episode shape plus
+``published_revision_id`` and ``public_url``. Like the post action, it accepts
+an optional ``If-Match: "<latest_revision_id>"`` header and returns the shared
+``revision_conflict`` envelope for a stale token. Publishing an episode that is
+already live with no unpublished draft returns the ``no_unpublished_draft``
+conflict, just like posts.
 
 Publishing requires a non-null ``podcast_audio`` (the same rule the Wagtail admin
 enforces). A publish request for an episode without ``podcast_audio`` is rejected

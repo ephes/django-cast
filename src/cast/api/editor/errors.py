@@ -50,7 +50,7 @@ class EditorFlatError(APIException):
 
 
 class EditorRevisionConflict(APIException):
-    """Revision token mismatch for draft updates."""
+    """Revision token mismatch for an editor write."""
 
     status_code = status.HTTP_409_CONFLICT
 
