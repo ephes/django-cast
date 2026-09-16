@@ -177,16 +177,14 @@ The editor API's permission chain and error envelope are the clear standard, the
 the feed hardening orders access checks before the shared cache. The rest is mostly duplication that the hardening
 commits paid for twice.
 
-- **V1. Admin media edit deletes the old file before the replacement save can fail** (low, bug) —
-  `views/media.py:156`: `_delete_old_audio_files` (`views/audio.py:47-51`) runs before `form.save()`, so a failing
-  save rolls the row back to a file already gone while the new upload is orphaned; the editor API path cleans up and
-  `StagedFileReplacementGroup` is used only by transcripts/voxhelm. Low, not medium: `create_duration` only runs when
-  `duration is None`, `validate_audio_upload` already ran, and the video path catches everything, so the realistic
-  window is a storage write error. Direction: capture old names, save first, delete in `transaction.on_commit`, with
-  a failure-injection test.
-  Note (2026-09-16): the V-extra duration fix makes `create_duration` run on admin audio replacements, so a
-  replacement file that passes header validation but fails ffprobe now rolls the row back to an already deleted
-  file. `validate_audio_upload` is header-only, so this window is real; do V1 next.
+- **V1. Admin media edit deletes the old file before the replacement save can fail** (fixed 2026-09-16) —
+  Admin audio and video edits now use the shared media-ingestion replacement
+  guard. It snapshots stored names from the database, removes newly written
+  files and restores the in-memory field names on failure, and schedules old
+  file deletion only after commit. Failure-injection and deferred-deletion
+  tests cover both media types. Implemented by the
+  [media-ingestion service plan](2026-09-16-media-ingestion-service.md) slices
+  3 and 4b.
 - **V2. Editor slug lookup deserializes every sibling's latest revision** (medium, performance) —
   `api/editor/views.py:419`. A documented deterministic single-object lookup does one `.specific` query plus a
   revision fetch and full StreamField deserialization *per child of the parent* (~2,000 queries for a 1,000-post

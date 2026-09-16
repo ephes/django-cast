@@ -72,7 +72,6 @@ class MediaAdminConfig:
     update_error_message: Any = ""
     file_missing_message: Any = ""
     edit_form_initial: Callable[[Any], dict[str, Any]] | None = None
-    delete_old_files: Callable[[int, Any], None] = field(default=lambda obj_id, form: None)
     get_file_for_size: Callable[[Any], Any] = field(default=lambda obj: None)
     extra_edit_context: Callable[[HttpRequest, Any], dict[str, Any]] = field(default=lambda request, obj: {})
 
@@ -81,19 +80,21 @@ class MediaAdminViews:
     def __init__(self, config: MediaAdminConfig) -> None:
         self.config = config
 
-    def _create_from_upload(
+    def _save_upload(
         self,
         request: AuthenticatedHttpRequest,
         form_class: Any,
         *,
+        obj: Any | None = None,
         prefix: str | None = None,
     ) -> tuple[Any, Any, bool]:
         config = self.config
         form = None
         try:
-            lock = upload_lock(request.user) if config.lock_uploads else nullcontext()
+            lock = upload_lock(request.user) if config.lock_uploads and request.FILES else nullcontext()
             with lock:
-                obj = config.create_instance(request.user)
+                if obj is None:
+                    obj = config.create_instance(request.user)
                 form_kwargs = {"instance": obj, "user": request.user}
                 if prefix is not None:
                     form_kwargs["prefix"] = prefix
@@ -104,7 +105,8 @@ class MediaAdminViews:
                 return obj, form, True
         except (MediaUploadInProgress, MediaProbeTimeout, MediaProbeFailed) as exc:
             if form is None:
-                obj = config.create_instance(request.user)
+                if obj is None:
+                    obj = config.create_instance(request.user)
                 form_kwargs = {"instance": obj, "user": request.user}
                 if prefix is not None:
                     form_kwargs["prefix"] = prefix
@@ -170,7 +172,7 @@ class MediaAdminViews:
             raise PermissionDenied
         form_class = cast(Any, config.get_form())
         if request.POST:
-            obj, form, saved = self._create_from_upload(request, form_class)
+            obj, form, saved = self._save_upload(request, form_class)
             if saved:
                 reindex(obj)
 
@@ -192,7 +194,7 @@ class MediaAdminViews:
             {"form": form},
         )
 
-    def edit(self, request: HttpRequest, obj_id: int) -> HttpResponse:
+    def edit(self, request: AuthenticatedHttpRequest, obj_id: int) -> HttpResponse:
         config = self.config
         form_class = cast(Any, config.get_form())
         obj = get_object_or_404(
@@ -201,10 +203,8 @@ class MediaAdminViews:
         )
 
         if request.method == "POST":
-            form = form_class(request.POST, request.FILES, instance=obj, user=request.user)
-            if form.is_valid():
-                config.delete_old_files(obj_id, form)
-                obj = form.save()
+            obj, form, saved = self._save_upload(request, form_class, obj=obj)
+            if saved:
                 reindex(obj)
 
                 messages.success(
@@ -339,7 +339,7 @@ class MediaAdminViews:
         form = None
 
         if request.method == "POST":
-            obj, form, saved = self._create_from_upload(
+            obj, form, saved = self._save_upload(
                 request,
                 form_class,
                 prefix="media-chooser-upload",

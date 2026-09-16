@@ -12,11 +12,14 @@ from django.urls import reverse
 from wagtail.models import Collection, GroupCollectionPermission
 
 from cast.models import Audio
-from cast.views.audio import delete_old_audio_files
 
 
 def invalid_m4a_upload():
     return SimpleUploadedFile("invalid.m4a", b"not a media file", content_type="audio/mp4")
+
+
+def minimal_mp3_upload(name: str = "test.mp3") -> SimpleUploadedFile:
+    return SimpleUploadedFile(name, b"ID3" + b"\x00" * 32, content_type="audio/mpeg")
 
 
 class TestPostWithAudioDetail:
@@ -343,12 +346,28 @@ class TestAudioEdit:
         # make sure we don't get redirected to index
         assert r.status_code == 200
 
-    def test_post_edit_audio_title(self, admin_client, audio_urls):
+    def test_post_edit_audio_refuses_concurrent_upload(self, admin_client, admin_user, audio_urls, m4a_audio):
+        old_name = audio_urls.audio.m4a.name
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
+        try:
+            response = admin_client.post(audio_urls.edit, {"m4a": m4a_audio})
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == ["Another audio or video upload is already in progress."]
+        audio_urls.audio.refresh_from_db()
+        assert audio_urls.audio.m4a.name == old_name
+
+    def test_post_edit_audio_title(self, admin_client, audio_urls, django_capture_on_commit_callbacks):
         audio = audio_urls.audio
+        old_name = audio.m4a.name
         post_data = {
             "title": "changed title",
         }
-        r = admin_client.post(audio_urls.edit, post_data)
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            r = admin_client.post(audio_urls.edit, post_data)
 
         # make sure we get redirected to index
         assert r.status_code == 302
@@ -357,19 +376,86 @@ class TestAudioEdit:
         # make sure title was changes
         audio.refresh_from_db()
         assert audio.title == post_data["title"]
+        assert audio.m4a.name == old_name
+        assert callbacks == []
 
-    def test_post_edit_audio_m4a(self, admin_client, audio_urls, m4a_audio):
+    def test_post_edit_audio_m4a(self, admin_client, audio_urls, m4a_audio, django_capture_on_commit_callbacks):
+        old_name = audio_urls.audio.m4a.name
+        storage = audio_urls.audio.m4a.storage
         m4a_audio.seek(0)  # don't know why this is necessary :/
         post_data = {"m4a": m4a_audio}
-        r = admin_client.post(audio_urls.edit, post_data)
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            r = admin_client.post(audio_urls.edit, post_data)
 
         # make sure we get redirected to index
         assert r.status_code == 302
         assert r.url == audio_urls.index
 
-        # teardown
-        audio = Audio.objects.first()
-        audio.m4a.delete()
+        audio_urls.audio.refresh_from_db()
+        new_name = audio_urls.audio.m4a.name
+        assert new_name != old_name
+        assert storage.exists(old_name) and storage.exists(new_name)
+
+        assert len(callbacks) == 1
+        callbacks[0]()
+        assert not storage.exists(old_name)
+        assert storage.exists(new_name)
+
+        audio_urls.audio.m4a.delete()
+
+    def test_post_edit_audio_mp3_deletes_only_replaced_format_after_commit(
+        self, admin_client, audio_urls, django_capture_on_commit_callbacks, mocker
+    ):
+        audio = audio_urls.audio
+        m4a_name = audio.m4a.name
+        audio.mp3.save("old.mp3", minimal_mp3_upload("old.mp3"))
+        old_mp3_name = audio.mp3.name
+        storage = audio.mp3.storage
+
+        def probe(command, **kwargs):
+            stdout = b'{"chapters": []}' if "-show_chapters" in command else b"1.000000\n"
+            return subprocess.CompletedProcess(command, 0, stdout=stdout)
+
+        mocker.patch("cast.models.audio.run_media_probe", side_effect=probe)
+
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            response = admin_client.post(audio_urls.edit, {"mp3": minimal_mp3_upload()})
+
+        assert response.status_code == 302
+        audio.refresh_from_db()
+        new_mp3_name = audio.mp3.name
+        assert new_mp3_name != old_mp3_name
+        assert audio.m4a.name == m4a_name
+        assert all(storage.exists(name) for name in (old_mp3_name, new_mp3_name, m4a_name))
+
+        assert len(callbacks) == 1
+        callbacks[0]()
+        assert not storage.exists(old_mp3_name)
+        assert storage.exists(new_mp3_name) and storage.exists(m4a_name)
+        audio.mp3.delete(save=False)
+
+    def test_post_edit_audio_probe_failure_keeps_old_file_and_name(self, admin_client, audio_urls, m4a_audio, mocker):
+        audio = audio_urls.audio
+        old_name = audio.m4a.name
+        storage = audio.m4a.storage
+        delete = mocker.spy(storage, "delete")
+        mocker.patch(
+            "cast.models.audio.run_media_probe",
+            return_value=subprocess.CompletedProcess([], 0, stdout=b"N/A\n"),
+        )
+        m4a_audio.seek(0)
+
+        response = admin_client.post(audio_urls.edit, {"m4a": m4a_audio})
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == ["Audio probing failed."]
+        audio.refresh_from_db()
+        assert audio.m4a.name == old_name
+        assert response.context["form"].instance.m4a.name == old_name
+        assert storage.exists(old_name)
+        deleted_names = [call.args[0] for call in delete.call_args_list]
+        assert deleted_names and old_name not in deleted_names
+        assert all(not storage.exists(name) for name in deleted_names)
 
     def test_post_edit_audio_m4a_reprobes_duration(self, admin_client, audio_urls, m4a_audio, fixture_dir):
         """Replacing an audio file has to replace the duration probed from the old file."""
@@ -573,14 +659,3 @@ class TestAudioChooserUpload:
 
         # teardown
         audio.m4a.delete()
-
-
-def test_delete_old_audio_files_skip_if_empty():
-    class File:
-        name = ""
-
-    class OldAudio:
-        mp3 = File()
-
-    audio = OldAudio()
-    assert delete_old_audio_files(audio, {"mp3"}) is None

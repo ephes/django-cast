@@ -130,13 +130,13 @@ attacks or additional demonstrated authorization bypasses.
   submit large files, subject to deployment request limits. Add a configurable
   cap before parsing and storage, including the VTT path. No large payload or
   memory-exhaustion test was performed.
-- **Admin media probe and concurrency limits (partially resolved 2026-09-16):**
-  Wagtail admin audio/video add and chooser uploads now use the shared per-user
+- **Admin media probe and concurrency limits (fixed 2026-09-16):** Wagtail
+  admin audio/video add, edit, and chooser uploads now use the shared per-user
   lock and the cumulative probe budget configured by
-  `CAST_MEDIA_PROBE_SECONDS`. Admin edit still saves directly and remains to be
-  routed through the replacement-aware ingest path in the next implementation
-  slice. No claim of unbounded subprocess runtime is made, and no
-  worker-exhaustion test was performed.
+  `CAST_MEDIA_PROBE_SECONDS`. Replacement saves also retain the old database
+  name and stored file if ingest fails. Implemented by the
+  [media-ingestion service plan](2026-09-16-media-ingestion-service.md) slices
+  1-4b. No worker-exhaustion test was performed.
 - **Publication approval binding (mitigated 2026-09-16):** the editor post and
   episode publish actions accept an optional strict `If-Match` revision token,
   lock the page row, compare the token with `latest_revision_id`, and publish

@@ -107,13 +107,17 @@ class FileFieldReplacementGuard:
 
     def commit(self) -> None:
         replacements = [
-            (snapshot.old_storage, snapshot.old_name, snapshot.field.name or "") for snapshot in self.snapshots
+            (snapshot.old_storage, snapshot.old_name)
+            for snapshot in self.snapshots
+            if snapshot.old_name and snapshot.old_name != (snapshot.field.name or "")
         ]
 
+        if not replacements:
+            return
+
         def delete_old_files() -> None:
-            for old_storage, old_name, new_name in replacements:
-                if old_name and old_name != new_name:
-                    _delete_file(old_storage, old_name)
+            for old_storage, old_name in replacements:
+                _delete_file(old_storage, old_name)
 
         transaction.on_commit(delete_old_files, using=self.using)
 

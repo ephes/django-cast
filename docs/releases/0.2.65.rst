@@ -1,12 +1,15 @@
 0.2.65 (unreleased)
 -------------------
 
-- Route Wagtail admin audio/video add and chooser uploads through the shared
-  media-ingestion service. They now use a per-user upload lock shared with API
-  uploads and a cumulative probe budget controlled by
+- Route Wagtail admin audio/video add, edit, and chooser uploads through the
+  shared media-ingestion service. They now use a per-user upload lock shared
+  with API uploads and a cumulative probe budget controlled by
   ``CAST_MEDIA_PROBE_SECONDS`` (default ``30``). Multi-worker deployments need
   a shared cache for cross-process locking. Transcript uploads remain unlocked,
   but now use the same ingest-managed cleanup and randomized stored basenames.
+  Successful audio/video replacements delete old stored files only after the
+  database commit; a failed replacement keeps the old file and database name
+  and removes any newly written file.
 - Route editor audio and video creates through the shared media-ingestion
   service. Stored upload basenames now carry a random suffix so same-named
   creates cannot overwrite one another on overwrite-capable storage backends;
