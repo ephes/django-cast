@@ -23,67 +23,12 @@ from ...content.media_refs import (
     image_choosable_by,
     video_choosable_by,
 )
+from ...content.placeholders import placeholder_for, resolve_placeholder
 from ...post_body_blocks import POST_BODY_SECTIONS
 from .errors import EditorValidationError
 
 SUPPORTED_BODY_BLOCKS = frozenset(name for name, converter in content_converters(None).items() if converter.editable)
 SUPPORTED_OVERVIEW_BLOCKS = SUPPORTED_BODY_BLOCKS
-
-
-def _preserved_unsupported_block(
-    value: Any, *, existing_section: list[dict] | None, base: str, path_prefix: str
-) -> tuple[dict | None, int | None, dict[str, list[dict[str, str]]]]:
-    if existing_section is None:
-        return (
-            None,
-            None,
-            {
-                f"{base}.type": [
-                    {"code": "unsupported_block_type", "message": "Block type 'unsupported' is not supported."}
-                ]
-            },
-        )
-    if not isinstance(value, dict):
-        return None, None, {f"{base}.value": [{"code": "invalid", "message": "Expected an object value."}]}
-    stored_type = value.get("stored_type")
-    position = value.get("position")
-    if not isinstance(stored_type, str) or not isinstance(position, str):
-        return (
-            None,
-            None,
-            {
-                f"{base}.value": [
-                    {"code": "invalid", "message": "Unsupported placeholders need stored_type and position."}
-                ]
-            },
-        )
-    prefix = f"{path_prefix}."
-    try:
-        existing_index = int(position.removeprefix(prefix))
-    except ValueError:
-        existing_index = -1
-    if not position.startswith(prefix) or existing_index < 0 or existing_index >= len(existing_section):
-        return (
-            None,
-            None,
-            {
-                f"{base}.value.position": [
-                    {"code": "invalid", "message": "Unsupported placeholder position does not match a stored block."}
-                ]
-            },
-        )
-    existing_block = existing_section[existing_index]
-    if existing_block.get("type") != stored_type:
-        return (
-            None,
-            None,
-            {
-                f"{base}.value.stored_type": [
-                    {"code": "invalid", "message": "Unsupported placeholder does not match the stored block."}
-                ]
-            },
-        )
-    return dict(existing_block), existing_index, {}
 
 
 def _content_section(path_prefix: str) -> str | None:
@@ -106,12 +51,6 @@ def _flatten_django_validation_error(exc: DjangoValidationError, path: str) -> d
     errors = ErrorCollector()
     errors.extend(flatten_django_validation_error(exc, path))
     return errors.error_map
-
-
-def _extend_error_map(errors: ErrorCollector, error_map: dict[str, list[dict[str, str]]]) -> None:
-    for path, items in error_map.items():
-        for item in items:
-            errors.add(path, item["code"], item["message"])
 
 
 def author_blocks_to_section(
@@ -147,11 +86,8 @@ def author_blocks_to_section(
             continue
 
         if block_type == "unsupported":
-            preserved, existing_index, placeholder_errors = _preserved_unsupported_block(
-                value, existing_section=existing_section, base=base, path_prefix=path_prefix
-            )
-            if placeholder_errors:
-                _extend_error_map(errors, placeholder_errors)
+            preserved, existing_index = resolve_placeholder(value, ctx=ctx, path=base, errors=errors)
+            if preserved is None:
                 continue
             assert existing_index is not None
             if existing_index in preserved_unsupported_indexes:
@@ -186,10 +122,6 @@ def author_blocks_to_overview(
     return author_blocks_to_section(blocks, user=user, path_prefix=path_prefix, existing_section=existing_section)
 
 
-def _unsupported_placeholder(block_type: Any, *, path_prefix: str, index: int) -> dict:
-    return {"type": "unsupported", "value": {"stored_type": block_type, "position": f"{path_prefix}.{index}"}}
-
-
 def _media_ref_is_available(block_type: str, value: Any, user: Any) -> bool:
     """Compatibility helper retained for private tests until converter slice 7."""
     if block_type == "image":
@@ -216,11 +148,11 @@ def section_to_author_blocks(
         if converter is not None:
             author_value = converter.to_author(value, ctx=ctx)
             if author_value is UNSUPPORTED:
-                author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
+                author.append(placeholder_for(index, block, path_prefix))
             else:
                 author.append({"type": block_type, "value": author_value})
         else:
-            author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
+            author.append(placeholder_for(index, block, path_prefix))
     return author
 
 

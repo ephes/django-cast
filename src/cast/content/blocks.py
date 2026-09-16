@@ -33,6 +33,10 @@ class ConversionContext:
     existing_section: list[dict] | None = None
     path_prefix: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.path_prefix is None:
+            object.__setattr__(self, "path_prefix", self.section)
+
 
 class Unsupported:
     """Sentinel type for stored values that cannot be represented to authors."""
