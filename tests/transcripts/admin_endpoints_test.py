@@ -3,8 +3,12 @@ from unittest.mock import patch
 import pytest
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+from cast.file_replacement import FileFieldReplacementGuard
+from cast.media_ingest import upload_lock_key
 from cast.models import Transcript
 from cast.views import transcript as transcript_views
 from tests.factories import UserFactory
@@ -182,4 +186,87 @@ class TestTranscriptAdd:
 
         assert response.status_code == 302
         transcript = Transcript.objects.get(audio=audio)
+        transcript.podlove.delete(save=False)
+
+
+class TestTranscriptEditIngestion:
+    pytestmark = pytest.mark.django_db
+
+    files = {
+        "podlove": ("application/json", b'{"transcripts": []}'),
+        "dote": ("application/json", b'{"lines": []}'),
+        "vtt": ("text/vtt", b"WEBVTT\n"),
+    }
+
+    def test_replacements_delete_old_files_only_after_commit(
+        self, admin_client, admin_user, transcript_urls, django_capture_on_commit_callbacks
+    ):
+        transcript = transcript_urls.transcript
+        for field_name, (_content_type, content) in self.files.items():
+            getattr(transcript, field_name).save(f"old.{field_name}", ContentFile(content), save=False)
+        transcript.save()
+        old_names = {field_name: getattr(transcript, field_name).name for field_name in self.files}
+        storage = transcript.podlove.storage
+        uploads = {
+            field_name: SimpleUploadedFile(f"new.{field_name}", content, content_type=content_type)
+            for field_name, (content_type, content) in self.files.items()
+        }
+
+        key = upload_lock_key(admin_user)
+        cache.set(key, "other", timeout=60)
+        try:
+            with django_capture_on_commit_callbacks(execute=False) as callbacks:
+                response = admin_client.post(
+                    transcript_urls.edit,
+                    {"audio": transcript.audio_id, **uploads},
+                )
+            assert cache.get(key) == "other"
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 302
+        transcript.refresh_from_db()
+        new_names = {field_name: getattr(transcript, field_name).name for field_name in self.files}
+        assert all(new_names[name] != old_names[name] for name in self.files)
+        assert all(storage.exists(name) for name in (*old_names.values(), *new_names.values()))
+
+        assert len(callbacks) == 1
+        callbacks[0]()
+        assert all(not storage.exists(name) for name in old_names.values())
+        assert all(storage.exists(name) for name in new_names.values())
+        for field_name in self.files:
+            getattr(transcript, field_name).delete(save=False)
+
+    def test_replacement_failure_keeps_old_file_and_name(
+        self, admin_client, transcript_urls, django_capture_on_commit_callbacks, mocker
+    ):
+        transcript = transcript_urls.transcript
+        transcript.podlove.save("old.podlove.json", ContentFile(b'{"transcripts": []}'), save=True)
+        old_name = transcript.podlove.name
+        storage = transcript.podlove.storage
+        delete = mocker.spy(storage, "delete")
+        original_commit = FileFieldReplacementGuard.commit
+
+        def fail_after_commit(guard):
+            original_commit(guard)
+            raise RuntimeError("replacement commit failed")
+
+        mocker.patch.object(FileFieldReplacementGuard, "commit", fail_after_commit)
+        upload = SimpleUploadedFile(
+            "new.podlove.json",
+            b'{"transcripts": [{"text": "new"}]}',
+            content_type="application/json",
+        )
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            with pytest.raises(RuntimeError, match="replacement commit failed"):
+                admin_client.post(transcript_urls.edit, {"audio": transcript.audio_id, "podlove": upload})
+
+        transcript.refresh_from_db()
+        assert transcript.podlove.name == old_name
+        assert storage.exists(old_name)
+        assert callbacks == []
+        deleted_names = [call.args[0] for call in delete.call_args_list]
+        assert deleted_names and old_name not in deleted_names
+        assert all(not storage.exists(name) for name in deleted_names)
         transcript.podlove.delete(save=False)

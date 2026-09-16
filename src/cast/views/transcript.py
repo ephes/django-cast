@@ -26,7 +26,7 @@ from ..forms import (
     TranscriptForm,
     VoiceReferenceCandidateCreateForm,
 )
-from ..media_ingest import TRANSCRIPT_POLICY
+from ..media_ingest import TRANSCRIPT_POLICY, ingest_upload
 from ..media_permissions import transcript_permission_policy
 from ..models import (
     Blog,
@@ -421,7 +421,7 @@ def _handle_transcript_form_save(
     speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
     form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
     if form.is_valid():
-        transcript = form.save()
+        transcript = ingest_upload(form, policy=TRANSCRIPT_POLICY)
 
         # Reindex the media entry to make sure all tags are indexed
         for backend in get_search_backends():

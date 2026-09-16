@@ -8,11 +8,15 @@
   shared media-ingestion service. They now use a per-user upload lock shared
   with API uploads and a cumulative probe budget controlled by
   ``CAST_MEDIA_PROBE_SECONDS`` (default ``30``). Multi-worker deployments need
-  a shared cache for cross-process locking. Transcript uploads remain unlocked,
-  but now use the same ingest-managed cleanup and randomized stored basenames.
+  a shared cache for cross-process locking.
   Successful audio/video replacements delete old stored files only after the
   database commit; a failed replacement keeps the old file and database name
   and removes any newly written file.
+- Route transcript admin add, chooser, and edit uploads through the shared
+  media-ingestion service without taking the audio/video lock. Stored Podlove,
+  DOTe, and WebVTT basenames are now randomized. Successful replacements delete
+  old files only after commit; failed replacements retain the old database name
+  and file and remove newly written files.
 - Route editor audio and video creates through the shared media-ingestion
   service. Stored upload basenames now carry a random suffix so same-named
   creates cannot overwrite one another on overwrite-capable storage backends;

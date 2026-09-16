@@ -65,10 +65,15 @@ def admin_policy(file_fields: tuple[str, ...]) -> IngestPolicy:
 TRANSCRIPT_POLICY = IngestPolicy(probe_seconds=None, file_fields=("podlove", "dote", "vtt"))
 
 
+def upload_lock_key(user: Any) -> str:
+    """Return the shared per-user audio/video upload lock key."""
+    return f"cast:editor-media-upload:{user.pk}"
+
+
 @contextmanager
 def upload_lock(user: Any, *, seconds: int | None = None) -> Iterator[None]:
     """Serialize audio and video uploads for one user."""
-    key = f"cast:editor-media-upload:{user.pk}"
+    key = upload_lock_key(user)
     owner = uuid.uuid4().hex
     timeout = int(appsettings.CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS if seconds is None else seconds)
     if not cache.add(key, owner, timeout=timeout):
