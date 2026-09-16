@@ -1,6 +1,11 @@
 0.2.65 (unreleased)
 -------------------
 
+- Aggregate editor API validation errors from multiple malformed rich-text or
+  raw-HTML leaves inside one custom block. Error codes and the existing
+  validation envelope are unchanged, so clients that read only ``code`` values
+  are unaffected; clients that enumerate field paths can now receive more than
+  one nested path for a block.
 - Move editor rich-text sanitization into the transport-neutral ``cast.content``
   layer. Operators filtering sanitizer warnings should update the logger name
   from ``cast.api.editor.richtext`` to ``cast.content.richtext``.

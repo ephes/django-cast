@@ -25,10 +25,6 @@ class _InlineEmbedError(Exception):
     """An inline embed bypassed the structured media boundary."""
 
 
-class _RejectedLeaf(Exception):
-    """Stop fail-fast sanitization after a leaf records an author error."""
-
-
 RichTextLeaf: TypeAlias = blocks.RichTextBlock | blocks.RawHTMLBlock
 LeafFn = Callable[[RichTextLeaf, Any, str], Any]
 
@@ -132,24 +128,24 @@ def map_rich_text_leaves(block: blocks.Block, value: Any, *, path: str, fn: Leaf
 
 
 def sanitize_block_value(block: blocks.Block, value: Any, *, path: str, errors: ErrorCollector) -> Any:
-    """Sanitize native block values before validation, retaining container IDs."""
+    """Sanitize native values in place, retaining IDs and visiting every leaf.
+
+    Rejected leaves become ``None`` in the returned, possibly partially
+    mutated value. Callers must treat any new collector error as failure and
+    must not validate or persist that returned container.
+    """
 
     def sanitize_leaf(block: RichTextLeaf, value: Any, path: str) -> Any:
         if isinstance(block, blocks.RawHTMLBlock):
             errors.add(path, "invalid", "Raw HTML blocks are not accepted by the editor API.")
-            raise _RejectedLeaf
+            return None
         before = len(errors)
         result = sanitize_rich_text(block, value, path=path, errors=errors)
-        if len(errors) > before:
-            raise _RejectedLeaf
-        if result is None:
+        if result is None and len(errors) == before:
             raise RuntimeError("Rich-text sanitization returned no value without recording an error.")
         return result
 
-    try:
-        return map_rich_text_leaves(block, value, path=path, fn=sanitize_leaf)
-    except _RejectedLeaf:
-        return None
+    return map_rich_text_leaves(block, value, path=path, fn=sanitize_leaf)
 
 
 def normalize_rich_text(block: blocks.RichTextBlock, source: str) -> NormalizedRichText:

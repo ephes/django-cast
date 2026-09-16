@@ -139,3 +139,29 @@ def test_custom_rich_text_conversion_errors_keep_nested_paths(api_client, blog, 
         "overview.1.value.0.description": [{"code": "invalid", "message": "Invalid rich text."}],
         "overview.2.value": [{"code": "invalid", "message": "Expected a string value."}],
     }
+
+
+@pytest.mark.django_db
+@override_settings(CAST_POST_BODY_BLOCKS=CUSTOM_BLOCK_SETTINGS)
+def test_custom_rich_text_conversion_aggregates_nested_errors(api_client, blog, admin_user):
+    api_client.force_authenticate(user=admin_user)
+    links = [
+        {**WEEKNOTE_LINK, "title": title, "description": "<p><b><i>Unbalanced</b></i></p>"}
+        for title in ("First", "Second")
+    ]
+
+    response = api_client.post(
+        reverse("cast:api:editor_post_create"),
+        {
+            "parent": {"id": blog.pk},
+            "title": "Invalid nested text",
+            "overview": [{"type": "weeknote_links", "value": links}],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 400, response.content
+    assert response.json()["errors"] == {
+        "overview.0.value.0.description": [{"code": "invalid", "message": "Invalid rich text."}],
+        "overview.0.value.1.description": [{"code": "invalid", "message": "Invalid rich text."}],
+    }

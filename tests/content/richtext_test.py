@@ -14,12 +14,44 @@ def test_raw_html_inside_stream_block_records_nested_error():
 
     result = sanitize_block_value(block, value, path="detail.0.value", errors=errors)
 
-    assert result is None
-    assert value[0].value == "<script>alert(1)</script>"
+    assert result is value
+    assert value[0].value is None
     assert errors.error_map == {
         "detail.0.value.0.value": [
             {"code": "invalid", "message": "Raw HTML blocks are not accepted by the editor API."}
         ]
+    }
+
+
+def test_multiple_raw_html_and_rich_text_leaves_are_rejected_together():
+    block = blocks.StructBlock(
+        [
+            ("first_raw", blocks.RawHTMLBlock()),
+            ("text", blocks.RichTextBlock()),
+            ("second_raw", blocks.RawHTMLBlock()),
+        ]
+    )
+    value = block.to_python(
+        {
+            "first_raw": "<script>first()</script>",
+            "text": "<li>Outside a list</li>",
+            "second_raw": "<script>second()</script>",
+        }
+    )
+    errors = ErrorCollector()
+
+    result = sanitize_block_value(block, value, path="detail.0.value", errors=errors)
+
+    assert result is value
+    assert dict(value) == {"first_raw": None, "text": None, "second_raw": None}
+    assert errors.error_map == {
+        "detail.0.value.first_raw": [
+            {"code": "invalid", "message": "Raw HTML blocks are not accepted by the editor API."}
+        ],
+        "detail.0.value.text": [{"code": "invalid", "message": "Invalid rich text."}],
+        "detail.0.value.second_raw": [
+            {"code": "invalid", "message": "Raw HTML blocks are not accepted by the editor API."}
+        ],
     }
 
 

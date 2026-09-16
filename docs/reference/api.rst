@@ -566,7 +566,9 @@ representation on read. Before ``clean()``, the API also sanitizes
 ``RichTextBlock`` values recursively inside ``StructBlock``, ``ListBlock``, and
 ``StreamBlock`` containers. Empty optional rich text stays empty. Submitted
 ``RawHTMLBlock`` values at the top level or nested in these three container types
-are rejected with a field-specific validation error.
+are rejected with a field-specific validation error. When multiple nested rich
+text leaves are invalid, the response reports every rejected leaf path together
+rather than stopping after the first one.
 
 Custom blocks are a trusted site-level extension point. The editor API enforces
 the built-in media blocks' per-user ``choose`` permissions, but it cannot infer

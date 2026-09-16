@@ -1,4 +1,5 @@
 import pytest
+from django.test import override_settings
 
 from cast.content.blocks import ConversionContext
 from cast.content.convert import convert_author_blocks
@@ -48,3 +49,34 @@ def test_non_list_input_is_collected_without_raising():
 def test_conversion_requires_a_path_prefix_or_section():
     with pytest.raises(ValueError, match="path_prefix is required when section is None"):
         convert_author_blocks([], ctx=ConversionContext(section=None, user=None), errors=ErrorCollector())
+
+
+@override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})
+def test_nested_rich_text_errors_are_aggregated_without_partial_output():
+    errors = ErrorCollector()
+    link = {
+        "category": "articles",
+        "kind": "article",
+        "url": "https://example.com/article",
+        "source": "Example",
+        "source_url": "",
+        "description": "<p><b><i>Unbalanced</b></i></p>",
+    }
+
+    assert (
+        convert_author_blocks(
+            [
+                {
+                    "type": "weeknote_links",
+                    "value": [{**link, "title": "First"}, {**link, "title": "Second"}],
+                }
+            ],
+            ctx=ConversionContext(section="overview", user=None),
+            errors=errors,
+        )
+        == []
+    )
+    assert errors.error_map == {
+        "overview.0.value.0.description": [{"code": "invalid", "message": "Invalid rich text."}],
+        "overview.0.value.1.description": [{"code": "invalid", "message": "Invalid rich text."}],
+    }

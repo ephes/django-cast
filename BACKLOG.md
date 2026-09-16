@@ -101,11 +101,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the read/preservation contract is specified and tested without allowing clients to forge or change
     preserved content or bypass sanitization on new writes.
 
-- [ ] Editor API aggregate validation errors within custom containers
-  - Scope: collect multiple malformed rich-text/raw-HTML errors within a single custom StructBlock/ListBlock/StreamBlock.
-    Errors across sibling section blocks already accumulate; nested sanitization currently reports its first failure.
-  - Done when: nested error paths are reported together and remain compatible with normal Wagtail block validation.
-
 - [ ] Editor API remote media import safety design
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
