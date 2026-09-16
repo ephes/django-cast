@@ -138,6 +138,10 @@ js-test-watch:
 js-coverage:
     cd javascript && npm run coverage
 
+# Type-check the TypeScript sources (reports known pre-existing errors, not in CI yet)
+js-typecheck:
+    cd javascript && npm run typecheck
+
 # Build shipped comment JS at src/cast/static/fluent_comments/js/ajaxcomments.js
 js-build-comments:
     cd javascript && npm run build:comments

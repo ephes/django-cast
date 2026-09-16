@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "dependencies": {
     "vite": "^8.1.0"
   },
@@ -9,12 +10,16 @@
     "build:all": "npm run build && npm run build:comments",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "coverage": "vitest run --coverage",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6",
+    "@types/node": "^22.20.3",
+    "@vitest/coverage-v8": "^4.1.11",
     "jsdom": "^27",
+    "typescript": "^7.0.2",
     "vitest": "^4"
   }
 }

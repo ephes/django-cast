@@ -127,3 +127,12 @@
   refreshed. Durations that already went stale this way are corrected by
   clearing ``duration`` and re-saving the audio object through the Wagtail admin
   or ``save_audio_with_derivations``.
+- Make the frontend tooling usable: ``javascript/package.json`` declares
+  ``"type": "module"`` so the ESM Vite configs stop loading as CommonJS, and
+  ``@vitest/coverage-v8`` is a real dev dependency so ``just js-coverage`` runs on a
+  fresh checkout (its report directory is gitignored). A new ``just js-typecheck``
+  (``npm run typecheck``) runs ``tsc --noEmit`` with ``typescript`` and ``@types/node``
+  installed; the ``tsconfig.json`` ``@/*`` alias now matches the Vite alias and the
+  test globals come from ``vitest/globals`` instead of the uninstalled ``@types/jest``.
+  Type-checking is not part of CI yet because it reports pre-existing errors. The
+  shipped bundles are unchanged.

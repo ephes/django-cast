@@ -389,6 +389,22 @@ Run JavaScript tests with Vitest:
    $ cd javascript
    $ npx vitest run
 
+Coverage uses the ``@vitest/coverage-v8`` provider and writes an HTML report to the
+gitignored ``javascript/coverage/`` directory.
+
+Type-check the TypeScript sources with ``tsc --noEmit``:
+
+.. code-block:: bash
+
+   $ just js-typecheck
+   # or directly:
+   $ cd javascript
+   $ npm run typecheck
+
+Vite and Vitest only strip types, so this is the only command that actually checks them.
+It currently reports pre-existing errors, mostly in the test files, and is therefore not
+part of CI yet; treat new errors in the code you touch as something to fix.
+
 Build shipped JavaScript assets:
 
 .. code-block:: bash
