@@ -375,6 +375,31 @@ supported dependency combination (Django 5.2, Wagtail 7.0) and once with the new
 
    $ uv run tox -e migrations-oldest,migrations-latest
 
+Test Media Files
+~~~~~~~~~~~~~~~~
+
+Uploads created by the suite land in a directory that belongs to a single test session.
+``tests/conftest.py`` points ``MEDIA_ROOT`` and ``CAST_PRIVATE_MEDIA_ROOT`` at pytest's
+per-session temporary directory, so nothing is written into the checkout and no run
+deletes another run's files. Set ``CAST_TEST_MEDIA_ROOT`` and
+``CAST_TEST_PRIVATE_MEDIA_ROOT`` to use fixed paths instead; every tox environment does
+that to get a stable directory of its own under ``.tox``, and such a directory is wiped
+at the start and end of the session because the next run reuses it.
+
+Private ``FileField`` columns - the contributor voice-reference clip and the transcript
+speakers sidecar - resolve their storage once, while the model class is created, so they
+cannot follow a settings override. The fixture rebinds them to the session's private root
+and restores them afterwards.
+
+Media files are therefore no longer a reason to avoid running two test sessions at once.
+The reused test database still is: two plain ``pytest`` runs share
+``tests/test_database.sqlite3`` and fail with ``database is locked``. Give the second run
+its own database to run both at the same time:
+
+.. code-block:: bash
+
+   $ CAST_TEST_DB=/tmp/cast-second-run.sqlite3 uv run pytest
+
 JavaScript Tests
 ----------------
 
@@ -432,9 +457,9 @@ To test a specific environment:
 
    $ uv run tox -e py312-django52-wagtail70
 
-Each environment keeps its own database, public media root, and private media root under ``.tox``.
-This isolation lets the default ``just tox`` recipe safely run six environments concurrently without
-one test session deleting another's uploaded files. ``uv run tox -e migrations-oldest,migrations-latest``
+Each environment keeps its own database, public media root, and private media root under ``.tox``
+(see `Test Media Files`_). This isolation lets the default ``just tox`` recipe safely run six
+environments concurrently without one test session deleting another's uploaded files. ``uv run tox -e migrations-oldest,migrations-latest``
 checks that the migration graph applies to an empty database at both ends of the supported dependency
 range, and ``uv run tox -e cleanup`` removes every test database and media root.
 

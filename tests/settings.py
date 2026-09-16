@@ -84,7 +84,9 @@ STATICFILES_FINDERS = [
 
 # MEDIA CONFIGURATION
 # ------------------------------------------------------------------------------
-# Keep test uploads out of src/cast/media; tests/conftest.py cleans this path.
+# Keep test uploads out of src/cast/media. These defaults only apply outside
+# pytest (mypy, manage.py): tests/conftest.py gives every pytest session its own
+# temporary roots unless the environment variables below are set, as tox does.
 MEDIA_ROOT = os.environ.get("CAST_TEST_MEDIA_ROOT", str(TESTS_DIR / "media"))
 CAST_PRIVATE_MEDIA_ROOT = os.environ.get("CAST_TEST_PRIVATE_MEDIA_ROOT", str(TESTS_DIR / "private-media"))
 

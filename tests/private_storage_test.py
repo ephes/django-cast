@@ -10,6 +10,8 @@ from cast.devdata import create_transcript
 from cast.models import Transcript
 from cast.private_storage import get_private_media_root, get_private_media_storage, get_transcript_storage
 
+from .conftest import private_storage_fields
+
 TEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
@@ -22,8 +24,11 @@ def test_private_media_root_uses_configured_setting(settings, tmp_path):
     assert get_private_media_root() == str(tmp_path / "configured-private")
 
 
-@override_settings(CAST_PRIVATE_MEDIA_ROOT="")
 def test_private_media_root_defaults_outside_media_root(settings, tmp_path):
+    # Both settings go through the settings fixture: combining an override_settings
+    # decorator with that fixture leaks the decorated setting into later tests, because
+    # the fixture restores the snapshot it took while the decorator was active.
+    settings.CAST_PRIVATE_MEDIA_ROOT = ""
     settings.MEDIA_ROOT = str(tmp_path / "media")
 
     assert get_private_media_root() == str(tmp_path / "cast-private-media")
@@ -76,6 +81,24 @@ def test_transcript_storage_falls_back_to_configured_private_media_alias():
 @override_settings(STORAGES=TEST_STORAGES)
 def test_transcript_storage_falls_back_to_default_storage_when_unconfigured():
     assert get_transcript_storage() is default_storage
+
+
+def test_private_model_field_storage_uses_the_session_private_media_root(isolated_media_files):
+    """Private ``FileField``s resolve their storage once, when the model class is created.
+
+    They therefore need the rebinding done by the ``isolated_media_files`` session fixture
+    to write into this session's private media root instead of the root that
+    ``tests/settings.py`` happened to define at import time.
+    """
+    fields = list(private_storage_fields())
+
+    assert [f"{field.model._meta.label}.{field.name}" for field in fields] == [
+        "cast.ContributorVoiceReference.clip",
+        "cast.Transcript.speakers",
+    ]
+    session_private_root = Path(isolated_media_files["CAST_PRIVATE_MEDIA_ROOT"])
+    for field in fields:
+        assert Path(field.storage.location) == session_private_root
 
 
 def test_public_transcript_artifact_fields_use_transcript_storage_helper():

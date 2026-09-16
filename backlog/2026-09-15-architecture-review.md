@@ -475,6 +475,16 @@ The coverage gate produces real tests, not pragma sprawl: 37 `pragma: no cover` 
   `override_settings(MEDIA_ROOT=..., CAST_PRIVATE_MEDIA_ROOT=...)`, keep the tox env-var overrides, drop the `rmtree`
   pair. Verified feasible: `appsettings` resolves the private root at access time and `private_storage` caches per
   location string.
+  Fix note (2026-09-16, fixed): the session fixture (now `isolated_media_files`) creates both roots with
+  `tmp_path_factory.mktemp()` and enters a session-scoped `override_settings(MEDIA_ROOT=...,
+  CAST_PRIVATE_MEDIA_ROOT=...)` whenever `CAST_TEST_MEDIA_ROOT`/`CAST_TEST_PRIVATE_MEDIA_ROOT` are unset, so nothing
+  is written under the checkout and nothing is deleted at session start or end; roots that do come from those
+  variables (tox) are still wiped, because the next run of the same environment reuses them. The two private
+  `FileField`s (`ContributorVoiceReference.clip`, `Transcript.speakers`) resolve their storage while the model class
+  is created and so ignored the override; the fixture rebinds them to the session root, with a regression test.
+  Two concurrent media-heavy pytest runs pass. Not done: the reused `tests/test_database.sqlite3` is now the remaining concurrency
+  blocker (`database is locked`), so a second run still needs its own `CAST_TEST_DB`; documented in
+  `docs/development.rst`.
 - **T7. 37 test files and the root conftest depend on the shipped `cast.devdata`** (medium, coupling, prior M6) —
   `tests/conftest.py:30`. `devdata.py` is test scaffolding (binary blobs, factory helpers) that ships in the wheel
   and is coverage-excluded line by line, yet `generate_blog_with_media`, `create_post`, `create_python_body` and

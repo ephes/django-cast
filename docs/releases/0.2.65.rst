@@ -141,3 +141,13 @@
   of the 83 files that had drifted. Contributors get import order fixed
   automatically by ``just lint`` and the pre-commit Ruff hook; no shipped behavior
   changes.
+- Give every plain ``pytest`` session its own media roots. Without
+  ``CAST_TEST_MEDIA_ROOT`` / ``CAST_TEST_PRIVATE_MEDIA_ROOT`` (which tox still sets per
+  environment) the suite now uploads into pytest's per-session temporary directory
+  instead of the shared ``tests/media`` path, and no longer deletes that path at
+  session start and end. Private ``FileField`` storages, which Django resolves once while
+  the model class is created, are rebound to the session root so private uploads stop
+  landing in the checkout as well. Two test runs in the same checkout - an agent session and a
+  terminal, say - no longer wipe each other's uploads and produce spurious ``ffprobe``
+  failures. A concurrent run still needs its own ``CAST_TEST_DB`` because the reused test
+  database is shared; see the testing section of the development docs.

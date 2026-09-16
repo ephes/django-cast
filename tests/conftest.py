@@ -18,7 +18,7 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.db.models.fields.files import FieldFile
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
@@ -31,6 +31,7 @@ from cast import appsettings
 from cast.devdata import create_transcript
 from cast.models import Audio, ChapterMark, File, ItunesArtWork
 from cast.models.theme import _clear_template_base_dir_choices_cache
+from cast.private_storage import PrivateFileSystemStorage, get_private_filesystem_storage
 
 from .factories import (
     BlogFactory,
@@ -199,18 +200,72 @@ def fixture_dir():
     return os.path.join(current_directory, "fixtures")
 
 
-@pytest.fixture(scope="session", autouse=True)
-def remove_stale_media_files():
-    # cannot use function scoped settings fixture, so import settings
-    from django.conf import settings
+# Public and private media root, the environment variable tox uses to point it at a
+# per-environment directory, and the prefix for the per-session fallback directory.
+MEDIA_ROOT_SETTINGS = (
+    ("MEDIA_ROOT", "CAST_TEST_MEDIA_ROOT", "media"),
+    ("CAST_PRIVATE_MEDIA_ROOT", "CAST_TEST_PRIVATE_MEDIA_ROOT", "private-media"),
+)
 
-    # clean up before tests start (handles leftovers from interrupted runs)
-    shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
-    shutil.rmtree(settings.CAST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
-    yield
-    # clean up after tests end
-    shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
-    shutil.rmtree(settings.CAST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
+
+def _remove_media_roots(roots):
+    for root in roots:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def private_storage_fields():
+    """Model file fields bound to the default private filesystem storage.
+
+    ``FileField`` calls a callable ``storage`` argument once, while the model class is
+    being created, so these fields keep the storage instance built from the settings that
+    were active at import time. Unlike ``default_storage`` - a lazy wrapper that follows
+    ``MEDIA_ROOT`` - they ignore a later ``override_settings``, which is why
+    ``isolated_media_files`` rebinds them.
+    """
+    for model in apps.get_models():
+        for field in model._meta.get_fields():
+            if isinstance(getattr(field, "storage", None), PrivateFileSystemStorage):
+                yield field
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_media_files(tmp_path_factory):
+    """Give every test session media roots it does not share with another session.
+
+    tox exports ``CAST_TEST_MEDIA_ROOT`` / ``CAST_TEST_PRIVATE_MEDIA_ROOT`` so each
+    environment gets its own stable directory under ``.tox`` (see
+    ``backlog/2026-08-10-test-media-root-isolation.md``). The next run of the same
+    environment reuses that directory, so it is still wiped before and after the
+    session.
+
+    Without an override the root comes from pytest's per-session temporary directory
+    instead of the fixed ``tests/media`` path, and needs no wiping. Two concurrent
+    plain ``pytest`` runs in the same checkout - an agent session and a terminal, say
+    - therefore no longer delete each other's uploads mid-run.
+
+    Yields the effective roots as ``{setting name: path}``, so a test can assert against
+    them without depending on the live settings.
+    """
+    overrides = {}
+    configured_roots = []
+    for setting_name, env_var, prefix in MEDIA_ROOT_SETTINGS:
+        if env_var in os.environ:
+            configured_roots.append(getattr(django_settings, setting_name))
+        else:
+            overrides[setting_name] = str(tmp_path_factory.mktemp(prefix))
+    _remove_media_roots(configured_roots)
+    with override_settings(**overrides):
+        session_private_storage = get_private_filesystem_storage(django_settings.CAST_PRIVATE_MEDIA_ROOT)
+        fields = list(private_storage_fields())
+        original_storages = [field.storage for field in fields]
+        for field in fields:
+            field.storage = session_private_storage
+        try:
+            yield {setting_name: getattr(django_settings, setting_name) for setting_name, _, _ in MEDIA_ROOT_SETTINGS}
+        finally:
+            for field, original_storage in zip(fields, original_storages, strict=True):
+                field.storage = original_storage
+            _remove_media_roots(configured_roots)
 
 
 @pytest.fixture(scope="session", autouse=True)
