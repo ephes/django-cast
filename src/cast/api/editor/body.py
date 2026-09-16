@@ -177,64 +177,29 @@ def author_blocks_to_section(
             errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
             continue
 
-        if block_type == "code":
-            if not isinstance(value, dict):
-                errors.add(f"{base}.value", "invalid", "Expected an object value.")
-                continue
-            block_errors = False
-            for key in ("language", "source"):
-                if not isinstance(value.get(key), str) or not value.get(key):
-                    errors.add(f"{base}.value.{key}", "required", f"Code block '{key}' is required.")
-                    block_errors = True
-            if block_errors:
-                continue
-            result.append({"type": "code", "value": {"language": value["language"], "source": value["source"]}})
+        if block_type != "gallery":
+            errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
+            continue
 
-        elif block_type == "image":
-            image_id = value.get("id") if isinstance(value, dict) else None
+        if not isinstance(value, list) or not value:
+            errors.add(f"{base}.value", "invalid", "Gallery value must be a non-empty list of image refs.")
+            continue
+        items = []
+        gallery_ok = True
+        for img_index, ref in enumerate(value):
+            image_id = ref.get("id") if isinstance(ref, dict) else None
             if not image_choosable_by(image_id, user):
                 errors.add(
-                    f"{base}.value.id",
+                    f"{base}.value.{img_index}.id",
                     "not_found",
                     f"Image {image_id} does not exist or is not accessible.",
                 )
+                gallery_ok = False
                 continue
-            result.append({"type": "image", "value": image_id})
-
-        elif block_type == "gallery":
-            if not isinstance(value, list) or not value:
-                errors.add(f"{base}.value", "invalid", "Gallery value must be a non-empty list of image refs.")
-                continue
-            items = []
-            gallery_ok = True
-            for img_index, ref in enumerate(value):
-                image_id = ref.get("id") if isinstance(ref, dict) else None
-                if not image_choosable_by(image_id, user):
-                    errors.add(
-                        f"{base}.value.{img_index}.id",
-                        "not_found",
-                        f"Image {image_id} does not exist or is not accessible.",
-                    )
-                    gallery_ok = False
-                    continue
-                items.append({"id": str(uuid.uuid4()), "type": "item", "value": image_id})
-            if not gallery_ok:
-                continue
-            result.append({"type": "gallery", "value": {"layout": "default", "gallery": items}})
-
-        elif block_type == "audio":
-            audio_id = value.get("id") if isinstance(value, dict) else None
-            if not audio_choosable_by(audio_id, user):
-                errors.add(f"{base}.value.id", "not_found", "Referenced media is not available.")
-                continue
-            result.append({"type": "audio", "value": audio_id})
-
-        else:  # block_type == "video"
-            video_id = value.get("id") if isinstance(value, dict) else None
-            if not video_choosable_by(video_id, user):
-                errors.add(f"{base}.value.id", "not_found", "Referenced media is not available.")
-                continue
-            result.append({"type": "video", "value": video_id})
+            items.append({"id": str(uuid.uuid4()), "type": "item", "value": image_id})
+        if not gallery_ok:
+            continue
+        result.append({"type": "gallery", "value": {"layout": "default", "gallery": items}})
 
     if errors:
         raise EditorValidationError(errors.error_map)
@@ -253,6 +218,7 @@ def _unsupported_placeholder(block_type: Any, *, path_prefix: str, index: int) -
 
 
 def _media_ref_is_available(block_type: str, value: Any, user: Any) -> bool:
+    """Compatibility helper retained for private tests until converter slice 7."""
     if block_type == "image":
         return image_choosable_by(value, user)
     if block_type == "audio":
@@ -280,20 +246,6 @@ def section_to_author_blocks(
                 author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
             else:
                 author.append({"type": block_type, "value": author_value})
-        elif block_type == "code":
-            if (
-                isinstance(value, dict)
-                and isinstance(value.get("language"), str)
-                and isinstance(value.get("source"), str)
-            ):
-                author.append({"type": "code", "value": {"language": value["language"], "source": value["source"]}})
-            else:
-                author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
-        elif block_type in ("image", "audio", "video"):
-            if user is not None and not _media_ref_is_available(block_type, value, user):
-                author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
-            else:
-                author.append({"type": block_type, "value": {"id": value}})
         elif block_type == "gallery":
             items = value.get("gallery", []) if isinstance(value, dict) else []
             if (

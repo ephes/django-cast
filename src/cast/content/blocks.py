@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -11,6 +12,7 @@ from wagtail.blocks import Block
 from cast.post_body_blocks import configured_content_blocks, default_content_blocks
 
 from .errors import ErrorCollector, flatten_django_validation_error
+from .media_refs import get_choosable_audio, get_choosable_image, get_choosable_video
 from .richtext import sanitize_block_value
 
 _CUSTOM_BLOCK_CONVERSION_ERRORS = (TypeError, ValueError, KeyError, AttributeError)
@@ -147,10 +149,91 @@ class EmbedConverter:
         return UNSUPPORTED
 
 
+@dataclass(frozen=True)
+class CodeConverter:
+    name: str = "code"
+    editable: bool = True
+
+    def to_stream(self, value: Any, *, ctx: ConversionContext, path: str, errors: ErrorCollector) -> Any | None:
+        if not isinstance(value, dict):
+            errors.add(path, "invalid", "Expected an object value.")
+            return None
+        invalid = False
+        for key in ("language", "source"):
+            if not isinstance(value.get(key), str) or not value.get(key):
+                errors.add(f"{path}.{key}", "required", f"Code block '{key}' is required.")
+                invalid = True
+        if invalid:
+            return None
+        return {"language": value["language"], "source": value["source"]}
+
+    def to_author(self, value: Any, *, ctx: ConversionContext) -> Any | Unsupported:
+        if isinstance(value, dict) and isinstance(value.get("language"), str) and isinstance(value.get("source"), str):
+            return {"language": value["language"], "source": value["source"]}
+        return UNSUPPORTED
+
+
+@dataclass(frozen=True)
+class MediaRefConverter:
+    """Convert one permission-filtered media chooser reference."""
+
+    name: str
+    resolver: Callable[[Any, Any], Any | None]
+    not_found_message: Callable[[Any], str]
+    editable: bool = True
+
+    def to_stream(self, value: Any, *, ctx: ConversionContext, path: str, errors: ErrorCollector) -> Any | None:
+        object_id = value.get("id") if isinstance(value, dict) else None
+        if self.resolver(object_id, ctx.user) is None:
+            errors.add(f"{path}.id", "not_found", self.not_found_message(object_id))
+            return None
+        return object_id
+
+    def to_author(self, value: Any, *, ctx: ConversionContext) -> Any | Unsupported:
+        if ctx.user is not None and self.resolver(value, ctx.user) is None:
+            return UNSUPPORTED
+        return {"id": value}
+
+
+class ImageConverter(MediaRefConverter):
+    def __init__(self) -> None:
+        super().__init__(
+            name="image",
+            resolver=get_choosable_image,
+            not_found_message=lambda object_id: f"Image {object_id} does not exist or is not accessible.",
+        )
+
+
+class AudioConverter(MediaRefConverter):
+    def __init__(self) -> None:
+        super().__init__(
+            name="audio",
+            resolver=get_choosable_audio,
+            not_found_message=lambda object_id: "Referenced media is not available.",
+        )
+
+
+class VideoConverter(MediaRefConverter):
+    def __init__(self) -> None:
+        super().__init__(
+            name="video",
+            resolver=get_choosable_video,
+            not_found_message=lambda object_id: "Referenced media is not available.",
+        )
+
+
 def content_converters(section: str | None) -> dict[str, BlockConverter]:
     """Return built-in and configured converters for ``section``."""
     converters: dict[str, BlockConverter] = {
-        converter.name: converter for converter in (ParagraphConverter(), EmbedConverter())
+        converter.name: converter
+        for converter in (
+            ParagraphConverter(),
+            EmbedConverter(),
+            CodeConverter(),
+            ImageConverter(),
+            AudioConverter(),
+            VideoConverter(),
+        )
     }
     if section is not None:
         for name, block in configured_content_blocks(section):
