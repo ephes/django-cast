@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import json
 from time import monotonic, sleep
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from urllib.request import Request
 
 from django.http import HttpRequest
 from wagtail.models import Site
+
+from cast.safe_fetch import (
+    ResponseTooLarge,
+    open_url,
+    read_http_error_detail,
+    read_response_bytes,
+)
 
 from .exceptions import VoxhelmError
 from .settings import get_bool_setting, get_float_setting, get_setting, require_setting
@@ -18,69 +25,6 @@ KNOWN_SPEAKER_STRATEGY = "pyannote_known_speaker"
 MAX_VOXHELM_ARTIFACT_BYTES = 10 * 1024 * 1024
 MAX_VOXHELM_API_RESPONSE_BYTES = 1024 * 1024
 MAX_VOXHELM_ERROR_BYTES = 16 * 1024
-
-
-if TYPE_CHECKING:
-    from http.client import HTTPMessage
-    from types import TracebackType
-    from typing import IO, Protocol, Self, overload
-
-    class ReadableResponse(Protocol):
-        @overload
-        def read(self) -> bytes: ...
-
-        @overload
-        def read(self, size: int, /) -> bytes: ...
-
-        def __enter__(self) -> Self: ...
-
-        def __exit__(
-            self,
-            exc_type: type[BaseException] | None,
-            exc_value: BaseException | None,
-            traceback: TracebackType | None,
-        ) -> object: ...
-else:
-    ReadableResponse = Any
-
-
-class NoRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(
-        self,
-        req: Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: HTTPMessage,
-        newurl: str,
-    ) -> Request | None:
-        return None
-
-
-def open_url(request: Request, *, timeout: float, follow_redirects: bool = True) -> ReadableResponse:
-    if follow_redirects:
-        return urlopen(request, timeout=timeout)
-    return build_opener(NoRedirectHandler).open(request, timeout=timeout)
-
-
-def read_response_bytes(response: ReadableResponse, *, max_bytes: int | None = None) -> bytes:
-    if max_bytes is None:
-        return response.read()
-    data = response.read(max_bytes + 1)
-    if len(data) > max_bytes:
-        raise VoxhelmError(f"Voxhelm response exceeded the maximum size of {max_bytes} bytes.")
-    return data
-
-
-def read_http_error_detail(exc: HTTPError) -> str:
-    data = exc.read(MAX_VOXHELM_ERROR_BYTES + 1)
-    if len(data) > MAX_VOXHELM_ERROR_BYTES:
-        data = data[:MAX_VOXHELM_ERROR_BYTES]
-        suffix = " [truncated]"
-    else:
-        suffix = ""
-    detail = data.decode("utf-8", errors="replace").strip() or str(exc.reason)
-    return f"{detail}{suffix}"
 
 
 def normalize_api_base(api_base: str) -> tuple[str, str]:
@@ -180,8 +124,10 @@ class VoxhelmClient:
                 request, timeout=self.request_timeout_seconds, follow_redirects=follow_redirects
             ) as response:
                 return read_response_bytes(response, max_bytes=max_bytes)
+        except ResponseTooLarge as exc:
+            raise VoxhelmError(f"Voxhelm response exceeded the maximum size of {exc.max_bytes} bytes.") from exc
         except HTTPError as exc:
-            detail = read_http_error_detail(exc)
+            detail = read_http_error_detail(exc, max_bytes=MAX_VOXHELM_ERROR_BYTES)
             raise VoxhelmError(f"Voxhelm request failed with status {exc.code}: {detail}") from exc
         except URLError as exc:
             raise VoxhelmError(f"Voxhelm request failed: {exc.reason}") from exc

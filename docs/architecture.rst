@@ -217,6 +217,12 @@ Media Pipeline:
 
 4. **Delivery**: Direct or via CDN
 
+Remote byte fetches use ``cast.safe_fetch`` for explicit origin policy,
+redirect control, response-size caps, bounded HTTP error details, and a shared
+error vocabulary. ``FetchPolicy`` reserves ``block_private_addresses``;
+enforcement is not active until the media-ingestion resolution check lands,
+before remote importers are enabled.
+
 API Architecture
 ----------------
 

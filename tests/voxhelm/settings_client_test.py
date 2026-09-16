@@ -2,7 +2,6 @@ import io
 import json
 from types import SimpleNamespace
 from urllib.error import HTTPError, URLError
-from urllib.request import Request
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -10,7 +9,6 @@ from django.test import RequestFactory
 
 from cast.models import Audio, Contributor, EpisodeContributor, VoxhelmSettings
 from cast.voxhelm import (
-    NoRedirectHandler,
     VoxhelmClient,
     VoxhelmError,
     append_diarization_speaker_count_to_task_ref,
@@ -22,7 +20,6 @@ from cast.voxhelm import (
     get_float_setting,
     get_setting,
     normalize_api_base,
-    open_url,
     read_response_bytes,
     require_artifact_path,
     require_setting,
@@ -432,6 +429,11 @@ def test_read_response_bytes_without_limit_reads_all():
     assert read_response_bytes(FakeResponse(b"payload")) == b"payload"
 
 
+def test_read_response_bytes_reexport_preserves_voxhelm_error():
+    with pytest.raises(VoxhelmError, match="maximum size of 4 bytes"):
+        read_response_bytes(FakeResponse(b"12345"), max_bytes=4)
+
+
 def test_resolve_diarization_speaker_count_without_episode_manager():
     assert resolve_diarization_speaker_count(SimpleNamespace()) is None
 
@@ -636,25 +638,6 @@ def test_client_download_artifact_rejects_redirect_response(mocker):
     assert open_url_mock.call_args.kwargs["follow_redirects"] is False
 
 
-def test_open_url_without_redirects_uses_no_redirect_opener(mocker):
-    opener = mocker.Mock()
-    opener.open.return_value = FakeResponse(b"ok")
-    build_opener = mocker.patch("cast.voxhelm.client.build_opener", return_value=opener)
-    request = Request("https://voxhelm.example/v1/jobs")
-
-    response = open_url(request, timeout=1.0, follow_redirects=False)
-
-    assert response.read() == b"ok"
-    assert build_opener.call_args.args == (NoRedirectHandler,)
-    opener.open.assert_called_once_with(request, timeout=1.0)
-
-
-def test_no_redirect_handler_blocks_redirect():
-    handler = NoRedirectHandler()
-
-    assert handler.redirect_request(None, None, 302, "Found", {}, "https://voxhelm.example/next") is None
-
-
 def test_client_request_json_requires_object_response(mocker):
     mocker.patch("cast.voxhelm.client.open_url", return_value=FakeResponse(b'["not-an-object"]'))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
@@ -697,7 +680,7 @@ def test_client_http_error_includes_body(mocker):
         hdrs=None,
         fp=io.BytesIO(b"upstream broke"),
     )
-    mocker.patch("cast.voxhelm.client.urlopen", side_effect=error)
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="502: upstream broke"):
@@ -713,7 +696,7 @@ def test_client_http_error_body_is_bounded(mocker):
         hdrs=None,
         fp=io.BytesIO(b"abcdef"),
     )
-    mocker.patch("cast.voxhelm.client.urlopen", side_effect=error)
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match=r"500: abcd \[truncated\]"):
@@ -728,7 +711,7 @@ def test_client_http_error_falls_back_to_reason_when_body_is_empty(mocker):
         hdrs=None,
         fp=io.BytesIO(b""),
     )
-    mocker.patch("cast.voxhelm.client.urlopen", side_effect=error)
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="503: Service Unavailable"):
@@ -736,7 +719,7 @@ def test_client_http_error_falls_back_to_reason_when_body_is_empty(mocker):
 
 
 def test_client_url_error_is_wrapped(mocker):
-    mocker.patch("cast.voxhelm.client.urlopen", side_effect=URLError("offline"))
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=URLError("offline"))
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="offline"):
