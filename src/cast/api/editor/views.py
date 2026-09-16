@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 
 from ...models import Audio, Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
+from ...publication import PublicationRejected, check_publishable
 from .body import (
     author_blocks_to_overview,
     author_blocks_to_section,
@@ -348,14 +349,10 @@ class PostEditorMixin:
         episode publish endpoints; it stops a podcast-audio-less episode from being
         published through either path (mirrors ``CustomEpisodeForm.clean``).
         """
-        if isinstance(content, Episode) and content.podcast_audio_id is None:
-            raise EditorValidationError(
-                {
-                    "podcast_audio": [
-                        {"code": "required", "message": "An episode must have an audio file to be published."}
-                    ]
-                }
-            )
+        try:
+            check_publishable(content)
+        except PublicationRejected as error:
+            raise EditorValidationError(error.as_error_map()) from error
 
     def _publish(self, page: Post, *, user: Any, request: Request, publish_denied_message: str, noun: str) -> dict:
         if not page.permissions_for_user(user).can_publish():

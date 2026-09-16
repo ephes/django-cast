@@ -44,6 +44,7 @@ from cast.post_media import (
     synchronize_post_media,
 )
 from cast.presenters import render_post_description
+from cast.publication import PublicationRejected, episode_audio_violation
 from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
 from .image_renditions import ImagesWithType
@@ -654,8 +655,11 @@ class CustomEpisodeForm(WagtailAdminPageForm):
         cleaned_data = super().clean()
         action_publish_values = self.data.getlist("action-publish") if hasattr(self.data, "getlist") else []
         publish_requested = any(action_publish_values) or bool(self.data.get("action-publish"))
-        if publish_requested and cleaned_data.get("podcast_audio") is None:
-            raise forms.ValidationError({"podcast_audio": _("An episode must have an audio file to be published.")})
+        podcast_audio = cleaned_data.get("podcast_audio")
+        podcast_audio_id = getattr(podcast_audio, "pk", podcast_audio)
+        violation = episode_audio_violation(podcast_audio_id) if publish_requested else None
+        if violation is not None:
+            raise PublicationRejected((violation,)).as_form_error()
         return cleaned_data
 
 
