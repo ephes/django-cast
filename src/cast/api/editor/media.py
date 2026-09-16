@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import logging
 import subprocess
-import uuid
 from collections.abc import Callable
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
-from django.core.cache import cache
 from django.db.models import Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
@@ -23,6 +21,7 @@ from wagtail.permission_policies.collections import CollectionOwnershipPermissio
 
 from ... import appsettings
 from ...forms import AudioForm, get_video_form
+from ...media_ingest import MediaUploadInProgress, cleanup_new_media_object, upload_lock
 from ...media_probe import media_probe_budget
 from ...models import Audio, Video
 from ...models.audio import AudioDurationProbeError, AudioDurationProbeTimeout
@@ -252,21 +251,7 @@ def _form_errors(form: Any) -> dict[str, list[dict[str, str]]]:
     return errors
 
 
-def _delete_field_file(field: Any) -> None:
-    if getattr(field, "name", ""):
-        field.delete(save=False)
-
-
-def _cleanup_media_object(obj: Any, field_names: tuple[str, ...]) -> bool:
-    try:
-        for field_name in field_names:
-            _delete_field_file(getattr(obj, field_name))
-        if getattr(obj, "pk", None) is not None:
-            obj.delete()
-    except Exception:
-        logger.exception("Editor media cleanup failed for %s pk=%s", obj._meta.label, getattr(obj, "pk", None))
-        return False
-    return True
+_cleanup_media_object = cleanup_new_media_object
 
 
 def _flat_error(code: str, detail: str, *, http_status: int) -> Response:
@@ -458,16 +443,15 @@ class LegacyVideoCreateView(EditorVideoListCreateView):
 
 
 def _with_upload_lock(user: Any, callback: Callable[[], Response]) -> Response:
-    key = f"cast:editor-media-upload:{user.pk}"
-    owner = uuid.uuid4().hex
-    timeout = int(appsettings.CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS)
-    if not cache.add(key, owner, timeout=timeout):
-        return _flat_error("rate_limited", "Another audio or video upload is already in progress.", http_status=429)
+    acquired = False
     try:
-        return callback()
-    finally:
-        if cache.get(key) == owner:
-            cache.delete(key)
+        with upload_lock(user):
+            acquired = True
+            return callback()
+    except MediaUploadInProgress:
+        if acquired:
+            raise
+        return _flat_error("rate_limited", "Another audio or video upload is already in progress.", http_status=429)
 
 
 class EditorMediaCollectionsView(EditorAPIView):

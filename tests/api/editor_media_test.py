@@ -8,7 +8,7 @@ from django.urls import reverse
 from rest_framework.response import Response
 from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
 
-from cast import media_probe
+from cast import media_ingest, media_probe
 from cast.api.editor import media as editor_media
 from cast.api.editor.errors import (
     EditorValidationError,
@@ -455,6 +455,13 @@ class TestEditorMediaEndpoints:
         assert response.status_code == 200
         assert cache.get(key) == "other-owner"
         cache.delete(key)
+
+    def test_upload_lock_does_not_translate_callback_contention(self, superuser):
+        def callback():
+            raise media_ingest.MediaUploadInProgress
+
+        with pytest.raises(media_ingest.MediaUploadInProgress):
+            editor_media._with_upload_lock(superuser, callback)
 
     def test_video_upload_with_supplied_poster(self, api_client, superuser, minimal_mp4, image_1px):
         api_client.force_authenticate(user=superuser)

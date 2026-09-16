@@ -674,6 +674,16 @@ Required audio duration probing failures are returned as ``probe_timeout`` or
 ``probe_failed``; optional audio chapter extraction and video poster generation
 degrade without failing the upload.
 
+
+CAST_MEDIA_PROBE_SECONDS
+========================
+
+Registered cumulative synchronous ffprobe/ffmpeg budget, in seconds, for the
+shared Wagtail admin audio and video ingest policy. Defaults to ``30``. Integer
+and floating-point values are accepted. The current admin views are not routed
+through that shared policy yet, so this setting has no effect until that wiring
+lands; they retain their existing per-probe timeout in the meantime.
+
 CAST_EDITOR_SCOPES
 ==================
 
