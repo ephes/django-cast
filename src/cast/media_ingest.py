@@ -14,7 +14,7 @@ from django.core.cache import cache
 from django.db import transaction
 
 from . import appsettings
-from .file_replacement import fresh_file_name
+from .file_replacement import FileFieldReplacementGuard, fresh_file_name
 from .media_derivation import normalize_model_save_arguments
 from .media_probe import media_probe_budget
 from .models.audio import AudioDurationProbeError, AudioDurationProbeTimeout
@@ -113,12 +113,35 @@ def ingest_upload(form: Any, *, policy: IngestPolicy) -> Any:
     _rename_uncommitted_files(instance, policy.file_fields)
     _, using = normalize_model_save_arguments(instance, (), {})
     probe_budget = nullcontext() if policy.probe_seconds is None else media_probe_budget(policy.probe_seconds)
+    is_replacement = instance.pk is not None
+    replacement_guard: FileFieldReplacementGuard | None = None
 
     try:
         with probe_budget, transaction.atomic(using=using):
-            return form.save()
+            if is_replacement:
+                replacement_guard = FileFieldReplacementGuard.track(instance, policy.file_fields, using=using)
+            result = form.save()
+            if replacement_guard is not None:
+                replacement_guard.commit()
+            return result
     except Exception as exc:
-        if not cleanup_new_media_object(instance, policy.file_fields):
+        try:
+            if replacement_guard is not None:
+                replacement_guard.rollback()
+                cleanup_succeeded = True
+            elif is_replacement:
+                # Tracking failed before form.save(), so no new file was written.
+                cleanup_succeeded = True
+            else:
+                cleanup_succeeded = cleanup_new_media_object(instance, policy.file_fields)
+        except Exception:
+            logger.exception(
+                "Media ingest rollback cleanup failed for %s pk=%s",
+                instance._meta.label,
+                getattr(instance, "pk", None),
+            )
+            cleanup_succeeded = False
+        if not cleanup_succeeded:
             logger.exception(
                 "Media ingest failed before cleanup completed for %s pk=%s",
                 instance._meta.label,

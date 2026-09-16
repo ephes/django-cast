@@ -154,3 +154,18 @@ def test_ingest_upload_preserves_unknown_errors_and_reports_cleanup_failure(mock
     assert raised.value.__cause__ is error
     assert re.fullmatch(r"clip-[0-9a-f]{12}\.mp3", form.instance.upload.name)
     assert cleanup.call_count == 2
+
+
+@pytest.mark.django_db
+def test_ingest_upload_does_not_clean_stored_files_when_tracking_fails(mocker):
+    form = FakeForm()
+    form.instance.pk = 1
+    error = RuntimeError("snapshot failed")
+    mocker.patch("cast.media_ingest.normalize_model_save_arguments", return_value=({"using": "default"}, "default"))
+    mocker.patch("cast.media_ingest.FileFieldReplacementGuard.track", side_effect=error)
+    cleanup = mocker.patch("cast.media_ingest.cleanup_new_media_object")
+
+    with pytest.raises(RuntimeError, match="snapshot failed"):
+        media_ingest.ingest_upload(form, policy=media_ingest.IngestPolicy(None, ("upload",)))
+
+    cleanup.assert_not_called()

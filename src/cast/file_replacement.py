@@ -75,6 +75,66 @@ class StagedFileReplacementGroup:
         self._rolled_back = True
 
 
+@dataclass(frozen=True)
+class _FileFieldSnapshot:
+    field: Any
+    old_storage: Any
+    old_name: str
+
+
+class FileFieldReplacementGuard:
+    """Keep stored files consistent with an existing model row."""
+
+    def __init__(self, snapshots: list[_FileFieldSnapshot], *, using: str) -> None:
+        self.snapshots = snapshots
+        self.using = using
+        self._rolled_back = False
+
+    @classmethod
+    def track(cls, instance: Any, field_names: tuple[str, ...], *, using: str) -> FileFieldReplacementGuard:
+        stored_names = (
+            type(instance)._default_manager.using(using).filter(pk=instance.pk).values_list(*field_names).get()
+        )
+        snapshots = [
+            _FileFieldSnapshot(
+                field=getattr(instance, field_name),
+                old_storage=getattr(instance, field_name).storage,
+                old_name=stored_name or "",
+            )
+            for field_name, stored_name in zip(field_names, stored_names, strict=True)
+        ]
+        return cls(snapshots, using=using)
+
+    def commit(self) -> None:
+        replacements = [
+            (snapshot.old_storage, snapshot.old_name, snapshot.field.name or "") for snapshot in self.snapshots
+        ]
+
+        def delete_old_files() -> None:
+            for old_storage, old_name, new_name in replacements:
+                if old_name and old_name != new_name:
+                    _delete_file(old_storage, old_name)
+
+        transaction.on_commit(delete_old_files, using=self.using)
+
+    def rollback(self) -> None:
+        if self._rolled_back:
+            return
+        cleanup_errors: list[Exception] = []
+        for snapshot in reversed(self.snapshots):
+            new_name = snapshot.field.name or ""
+            # Django sets _committed only after storage.save() returns successfully.
+            if new_name and new_name != snapshot.old_name and snapshot.field._committed:
+                try:
+                    _delete_file_strict(snapshot.field.storage, new_name)
+                except Exception as exc:
+                    cleanup_errors.append(exc)
+            _set_field_name(snapshot.field, snapshot.old_name)
+        self._rolled_back = True
+        if cleanup_errors:
+            raise cleanup_errors[0]
+
+
 def stage_file_replacement(field: Any, filename: str, content: bytes) -> StagedFileReplacement:
     old_name = field.name if field and field.name else ""
     old_storage = field.storage if old_name else None
@@ -170,3 +230,7 @@ def _set_field_name(field: Any, name: str) -> None:
 def _delete_file(storage: Any, name: str) -> None:
     with suppress(Exception):
         storage.delete(name)
+
+
+def _delete_file_strict(storage: Any, name: str) -> None:
+    storage.delete(name)
