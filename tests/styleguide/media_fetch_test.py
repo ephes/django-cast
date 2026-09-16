@@ -1,17 +1,13 @@
-# ruff: noqa: F401,F811,I001
-import json
-from contextlib import nullcontext
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 from django.core.files.base import ContentFile
 from django.test import RequestFactory
 
-from cast.devdata import create_audio, create_blog, create_gallery, create_image, create_podcast, create_user
-from cast.models import Audio, Post
+from cast.devdata import create_audio, create_image, create_user
+from cast.models import Audio
 from cast.views import styleguide as styleguide_view
-from cast.views.styleguide import StyleguideRemoteFile, StyleguideRemoteVideo
+from cast.views.styleguide import StyleguideRemoteVideo
 
 
 class DummyResponse:

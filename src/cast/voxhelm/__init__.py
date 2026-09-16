@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from cast.models.transcript import Transcript
 from cast.models.transcript_generation import TranscriptGeneration
+from cast.safe_fetch import (
+    NoRedirectHandler,
+    ReadableResponse,
+    ResponseTooLarge,
+    open_url,
+    read_http_error_detail,
+    read_response_bytes as _read_response_bytes,
+)
 from cast.transcripts.generation_status import (
     get_transcript_generation,
     get_transcript_generation_status_context,
@@ -14,12 +22,8 @@ from .client import (
     MAX_VOXHELM_ARTIFACT_BYTES,
     MAX_VOXHELM_ERROR_BYTES,
     TERMINAL_JOB_STATES,
-    NoRedirectHandler,
     VoxhelmClient,
     normalize_api_base,
-    open_url,
-    read_http_error_detail,
-    read_response_bytes,
 )
 from .exceptions import VoxhelmError
 from .service import (
@@ -66,6 +70,15 @@ from .task_refs import (
     resolve_audio_task_ref,
     strip_diarized_task_ref,
 )
+
+
+def read_response_bytes(response: ReadableResponse, *, max_bytes: int | None = None) -> bytes:
+    """Preserve the Voxhelm error contract for the historical re-export."""
+    try:
+        return _read_response_bytes(response, max_bytes=max_bytes)
+    except ResponseTooLarge as exc:
+        raise VoxhelmError(f"Voxhelm response exceeded the maximum size of {exc.max_bytes} bytes.") from exc
+
 
 __all__ = [
     "DOTE_REQUIRED_KEYS",

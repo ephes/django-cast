@@ -352,21 +352,42 @@ class TestTranscriptForm:
         assert form.is_valid() is False
         assert "vtt" in form.errors
 
+    @pytest.mark.parametrize(
+        ("field_name", "filename", "content_type", "content"),
+        [
+            ("podlove", "transcript.json", "application/json", b'{"transcripts":[]}'),
+            ("dote", "transcript.json", "application/json", b'{"lines":[]}'),
+            ("vtt", "transcript.vtt", "text/vtt", b"WEBVTT"),
+        ],
+    )
+    def test_transcript_upload_cap_accepts_exact_size_and_rejects_larger(
+        self, audio, settings, field_name, filename, content_type, content
+    ):
+        settings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES = len(content)
+        exact = SimpleUploadedFile(filename, content, content_type=content_type)
+        assert TranscriptForm({"audio": audio.id}, {field_name: exact}).is_valid()
+
+        over_cap = SimpleUploadedFile(filename, content + b" ", content_type=content_type)
+        form = TranscriptForm({"audio": audio.id}, {field_name: over_cap})
+
+        assert form.is_valid() is False
+        assert form.errors.as_data()[field_name][0].code == "file_too_large"
+
     def test_load_json_handles_seek_failure_in_finally(self):
-        class FlakySeek(io.StringIO):
-            def __init__(self, value: str):
+        class FlakySeek(io.BytesIO):
+            def __init__(self, value: bytes):
                 super().__init__(value)
                 self._seek_calls = 0
 
             def seek(self, *args, **kwargs):
                 self._seek_calls += 1
-                if self._seek_calls > 1:
+                if self._seek_calls == 4:
                     raise OSError("seek failed")
                 return super().seek(*args, **kwargs)
 
         payload = {"transcripts": []}
-        file_obj = FlakySeek(json.dumps(payload))
-        assert TranscriptForm._load_json(file_obj, field_label="Podlove") == payload
+        file_obj = FlakySeek(json.dumps(payload).encode())
+        assert TranscriptForm._load_json(file_obj, field_label="Podlove", max_bytes=1024) == payload
 
     def test_read_header_handles_str_and_seek_failure(self):
         class FlakySeek(io.StringIO):

@@ -1,5 +1,5 @@
-from typing import cast
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from django.core.exceptions import ValidationError

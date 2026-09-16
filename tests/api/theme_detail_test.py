@@ -1,27 +1,10 @@
-# ruff: noqa: F401,F811,I001
-import json
-from datetime import datetime, timedelta
-from urllib.parse import urlencode
-
 import pytest
 from django.urls import reverse
-from django.utils import timezone
-from rest_framework.request import Request
-from wagtail.models import PageViewRestriction
 
-from cast import modal_facet_counts
-from cast.api.serializers import AudioPodloveSerializer
 from cast.api.views import (
-    AudioPodloveDetailView,
-    CastImagesAPIViewSet,
-    FilteredPagesAPIViewSet,
-    StandardResultsSetPagination,
     ThemeListView,
 )
-from cast.devdata import create_transcript, generate_blog_with_media
-from cast.models import Audio, Contributor, EpisodeContributor, PostCategory, TranscriptSpeakerMapping
-
-from tests.factories import PostFactory, UserFactory
+from cast.devdata import generate_blog_with_media
 
 SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"
 

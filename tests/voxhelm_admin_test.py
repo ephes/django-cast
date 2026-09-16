@@ -9,9 +9,9 @@ from django.test import RequestFactory
 from django.urls import reverse
 
 from cast.models import Audio, Contributor, EpisodeContributor, Transcript, TranscriptGeneration, VoxhelmSettings
-from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
-from cast.voxhelm import TranscriptSubmission, VoxhelmError, build_audio_task_ref
 from cast.views import voxhelm as voxhelm_views
+from cast.voxhelm import TranscriptSubmission, VoxhelmError, build_audio_task_ref
+from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
 
 
 @pytest.fixture

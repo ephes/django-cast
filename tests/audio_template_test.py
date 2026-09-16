@@ -1,7 +1,6 @@
 import pytest
 from django.template.loader import render_to_string
 
-
 TEMPLATE_NAME = "cast/audio/audio.html"
 
 

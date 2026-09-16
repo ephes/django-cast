@@ -1,34 +1,11 @@
-# ruff: noqa: F401,F811,I001
-import json
-import subprocess
-
 import pytest
-from django.core.cache import cache
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
-from rest_framework import status
-from rest_framework.response import Response
-from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
+from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page
 
-from cast import media_probe
-from cast.api.editor import media as editor_media
-from cast.api.editor.body import (
-    SUPPORTED_OVERVIEW_BLOCKS,
-    _media_ref_is_available,
-    author_blocks_to_overview,
-    overview_to_author_blocks,
-)
-from cast.api.editor.errors import (
-    EditorNotFound,
-    EditorPermissionDenied,
-    EditorValidationError,
-    editor_exception_handler,
-)
-from cast.models import Audio, Episode, Post, Season, Video
+from cast.models import Episode, Post, Season
 from cast.models.snippets import PostCategory
-
-from tests.factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory, UserFactory
+from tests.factories import EpisodeFactory, PodcastFactory, PostFactory, UserFactory
 
 
 def grant_wagtail_admin_access(user) -> None:
@@ -53,14 +30,6 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
         GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
     user.groups.add(group)
     return user
-
-
-@pytest.fixture
-def superuser(django_user_model):
-    """A superuser, which passes every Wagtail page and image ``choose`` permission."""
-    return django_user_model.objects.create_superuser(
-        username="editor-su", email="editor-su@example.com", password="password"
-    )
 
 
 class TestEditorEpisodeCreate:
@@ -548,8 +517,8 @@ class TestEditorEpisodeUpdate:
         assert response.json() == {"code": "not_found", "detail": "Episode parent not found."}
         assert Episode.objects.get(pk=created["id"]).latest_revision_id == created["latest_revision_id"]
 
-    def test_draft_only_patch_rejects_published_episode(self, api_client, podcast, admin_user):
-        created = self._create(api_client, podcast, admin_user)
+    def test_draft_only_patch_rejects_published_episode(self, api_client, podcast, admin_user, audio):
+        created = self._create(api_client, podcast, admin_user, podcast_audio={"id": audio.id})
         episode = Episode.objects.get(pk=created["id"])
         episode.get_latest_revision().publish(user=admin_user)
         episode.refresh_from_db()

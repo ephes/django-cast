@@ -1,11 +1,11 @@
 from urllib.parse import urlencode
 
+import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import Http404
-from django.test import RequestFactory
 from django.template import TemplateDoesNotExist
+from django.test import RequestFactory
 from django.urls import reverse
-import pytest
 from wagtail.images.models import Image
 
 from cast.gallery_tokens import sign_gallery_image_pks

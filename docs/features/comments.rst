@@ -21,6 +21,16 @@ Post level
 
 A comment form is only rendered when **all three levels** evaluate to enabled.
 
+Both regular and AJAX comment submissions, including comment previews and
+replies, check these flags again on the server. For Wagtail page targets, the
+page must also be live and the current request must satisfy all direct and
+inherited login, password, or group restrictions; otherwise submission returns
+HTTP 403 before preview or creation. A previously issued signed
+comment form does not preserve access after a page is unpublished or its view
+restrictions change. Authorized visitors can still comment on restricted live
+pages when comments are enabled. Non-page targets retain the generic
+``django-contrib-comments`` behavior and their comment-enabled checks.
+
 .. _comments_configuration:
 
 Configuration
@@ -129,8 +139,17 @@ When threaded mode is active:
 - The comment form includes a hidden ``parent`` field.
 - Each rendered comment shows a "reply" link that sets the ``parent`` value via
   the JavaScript layer (see :ref:`comments_ajax_posting`).
-- The comment list template uses ``fill_tree`` and ``annotate_tree`` filters
-  from ``threadedcomments`` to produce nested ``<ul>`` markup.
+- The comment list template fills paginated ancestor paths only with visible
+  comments from the same content object and site, then uses
+  ``annotate_tree`` from ``threadedcomments`` to produce nested ``<ul>`` markup.
+  Reply submission enforces the same boundary for both AJAX and regular posts.
+  Existing custom templates that use the legacy ``fill_tree`` filter inherit
+  this protection when the Cast comments app starts; new overrides can call
+  ``safe_fill_tree`` explicitly before ``annotate_tree``.
+- If moderation hides a comment in the middle of an ancestor path, descendants
+  remain visible. A visible ancestor above the hidden comment is used as the
+  rendered parent only when it is already present in the current comment-list
+  slice; no ancestor is fetched across the hidden comment.
 - The flat list template (``flat_list.html``) is used when threaded comments are
   disabled.
 
@@ -162,7 +181,9 @@ The ``post_comment_ajax`` view handles the request:
 1. **Authentication check** -- if the user is logged in, ``name`` and
    ``email`` are auto-filled from the user profile when not provided.
 2. **Target resolution** -- the ``content_type`` and ``object_pk`` fields
-   identify the target object (typically a ``Post`` page).
+   identify the target object (typically a ``Post`` page). The server checks
+   that comments are enabled and, for Wagtail pages, that the page is live and
+   viewable by this request before validating or previewing the comment.
 3. **Form validation** -- the standard ``django_comments`` form is
    instantiated. Security hash and honeypot checks run first.
 4. **Preview mode** -- if the ``preview`` button was clicked and the form is
@@ -183,6 +204,8 @@ JSON Response Format
 On success or form-validation errors, the AJAX endpoint returns a JSON object
 with the following fields. Early failures (missing fields, invalid content
 type, security hash mismatch) return a plain-text HTTP 400 response instead.
+An inaccessible Wagtail page target returns HTTP 403 instead of the JSON
+response, including when requesting a comment preview.
 
 JSON fields:
 
@@ -305,12 +328,12 @@ Scope and limitations
   themes). A single-page or API-driven comment UI (for example a custom front end
   consuming the comment API) does not receive the controls automatically and would
   need its own integration.
-- While the feature is enabled, **threaded replies must be posted through the
-  AJAX endpoint** (the reply form). The plain non-JavaScript ``POST`` to the
-  stock comment view is rejected for replies, because only the AJAX path locks
-  the parent row to coordinate with concurrent edit/delete. Top-level comments
-  still post without JavaScript. If your site relies on no-JavaScript threaded
-  replies, keep the feature disabled.
+- Threaded replies posted through either the AJAX endpoint or the regular
+  non-JavaScript endpoint lock and revalidate the parent before saving. A reply
+  is rejected if moderation has hidden or removed its parent in the meantime.
+  Both endpoints leave their reply-save transaction before running post-save
+  notification receivers. An outer transaction such as ``ATOMIC_REQUESTS`` can
+  still extend the transaction and parent-row lock in the usual way.
 
 Optional tunables limit abuse and bound eligibility/session size (all only
 apply when the feature is enabled):

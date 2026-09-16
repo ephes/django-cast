@@ -1,10 +1,9 @@
+import re
 from unittest.mock import patch
 
 import pytest
-import re
 from django.urls import reverse
-from django_comments import get_model as get_comments_model
-from django_comments import signals
+from django_comments import get_model as get_comments_model, signals
 from django_comments.forms import CommentForm
 
 from cast.moderation import Moderator

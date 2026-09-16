@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 try:
-    from playwright.sync_api import sync_playwright, Page, Browser
+    from playwright.sync_api import Browser, Page, sync_playwright
 except ImportError:
     print("playwright is not installed. Install it with: uv add --dev playwright && playwright install chromium")
     sys.exit(1)
@@ -73,8 +73,8 @@ def collect_browser_errors(page: Page) -> tuple[list[str], list[str]]:
 
 def discover_themes(base_url: str) -> list[str]:
     """Try to discover installed themes via the dev-health endpoint."""
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     try:
         with urllib.request.urlopen(f"{base_url}/cast/dev-health/", timeout=3) as resp:

@@ -1,0 +1,207 @@
+0.2.65 (2026-09-16)
+-------------------
+
+- Aggregate editor API validation errors from multiple malformed rich-text or
+  raw-HTML leaves inside one custom block. Error codes and the existing
+  validation envelope are unchanged, so clients that read only ``code`` values
+  are unaffected; clients that enumerate field paths can now receive more than
+  one nested path for a block.
+- Move editor rich-text sanitization into the transport-neutral ``cast.content``
+  layer. Operators filtering sanitizer warnings should update the logger name
+  from ``cast.api.editor.richtext`` to ``cast.content.richtext``.
+- Reject Podlove JSON, DOTe JSON, and WebVTT transcript uploads larger than
+  ``CAST_TRANSCRIPT_UPLOAD_MAX_BYTES`` before parsing. The configurable limit
+  defaults to 10 MiB.
+- Route Wagtail admin audio/video add, edit, and chooser uploads through the
+  shared media-ingestion service. They now use a per-user upload lock shared
+  with API uploads and a cumulative probe budget controlled by
+  ``CAST_MEDIA_PROBE_SECONDS`` (default ``30``). Multi-worker deployments need
+  a shared cache for cross-process locking.
+  Successful audio/video replacements delete old stored files only after the
+  database commit; a failed replacement keeps the old file and database name
+  and removes any newly written file.
+- Route transcript admin add, chooser, and edit uploads through the shared
+  media-ingestion service without taking the audio/video lock. Stored Podlove,
+  DOTe, and WebVTT basenames are now randomized. Successful replacements delete
+  old files only after commit; failed replacements retain the old database name
+  and file and remove newly written files.
+- Route editor audio and video creates through the shared media-ingestion
+  service. Stored upload basenames now carry a random suffix so same-named
+  creates cannot overwrite one another on overwrite-capable storage backends;
+  editor API response codes and envelopes are unchanged.
+- Declare Python 3.15 support and add it to the CI compatibility matrix with
+  prerelease interpreter support. Matrix jobs run independently so a failure
+  on one Python version does not cancel the others.
+- Enforce Audio chooser permissions throughout transcript administration.
+  Transcript forms reject audio from inaccessible collections, and existing
+  transcripts linked to such audio are hidden from admin lists and denied at
+  direct admin URLs. Delegated transcript editors now need Audio choose
+  permission as well as the relevant Transcript collection permissions.
+- Enforce the episode audio requirement through Wagtail's shared publication
+  path. Bulk publishing, workflow approval, scheduled publication approval,
+  Wagtail APIs, and direct revision publishing now reject an episode without
+  ``podcast_audio`` instead of allowing it to go live. Bulk and workflow
+  rejection currently surface as a Wagtail server error. If an approved
+  scheduled episode loses its audio, or a pre-upgrade approval contains other
+  invalid stored content, django-cast now skips that scheduled revision, clears
+  the approval, records the rejection in Wagtail History, and continues
+  publishing later due revisions instead of stopping the batch.
+- Add the ``cast.E010`` system check for django-cast's guarded Wagtail
+  publication hook. An unsupported Wagtail publish API now fails deployment
+  checks instead of leaving publication rules disabled with only a startup
+  warning.
+- Accept an optional strict ``If-Match: "<revision-id>"`` header on editor post
+  and episode publish actions. A stale token now returns the existing
+  ``revision_conflict`` response without publishing a newer draft, while
+  clients that omit the header retain the previous latest-draft behavior.
+- Recheck Wagtail page visibility on regular and AJAX comment submissions and
+  previews. Retained signed comment forms no longer allow comments after a page
+  is unpublished or the visitor loses access through a view restriction.
+  Authorized restricted-page visitors and generic non-page comment targets
+  retain their existing comment workflows.
+- Raise supported dependency floors to patched releases for the packages in the
+  runtime security audit. Vulnerable Wagtail patch releases and the unpatched
+  7.1 and 7.2 branches are excluded while preserving patched Wagtail 7.0 LTS,
+  7.3, 7.4, and 8.0 support. Django REST framework, Pillow, pillow-heif,
+  Pygments, requests, urllib3, idna, soupsieve, and sqlparse now have direct
+  published security floors, so applications with older pins must refresh
+  their dependency resolution when upgrading. CI audits both the current
+  resolution and the fixed releases identified by the dependency advisories.
+- Upgrade supported Wagtail releases past its restricted-collection image API
+  disclosure. The regression suite verifies that images below a restricted
+  collection do not expose their title or download URL to anonymous clients.
+- Remove the obsolete direct ``setuptools`` dependency. django-model-utils 4.4
+  or newer no longer relies on ``pkg_resources`` at runtime.
+- Make the legacy ``/api/audios/`` and ``/api/videos/`` collection endpoints
+  read-only. Their unsupported create paths failed after writing uploaded files,
+  leaving storage objects without database records. They now return ``405`` for
+  ``POST`` without storing the upload. New clients should use the permission-aware
+  editor media upload endpoints; the separate legacy ``/api/upload_video/``
+  endpoint remains available during migration.
+- Stop feed requests from replacing Django's process-wide current Site with
+  the request host. Feed self URLs, relative channel links, and host-scoped
+  cached responses still use the request host validated by ``ALLOWED_HOSTS``;
+  a missing configured ``django_site`` row now raises a clear configuration
+  error instead of being hidden by synthetic global cache state. The first
+  feed render in a process may perform the normal Django Site lookup. Sites
+  with this error must create the row referenced by ``SITE_ID`` or correct
+  ``SITE_ID`` to reference an existing row.
+
+- Harden the remaining legacy media mutations. Video uploads now require
+  Wagtail admin and collection upload permissions, honor explicit token write
+  scopes, and share the editor upload lock and probe budget while preserving the
+  historical bare-primary-key success response. Owner-only legacy audio/video
+  deletes now also require Wagtail admin access, collection delete permission, and a distinct
+  ``delete`` scope when a token advertises scopes; empty, malformed, and
+  write-only scoped tokens are denied.
+  Existing ``CAST_EDITOR_SCOPES`` overrides must add the new ``delete`` bucket;
+  a missing bucket fails closed with ``403``. Legacy upload errors now use editor API JSON
+  envelopes, unauthenticated uploads return ``403`` instead of a login redirect,
+  and lock contention returns ``429``. Sites with multiple available video
+  collections must send ``collection`` or receive the ``ambiguous`` validation
+  error.
+  Custom imports must replace the removed ``cast.api.views.VideoCreateView``
+  with ``cast.api.editor.media.LegacyVideoCreateView``. The obsolete
+  ``cast.api.viewmixins`` module and its upload mixins were also removed.
+- Create a fresh RSS or Atom feed renderer for every cache miss, preventing
+  concurrent requests from mixing blog, request, repository, or podcast-format
+  state while preserving generated-response caching.
+
+- Prevent RSS, Atom, podcast, and feed detail endpoints from exposing metadata
+  for blogs or podcasts protected by direct or inherited Wagtail login,
+  password, or group restrictions. These shared-cache endpoints now serve only
+  unrestricted public feed roots.
+
+- Bind threaded-comment replies to a visible parent on the same content object
+  and site. Comment rendering now applies the same boundary while filling an
+  ancestor path, preventing malformed historical trees or later moderation of
+  a parent from exposing hidden comments. Valid replies and paginated thread
+  context continue to render normally. Existing custom threaded comment-list
+  templates using ``fill_tree`` inherit the safe implementation automatically;
+  new templates can use ``safe_fill_tree`` explicitly.
+  Regular non-JavaScript replies are now accepted when anonymous author edits
+  are enabled because that path now locks and validates the parent too.
+- Fix stored cross-site scripting through editor API rich-text writes. Paragraphs
+  and nested custom rich-text blocks now pass through Wagtail's feature-based
+  HTML conversion before validation. Raw-HTML custom inputs are rejected;
+  malformed rich text returns a structured 400. Returned HTML is normalized:
+  formatting outside the configured rich-text features becomes ordinary text
+  (enable features such as ``blockquote`` and ``code`` to retain them).
+  Supplied Draftail comment-anchor keys are retained without adding random keys.
+  Inline image/oEmbed markup returns an ``inline_embed`` validation error
+  instead of being silently removed; even
+  existing admin-authored inline media must be moved to structured media blocks
+  before resubmitting its section. Existing pages and historical
+  revisions are not rewritten: operators should review stored content and
+  restorable revisions before lifting temporary API restrictions. See the
+  editor API section in :doc:`../reference/api` for the exact scope.
+- Reduce the public custom-player transcript cache freshness window from one
+  hour to 30 seconds and require revalidation afterward, so transcript and
+  contributor/speaker-mapping edits do not remain stale while immediate repeat
+  opens avoid rebuilding the full sanitized payload.
+- Make the known-speaker quick-apply action publish confident suggestions only.
+  Uncertain hand-offs remain unchanged until an editor reviews them instead of
+  being filled from a surrounding confident speaker automatically.
+- Resolve the ``cast_transcripts`` Django Tasks backend before submitting a
+  Voxhelm transcription job. A deployment without that ``TASKS`` entry previously
+  submitted the remote job and saved a queued generation row, then failed on the
+  task import, leaving the row permanently queued so every retry reported
+  "already in progress". Transcript generation now fails up front with a
+  configuration message and writes nothing. The new ``cast.E009`` system check
+  reports the missing backend when Voxhelm is configured through Django settings
+  or environment variables.
+- Include ``last_published_at`` when serializing episodes, so podcast Atom feed
+  entries carry the required ``<updated>`` element on the default repository
+  path as blog Atom feeds already did. Podcast index pages and blog feeds no
+  longer raise an error for a live episode whose podcast audio was removed;
+  such an episode is rendered without audio, and the podcast feed keeps
+  omitting it. Plain-post and episode serialization now share one field helper
+  so the common fields cannot drift apart again.
+- Return ``404`` instead of a server error from the public Podlove JSON and
+  WebVTT transcript endpoints when the stored transcript file is missing from
+  storage. The podcast-index JSON endpoint already behaved this way; all three
+  endpoints now share one artifact read.
+- Narrow the editor API post lookup (``GET /api/editor/posts/?parent=&slug=``) in the
+  database before reading revisions. It previously fetched and deserialized the latest
+  revision of every sibling post under the requested parent, so a single lookup in a
+  large blog cost one query pair and one body deserialization per post. Responses,
+  including the ambiguous-slug conflict, are unchanged.
+- Recompute the audio duration when an audio file is replaced or cleared in the
+  Wagtail admin edit form. Feeds, the Podlove player, and episode metadata kept
+  the duration probed from the previous file while the cached file sizes were
+  refreshed. Durations that already went stale this way are corrected by
+  clearing ``duration`` and re-saving the audio object through the Wagtail admin
+  or ``save_audio_with_derivations``.
+- Make the frontend tooling usable: ``javascript/package.json`` declares
+  ``"type": "module"`` so the ESM Vite configs stop loading as CommonJS, and
+  ``@vitest/coverage-v8`` is a real dev dependency so ``just js-coverage`` runs on a
+  fresh checkout (its report directory is gitignored). A new ``just js-typecheck``
+  (``npm run typecheck``) runs ``tsc --noEmit`` with ``typescript`` and ``@types/node``
+  installed; the ``tsconfig.json`` ``@/*`` alias now matches the Vite alias and the
+  test globals come from ``vitest/globals`` instead of the uninstalled ``@types/jest``.
+  Type-checking is not part of CI yet because it reports pre-existing errors. The
+  shipped bundles are unchanged.
+- Enable Ruff's import-sorting rules (``I``) so the existing
+  ``[tool.ruff.lint.isort]`` configuration is no longer inert, and sort the imports
+  of the 83 files that had drifted. Contributors get import order fixed
+  automatically by ``just lint`` and the pre-commit Ruff hook; no shipped behavior
+  changes.
+- Give every plain ``pytest`` session its own media roots. Without
+  ``CAST_TEST_MEDIA_ROOT`` / ``CAST_TEST_PRIVATE_MEDIA_ROOT`` (which tox still sets per
+  environment) the suite now uploads into pytest's per-session temporary directory
+  instead of the shared ``tests/media`` path, and no longer deletes that path at
+  session start and end. Private ``FileField`` storages, which Django resolves once while
+  the model class is created, are rebound to the session root so private uploads stop
+  landing in the checkout as well. Two test runs in the same checkout - an agent session and a
+  terminal, say - no longer wipe each other's uploads and produce spurious ``ffprobe``
+  failures. A concurrent run still needs its own ``CAST_TEST_DB`` because the reused test
+  database is shared; see the testing section of the development docs.
+- Surface deprecation warnings in the newest tox environments. The ``django61`` and
+  ``wagtail80`` matrix environments run pytest with ``-W default::DeprecationWarning``
+  and ``-W default::PendingDeprecationWarning`` (plus a matching ``PYTHONWARNINGS``), so
+  upcoming Django and Wagtail removals appear in their warnings summary instead of being
+  dropped by the ``filterwarnings`` list in ``pyproject.toml``. The other environments and
+  plain ``pytest`` runs stay quiet, the warnings do not fail a run, and no shipped behavior
+  changes; see the tox section of the development documentation. The one deprecated call
+  this surfaced in ``cast`` itself, ``datetime.utcfromtimestamp()`` in the ffprobe chapter
+  mark start field, now uses an explicit UTC timestamp and parses the same values.

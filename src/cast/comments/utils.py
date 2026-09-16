@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.contrib.contenttypes.models import ContentType
+from django.http import HttpRequest
+from wagtail.models import Page
+
+from cast.audio_access import page_is_publicly_viewable
 
 from . import appsettings
 
@@ -39,3 +43,10 @@ def comments_are_open(content_object: object) -> bool:
 
 def comments_are_moderated(content_object: object) -> bool:
     return False
+
+
+def comment_target_is_accessible(content_object: object, request: HttpRequest) -> bool:
+    """Recheck page visibility; generic comment targets keep their existing policy."""
+    if isinstance(content_object, Page):
+        return page_is_publicly_viewable(content_object, request)
+    return True

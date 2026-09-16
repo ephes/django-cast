@@ -1,8 +1,11 @@
 from unittest.mock import patch
 
 import pytest
+from django.core.cache import cache
 from django.urls import reverse
 
+from cast.file_replacement import FileFieldReplacementGuard
+from cast.media_ingest import MediaProbeFailed
 from cast.models import Video
 
 
@@ -189,6 +192,21 @@ class TestVideoAdd:
         # make sure we didn't create a video
         Video.objects.first() is None
 
+    def test_post_add_video_refuses_concurrent_upload(self, admin_client, admin_user, minimal_mp4):
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
+        try:
+            response = admin_client.post(
+                reverse("castvideo:add"),
+                {"title": "Locked video", "original": minimal_mp4},
+            )
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == ["Another audio or video upload is already in progress."]
+        assert not Video.objects.filter(title="Locked video").exists()
+
     def test_post_add_video(self, admin_client, minimal_mp4):
         add_url = reverse("castvideo:add")
 
@@ -248,12 +266,19 @@ class TestVideoEdit:
         # make sure we dont get redirected to index
         assert r.status_code == 200
 
-    def test_post_edit_video_title(self, admin_client, video_urls):
+    def test_post_edit_video_title(self, admin_client, admin_user, video_urls, django_capture_on_commit_callbacks):
         video = video_urls.video
+        old_name = video.original.name
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
         post_data = {
             "title": "changed title",
         }
-        r = admin_client.post(video_urls.edit, post_data)
+        try:
+            with django_capture_on_commit_callbacks(execute=False) as callbacks:
+                r = admin_client.post(video_urls.edit, post_data)
+        finally:
+            cache.delete(key)
 
         # make sure we get redirected to index
         assert r.status_code == 302
@@ -262,17 +287,78 @@ class TestVideoEdit:
         # make sure title was changes
         video.refresh_from_db()
         assert video.title == post_data["title"]
+        assert video.original.name == old_name
+        assert callbacks == []
 
-    def test_post_edit_video_original(self, admin_client, video_urls, minimal_mp4):
+    def test_post_edit_video_refuses_concurrent_upload(self, admin_client, admin_user, video_urls, minimal_mp4):
+        old_name = video_urls.video.original.name
+        key = f"cast:editor-media-upload:{admin_user.pk}"
+        cache.set(key, "other", timeout=60)
+        try:
+            response = admin_client.post(video_urls.edit, {"original": minimal_mp4})
+        finally:
+            cache.delete(key)
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == ["Another audio or video upload is already in progress."]
+        video_urls.video.refresh_from_db()
+        assert video_urls.video.original.name == old_name
+
+    def test_post_edit_video_maps_probe_failure(self, admin_client, video_urls, minimal_mp4, mocker):
+        mocker.patch("cast.views.media.ingest_upload", side_effect=MediaProbeFailed)
+
+        response = admin_client.post(video_urls.edit, {"title": "replacement", "original": minimal_mp4})
+
+        assert response.status_code == 200
+        assert response.context["form"].non_field_errors() == ["Video probing failed."]
+
+    def test_post_edit_video_original(self, admin_client, video_urls, minimal_mp4, django_capture_on_commit_callbacks):
+        old_name = video_urls.video.original.name
+        storage = video_urls.video.original.storage
         post_data = {
             "title": "asdf",
             "original": minimal_mp4,
         }
-        r = admin_client.post(video_urls.edit, post_data)
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            r = admin_client.post(video_urls.edit, post_data)
 
         # make sure we get redirected to index
         assert r.status_code == 302
         assert r.url == video_urls.index
+
+        video_urls.video.refresh_from_db()
+        new_name = video_urls.video.original.name
+        assert new_name != old_name
+        assert storage.exists(old_name) and storage.exists(new_name)
+
+        assert len(callbacks) == 1
+        callbacks[0]()
+        assert not storage.exists(old_name)
+        assert storage.exists(new_name)
+        video_urls.video.original.delete(save=False)
+
+    def test_post_edit_video_save_failure_keeps_old_file_and_name(self, admin_client, video_urls, minimal_mp4, mocker):
+        video = video_urls.video
+        old_name = video.original.name
+        storage = video.original.storage
+        delete = mocker.spy(storage, "delete")
+        original_commit = FileFieldReplacementGuard.commit
+
+        def fail_after_commit(guard):
+            original_commit(guard)
+            raise RuntimeError("replacement commit failed")
+
+        mocker.patch.object(FileFieldReplacementGuard, "commit", fail_after_commit)
+
+        with pytest.raises(RuntimeError, match="replacement commit failed"):
+            admin_client.post(video_urls.edit, {"title": "replacement", "original": minimal_mp4})
+
+        video.refresh_from_db()
+        assert video.original.name == old_name
+        assert storage.exists(old_name)
+        deleted_names = [call.args[0] for call in delete.call_args_list]
+        assert deleted_names and old_name not in deleted_names
+        assert all(not storage.exists(name) for name in deleted_names)
 
     def test_post_edit_video_original_without_existing_file(self, admin_client, video_without_original, minimal_mp4):
         edit_url = reverse("castvideo:edit", args=(video_without_original.id,))

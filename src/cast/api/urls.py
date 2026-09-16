@@ -3,8 +3,7 @@ from typing import Any
 from django.urls import include, path, re_path
 
 from . import views
-from .editor import media as editor_media
-from .editor import views as editor_views
+from .editor import media as editor_media, views as editor_views
 
 app_name = "api"
 
@@ -39,7 +38,7 @@ urlpatterns: list[Any] = [
     re_path(r"^videos/(?P<pk>\d+)/?$", views.VideoDetailView.as_view(), name="video_detail"),
     path(
         "upload_video/",
-        views.VideoCreateView.as_view(),
+        editor_media.LegacyVideoCreateView.as_view(),
         name="upload_video",
     ),
     # audio

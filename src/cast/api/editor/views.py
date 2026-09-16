@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 
 from ...models import Audio, Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
+from ...publication import PublicationRejected, check_publishable
 from .body import (
     author_blocks_to_overview,
     author_blocks_to_section,
@@ -348,18 +349,33 @@ class PostEditorMixin:
         episode publish endpoints; it stops a podcast-audio-less episode from being
         published through either path (mirrors ``CustomEpisodeForm.clean``).
         """
-        if isinstance(content, Episode) and content.podcast_audio_id is None:
-            raise EditorValidationError(
-                {
-                    "podcast_audio": [
-                        {"code": "required", "message": "An episode must have an audio file to be published."}
-                    ]
-                }
-            )
+        try:
+            check_publishable(content)
+        except PublicationRejected as error:
+            raise EditorValidationError(error.as_error_map()) from error
 
-    def _publish(self, page: Post, *, user: Any, request: Request, publish_denied_message: str, noun: str) -> dict:
+    @transaction.atomic
+    def _publish(
+        self,
+        page_id: int,
+        *,
+        user: Any,
+        request: Request,
+        edit_denied_message: str,
+        publish_denied_message: str,
+        noun: str,
+    ) -> dict:
+        submitted_revision_id = _if_match_revision_id(request)
+        page = self._get_post(page_id, user, denied_message=edit_denied_message, for_update=True)
         if not page.permissions_for_user(user).can_publish():
             raise EditorPermissionDenied(publish_denied_message, parent_id=None)
+        current_revision_id = page.latest_revision_id
+        if submitted_revision_id is not None and current_revision_id != submitted_revision_id:
+            raise EditorRevisionConflict(
+                current_revision_id=current_revision_id,
+                submitted_base_revision_id=submitted_revision_id,
+                edit_url=reverse("wagtailadmin_pages:edit", args=[page.id]),
+            )
         if page.live and not page.has_unpublished_changes:
             raise EditorFlatError(
                 "no_unpublished_draft",
@@ -367,13 +383,13 @@ class PostEditorMixin:
                 status_code=status.HTTP_409_CONFLICT,
             )
 
-        revision = page.get_latest_revision()
-        if revision is None:
+        if current_revision_id is None:
             raise EditorFlatError(
                 "no_revision",
                 f"This {noun} has no draft revision to publish.",
                 status_code=status.HTTP_409_CONFLICT,
             )
+        revision = page.revisions.get(pk=current_revision_id)
 
         self._reject_unpublishable_episode(revision.as_object())
         revision.publish(user=user)
@@ -415,8 +431,18 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         parent = Blog.objects.filter(pk=parent_id).first()
         if parent is None:
             raise EditorNotFound("Post not found.")
+        # Narrow the siblings in SQL with the same both-namespaces filter
+        # ``_check_unique_slug`` uses, so a single lookup no longer fetches and
+        # deserializes the latest revision of every sibling. The filter is a superset of
+        # what the Python check below accepts: ``get_latest_revision_as_object`` returns
+        # the revision content only for a page with unpublished changes and otherwise
+        # falls back to the persisted row, so the effective draft slug always lives in
+        # one of the two columns. The Python check stays authoritative because it decides
+        # which column applies and because the database comparison may be collation
+        # dependent; that keeps the ambiguous-lookup semantics unchanged.
+        candidates = Post.objects.child_of(parent).filter(Q(latest_revision__content__slug=slug) | Q(slug=slug))
         matches = []
-        for candidate in Post.objects.child_of(parent):
+        for candidate in candidates:
             post = candidate.specific
             content_post = post.get_latest_revision_as_object()
             if content_post.slug == slug:
@@ -574,9 +600,13 @@ class PostPublishView(PostEditorMixin, EditorAPIView):
 
     def post(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         user = request.user
-        post = self._get_post(pk, user, denied_message="You cannot publish this draft.")
         data = self._publish(
-            post, user=user, request=request, publish_denied_message="You cannot publish this post.", noun="post"
+            pk,
+            user=user,
+            request=request,
+            edit_denied_message="You cannot publish this draft.",
+            publish_denied_message="You cannot publish this post.",
+            noun="post",
         )
         return Response(data)
 
@@ -835,9 +865,10 @@ class EpisodePublishView(EpisodeEditorMixin, EditorAPIView):
         user = request.user
         episode = self._get_episode(pk, user, denied_message="You cannot publish this draft.")
         data = self._publish(
-            episode,
+            episode.id,
             user=user,
             request=request,
+            edit_denied_message="You cannot publish this draft.",
             publish_denied_message="You cannot publish this episode.",
             noun="episode",
         )

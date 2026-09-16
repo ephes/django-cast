@@ -1,27 +1,31 @@
 from datetime import datetime, time
-from types import SimpleNamespace
 from time import mktime
+from types import SimpleNamespace
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
+import django
 import feedparser
 import pytest
 import pytz
+from django.conf import settings as django_settings
+from django.contrib.sites import models as sites_models
+from django.contrib.sites.models import Site as DjangoSite
+from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404
-from django.urls import reverse
+from django.urls import resolve, reverse
 from wagtail.models import PageViewRestriction
-
-import django
 
 from cast import appsettings
 from cast.devdata import create_transcript
 from cast.feeds import (
+    PSC_NAMESPACE,
     AtomITunesFeedGenerator,
     AtomPodcastFeed,
     ITunesElements,
     LatestEntriesAtomFeed,
     LatestEntriesFeed,
-    PSC_NAMESPACE,
     PodcastFeed,
     PodcastIndexElements,
     RssPodcastFeed,
@@ -31,10 +35,9 @@ from cast.feeds import (
     _is_positive_integer,
     _psc_start,
 )
-from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Season, Post
+from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Post, Season
 from cast.models.repository import FeedContext
-from tests.factories import EpisodeFactory
-
+from tests.factories import BlogFactory, EpisodeFactory
 
 RSS_CHAPTERLESS_ROOT_BASELINE = (
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" '
@@ -98,6 +101,157 @@ def use_django_repository():
 
 class TestGeneratedFeeds:
     pytestmark = pytest.mark.django_db
+
+    @pytest.mark.parametrize(
+        ("route_name", "is_podcast"),
+        [
+            ("cast:latest_entries_feed", False),
+            ("cast:latest_entries_atom_feed", False),
+            ("cast:feed_detail", False),
+            ("cast:podcast_feed_rss", True),
+            ("cast:podcast_feed_atom", True),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "restriction_type",
+        [PageViewRestriction.LOGIN, PageViewRestriction.PASSWORD, PageViewRestriction.GROUPS],
+    )
+    @pytest.mark.parametrize("inherited", [False, True], ids=["direct", "inherited"])
+    def test_feed_roots_require_unrestricted_public_page(
+        self,
+        client,
+        blog,
+        podcast,
+        site,
+        use_dummy_cache_backend,
+        route_name,
+        is_podcast,
+        restriction_type,
+        inherited,
+    ):
+        feed_root = podcast if is_podcast else blog
+        restricted_page = site.root_page if inherited else feed_root
+        PageViewRestriction.objects.create(page=restricted_page, restriction_type=restriction_type)
+        kwargs = {"slug": feed_root.slug}
+        if "podcast_feed" in route_name:
+            kwargs["audio_format"] = "m4a"
+
+        response = client.get(reverse(route_name, kwargs=kwargs))
+
+        assert response.status_code == 404
+
+    @pytest.mark.parametrize(
+        ("route_name", "is_podcast"),
+        [
+            ("cast:latest_entries_feed", False),
+            ("cast:latest_entries_atom_feed", False),
+            ("cast:podcast_feed_rss", True),
+            ("cast:podcast_feed_atom", True),
+        ],
+    )
+    def test_cached_feed_is_hidden_after_root_becomes_restricted(self, client, post, episode, route_name, is_podcast):
+        cache.clear()
+        try:
+            entry = episode if is_podcast else post
+            feed_root = entry.blog
+            kwargs = {"slug": feed_root.slug}
+            if is_podcast:
+                kwargs["audio_format"] = "m4a"
+            feed_url = reverse(route_name, kwargs=kwargs)
+            first_response = client.get(feed_url)
+            assert first_response.status_code == 200
+            assert entry.title in first_response.content.decode()
+
+            original_title = entry.title
+            entry.title = "updated after feed was cached"
+            entry.save(update_fields=["title"])
+            cached_response = client.get(feed_url)
+            assert original_title in cached_response.content.decode()
+            assert entry.title not in cached_response.content.decode()
+
+            PageViewRestriction.objects.create(page=feed_root, restriction_type=PageViewRestriction.LOGIN)
+
+            response = client.get(feed_url)
+
+            assert response.status_code == 404
+        finally:
+            cache.clear()
+
+    @pytest.mark.parametrize("route_name", ["cast:latest_entries_feed", "cast:latest_entries_atom_feed"])
+    def test_feed_endpoint_keeps_interleaved_blog_state_separate(
+        self, rf, blog, site, user, use_dummy_cache_backend, mocker, route_name
+    ):
+        other_blog = BlogFactory(owner=user, title="other blog", slug="other-blog", parent=site.root_page)
+        first_request = rf.get(reverse(route_name, kwargs={"slug": blog.slug}))
+        second_request = rf.get(reverse(route_name, kwargs={"slug": other_blog.slug}))
+        view = resolve(first_request.path).func
+        original_title = LatestEntriesFeed.title
+        second_response = None
+        interleaving_started = False
+
+        def interleaved_title(feed):
+            nonlocal interleaving_started, second_response
+            if not interleaving_started:
+                interleaving_started = True
+                second_response = view(second_request, slug=other_blog.slug)
+            return original_title(feed)
+
+        mocker.patch.object(LatestEntriesFeed, "title", interleaved_title)
+
+        first_response = view(first_request, slug=blog.slug)
+
+        assert blog.title in first_response.content.decode()
+        assert other_blog.title not in first_response.content.decode()
+        assert second_response is not None
+        assert other_blog.title in second_response.content.decode()
+        assert blog.title not in second_response.content.decode()
+
+    @pytest.mark.parametrize("route_name", ["cast:podcast_feed_rss", "cast:podcast_feed_atom"])
+    def test_podcast_feed_endpoint_keeps_interleaved_audio_format_state_separate(
+        self, rf, episode, audio, use_dummy_cache_backend, mocker, route_name
+    ):
+        audio.mp3.name = audio.m4a.name
+        audio.save(update_fields=["mp3"])
+        first_request = rf.get(reverse(route_name, kwargs={"slug": episode.blog.slug, "audio_format": "mp3"}))
+        second_request = rf.get(reverse(route_name, kwargs={"slug": episode.blog.slug, "audio_format": "m4a"}))
+        view = resolve(first_request.path).func
+        original_title = PodcastFeed.title
+        second_response = None
+        interleaving_started = False
+
+        def interleaved_title(feed, blog):
+            nonlocal interleaving_started, second_response
+            if not interleaving_started:
+                interleaving_started = True
+                second_response = view(second_request, slug=episode.blog.slug, audio_format="m4a")
+            return original_title(feed, blog)
+
+        mocker.patch.object(PodcastFeed, "title", interleaved_title)
+
+        first_response = view(first_request, slug=episode.blog.slug, audio_format="mp3")
+
+        assert "audio/mpeg" in first_response.content.decode()
+        assert "audio/mp4" not in first_response.content.decode()
+        assert second_response is not None
+        assert "audio/mp4" in second_response.content.decode()
+        assert "audio/mpeg" not in second_response.content.decode()
+
+    def test_feed_endpoint_discards_state_after_exception(self, rf, blog, site, user, use_dummy_cache_backend, mocker):
+        other_blog = BlogFactory(owner=user, title="other blog", slug="other-blog", parent=site.root_page)
+        first_request = rf.get(reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug}))
+        second_request = rf.get(reverse("cast:latest_entries_feed", kwargs={"slug": other_blog.slug}))
+        view = resolve(first_request.path).func
+        failing_title = mocker.patch.object(LatestEntriesFeed, "title", side_effect=RuntimeError("render failed"))
+
+        with pytest.raises(RuntimeError, match="render failed"):
+            view(first_request, slug=blog.slug)
+
+        mocker.stop(failing_title)
+        response = view(second_request, slug=other_blog.slug)
+
+        assert response.status_code == 200
+        assert other_blog.title in response.content.decode()
+        assert blog.title not in response.content.decode()
 
     def test_get_latest_entries_feed(self, client, post, use_dummy_cache_backend):
         feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
@@ -201,6 +355,48 @@ class TestGeneratedFeeds:
         assert entry is not None
         assert entry.findtext("atom:updated", namespaces=namespace) is not None
         assert entry.findtext("atom:id", namespaces=namespace) == str(post.uuid)
+
+    def test_podcast_atom_feed_entry_has_updated(self, client, episode, use_dummy_cache_backend, monkeypatch):
+        # Twin of test_latest_entries_atom_feed_entry_has_updated_and_uuid_id for the podcast feed,
+        # pinned to the serializing repository path where <updated> used to go missing.
+        monkeypatch.setattr(appsettings, "CAST_REPOSITORY", "default")
+        episode.last_published_at = episode.visible_date
+        episode.save(update_fields=["last_published_at"])
+        feed_url = reverse(
+            "cast:podcast_feed_atom",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+
+        response = client.get(feed_url)
+
+        assert response.status_code == 200
+        root = ElementTree.fromstring(response.content.decode("utf-8"))
+        namespace = {"atom": "http://www.w3.org/2005/Atom"}
+        entry = root.find("atom:entry", namespace)
+        assert entry is not None
+        assert entry.findtext("atom:updated", namespaces=namespace) is not None
+
+    def test_feeds_do_not_crash_for_episode_without_podcast_audio(
+        self, client, episode, use_dummy_cache_backend, monkeypatch
+    ):
+        # podcast_audio is nullable, so deleting the audio leaves a live episode without it.
+        monkeypatch.setattr(appsettings, "CAST_REPOSITORY", "default")
+        episode.podcast_audio = None
+        episode.save(update_fields=["podcast_audio"])
+
+        podcast_feed_url = reverse(
+            "cast:podcast_feed_rss",
+            kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"},
+        )
+        podcast_response = client.get(podcast_feed_url)
+        assert podcast_response.status_code == 200
+        # The podcast feed only lists episodes that have audio.
+        assert episode.title not in podcast_response.content.decode("utf-8")
+
+        blog_feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": episode.podcast.slug})
+        blog_response = client.get(blog_feed_url)
+        assert blog_response.status_code == 200
+        assert episode.title in blog_response.content.decode("utf-8")
 
     def test_get_link_if_no_repository(self, blog):
         feed_view = LatestEntriesFeed()
@@ -994,44 +1190,169 @@ def test_get_repository_uses_predefined_repository(mocker):
     assert returned is repository
 
 
-def test_cache_site_for_feed_without_site_id(settings, rf):
+def test_get_repository_replaces_used_predefined_repository(mocker):
+    repository = mocker.MagicMock(used=True)
+    replacement = mocker.MagicMock()
+    cachable_data = mocker.patch.object(FeedContext, "data_for_feed_cachable", return_value={})
+    create_repository = mocker.patch.object(FeedContext, "create_from_cachable_data", return_value=replacement)
+    feed = LatestEntriesFeed(repository=repository)
+    request = mocker.MagicMock()
+    blog = mocker.MagicMock()
+
+    returned = feed.get_repository(request, blog)
+
+    assert returned is replacement
+    cachable_data.assert_called_once_with(request=request, blog=blog, is_podcast=False)
+    create_repository.assert_called_once_with(data={})
+
+
+@pytest.mark.django_db
+def test_feed_uses_request_host_without_replacing_configured_site(client, post, use_dummy_cache_backend):
+    configured_site, _created = DjangoSite.objects.update_or_create(
+        pk=django_settings.SITE_ID,
+        defaults={"domain": "canonical.example", "name": "Canonical"},
+    )
+    site_cache_backup = sites_models.SITE_CACHE.copy()
+    try:
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        response = client.get(feed_url, HTTP_HOST="example.com")
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert f"http://example.com{feed_url}" in content
+        assert "canonical.example" not in content
+        assert DjangoSite.objects.get_current().pk == configured_site.pk
+        assert DjangoSite.objects.get_current().domain == "canonical.example"
+        assert DjangoSite.objects.get(pk=configured_site.pk).domain == "canonical.example"
+    finally:
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_cached_feed_response_is_scoped_to_request_host(client, post, settings, mocker):
+    settings.ALLOWED_HOSTS = [*settings.ALLOWED_HOSTS, "alternate.example"]
+    DjangoSite.objects.update_or_create(
+        pk=django_settings.SITE_ID,
+        defaults={"domain": "canonical.example", "name": "Canonical"},
+    )
+    feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+    render_feed = mocker.spy(LatestEntriesFeed, "get_feed")
+    site_cache_backup = sites_models.SITE_CACHE.copy()
+    cache.clear()
+    try:
+        first = client.get(feed_url, HTTP_HOST="example.com")
+        first_cached = client.get(feed_url, HTTP_HOST="example.com")
+        second = client.get(feed_url, HTTP_HOST="alternate.example")
+
+        assert first.status_code == 200
+        assert first_cached.content == first.content
+        assert second.status_code == 200
+        assert render_feed.call_count == 2
+        assert f"http://example.com{feed_url}" in first.content.decode()
+        second_content = second.content.decode()
+        assert f"http://alternate.example{feed_url}" in second_content
+        assert f"http://example.com{feed_url}" not in second_content
+    finally:
+        cache.clear()
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_feed_missing_django_site_row_raises_configuration_error(client, post, use_dummy_cache_backend):
+    DjangoSite.objects.filter(pk=django_settings.SITE_ID).delete()
+    site_cache_backup = sites_models.SITE_CACHE.copy()
+    try:
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        with pytest.raises(ImproperlyConfigured, match="requires a django.contrib.sites Site"):
+            client.get(feed_url)
+    finally:
+        sites_models.SITE_CACHE.clear()
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_feed_without_site_id_uses_matching_django_site(client, post, settings, use_dummy_cache_backend):
     settings.SITE_ID = None
-
-    LatestEntriesFeed._cache_site_for_feed(rf.get("/"))
-
-
-def test_cache_site_for_feed_uses_existing_cache(settings, rf):
-    from django.contrib.sites import models as sites_models
-    from django.contrib.sites.models import Site as DjangoSite
-
-    site_id = 998
-    settings.SITE_ID = site_id
-    cache_backup = sites_models.SITE_CACHE.copy()
-    sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain="example.com", name="example.com")
+    matching_site, _created = DjangoSite.objects.get_or_create(domain="example.com", defaults={"name": "Request Host"})
+    site_cache_backup = sites_models.SITE_CACHE.copy()
     try:
-        LatestEntriesFeed._cache_site_for_feed(rf.get("/"))
-        assert sites_models.SITE_CACHE[site_id].domain == "example.com"
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        response = client.get(feed_url, HTTP_HOST="example.com")
+
+        assert response.status_code == 200
+        assert f"http://example.com{feed_url}" in response.content.decode()
+        assert DjangoSite.objects.get_current(response.wsgi_request) == matching_site
     finally:
         sites_models.SITE_CACHE.clear()
-        sites_models.SITE_CACHE.update(cache_backup)
+        sites_models.SITE_CACHE.update(site_cache_backup)
 
 
-def test_cache_site_for_feed_without_get_host(settings):
-    from django.contrib.sites import models as sites_models
-
-    class DummyRequest:
-        pass
-
-    site_id = 999
-    settings.SITE_ID = site_id
-    cache_backup = sites_models.SITE_CACHE.copy()
+@pytest.mark.django_db
+def test_feed_without_site_id_and_matching_site_raises_configuration_error(
+    client, post, settings, use_dummy_cache_backend
+):
+    settings.SITE_ID = None
+    settings.ALLOWED_HOSTS = [*settings.ALLOWED_HOSTS, "missing.example"]
+    DjangoSite.objects.filter(domain="missing.example").delete()
+    site_cache_backup = sites_models.SITE_CACHE.copy()
     try:
-        sites_models.SITE_CACHE.pop(site_id, None)
-        LatestEntriesFeed._cache_site_for_feed(DummyRequest())
-        assert sites_models.SITE_CACHE[site_id].domain == "localhost"
+        DjangoSite.objects.clear_cache()
+        feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+        with pytest.raises(ImproperlyConfigured, match="requires a django.contrib.sites Site"):
+            client.get(feed_url, HTTP_HOST="missing.example")
     finally:
         sites_models.SITE_CACHE.clear()
-        sites_models.SITE_CACHE.update(cache_backup)
+        sites_models.SITE_CACHE.update(site_cache_backup)
+
+
+@pytest.mark.django_db
+def test_feed_without_django_sites_app_uses_request_site(client, post, use_dummy_cache_backend, mocker):
+    mocker.patch("django.contrib.sites.shortcuts.apps.is_installed", return_value=False)
+    get_current = mocker.patch.object(
+        DjangoSite.objects,
+        "get_current",
+        side_effect=AssertionError("Django Site manager must not be used"),
+    )
+    feed_url = reverse("cast:latest_entries_feed", kwargs={"slug": post.blog.slug})
+
+    response = client.get(feed_url, HTTP_HOST="example.com")
+
+    assert response.status_code == 200
+    assert f"http://example.com{feed_url}" in response.content.decode()
+    get_current.assert_not_called()
+
+
+def test_feed_preserves_absolute_repository_blog_url(rf, mocker):
+    repository = mocker.MagicMock(blog_url="https://canonical.example/blog/")
+    feed = LatestEntriesFeed(repository=repository)
+    feed.request = rf.get("/blog/feed/rss.xml", HTTP_HOST="alternate.example")
+
+    assert feed.link() == "https://canonical.example/blog/"
+
+
+def test_atom_podcast_feed_uses_request_host_for_relative_blog_url(rf, mocker):
+    repository = mocker.MagicMock(blog_url="/podcast/")
+    feed = AtomPodcastFeed(repository=repository)
+    feed.request = rf.get("/podcast/feed/podcast/mp3/atom.xml", HTTP_HOST="example.com")
+
+    assert feed.link() == "http://example.com/podcast/"
+
+
+def test_atom_podcast_feed_keeps_canonical_feed_identity(mocker):
+    feed = AtomPodcastFeed()
+    feed.object = mocker.MagicMock()
+    feed.object.get_full_url.return_value = "https://canonical.example/podcast/"
+
+    assert feed.feed_guid(feed.object) == "https://canonical.example/podcast/"
 
 
 @pytest.mark.django_db
@@ -1047,6 +1368,17 @@ def test_latest_entries_feed_get_object_uses_repository_blog(rf, blog, mocker):
 
 
 @pytest.mark.django_db
+def test_latest_entries_feed_get_object_ignores_used_repository(rf, blog, mocker):
+    repository = mocker.MagicMock(used=True)
+    repository.blog = mocker.MagicMock()
+    feed = LatestEntriesFeed(repository=repository)
+
+    returned = feed.get_object(rf.get("/"), slug=blog.slug)
+
+    assert returned == blog
+
+
+@pytest.mark.django_db
 def test_podcast_feed_get_object_uses_repository_blog(rf, podcast, mocker):
     repository = mocker.MagicMock()
     repository.used = False
@@ -1056,6 +1388,17 @@ def test_podcast_feed_get_object_uses_repository_blog(rf, podcast, mocker):
     returned = feed.get_object(rf.get("/"), slug=podcast.slug, audio_format="m4a")
 
     assert returned is podcast
+
+
+@pytest.mark.django_db
+def test_podcast_feed_get_object_ignores_used_repository(rf, podcast, mocker):
+    repository = mocker.MagicMock(used=True)
+    repository.blog = mocker.MagicMock()
+    feed = PodcastFeed(repository=repository)
+
+    returned = feed.get_object(rf.get("/"), slug=podcast.slug, audio_format="m4a")
+
+    assert returned == podcast
 
 
 class TestFeedStylesheets:

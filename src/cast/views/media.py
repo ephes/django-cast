@@ -4,6 +4,7 @@ Extracted from the previously triplicated per-type modules (architecture review 
 """
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -23,6 +24,14 @@ from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
 from ..forms import NonEmptySearchForm
+from ..media_ingest import (
+    IngestPolicy,
+    MediaProbeFailed,
+    MediaProbeTimeout,
+    MediaUploadInProgress,
+    ingest_upload,
+    upload_lock,
+)
 from . import AuthenticatedHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
@@ -54,11 +63,15 @@ class MediaAdminConfig:
     deleted_message: Any
     chooser_upload_error_message: Any
     message_arg: Callable[[Any], Any]
+    ingest_policy: Callable[[], IngestPolicy]
+    upload_in_progress_message: Any
+    probe_timeout_message: Any
+    probe_failed_message: Any
+    lock_uploads: bool = False
     updated_message: Any = ""
     update_error_message: Any = ""
     file_missing_message: Any = ""
     edit_form_initial: Callable[[Any], dict[str, Any]] | None = None
-    delete_old_files: Callable[[int, Any], None] = field(default=lambda obj_id, form: None)
     get_file_for_size: Callable[[Any], Any] = field(default=lambda obj: None)
     extra_edit_context: Callable[[HttpRequest, Any], dict[str, Any]] = field(default=lambda request, obj: {})
 
@@ -66,6 +79,47 @@ class MediaAdminConfig:
 class MediaAdminViews:
     def __init__(self, config: MediaAdminConfig) -> None:
         self.config = config
+
+    def _save_upload(
+        self,
+        request: AuthenticatedHttpRequest,
+        form_class: Any,
+        *,
+        obj: Any | None = None,
+        prefix: str | None = None,
+    ) -> tuple[Any, Any, bool]:
+        config = self.config
+        form = None
+        try:
+            lock = upload_lock(request.user) if config.lock_uploads and request.FILES else nullcontext()
+            with lock:
+                if obj is None:
+                    obj = config.create_instance(request.user)
+                form_kwargs = {"instance": obj, "user": request.user}
+                if prefix is not None:
+                    form_kwargs["prefix"] = prefix
+                form = form_class(request.POST, request.FILES, **form_kwargs)
+                if not form.is_valid():
+                    return obj, form, False
+                obj = ingest_upload(form, policy=config.ingest_policy())
+                return obj, form, True
+        except (MediaUploadInProgress, MediaProbeTimeout, MediaProbeFailed) as exc:
+            if form is None:
+                if obj is None:
+                    obj = config.create_instance(request.user)
+                form_kwargs = {"instance": obj, "user": request.user}
+                if prefix is not None:
+                    form_kwargs["prefix"] = prefix
+                form = form_class(request.POST, request.FILES, **form_kwargs)
+                form.is_valid()
+            if isinstance(exc, MediaUploadInProgress):
+                message = config.upload_in_progress_message
+            elif isinstance(exc, MediaProbeTimeout):
+                message = config.probe_timeout_message
+            else:
+                message = config.probe_failed_message
+            form.add_error(None, message)
+            return obj, form, False
 
     @vary_on_headers("X-Requested-With")
     def index(self, request: HttpRequest) -> HttpResponse:
@@ -118,10 +172,8 @@ class MediaAdminViews:
             raise PermissionDenied
         form_class = cast(Any, config.get_form())
         if request.POST:
-            obj = config.create_instance(request.user)
-            form = form_class(request.POST, request.FILES, instance=obj, user=request.user)
-            if form.is_valid():
-                form.save()
+            obj, form, saved = self._save_upload(request, form_class)
+            if saved:
                 reindex(obj)
 
                 messages.success(
@@ -142,7 +194,7 @@ class MediaAdminViews:
             {"form": form},
         )
 
-    def edit(self, request: HttpRequest, obj_id: int) -> HttpResponse:
+    def edit(self, request: AuthenticatedHttpRequest, obj_id: int) -> HttpResponse:
         config = self.config
         form_class = cast(Any, config.get_form())
         obj = get_object_or_404(
@@ -151,10 +203,8 @@ class MediaAdminViews:
         )
 
         if request.method == "POST":
-            form = form_class(request.POST, request.FILES, instance=obj, user=request.user)
-            if form.is_valid():
-                config.delete_old_files(obj_id, form)
-                obj = form.save()
+            obj, form, saved = self._save_upload(request, form_class, obj=obj)
+            if saved:
                 reindex(obj)
 
                 messages.success(
@@ -286,19 +336,16 @@ class MediaAdminViews:
         ) or not config.permission_policy.user_has_permission(request.user, "choose"):
             raise PermissionDenied
         form_class = cast(Any, config.get_form())
+        form = None
 
         if request.method == "POST":
-            obj = config.create_instance(request.user)
-            form = form_class(
-                request.POST,
-                request.FILES,
-                instance=obj,
-                user=request.user,
+            obj, form, saved = self._save_upload(
+                request,
+                form_class,
                 prefix="media-chooser-upload",
             )
 
-            if form.is_valid():
-                form.save()
+            if saved:
                 reindex(obj)
 
                 return render_modal_workflow(
@@ -322,7 +369,7 @@ class MediaAdminViews:
         context = {
             config.plural_context_name: item_page,
             "searchform": search_form,
-            "uploadform": form_class(user=request.user),
+            "uploadform": form or form_class(user=request.user),
             "is_searching": False,
             "pagination_template": pagination_template,
         }

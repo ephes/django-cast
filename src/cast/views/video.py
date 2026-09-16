@@ -1,13 +1,13 @@
 from typing import Any
 
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from modelsearch.backends.base import BaseSearchResults
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ..forms import get_video_form
+from ..media_ingest import admin_policy
 from ..models import Video
 from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from . import AuthenticatedHttpRequest
@@ -32,12 +32,6 @@ def _search_video(base_videos: Any, raw_query_string: str) -> tuple[Any | BaseSe
     return safe_modelsearch_results(base_videos, raw_query_string), normalize_modelsearch_query(
         raw_query_string
     ) or None
-
-
-def _delete_old_video_files(video_id: int, form: Any) -> None:
-    old_video = get_object_or_404(Video, id=video_id)
-    if "original" in form.changed_data and old_video.original.name:
-        old_video.original.storage.delete(old_video.original.name)
 
 
 def _create_video(user: Any) -> Video:
@@ -80,8 +74,12 @@ video_admin_config = MediaAdminConfig(
     chooser_upload_error_message=_("The video could not be saved due to errors."),
     file_missing_message=_("The file could not be found. Please change the source or delete the video file"),
     message_arg=_video_message_arg,
+    ingest_policy=lambda: admin_policy(("original", "poster")),
+    upload_in_progress_message=_("Another audio or video upload is already in progress."),
+    probe_timeout_message=_("Video probing exceeded the upload budget."),
+    probe_failed_message=_("Video probing failed."),
+    lock_uploads=True,
     edit_form_initial=None,
-    delete_old_files=_delete_old_video_files,
     get_file_for_size=_video_file_for_size,
     extra_edit_context=_extra_video_edit_context,
 )
@@ -96,7 +94,7 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     return _views.add(request)
 
 
-def edit(request: HttpRequest, video_id: int) -> HttpResponse:
+def edit(request: AuthenticatedHttpRequest, video_id: int) -> HttpResponse:
     return _views.edit(request, video_id)
 
 

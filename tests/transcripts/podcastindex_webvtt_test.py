@@ -1,62 +1,11 @@
-# ruff: noqa: F401,F811,I001
 import json
-import re
-from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
-from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
-from django.db import IntegrityError, transaction
-from django.test import override_settings
-from django.template import TemplateDoesNotExist
 from django.urls import reverse
-from django.utils import translation
 
 from cast.devdata import create_transcript
-from cast.views import transcript as transcript_views
-from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
-from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptSpeakerMapping
-from cast.transcripts import parsing, speaker_samples, webvtt
-from cast.views.transcript import (
-    _resolve_transcript_template,
-    get_speaker_mapping_context,
-    get_transcript_audio_sources,
-)
-
-from tests.factories import BlogFactory, EpisodeFactory, UserFactory
-from tests.multisite_helpers import create_site_root
-
-
-def get_endpoint_urls_without_args():
-    urls = {}
-    view_names = ["index", "add", "chooser", "chooser_upload"]
-    for view_name in view_names:
-        urls[view_name] = reverse(f"cast-transcript:{view_name}")
-    return urls
-
-
-def get_endpoint_urls_with_args(transcript):
-    urls = {}
-    view_names = ["edit", "delete", "chosen"]
-    for view_name in view_names:
-        urls[view_name] = reverse(f"cast-transcript:{view_name}", args=(transcript.id,))
-    return urls
-
-
-class TranscriptUrls:
-    def __init__(self, transcript):
-        self.transcript = transcript
-        self.urls = get_endpoint_urls_without_args()
-        self.urls.update(get_endpoint_urls_with_args(transcript))
-
-    def __getattr__(self, item):
-        return self.urls[item]
-
-
-@pytest.fixture
-def transcript_urls(transcript):
-    return TranscriptUrls(transcript)
+from cast.models import Contributor, EpisodeContributor
 
 
 class TestGetTranscriptAsPodcastIndexJson:
@@ -223,6 +172,19 @@ class TestGetTranscriptAsWebVtt:
         # Then we get a 404 response with an error message
         assert r.status_code == 404
         assert r.content.decode("utf-8") == "WebVTT file not available"
+
+    def test_get_transcript_as_vtt_missing_vtt_file_returns_404(self, client, episode):
+        # Given a transcript whose vtt file is gone from storage
+        transcript = create_transcript(audio=episode.podcast_audio, vtt="WEBVTT\n")
+        transcript.vtt.storage.delete(transcript.vtt.name)
+
+        # When we request the transcript as WebVTT
+        url = reverse("cast:webvtt-transcript", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 404 response instead of a server error
+        assert r.status_code == 404
+        assert r.content.decode("utf-8") == "WebVTT file missing"
 
     def test_get_transcript_as_vtt_success(self, client, episode):
         # Given a transcript in vtt format

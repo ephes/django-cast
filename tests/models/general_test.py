@@ -1,36 +1,14 @@
-# ruff: noqa: F401,F811,I001
-import os
-from types import SimpleNamespace
-
 import pytest
-from django import forms
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, connection, transaction
-from django.db.models import ProtectedError
+from django.db import IntegrityError, transaction
 from django.http import QueryDict
-from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from wagtail.images.models import Image
 
 from cast import appsettings
-from cast.devdata import create_transcript
-from cast.models import Audio, Blog, Contributor, ContributorLink, EpisodeContributor, File, Podcast, Season
-from cast.models.contributors import ContributorLinkSelect
-from cast.models.pages import (
-    PODLOVE_POSTER_RENDITION_SPEC,
-    SOCIAL_COVER_RENDITION_SPEC,
-    CustomEpisodeForm,
-    Episode,
-    HomePage,
-    HtmlField,
-    Post,
-)
+from cast.models import Blog, File, Podcast, Season
 from cast.models.repository import BlogIndexContext
-from cast.models.transcript import Transcript
-from cast.transcripts.dote import convert_dote_to_podcastindex_transcript, time_to_seconds
-from cast.models.video import Video
-from tests.factories import EpisodeFactory, PodcastFactory
 
 
 def test_htmx_http_request_is_importable_from_neutral_module():

@@ -1,31 +1,19 @@
 from typing import Any
 
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from modelsearch.backends.base import BaseSearchResults
-from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ..forms import AudioForm
+from ..media_ingest import AUDIO_FILE_FIELDS, admin_policy
+from ..media_permissions import audio_permission_policy
 from ..models import Audio
 from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from ..voxhelm import voxhelm_configured
 from . import AuthenticatedHttpRequest
 from .media import MediaAdminConfig, MediaAdminViews
 from .voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_audio
-
-audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
-
-
-def delete_old_audio_files(audio: Audio, changed_audio_files: set[str]) -> None:
-    for file_format in changed_audio_files:
-        # if providing a new audio file, delete the old one.
-        # NB Doing this via original_file.delete() clears the file field,
-        # which definitely isn't what we want...
-        original_file = getattr(audio, file_format)
-        if original_file.name != "":
-            original_file.storage.delete(original_file.name)
 
 
 def get_audio_data(audio: Audio) -> dict[str, Any]:
@@ -44,13 +32,6 @@ def _search_audio(base_audios: Any, raw_query_string: str) -> tuple[Any | BaseSe
     return safe_modelsearch_results(base_audios, raw_query_string), normalize_modelsearch_query(
         raw_query_string
     ) or None
-
-
-def _delete_old_audio_files(audio_id: int, form: Any) -> None:
-    changed_audio_files = set(form.changed_data).intersection(Audio.audio_formats)
-    if len(changed_audio_files) > 0:
-        old_audio = get_object_or_404(Audio, id=audio_id)
-        delete_old_audio_files(old_audio, changed_audio_files)
 
 
 def _extra_audio_edit_context(request: HttpRequest, audio: Audio) -> dict[str, Any]:
@@ -102,8 +83,12 @@ audio_admin_config = MediaAdminConfig(
     chooser_upload_error_message=_("The audio could not be saved due to errors."),
     file_missing_message=_("The file could not be found. Please change the source or delete the audio file"),
     message_arg=_audio_message_arg,
+    ingest_policy=lambda: admin_policy(AUDIO_FILE_FIELDS),
+    upload_in_progress_message=_("Another audio or video upload is already in progress."),
+    probe_timeout_message=_("Audio probing exceeded the upload budget."),
+    probe_failed_message=_("Audio probing failed."),
+    lock_uploads=True,
     edit_form_initial=_audio_edit_form_initial,
-    delete_old_files=_delete_old_audio_files,
     get_file_for_size=_audio_file_for_size,
     extra_edit_context=_extra_audio_edit_context,
 )
@@ -118,7 +103,7 @@ def add(request: AuthenticatedHttpRequest) -> HttpResponse:
     return _views.add(request)
 
 
-def edit(request: HttpRequest, audio_id: int) -> HttpResponse:
+def edit(request: AuthenticatedHttpRequest, audio_id: int) -> HttpResponse:
     return _views.edit(request, audio_id)
 
 

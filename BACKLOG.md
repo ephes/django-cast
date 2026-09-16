@@ -15,6 +15,41 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
+- [ ] Upstream the modelsearch Django 6.1 MATCH fix and remove the shim
+  - Notes: [backlog/2026-08-10-modelsearch-django61-upstream.md](backlog/2026-08-10-modelsearch-django61-upstream.md)
+  - Scope: report the Django 6.1 `MATCH` compilation break to `modelsearch` upstream, then drop
+    `src/cast/modelsearch_compat.py`, its `apps.py` call and its tests once a fixed release exists.
+  - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
+    against a fixed `modelsearch` release or the version gate and its retention reason are documented.
+
+- [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
+  - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+  - Implemented prerequisites: the publication policy and content converter seams —
+    [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and
+    [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
+  - Scope: prove Post and Episode editing through Wagtail 8's preview API, compare it with the existing editor
+    contract, and identify upstream functionality that can replace Cast implementation without losing automation
+    safeguards or podcast/media behavior. Daybook is owned by us and can change in a coordinated migration;
+    preserving its current API contract is not a prerequisite.
+  - Done when: a tested compatibility matrix and architecture decision identify what to reuse, retain, or report
+    upstream, with concrete follow-up slices and an explicit Wagtail 7 support and client migration policy.
+
+- [ ] Triage remaining security hardening observations
+  - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
+  - Scope: decide whether authors retain self-edit/delete rights after losing
+    access to the target page. The upload limits, media probe/concurrency limits,
+    and optional publication revision binding have been implemented or resolved;
+    the review's hardening observations record the accepted omitted-token race.
+  - Done when: the author action policy is specified and covered by regressions.
+
+- [ ] Audit existing editor API rich text and historical revisions
+  - Design record:
+    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
+  - Scope: provide read-only tooling to inspect published content, drafts, and restorable revisions after the
+    editor API sanitization fix. Normalization differences alone must not be reported as proof of an attack.
+  - Done when: operators can locate potentially unsafe historical content and follow a documented remediation
+    workflow without silently rewriting pages or destroying revision history.
+
 - [ ] Local authoring and sync workflow
   - Design record:
     [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
@@ -42,11 +77,22 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
+- [ ] Editor API preservation of paragraphs containing inline media
+  - Related design:
+    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
+  - Scope: consider exposing existing paragraphs with inline media as unsupported placeholders, so clients can
+    preserve them while editing neighboring blocks. New inline embeds remain rejected by the write API.
+  - Done when: the read/preservation contract is specified and tested without allowing clients to forge or change
+    preserved content or bypass sanitization on new writes.
+
 - [ ] Editor API remote media import safety design
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
     (see Open Questions)
   - Status: deferred for now.
+  - Prerequisite implemented: the shared upload and bounded-fetch contracts are documented in
+    [the media-ingestion service plan](backlog/2026-09-16-media-ingestion-service.md); remote imports must add
+    connect-time address pinning and redirect revalidation before accepting attacker-controlled URLs.
   - Scope: design how editor clients could import images/media from remote URLs with explicit server-side validation
     (SSRF protection, allowed schemes/hosts, size/content-type limits, the existing editor probe budget) so it is useful
     for agents but safe for production sites.

@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
-
 _probe_deadline: ContextVar[float | None] = ContextVar("cast_probe_deadline", default=None)
 
 

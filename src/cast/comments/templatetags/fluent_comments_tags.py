@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import copy
 from typing import TYPE_CHECKING, Any, cast
 
 from django import template
@@ -20,6 +21,52 @@ if TYPE_CHECKING:
     from ..models import BaseComment
 
 register = template.Library()
+
+
+@register.filter
+def safe_fill_tree(comments: Any) -> Any:
+    """Fill a paginated thread path without crossing its target or visibility boundary."""
+    from threadedcomments.models import PATH_DIGITS, PATH_SEPARATOR
+
+    if not comments:
+        return comments
+    comments = list(comments)
+    first = comments[0]
+    path_ids = first.tree_path.split(PATH_SEPARATOR)[:-1]
+    valid_path_ids = [path_id for path_id in path_ids if path_id.isdecimal()]
+    ancestors = (
+        first.__class__.objects.filter(
+            pk__in=valid_path_ids,
+            content_type_id=first.content_type_id,
+            object_pk=first.object_pk,
+            site_id=first.site_id,
+            is_public=True,
+            is_removed=False,
+        ).order_by("tree_path")
+        if valid_path_ids
+        else []
+    )
+    ancestors_by_path_id = {str(ancestor.pk).zfill(PATH_DIGITS): ancestor for ancestor in ancestors}
+    safe_ancestors: list[Any] = []
+    for path_id in reversed(path_ids):
+        ancestor = ancestors_by_path_id.get(path_id)
+        if ancestor is None:
+            # Do not reconnect a descendant across a hidden middle ancestor.
+            # No further ancestors are fetched; the paths are rebased below to
+            # whichever safe comments are already present in the rendered slice.
+            break
+        ancestor.added_path = True
+        safe_ancestors.insert(0, ancestor)
+
+    visible_ids = {str(comment.pk).zfill(PATH_DIGITS) for comment in [*safe_ancestors, *comments]}
+    rendered = []
+    for comment in [*safe_ancestors, *comments]:
+        rendered_comment = copy(comment)
+        rendered_path = [path_id for path_id in comment.tree_path.split(PATH_SEPARATOR) if path_id in visible_ids]
+        rendered_comment.tree_path = PATH_SEPARATOR.join(rendered_path)
+        rendered_comment.parent_id = int(rendered_path[-2]) if len(rendered_path) > 1 else None
+        rendered.append(rendered_comment)
+    return rendered
 
 
 class AjaxCommentTagsNode(template.Node):

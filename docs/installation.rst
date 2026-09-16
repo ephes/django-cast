@@ -42,8 +42,9 @@ Prerequisites
 Before you begin, ensure you have:
 
 - Python 3.11 or higher
-- Django 5.2 or higher
-- Wagtail 7.0 or higher
+- Django 5.2.17+, 6.0.8+, or 6.1+
+- Wagtail 7.0.9+ on the 7.0 LTS branch, 7.3.4+, 7.4.3+, or 8.0+
+  (the unpatched 7.1 and 7.2 branches are excluded)
 - `uv <https://docs.astral.sh/uv/>`_ (recommended) or pip
 - `ffmpeg <https://ffmpeg.org/download.html>`_ (optional, for video/audio processing)
 
@@ -76,6 +77,17 @@ This command will:
 5. Create a superuser account (username: ``user``, password: ``password``)
 6. Start the development server
 7. Open your browser to the Wagtail admin interface
+
+The package metadata excludes the vulnerable dependency releases identified by
+the project's security audit. Refresh the resolved dependencies in an existing
+environment when upgrading django-cast, then audit that application-specific
+resolution rather than assuming package metadata covers future advisories.
+Security floors for Wagtail's HTTP, HTML parsing, and image-decoding dependency
+stack are published in django-cast's metadata deliberately: this makes an
+upgrade replace vulnerable versions retained in an otherwise compatible
+application lock. The oldest supported Wagtail branch is tested with these
+floors. Applications should review any conflicting pins rather than bypass the
+security constraints.
 
 .. warning::
    The default credentials (``user``/``password``) are for development only.

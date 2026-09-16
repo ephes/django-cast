@@ -45,6 +45,19 @@ Update dependencies and rebuild all shipped assets:
    $ cd ..
    $ just js-build-all
 
+Vite uses content-hashed filenames, so a rebuild can delete one tracked bundle
+and create a differently named untracked bundle. Stage all release-preparation
+changes explicitly (do not rely on ``git commit -a``), then inspect the short
+status before committing. It must not contain any ``??`` entries under
+``src/cast/static/``. The final command separately checks the staged diff for
+whitespace errors and conflict markers:
+
+.. code-block:: shell
+
+   $ git add docs/releases/<version>.rst javascript/package-lock.json src/cast/static/
+   $ git status --short
+   $ git diff --cached --check
+
 Test Python Versions
 --------------------
 

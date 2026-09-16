@@ -8,7 +8,6 @@ from pathlib import Path
 
 from cast import quickstart
 
-
 QUICKSTART_TEMPLATE_FILES = {
     "base.html.template",
     "manage.py.template",

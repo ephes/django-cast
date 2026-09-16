@@ -68,6 +68,15 @@ Use a distinct ``--worker-id`` per deployed site, for example
 ``python-podcast-transcripts`` for a second site sharing the same codebase.
 The default task backend should remain immediate; only the
 ``cast_transcripts`` backend should point at ``django_tasks_db.DatabaseBackend``.
+``python manage.py check`` reports ``cast.E009`` when Voxhelm credentials
+resolve from Django settings or the environment but ``settings.TASKS`` has no
+``cast_transcripts`` entry. django-cast resolves that backend before submitting a
+transcription job, so a missing entry makes transcript generation fail
+immediately with a configuration message instead of leaving a queued generation
+behind an unfinished remote job. The check reads only Django settings and
+environment variables, because the site-scoped Wagtail ``Voxhelm settings``
+require database access; configure the backend even when the API token lives
+only in Wagtail admin.
 The web process and transcript worker must both receive the Voxhelm
 configuration used for job submission and artifact downloads. For
 deployment-managed secrets, set ``CAST_VOXHELM_API_BASE`` and
@@ -112,6 +121,11 @@ required FFmpeg tools are installed on your application hosts:
 
 - ``ffprobe`` for audio duration extraction, chapter-mark import, and video dimension detection
 - ``ffmpeg`` for video poster generation
+
+Editor, legacy API, and Wagtail admin audio/video uploads share a per-user
+upload lock stored in Django's default cache. Multi-worker deployments need a
+shared cache backend, such as Redis or Memcached, for that lock to coordinate
+requests across processes; ``LocMemCache`` only coordinates within one process.
 
 For backup and restore of media files, see :doc:`backup` and the
 :ref:`media management commands <cast_management_commands>`.

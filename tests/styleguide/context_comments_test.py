@@ -1,17 +1,13 @@
-# ruff: noqa: F401,F811,I001
 import json
 from contextlib import nullcontext
-from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
-from django.core.files.base import ContentFile
 from django.test import RequestFactory
 
-from cast.devdata import create_audio, create_blog, create_gallery, create_image, create_podcast, create_user
-from cast.models import Audio, Post
+from cast.devdata import create_blog, create_gallery, create_image, create_podcast, create_user
+from cast.models import Post
 from cast.views import styleguide as styleguide_view
-from cast.views.styleguide import StyleguideRemoteFile, StyleguideRemoteVideo
 
 
 class DummyResponse:
@@ -583,7 +579,6 @@ def test_styleguide_comments_creates_parent_and_reply(site, comments_enabled):
 def test_ensure_posts_updates_stale_visible_date(site):
     """When an existing styleguide post has a visible_date in the wrong month, _ensure_posts updates it."""
     from dateutil.relativedelta import relativedelta
-
     from django.utils import timezone
 
     user = create_user(name="date-user", password="date-user")

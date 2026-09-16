@@ -10,7 +10,6 @@ from wagtail.models import PageViewRestriction
 
 from cast.models import PostCategory
 from cast.search_suggestions import TYPEAHEAD_RESULT_LIMIT, get_search_suggestions
-
 from tests.factories import PostFactory
 
 

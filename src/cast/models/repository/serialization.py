@@ -255,10 +255,14 @@ def deserialize_blog(data: dict[str, Any]) -> "Blog":
     return blog
 
 
-def serialize_post(post: "Post") -> dict[str, Any]:
-    """Serialize a Post instance to a plain dict for caching."""
+def _serialize_post_common(post: "Post") -> dict[str, Any]:
+    """Serialize the fields shared by every post type (plain posts and episodes).
+
+    Both ``serialize_post`` and ``serialize_episode`` build on this helper so the
+    shared field set cannot drift apart again (a missing ``last_published_at``
+    used to drop the Atom ``<updated>`` element from podcast feeds).
+    """
     return {
-        "type": "post",
         "id": post.pk,
         "pk": post.pk,
         "uuid": post.uuid,
@@ -271,6 +275,11 @@ def serialize_post(post: "Post") -> dict[str, Any]:
     }
 
 
+def serialize_post(post: "Post") -> dict[str, Any]:
+    """Serialize a Post instance to a plain dict for caching."""
+    return {"type": "post", **_serialize_post_common(post)}
+
+
 def deserialize_post(data: dict[str, Any]) -> "Post":
     """Reconstruct a Post instance from a serialized dict."""
     from .. import Post
@@ -281,18 +290,13 @@ def deserialize_post(data: dict[str, Any]) -> "Post":
 
 
 def serialize_episode(post: "Episode") -> dict[str, Any]:
-    """Serialize an Episode instance (post with podcast audio) to a plain dict."""
-    data = {
+    """Serialize an Episode instance (post with optional podcast audio) to a plain dict."""
+    podcast_audio = post.podcast_audio
+    data: dict[str, Any] = {
         "type": "episode",
-        "id": post.pk,
-        "pk": post.pk,
-        "uuid": post.uuid,
-        "slug": post.slug,
-        "title": post.title,
-        "visible_date": post.visible_date,
-        "comments_enabled": post.comments_enabled,
-        "body": json.dumps(list(post.body.raw_data)),
-        "podcast_audio": serialize_audio(post.podcast_audio),
+        **_serialize_post_common(post),
+        # podcast_audio is nullable (SET_NULL), so an episode can be live without audio.
+        "podcast_audio": None if podcast_audio is None else serialize_audio(podcast_audio),
         "keywords": post.keywords,
         "explicit": post.explicit,
         "block": post.block,
@@ -313,8 +317,8 @@ def deserialize_episode(data: dict[str, Any]) -> "Episode":
 
     episode_data = data.copy()
     episode_data.pop("type", None)
-    if "podcast_audio" in episode_data:
-        episode_data["podcast_audio"] = deserialize_audio(episode_data["podcast_audio"])
+    if (podcast_audio_data := episode_data.get("podcast_audio")) is not None:
+        episode_data["podcast_audio"] = deserialize_audio(podcast_audio_data)
     if (season_data := episode_data.get("season")) is not None:
         episode_data["season"] = deserialize_season(season_data)
     assignments_data = episode_data.pop("contributor_assignments", [])

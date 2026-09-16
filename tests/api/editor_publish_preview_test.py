@@ -1,34 +1,12 @@
-# ruff: noqa: F401,F811,I001
 import json
-import subprocess
 
 import pytest
-from django.core.cache import cache
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
-from rest_framework import status
-from rest_framework.response import Response
-from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
+from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page
 
-from cast import media_probe
-from cast.api.editor import media as editor_media
-from cast.api.editor.body import (
-    SUPPORTED_OVERVIEW_BLOCKS,
-    _media_ref_is_available,
-    author_blocks_to_overview,
-    overview_to_author_blocks,
-)
-from cast.api.editor.errors import (
-    EditorNotFound,
-    EditorPermissionDenied,
-    EditorValidationError,
-    editor_exception_handler,
-)
-from cast.models import Audio, Episode, Post, Season, Video
-from cast.models.snippets import PostCategory
-
-from tests.factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory, UserFactory
+from cast.models import Post
+from tests.factories import EpisodeFactory, PostFactory, UserFactory
 
 
 def grant_wagtail_admin_access(user) -> None:
@@ -53,14 +31,6 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
         GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
     user.groups.add(group)
     return user
-
-
-@pytest.fixture
-def superuser(django_user_model):
-    """A superuser, which passes every Wagtail page and image ``choose`` permission."""
-    return django_user_model.objects.create_superuser(
-        username="editor-su", email="editor-su@example.com", password="password"
-    )
 
 
 class _FakeScopedToken:
@@ -155,6 +125,110 @@ class TestEditorPostPublish:
         assert data["api_url"].endswith(f"/editor/posts/{post.id}/")
         assert data["public_url"] is not None
         assert "publishable-draft" in data["public_url"]
+
+    def test_matching_if_match_publishes_checked_revision(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user, slug="publish-matching-revision")
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(
+            url,
+            {},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"',
+        )
+
+        assert response.status_code == 200, response.content
+        post = Post.objects.get(pk=created["id"])
+        assert post.live_revision_id == created["latest_revision_id"]
+        assert response.json()["published_revision_id"] == created["latest_revision_id"]
+
+    def test_stale_if_match_returns_existing_revision_conflict(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user, slug="publish-stale-revision")
+        post = Post.objects.get(pk=created["id"]).specific
+        draft = post.get_latest_revision_as_object()
+        draft.title = "Newer human draft"
+        current_revision = draft.save_revision(user=admin_user)
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(
+            url,
+            {},
+            format="json",
+            HTTP_IF_MATCH=f'"{created["latest_revision_id"]}"',
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "code": "revision_conflict",
+            "detail": "The page has a newer revision than the submitted base revision.",
+            "current_revision_id": current_revision.id,
+            "submitted_base_revision_id": created["latest_revision_id"],
+            "edit_url": reverse("wagtailadmin_pages:edit", args=[post.id]),
+        }
+        post.refresh_from_db()
+        assert post.live is False
+        assert post.latest_revision_id == current_revision.id
+
+    def test_malformed_publish_if_match_uses_existing_validation_error(self, api_client, blog, admin_user):
+        created = self._create_draft(api_client, blog, admin_user, slug="publish-malformed-revision")
+        url = reverse("cast:api:editor_post_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json", HTTP_IF_MATCH="not-quoted")
+
+        assert response.status_code == 400
+        assert response.json() == {
+            "code": "validation_error",
+            "errors": {
+                "If-Match": [
+                    {
+                        "code": "invalid",
+                        "message": 'If-Match must be a quoted revision id such as "123".',
+                    }
+                ]
+            },
+        }
+
+    def test_episode_publish_stale_if_match_keeps_newer_revision_draft(
+        self,
+        api_client,
+        podcast,
+        admin_user,
+        audio,
+    ):
+        episode = EpisodeFactory(
+            owner=podcast.owner,
+            parent=podcast,
+            title="Reviewed episode draft",
+            slug="reviewed-episode-draft",
+            live=False,
+            first_published_at=None,
+            podcast_audio=audio,
+        )
+        reviewed_revision = episode.save_revision(user=admin_user)
+        newer_draft = reviewed_revision.as_object()
+        newer_draft.title = "Newer episode draft"
+        current_revision = newer_draft.save_revision(user=admin_user)
+        api_client.force_authenticate(user=admin_user)
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": episode.id})
+
+        response = api_client.post(
+            url,
+            {},
+            format="json",
+            HTTP_IF_MATCH=f'"{reviewed_revision.id}"',
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "code": "revision_conflict",
+            "detail": "The page has a newer revision than the submitted base revision.",
+            "current_revision_id": current_revision.id,
+            "submitted_base_revision_id": reviewed_revision.id,
+            "edit_url": reverse("wagtailadmin_pages:edit", args=[episode.id]),
+        }
+        episode.refresh_from_db()
+        assert episode.live is False
+        assert episode.latest_revision_id == current_revision.id
 
     def test_live_page_with_unpublished_draft_publishes_latest_revision(self, api_client, blog, admin_user):
         post = PostFactory(

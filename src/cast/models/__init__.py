@@ -9,19 +9,19 @@ from .pages import Episode, HomePage, Post, sync_media_ids
 from .snippets import PostCategory
 from .theme import (
     TemplateBaseDirectory,
-    get_template_base_dir,
-    get_template_base_dir_choices,
     get_required_template_names,
     get_soft_required_template_names,
     get_strictly_required_template_names,
+    get_template_base_dir,
+    get_template_base_dir_choices,
 )
-from .transcript_generation import TranscriptGeneration
 from .transcript import (
     Transcript,
     TranscriptSpeakerMapping,
     TranscriptSpeakerSample,
     TranscriptVoiceReferenceCandidate,
 )
+from .transcript_generation import TranscriptGeneration
 from .video import Video, get_video_dimensions
 from .voxhelm_settings import VoxhelmSettings
 

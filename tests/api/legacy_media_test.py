@@ -1,29 +1,25 @@
-# ruff: noqa: F401,F811,I001
 import json
-from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from datetime import timedelta
 
 import pytest
+from django.contrib.auth.models import Permission
 from django.urls import reverse
-from django.utils import timezone
-from rest_framework.request import Request
-from wagtail.models import PageViewRestriction
 
-from cast import modal_facet_counts
 from cast.api.serializers import AudioPodloveSerializer
 from cast.api.views import (
     AudioPodloveDetailView,
-    CastImagesAPIViewSet,
-    FilteredPagesAPIViewSet,
     StandardResultsSetPagination,
-    ThemeListView,
 )
-from cast.devdata import create_transcript, generate_blog_with_media
-from cast.models import Audio, Contributor, EpisodeContributor, PostCategory, TranscriptSpeakerMapping
-
-from tests.factories import PostFactory, UserFactory
+from cast.devdata import create_transcript
+from cast.models import Audio, Contributor, EpisodeContributor, TranscriptSpeakerMapping, Video
+from tests.factories import UserFactory
 
 SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"
+
+
+class _ScopedToken:
+    def __init__(self, scope: object):
+        self.scope = scope
 
 
 def test_api_root(api_client):
@@ -70,6 +66,19 @@ class TestBlogVideo:
         assert r.status_code == 200
         assert "results" in r.json()
 
+    def test_video_list_endpoint_rejects_create_without_storing_file(self, api_client, minimal_mp4, mocker):
+        user = UserFactory()
+        api_client.login(username=user.username, password="password")
+        storage_save = mocker.spy(Video._meta.get_field("original").storage, "save")
+
+        r = api_client.post(self.list_url, {"original": minimal_mp4}, format="multipart")
+
+        assert r.status_code == 405
+        assert r.headers["Allow"] == "GET, HEAD, OPTIONS"
+        assert not Audio.objects.filter(user=user).exists()
+        assert not Video.objects.filter(user=user).exists()
+        storage_save.assert_not_called()
+
     def test_video_detail_endpoint_for_other_user_returns_404(self, api_client, video):
         requester = UserFactory()
         api_client.login(username=requester.username, password="password")
@@ -89,14 +98,68 @@ class TestBlogVideo:
         assert r.status_code == 404
         assert type(video).objects.filter(pk=video.pk).exists()
 
-    def test_video_delete_endpoint_for_owner_deletes_video(self, api_client, user, video):
-        api_client.login(username=user.username, password="password")
+    def test_video_delete_endpoint_for_owner_deletes_video(self, api_client, admin_user, video):
+        assert not admin_user.is_superuser
+        video.user = admin_user
+        video.save(poster=False)
+        api_client.login(username=admin_user.username, password="password")
 
         detail_url = reverse("cast:api:video_detail", kwargs={"pk": video.pk})
         r = api_client.delete(detail_url, format="json")
 
         assert r.status_code == 204
         assert not type(video).objects.filter(pk=video.pk).exists()
+
+    def test_video_delete_endpoint_denies_owner_without_wagtail_permission(self, api_client, user, video):
+        api_client.login(username=user.username, password="password")
+
+        r = api_client.delete(reverse("cast:api:video_detail", kwargs={"pk": video.pk}), format="json")
+
+        assert r.status_code == 403
+        assert type(video).objects.filter(pk=video.pk).exists()
+
+    def test_video_delete_endpoint_denies_admin_without_collection_delete_permission(self, api_client, user, video):
+        access_admin = Permission.objects.get(codename="access_admin", content_type__app_label="wagtailadmin")
+        user.user_permissions.add(access_admin)
+        assert user.has_perm("wagtailadmin.access_admin")
+        api_client.login(username=user.username, password="password")
+
+        r = api_client.delete(reverse("cast:api:video_detail", kwargs={"pk": video.pk}), format="json")
+
+        assert r.status_code == 403
+        assert type(video).objects.filter(pk=video.pk).exists()
+
+    @pytest.mark.parametrize("scope", ["", "write", ["delete"]])
+    def test_video_delete_endpoint_rejects_empty_wrong_or_malformed_scope(self, api_client, admin_user, video, scope):
+        video.user = admin_user
+        video.save(poster=False)
+        api_client.force_authenticate(user=admin_user, token=_ScopedToken(scope))
+
+        r = api_client.delete(reverse("cast:api:video_detail", kwargs={"pk": video.pk}), format="json")
+
+        assert r.status_code == 403
+        assert type(video).objects.filter(pk=video.pk).exists()
+
+    def test_video_delete_endpoint_accepts_delete_scope(self, api_client, admin_user, video):
+        video.user = admin_user
+        video.save(poster=False)
+        api_client.force_authenticate(user=admin_user, token=_ScopedToken("delete"))
+
+        r = api_client.delete(reverse("cast:api:video_detail", kwargs={"pk": video.pk}), format="json")
+
+        assert r.status_code == 204
+        assert not type(video).objects.filter(pk=video.pk).exists()
+
+    def test_video_delete_missing_configured_scope_bucket_fails_closed(self, api_client, admin_user, video, settings):
+        video.user = admin_user
+        video.save(poster=False)
+        settings.CAST_EDITOR_SCOPES = {"write": {"write"}, "publish": {"publish"}}
+        api_client.force_authenticate(user=admin_user, token=_ScopedToken("delete"))
+
+        r = api_client.delete(reverse("cast:api:video_detail", kwargs={"pk": video.pk}), format="json")
+
+        assert r.status_code == 403
+        assert type(video).objects.filter(pk=video.pk).exists()
 
     def test_video_detail_endpoint_for_owner_returns_200(self, api_client, user, video):
         api_client.login(username=user.username, password="password")
@@ -146,6 +209,19 @@ class TestBlogAudio:
         assert r.status_code == 200
         assert "results" in r.json()
 
+    def test_audio_list_endpoint_rejects_create_without_storing_file(self, api_client, mp3_audio, mocker):
+        user = UserFactory()
+        api_client.login(username=user.username, password="password")
+        storage_save = mocker.spy(Audio._meta.get_field("mp3").storage, "save")
+
+        r = api_client.post(self.list_url, {"mp3": mp3_audio}, format="multipart")
+
+        assert r.status_code == 405
+        assert r.headers["Allow"] == "GET, HEAD, OPTIONS"
+        assert not Audio.objects.filter(user=user).exists()
+        assert not Video.objects.filter(user=user).exists()
+        storage_save.assert_not_called()
+
     def test_audio_detail_endpoint_for_other_user_returns_404(self, api_client, audio):
         requester = UserFactory()
         api_client.login(username=requester.username, password="password")
@@ -165,11 +241,54 @@ class TestBlogAudio:
         assert r.status_code == 404
         assert type(audio).objects.filter(pk=audio.pk).exists()
 
-    def test_audio_delete_endpoint_for_owner_deletes_audio(self, api_client, user, audio):
-        api_client.login(username=user.username, password="password")
+    def test_audio_delete_endpoint_for_owner_deletes_audio(self, api_client, admin_user, audio):
+        assert not admin_user.is_superuser
+        audio.user = admin_user
+        audio.save(duration=False)
+        api_client.login(username=admin_user.username, password="password")
 
         detail_url = reverse("cast:api:audio_detail", kwargs={"pk": audio.pk})
         r = api_client.delete(detail_url, format="json")
+
+        assert r.status_code == 204
+        assert not type(audio).objects.filter(pk=audio.pk).exists()
+
+    def test_audio_delete_endpoint_denies_owner_without_wagtail_permission(self, api_client, user, audio):
+        api_client.login(username=user.username, password="password")
+
+        r = api_client.delete(reverse("cast:api:audio_detail", kwargs={"pk": audio.pk}), format="json")
+
+        assert r.status_code == 403
+        assert type(audio).objects.filter(pk=audio.pk).exists()
+
+    def test_audio_delete_endpoint_denies_admin_without_collection_delete_permission(self, api_client, user, audio):
+        access_admin = Permission.objects.get(codename="access_admin", content_type__app_label="wagtailadmin")
+        user.user_permissions.add(access_admin)
+        assert user.has_perm("wagtailadmin.access_admin")
+        api_client.login(username=user.username, password="password")
+
+        r = api_client.delete(reverse("cast:api:audio_detail", kwargs={"pk": audio.pk}), format="json")
+
+        assert r.status_code == 403
+        assert type(audio).objects.filter(pk=audio.pk).exists()
+
+    @pytest.mark.parametrize("scope", ["", "write", ["delete"]])
+    def test_audio_delete_endpoint_rejects_empty_wrong_or_malformed_scope(self, api_client, admin_user, audio, scope):
+        audio.user = admin_user
+        audio.save(duration=False)
+        api_client.force_authenticate(user=admin_user, token=_ScopedToken(scope))
+
+        r = api_client.delete(reverse("cast:api:audio_detail", kwargs={"pk": audio.pk}), format="json")
+
+        assert r.status_code == 403
+        assert type(audio).objects.filter(pk=audio.pk).exists()
+
+    def test_audio_delete_endpoint_accepts_delete_scope(self, api_client, admin_user, audio):
+        audio.user = admin_user
+        audio.save(duration=False)
+        api_client.force_authenticate(user=admin_user, token=_ScopedToken("delete"))
+
+        r = api_client.delete(reverse("cast:api:audio_detail", kwargs={"pk": audio.pk}), format="json")
 
         assert r.status_code == 204
         assert not type(audio).objects.filter(pk=audio.pk).exists()

@@ -51,9 +51,16 @@ Audio and Podcasts
 Missing audio duration
 ----------------------
 
-Audio duration is computed automatically when an audio object is saved.
+Audio duration is probed when an audio object without a duration is saved
+through the Wagtail admin, and recomputed when the admin edit form replaces
+or clears one of its audio files.
 If duration is missing for older files, re-save the audio object in the
-Wagtail or Django admin to trigger recomputation.
+Wagtail admin to trigger recomputation.
+Durations that went stale through a file replacement before Cast 0.2.65 are
+corrected by clearing ``duration`` and saving the audio object again. Plain
+``Audio.save()`` only persists fields, so from a shell use
+``save_audio_with_derivations(audio)`` (see :doc:`/reference/models`) or the
+``audio.save(duration=True)`` compatibility keyword.
 
 Chapter marks not appearing
 ---------------------------

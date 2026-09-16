@@ -51,11 +51,19 @@ Create a virtual environment and install all dependencies:
    $ just install
    # or directly: uv sync
 
-This command will:
+The install command will:
 
 - Create a virtual environment if one doesn't exist
 - Install django-cast in editable mode
 - Install all development dependencies
+
+The repository intentionally does not track ``uv.lock`` because its test matrix
+resolves several supported Django and Wagtail branches. After ``uv sync``, audit
+the frozen local runtime resolution, including optional extras, with:
+
+.. code-block:: console
+
+   $ just audit-dependencies
 
 Setting Up the JavaScript Environment
 -------------------------------------
@@ -311,7 +319,7 @@ For specific tests:
 
 .. code-block:: bash
 
-   $ just test-one tests/models_test.py::TestPostModel::test_post_slug
+   $ just test-one tests/models/posts_test.py::TestPostModel::test_post_slug
 
 Test Coverage
 ~~~~~~~~~~~~~
@@ -367,6 +375,31 @@ supported dependency combination (Django 5.2, Wagtail 7.0) and once with the new
 
    $ uv run tox -e migrations-oldest,migrations-latest
 
+Test Media Files
+~~~~~~~~~~~~~~~~
+
+Uploads created by the suite land in a directory that belongs to a single test session.
+``tests/conftest.py`` points ``MEDIA_ROOT`` and ``CAST_PRIVATE_MEDIA_ROOT`` at pytest's
+per-session temporary directory, so nothing is written into the checkout and no run
+deletes another run's files. Set ``CAST_TEST_MEDIA_ROOT`` and
+``CAST_TEST_PRIVATE_MEDIA_ROOT`` to use fixed paths instead; every tox environment does
+that to get a stable directory of its own under ``.tox``, and such a directory is wiped
+at the start and end of the session because the next run reuses it.
+
+Private ``FileField`` columns - the contributor voice-reference clip and the transcript
+speakers sidecar - resolve their storage once, while the model class is created, so they
+cannot follow a settings override. The fixture rebinds them to the session's private root
+and restores them afterwards.
+
+Media files are therefore no longer a reason to avoid running two test sessions at once.
+The reused test database still is: two plain ``pytest`` runs share
+``tests/test_database.sqlite3`` and fail with ``database is locked``. Give the second run
+its own database to run both at the same time:
+
+.. code-block:: bash
+
+   $ CAST_TEST_DB=/tmp/cast-second-run.sqlite3 uv run pytest
+
 JavaScript Tests
 ----------------
 
@@ -380,6 +413,22 @@ Run JavaScript tests with Vitest:
    # or directly:
    $ cd javascript
    $ npx vitest run
+
+Coverage uses the ``@vitest/coverage-v8`` provider and writes an HTML report to the
+gitignored ``javascript/coverage/`` directory.
+
+Type-check the TypeScript sources with ``tsc --noEmit``:
+
+.. code-block:: bash
+
+   $ just js-typecheck
+   # or directly:
+   $ cd javascript
+   $ npm run typecheck
+
+Vite and Vitest only strip types, so this is the only command that actually checks them.
+It currently reports pre-existing errors, mostly in the test files, and is therefore not
+part of CI yet; treat new errors in the code you touch as something to fix.
 
 Build shipped JavaScript assets:
 
@@ -408,11 +457,22 @@ To test a specific environment:
 
    $ uv run tox -e py312-django52-wagtail70
 
-Each environment keeps its own database, public media root, and private media root under ``.tox``.
-This isolation lets the default ``just tox`` recipe safely run six environments concurrently without
-one test session deleting another's uploaded files. ``uv run tox -e migrations-oldest,migrations-latest``
+Each environment keeps its own database, public media root, and private media root under ``.tox``
+(see `Test Media Files`_). This isolation lets the default ``just tox`` recipe safely run six
+environments concurrently without one test session deleting another's uploaded files. ``uv run tox -e migrations-oldest,migrations-latest``
 checks that the migration graph applies to an empty database at both ends of the supported dependency
 range, and ``uv run tox -e cleanup`` removes every test database and media root.
+
+The ``django61`` and ``wagtail80`` environments also make deprecation warnings visible: they run
+pytest with ``-W default::DeprecationWarning -W default::PendingDeprecationWarning`` (through
+``PYTEST_ADDOPTS``) and set a matching ``PYTHONWARNINGS``. The newest supported Django and Wagtail
+releases are where the next round of removals shows up first, and Django's
+``RemovedInDjangoXXWarning`` classes are deprecation warnings, so these environments end with a
+warnings summary that the rest of the matrix - and a plain ``pytest`` run - suppress through the
+``filterwarnings`` list in ``pyproject.toml``. The warnings do not fail the run. Treat a new one
+coming from ``src/cast`` as work to schedule before the framework release that removes the API, and
+ignore third-party noise until the whole matrix is quiet enough to turn deprecations into errors.
+CI runs ``py314-django61-wagtail80`` in its tox matrix job, so the same summary shows up there.
 
 Code Quality
 ============
@@ -433,7 +493,11 @@ Django-cast uses Ruff for code formatting and linting. The project is configured
 
 - Line length: 119 characters
 - Black-compatible formatting
-- Import sorting
+- Import sorting (the ``I`` rules, so the ``[tool.ruff.lint.isort]`` options apply)
+
+The lint rule selection is pinned in ``pyproject.toml`` (``[tool.ruff.lint] select``)
+so the CI gate does not depend on the installed Ruff version. Pre-commit's Ruff hook
+reads the same configuration, so ``just lint`` and ``pre-commit`` agree.
 
 Format your code:
 

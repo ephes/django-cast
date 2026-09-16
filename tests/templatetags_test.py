@@ -6,7 +6,6 @@ from django.test import RequestFactory
 from cast.filters import PostFilterset, get_active_facets, has_active_filters
 from cast.models import PostCategory
 
-
 # --- remove_filter_url template tag tests ---
 
 

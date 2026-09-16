@@ -1,4 +1,3 @@
-# ruff: noqa: F401,F811,I001
 """
 This file contains tests for the post data cache. Make sure
 all queries happen in one place and there are no additional
@@ -6,45 +5,25 @@ queries when rendering posts.
 """
 
 import json
-import pickle
-from datetime import time, timedelta
 from contextvars import Context, copy_context
 from copy import deepcopy
-from pathlib import Path
-from xml.etree import ElementTree
+from datetime import time, timedelta
 
 import pytest
-import sqlparse
-import cast.models.repository as repository_module
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.sites import models as sites_models
-from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
 from django.test.utils import CaptureQueriesContext
-from django.urls import reverse
 from django.utils import timezone
-from wagtail.images.models import Image, Rendition
 from wagtail.models import Site as WagtailSite
 
-from cast.devdata import create_post, create_python_body, create_transcript, generate_blog_with_media
-from cast.feeds import LatestEntriesFeed, RssPodcastFeed
-from cast.filters import PostFilterset
+from cast.devdata import create_post, create_transcript
 from cast.models import (
     Audio,
     Blog,
     ChapterMark,
-    Contributor,
-    ContributorLink,
     Episode,
-    EpisodeContributor,
-    Podcast,
     Post,
     Season,
-    Transcript,
-    Video,
 )
-from cast.models.image_renditions import create_missing_renditions_for_posts
-from cast.models.repository.builders import _blog_url_from_referer
 from cast.models.repository import (
     BlogIndexContext,
     FeedContext,
@@ -53,39 +32,15 @@ from cast.models.repository import (
     add_queryset_data,
     add_site_raw,
     apply_cover_fallback,
-    deserialize_audio,
-    deserialize_episode,
-    deserialize_image,
-    deserialize_post,
-    deserialize_season,
-    deserialize_transcript,
-    deserialize_video,
-    deserialize_blog,
-    deserialize_episode_contributor,
     data_for_blog_cachable,
-    get_facet_choices,
-    serialize_audio,
-    serialize_blog,
-    serialize_episode_contributor,
-    serialize_episode,
-    serialize_image,
-    serialize_post,
-    serialize_renditions,
-    serialize_season,
     serialize_transcript,
-    serialize_video,
 )
+from cast.models.repository.builders import _blog_url_from_referer
 from cast.wagtail_hooks import PageLinkHandlerWithCache
 from tests.factories import EpisodeFactory
-
 from tests.repository.helpers import (
-    StubFile,
     blocker,
-    blog_index_repository,
-    feed_repository,
-    post_detail_repository,
     queryset_data,
-    show_queries,
 )
 
 
@@ -790,7 +745,7 @@ def test_serialize_transcript_no_collection():
     class TranscriptFile:
         name = "blub"
 
-    class Transcript:
+    class StubTranscript:
         pk = 1
         audio_id = 1
         podlove = Podlove()
@@ -798,7 +753,7 @@ def test_serialize_transcript_no_collection():
         dote = TranscriptFile()
         collection_id = None
 
-    result = serialize_transcript(Transcript())
+    result = serialize_transcript(StubTranscript())
     assert result["collection"] is None
 
 

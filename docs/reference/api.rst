@@ -42,6 +42,33 @@ returning its historical bare-text ``"<pk>"`` body with ``201 Created``. New
 integrations should use the editor API below for structured errors, scoped
 authorization, and ``If-Match`` revision handling.
 
+The legacy ``/api/videos/`` and ``/api/audios/`` collection endpoints are
+read-only. ``POST`` requests return ``405 Method Not Allowed``. Use
+``POST /api/editor/media/videos/`` or ``POST /api/editor/media/audios/`` for
+permission-checked uploads. Existing legacy video clients can continue using
+``POST /api/upload_video/`` while they migrate.
+
+Legacy mutations now apply scoped-token and Wagtail permission boundaries.
+``POST /api/upload_video/`` requires Wagtail admin
+access, an available video collection with add permission, and the ``write``
+scope when the authenticating token advertises scopes. It also shares the editor
+audio/video per-user upload lock and cumulative probe budget. If more than one
+upload collection is available, submit its integer ID as ``collection``.
+``DELETE /api/audios/{id}/`` and ``DELETE /api/videos/{id}/`` retain owner
+isolation and additionally require Wagtail admin access, delete permission for
+the object's collection, and the distinct ``delete`` scope for scoped tokens.
+For deletes, an empty, malformed, ``write``-only, or otherwise insufficient
+token scope is denied before mutation. Session authentication and tokens without any scope
+metadata defer to Wagtail permissions.
+
+This hardening changes legacy upload error contracts: unauthenticated requests
+return ``403`` instead of redirecting to login, validation errors use the editor
+``validation_error`` envelope, and a busy upload lock returns ``429`` with code
+``rate_limited``.
+The compatibility endpoint keeps ``title`` optional even when the configured
+video form normally requires it. Other site-specific required video-form fields
+remain required; sites using them should migrate clients to the editor endpoint.
+
 Endpoints
 ---------
 
@@ -451,9 +478,49 @@ plus episode-specific fields; see **Episode endpoints** below.
 Referenced media — ``cover_image`` and inline ``image``, ``gallery``,
 ``audio``, and ``video`` blocks — must be choosable by the caller. Missing and
 inaccessible media references are reported the same way (``not_found``) so the
-API does not leak objects outside the caller's permissions. ``paragraph`` HTML
-is validated through Wagtail's rich-text block, the same path the admin uses on
-save.
+API does not leak objects outside the caller's permissions.
+
+``paragraph`` HTML is sanitized on create and PATCH through Wagtail's
+ContentState converter before normal block validation. The converter rebuilds
+HTML from the block's rich-text features, using the selected editor's
+``OPTIONS.features`` or Wagtail's default features when the block does not
+specify them. Disallowed elements, attributes, and link schemes are removed;
+their text may remain as ordinary text. Malformed input that cannot be converted
+returns ``400 validation_error`` at the affected value path. There is no fallback
+to storing the original input.
+
+The response contains normalized HTML, which can differ from the request:
+``<p onclick="alert(1)">Text</p>`` becomes ``<p>Text</p>``. Supplied Draftail
+``data-block-key`` values are retained so existing rich-text comment anchors
+survive a round trip; API writes do not add generated keys to unkeyed HTML. Supported page and
+document links retain Wagtail's internal reference format. Inline image and
+oEmbed features are excluded from API rich text, even if enabled in the admin;
+use the structured image/gallery/audio/video blocks with their permission and
+media checks. A submitted ``<embed>`` tag returns a field-specific validation
+error with code ``inline_embed`` rather than silently removing inline media. This also applies to
+resubmitting existing admin-authored paragraphs: move inline media to structured
+blocks before sending that section, or omit the section from PATCH. Rich-text
+conversion does not fetch remote embed providers.
+
+Page/document links whose targets have been deleted retain their reference IDs
+on write, following Wagtail's broken-link behavior; a missing target does not
+make an otherwise valid rich-text write fail.
+
+Formatting outside the resolved feature list is reduced to ordinary text.
+For example, sites using Wagtail's defaults must enable ``blockquote`` and
+``code`` in their rich-text editor options if API writes should preserve those
+formats. Review the feature list before resubmitting existing content.
+
+.. warning::
+
+   This protection applies to submitted rich text on new API writes. Upgrading
+   does not sanitize existing page bodies, drafts, or historical revisions.
+   GET and previews still use stored content, PATCH preserves omitted sections,
+   and restoring an old revision can restore unsafe HTML. Sites that previously
+   exposed this API should review existing content and restorable revisions,
+   including published content, before removing temporary access restrictions.
+   Resubmitting a section sanitizes its editable rich text; it does not clean
+   preserved unsupported blocks, other sections, or revision history.
 
 Request fields:
 
@@ -495,14 +562,26 @@ sent as a plain JSON list of objects; clients do not send ``{"type": "item",
 "id": "...", "value": ...}`` list-item wrappers. Custom block values are
 converted through the configured Wagtail block's ``to_python()``, ``clean()``,
 and ``get_prep_value()`` methods on write, and are returned in an editor-facing
-representation on read.
+representation on read. Before ``clean()``, the API also sanitizes
+``RichTextBlock`` values recursively inside ``StructBlock``, ``ListBlock``, and
+``StreamBlock`` containers. Empty optional rich text stays empty. Submitted
+``RawHTMLBlock`` values at the top level or nested in these three container types
+are rejected with a field-specific validation error. When multiple nested rich
+text leaves are invalid, the response reports every rejected leaf path together
+rather than stopping after the first one.
 
 Custom blocks are a trusted site-level extension point. The editor API enforces
 the built-in media blocks' per-user ``choose`` permissions, but it cannot infer
 permissions for arbitrary object references inside custom block values. A
 custom block that references images, pages, snippets, or media should enforce
 its own validation and permission semantics, or should not be exposed to editor
-API clients.
+API clients. Custom HTML rendering, custom block methods and rich-text converter
+plugins remain trusted application code. The API cannot infer HTML stored in
+arbitrary string fields or make unsafe custom rendering safe. Non-API writes
+and preserved unsupported placeholders are outside this write-time protection.
+Other custom container types, such as ``TypedTableBlock``, are not traversed;
+their implementation must sanitize nested HTML itself, or the site must not
+expose them through this API.
 
 Stored body blocks that this API version cannot safely edit are returned as
 ``{"type": "unsupported", "value": {"stored_type": "...", "position":
@@ -734,6 +813,8 @@ A stale base revision returns ``409 Conflict``:
       "edit_url": "/admin/pages/987/edit/"
     }
 
+.. _editor_api_publish:
+
 **Publish a draft post**::
 
     POST /api/editor/posts/{id}/publish/
@@ -742,9 +823,14 @@ Publishes the latest draft revision for an existing ``Post`` through Wagtail's
 revision publishing path. The caller must be authenticated, have Wagtail admin
 access, be able to edit the target page through the editor API, and have Wagtail
 publish permission for that page. The action does not accept a request body and
-does not use ``If-Match`` or ``base_revision_id`` in this API version; clients
-should ``GET`` the post immediately before presenting a publish action when they
-need to confirm the latest draft content.
+does not use ``base_revision_id`` in the request body. Clients may optionally
+send ``If-Match: "<latest_revision_id>"`` to bind the approval to the revision
+they reviewed. The header uses the same strict quoted-integer syntax and
+``validation_error`` response documented for ``PATCH`` above. A stale token
+returns the same ``409 revision_conflict`` envelope, and the newer revision is
+not published. When the header is omitted, the endpoint remains backwards
+compatible and publishes the latest revision found while holding the page-row
+lock.
 
 The success response is the normal editor post shape plus publish metadata:
 
@@ -871,9 +957,12 @@ The episode publish action mirrors the post publish action::
 
 It publishes the latest draft revision through Wagtail's revision publishing
 path, requires Wagtail admin access plus publish permission for the page, takes
-no request body, and returns the editor episode shape plus ``published_revision_id``
-and ``public_url``. Publishing an episode that is already live with no
-unpublished draft returns the ``no_unpublished_draft`` conflict, just like posts.
+no request body, and returns the editor episode shape plus
+``published_revision_id`` and ``public_url``. Like the post action, it accepts
+an optional ``If-Match: "<latest_revision_id>"`` header and returns the shared
+``revision_conflict`` envelope for a stale token. Publishing an episode that is
+already live with no unpublished draft returns the ``no_unpublished_draft``
+conflict, just like posts.
 
 Publishing requires a non-null ``podcast_audio`` (the same rule the Wagtail admin
 enforces). A publish request for an episode without ``podcast_audio`` is rejected

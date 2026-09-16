@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import inspect
-import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
@@ -12,9 +10,6 @@ if TYPE_CHECKING:
     from wagtail.models import Revision
 
     from cast.models import Episode, Podcast
-
-_PUBLISH_REVISION_PARAMETER_NAMES = ("revision", "object", "user", "changed", "log_action", "previous_revision")
-logger = logging.getLogger(__name__)
 
 
 def episode_type_consumes_number(episode_type: str) -> bool:
@@ -141,59 +136,3 @@ def assign_episode_number_for_publish(
         locked_podcast.next_episode_number = episode_number + 1
         locked_podcast.save(update_fields=["next_episode_number"])
         return episode_number
-
-
-def _validate_publish_revision_api(publish_revision: Any) -> None:
-    if publish_revision is None:
-        raise RuntimeError("Wagtail PublishRevisionAction._publish_revision is not available")
-    parameters = inspect.signature(publish_revision).parameters
-    missing_parameters = {"revision", "object", "previous_revision"} - set(parameters)
-    if missing_parameters:
-        missing = ", ".join(sorted(missing_parameters))
-        raise RuntimeError(f"Unsupported Wagtail PublishRevisionAction._publish_revision API; missing {missing}")
-    positional_parameters = tuple(name for name in parameters if name in _PUBLISH_REVISION_PARAMETER_NAMES)
-    if positional_parameters != _PUBLISH_REVISION_PARAMETER_NAMES:
-        raise RuntimeError("Unsupported Wagtail PublishRevisionAction._publish_revision positional parameter order")
-
-
-def _publish_revision_and_object(
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-) -> tuple[Revision, Any, Revision | None]:
-    arguments = dict(zip(_PUBLISH_REVISION_PARAMETER_NAMES, args, strict=False))
-    arguments.update(kwargs)
-    return arguments["revision"], arguments["object"], arguments.get("previous_revision")
-
-
-def install_episode_numbering_publish_hook() -> None:
-    from wagtail.actions.publish_revision import PublishRevisionAction
-
-    original = getattr(PublishRevisionAction, "_publish_revision", None)
-    if getattr(original, "_cast_episode_numbering_hook", False):
-        return
-    try:
-        # Wagtail 7.4 has no public pre-save publish hook that can update both
-        # the revision content and live object, so this private hook is guarded.
-        _validate_publish_revision_api(original)
-    except RuntimeError as error:
-        logger.warning("Automatic episode numbering publish hook was not installed: %s", error)
-        return
-    assert original is not None
-
-    def publish_revision_with_episode_numbering(
-        self: Any,
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
-        from cast.models import Episode
-
-        revision, object_to_publish, previous_revision = _publish_revision_and_object(args, kwargs)
-        if isinstance(object_to_publish, Episode):
-            with transaction.atomic():
-                assign_episode_number_for_publish(object_to_publish, revision, previous_revision=previous_revision)
-                return original(self, *args, **kwargs)
-        return original(self, *args, **kwargs)
-
-    setattr(publish_revision_with_episode_numbering, "_cast_episode_numbering_hook", True)
-    setattr(publish_revision_with_episode_numbering, "_cast_episode_numbering_original", original)
-    PublishRevisionAction._publish_revision = publish_revision_with_episode_numbering  # type: ignore[method-assign]

@@ -10,7 +10,6 @@ from cast.views.styleguide import (
     STYLEGUIDE_POST_SLUG_PREFIX,
 )
 
-
 pytestmark = [pytest.mark.django_db, pytest.mark.slow]
 
 

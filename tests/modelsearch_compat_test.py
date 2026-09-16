@@ -1,5 +1,5 @@
-from django.core.exceptions import ImproperlyConfigured
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 
 from cast.modelsearch_compat import MatchCondition, apply_modelsearch_sqlite_match_patch, build_match_condition
 

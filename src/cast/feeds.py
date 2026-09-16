@@ -1,11 +1,15 @@
 import logging
+from collections.abc import Callable
 from datetime import datetime, time
+from functools import update_wrapper
 from typing import Any, Protocol, cast
 
 import django
+from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.syndication.views import Feed
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.db.models import Model, QuerySet
-from django.http import Http404, HttpRequest
+from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.feedgenerator import (
     Atom1Feed,
     Rss201rev2Feed,
@@ -19,7 +23,7 @@ from wagtail.images.models import Image
 from cast import appsettings
 from cast.http_types import HtmxHttpRequest
 from cast.presenters import render_post_description
-from cast.site_lookup import get_site_specific_page_or_404
+from cast.site_lookup import get_site_specific_unrestricted_page_or_404
 
 from .models import Audio, Blog, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext
@@ -122,17 +126,32 @@ class RepositoryMixin(Feed):
         return queryset
 
     def get_feed(self, obj: Blog, request: HttpRequest) -> SyndicationFeed:
-        # If we want to cache the site to avoid one additional db query, we should do it here
+        # Fail with an actionable error before Django resolves feed URLs.
+        try:
+            get_current_site(request)
+        except ObjectDoesNotExist as exc:
+            raise ImproperlyConfigured(
+                "Feed generation requires a django.contrib.sites Site matching SITE_ID or the request host."
+            ) from exc
+
         blog = obj
         self.repository = repository = self.get_repository(self.request, blog)
         # now that we have the repository, we can set the template base dir
         # to avoid db queries in context_processors
         self.request.cast_site_template_base_dir = repository.template_base_dir
-        self._cache_site_for_feed(request)
         feed = super().get_feed(obj, request)
         # Pass repository to feed to be able to access it in PodcastIndexElements.
         cast(_RepositoryAwareFeed, feed).repository = repository
         return feed
+
+    def feed_url(self, _obj: Blog) -> str:
+        """Return the request-host URL without changing Django's configured Site."""
+        return self.request.build_absolute_uri(self.request.path)
+
+    def _absolute_for_request(self, url: str) -> str:
+        if hasattr(self, "request"):
+            return self.request.build_absolute_uri(url)
+        return url
 
     def item_description(self, item: Post) -> SafeText:
         repository = None
@@ -159,22 +178,14 @@ class RepositoryMixin(Feed):
     def item_updateddate(self, item: Post) -> datetime:
         return item.last_published_at
 
-    @staticmethod
-    def _cache_site_for_feed(request: HttpRequest) -> None:
-        from django.conf import settings
-        from django.contrib.sites import models as sites_models
-        from django.contrib.sites.models import Site as DjangoSite
 
-        site_id = getattr(settings, "SITE_ID", None)
-        if site_id is None:
-            return
-        if site_id in sites_models.SITE_CACHE:
-            return
-        if hasattr(request, "get_host"):
-            domain = request.get_host()
-        else:
-            domain = "localhost"
-        sites_models.SITE_CACHE[site_id] = DjangoSite(id=site_id, domain=domain, name=domain)
+def request_local_feed(feed_class: type[RepositoryMixin]) -> Callable[..., HttpResponse]:
+    """Return a view that creates one mutable feed instance for each cache miss."""
+
+    def view(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        return feed_class()(request, *args, **kwargs)
+
+    return update_wrapper(view, feed_class, updated=())
 
 
 class AtomStylesheetsMixin:
@@ -223,7 +234,7 @@ class LatestEntriesFeed(RepositoryMixin):
             if not self.repository.used:
                 blog = self.repository.blog
         if blog is None:
-            blog = get_site_specific_page_or_404(Blog, request, slug=slug)
+            blog = get_site_specific_unrestricted_page_or_404(Blog, request, slug=slug)
         self.object = blog
         return self.object
 
@@ -235,8 +246,10 @@ class LatestEntriesFeed(RepositoryMixin):
 
     def link(self) -> str:
         if self.repository is not None:
-            return self.repository.blog_url
-        return self.object.get_full_url()
+            url = self.repository.blog_url
+        else:
+            url = self.object.get_full_url()
+        return self._absolute_for_request(url)
 
     def item_title(self, post: Model) -> str:
         assert isinstance(post, Post)
@@ -458,15 +471,17 @@ class PodcastFeed(RepositoryMixin):
             if not self.repository.used and isinstance(self.repository.blog, Podcast):
                 blog = self.repository.blog
         if blog is None:
-            blog = get_site_specific_page_or_404(Podcast, request, slug=slug)
+            blog = get_site_specific_unrestricted_page_or_404(Podcast, request, slug=slug)
         self.object = blog
         self.request = cast(HtmxHttpRequest, request)  # need request for item.serve(request) later on
         return self.object
 
     def link(self) -> str:
         if self.repository is not None:
-            return self.repository.blog_url
-        return self.object.get_full_url()
+            url = self.repository.blog_url
+        else:
+            url = self.object.get_full_url()
+        return self._absolute_for_request(url)
 
     def title(self, _blog: Blog) -> str:
         return self.object.title
@@ -524,8 +539,11 @@ class AtomPodcastFeed(PodcastFeed):
         return blog.email
 
     def link(self) -> str:
-        """atom link is still wrong, dunno why FIXME"""
-        return self.object.get_full_url()
+        return super().link()
+
+    def feed_guid(self, _blog: Blog) -> str:
+        """Keep the Atom feed identity stable across allowed host aliases."""
+        return cast(str, self.object.get_full_url())
 
 
 class RssPodcastFeed(PodcastFeed):

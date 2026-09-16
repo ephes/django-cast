@@ -1,6 +1,5 @@
 from django.apps import AppConfig
 
-
 # Apps required by django-cast
 CAST_APPS = [
     # Form styling
@@ -52,10 +51,8 @@ class CastConfig(AppConfig):
         from . import checks  # noqa: F401 — registers @register("cast") decorators
         from .appsettings import init_cast_settings
         from .modelsearch_compat import apply_modelsearch_sqlite_match_patch
-        from .podcast_numbering import install_episode_numbering_publish_hook
-        from .post_media import install_post_media_publish_handler
+        from .publication import install_publication_policy
 
         apply_modelsearch_sqlite_match_patch()
         init_cast_settings()
-        install_episode_numbering_publish_hook()
-        install_post_media_publish_handler()
+        install_publication_policy()

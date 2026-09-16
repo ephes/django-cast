@@ -81,6 +81,9 @@ tests/media/
 tests/private-media/
 tests/*.sqlite3
 
+# collectstatic target for the test settings
+tests/staticfiles/
+
 # local databases
 db.sqlite3
 tests/test_database.sqlite3

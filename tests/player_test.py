@@ -4,7 +4,6 @@ import logging
 from datetime import timedelta
 
 import pytest
-from django.test import RequestFactory
 from django.urls import reverse
 
 from cast import appsettings
@@ -21,11 +20,6 @@ from cast.player import (
     build_sources,
     parse_chapter_start_seconds,
 )
-
-
-@pytest.fixture()
-def rf_request():
-    return RequestFactory().get("/")
 
 
 class TestParseChapterStartSeconds:
@@ -409,8 +403,7 @@ class TestFallbackEndpoint:
         create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
         response = client.get(self._url(audio), {"post_id": episode.pk})
         assert response.status_code == 200
-        assert "max-age" in response["Cache-Control"]
-        assert "public" in response["Cache-Control"]
+        assert response["Cache-Control"] == "public, max-age=30, must-revalidate"
         assert response["ETag"]
 
     def test_304_on_matching_if_none_match(self, client, audio, episode):
@@ -421,6 +414,7 @@ class TestFallbackEndpoint:
         assert again.status_code == 304
         assert again.content == b""
         assert again["ETag"] == etag
+        assert again["Cache-Control"] == "public, max-age=30, must-revalidate"
 
 
 class TestContextFlags:

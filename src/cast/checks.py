@@ -11,8 +11,8 @@ from django.conf import settings
 from django.core.checks import Error, Warning, register
 
 from cast import appsettings
-from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.apps import CAST_MIDDLEWARE
+from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.post_body_blocks import validate_post_body_block_setting
 
 # Source extensions to consider
@@ -194,8 +194,7 @@ def check_cast_comments_author_edits_session_backend(
     would travel in the client cookie (readable, non-revocable). The feature is
     optional, so this is a hard requirement with no opt-out.
     """
-    from cast.comments import appsettings as comment_appsettings
-    from cast.comments import author_edits
+    from cast.comments import appsettings as comment_appsettings, author_edits
 
     if comment_appsettings.ALLOW_AUTHOR_EDITS and author_edits.uses_signed_cookie_sessions():
         return [
@@ -300,5 +299,62 @@ def check_cast_required_middleware(
             f"settings.MIDDLEWARE is missing required django-cast middleware: {missing_middleware_str}.",
             hint="Add all entries from cast.apps.CAST_MIDDLEWARE to settings.MIDDLEWARE.",
             id="cast.E003",
+        )
+    ]
+
+
+@register("cast")
+def check_publication_policy_installed(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Ensure the guarded Wagtail publication boundary was installed."""
+    from cast.publication import publication_policy_installed
+
+    if publication_policy_installed():
+        return []
+    return [
+        Error(
+            "The django-cast publication policy hook is not installed, so publication rules are not enforced.",
+            hint="Use a supported Wagtail version and inspect startup logs for the publication hook warning.",
+            id="cast.E010",
+        )
+    ]
+
+
+@register("cast")
+def check_voxhelm_transcripts_task_backend(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Require the ``cast_transcripts`` TASKS backend once Voxhelm is configured.
+
+    ``cast.voxhelm_tasks`` resolves that backend at import time, so without it the
+    first transcript enqueue fails after the remote job was already submitted.
+    Only the Django-settings and environment layers are inspected: reading the
+    site-scoped ``Voxhelm settings`` model would need database access, which
+    system checks must not require.
+    """
+    # Imported lazily so ``django.setup()`` (which runs ``CastConfig.ready()``)
+    # does not pull in the voxhelm package.
+    from cast.voxhelm.settings import voxhelm_configured
+
+    if not voxhelm_configured():
+        return []
+    if "cast_transcripts" in getattr(settings, "TASKS", {}):
+        return []
+    return [
+        Error(
+            'Voxhelm is configured but settings.TASKS has no "cast_transcripts" backend, '
+            "so queueing transcript completion will fail.",
+            hint=(
+                'Add a "cast_transcripts" entry to settings.TASKS as described in the '
+                '"Transcript Worker" section of the deployment documentation. This check only '
+                "reads Django settings and environment variables, so a site that configures "
+                "Voxhelm solely through Wagtail 'Voxhelm settings' needs the backend as well."
+            ),
+            id="cast.E009",
         )
     ]

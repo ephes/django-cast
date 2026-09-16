@@ -22,6 +22,12 @@ The navbar RSS icon links to this page instead of the raw XML feed. Custom
 themes without a ``feed_detail.html`` template automatically fall back to the
 plain theme.
 
+Feed XML endpoints use shared response caches, and the feed detail page is also
+public. These endpoints are available only for live blogs and podcasts without
+Wagtail login, password, or group restrictions on the page or any ancestor.
+Restricted pages return 404; django-cast does not expose authenticated private
+feeds.
+
 The template receives the following context variables:
 
 - ``blog`` — the Blog or Podcast instance
@@ -191,6 +197,19 @@ Performance Features
 - **Prefetch Optimization**: Single query retrieves all feed data
 - **Lazy Loading**: Large content fields loaded on-demand
 - **Conditional GET**: Support for If-Modified-Since headers
+
+Host and Site Configuration
+---------------------------
+
+Feed self URLs and relative channel links use the request host validated by
+Django's ``ALLOWED_HOSTS``, which supports sites served from more than one
+configured hostname. Cached feed responses are scoped to that host. Item URLs
+continue to follow Wagtail site routing. Feed rendering does not replace
+Django's process-wide current ``Site`` with request data. When
+``django.contrib.sites`` is installed, ``SITE_ID`` must identify an existing
+``django_site`` row (or, without ``SITE_ID``, the request host must match one);
+otherwise feed generation raises an explicit configuration error. Without the
+Sites app, Django's request-local ``RequestSite`` fallback is preserved.
 
 API Access
 ==========

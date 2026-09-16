@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 
 from django.core.exceptions import ValidationError
+from django.db.models.fields.files import FieldFile
 from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,19 +13,21 @@ from django.template.loader import get_template
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin import messages
-from wagtail.permission_policies.collections import CollectionPermissionPolicy
 from wagtail.search.backends import get_search_backends
 
+from ..audio_access import authorize_transcript_access, request_may_view_page
 from ..forms import (
     KNOWN_SPEAKER_APPLY_ACTION,
     KNOWN_SPEAKER_REVIEW_ACTION,
+    SPEAKER_MAPPING_ACTION,
+    VOICE_REFERENCE_CREATE_ACTION,
     KnownSpeakerSegmentReviewForm,
     SpeakerContributorMappingForm,
-    SPEAKER_MAPPING_ACTION,
     TranscriptForm,
     VoiceReferenceCandidateCreateForm,
-    VOICE_REFERENCE_CREATE_ACTION,
 )
+from ..media_ingest import TRANSCRIPT_POLICY, ingest_upload
+from ..media_permissions import transcript_permission_policy
 from ..models import (
     Blog,
     Contributor,
@@ -36,11 +39,8 @@ from ..models import (
     TranscriptVoiceReferenceCandidate,
     get_template_base_dir,
 )
-from ..audio_access import authorize_transcript_access, request_may_view_page
 from ..models.contributors import ContributorVoiceReference
 from ..site_lookup import get_site_specific_page_or_404
-from ..transcripts import editing, parsing
-from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
 from ..transcript_sanitization import (
     apply_public_speaker_mapping_to_dote_data,
     apply_public_speaker_mapping_to_podlove_data,
@@ -51,12 +51,12 @@ from ..transcript_sanitization import (
     sanitize_webvtt_content,
     strict_public_speaker_labels_for_transcript,
 )
+from ..transcripts import editing, parsing
+from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .media import MediaAdminConfig, MediaAdminViews
 
-
 TRANSCRIPT_FALLBACK_THEME = "plain"
-transcript_permission_policy = CollectionPermissionPolicy(Transcript)
 
 create_voice_reference_from_candidate = editing.create_voice_reference_from_candidate
 get_speaker_mapping_context = editing.get_speaker_mapping_context
@@ -293,11 +293,19 @@ def _handle_known_speaker_apply(
     transcript: Transcript,
     speaker_mapping_context: editing.SpeakerMappingContext,
 ) -> HttpResponse | EditFormState:
-    applied = transcript.apply_known_speaker_suggestions()
+    # The quick action promises to apply confident suggestions only. Do not
+    # smooth uncertain gaps here: a rapid speaker hand-off can sit between two
+    # confident segments from the same person, and carrying that name across
+    # would silently publish a wrong attribution. Editors can resolve uncertain
+    # rows explicitly in the segment review form.
+    applied = transcript.apply_known_speaker_suggestions(smooth=False)
     if applied:
         messages.success(
             request,
-            _("Applied known-speaker names to {0} public transcript entries.").format(applied),
+            _(
+                "Applied known-speaker names to {0} public transcript entries. "
+                "Uncertain segments were left unchanged for review."
+            ).format(applied),
         )
     else:
         messages.warning(request, _("No confident known-speaker suggestions were available to apply."))
@@ -413,7 +421,7 @@ def _handle_transcript_form_save(
     speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
     form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
     if form.is_valid():
-        transcript = form.save()
+        transcript = ingest_upload(form, policy=TRANSCRIPT_POLICY)
 
         # Reindex the media entry to make sure all tags are indexed
         for backend in get_search_backends():
@@ -526,6 +534,10 @@ transcript_admin_config = MediaAdminConfig(
     deleted_message=_("Transcript '{0}' deleted."),
     chooser_upload_error_message=_("The transcript could not be saved due to errors."),
     message_arg=_transcript_message_arg,
+    ingest_policy=lambda: TRANSCRIPT_POLICY,
+    upload_in_progress_message=_("Another upload is already in progress."),
+    probe_timeout_message=_("Media probing exceeded the upload budget."),
+    probe_failed_message=_("Media probing failed."),
 )
 
 _views = MediaAdminViews(transcript_admin_config)
@@ -550,17 +562,27 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     return _views.chooser_upload(request)
 
 
+def _read_transcript_artifact(field: FieldFile) -> str | None:
+    """Return the artifact content or None if the field has a name but no file in storage."""
+    try:
+        with field.open("r") as file:
+            return cast(str, file.read())
+    except OSError:
+        return None
+
+
 def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
     authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if transcript.podlove:
-        # Open the file and load its contents as JSON
-        with transcript.podlove.open("r") as file:
-            try:
-                data = json.load(file)  # assumes the file content is JSON
-            except json.JSONDecodeError:
-                return HttpResponse("Invalid JSON format in podlove file", status=400)
+        content = _read_transcript_artifact(transcript.podlove)
+        if content is None:
+            return HttpResponse("Podlove file missing", status=404)
+        try:
+            data = json.loads(content)  # assumes the file content is JSON
+        except json.JSONDecodeError:
+            return HttpResponse("Invalid JSON format in podlove file", status=400)
         episode = public_episode_from_request(request, transcript=transcript)
         data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
         data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
@@ -574,22 +596,22 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if not transcript.dote:
         return HttpResponse("podcastindex JSON file not available", status=404)
-    try:
-        episode = public_episode_from_request(request, transcript=transcript)
-        with transcript.dote.open("r") as file:
-            dote_data = json.load(file)
-        if not dote_data:
-            return JsonResponse(dote_data)
-        dote_data = apply_public_speaker_mapping_to_dote_data(dote_data, transcript, episode=episode)
-        dote_data = sanitize_dote_data(
-            dote_data,
-            strict_public_speaker_labels_for_transcript(transcript, episode=episode),
-        )
-        return JsonResponse(convert_dote_to_podcastindex_transcript(dote_data))
-    except (FileNotFoundError, OSError):
+    content = _read_transcript_artifact(transcript.dote)
+    if content is None:
         return HttpResponse("podcastindex JSON file missing", status=404)
+    episode = public_episode_from_request(request, transcript=transcript)
+    try:
+        dote_data = json.loads(content)
     except json.JSONDecodeError:
         return HttpResponse("Invalid JSON format in dote file", status=400)
+    if not dote_data:
+        return JsonResponse(dote_data)
+    dote_data = apply_public_speaker_mapping_to_dote_data(dote_data, transcript, episode=episode)
+    dote_data = sanitize_dote_data(
+        dote_data,
+        strict_public_speaker_labels_for_transcript(transcript, episode=episode),
+    )
+    return JsonResponse(convert_dote_to_podcastindex_transcript(dote_data))
 
 
 def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
@@ -597,9 +619,9 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
     transcript = get_object_or_404(Transcript, pk=pk)
     authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
     if transcript.vtt:
-        # Open the file and return its contents as WebVTT
-        with transcript.vtt.open("r") as file:
-            content = file.read()
+        content = _read_transcript_artifact(transcript.vtt)
+        if content is None:
+            return HttpResponse("WebVTT file missing", status=404)
         episode = public_episode_from_request(request, transcript=transcript)
         content = apply_public_speaker_mapping_to_webvtt_content(content, transcript, episode=episode)
         content = sanitize_webvtt_content(

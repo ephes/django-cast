@@ -8,11 +8,20 @@ import pytest
 from django.core.checks import Warning
 from django.core.checks.registry import registry
 
-from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.apps import CAST_MIDDLEWARE
-from cast.checks import CAST_SETTING_TYPES, _find_stale_assets, _newest_source_mtime, check_asset_freshness
-from cast.checks import check_cast_comments_ordering, check_cast_required_middleware, check_cast_setting_types
-from cast.checks import check_post_body_block_setting
+from cast.appsettings import CAST_SETTING_REGISTRY
+from cast.checks import (
+    CAST_SETTING_TYPES,
+    _find_stale_assets,
+    _newest_source_mtime,
+    check_asset_freshness,
+    check_cast_comments_ordering,
+    check_cast_required_middleware,
+    check_cast_setting_types,
+    check_post_body_block_setting,
+    check_publication_policy_installed,
+    check_voxhelm_transcripts_task_backend,
+)
 
 
 @pytest.fixture()
@@ -162,6 +171,7 @@ class TestCheckCastSettingTypes:
             ("CAST_REPOSITORY", str),
             ("CAST_PODLOVE_PLAYER_THEMES", dict),
             ("CAST_AUDIO_PLAYER", str),
+            ("CAST_TRANSCRIPT_UPLOAD_MAX_BYTES", int),
         )
         derived = tuple(
             (name, setting.check_type)
@@ -315,6 +325,74 @@ class TestCheckCastConfiguration:
         assert errors[0].id == "cast.E003"
         for middleware_entry in CAST_MIDDLEWARE:
             assert middleware_entry in errors[0].msg
+
+
+class TestVoxhelmTranscriptsTaskBackendCheck:
+    """cast.E009 — a configured Voxhelm needs the ``cast_transcripts`` TASKS backend.
+
+    No ``django_db`` marker on purpose: the check must not touch the database, so
+    pytest-django's database block also guards that promise.
+    """
+
+    IMMEDIATE = {"default": {"BACKEND": "django_tasks.backends.immediate.ImmediateBackend"}}
+
+    @staticmethod
+    def _configure_voxhelm(settings):
+        settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example.com"
+        settings.CAST_VOXHELM_API_KEY = "token"
+
+    def test_no_error_when_voxhelm_is_not_configured(self, settings, monkeypatch):
+        monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+        monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+        settings.CAST_VOXHELM_API_BASE = ""
+        settings.CAST_VOXHELM_API_KEY = ""
+        settings.TASKS = self.IMMEDIATE
+
+        assert check_voxhelm_transcripts_task_backend() == []
+
+    def test_no_error_when_transcripts_backend_is_configured(self, settings):
+        self._configure_voxhelm(settings)
+
+        # tests/settings.py already routes a "cast_transcripts" backend.
+        assert check_voxhelm_transcripts_task_backend() == []
+
+    def test_error_when_transcripts_backend_is_missing(self, settings):
+        self._configure_voxhelm(settings)
+        settings.TASKS = self.IMMEDIATE
+
+        errors = check_voxhelm_transcripts_task_backend()
+
+        assert [error.id for error in errors] == ["cast.E009"]
+        assert "cast_transcripts" in errors[0].msg
+        assert "Transcript Worker" in errors[0].hint
+
+
+class TestPublicationPolicyCheck:
+    def test_check_is_registered(self):
+        assert check_publication_policy_installed in registry.get_checks(include_deployment_checks=False)
+
+    def test_no_error_when_publication_policy_is_installed(self):
+        assert check_publication_policy_installed() == []
+
+    def test_error_when_publication_policy_is_not_installed(self, mocker):
+        from wagtail.actions.publish_revision import PublishRevisionAction
+
+        mocker.patch.object(PublishRevisionAction, "_publish_revision", None)
+
+        errors = check_publication_policy_installed()
+
+        assert [error.id for error in errors] == ["cast.E010"]
+        assert "publication policy hook is not installed" in errors[0].msg
+        assert "startup logs" in errors[0].hint
+
+    def test_error_when_wagtail_publish_action_is_unavailable(self, monkeypatch):
+        from wagtail.actions import publish_revision
+
+        monkeypatch.delattr(publish_revision, "PublishRevisionAction")
+
+        errors = check_publication_policy_installed()
+
+        assert [error.id for error in errors] == ["cast.E010"]
 
 
 def test_system_check_is_registered():

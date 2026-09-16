@@ -1,7 +1,7 @@
 """Legacy django-cast API surface with frozen response contracts.
 
 This module intentionally preserves its existing response shapes for current
-clients, including ``VideoCreateView`` returning a bare-text ``"<pk>"`` body with
+clients, including ``cast.api.editor.media.LegacyVideoCreateView`` returning a bare-text ``"<pk>"`` body with
 ``201 Created``. New clients should use ``cast.api.editor.*`` endpoints, which
 provide structured errors, scoped authorization, and ``If-Match`` revision
 conflict handling. This freeze follows the 2026-06-25 media-detail plan.
@@ -13,15 +13,14 @@ import logging
 from collections import OrderedDict
 from typing import Any, cast
 
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.cache import patch_cache_control, patch_vary_headers
-from django.views.generic import CreateView
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
@@ -34,8 +33,9 @@ from wagtail.models import Site
 
 from ..audio_access import authorize_audio_access, page_grants_audio_access, page_is_unrestricted_public
 from ..filters import PostFilterset
-from ..forms import SelectThemeForm, VideoForm
+from ..forms import SelectThemeForm
 from ..http_types import HtmxHttpRequest
+from ..modal_facet_counts import get_modal_facet_counts
 from ..models import (
     Audio,
     Blog,
@@ -45,11 +45,11 @@ from ..models import (
     get_template_base_dir,
     get_template_base_dir_choices,
 )
-from ..modal_facet_counts import get_modal_facet_counts
 from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
 from ..search_suggestions import get_search_suggestions
 from ..views.theme import set_template_base_dir
+from .editor.scopes import HasEditorScope
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -57,7 +57,6 @@ from .serializers import (
     SimpleBlogSerializer,
     VideoSerializer,
 )
-from .viewmixins import AddRequestUserMixin, FileUploadResponseMixin
 
 logger = logging.getLogger(__name__)
 
@@ -82,19 +81,13 @@ def api_root(request: Request) -> Response:
     return Response(OrderedDict(root_api_urls))
 
 
-class VideoCreateView(LoginRequiredMixin, AddRequestUserMixin, FileUploadResponseMixin, CreateView):  # type: ignore
-    model = Video
-    form_class = VideoForm
-    user_field_name = "user"
-
-
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 40
     page_size_query_param = "pageSize"
     max_page_size = 200
 
 
-class VideoListView(generics.ListCreateAPIView):
+class VideoListView(generics.ListAPIView):
     serializer_class = VideoSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
@@ -107,14 +100,24 @@ class VideoListView(generics.ListCreateAPIView):
 
 class VideoDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = VideoSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, HasEditorScope)
+    required_scopes = {"GET": None, "DELETE": "delete"}
 
     def get_queryset(self) -> QuerySet[Video]:
         user = self.request.user
         return Video.objects.filter(user=user)
 
+    def perform_destroy(self, instance: Video) -> None:
+        from .editor.media import video_permission_policy
 
-class AudioListView(generics.ListCreateAPIView):
+        if not self.request.user.has_perm(
+            "wagtailadmin.access_admin"
+        ) or not video_permission_policy.user_has_permission_for_instance(self.request.user, "delete", instance):
+            raise PermissionDenied("You do not have permission to delete this video.")
+        instance.delete()
+
+
+class AudioListView(generics.ListAPIView):
     serializer_class = AudioSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
@@ -127,11 +130,21 @@ class AudioListView(generics.ListCreateAPIView):
 
 class AudioDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = AudioSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticated, HasEditorScope)
+    required_scopes = {"GET": None, "DELETE": "delete"}
 
     def get_queryset(self) -> QuerySet[Audio]:
         user = self.request.user
         return Audio.objects.filter(user=user)
+
+    def perform_destroy(self, instance: Audio) -> None:
+        from .editor.media import audio_permission_policy
+
+        if not self.request.user.has_perm(
+            "wagtailadmin.access_admin"
+        ) or not audio_permission_policy.user_has_permission_for_instance(self.request.user, "delete", instance):
+            raise PermissionDenied("You do not have permission to delete this audio.")
+        instance.delete()
 
 
 class AudioPodloveDetailView(generics.RetrieveAPIView):
@@ -193,11 +206,12 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
         payload = build_player_payload(audio, post=post, request=request, inline_transcript=False)
         cues = payload["transcript"]["cues"]
 
-        # Cache so re-opening the transcript after navigation doesn't refetch.
         # A strong ETag over the *sanitized* cues stays correct across transcript
-        # edits and contributor/speaker-mapping changes; Cache-Control lets the
-        # browser serve from its HTTP cache within the window (no request), and a
-        # cheap 304 covers revalidation after it. The content is already public.
+        # edits and contributor/speaker-mapping changes. Public responses get a
+        # short freshness window: transcript labels are editorial content, so
+        # serving an hour-old attribution is not acceptable, while immediate
+        # repeat opens should not rebuild the full sanitized payload. Revalidation
+        # returns a small 304 response when the cues are unchanged.
         serialized = json.dumps(cues, ensure_ascii=False, sort_keys=True)
         etag = f'"{hashlib.sha256(serialized.encode("utf-8")).hexdigest()}"'
         if_none_match = request.headers.get("If-None-Match", "")
@@ -214,7 +228,7 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
     def _set_cache_headers(response: Response, post: Post) -> None:
         specific = getattr(post, "specific", post)
         if page_is_unrestricted_public(specific):
-            response["Cache-Control"] = "public, max-age=3600, stale-while-revalidate=86400"
+            response["Cache-Control"] = "public, max-age=30, must-revalidate"
             return
         response["Cache-Control"] = "private, no-store"
         patch_vary_headers(response, ("Cookie", "Authorization"))

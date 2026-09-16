@@ -171,6 +171,7 @@ class TestFeedDetailRoutingNonConflict:
         content = response.content.decode()
         assert "Site 1 Post" in content
         assert "Site 2 Post" not in content
+        assert f"http://{site1.hostname}{url}" in content
 
     def test_podcast_feed_uses_current_site_for_duplicate_podcast_slug(self, client, user, audio, body):
         site1, site1_root = create_site_root(
@@ -196,6 +197,7 @@ class TestFeedDetailRoutingNonConflict:
         content = response.content.decode()
         assert "Episode 1" in content
         assert "Episode 2" not in content
+        assert f"http://{site1.hostname}{url}" in content
 
 
 class TestFeedDetailTemplateSelection:

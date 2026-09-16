@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from io import BytesIO
 import json
 import re
+from dataclasses import dataclass
+from datetime import datetime
 from html.parser import HTMLParser
-from typing import Any, cast
+from io import BytesIO
 from types import SimpleNamespace
+from typing import Any, cast
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 from django.conf import settings
-from django.contrib.auth.models import Group
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
@@ -24,8 +23,7 @@ from django.template.loader import get_template
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from PIL import Image as PilImage
-from wagtail.images.models import Image
-from wagtail.images.models import Rendition
+from wagtail.images.models import Image, Rendition
 from wagtail.models import Page, Site
 
 from cast import appsettings
@@ -43,6 +41,7 @@ from cast.devdata import (
     create_video,
 )
 from cast.filters import get_active_facets, has_active_filters
+from cast.media_derivation import save_audio_with_derivations, save_transcript_with_derivations
 from cast.models import (
     Audio,
     Blog,
@@ -63,7 +62,7 @@ from cast.models.image_renditions import (
 )
 from cast.models.repository import BlogIndexContext
 from cast.post_media import prepare_post_media
-from cast.media_derivation import save_audio_with_derivations, save_transcript_with_derivations
+
 from .htmx_helpers import HtmxHttpRequest
 
 STYLEGUIDE_BLOG_SLUG = "styleguide-blog"
@@ -794,8 +793,8 @@ def _ensure_styleguide_comments(post: Post, *, site: Site, user: User) -> None:
     if not post.get_comments_are_enabled(post.blog):
         return
 
-    from django_comments import get_model as get_comment_model
     from django.contrib.sites.models import Site as DjangoSite
+    from django_comments import get_model as get_comment_model
 
     comment_model = get_comment_model()
     ctype = ContentType.objects.get_for_model(post)

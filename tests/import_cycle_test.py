@@ -97,3 +97,24 @@ def test_models_do_not_import_presentation_block_or_filter_modules():
                 violations.append(f"{path.relative_to(SRC_ROOT)}:{lineno}: {resolved_name}")
 
     assert not violations, "cast.models must use neutral schema/query modules:\n" + "\n".join(violations)
+
+
+def test_publication_module_owns_wagtail_publication_boundaries():
+    owner = SRC_ROOT / "cast" / "publication.py"
+    violations = []
+    for path in sorted((SRC_ROOT / "cast").rglob("*.py")):
+        if path == owner:
+            continue
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for lineno, resolved_name in iter_resolved_imports(path):
+            if resolved_name == "wagtail.actions.publish_revision" or resolved_name.startswith(
+                "wagtail.actions.publish_revision."
+            ):
+                violations.append(f"{path.relative_to(SRC_ROOT)}:{lineno}: imports {resolved_name}")
+            if resolved_name == "wagtail.signals.page_published":
+                violations.append(f"{path.relative_to(SRC_ROOT)}:{lineno}: imports {resolved_name}")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr == "page_published":
+                violations.append(f"{path.relative_to(SRC_ROOT)}:{node.lineno}: references page_published")
+
+    assert not violations, "cast.publication must own Wagtail publication boundaries:\n" + "\n".join(violations)
