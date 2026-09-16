@@ -2,13 +2,14 @@ import pytest
 from django.test import override_settings
 from wagtail import blocks
 
-from cast.api.editor.body import _media_ref_is_available, author_blocks_to_section
+from cast.api.editor.body import SUPPORTED_BODY_BLOCKS, _media_ref_is_available, author_blocks_to_section
 from cast.api.editor.errors import EditorValidationError
 from cast.content.blocks import (
     UNSUPPORTED,
     AudioConverter,
     CodeConverter,
     ConversionContext,
+    GalleryConverter,
     GenericBlockConverter,
     ImageConverter,
     ParagraphConverter,
@@ -16,13 +17,18 @@ from cast.content.blocks import (
     content_converters,
 )
 from cast.content.errors import ErrorCollector
+from cast.post_body_blocks import DEFAULT_CONTENT_BLOCK_NAMES
 
 
-def test_content_converters_without_section_returns_partial_builtins_only():
+def test_content_converters_without_section_returns_all_builtins_only():
     converters = content_converters(None)
 
-    assert set(converters) == {"paragraph", "embed", "code", "image", "audio", "video"}
+    assert set(converters) == set(DEFAULT_CONTENT_BLOCK_NAMES)
     assert all(converters[name].name == name for name in converters)
+
+
+def test_supported_body_blocks_are_derived_from_editable_builtin_converters():
+    assert SUPPORTED_BODY_BLOCKS == frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
 
 
 @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})
@@ -124,3 +130,50 @@ def test_missing_converter_cannot_reinterpret_a_supported_type_as_gallery(mocker
     assert exc_info.value.error_map == {
         "overview.0.type": [{"code": "unsupported_block_type", "message": "Block type 'code' is not supported."}]
     }
+
+
+def test_gallery_converter_writes_curated_stream_value(mocker):
+    resolver = mocker.patch("cast.content.blocks.get_choosable_image", return_value=object())
+    mocker.patch("cast.content.blocks.uuid4", side_effect=["first", "second"])
+    converter = GalleryConverter()
+    ctx = ConversionContext(section="overview", user="user")
+    errors = ErrorCollector()
+
+    assert converter.to_stream([{"id": 3}, {"id": 5}], ctx=ctx, path="overview.0.value", errors=errors) == {
+        "layout": "default",
+        "gallery": [
+            {"id": "first", "type": "item", "value": 3},
+            {"id": "second", "type": "item", "value": 5},
+        ],
+    }
+    assert not errors
+    assert resolver.call_args_list == [mocker.call(3, "user"), mocker.call(5, "user")]
+
+
+def test_gallery_converter_aggregates_inaccessible_images(mocker):
+    mocker.patch("cast.content.blocks.get_choosable_image", return_value=None)
+    errors = ErrorCollector()
+
+    assert (
+        GalleryConverter().to_stream(
+            [{"id": 3}, {"id": 5}],
+            ctx=ConversionContext(section="overview", user="user"),
+            path="overview.0.value",
+            errors=errors,
+        )
+        is None
+    )
+    assert errors.error_map == {
+        "overview.0.value.0.id": [{"code": "not_found", "message": "Image 3 does not exist or is not accessible."}],
+        "overview.0.value.1.id": [{"code": "not_found", "message": "Image 5 does not exist or is not accessible."}],
+    }
+
+
+def test_gallery_converter_read_skips_filter_without_user_and_rejects_inaccessible(mocker):
+    resolver = mocker.patch("cast.content.blocks.get_choosable_image", return_value=None)
+    converter = GalleryConverter()
+    value = {"layout": "default", "gallery": [{"type": "item", "value": 3}]}
+
+    assert converter.to_author(value, ctx=ConversionContext(section="overview", user=None)) == [{"id": 3}]
+    assert converter.to_author(value, ctx=ConversionContext(section="overview", user="user")) is UNSUPPORTED
+    resolver.assert_called_once_with(3, "user")

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -27,7 +26,7 @@ from ...content.media_refs import (
 from ...post_body_blocks import POST_BODY_SECTIONS
 from .errors import EditorValidationError
 
-SUPPORTED_BODY_BLOCKS = frozenset({"paragraph", "code", "image", "gallery", "audio", "video"})
+SUPPORTED_BODY_BLOCKS = frozenset(name for name, converter in content_converters(None).items() if converter.editable)
 SUPPORTED_OVERVIEW_BLOCKS = SUPPORTED_BODY_BLOCKS
 
 
@@ -173,33 +172,7 @@ def author_blocks_to_section(
                 result.append({"type": block_type, "value": prepared})
             continue
 
-        if block_type not in SUPPORTED_BODY_BLOCKS:
-            errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
-            continue
-
-        if block_type != "gallery":
-            errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
-            continue
-
-        if not isinstance(value, list) or not value:
-            errors.add(f"{base}.value", "invalid", "Gallery value must be a non-empty list of image refs.")
-            continue
-        items = []
-        gallery_ok = True
-        for img_index, ref in enumerate(value):
-            image_id = ref.get("id") if isinstance(ref, dict) else None
-            if not image_choosable_by(image_id, user):
-                errors.add(
-                    f"{base}.value.{img_index}.id",
-                    "not_found",
-                    f"Image {image_id} does not exist or is not accessible.",
-                )
-                gallery_ok = False
-                continue
-            items.append({"id": str(uuid.uuid4()), "type": "item", "value": image_id})
-        if not gallery_ok:
-            continue
-        result.append({"type": "gallery", "value": {"layout": "default", "gallery": items}})
+        errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
 
     if errors:
         raise EditorValidationError(errors.error_map)
@@ -246,20 +219,6 @@ def section_to_author_blocks(
                 author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
             else:
                 author.append({"type": block_type, "value": author_value})
-        elif block_type == "gallery":
-            items = value.get("gallery", []) if isinstance(value, dict) else []
-            if (
-                isinstance(items, list)
-                and len(items) > 0
-                and all(isinstance(item, dict) and "value" in item for item in items)
-                and (
-                    user is None
-                    or all(image_choosable_by(item["value"], user) for item in items if isinstance(item, dict))
-                )
-            ):
-                author.append({"type": "gallery", "value": [{"id": item["value"]} for item in items]})
-            else:
-                author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
         else:
             author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
     return author

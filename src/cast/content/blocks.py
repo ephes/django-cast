@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+from uuid import uuid4
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from wagtail.blocks import Block
@@ -222,6 +223,44 @@ class VideoConverter(MediaRefConverter):
         )
 
 
+@dataclass(frozen=True)
+class GalleryConverter:
+    name: str = "gallery"
+    editable: bool = True
+
+    def to_stream(self, value: Any, *, ctx: ConversionContext, path: str, errors: ErrorCollector) -> Any | None:
+        if not isinstance(value, list) or not value:
+            errors.add(path, "invalid", "Gallery value must be a non-empty list of image refs.")
+            return None
+        items = []
+        valid = True
+        for index, ref in enumerate(value):
+            image_id = ref.get("id") if isinstance(ref, dict) else None
+            if get_choosable_image(image_id, ctx.user) is None:
+                errors.add(
+                    f"{path}.{index}.id",
+                    "not_found",
+                    f"Image {image_id} does not exist or is not accessible.",
+                )
+                valid = False
+                continue
+            items.append({"id": str(uuid4()), "type": "item", "value": image_id})
+        if not valid:
+            return None
+        return {"layout": "default", "gallery": items}
+
+    def to_author(self, value: Any, *, ctx: ConversionContext) -> Any | Unsupported:
+        items = value.get("gallery", []) if isinstance(value, dict) else []
+        if not (
+            isinstance(items, list)
+            and len(items) > 0
+            and all(isinstance(item, dict) and "value" in item for item in items)
+            and (ctx.user is None or all(get_choosable_image(item["value"], ctx.user) is not None for item in items))
+        ):
+            return UNSUPPORTED
+        return [{"id": item["value"]} for item in items]
+
+
 def content_converters(section: str | None) -> dict[str, BlockConverter]:
     """Return built-in and configured converters for ``section``."""
     converters: dict[str, BlockConverter] = {
@@ -233,6 +272,7 @@ def content_converters(section: str | None) -> dict[str, BlockConverter]:
             ImageConverter(),
             AudioConverter(),
             VideoConverter(),
+            GalleryConverter(),
         )
     }
     if section is not None:
