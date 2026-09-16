@@ -1,6 +1,10 @@
 # Publication policy service
 
-Date: 2026-09-16   Status: Proposed (design record; no implementation yet)
+Date: 2026-09-16   Status: Implemented on 2026-09-16
+
+Implementation commits, by slice: 1 — `2dbdb954` (policy and adapters); 2a — `c87c6024` (installer relocation);
+2b — `63a25ff6` (shared enforcement); 2c — `e638f007` (system check); 3 — `17adff2e` (scheduled rejection);
+4 — `e71822e7` (boundary ownership); 5 — `972ab86b` (revision-bound editor publication).
 
 ## Problem
 

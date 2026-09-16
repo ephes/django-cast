@@ -26,6 +26,10 @@ corrections are folded into the directions below. Previous review:
    monkeypatch of Wagtail's private `PublishRevisionAction._publish_revision` (`podcast_numbering.py:168-200` via
    `apps.py:60`) and a `page_published` receiver (`post_media.py:100-102`). The v3 evaluation, publication approval
    binding and scheduled publishes all need one publication-policy service.
+   Resolution note (2026-09-16): implemented in
+   [2026-09-16-publication-policy-service.md](2026-09-16-publication-policy-service.md). Shared rules now guard
+   Wagtail's publication action, scheduled rejection is recorded without aborting the batch, publication ownership
+   is centralized, and editor callers can bind approval to a reviewed revision.
 3. **Upload safety lives in the transport layer, not a media service**: lock, probe budget and size handling exist
    only in `api/editor/media.py`; admin `MediaAdminViews`, `TranscriptForm` and `media_derivation.py` have none.
    Admin hardening, transcript caps, remote media import, media replacement and podcast feed import are all blocked
@@ -581,8 +585,9 @@ Low-11 (`slow` marker used by two modules), H6-residual (import-time comment-for
 2. **Then the three seams**, each shaped as its own backlog item before implementation: a **publication policy
    service** (theme 2), a **media ingestion service** with an SSRF-safe fetch helper (theme 3), and a
    **transport-neutral content converter** (theme 4). Each is independently valuable and each unblocks several
-   deferred backlog items. All three are now shaped as proposed plans awaiting maintainer decisions:
-   theme 2 → [2026-09-16-publication-policy-service.md](2026-09-16-publication-policy-service.md);
+   deferred backlog items. The maintainer decisions in all three plans are settled; theme 2 is implemented and
+   themes 3 and 4 remain active:
+   theme 2 (implemented) → [2026-09-16-publication-policy-service.md](2026-09-16-publication-policy-service.md);
    theme 3 → [2026-09-16-media-ingestion-service.md](2026-09-16-media-ingestion-service.md);
    theme 4 → [2026-09-16-transport-neutral-content-converter.md](2026-09-16-transport-neutral-content-converter.md).
 3. **Then the Wagtail v3 evaluation**, measured against those seams rather than today's coupling — the publication

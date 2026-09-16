@@ -137,13 +137,17 @@ attacks or additional demonstrated authorization bypasses.
   default ten-second budget. Reuse bounded probing and concurrency protection
   across upload entry points. No claim of unbounded subprocess runtime is made,
   and no worker-exhaustion test was performed.
-- **Publication approval binding:** `src/cast/api/editor/views.py:360-379`
-  publishes the latest revision without a revision precondition. This is
-  explicitly documented in `docs/reference/api.rst:818-824`; publish scope and
-  Wagtail publish permission are still required. A co-editor can replace a
-  previously reviewed draft before an authorized publication. Consider a
-  required revision token for workflows where publishing means approval of
-  specific reviewed content. This is not a direct write-scope-to-publish bypass.
+- **Publication approval binding (mitigated 2026-09-16):** the editor post and
+  episode publish actions accept an optional strict `If-Match` revision token,
+  lock the page row, compare the token with `latest_revision_id`, and publish
+  exactly that checked revision. A stale token returns the existing
+  `revision_conflict` response without publishing the newer draft. Implemented
+  by [publication-policy service plan](2026-09-16-publication-policy-service.md)
+  slice 5 in commit `972ab86b`. The maintainer accepted optional rather than
+  required `If-Match` for backwards compatibility. Callers that omit the token
+  therefore retain the documented latest-revision behavior and its original
+  co-editor race; requiring revision binding is deferred to the next editor API
+  version alongside the Wagtail v3 decision.
 - **Author self-edit/delete after page access revocation:** the opt-in author
   action endpoints check session ownership and comment eligibility, but not the
   target page's current visibility (`src/cast/comments/views.py`,
