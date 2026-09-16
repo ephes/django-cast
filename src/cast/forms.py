@@ -274,6 +274,10 @@ class AudioForm(BaseCollectionMemberForm):
     def save(self, commit: bool = True) -> Audio:
         audio = super().save(commit=False)
         if commit:
+            if set(self.changed_data).intersection(Audio.audio_formats):
+                # The stored duration describes the replaced files, so drop it and let
+                # save_audio_with_derivations probe the new ones.
+                audio.duration = None
             save_audio_with_derivations(audio)
             self._save_m2m()
             self.save_chaptermarks(audio)

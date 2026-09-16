@@ -180,6 +180,9 @@ commits paid for twice.
   `duration is None`, `validate_audio_upload` already ran, and the video path catches everything, so the realistic
   window is a storage write error. Direction: capture old names, save first, delete in `transaction.on_commit`, with
   a failure-injection test.
+  Note (2026-09-16): the V-extra duration fix makes `create_duration` run on admin audio replacements, so a
+  replacement file that passes header validation but fails ffprobe now rolls the row back to an already deleted
+  file. `validate_audio_upload` is header-only, so this window is real; do V1 next.
 - **V2. Editor slug lookup deserializes every sibling's latest revision** (medium, performance) —
   `api/editor/views.py:419`. A documented deterministic single-object lookup does one `.specific` query plus a
   revision fetch and full StreamField deserialization *per child of the parent* (~2,000 queries for a 1,000-post
@@ -277,6 +280,10 @@ commits paid for twice.
   `create_duration` only when `duration is None`, `AudioForm` never resets it on a changed file, and no
   `.duration = None` exists in `src/cast`, so feeds and the podlove player keep the old file's duration while cached
   file sizes *are* refreshed. `tests/audio_views_test.py:313` asserts only the redirect.
+  Fix note (2026-09-16): fixed — `AudioForm.save` clears `duration` when `changed_data` contains an audio format
+  field, so `save_audio_with_derivations` probes the replacement. Existing stale rows are not backfilled;
+  `docs/operations/troubleshooting.rst` documents clearing `duration` for them. This makes `create_duration` run on
+  admin replacements, which raises the practical priority of V1 below.
 - **V-extra. `webvtt_transcript` 500s on a missing storage file** (medium, bug) — `views/transcript.py:606-608`,
   independent of V10's podlove case; `podcastindex_transcript_json` 404s the same condition and
   `tests/transcripts/podcastindex_webvtt_test.py:148` covers only the dote variant.

@@ -1,3 +1,5 @@
+from datetime import timedelta
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -322,6 +324,35 @@ class TestAudioEdit:
         # teardown
         audio = Audio.objects.first()
         audio.m4a.delete()
+
+    def test_post_edit_audio_m4a_reprobes_duration(self, admin_client, audio_urls, m4a_audio, fixture_dir):
+        """Replacing an audio file has to replace the duration probed from the old file."""
+        audio = audio_urls.audio
+        stale_duration = timedelta(hours=3)
+        Audio.objects.filter(pk=audio.pk).update(duration=stale_duration)
+        m4a_audio.seek(0)
+
+        r = admin_client.post(audio_urls.edit, {"m4a": m4a_audio})
+
+        assert r.status_code == 302
+        audio.refresh_from_db()
+        assert audio.duration == Audio._get_audio_duration(Path(fixture_dir) / "test.m4a")
+        assert audio.duration != stale_duration
+
+        # teardown
+        audio.m4a.delete()
+
+    def test_post_edit_audio_without_file_change_keeps_duration(self, admin_client, audio_urls):
+        """An edit that does not touch an audio file must not discard the stored duration."""
+        audio = audio_urls.audio
+        duration = timedelta(seconds=61, microseconds=234000)
+        Audio.objects.filter(pk=audio.pk).update(duration=duration)
+
+        r = admin_client.post(audio_urls.edit, {"title": "changed title"})
+
+        assert r.status_code == 302
+        audio.refresh_from_db()
+        assert audio.duration == duration
 
 
 class TestAudioDelete:

@@ -121,3 +121,9 @@
   revision of every sibling post under the requested parent, so a single lookup in a
   large blog cost one query pair and one body deserialization per post. Responses,
   including the ambiguous-slug conflict, are unchanged.
+- Recompute the audio duration when an audio file is replaced or cleared in the
+  Wagtail admin edit form. Feeds, the Podlove player, and episode metadata kept
+  the duration probed from the previous file while the cached file sizes were
+  refreshed. Durations that already went stale this way are corrected by
+  clearing ``duration`` and re-saving the audio object through the Wagtail admin
+  or ``save_audio_with_derivations``.
