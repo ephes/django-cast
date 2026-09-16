@@ -1,4 +1,4 @@
-0.2.65 (unreleased)
+0.2.65 (2026-09-16)
 -------------------
 
 - Aggregate editor API validation errors from multiple malformed rich-text or
