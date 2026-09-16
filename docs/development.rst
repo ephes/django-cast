@@ -463,6 +463,17 @@ environments concurrently without one test session deleting another's uploaded f
 checks that the migration graph applies to an empty database at both ends of the supported dependency
 range, and ``uv run tox -e cleanup`` removes every test database and media root.
 
+The ``django61`` and ``wagtail80`` environments also make deprecation warnings visible: they run
+pytest with ``-W default::DeprecationWarning -W default::PendingDeprecationWarning`` (through
+``PYTEST_ADDOPTS``) and set a matching ``PYTHONWARNINGS``. The newest supported Django and Wagtail
+releases are where the next round of removals shows up first, and Django's
+``RemovedInDjangoXXWarning`` classes are deprecation warnings, so these environments end with a
+warnings summary that the rest of the matrix - and a plain ``pytest`` run - suppress through the
+``filterwarnings`` list in ``pyproject.toml``. The warnings do not fail the run. Treat a new one
+coming from ``src/cast`` as work to schedule before the framework release that removes the API, and
+ignore third-party noise until the whole matrix is quiet enough to turn deprecations into errors.
+CI runs ``py314-django61-wagtail80`` in its tox matrix job, so the same summary shows up there.
+
 Code Quality
 ============
 

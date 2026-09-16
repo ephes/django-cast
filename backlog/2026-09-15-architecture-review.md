@@ -466,6 +466,11 @@ The coverage gate produces real tests, not pragma sprawl: 37 `pragma: no cover` 
   `PYTHONWARNINGS`: verified in a scratch project that the env var only suppresses pytest's built-in defaults, after
   which `apply_warning_filters` re-inserts the ini `ignore::DeprecationWarning` ahead of it and the warning stays
   hidden, while `-W` (a command-line filter, applied last) does surface it.
+  Fix note (2026-09-16, first stage done): `tox.ini` sets `PYTEST_ADDOPTS=-W default::DeprecationWarning -W
+  default::PendingDeprecationWarning` plus a matching `PYTHONWARNINGS` for the `django61`/`wagtail80` factors, so the
+  newest-matrix environments print deprecations while the rest stay quiet; documented in `docs/development.rst`. The
+  second stage (ini `error::DeprecationWarning` with targeted `ignore:<message>:...:<module>` entries, plus fixing the
+  deprecations those runs report) is still open.
 - **T6. Plain pytest runs share and `rmtree` the same media root** (medium, testing) — `tests/conftest.py:203`.
   [2026-08-10-test-media-root-isolation.md](2026-08-10-test-media-root-isolation.md) isolated tox but left plain
   pytest on the fixed `tests/media` path, and every developer recipe uses plain pytest, so two concurrent local runs

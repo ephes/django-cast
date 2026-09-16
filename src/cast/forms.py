@@ -8,7 +8,7 @@ a search form that rejects empty queries.
 import json
 import logging
 import subprocess
-from datetime import datetime, time
+from datetime import UTC, datetime, time
 from typing import IO, Any, NoReturn, cast
 
 from django import forms
@@ -130,8 +130,9 @@ class FFProbeStartField(forms.TimeField):
         if value in self.empty_values or isinstance(value, time):
             return super().to_python(value)
         try:
-            # utcfromtimestamp, super important!
-            return datetime.utcfromtimestamp(float(value)).time()
+            # UTC, super important! The value is an offset from the start of the
+            # file, so the local time zone must not shift it.
+            return datetime.fromtimestamp(float(value), UTC).time()
         except (TypeError, ValueError):
             raise ValidationError(
                 _(f"Invalid chaptermark start: {value}"),

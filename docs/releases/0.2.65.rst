@@ -151,3 +151,12 @@
   terminal, say - no longer wipe each other's uploads and produce spurious ``ffprobe``
   failures. A concurrent run still needs its own ``CAST_TEST_DB`` because the reused test
   database is shared; see the testing section of the development docs.
+- Surface deprecation warnings in the newest tox environments. The ``django61`` and
+  ``wagtail80`` matrix environments run pytest with ``-W default::DeprecationWarning``
+  and ``-W default::PendingDeprecationWarning`` (plus a matching ``PYTHONWARNINGS``), so
+  upcoming Django and Wagtail removals appear in their warnings summary instead of being
+  dropped by the ``filterwarnings`` list in ``pyproject.toml``. The other environments and
+  plain ``pytest`` runs stay quiet, the warnings do not fail a run, and no shipped behavior
+  changes; see the tox section of the development documentation. The one deprecated call
+  this surfaced in ``cast`` itself, ``datetime.utcfromtimestamp()`` in the ffprobe chapter
+  mark start field, now uses an explicit UTC timestamp and parses the same values.
