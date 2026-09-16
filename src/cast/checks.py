@@ -310,14 +310,9 @@ def check_publication_policy_installed(
     **kwargs: Any,
 ) -> list[Error]:
     """Ensure the guarded Wagtail publication boundary was installed."""
-    try:
-        from wagtail.actions.publish_revision import PublishRevisionAction
-    except ImportError:
-        publish_revision = None
-    else:
-        publish_revision = getattr(PublishRevisionAction, "_publish_revision", None)
+    from cast.publication import publication_policy_installed
 
-    if getattr(publish_revision, "_cast_publication_policy_hook", False):
+    if publication_policy_installed():
         return []
     return [
         Error(

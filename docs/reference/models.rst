@@ -235,6 +235,20 @@ Specialized Post for podcast episodes with audio requirements.
 
 - ``podcast``: Parent Podcast instance
 
+***********
+Publication
+***********
+
+``cast.publication`` owns django-cast's shared Wagtail publication boundary.
+Before a revision goes live, it applies publication rules to the exact revision
+content and performs publish-time episode numbering. Rules are enforced for
+admin, API, workflow, scheduled, bulk, and direct-code publication paths.
+
+Post-publication media synchronization and rendition preparation remain on
+Wagtail's ``page_published`` signal. This supported after-publish seam also
+covers live copies and alias updates that do not pass through Wagtail's revision
+publish action.
+
 *************
 Media Models
 *************

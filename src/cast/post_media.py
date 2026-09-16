@@ -93,10 +93,3 @@ def prepare_published_post_media(sender: Any, instance: Any, **kwargs: Any) -> N
 
     if isinstance(instance, Post) and instance.live:
         prepare_post_media(instance)
-
-
-def install_post_media_publish_handler() -> None:
-    """Install the Wagtail publication boundary for Post media preparation."""
-    from wagtail.signals import page_published
-
-    page_published.connect(prepare_published_post_media, dispatch_uid="cast.prepare_published_post_media")

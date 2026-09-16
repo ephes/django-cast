@@ -164,11 +164,37 @@ def test_install_publication_policy_is_idempotent():
 
 
 @pytest.mark.django_db
+def test_install_publication_policy_connects_post_publish_effects(mocker):
+    from cast.post_media import prepare_published_post_media
+
+    connect = mocker.patch("wagtail.signals.page_published.connect")
+
+    install_publication_policy()
+
+    connect.assert_called_once_with(
+        prepare_published_post_media,
+        dispatch_uid="cast.prepare_published_post_media",
+    )
+
+
+@pytest.mark.django_db
 def test_install_publication_policy_logs_and_skips_unsupported_api(mocker, caplog):
     from wagtail.actions.publish_revision import PublishRevisionAction
 
     caplog.set_level("WARNING", logger="cast.publication")
     mocker.patch.object(PublishRevisionAction, "_publish_revision", None)
+
+    install_publication_policy()
+
+    assert "Publication policy publish hook was not installed" in caplog.text
+
+
+@pytest.mark.django_db
+def test_install_publication_policy_logs_and_skips_unavailable_action(monkeypatch, caplog):
+    from wagtail.actions import publish_revision
+
+    caplog.set_level("WARNING", logger="cast.publication")
+    monkeypatch.delattr(publish_revision, "PublishRevisionAction")
 
     install_publication_policy()
 

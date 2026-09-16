@@ -1,3 +1,10 @@
+"""Own django-cast's Wagtail publication boundary.
+
+Publication rules run before Wagtail makes revision content live. Supported
+post-publication effects remain on Wagtail's ``page_published`` signal so they
+also cover live copies and alias updates that bypass the revision action.
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -132,9 +139,29 @@ def _reject_scheduled_publication(revision: Revision, page: Post, rejection: Pub
     )
 
 
+def publication_policy_installed() -> bool:
+    """Return whether the guarded Wagtail publication wrapper is installed."""
+    try:
+        from wagtail.actions.publish_revision import PublishRevisionAction
+    except ImportError:
+        return False
+    publish_revision = getattr(PublishRevisionAction, "_publish_revision", None)
+    return bool(getattr(publish_revision, "_cast_publication_policy_hook", False))
+
+
 def install_publication_policy() -> None:
     """Install the guarded Wagtail publication boundary."""
-    from wagtail.actions.publish_revision import PublishRevisionAction
+    from wagtail.signals import page_published
+
+    from cast.post_media import prepare_published_post_media
+
+    page_published.connect(prepare_published_post_media, dispatch_uid="cast.prepare_published_post_media")
+
+    try:
+        from wagtail.actions.publish_revision import PublishRevisionAction
+    except ImportError as error:
+        logger.warning("Publication policy publish hook was not installed: %s", error)
+        return
 
     original = getattr(PublishRevisionAction, "_publish_revision", None)
     if getattr(original, "_cast_publication_policy_hook", False):
