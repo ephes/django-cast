@@ -53,6 +53,13 @@ def media_collections(db):
     assert root is not None
     permitted = root.add_child(instance=Collection(name="Permitted media"))
     forbidden = root.add_child(instance=Collection(name="Forbidden media"))
+    # Collection.node_order_by = ["name"] makes the second add_child() re-sort the siblings and
+    # rewrite the already created sibling's path in the database, so the in-memory instances keep
+    # stale treebeard paths. django-treebeard 5.x reloads the parent before computing a child path,
+    # but 4.8 (Wagtail 7.0/7.3) trusts the stale path and would file later add_child() calls under
+    # the wrong sibling -- keep these refreshes so add_child() on them stays correct everywhere.
+    permitted.refresh_from_db()
+    forbidden.refresh_from_db()
     return permitted, forbidden
 
 
