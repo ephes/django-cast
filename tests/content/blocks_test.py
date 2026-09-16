@@ -118,7 +118,7 @@ def test_compatibility_media_availability_helper(mocker, block_type, patch_targe
 
 
 def test_missing_converter_cannot_reinterpret_a_supported_type_as_gallery(mocker):
-    mocker.patch("cast.api.editor.body.content_converters", return_value={})
+    mocker.patch("cast.content.convert.content_converters", return_value={})
 
     with pytest.raises(EditorValidationError) as exc_info:
         author_blocks_to_section(

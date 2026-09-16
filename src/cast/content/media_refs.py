@@ -49,3 +49,14 @@ def get_choosable_video(video_id: Any, user: Any) -> Any | None:
 def video_choosable_by(video_id: Any, user: Any) -> bool:
     """Return whether the video exists and the caller may choose it."""
     return get_choosable_video(video_id, user) is not None
+
+
+def _media_ref_is_available(block_type: str, value: Any, user: Any) -> bool:
+    """Compatibility helper retained for private tests until converter slice 7."""
+    if block_type == "image":
+        return image_choosable_by(value, user)
+    if block_type == "audio":
+        return audio_choosable_by(value, user)
+    if block_type == "video":
+        return video_choosable_by(value, user)
+    raise ValueError(f"Unsupported media block type: {block_type}")

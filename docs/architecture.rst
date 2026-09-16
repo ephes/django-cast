@@ -309,6 +309,7 @@ Code Organization
     src/cast/
     ├── api/              # REST API
     ├── blocks.py         # StreamField blocks
+    ├── content/          # Transport-neutral author/StreamField conversion
     ├── feeds.py          # RSS/podcast feeds
     ├── management/       # Django commands
     ├── migrations/       # Database migrations
@@ -317,6 +318,10 @@ Code Organization
     ├── templates/        # Django templates
     ├── views/            # Django views
     └── wagtail_hooks.py  # Admin customizations
+
+The ``cast.content`` package owns conversion, rich-text normalization, media
+reference resolution, and validation without depending on REST Framework. It
+is an internal architectural boundary, not yet a supported extension API.
 
 Extension Points
 ----------------

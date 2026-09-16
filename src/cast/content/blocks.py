@@ -284,3 +284,14 @@ def content_converters(section: str | None) -> dict[str, BlockConverter]:
             if name not in converters:
                 converters[name] = GenericBlockConverter(name=name, block=block)
     return converters
+
+
+SUPPORTED_BODY_BLOCKS = frozenset(name for name, converter in content_converters(None).items() if converter.editable)
+
+
+def _custom_block_map(section: str | None) -> dict[str, Block]:
+    return {
+        name: converter.block
+        for name, converter in content_converters(section).items()
+        if isinstance(converter, GenericBlockConverter)
+    }
