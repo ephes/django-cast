@@ -1,9 +1,10 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import UploadedFile
 from django.utils.translation import gettext_lazy as _
 
 from cast import appsettings
@@ -92,6 +93,24 @@ def validate_video_upload(uploaded_file: Any | None) -> None:
         max_bytes=int(appsettings.CAST_VIDEO_UPLOAD_MAX_BYTES),
         media_label="Video",
     )
+
+
+def validate_transcript_upload(uploaded_file: UploadedFile | IO[bytes], *, max_bytes: int) -> None:
+    """Reject transcript content larger than the configured byte cap."""
+    try:
+        uploaded_file.seek(0)
+        content = uploaded_file.read(max_bytes + 1)
+    finally:
+        try:
+            uploaded_file.seek(0)
+        except Exception:
+            pass
+    if len(content) > max_bytes:
+        raise ValidationError(
+            _("Transcript file is too large. The maximum allowed size is %(max_size)s bytes."),
+            code="file_too_large",
+            params={"max_size": max_bytes},
+        )
 
 
 def validate_media_upload(

@@ -1,6 +1,9 @@
 0.2.65 (unreleased)
 -------------------
 
+- Reject Podlove JSON, DOTe JSON, and WebVTT transcript uploads larger than
+  ``CAST_TRANSCRIPT_UPLOAD_MAX_BYTES`` before parsing. The configurable limit
+  defaults to 10 MiB.
 - Route Wagtail admin audio/video add, edit, and chooser uploads through the
   shared media-ingestion service. They now use a per-user upload lock shared
   with API uploads and a cumulative probe budget controlled by

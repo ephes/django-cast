@@ -124,12 +124,12 @@ Implementation follow-up (2026-09-08):
 These are source-confirmed missing safeguards, not reproduced resource-exhaustion
 attacks or additional demonstrated authorization bypasses.
 
-- **Manual transcript upload size limits:** `TranscriptForm._load_json()` at
-  `src/cast/forms.py:350-360` fully loads uploaded JSON, and Podlove/DOTe/VTT
-  validators have no application byte cap. A permitted transcript uploader can
-  submit large files, subject to deployment request limits. Add a configurable
-  cap before parsing and storage, including the VTT path. No large payload or
-  memory-exhaustion test was performed.
+- **Manual transcript upload size limits (fixed 2026-09-16):** Podlove JSON,
+  DOTe JSON, and WebVTT uploads are read only up to
+  `CAST_TRANSCRIPT_UPLOAD_MAX_BYTES + 1` and rejected before parsing or storage
+  when over the configured cap. The default is 10 MiB. Implemented by the
+  [media-ingestion service plan](2026-09-16-media-ingestion-service.md) slice
+  5. No resource-exhaustion test was performed.
 - **Admin media probe and concurrency limits (fixed 2026-09-16):** Wagtail
   admin audio/video add, edit, and chooser uploads now use the shared per-user
   lock and the cumulative probe budget configured by

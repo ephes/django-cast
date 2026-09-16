@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from cast.forms import AudioForm, VideoForm
 from cast.media_derivation import save_audio_with_derivations, save_video_with_derivations
-from cast.media_validation import validate_audio_upload, validate_video_upload
+from cast.media_validation import validate_audio_upload, validate_transcript_upload, validate_video_upload
 from cast.models import Audio, Video
 
 pytestmark = pytest.mark.django_db
@@ -25,6 +25,23 @@ def upload(name: str, content: bytes, content_type: str) -> SimpleUploadedFile:
 def test_validate_upload_helpers_accept_none():
     validate_audio_upload(None, audio_format="m4a")
     validate_video_upload(None)
+
+
+def test_validate_transcript_upload_ignores_reset_failure():
+    class FlakySeekUpload:
+        def __init__(self):
+            self.seek_calls = 0
+
+        def seek(self, offset):
+            self.seek_calls += 1
+            if self.seek_calls > 1:
+                raise OSError("seek failed")
+
+        def read(self, size):
+            assert size == 4
+            return b"abc"
+
+    validate_transcript_upload(FlakySeekUpload(), max_bytes=3)
 
 
 def test_validate_audio_upload_accepts_seekable_file_without_size():

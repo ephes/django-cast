@@ -171,6 +171,7 @@ class TestCheckCastSettingTypes:
             ("CAST_REPOSITORY", str),
             ("CAST_PODLOVE_PLAYER_THEMES", dict),
             ("CAST_AUDIO_PLAYER", str),
+            ("CAST_TRANSCRIPT_UPLOAD_MAX_BYTES", int),
         )
         derived = tuple(
             (name, setting.check_type)

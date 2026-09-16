@@ -22,13 +22,14 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
+from . import appsettings
 from .media_derivation import (
     save_audio_with_derivations,
     save_transcript_with_derivations,
     save_video_with_derivations,
 )
 from .media_permissions import audio_permission_policy, transcript_permission_policy
-from .media_validation import validate_audio_upload, validate_video_upload
+from .media_validation import validate_audio_upload, validate_transcript_upload, validate_video_upload
 from .models import (
     Audio,
     ChapterMark,
@@ -313,7 +314,8 @@ class TranscriptForm(BaseCollectionMemberForm):
         podlove = self.cleaned_data.get("podlove")
         if not podlove:
             return podlove
-        data = self._load_json(podlove, field_label="Podlove")
+        max_bytes = int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
+        data = self._load_json(podlove, field_label="Podlove", max_bytes=max_bytes)
         if not isinstance(data, dict) or "transcripts" not in data:
             raise ValidationError(_("Podlove transcript must include a top-level 'transcripts' key."))
         if not isinstance(data["transcripts"], list):
@@ -324,7 +326,8 @@ class TranscriptForm(BaseCollectionMemberForm):
         dote = self.cleaned_data.get("dote")
         if not dote:
             return dote
-        data = self._load_json(dote, field_label="DOTe")
+        max_bytes = int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
+        data = self._load_json(dote, field_label="DOTe", max_bytes=max_bytes)
         if not isinstance(data, dict) or "lines" not in data:
             raise ValidationError(_("DOTe transcript must include a top-level 'lines' key."))
         lines = data["lines"]
@@ -347,6 +350,7 @@ class TranscriptForm(BaseCollectionMemberForm):
         vtt = self.cleaned_data.get("vtt")
         if not vtt:
             return vtt
+        validate_transcript_upload(vtt, max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES))
         header = self._read_header(vtt)
         if not header.startswith("WEBVTT"):
             raise ValidationError(_("WebVTT transcripts must start with the WEBVTT header."))
@@ -360,10 +364,11 @@ class TranscriptForm(BaseCollectionMemberForm):
         return transcript
 
     @staticmethod
-    def _load_json(uploaded_file: UploadedFile | IO[str] | IO[bytes], *, field_label: str) -> Any:
+    def _load_json(uploaded_file: UploadedFile | IO[bytes], *, field_label: str, max_bytes: int) -> Any:
         try:
+            validate_transcript_upload(uploaded_file, max_bytes=max_bytes)
             uploaded_file.seek(0)
-            return json.load(uploaded_file)
+            return json.loads(uploaded_file.read(max_bytes + 1))
         except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
             raise ValidationError(_("%(field)s transcript is not valid JSON."), params={"field": field_label})
         finally:

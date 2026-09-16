@@ -653,6 +653,15 @@ django-cast validates the file container or runs ffmpeg/ffprobe. Defaults to
 ``2147483648`` (2 GiB).
 
 
+CAST_TRANSCRIPT_UPLOAD_MAX_BYTES
+================================
+
+Maximum accepted size, in bytes, for each uploaded Podlove JSON, DOTe JSON,
+or WebVTT transcript before parsing. Defaults to ``10485760`` (10 MiB). The
+limit is enforced from the uploaded content rather than a client-reported
+size.
+
+
 CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
 =====================================
 
