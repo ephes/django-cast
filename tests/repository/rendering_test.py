@@ -1,32 +1,23 @@
-# ruff: noqa: F401,F811,I001
 """
 This file contains tests for the post data cache. Make sure
 all queries happen in one place and there are no additional
 queries when rendering posts.
 """
 
-import json
 import pickle
-from contextvars import Context, copy_context
 from copy import deepcopy
-from pathlib import Path
 from xml.etree import ElementTree
 
 import pytest
-import sqlparse
-import cast.models.repository as repository_module
-from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
 from django.urls import reverse
 from django.utils import timezone
-from wagtail.images.models import Image, Rendition
-from wagtail.models import Site as WagtailSite
+from wagtail.images.models import Image
 
-from cast.devdata import create_post, create_python_body, create_transcript, generate_blog_with_media
+from cast.devdata import create_post, generate_blog_with_media
 from cast.feeds import LatestEntriesFeed, RssPodcastFeed
-from cast.filters import PostFilterset
 from cast.models import (
     Audio,
     Blog,
@@ -37,40 +28,15 @@ from cast.models import (
     Podcast,
     Post,
     Season,
-    Transcript,
     Video,
 )
 from cast.models.image_renditions import create_missing_renditions_for_posts
-from cast.models.repository.builders import _blog_url_from_referer
 from cast.models.repository import (
     BlogIndexContext,
     FeedContext,
     PostDetailContext,
     PostQuerySnapshot,
-    add_queryset_data,
-    add_site_raw,
-    apply_cover_fallback,
-    deserialize_audio,
-    deserialize_episode,
-    deserialize_image,
-    deserialize_post,
-    deserialize_season,
-    deserialize_transcript,
-    deserialize_video,
-    deserialize_blog,
-    deserialize_episode_contributor,
     data_for_blog_cachable,
-    get_facet_choices,
-    serialize_audio,
-    serialize_blog,
-    serialize_episode_contributor,
-    serialize_episode,
-    serialize_image,
-    serialize_post,
-    serialize_renditions,
-    serialize_season,
-    serialize_transcript,
-    serialize_video,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
 from tests.factories import EpisodeFactory
@@ -78,9 +44,6 @@ from tests.factories import EpisodeFactory
 from tests.repository.helpers import (
     StubFile,
     blocker,
-    blog_index_repository,
-    feed_repository,
-    post_detail_repository,
     queryset_data,
     show_queries,
 )
@@ -215,42 +178,6 @@ def test_feed_context_create_from_django_models_handles_missing_request_site(rf,
 # provided without hitting the database
 
 
-class StubFile:
-    def __init__(self, name):
-        self.name = name
-        self.url = f"/media/{name}"
-
-
-@pytest.fixture
-def post():
-    body = create_python_body()
-    body[0]["value"].append({"type": "audio", "value": 1})
-    body[0]["value"].append({"type": "video", "value": 1})
-    body[0]["value"].append({"type": "image", "value": 1})
-    gallery_with_layout = {"layout": "default", "gallery": [{"id": 1, "type": "item", "value": 1}]}
-    body[0]["value"].append({"id": 1, "type": "gallery", "value": gallery_with_layout})
-    serialized_body = json.dumps(body)
-    return Post(id=1, title="Some post", body=serialized_body)
-
-
-@pytest.fixture
-def renditions_for_post():
-    return {
-        1: [
-            # image
-            Rendition(file=StubFile("foo.jpg"), filter_spec="width-1110", width=1110, height=200),
-            Rendition(file=StubFile("foo.avif"), filter_spec="width-1110|format-avif", width=1110, height=200),
-            # gallery
-            Rendition(file=StubFile("foo.jpg"), filter_spec="width-120", width=100, height=120),
-            Rendition(file=StubFile("foo.jpg"), filter_spec="width-240", width=100, height=240),
-            Rendition(file=StubFile("foo.jpg"), filter_spec="width-360", width=100, height=360),
-            Rendition(file=StubFile("foo.jpg"), filter_spec="width-120|format-avif", width=100, height=200),
-            Rendition(file=StubFile("foo.jpg"), filter_spec="width-240|format-avif", width=100, height=200),
-            Rendition(file=StubFile("foo.jpg"), filter_spec="width-360|format-avif", width=100, height=200),
-        ]
-    }
-
-
 def test_render_post_detail_without_hitting_the_database(rf, post, renditions_for_post):
     """
     Given a post with media which is not in the database. And a repository
@@ -311,45 +238,6 @@ def test_render_post_detail_without_hitting_the_database(rf, post, renditions_fo
     assert context["cover_image_url"] == repository.cover_image_url
     assert context["cover_alt_text"] == repository.cover_alt_text
     assert len(connection.queries) == 0
-
-
-@pytest.fixture
-def blog_data(post, renditions_for_post):
-    post.pk = 1
-    audio = Audio(id=1, title="Some audio", collection=None)
-    video = Video(id=1, title="Some video", collection=None, original=StubFile("foo.mp4"))
-    image = Image(id=1, title="Some image", collection=None, file=StubFile("foo.jpg"), width=2000, height=1000)
-    serialized_renditions = serialize_renditions(renditions_for_post)
-    data = {
-        "template_base_dir": "bootstrap4",
-        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
-        "blog_cover_image_url": "",
-        "blog_cover_alt_text": "",
-        "post_by_id": {1: serialize_post(post)},
-        "posts": [1],
-        "pagination_context": {},
-        "audios": {1: serialize_audio(audio)},
-        "images": {1: serialize_image(image)},
-        "videos": {1: serialize_video(video)},
-        "images_by_post_id": {1: [1]},
-        "videos_by_post_id": {1: [1]},
-        "audios_by_post_id": {1: [1]},
-        "cover_by_post_id": {},
-        "cover_alt_by_post_id": {},
-        "renditions_for_posts": serialized_renditions,
-        "owner_username_by_id": {1: "owner"},
-        "page_url_by_id": {1: "/some-post/"},
-        "absolute_page_url_by_id": {1: "http://testserver/some-post/"},
-        "has_audio_by_id": {1: True},
-        "root_nav_links": [("http://testserver/", "Home"), ("http://testserver/about/", "About")],
-        "filterset": {
-            "get_params": {},
-            "date_facets_choices": [],
-            "category_facets_choices": [],
-            "tag_facets_choices": [],
-        },
-    }
-    return data
 
 
 def test_render_blog_index_without_hitting_the_database(rf, blog_data):

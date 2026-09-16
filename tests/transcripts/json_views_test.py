@@ -1,31 +1,11 @@
-# ruff: noqa: F401,F811,I001
 import json
-import re
-from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
-from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
-from django.db import IntegrityError, transaction
-from django.test import override_settings
-from django.template import TemplateDoesNotExist
 from django.urls import reverse
-from django.utils import translation
 
 from cast.devdata import create_transcript
-from cast.views import transcript as transcript_views
-from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
-from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptSpeakerMapping
-from cast.transcripts import parsing, speaker_samples, webvtt
-from cast.views.transcript import (
-    _resolve_transcript_template,
-    get_speaker_mapping_context,
-    get_transcript_audio_sources,
-)
-
-from tests.factories import BlogFactory, EpisodeFactory, UserFactory
-from tests.multisite_helpers import create_site_root
+from cast.models import Contributor, EpisodeContributor, TranscriptSpeakerMapping
 
 
 def get_endpoint_urls_without_args():
