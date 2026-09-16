@@ -2,15 +2,14 @@ import subprocess
 import sys
 
 import pytest
-from django.test import override_settings
 from django.template.loader import render_to_string
+from django.test import override_settings
 from wagtail import blocks
 from wagtail.blocks import StreamValue
 from wagtail.blocks.definition_lookup import BlockDefinitionLookup
 
 from cast.models import Blog
-from cast.models.pages import ContentBlock as LegacyContentBlock
-from cast.models.pages import HtmlField, Post
+from cast.models.pages import ContentBlock as LegacyContentBlock, HtmlField, Post
 from cast.models.repository import PostDetailContext
 from cast.post_body_blocks import (
     ContentBlock,
@@ -19,7 +18,6 @@ from cast.post_body_blocks import (
     homepage_content_blocks,
 )
 from tests.factories import PostFactory
-
 
 DEFAULT_BLOCK_NAMES = [
     "paragraph",

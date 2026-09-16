@@ -13,7 +13,6 @@ from cast.api.views import (
     FilteredPagesAPIViewSet,
 )
 from cast.models import PostCategory
-
 from tests.factories import PostFactory, UserFactory
 
 SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"

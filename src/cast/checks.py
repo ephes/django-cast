@@ -11,8 +11,8 @@ from django.conf import settings
 from django.core.checks import Error, Warning, register
 
 from cast import appsettings
-from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.apps import CAST_MIDDLEWARE
+from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.post_body_blocks import validate_post_body_block_setting
 
 # Source extensions to consider
@@ -194,8 +194,7 @@ def check_cast_comments_author_edits_session_backend(
     would travel in the client cookie (readable, non-revocable). The feature is
     optional, so this is a hard requirement with no opt-out.
     """
-    from cast.comments import appsettings as comment_appsettings
-    from cast.comments import author_edits
+    from cast.comments import appsettings as comment_appsettings, author_edits
 
     if comment_appsettings.ALLOW_AUTHOR_EDITS and author_edits.uses_signed_cookie_sessions():
         return [

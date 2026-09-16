@@ -1,5 +1,5 @@
-from django.db import models
 import pytest
+from django.db import models
 
 from cast.search_utils import normalize_modelsearch_query, safe_fulltext_queryset, safe_modelsearch_results
 

@@ -20,8 +20,8 @@ from django.urls import reverse
 from django.utils.cache import patch_cache_control, patch_vary_headers
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -35,6 +35,7 @@ from ..audio_access import authorize_audio_access, page_grants_audio_access, pag
 from ..filters import PostFilterset
 from ..forms import SelectThemeForm
 from ..http_types import HtmxHttpRequest
+from ..modal_facet_counts import get_modal_facet_counts
 from ..models import (
     Audio,
     Blog,
@@ -44,11 +45,11 @@ from ..models import (
     get_template_base_dir,
     get_template_base_dir_choices,
 )
-from ..modal_facet_counts import get_modal_facet_counts
 from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
 from ..search_suggestions import get_search_suggestions
 from ..views.theme import set_template_base_dir
+from .editor.scopes import HasEditorScope
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -56,7 +57,6 @@ from .serializers import (
     SimpleBlogSerializer,
     VideoSerializer,
 )
-from .editor.scopes import HasEditorScope
 
 logger = logging.getLogger(__name__)
 

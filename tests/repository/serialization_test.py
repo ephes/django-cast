@@ -26,19 +26,19 @@ from cast.models.repository import (
     BlogIndexContext,
     FeedContext,
     deserialize_audio,
+    deserialize_blog,
     deserialize_episode,
+    deserialize_episode_contributor,
     deserialize_image,
     deserialize_post,
     deserialize_season,
     deserialize_transcript,
     deserialize_video,
-    deserialize_blog,
-    deserialize_episode_contributor,
     get_facet_choices,
     serialize_audio,
     serialize_blog,
-    serialize_episode_contributor,
     serialize_episode,
+    serialize_episode_contributor,
     serialize_image,
     serialize_post,
     serialize_renditions,
@@ -46,7 +46,6 @@ from cast.models.repository import (
     serialize_transcript,
     serialize_video,
 )
-
 from tests.repository.helpers import (
     StubFile,
 )

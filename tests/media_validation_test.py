@@ -8,7 +8,6 @@ from cast.media_derivation import save_audio_with_derivations, save_video_with_d
 from cast.media_validation import validate_audio_upload, validate_video_upload
 from cast.models import Audio, Video
 
-
 pytestmark = pytest.mark.django_db
 
 

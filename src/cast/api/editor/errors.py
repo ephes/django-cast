@@ -3,9 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from rest_framework import status
-from rest_framework.exceptions import APIException
-from rest_framework.exceptions import NotFound as DRFNotFound
-from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.exceptions import APIException, NotFound as DRFNotFound, ValidationError as DRFValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 

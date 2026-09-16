@@ -8,7 +8,6 @@ from django.utils.translation import gettext_lazy as _
 
 from cast import appsettings
 
-
 DEFAULT_AUDIO_UPLOAD_MAX_BYTES = appsettings.CAST_SETTING_REGISTRY["CAST_AUDIO_UPLOAD_MAX_BYTES"].default
 DEFAULT_VIDEO_UPLOAD_MAX_BYTES = appsettings.CAST_SETTING_REGISTRY["CAST_VIDEO_UPLOAD_MAX_BYTES"].default
 GENERIC_CONTENT_TYPES = {"application/octet-stream", "binary/octet-stream"}

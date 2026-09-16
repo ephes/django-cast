@@ -136,3 +136,8 @@
   test globals come from ``vitest/globals`` instead of the uninstalled ``@types/jest``.
   Type-checking is not part of CI yet because it reports pre-existing errors. The
   shipped bundles are unchanged.
+- Enable Ruff's import-sorting rules (``I``) so the existing
+  ``[tool.ruff.lint.isort]`` configuration is no longer inert, and sort the imports
+  of the 83 files that had drifted. Contributors get import order fixed
+  automatically by ``just lint`` and the pre-commit Ruff hook; no shipped behavior
+  changes.

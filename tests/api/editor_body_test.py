@@ -1,6 +1,6 @@
 import pytest
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -28,9 +28,7 @@ from cast.api.editor.errors import (
 )
 from cast.models import Post
 from cast.models.snippets import PostCategory
-
 from tests.factories import BlogFactory, PostFactory, UserFactory
-
 
 WEEKNOTE_LINK = {
     "category": "articles",
@@ -65,14 +63,6 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
         GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
     user.groups.add(group)
     return user
-
-
-@pytest.fixture
-def superuser(django_user_model):
-    """A superuser, which passes every Wagtail page and image ``choose`` permission."""
-    return django_user_model.objects.create_superuser(
-        username="editor-su", email="editor-su@example.com", password="password"
-    )
 
 
 class TestEditorExceptionHandler:

@@ -20,7 +20,6 @@ from cast.api.editor.richtext import sanitize_block_value, sanitize_rich_text
 from cast.models import Post
 from tests.factories import PostFactory
 
-
 UNSAFE_HTML = [
     '<p>Safe</p><script>alert("cast-xss")</script>',
     '<p onclick="alert(1)">Safe</p>',

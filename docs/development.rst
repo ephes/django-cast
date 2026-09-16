@@ -457,7 +457,11 @@ Django-cast uses Ruff for code formatting and linting. The project is configured
 
 - Line length: 119 characters
 - Black-compatible formatting
-- Import sorting
+- Import sorting (the ``I`` rules, so the ``[tool.ruff.lint.isort]`` options apply)
+
+The lint rule selection is pinned in ``pyproject.toml`` (``[tool.ruff.lint] select``)
+so the CI gate does not depend on the installed Ruff version. Pre-commit's Ruff hook
+reads the same configuration, so ``just lint`` and ``pre-commit`` agree.
 
 Format your code:
 

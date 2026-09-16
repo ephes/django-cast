@@ -8,7 +8,6 @@ from django.urls import reverse
 
 from cast.devdata import create_transcript
 from cast.models import Audio, Contributor, EpisodeContributor, TranscriptGeneration, VoxhelmSettings
-from cast.voxhelm_tasks import complete_transcript_generation
 from cast.voxhelm import (
     TranscriptSubmission,
     VoxhelmError,
@@ -18,6 +17,7 @@ from cast.voxhelm import (
     get_transcript_generation,
     get_transcript_generation_status_context,
 )
+from cast.voxhelm_tasks import complete_transcript_generation
 
 
 class FakeResponse(io.BytesIO):

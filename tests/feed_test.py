@@ -1,9 +1,10 @@
 from datetime import datetime, time
-from types import SimpleNamespace
 from time import mktime
+from types import SimpleNamespace
 from urllib.parse import urlparse
 from xml.etree import ElementTree
 
+import django
 import feedparser
 import pytest
 import pytz
@@ -16,17 +17,15 @@ from django.http import Http404
 from django.urls import resolve, reverse
 from wagtail.models import PageViewRestriction
 
-import django
-
 from cast import appsettings
 from cast.devdata import create_transcript
 from cast.feeds import (
+    PSC_NAMESPACE,
     AtomITunesFeedGenerator,
     AtomPodcastFeed,
     ITunesElements,
     LatestEntriesAtomFeed,
     LatestEntriesFeed,
-    PSC_NAMESPACE,
     PodcastFeed,
     PodcastIndexElements,
     RssPodcastFeed,
@@ -36,10 +35,9 @@ from cast.feeds import (
     _is_positive_integer,
     _psc_start,
 )
-from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Season, Post
+from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Post, Season
 from cast.models.repository import FeedContext
 from tests.factories import BlogFactory, EpisodeFactory
-
 
 RSS_CHAPTERLESS_ROOT_BASELINE = (
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" '

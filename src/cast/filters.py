@@ -15,9 +15,9 @@ from django.forms import Widget
 from django.forms.renderers import BaseRenderer
 from django.forms.utils import flatatt
 from django.http import QueryDict
-from django.utils.html import format_html
 from django.utils.datastructures import MultiValueDict
 from django.utils.encoding import force_str
+from django.utils.html import format_html
 from django.utils.safestring import SafeText, mark_safe
 from django.utils.translation import gettext as _
 from django_filters.fields import ChoiceField as FilterChoiceField

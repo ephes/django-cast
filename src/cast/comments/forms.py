@@ -9,7 +9,6 @@ from django.core.exceptions import ImproperlyConfigured
 from . import appsettings
 from .helper import CommentFormHelper
 
-
 if TYPE_CHECKING:
     from django_comments.forms import CommentForm
 

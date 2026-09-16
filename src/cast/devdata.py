@@ -11,9 +11,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from wagtail.images.models import Image
 from wagtail.models import Site
 
+from cast.media_derivation import save_transcript_with_derivations
 from cast.models import Audio, Blog, Episode, Gallery, Podcast, Post, Transcript, Video
 from cast.post_media import prepare_post_media
-from cast.media_derivation import save_transcript_with_derivations
 
 
 class _Auto:

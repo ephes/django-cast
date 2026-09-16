@@ -6,7 +6,6 @@ from cast.api.views import (
 )
 from cast.devdata import generate_blog_with_media
 
-
 SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"
 
 

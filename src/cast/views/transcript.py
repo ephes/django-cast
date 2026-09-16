@@ -15,16 +15,18 @@ from django.utils.translation import gettext_lazy as _
 from wagtail.admin import messages
 from wagtail.search.backends import get_search_backends
 
+from ..audio_access import authorize_transcript_access, request_may_view_page
 from ..forms import (
     KNOWN_SPEAKER_APPLY_ACTION,
     KNOWN_SPEAKER_REVIEW_ACTION,
+    SPEAKER_MAPPING_ACTION,
+    VOICE_REFERENCE_CREATE_ACTION,
     KnownSpeakerSegmentReviewForm,
     SpeakerContributorMappingForm,
-    SPEAKER_MAPPING_ACTION,
     TranscriptForm,
     VoiceReferenceCandidateCreateForm,
-    VOICE_REFERENCE_CREATE_ACTION,
 )
+from ..media_permissions import transcript_permission_policy
 from ..models import (
     Blog,
     Contributor,
@@ -36,12 +38,8 @@ from ..models import (
     TranscriptVoiceReferenceCandidate,
     get_template_base_dir,
 )
-from ..audio_access import authorize_transcript_access, request_may_view_page
 from ..models.contributors import ContributorVoiceReference
-from ..media_permissions import transcript_permission_policy
 from ..site_lookup import get_site_specific_page_or_404
-from ..transcripts import editing, parsing
-from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
 from ..transcript_sanitization import (
     apply_public_speaker_mapping_to_dote_data,
     apply_public_speaker_mapping_to_podlove_data,
@@ -52,9 +50,10 @@ from ..transcript_sanitization import (
     sanitize_webvtt_content,
     strict_public_speaker_labels_for_transcript,
 )
+from ..transcripts import editing, parsing
+from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
 from . import AuthenticatedHttpRequest, HtmxHttpRequest
 from .media import MediaAdminConfig, MediaAdminViews
-
 
 TRANSCRIPT_FALLBACK_THEME = "plain"
 

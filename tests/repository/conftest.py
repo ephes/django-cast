@@ -26,7 +26,6 @@ from cast.models.repository import (
     serialize_renditions,
     serialize_video,
 )
-
 from tests.repository.helpers import StubFile
 
 

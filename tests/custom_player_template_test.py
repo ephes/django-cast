@@ -4,16 +4,10 @@ import json
 
 import pytest
 from django.template.loader import render_to_string
-from django.test import RequestFactory
 
 from cast.devdata import create_transcript
 
 from .factories import EpisodeFactory
-
-
-@pytest.fixture()
-def rf_request():
-    return RequestFactory().get("/")
 
 
 def render_audio_block(audio, page, *, render_detail, render_for_feed=False, request=None):

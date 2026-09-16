@@ -12,7 +12,6 @@ from cast.api.views import (
 )
 from cast.devdata import create_transcript
 from cast.models import Audio, Contributor, EpisodeContributor, TranscriptSpeakerMapping, Video
-
 from tests.factories import UserFactory
 
 SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"

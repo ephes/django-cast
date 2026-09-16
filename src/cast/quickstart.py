@@ -19,7 +19,6 @@ from pathlib import Path
 from string import Template
 from textwrap import dedent
 
-
 QUICKSTART_TEMPLATE_PACKAGE = "cast"
 QUICKSTART_TEMPLATE_DIR = "quickstart_templates"
 

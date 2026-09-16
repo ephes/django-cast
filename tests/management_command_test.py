@@ -1,14 +1,13 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
-from io import BytesIO
-from io import StringIO
+from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
-from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import CommandError, call_command
 
 from cast.devdata import create_transcript

@@ -22,14 +22,13 @@ from wagtail.admin.forms.collections import BaseCollectionMemberForm
 from wagtail.admin.forms.search import SearchForm
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
-from .media_permissions import audio_permission_policy, transcript_permission_policy
-
-from .media_validation import validate_audio_upload, validate_video_upload
 from .media_derivation import (
     save_audio_with_derivations,
     save_transcript_with_derivations,
     save_video_with_derivations,
 )
+from .media_permissions import audio_permission_policy, transcript_permission_policy
+from .media_validation import validate_audio_upload, validate_video_upload
 from .models import (
     Audio,
     ChapterMark,

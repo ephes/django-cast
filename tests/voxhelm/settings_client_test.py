@@ -1,8 +1,7 @@
 import io
 import json
 from types import SimpleNamespace
-from urllib.error import HTTPError
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
 import pytest
@@ -10,7 +9,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory
 
 from cast.models import Audio, Contributor, EpisodeContributor, VoxhelmSettings
-from tests.factories import EpisodeFactory
 from cast.voxhelm import (
     NoRedirectHandler,
     VoxhelmClient,
@@ -26,15 +24,16 @@ from cast.voxhelm import (
     normalize_api_base,
     open_url,
     read_response_bytes,
-    require_setting,
     require_artifact_path,
-    resolve_audio_source_url,
+    require_setting,
     resolve_audio_diarization_enabled,
+    resolve_audio_source_url,
     resolve_audio_task_ref,
     resolve_diarization_speaker_count,
     strip_diarized_task_ref,
     validate_transcript_artifacts,
 )
+from tests.factories import EpisodeFactory
 
 
 class FakeResponse(io.BytesIO):

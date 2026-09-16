@@ -579,7 +579,6 @@ def test_styleguide_comments_creates_parent_and_reply(site, comments_enabled):
 def test_ensure_posts_updates_stale_visible_date(site):
     """When an existing styleguide post has a visible_date in the wrong month, _ensure_posts updates it."""
     from dateutil.relativedelta import relativedelta
-
     from django.utils import timezone
 
     user = create_user(name="date-user", password="date-user")

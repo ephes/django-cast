@@ -12,12 +12,13 @@ from uuid import uuid4
 import pytest
 import pytz
 from django.apps import apps
-from django.contrib.auth.models import Group, Permission
 from django.conf import settings as django_settings
+from django.contrib.auth.models import Group, Permission
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.db.models.fields.files import FieldFile
+from django.test import RequestFactory
 from django.utils import timezone
 from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
@@ -40,7 +41,6 @@ from .factories import (
     UserFactory,
     VideoFactory,
 )
-
 
 _dropped_stale_test_db = False
 _test_db_fingerprint = None
@@ -1046,3 +1046,8 @@ def use_dummy_cache_backend(settings, mocker):
     }
     # workaround for settings fixture is not working in Django 4.0 and pytest-django
     mocker.patch("django.core.cache.backends.locmem.LocMemCache.get", return_value=None)
+
+
+@pytest.fixture()
+def rf_request():
+    return RequestFactory().get("/")

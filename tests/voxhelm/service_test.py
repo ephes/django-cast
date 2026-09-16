@@ -6,7 +6,6 @@ import pytest
 from wagtail.models import Collection
 
 from cast.models import Audio, Contributor, EpisodeContributor
-from tests.factories import EpisodeFactory
 from cast.voxhelm import (
     TranscriptGenerationResult,
     TranscriptSubmission,
@@ -17,6 +16,7 @@ from cast.voxhelm import (
     replace_file,
     transcript_complete,
 )
+from tests.factories import EpisodeFactory
 
 
 class FakeResponse(io.BytesIO):

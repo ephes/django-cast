@@ -8,11 +8,19 @@ import pytest
 from django.core.checks import Warning
 from django.core.checks.registry import registry
 
-from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.apps import CAST_MIDDLEWARE
-from cast.checks import CAST_SETTING_TYPES, _find_stale_assets, _newest_source_mtime, check_asset_freshness
-from cast.checks import check_cast_comments_ordering, check_cast_required_middleware, check_cast_setting_types
-from cast.checks import check_post_body_block_setting, check_voxhelm_transcripts_task_backend
+from cast.appsettings import CAST_SETTING_REGISTRY
+from cast.checks import (
+    CAST_SETTING_TYPES,
+    _find_stale_assets,
+    _newest_source_mtime,
+    check_asset_freshness,
+    check_cast_comments_ordering,
+    check_cast_required_middleware,
+    check_cast_setting_types,
+    check_post_body_block_setting,
+    check_voxhelm_transcripts_task_backend,
+)
 
 
 @pytest.fixture()

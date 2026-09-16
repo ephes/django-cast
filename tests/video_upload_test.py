@@ -1,6 +1,6 @@
 import pytest
-from django.core.cache import cache
 from django.contrib.auth.models import Permission
+from django.core.cache import cache
 from django.urls import reverse
 from wagtail.models import Collection
 

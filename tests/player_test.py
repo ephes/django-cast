@@ -4,7 +4,6 @@ import logging
 from datetime import timedelta
 
 import pytest
-from django.test import RequestFactory
 from django.urls import reverse
 
 from cast import appsettings
@@ -21,11 +20,6 @@ from cast.player import (
     build_sources,
     parse_chapter_start_seconds,
 )
-
-
-@pytest.fixture()
-def rf_request():
-    return RequestFactory().get("/")
 
 
 class TestParseChapterStartSeconds:

@@ -5,17 +5,16 @@ queries when rendering posts.
 """
 
 import pytest
-import cast.models.repository as repository_module
 from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
 
+import cast.models.repository as repository_module
 from cast.feeds import LatestEntriesFeed
 from cast.models import (
     Blog,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
-
 from tests.repository.helpers import (
     blog_index_repository,
     feed_repository,

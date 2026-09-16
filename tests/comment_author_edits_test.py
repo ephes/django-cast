@@ -354,6 +354,7 @@ class TestEditEndpoint:
 
     def test_edit_into_spam_re_moderates_to_hidden(self, client, comment, feature_on):
         from unittest.mock import patch
+
         from django.urls import reverse
 
         from cast.moderation import Moderator

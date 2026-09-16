@@ -5,9 +5,9 @@ queries when rendering posts.
 """
 
 import json
-from datetime import time, timedelta
 from contextvars import Context, copy_context
 from copy import deepcopy
+from datetime import time, timedelta
 
 import pytest
 from django.db import connection, reset_queries
@@ -24,7 +24,6 @@ from cast.models import (
     Post,
     Season,
 )
-from cast.models.repository.builders import _blog_url_from_referer
 from cast.models.repository import (
     BlogIndexContext,
     FeedContext,
@@ -36,9 +35,9 @@ from cast.models.repository import (
     data_for_blog_cachable,
     serialize_transcript,
 )
+from cast.models.repository.builders import _blog_url_from_referer
 from cast.wagtail_hooks import PageLinkHandlerWithCache
 from tests.factories import EpisodeFactory
-
 from tests.repository.helpers import (
     blocker,
     queryset_data,

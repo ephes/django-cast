@@ -1,14 +1,12 @@
 import pytest
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.test import override_settings
-from django.template.loader import get_template
 from django.template import Context, Template
 from django.template.exceptions import TemplateSyntaxError
+from django.template.loader import get_template
+from django.test import override_settings
 from django.urls import reverse
-from django_comments import get_form_target
-from django_comments import get_model as get_comments_model
-from django_comments import signals
+from django_comments import get_form_target, get_model as get_comments_model, signals
 from django_comments.forms import CommentForm
 
 
@@ -63,8 +61,7 @@ def test_comment_appsettings_falls_back_to_bootstrap4_crispy_templates(monkeypat
 
 @pytest.mark.django_db
 def test_get_base_form_supports_non_threaded(monkeypatch):
-    from cast.comments import appsettings
-    from cast.comments import forms as cast_comment_forms
+    from cast.comments import appsettings, forms as cast_comment_forms
 
     monkeypatch.setattr(appsettings, "USE_THREADEDCOMMENTS", False)
     assert cast_comment_forms._get_base_form() is CommentForm
@@ -151,14 +148,15 @@ def test_cast_comment_form_keeps_existing_excluded_cleaned_data(monkeypatch, pos
 def test_cast_comment_form_field_order_without_threadedcomments(monkeypatch, post):
     from django_comments import get_form
 
-    from cast.comments import appsettings
-
     # Import the forms module *before* patching: CastCommentForm's base class is
     # chosen once at first import (threaded vs. plain). Triggering that first
     # import via get_form() while USE_THREADEDCOMMENTS is patched to False would
     # bake a parent-less form class into sys.modules for the rest of the test
     # session, breaking later reply tests depending on test order.
-    from cast.comments import forms  # noqa: F401
+    from cast.comments import (
+        appsettings,
+        forms,  # noqa: F401
+    )
 
     monkeypatch.setattr(appsettings, "USE_THREADEDCOMMENTS", False)
     form = get_form()(post)
@@ -168,10 +166,11 @@ def test_cast_comment_form_field_order_without_threadedcomments(monkeypatch, pos
 
 @pytest.mark.django_db
 def test_models_get_base_comment_model_supports_threaded_and_non_threaded(monkeypatch):
-    from cast.comments import appsettings
-    from cast.comments.models import get_base_comment_model
     from django_comments.models import Comment as DjangoComment
     from threadedcomments.models import ThreadedComment as ThreadedCommentModel
+
+    from cast.comments import appsettings
+    from cast.comments.models import get_base_comment_model
 
     monkeypatch.setattr(appsettings, "USE_THREADEDCOMMENTS", True)
     assert get_base_comment_model() is ThreadedCommentModel
@@ -689,6 +688,7 @@ def test_safe_fill_tree_clears_primed_excluded_parent_cache(post, settings):
 @pytest.mark.django_db
 def test_safe_fill_tree_filters_malformed_cross_target_ancestor(post, blog, settings):
     from threadedcomments.models import PATH_SEPARATOR
+
     from tests.factories import PostFactory
 
     other_post = PostFactory(parent=blog, title="Other post", slug="other-render-post")
@@ -713,6 +713,7 @@ def test_safe_fill_tree_filters_malformed_cross_target_ancestor(post, blog, sett
 @pytest.mark.django_db
 def test_threadedcomments_fill_tree_is_replaced_with_safe_filter(post, blog, settings):
     from threadedcomments.models import PATH_SEPARATOR
+
     from tests.factories import PostFactory
 
     other_post = PostFactory(parent=blog, title="Other override post", slug="other-override-post")

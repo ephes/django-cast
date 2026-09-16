@@ -6,7 +6,6 @@ from pathlib import Path
 from . import base as base_settings
 from .base import *  # noqa
 
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 

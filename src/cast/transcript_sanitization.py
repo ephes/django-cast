@@ -6,7 +6,6 @@ from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist
 
-
 PODLOVE_SPEAKER_FIELDS = ("speaker", "voice")
 WEBVTT_TIMING_SEPARATOR = "-->"
 WEBVTT_VOICE_SPAN_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>(?P<body>.*?)</v>")

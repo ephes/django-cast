@@ -33,16 +33,16 @@ from wagtail.models import Page, PageManager, Site
 from wagtail.search import index
 
 from cast import appsettings
-from cast.player import audio_player_context_flags
 from cast.follow_links import get_follow_links
 from cast.http_types import HtmxHttpRequest
+from cast.player import audio_player_context_flags
+from cast.post_body_blocks import ContentBlock, homepage_content_blocks
 from cast.post_media import (
     media_ids_from_body,
     prepare_post_media,
     sync_media_ids as _sync_media_id_changes,
     synchronize_post_media,
 )
-from cast.post_body_blocks import ContentBlock, homepage_content_blocks
 from cast.presenters import render_post_description
 from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
@@ -344,8 +344,9 @@ class Post(Page):
 
     @property
     def comments_security_data(self) -> dict[str, str | int]:
-        from cast.comments.utils import comments_are_open
         from django_comments.forms import CommentSecurityForm
+
+        from cast.comments.utils import comments_are_open
 
         if not comments_are_open(self):
             return {}

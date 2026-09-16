@@ -2,6 +2,7 @@ import copy
 import shutil
 import warnings
 from pathlib import Path
+
 import pytest
 from django.db.utils import OperationalError
 from django.urls import reverse
@@ -14,8 +15,8 @@ from cast.models.theme import (
     get_required_template_names,
     get_soft_required_template_names,
     get_strictly_required_template_names,
-    get_template_base_dir_candidates,
     get_template_base_dir,
+    get_template_base_dir_candidates,
     get_template_base_dir_choices,
     get_template_directories,
 )

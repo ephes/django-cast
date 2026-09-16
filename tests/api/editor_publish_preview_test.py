@@ -6,7 +6,6 @@ from django.urls import reverse
 from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page
 
 from cast.models import Post
-
 from tests.factories import EpisodeFactory, PostFactory, UserFactory
 
 
@@ -32,14 +31,6 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
         GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
     user.groups.add(group)
     return user
-
-
-@pytest.fixture
-def superuser(django_user_model):
-    """A superuser, which passes every Wagtail page and image ``choose`` permission."""
-    return django_user_model.objects.create_superuser(
-        username="editor-su", email="editor-su@example.com", password="password"
-    )
 
 
 class _FakeScopedToken:

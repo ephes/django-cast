@@ -9,7 +9,6 @@ from wagtail.images.models import Image
 from ...utils import storage_walk_paths
 from .storage_backend import get_production_and_backup_storage
 
-
 MANAGED_MEDIA_PREFIXES = (
     "cast_audio/",
     "cast_files/",

@@ -1,6 +1,5 @@
 from django.apps import AppConfig
 
-
 # Apps required by django-cast
 CAST_APPS = [
     # Form styling

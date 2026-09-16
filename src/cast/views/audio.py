@@ -7,8 +7,8 @@ from django.utils.translation import gettext_lazy as _
 from modelsearch.backends.base import BaseSearchResults
 
 from ..forms import AudioForm
-from ..models import Audio
 from ..media_permissions import audio_permission_policy
+from ..models import Audio
 from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from ..voxhelm import voxhelm_configured
 from . import AuthenticatedHttpRequest

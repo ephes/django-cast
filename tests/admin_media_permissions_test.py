@@ -11,9 +11,7 @@ from django.urls import reverse
 from wagtail.models import Collection, GroupCollectionPermission
 
 from cast.models import Audio, Transcript, Video
-from cast.views import audio as audio_views
-from cast.views import transcript as transcript_views
-from cast.views import video as video_views
+from cast.views import audio as audio_views, transcript as transcript_views, video as video_views
 
 
 @dataclass(frozen=True)

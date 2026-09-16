@@ -1,9 +1,9 @@
 import subprocess
 
 import pytest
+from django.contrib.auth.models import Group, Permission
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 from rest_framework.response import Response
 from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
@@ -14,7 +14,6 @@ from cast.api.editor.errors import (
     EditorValidationError,
 )
 from cast.models import Audio, Video
-
 from tests.factories import UserFactory
 
 
@@ -40,14 +39,6 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
         GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
     user.groups.add(group)
     return user
-
-
-@pytest.fixture
-def superuser(django_user_model):
-    """A superuser, which passes every Wagtail page and image ``choose`` permission."""
-    return django_user_model.objects.create_superuser(
-        username="editor-su", email="editor-su@example.com", password="password"
-    )
 
 
 class TestEditorMediaEndpoints:

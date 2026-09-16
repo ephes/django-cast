@@ -1,6 +1,6 @@
+import pytest
 from django.apps import apps
 from django.test import override_settings
-import pytest
 
 import cast.appsettings as appsettings
 from cast.apps import CAST_APPS
