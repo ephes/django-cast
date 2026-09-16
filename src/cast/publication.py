@@ -107,9 +107,29 @@ def _publish_revision_and_object(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> tuple[Revision, Any, Revision | None]:
+    arguments = _publish_revision_arguments(args, kwargs)
+    return arguments["revision"], arguments["object"], arguments.get("previous_revision")
+
+
+def _publish_revision_arguments(args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
     arguments = dict(zip(_PUBLISH_REVISION_PARAMETER_NAMES, args, strict=False))
     arguments.update(kwargs)
-    return arguments["revision"], arguments["object"], arguments.get("previous_revision")
+    return arguments
+
+
+def _reject_scheduled_publication(revision: Revision, page: Post, rejection: PublicationRejected) -> None:
+    from wagtail.log_actions import log
+
+    revision.approved_go_live_at = None
+    revision.save(update_fields=["approved_go_live_at"])
+    log(instance=page, action="cast.publish.rejected", revision=revision)
+    violation_codes = ", ".join(f"{violation.field}:{violation.code}" for violation in rejection.violations)
+    logger.error(
+        "Publication policy rejected scheduled publication for page %s revision %s: %s",
+        page.pk,
+        revision.pk,
+        violation_codes,
+    )
 
 
 def install_publication_policy() -> None:
@@ -136,10 +156,19 @@ def install_publication_policy() -> None:
         from cast.models import Episode, Post
         from cast.podcast_numbering import assign_episode_number_for_publish
 
-        revision, object_to_publish, previous_revision = _publish_revision_and_object(args, kwargs)
+        arguments = _publish_revision_arguments(args, kwargs)
+        revision = arguments["revision"]
+        object_to_publish = arguments["object"]
+        previous_revision = arguments.get("previous_revision")
         if isinstance(object_to_publish, Post):
             with transaction.atomic():
-                check_publishable(object_to_publish, revision=revision)
+                try:
+                    check_publishable(object_to_publish, revision=revision)
+                except PublicationRejected as rejection:
+                    if arguments.get("log_action") != "wagtail.publish.scheduled":
+                        raise
+                    _reject_scheduled_publication(revision, object_to_publish, rejection)
+                    return None
                 if isinstance(object_to_publish, Episode):
                     assign_episode_number_for_publish(
                         object_to_publish,

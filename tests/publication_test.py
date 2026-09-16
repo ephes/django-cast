@@ -1,9 +1,13 @@
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from django.core.management import call_command
+from django.utils import timezone
+from wagtail.models import PageLogEntry, Revision
 from wagtail.workflows import publish_workflow_state
 
-from cast.models import Episode, Post
+from cast.models import Audio, Episode, Post
 from cast.publication import (
     EPISODE_AUDIO_REQUIRED,
     PublicationRejected,
@@ -300,3 +304,88 @@ def test_publish_hook_allows_non_cast_page(site):
 
     page.refresh_from_db()
     assert page.live is True
+
+
+@pytest.mark.django_db
+def test_scheduled_publish_rejects_episode_after_audio_deletion_and_continues(
+    podcast,
+    audio,
+    body,
+    caplog,
+):
+    scheduled_for = timezone.now() + timedelta(days=1)
+    rejected_episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Episode that lost its audio",
+        slug="episode-that-lost-audio",
+        live=False,
+        first_published_at=None,
+        go_live_at=scheduled_for,
+        podcast_audio=audio,
+        body=body,
+    )
+    rejected_revision = rejected_episode.save_revision()
+    rejected_revision.publish()
+    due = timezone.now() - timedelta(minutes=2)
+    Revision.objects.filter(pk=rejected_revision.pk).update(approved_go_live_at=due)
+    audio.delete()
+
+    valid_audio = Audio.objects.create(user=podcast.owner, title="Still available")
+    valid_episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Next scheduled episode",
+        slug="next-scheduled-episode",
+        live=False,
+        first_published_at=None,
+        go_live_at=due + timedelta(minutes=1),
+        podcast_audio=valid_audio,
+        body=body,
+    )
+    valid_revision = valid_episode.save_revision(approved_go_live_at=due + timedelta(minutes=1))
+    caplog.set_level("ERROR", logger="cast.publication")
+
+    call_command("publish_scheduled", verbosity=0)
+
+    rejected_episode.refresh_from_db()
+    rejected_revision.refresh_from_db()
+    valid_episode.refresh_from_db()
+    assert rejected_episode.live is False
+    assert rejected_revision.approved_go_live_at is None
+    assert valid_episode.live is True
+    assert valid_episode.live_revision_id == valid_revision.pk
+    log_entry = PageLogEntry.objects.get(page_id=rejected_episode.pk, action="cast.publish.rejected")
+    assert log_entry.revision_id == rejected_revision.pk
+    assert str(log_entry.message) == "Rejected scheduled publication"
+    assert "Publication policy rejected scheduled publication" in caplog.text
+    assert "podcast_audio:required" in caplog.text
+
+
+@pytest.mark.django_db
+def test_scheduled_publish_rejects_synthetic_legacy_revision(podcast, audio, body):
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="Legacy scheduled episode",
+        slug="legacy-scheduled-episode",
+        live=False,
+        first_published_at=None,
+        podcast_audio=audio,
+        body=body,
+    )
+    revision = episode.save_revision()
+    invalid_content = revision.content.copy()
+    invalid_content["podcast_audio"] = None
+    Revision.objects.filter(pk=revision.pk).update(
+        approved_go_live_at=timezone.now() - timedelta(minutes=1),
+        content=invalid_content,
+    )
+
+    call_command("publish_scheduled", verbosity=0)
+
+    episode.refresh_from_db()
+    revision.refresh_from_db()
+    assert episode.live is False
+    assert revision.approved_go_live_at is None
+    assert PageLogEntry.objects.filter(page_id=episode.pk, action="cast.publish.rejected").exists()

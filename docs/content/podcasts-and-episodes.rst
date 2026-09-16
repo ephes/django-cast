@@ -66,9 +66,16 @@ image will be used.
 Podcast Audio
 -------------
 
-The `podcast_audio` field may be empty while an episode is a draft, but the
-built-in Wagtail form requires it when publishing. It supplies the enclosure
-for the episode in the podcast feed.
+The `podcast_audio` field may be empty while an episode is a draft, but it is
+required when publishing through Wagtail or the editor API. It supplies the
+enclosure for the episode in the podcast feed.
+
+If the audio linked from an approved, scheduled episode is deleted before its
+go-live time, django-cast does not publish that scheduled revision. A draft
+episode remains a draft; an already-live episode remains live without applying
+the scheduled update. The approval is cleared so Wagtail does not retry it on
+every run, and the episode History records a rejected scheduled publication.
+Add audio and schedule the episode again to publish it.
 
 Promote > Title
 ---------------

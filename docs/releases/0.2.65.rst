@@ -13,9 +13,11 @@
   path. Bulk publishing, workflow approval, scheduled publication approval,
   Wagtail APIs, and direct revision publishing now reject an episode without
   ``podcast_audio`` instead of allowing it to go live. Bulk and workflow
-  rejection currently surface as a Wagtail server error. A legacy invalid
-  revision that was approved before this upgrade can still stop a
-  ``publish_scheduled`` batch until its approval is cleared.
+  rejection currently surface as a Wagtail server error. If an approved
+  scheduled episode loses its audio, or a pre-upgrade approval contains other
+  invalid stored content, django-cast now skips that scheduled revision, clears
+  the approval, records the rejection in Wagtail History, and continues
+  publishing later due revisions instead of stopping the batch.
 - Add the ``cast.E010`` system check for django-cast's guarded Wagtail
   publication hook. An unsupported Wagtail publish API now fails deployment
   checks instead of leaving publication rules disabled with only a startup

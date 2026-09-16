@@ -36,6 +36,16 @@ from .voxhelm import voxhelm_configured
 _T = TypeVar("_T")
 
 
+@hooks.register("register_log_actions")
+def register_publication_log_actions(actions: Any) -> None:
+    """Register the History entry used for rejected scheduled publishes."""
+    actions.register_action(
+        "cast.publish.rejected",
+        _("Reject scheduled publication"),
+        _("Rejected scheduled publication"),
+    )
+
+
 @hooks.register("register_image_operations")
 def register_image_operations() -> list[tuple[str, type[TransformColorspaceToSrgbOperation]]]:
     """Register custom image operations for django-cast renditions."""
