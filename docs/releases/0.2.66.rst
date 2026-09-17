@@ -4,4 +4,7 @@
 - Add an isolated Wagtail 8 v3 compatibility experiment to the Wagtail 8 tox
   environments. It proves bearer-authenticated schema discovery and public
   Post/Episode page exposure without mounting v3 in normal django-cast URLs or
-  enabling any Cast fields for v3 writes.
+  enabling any Cast fields for v3 writes in production.
+- Extend the disposable experiment with selected scalar draft fields. It
+  reproduces write-response failures from Cast's computed v2 fields and shows
+  that partial updates are based on the live row rather than the latest draft.

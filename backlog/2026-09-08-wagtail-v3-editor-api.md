@@ -2,9 +2,9 @@
 
 Date: 2026-09-08
 
-Status: evaluation in progress; the first isolated mounting/discovery slice is
-implemented in test configuration only. No production v3 integration or client
-migration is implemented.
+Status: evaluation in progress; isolated mounting/discovery and scalar
+draft-write slices are implemented in test configuration only. No production
+v3 integration or client migration is implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
@@ -47,7 +47,7 @@ The initial analysis ran `just check` on Wagtail 8.0: 2,616 tests passed,
 one skipped, 100% coverage, with lint and type checks passing. This establishes
 the current Cast baseline; it does not validate v3 integration.
 
-## Slice 1: isolated mounting and discovery baseline
+## Compatibility experiment evidence
 
 Measured on 2026-09-16 with Python 3.12, Django 6.1.1, and Wagtail 8.0 in
 ``py312-django61-wagtail80``. The default development environment remained on
@@ -56,13 +56,16 @@ authoritative, specifically ``wagtail.api.v3.api``, ``auth``, ``registry``,
 ``routers.pages``, ``routers.schema``, the read/write schema generators, and
 ``form_data``.
 
-The experiment adds ``wagtail.api.v3`` and mounts its URLs only through
-``tests.wagtail_v3_settings`` and ``tests.wagtail_v3_urls``. Every Wagtail 8
-tox environment first runs the complete suite with normal ``tests.settings``
-and ``tests.urls``, then runs only the experiment module in a second process
-with the disposable settings. Every django-cast production module remains
-unchanged. Normal Wagtail 8 test runs and Wagtail 7 collect the experiment as
-a configuration-gated skip without importing a v3 module.
+The first slice adds ``wagtail.api.v3`` and mounts its URLs only through
+``tests.wagtail_v3_settings`` and ``tests.wagtail_v3_urls``. The second slice,
+measured on 2026-09-17 in the same environment, adds a disposable AppConfig
+that marks selected Post and Episode scalar fields writable before Wagtail
+builds its v3 registry. Every Wagtail 8 tox environment first runs the complete
+suite with normal ``tests.settings`` and ``tests.urls``, then runs only the
+experiment module in a second process with the disposable settings. Every
+django-cast production module remains unchanged. Normal Wagtail 8 test runs and
+Wagtail 7 collect the experiment as a configuration-gated skip without
+importing a v3 module.
 
 Evidence labels below are deliberate: **test** means
 ``tests/wagtail_v3_experiment_test.py`` exercised the behavior; **source**
@@ -76,26 +79,27 @@ but was not exercised through a Cast integration test in this slice.
 | Authentication identity | upstream equivalent | **Test:** anonymous and session-only schema requests return 401; a native Wagtail ``APIToken`` bearer succeeds. **Source:** bearer auth overwrites any session user. | Token migration and service-account lifecycle remain unverified. |
 | Write/publish scopes | Cast extension required | **Source:** native tokens represent a user but carry no Cast ``write`` versus ``publish`` scopes. | Prove an extension point before exposing writes. |
 | Live page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Draft reads, exclusion behavior, and per-page permission behavior remain unverified. |
-| Common page fields | upstream equivalent | **Test:** Post and Episode create/patch schemas include ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``. | Exercise create and partial update behavior before relying on it. |
-| Post field inventory | Cast extension required | **Test:** read schemas expose ``visible_date``, ``cover_image``, ``cover_alt_text``, and ``body``; create/patch expose none of the intended Cast fields ``visible_date``, ``cover_image``, ``cover_alt_text``, ``body``, ``tags``, or ``categories``. **Source:** the read fields come from existing v2 ``APIField`` declarations. | Opt in only test-local fields, then measure conversion, permissions, and omission semantics. |
-| Episode field inventory | Cast extension required | **Test:** Episode inherits the Post read shape, but ``podcast_audio``, ``episode_number``, ``episode_type``, ``season``, ``keywords``, ``explicit``, and ``block`` are absent from read/create/patch schemas. | Add a test-only Episode field inventory before attempting a write. |
+| Common page fields | upstream equivalent | **Test:** Post and Episode create/patch schemas include ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``; draft create requests reach Wagtail's action layer. | A successful API response still requires the response-schema incompatibility below to be resolved. |
+| Post field inventory | Cast extension required | **Test:** the disposable configuration makes ``visible_date`` and ``cover_alt_text`` writable; read schemas also expose ``cover_image`` and ``body``. ``cover_image``, ``body``, ``tags``, and ``categories`` remain absent from writes. **Source:** the read fields originate in existing v2 ``APIField`` declarations. | Evaluate relations and body conversion only after safe scalar updates exist. |
+| Episode field inventory | Cast extension required | **Test:** Episode inherits the two Post write fields and additionally exposes ``episode_number``, ``episode_type``, ``keywords``, ``explicit``, and ``block``. A draft Episode without audio is persisted. ``podcast_audio`` and ``season`` remain absent from read/create/patch schemas. | Evaluate FK representation, same-podcast season policy, and media permissions separately. |
 | StreamField schema | incompatible for self-describing agent input | **Source and test schema:** ``body`` is read as ``list[Any]`` and is absent from writes, so discovery cannot currently describe Cast's author block contract. | Evaluate a Cast adapter over ``cast.content`` rather than duplicating conversion. |
 | Revision conflict and draft-only guards | unverified | **Source:** the inspected v3 update route has no Cast revision token or ``require_unpublished`` precondition. | Reproduce concurrent and scheduled-state behavior after a field is writable. |
-| Partial update against a newer draft | unverified | **Source:** ``build_page_update_form`` binds the materialized page object and narrows the form to submitted fields. | Reproduce the live-row/newer-draft case; do not classify it as a bug yet. |
+| Write response serialization | incompatible | **Test:** Post and Episode draft creates persist, and a Post PATCH creates a revision, but each response is 422 because the inherited ``html_overview`` and ``html_detail`` v2 serializers require a request context that the v3 write response lacks. The write has committed before serialization fails. | Give v3 a transport-native read schema or establish an upstream response-context extension; do not mask committed writes as validation failures. |
+| Partial update against a newer draft | incompatible | **Test:** after a newer draft changes ``cover_alt_text``, a v3 PATCH that supplies only ``visible_date`` creates a revision whose omitted cover text comes from the live row. **Source:** ``build_page_update_form`` binds the database page object and narrows the form to submitted fields. | A Cast adapter must materialize the latest draft and enforce an explicit base revision before editing. |
 | Episode publication policy | unverified | **Source:** v3 publish uses Wagtail's action registry and revision publish path, which should reach ``cast.publication``. | Test create/edit/standalone/scheduled publication, including audio-less rejection. |
 | Media and body conversion | Cast extension required | Existing Cast services remain the required policy seams; no v3 write path exercised them in this slice. | Keep ``cast.content`` transport-neutral and reuse media ingestion without internal HTTP calls. |
 
-No incompatible runtime behavior was reproduced because this prerequisite did
-not enable writes. The StreamField discovery limitation above is a schema
-incompatibility for the intended self-describing agent workflow, not evidence
-that a future adapter cannot make body writes safe.
+The write experiment reproduced two runtime incompatibilities without enabling
+production routes: response serialization reports failure after committing a
+write, and partial updates discard omitted values from a newer draft. The
+StreamField limitation remains a separate schema incompatibility for the
+intended self-describing agent workflow.
 
-The next smallest experiment slice is a test-only writable-field opt-in for the
-minimum Post and Episode draft inventory. It should exercise one draft create
-and one partial draft update, prove whether omitted fields come from the latest
-draft or the live row, and route body input through ``cast.content`` rather than
-adding transport logic there. Publication, preview, media upload, and Daybook
-migration remain later slices.
+The next smallest experiment slice is a test-only revision-aware update
+adapter. It should expose a transport-native response shape, require a base
+revision, materialize the latest draft before applying an update, and prove
+that stale requests fail without creating a revision. Body, publication,
+preview, media upload, and Daybook migration remain later slices.
 
 ## Upstream capabilities and remaining questions
 
@@ -118,10 +122,9 @@ in any release until stabilized. Enabling it requires separate app/URL setup.
 Two source-level concerns need focused regression proofs:
 
 1. The installed v3 update router builds its update form from the model row.
-   Test a live page that already has a newer draft: a subsequent partial edit
-   must preserve omitted values from that draft, not reconstruct them from
-   the live row. Treat this as an investigation item, not a confirmed runtime
-   regression until reproduced.
+   The scalar write experiment confirms that a partial edit of a live page
+   with a newer draft reconstructs omitted values from the live row. Any Cast
+   adapter must start from the latest revision and reject stale base revisions.
 2. `CustomEpisodeForm.clean()` identifies publication using the admin's
    `action-publish` form input, while Cast's editor publish handler explicitly
    checks the revision for `podcast_audio`. A v3 standalone publish bypasses
