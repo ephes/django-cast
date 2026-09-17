@@ -48,3 +48,7 @@
   writes replace the whole body and accept images the caller cannot choose.
   A disposable adapter converts Cast author blocks through ``cast.content``,
   preserves the other body section, and reports Cast's field-level errors.
+- Measure media handling in the Wagtail 8 experiment. Stock v3 image uploads
+  apply Wagtail's validation and collection scoping, but can store an image in
+  a different collection than requested and do not require ``choose``
+  permission. v3 exposes no Cast audio, video, or transcript routes.

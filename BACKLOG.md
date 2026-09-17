@@ -26,14 +26,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
   - Progress: 0.2.66 adds test-only Wagtail 8 mounting, discovery, scalar draft-write,
     revision-aware update-adapter, publication-policy, authorization, draft-state, revision-bound publication,
-    scheduling-input, draft read/preview, and body-conversion experiments. The adapter resolves measured response and latest-draft gaps; v3 actions reuse Cast's audio
+    scheduling-input, draft read/preview, body-conversion, and media experiments. The adapter resolves measured response and latest-draft gaps; v3 actions reuse Cast's audio
     policy, tree permissions, and scheduled-page lock. Native tokens lack Cast scopes and work without Wagtail admin
     access, while live-page draft-only updates still need a Cast precondition. Stock standalone publish can make a
     newer unreviewed draft live, so publication also needs a selected-revision precondition. Schedule input needs
     a field opt-in and merged go-live/expiry validation. Stock v3 cannot serialize Cast page detail, lets
     explore-only users read drafts, and has no rendered preview. Native body writes replace whole fields and skip
-    media-choice checks, while ``cast.content`` is reusable from an adapter. Media and PostgreSQL concurrency remain
-    to be evaluated.
+    media-choice checks, while ``cast.content`` is reusable from an adapter. v3 image uploads can substitute the
+    requested collection and skip ``choose``; there are no v3 audio/video routes. PostgreSQL concurrency and the
+    architecture decision remain.
   - Implemented prerequisites: the publication policy and content converter seams —
     [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and
     [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)

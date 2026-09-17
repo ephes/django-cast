@@ -7,7 +7,7 @@ draft-write, revision-aware update-adapter, and publication-policy slices are
 implemented in test configuration only, along with an authorization/scope
 experiment, a draft-state precondition experiment, a revision-bound
 publication experiment, a scheduling-input experiment, a draft read and
-preview experiment, and a body-conversion experiment. No production v3 integration or client migration is
+preview experiment, a body-conversion experiment, and a media experiment. No production v3 integration or client migration is
 implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
@@ -98,7 +98,10 @@ rule, and adds a test-only bearer-authenticated preview route that renders the
 latest revision through Wagtail's ``make_preview_request``. The tenth slice,
 measured on 2026-09-17, opts ``body`` into the disposable write inventory,
 submits native StreamField values through stock v3, and adds a test-adapter
-route that converts Cast author blocks through ``cast.content``. Every django-cast
+route that converts Cast author blocks through ``cast.content``. The
+eleventh slice, measured on 2026-09-17, inventories the installed v3 media
+types and exercises stock v3 image uploads under collection permissions and
+anonymous image listing. Every django-cast
 production module remains unchanged. Normal Wagtail 8 test runs and Wagtail 7
 collect the experiment as a configuration-gated skip without importing a v3
 module.
@@ -136,6 +139,9 @@ but was not exercised through a Cast integration test in this slice;
 | Scheduling input | Cast extension required | **Test:** stock ``cast.Blog`` read/create/patch schemas have no ``go_live_at`` or ``expire_at``; the disposable opt-in makes both writable for Post and Episode. A future ``go_live_at`` written through the adapter, followed by revision-bound publication, returns 200 with ``live: false`` and no live revision. The selected revision receives ``approved_go_live_at``, is the only item in the v3 revision listing filtered by that time, and places the page under ``ScheduledForPublishLock``. A past ``go_live_at`` publishes immediately. An audio-less Episode is rejected with 422 before approval, and no schedule log is written. Submitting ``go_live_at`` later than ``expire_at`` in one request returns 422 for both fields without a revision. Submitting only ``go_live_at`` after an earlier request set ``expire_at`` is accepted, leaving a draft whose ``go_live_at`` is later than its ``expire_at``. Earlier tests show that the scheduler rechecks an approved revision. **Source:** v3's base page write inventory is ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``. Wagtail's admin form checks ``go_live_at``/``expire_at`` only when both are bound, and v3 partial updates bind only submitted fields. Cast's editor API accepts no schedule input and only reports ``status: "scheduled"``. **Inference:** scheduling is not a current editor-API guarantee. Exposing it through v3 needs an explicit field opt-in plus a Cast check against the stored counterpart value. | Decide whether programmatic scheduling is required at all. If it is, validate the merged ``go_live_at``/``expire_at`` pair in the adapter and define its read representation; the page detail schema exposes it only after the opt-in. |
 | Native body writes | incompatible with Cast body safeguards | **Test:** a stock native body PATCH replaces the whole field, dropping the omitted ``detail`` section, and commits before the known 422. Wagtail's rich-text input sanitizer removes a script, a ``javascript:`` link, and an ``onerror`` image. A non-staff page editor without image permissions can store an existing image id, and a missing image id is stored as ``null``. An unknown block type returns 422 without a revision. **Source:** v3 flattens native values into the StreamField form (``form_data.flatten_block_value``). Chooser blocks resolve ids without a ``choose`` permission check. Rich text passes through ``DbHTMLConverter``. **Inference:** native writes bypass Cast's per-section preservation and media-choice policy. | Do not expose native ``body`` writes for Cast pages. |
 | Author-block body conversion | Cast extension required | **Test:** a test-adapter route with a strong ``If-Match`` converts Post and Episode ``overview`` author blocks through ``cast.content``, stores the converted paragraph and image, and leaves the existing ``detail`` section unchanged in parsed StreamField data. A caller without image ``choose`` permission receives ``422 validation_error`` at ``detail.0.value.id`` with code ``not_found``, and an unsupported author block is reported at ``overview.0.type``. Neither creates a revision. Empty input returns 400, a stale base returns 409, an unquoted token returns 400, and an out-of-tree editor receives 403 without the current revision id. **Source:** the adapter calls ``cast.content.convert.author_blocks_to_section`` and saves through Wagtail's registered edit action. It reuses ``_section_value`` and ``_body_sections_with_replacements`` from the DRF ``PostEditorMixin``. **Inference:** ``cast.content`` is reusable without transport coupling, but the section-merge rule still lives in the DRF editor view. | Move section selection and merging into ``cast.content`` before any production adapter reuses them. Media upload remains a separate slice. |
+| Image upload | Cast extension required | **Test:** a bearer user with ``add_image`` on two collections receives 422 at ``collection`` for an unpermitted or missing collection and 422 at ``file`` for non-image bytes, creating no image. A permitted upload returns 201 and records the uploader and the requested collection. A user with exactly one usable collection who requests another one receives 201, and the image is stored in the usable collection instead. An add-only user can upload an image that ``get_choosable_image`` then hides, so the Cast body adapter refuses to attach it with ``not_found``. **Source:** v3 builds Wagtail's admin image form, whose collection field is limited to ``add`` collections and hidden when only one is available. Cast's editor upload requires ``add`` and ``choose`` on the target collection and returns ``collection_permission_denied`` for any other requested collection. **Inference:** upstream image validation and collection scoping are reusable, but silent collection substitution and add-without-choose uploads differ from Cast's contract. | Keep a Cast upload route, or accept the upstream contract explicitly and document the substitution. |
+| Audio, video, and transcripts | Cast extension required | **Test:** the v3 schema registry lists ``wagtailimages.Image`` and ``wagtaildocs.Document`` but no ``cast.Audio``, ``cast.Video``, or ``cast.Transcript``; the installed route names contain no audio, video, or transcript routes. **Source:** v3 registers snippet types only for registered snippet models with API fields; Cast media are not among them. Cast's upload lock, probe budget, derivation, and cleanup live in its media-ingestion service. | Keep Cast audio/video/transcript upload routes over the existing ingestion service; do not use snippet registration as a substitute. |
+| Public image reads | upstream equivalent | **Test:** anonymous v3 and Cast's existing v2 image listings both return the same unrestricted image. **Source:** v3 uses the v2-parity queryset that excludes only restricted collections. The editor media list additionally filters by ``choose``. | Keep editor-style choose filtering for authoring pickers. |
 
 The stock write experiment reproduced two runtime incompatibilities without
 enabling production routes: response serialization reports failure after
@@ -185,12 +191,16 @@ skip Cast's media-choice checks, while a thin adapter can reuse
 ``cast.content`` for author-block conversion and preserve the untouched
 section. The section-merge helper still lives in the DRF editor view.
 
-The next smallest experiment slice is media upload: compare the installed v3
-image and document routes with Cast's ingestion service and collection
-permissions, and establish whether Cast audio and video are reachable through
-v3 at all. PostgreSQL concurrency and
-the architecture decision remain later slices; Daybook migration is outside
-this evaluation.
+The eleventh slice shows that stock v3 image uploads reuse Wagtail's image
+validation and collection scoping, but may substitute the requested
+collection and do not require ``choose``. v3 has no route for Cast audio,
+video, or transcripts, so Cast's ingestion service stays authoritative.
+
+The remaining decision-relevant gap is concurrency: the adapter row locks and
+the editor API's guards are proved only by sequential SQLite tests. The next
+slice should determine whether a PostgreSQL run is available for the
+experiment; if not, record that as an explicit blocker and state whether it
+changes the architecture choice. The architecture decision follows.
 
 ## Upstream capabilities and remaining questions
 

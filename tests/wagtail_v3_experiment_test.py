@@ -6,6 +6,7 @@ from typing import Any, Literal, Protocol
 import pytest
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group, Permission
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import Client
 from django.urls import NoReverseMatch, reverse
@@ -28,6 +29,7 @@ from wagtail.models import APIToken  # noqa: E402
 from cast.content.media_refs import get_choosable_image  # noqa: E402
 from cast.models import Episode, Post  # noqa: E402
 from cast.publication import EPISODE_AUDIO_REQUIRED  # noqa: E402
+from tests.conftest import create_1_px_image  # noqa: E402
 from tests.factories import BlogFactory, EpisodeFactory, PostFactory, UserFactory  # noqa: E402
 from tests.wagtail_v3_writable import (  # noqa: E402
     EPISODE_ONLY_WRITABLE_FIELDS,
@@ -1367,3 +1369,103 @@ def test_body_adapter_preconditions(client, admin_user, site, post, body) -> Non
     assert unquoted.json()["code"] == "invalid_base_revision"
     post.refresh_from_db()
     assert post.latest_revision_id == current.pk
+
+
+def _grant_collection_permissions(user: AbstractUser, collections: list[Collection], *codenames: str) -> None:
+    group = Group.objects.create(name=f"v3 image collections {user.pk} {len(user.groups.all())}")
+    for collection in collections:
+        for codename in codenames:
+            permission = Permission.objects.get(codename=codename, content_type__app_label="wagtailimages")
+            GroupCollectionPermission.objects.create(group=group, collection=collection, permission=permission)
+    user.groups.add(group)
+
+
+def _child_collections(*names: str) -> list[Collection]:
+    children = []
+    for name in names:
+        root = Collection.get_first_root_node()
+        children.append(root.add_child(name=name))
+    return children
+
+
+def _upload_image(client, token: str, collection: Collection | None, content: bytes | None = None) -> Any:
+    data = {"file": SimpleUploadedFile("upload.png", content or create_1_px_image(), content_type="image/png")}
+    data["title"] = "v3 upload"
+    if collection is not None:
+        data["collection_id"] = collection.pk
+    return client.post(reverse("wagtailapi_v3:create_image"), data, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+
+def test_stock_v3_exposes_images_and_documents_but_no_cast_media(client, admin_user) -> None:
+    from wagtail.api.v3.urls import api
+
+    listed = client.get(
+        reverse("wagtailapi_v3:list_schemas"), HTTP_AUTHORIZATION=f"Bearer {_bearer_token(admin_user)}"
+    )
+    types = {entry["name"] for entry in listed.json()["types"]}
+    route_names = {pattern.name for pattern in api.urls[0]}
+
+    assert {"wagtailimages.Image", "wagtaildocs.Document"} <= types
+    assert not {"cast.Audio", "cast.Video", "cast.Transcript"} & types
+    assert {"create_image", "create_document"} <= route_names
+    assert not {name for name in route_names if any(kind in name for kind in ("audio", "video", "transcript"))}
+
+
+def test_stock_image_upload_scopes_collections_and_validates_files(client) -> None:
+    allowed, forbidden, other_allowed = _child_collections("Allowed", "Forbidden", "Other allowed")
+    user = UserFactory(is_staff=False)
+    _grant_collection_permissions(user, [allowed, other_allowed], "add_image")
+    token = _bearer_token(user)
+
+    denied = _upload_image(client, token, forbidden)
+    missing = _upload_image(client, token, None)
+    invalid = _upload_image(client, token, allowed, b"not an image")
+    created = _upload_image(client, token, other_allowed)
+
+    for response, field in ((denied, "collection"), (missing, "collection"), (invalid, "file")):
+        assert response.status_code == 422
+        assert [error["loc"] for error in response.json()["errors"]] == [[field]]
+    assert created.status_code == 201
+    image = get_image_model().objects.get()
+    assert created.json()["id"] == image.pk
+    assert image.collection == other_allowed
+    assert image.uploaded_by_user == user
+
+
+def test_stock_image_upload_replaces_request_collection_when_one_is_usable(client) -> None:
+    allowed, forbidden = _child_collections("Only allowed", "Requested")
+    user = UserFactory(is_staff=False)
+    _grant_collection_permissions(user, [allowed], "add_image")
+
+    response = _upload_image(client, _bearer_token(user), forbidden)
+
+    assert response.status_code == 201
+    assert get_image_model().objects.get().collection == allowed
+
+
+def test_stock_image_upload_does_not_require_choose_permission(client, admin_user, blog, post) -> None:
+    (collection,) = _child_collections("Add only")
+    user = _page_permission_user(blog, "change_page")
+    _grant_collection_permissions(user, [collection], "add_image")
+    token = _bearer_token(user)
+    base_revision = post.get_latest_revision_as_object().save_revision(user=admin_user)
+
+    upload = _upload_image(client, token, collection)
+    image = get_image_model().objects.get()
+    attach = _body_update(
+        client, token, post, base_revision.pk, {"overview": [{"type": "image", "value": {"id": image.pk}}]}
+    )
+
+    assert upload.status_code == 201
+    assert get_choosable_image(image.pk, user) is None
+    assert attach.status_code == 422
+    assert [error["code"] for error in attach.json()["errors"]["overview.0.value.id"]] == ["not_found"]
+
+
+def test_anonymous_image_listing_matches_cast_v2_exposure(client, image) -> None:
+    v3 = client.get(reverse("wagtailapi_v3:list_images"))
+    v2 = client.get(reverse("cast:api:wagtail:images:listing"))
+
+    assert v3.status_code == v2.status_code == 200
+    assert [item["id"] for item in v3.json()["items"]] == [image.pk]
+    assert [item["id"] for item in v2.json()["items"]] == [image.pk]
