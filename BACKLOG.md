@@ -25,9 +25,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
   - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
   - Progress: 0.2.66 adds test-only Wagtail 8 mounting, discovery, scalar draft-write,
-    revision-aware update-adapter, publication-policy, and authorization experiments. The adapter resolves measured
-    response and latest-draft gaps; v3 actions reuse Cast's audio policy and enforce Wagtail tree permissions. Native
-    tokens lack Cast scopes and do not require admin access; scheduling input and draft-state safeguards remain to be
+    revision-aware update-adapter, publication-policy, authorization, and draft-state experiments. The adapter
+    resolves measured response and latest-draft gaps; v3 actions reuse Cast's audio policy, tree permissions, and
+    scheduled-page lock. Native tokens lack Cast scopes and work without Wagtail admin access, while live-page
+    draft-only updates still need a Cast precondition. Scheduling input and revision-bound publication remain to be
     evaluated.
   - Implemented prerequisites: the publication policy and content converter seams —
     [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and

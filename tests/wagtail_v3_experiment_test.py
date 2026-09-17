@@ -1,7 +1,7 @@
 """Wagtail 8 v3 discovery, draft-write, and publication experiment."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import pytest
 from django.conf import settings
@@ -20,6 +20,7 @@ if (
 ):
     pytest.skip("Wagtail v3 experiment settings are not active", allow_module_level=True)
 
+from wagtail.locks import ScheduledForPublishLock  # noqa: E402
 from wagtail.models import APIToken  # noqa: E402
 
 from cast.models import Episode, Post  # noqa: E402
@@ -79,14 +80,43 @@ def _assert_cast_write_response_failure(response: object, model: type[Post]) -> 
     } <= locations
 
 
-def _adapter_update(client, token: str, page: Post, base_revision_id: int, values: dict) -> object:
+def _adapter_update(
+    client,
+    token: str,
+    page: Post,
+    base_revision_id: int,
+    values: dict,
+    *,
+    require_unpublished: bool = False,
+) -> object:
+    url = reverse("wagtailapi_v3:cast_revision_update", kwargs={"page_id": page.pk})
+    if require_unpublished:
+        url = f"{url}?require_unpublished=true"
     return client.patch(
-        reverse("wagtailapi_v3:cast_revision_update", kwargs={"page_id": page.pk}),
+        url,
         values,
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {token}",
         HTTP_IF_MATCH=f'"{base_revision_id}"',
     )
+
+
+def _transition_latest_revision(page: Post, user: AbstractUser, state: Literal["published", "scheduled"]) -> Revision:
+    page.unpublish(user=user)
+    page.refresh_from_db()
+    draft = page.get_latest_revision_as_object()
+    draft.go_live_at = django_timezone.now() + timedelta(days=1) if state == "scheduled" else None
+    revision = draft.save_revision(user=user)
+    revision.publish(user=user)
+    page.refresh_from_db()
+    revision.refresh_from_db()
+    if state == "published":
+        assert page.live is True
+    else:
+        assert page.live is False
+        assert revision.approved_go_live_at is not None
+    assert page.latest_revision_id == revision.pk
+    return revision
 
 
 def _draft_episode(podcast, body: str, *, slug: str, audio=None, go_live_at=None) -> Episode:
@@ -288,6 +318,31 @@ def test_revision_adapter_updates_latest_draft_with_truthful_response(
         assert getattr(page, name) == live_values[name]
 
 
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+def test_revision_adapter_allows_unpublished_page_when_draft_required(
+    client, admin_user, request, fixture_name
+) -> None:
+    page = request.getfixturevalue(fixture_name)
+    page.unpublish(user=admin_user)
+    page.refresh_from_db()
+    base_revision = page.get_latest_revision_as_object().save_revision(user=admin_user)
+
+    response = _adapter_update(
+        client,
+        _bearer_token(admin_user),
+        page,
+        base_revision.pk,
+        {"cover_alt_text": "Still a draft"},
+        require_unpublished=True,
+    )
+
+    assert response.status_code == 200
+    page.refresh_from_db()
+    assert page.live is False
+    assert page.latest_revision_id == response.json()["latest_revision_id"]
+    assert page.get_latest_revision_as_object().cover_alt_text == "Still a draft"
+
+
 def test_revision_adapter_rejects_stale_update_without_revision(client, admin_user, post) -> None:
     draft = post.get_latest_revision_as_object()
     draft.cover_alt_text = "First draft"
@@ -334,6 +389,76 @@ def test_revision_adapter_rejects_invalid_form_without_revision(client, admin_us
     episode.refresh_from_db()
     assert episode.latest_revision_id == base_revision.pk
     assert Revision.objects.filter(object_id=str(episode.pk)).count() == revision_count
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+@pytest.mark.parametrize("state", ["published", "scheduled"])
+def test_stock_update_allows_live_draft_but_scheduled_lock_rejects(
+    client, admin_user, request, fixture_name, state
+) -> None:
+    page = request.getfixturevalue(fixture_name)
+    base_revision = _transition_latest_revision(page, admin_user, state)
+    revision_count = page.revisions.count()
+    if state == "scheduled":
+        assert isinstance(Page.objects.get(pk=page.pk).specific.get_lock(), ScheduledForPublishLock)
+
+    response = client.patch(
+        reverse("wagtailapi_v3:update_page", kwargs={"page_id": page.pk}),
+        {"cover_alt_text": f"Stock update after {state}"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {_bearer_token(admin_user)}",
+    )
+
+    page.refresh_from_db()
+    base_revision.refresh_from_db()
+    if state == "published":
+        _assert_cast_write_response_failure(response, type(page))
+        assert page.latest_revision_id != base_revision.pk
+        assert page.revisions.count() == revision_count + 1
+        assert page.get_latest_revision_as_object().cover_alt_text == f"Stock update after {state}"
+        assert page.live is True
+        assert page.live_revision_id == base_revision.pk
+    else:
+        assert response.status_code == 403
+        assert page.latest_revision_id == base_revision.pk
+        assert page.revisions.count() == revision_count
+        assert page.get_latest_revision_as_object().cover_alt_text != f"Stock update after {state}"
+        assert page.live is False
+        assert base_revision.approved_go_live_at is not None
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+@pytest.mark.parametrize(
+    ("state", "expected_code"),
+    [("published", "published_post"), ("scheduled", "scheduled_post")],
+)
+def test_revision_adapter_retains_draft_state_precondition(
+    client, admin_user, request, fixture_name, state, expected_code
+) -> None:
+    page = request.getfixturevalue(fixture_name)
+    base_revision = _transition_latest_revision(page, admin_user, state)
+    revision_count = page.revisions.count()
+
+    response = _adapter_update(
+        client,
+        _bearer_token(admin_user),
+        page,
+        base_revision.pk,
+        {"cover_alt_text": "Must not be written"},
+        require_unpublished=True,
+    )
+
+    assert response.status_code == 409
+    expected_detail = (
+        "This page is already live; the requested draft-only update was refused."
+        if state == "published"
+        else "This page is scheduled for publication; the requested draft-only update was refused."
+    )
+    assert response.json() == {"code": expected_code, "detail": expected_detail}
+    page.refresh_from_db()
+    assert page.latest_revision_id == base_revision.pk
+    assert page.revisions.count() == revision_count
+    assert page.get_latest_revision_as_object().cover_alt_text != "Must not be written"
 
 
 def test_revision_adapter_requires_bearer_authentication(client, admin_user, post) -> None:

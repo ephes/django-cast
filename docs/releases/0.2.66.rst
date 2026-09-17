@@ -21,3 +21,7 @@
   publish permissions for separate drafting and publishing users. Native API
   tokens do not require Wagtail admin access and cannot carry Cast's separate
   ``write`` and ``publish`` scopes.
+- Measure draft-state update behavior in the disposable v3 adapter. Wagtail's
+  scheduled-publication lock already rejects scheduled Post and Episode edits,
+  while preserving Cast's draft-only live-page safeguard requires an explicit
+  adapter precondition.
