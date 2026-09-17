@@ -192,3 +192,18 @@ def revision_bound_publish(request: HttpRequest, page_id: int):
         "live": published.live,
         "live_revision_id": published.live_revision_id,
     }
+
+
+@router.get(
+    "/{page_id}/preview/",
+    response={200: None},
+    url_name="cast_draft_preview",
+    summary="Rendered Cast draft preview experiment",
+)
+@require_any_permission(Page, ("change",))
+def draft_preview(request: HttpRequest, page_id: int):
+    page = get_object_or_404(Page, pk=page_id).specific
+    # Match the editor API: previewing a draft requires edit permission.
+    if not page.permissions_for_user(request.user).can_edit():
+        raise PermissionDenied
+    return page.get_latest_revision_as_object().make_preview_request(original_request=request)

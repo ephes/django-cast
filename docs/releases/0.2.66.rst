@@ -36,3 +36,11 @@
   revision-bound publication schedules the selected revision and Cast's
   Episode audio policy still applies, but a partial update can set a go-live
   time after an existing expiry time.
+- Measure draft reads and previews in the Wagtail 8 experiment. Stock v3
+  detail reads fail for Cast Posts and Episodes because inherited HTML fields
+  receive no request context, and draft reads are gated by explore rather
+  than edit permission. A disposable adapter route renders the latest draft
+  through Wagtail's preview machinery under the editor API's edit rule. The
+  experiment also records that preview rendering sees the session user, not
+  the bearer token, and that Cast's preview synchronizes stored media
+  relationships.

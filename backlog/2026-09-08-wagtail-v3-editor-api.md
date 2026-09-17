@@ -6,7 +6,8 @@ Status: evaluation in progress; isolated mounting/discovery, scalar
 draft-write, revision-aware update-adapter, and publication-policy slices are
 implemented in test configuration only, along with an authorization/scope
 experiment, a draft-state precondition experiment, a revision-bound
-publication experiment, and a scheduling-input experiment. No production v3 integration or client migration is
+publication experiment, a scheduling-input experiment, and a draft read and
+preview experiment. No production v3 integration or client migration is
 implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
@@ -91,7 +92,10 @@ are also sequential on SQLite. The eighth slice, measured on 2026-09-17,
 opts Wagtail's own ``go_live_at`` and ``expire_at`` fields into the disposable
 Post and Episode write inventory, submits them through the adapter, and
 schedules the selected revision through the revision-bound publish route.
-Every django-cast
+The ninth slice, measured on 2026-09-17, reads Post and Episode detail
+through stock v3, compares stock draft-read access with Cast's editor preview
+rule, and adds a test-only bearer-authenticated preview route that renders the
+latest revision through Wagtail's ``make_preview_request``. Every django-cast
 production module remains unchanged. Normal Wagtail 8 test runs and Wagtail 7
 collect the experiment as a configuration-gated skip without importing a v3
 module.
@@ -110,7 +114,10 @@ but was not exercised through a Cast integration test in this slice;
 | Page authorization | upstream equivalent | **Test:** a non-staff token owner with change permission on one Blog can update its Post but receives 403 for a Post under another Blog and for publish. A publish-only user cannot update an Episode but can publish it. **Source:** Wagtail's route permission and action layers perform the model-level and instance/tree checks. | Extend to create-parent and page-restriction cases only if v3 remains a candidate. |
 | Wagtail admin access | Cast extension required | **Test:** a non-staff user without ``wagtailadmin.access_admin`` can update through v3 when its tree permission allows it. **Source:** the current editor API requires admin access in addition to page permission. | Explicitly choose the service-account admission policy before production enablement. |
 | Write/publish scopes | Cast extension required | **Test:** one native token for a user with change and publish page permissions performs both operations, and model-field introspection finds no ``scope`` or ``scopes`` field. **Inference:** tree permissions can separate drafting and publishing users, but native tokens cannot provide different write and publish scopes for the same user. | Prove a token-auth extension point or accept separate service accounts before exposing writes. |
-| Live page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Draft reads and exclusion behavior remain unverified. |
+| Live page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Exclusion of restricted pages remains unverified. |
+| Page detail reads | Cast extension required | **Test:** stock v3 detail for Post and Episode returns 422 for anonymous and bearer-authenticated callers, with ``version=live`` and ``version=draft``. The error locations are the inherited ``html_overview`` and ``html_detail`` fields. **Source:** v3's ``APIField(serializer=...)`` compatibility shim binds a copied DRF field with no parent and never passes the resolver context. Cast's ``HtmlField`` reads ``self.context["request"]``. **Inference:** stock v3 cannot currently read any Cast Post or Episode detail. The failure is in the shared serializer bridge, not in the write actions. | Choose between a transport-native Cast read schema and an upstream context fix. The write-response failures above report the same two fields. |
+| Draft read access | Cast extension required | **Test:** with a ``cast.Blog`` draft, whose schema has no ``HtmlField``, a publish-only user with no edit permission reads the draft title through ``version=draft``. An anonymous caller receives the live title from the same query, and a user with permissions only under another blog receives 404. **Source:** the detail route returns ``get_latest_revision_as_object()`` for any authenticated user within ``explorable_instances``. The editor API requires admin access and edit permission for draft reads and previews. | A Cast read route would need to keep the edit-permission rule, because stock v3 lets explore-only users read drafts. |
+| Rendered draft preview | Cast extension required | **Test:** the complete installed v3 page-route inventory contains detail, revision, and action routes but no preview route. A test-adapter route renders the latest Post or Episode draft as ``text/html`` without publishing it. It returns 401 for a session-only caller, 403 for a publish-only user and for a change user outside the page tree, and 404 for a missing page; none of the denied bodies contains the draft title. A tree-scoped editor receives the preview. The rendered request is anonymous for a bearer-only call, but sees the session user when a session cookie is also sent. A preview GET also re-adds a body image to the page's stored media relationship. **Source:** the route delegates to the same ``make_preview_request`` used by the editor API. Wagtail copies cookies and other original headers into the fake request and runs middleware, so the bearer principal is not the rendering identity. Cast's ``Post.serve_preview`` calls ``prepare_post_media``, which adds and removes stored media relationships and creates missing renditions. **Inference:** rendered previews are not read-only in the existing editor API, the Wagtail admin, or this adapter. | Keep rendered previews Cast-owned. Before exposing a v3 preview, define the rendering identity (strip cookies, or render as the bearer user) and decide whether preview may synchronize media relationships; this also applies to the existing editor preview. Admin-access admission remains the policy decision recorded above. |
 | Common page fields | upstream equivalent | **Test:** Post and Episode create/patch schemas include ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``; draft create requests reach Wagtail's action layer. | A successful API response still requires the response-schema incompatibility below to be resolved. |
 | Post field inventory | Cast extension required | **Test:** the disposable configuration makes ``visible_date`` and ``cover_alt_text`` writable; read schemas also expose ``cover_image`` and ``body``. ``cover_image``, ``body``, ``tags``, and ``categories`` remain absent from writes. **Source:** the read fields originate in existing v2 ``APIField`` declarations. | Evaluate relations and body conversion only after safe scalar updates exist. |
 | Episode field inventory | Cast extension required | **Test:** Episode inherits the two Post write fields and additionally exposes ``episode_number``, ``episode_type``, ``keywords``, ``explicit``, and ``block``. A draft Episode without audio is persisted. ``podcast_audio`` and ``season`` remain absent from read/create/patch schemas. | Evaluate FK representation, same-podcast season policy, and media permissions separately. |
@@ -158,11 +165,21 @@ selected revision through Wagtail's action, and Cast's audio policy still
 rejects it before approval. Partial updates, however, skip Wagtail's
 go-live/expiry cross-check when only one of the two fields is submitted.
 
-The next smallest experiment slice is authenticated draft preview: establish
-what v3 returns for a Post or Episode draft read and whether any v3 path
-replaces Cast's rendered editor preview. Body conversion, media upload,
-PostgreSQL concurrency, and the architecture decision remain later slices;
-Daybook migration is outside this evaluation.
+The ninth slice shows that stock v3 cannot serialize any Cast Post or Episode
+detail response, live or draft. Its draft selection is gated by explore
+permission rather than edit permission, and it has no rendered preview. A thin
+Cast route can reuse Wagtail's preview machinery under the editor API's edit
+rule. That machinery renders with the session identity rather than the bearer
+token, and Cast's preview synchronizes media relationships as a side effect.
+
+**Source:** the installed ``wagtail.images``, ``wagtail.documents``, and
+``wagtail.snippets`` app configs register image, document, and snippet
+routers with the v3 API, so media can be measured directly. The next smallest experiment slice is body
+conversion: establish whether the native StreamField write path can carry
+Cast's authoring blocks, and whether an adapter can reuse ``cast.content``
+without transport coupling. Media upload, PostgreSQL concurrency, and the
+architecture decision remain later slices; Daybook migration is outside this
+evaluation.
 
 ## Upstream capabilities and remaining questions
 
@@ -180,7 +197,7 @@ in any release until stabilized. Enabling it requires separate app/URL setup.
 | Concurrent editing | Installed v3 code has no revision token or live-page `require_unpublished` equivalent; its scheduled-publication lock does reject scheduled edits. | Prove the remaining PostgreSQL races, or retain Cast's page-locking guarded update path. |
 | Podcast/media behavior | Generic Wagtail endpoints do not automatically implement Cast audio/video processing or episode rules. | Verify permissions, upload/probe budgets, audio requirements, seasons, and numbering on every proposed path. |
 | Rich text | Wagtail has reusable conversion/sanitization code, including nested rich-text handling in the installed v3 implementation. | Run Cast's sanitization and feature-preservation cases; retain explicit raw-HTML/inline-media policy. |
-| Preview and publishing | Cast renders authenticated draft previews; its publish actions bind to a reviewed revision only when the optional ``If-Match`` header is sent. Stock v3 publishes the latest revision and has no selector. | Prove preview behavior. The revision-bound publication experiment above shows that a v3 route needs a Cast precondition; decide whether it is mandatory. |
+| Preview and publishing | Cast renders authenticated draft previews; its publish actions bind to a reviewed revision only when the optional ``If-Match`` header is sent. Stock v3 publishes the latest revision and has no selector or rendered preview. | The experiments above show that both need Cast routes; decide whether the revision token is mandatory. |
 
 The experiments establish two important action-path findings:
 

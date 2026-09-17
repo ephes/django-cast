@@ -7,6 +7,7 @@ import pytest
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.core.management import call_command
+from django.test import Client
 from django.urls import NoReverseMatch, reverse
 from django.urls.base import clear_url_caches
 from django.utils import timezone as django_timezone
@@ -1020,3 +1021,149 @@ def test_partial_schedule_input_skips_cross_field_validation(client, admin_user,
     assert response.status_code == 200
     draft = Revision.objects.get(pk=response.json()["latest_revision_id"]).as_object()
     assert draft.go_live_at > draft.expire_at
+
+
+def _preview(client, page: Post, token: str | None) -> Any:
+    headers = {} if token is None else {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+    return client.get(reverse("wagtailapi_v3:cast_draft_preview", kwargs={"page_id": page.pk}), **headers)
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+@pytest.mark.parametrize("version", ["live", "draft"])
+@pytest.mark.parametrize("authenticated", [False, True])
+def test_stock_cast_page_detail_read_fails_response_serialization(
+    client, admin_user, request, fixture_name, version, authenticated
+) -> None:
+    page = request.getfixturevalue(fixture_name)
+    headers = {"HTTP_AUTHORIZATION": f"Bearer {_bearer_token(admin_user)}"} if authenticated else {}
+
+    response = client.get(
+        reverse("wagtailapi_v3:detail_page", kwargs={"page_id": page.pk}), {"version": version}, **headers
+    )
+
+    _assert_cast_write_response_failure(response, type(page))
+
+
+def test_stock_draft_read_requires_explore_not_edit_permission(client, admin_user, site, blog) -> None:
+    other_blog = BlogFactory(owner=admin_user, parent=site.root_page, title="Other blog", slug="other-blog")
+    live_title = blog.title
+    draft = blog.get_latest_revision_as_object()
+    draft.title = "Draft blog title"
+    draft.save_revision(user=admin_user)
+    publisher = _page_permission_user(blog, "publish_page")
+    url = reverse("wagtailapi_v3:detail_page", kwargs={"page_id": blog.pk})
+
+    publisher_read = client.get(url, {"version": "draft"}, HTTP_AUTHORIZATION=f"Bearer {_bearer_token(publisher)}")
+    anonymous_read = client.get(url, {"version": "draft"})
+    outsider = _page_permission_user(other_blog, "change_page")
+    outsider_read = client.get(url, {"version": "draft"}, HTTP_AUTHORIZATION=f"Bearer {_bearer_token(outsider)}")
+
+    assert blog.permissions_for_user(publisher).can_edit() is False
+    assert publisher_read.status_code == 200
+    assert publisher_read.json()["title"] == "Draft blog title"
+    assert anonymous_read.status_code == 200
+    assert anonymous_read.json()["title"] == live_title
+    assert outsider_read.status_code == 404
+
+
+STOCK_V3_PAGE_ROUTE_NAMES = {
+    "list_pages",
+    "create_page",
+    "find_page",
+    "detail_page",
+    "update_page",
+    "delete_page",
+    "list_page_revisions",
+    "detail_page_revision",
+    "pages_actions_publish",
+    "pages_actions_unpublish",
+    "pages_actions_copy",
+    "pages_actions_move",
+    "pages_actions_delete",
+    "pages_actions_revert",
+    "pages_actions_convert_alias",
+    "pages_actions_create_alias",
+    "pages_actions_copy_for_translation",
+}
+
+
+def test_stock_v3_page_routes_have_no_rendered_preview() -> None:
+    from wagtail.api.v3.urls import api
+
+    page_routes = {pattern.name for pattern in api.urls[0] if "page" in pattern.name}
+    adapter_names = {"cast_revision_update", "cast_revision_publish", "cast_draft_preview"}
+
+    # The complete stock page-route inventory; none of these renders HTML.
+    assert page_routes - adapter_names == STOCK_V3_PAGE_ROUTE_NAMES
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+def test_adapter_preview_renders_latest_draft(client, admin_user, request, fixture_name) -> None:
+    page = request.getfixturevalue(fixture_name)
+    draft = page.get_latest_revision_as_object()
+    draft.title = "Unpublished preview title"
+    draft.save_revision(user=admin_user)
+
+    response = _preview(client, page, _bearer_token(admin_user))
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "text/html; charset=utf-8"
+    assert "Unpublished preview title" in response.content.decode()
+    page.refresh_from_db()
+    assert page.title != "Unpublished preview title"
+
+
+def test_adapter_preview_enforces_authentication_and_edit_permission(client, admin_user, site, blog, post) -> None:
+    other_blog = BlogFactory(owner=admin_user, parent=site.root_page, title="Other blog", slug="other-blog")
+    draft = post.get_latest_revision_as_object()
+    draft.title = "Secret preview title"
+    draft.save_revision(user=admin_user)
+    session_client = Client()
+    session_client.force_login(admin_user)
+
+    session_only = _preview(session_client, post, None)
+    publisher = _preview(client, post, _bearer_token(_page_permission_user(blog, "publish_page")))
+    outsider = _preview(client, post, _bearer_token(_page_permission_user(other_blog, "change_page")))
+    editor = _preview(client, post, _bearer_token(_page_permission_user(blog, "change_page")))
+
+    assert session_only.status_code == 401
+    assert publisher.status_code == 403
+    assert outsider.status_code == 403
+    for denied in (session_only, publisher, outsider):
+        assert "Secret preview title" not in denied.content.decode()
+    assert editor.status_code == 200
+    assert "Secret preview title" in editor.content.decode()
+
+
+def test_adapter_preview_renders_with_session_identity_not_bearer(client, admin_user, blog, post, mocker) -> None:
+    spy = mocker.spy(Post, "serve_preview")
+    token = _bearer_token(_page_permission_user(blog, "change_page"))
+
+    bearer_only = _preview(client, post, token)
+    client.force_login(admin_user)
+    with_session = _preview(client, post, token)
+
+    assert bearer_only.status_code == with_session.status_code == 200
+    rendered_users = [call.args[1].user for call in spy.call_args_list]
+    assert rendered_users[0].is_authenticated is False
+    assert rendered_users[1] == admin_user
+
+
+def test_adapter_preview_synchronizes_draft_media_relationships(client, admin_user, post_with_image) -> None:
+    image = post_with_image.images.get()
+    post_with_image.images.remove(image)
+
+    response = _preview(client, post_with_image, _bearer_token(admin_user))
+
+    assert response.status_code == 200
+    assert post_with_image.revisions.count() == 0
+    assert list(Post.objects.get(pk=post_with_image.pk).images.all()) == [image]
+
+
+def test_adapter_preview_reports_missing_page(client, admin_user) -> None:
+    response = client.get(
+        reverse("wagtailapi_v3:cast_draft_preview", kwargs={"page_id": 999_999}),
+        HTTP_AUTHORIZATION=f"Bearer {_bearer_token(admin_user)}",
+    )
+
+    assert response.status_code == 404
