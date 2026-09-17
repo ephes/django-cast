@@ -4,8 +4,8 @@ Date: 2026-09-08
 
 Status: evaluation in progress; isolated mounting/discovery, scalar
 draft-write, revision-aware update-adapter, and publication-policy slices are
-implemented in test configuration only. No production v3 integration or
-client migration is implemented.
+implemented in test configuration only, along with an authorization/scope
+experiment. No production v3 integration or client migration is implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
@@ -72,23 +72,28 @@ the stock create-and-publish, edit-and-publish, and standalone publish routes
 for Episodes, and executes a scheduled revision that was approved through the
 standalone route. Every Wagtail 8 tox environment first runs the complete suite
 with normal ``tests.settings`` and ``tests.urls``, then runs only the experiment
-module in a second process with the disposable settings. Every django-cast
-production module remains unchanged. Normal Wagtail 8 test runs and Wagtail 7
-collect the experiment as a configuration-gated skip without importing a v3
-module.
+module in a second process with the disposable settings. The fifth slice,
+measured on 2026-09-17, gives separate non-staff bearer-token users tree-scoped
+change and publish permissions, then exercises Post and Episode actions inside
+and outside those trees. Every django-cast production module remains unchanged.
+Normal Wagtail 8 test runs and Wagtail 7 collect the experiment as a
+configuration-gated skip without importing a v3 module.
 
 Evidence labels below are deliberate: **test** means
 ``tests/wagtail_v3_experiment_test.py`` exercised the behavior; **source**
 means it was established by reading the installed Wagtail 8.0 implementation
-but was not exercised through a Cast integration test in this slice.
+but was not exercised through a Cast integration test in this slice;
+**inference** identifies a conclusion drawn from that evidence.
 
 | Area | Classification | Evidence from this slice | Remaining work |
 | --- | --- | --- | --- |
 | Test-only mount | upstream equivalent | **Test:** the v3 namespace reverses under the disposable URLconf, while ``tests.urls`` does not mount it. | Decide a production route only after the evaluation; none exists now. |
 | Schema discovery | upstream equivalent | **Test:** bearer-authenticated ``/schema/`` discovery includes ``cast.Post`` and ``cast.Episode`` and returns read/create/patch schemas for both. | Add agent-facing Cast block guidance only if v3 is selected. |
 | Authentication identity | upstream equivalent | **Test:** anonymous and session-only schema requests return 401; a native Wagtail ``APIToken`` bearer succeeds. **Source:** bearer auth overwrites any session user. | Token migration and service-account lifecycle remain unverified. |
-| Write/publish scopes | Cast extension required | **Source:** native tokens represent a user but carry no Cast ``write`` versus ``publish`` scopes. | Prove an extension point before exposing writes. |
-| Live page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Draft reads, exclusion behavior, and per-page permission behavior remain unverified. |
+| Page authorization | upstream equivalent | **Test:** a non-staff token owner with change permission on one Blog can update its Post but receives 403 for a Post under another Blog and for publish. A publish-only user cannot update an Episode but can publish it. **Source:** Wagtail's route permission and action layers perform the model-level and instance/tree checks. | Extend to create-parent and page-restriction cases only if v3 remains a candidate. |
+| Wagtail admin access | Cast extension required | **Test:** a non-staff user without ``wagtailadmin.access_admin`` can update through v3 when its tree permission allows it. **Source:** the current editor API requires admin access in addition to page permission. | Explicitly choose the service-account admission policy before production enablement. |
+| Write/publish scopes | Cast extension required | **Test:** one native token for a user with change and publish page permissions performs both operations, and model-field introspection finds no ``scope`` or ``scopes`` field. **Inference:** tree permissions can separate drafting and publishing users, but native tokens cannot provide different write and publish scopes for the same user. | Prove a token-auth extension point or accept separate service accounts before exposing writes. |
+| Live page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Draft reads and exclusion behavior remain unverified. |
 | Common page fields | upstream equivalent | **Test:** Post and Episode create/patch schemas include ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``; draft create requests reach Wagtail's action layer. | A successful API response still requires the response-schema incompatibility below to be resolved. |
 | Post field inventory | Cast extension required | **Test:** the disposable configuration makes ``visible_date`` and ``cover_alt_text`` writable; read schemas also expose ``cover_image`` and ``body``. ``cover_image``, ``body``, ``tags``, and ``categories`` remain absent from writes. **Source:** the read fields originate in existing v2 ``APIField`` declarations. | Evaluate relations and body conversion only after safe scalar updates exist. |
 | Episode field inventory | Cast extension required | **Test:** Episode inherits the two Post write fields and additionally exposes ``episode_number``, ``episode_type``, ``keywords``, ``explicit``, and ``block``. A draft Episode without audio is persisted. ``podcast_audio`` and ``season`` remain absent from read/create/patch schemas. | Evaluate FK representation, same-podcast season policy, and media permissions separately. |
@@ -117,13 +122,12 @@ truthful but less structured validation response. The StreamField limitation
 remains a separate schema incompatibility for the intended self-describing
 agent workflow.
 
-The next smallest experiment slice is authorization and scope evaluation. It
-should exercise a drafting user and a publishing user against Post and Episode
-pages, distinguish Wagtail's per-page permissions from Cast's token-level
-``write``/``publish`` scopes, and determine the smallest supported extension
-point. Body, preview, media upload, scheduling input, revision-bound
-publication, draft-state race handling, and Daybook migration remain later
-slices.
+The next smallest experiment slice is the draft-state precondition. It should
+reproduce an update racing with publication or scheduling, establish what the
+stock route and revision-aware adapter do, and determine whether Cast's atomic
+``require_unpublished`` guard can be retained through a supported extension.
+Body, preview, media upload, scheduling input, revision-bound publication, and
+Daybook migration remain later slices.
 
 ## Upstream capabilities and remaining questions
 

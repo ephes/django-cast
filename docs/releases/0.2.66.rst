@@ -17,3 +17,7 @@
   publication while permitting a valid audio Episode. The scheduler also
   rechecks a revision approved through v3 if its audio later disappears; v3
   scheduling input remains unverified.
+- Confirm that native v3 actions enforce Wagtail's tree-scoped change and
+  publish permissions for separate drafting and publishing users. Native API
+  tokens do not require Wagtail admin access and cannot carry Cast's separate
+  ``write`` and ``publish`` scopes.

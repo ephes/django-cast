@@ -5,12 +5,13 @@ from typing import Any, Protocol
 
 import pytest
 from django.conf import settings
+from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.core.management import call_command
 from django.urls import NoReverseMatch, reverse
 from django.urls.base import clear_url_caches
 from django.utils import timezone as django_timezone
 from wagtail import VERSION as WAGTAIL_VERSION
-from wagtail.models import PageLogEntry, Revision
+from wagtail.models import GroupPagePermission, Page, PageLogEntry, Revision
 
 if (
     WAGTAIL_VERSION < (8, 0)
@@ -23,7 +24,7 @@ from wagtail.models import APIToken  # noqa: E402
 
 from cast.models import Episode, Post  # noqa: E402
 from cast.publication import EPISODE_AUDIO_REQUIRED  # noqa: E402
-from tests.factories import EpisodeFactory  # noqa: E402
+from tests.factories import BlogFactory, EpisodeFactory, PostFactory, UserFactory  # noqa: E402
 from tests.wagtail_v3_writable import (  # noqa: E402
     EPISODE_ONLY_WRITABLE_FIELDS,
     POST_WRITABLE_FIELDS,
@@ -102,9 +103,19 @@ def _draft_episode(podcast, body: str, *, slug: str, audio=None, go_live_at=None
     )
 
 
-def _publish_action(client, token: str, episode: Episode) -> ClientResponse:
+def _page_permission_user(page: Page, *codenames: str) -> AbstractUser:
+    user = UserFactory(is_staff=False)
+    group = Group.objects.create(name=f"v3 page permissions {user.pk}")
+    for codename in codenames:
+        permission = Permission.objects.get(codename=codename, content_type__app_label="wagtailcore")
+        GroupPagePermission.objects.create(group=group, page=page, permission=permission)
+    user.groups.add(group)
+    return user
+
+
+def _publish_action(client, token: str, page: Post) -> ClientResponse:
     return client.post(
-        reverse("wagtailapi_v3:pages_actions_publish", kwargs={"page_id": episode.pk}),
+        reverse("wagtailapi_v3:pages_actions_publish", kwargs={"page_id": page.pk}),
         HTTP_AUTHORIZATION=f"Bearer {token}",
     )
 
@@ -489,3 +500,68 @@ def test_v3_scheduled_revision_is_rechecked_after_audio_deletion(client, admin_u
     assert episode.live_revision_id is None
     assert revision.approved_go_live_at is None
     assert PageLogEntry.objects.filter(page_id=episode.pk, action="cast.publish.rejected").exists()
+
+
+def test_change_permission_is_tree_scoped_and_does_not_grant_publish(
+    client, admin_user, site, blog, post, body
+) -> None:
+    other_blog = BlogFactory(owner=admin_user, parent=site.root_page, title="Other blog", slug="other-blog")
+    other_post = PostFactory(
+        owner=admin_user,
+        parent=other_blog,
+        title="Other post",
+        slug="other-post",
+        body=body,
+    )
+    post_revision = post.get_latest_revision_as_object().save_revision(user=admin_user)
+    other_revision = other_post.get_latest_revision_as_object().save_revision(user=admin_user)
+    user = _page_permission_user(blog, "change_page")
+    token = _bearer_token(user)
+
+    allowed = _adapter_update(client, token, post, post_revision.pk, {"cover_alt_text": "Allowed subtree"})
+    denied = _adapter_update(client, token, other_post, other_revision.pk, {"cover_alt_text": "Wrong subtree"})
+    publish = _publish_action(client, token, post)
+
+    assert user.is_staff is False
+    assert user.has_perm("wagtailadmin.access_admin") is False
+    assert allowed.status_code == 200
+    allowed_revision_id = allowed.json()["latest_revision_id"]
+    assert allowed_revision_id != post_revision.pk
+    assert Revision.objects.get(pk=allowed_revision_id).as_object().cover_alt_text == "Allowed subtree"
+    assert denied.status_code == 403
+    assert publish.status_code == 403
+    other_post.refresh_from_db()
+    assert other_post.latest_revision_id == other_revision.pk
+
+
+def test_publish_permission_does_not_grant_draft_update(client, admin_user, podcast, audio, body) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-publish-only", audio=audio)
+    revision = episode.save_revision(user=admin_user)
+    user = _page_permission_user(podcast, "publish_page")
+    token = _bearer_token(user)
+
+    update = _adapter_update(client, token, episode, revision.pk, {"episode_type": "bonus"})
+    publish = _publish_action(client, token, episode)
+
+    assert update.status_code == 403
+    _assert_cast_write_response_failure(publish, Episode)
+    episode.refresh_from_db()
+    assert episode.live is True
+    assert episode.live_revision_id == revision.pk
+
+
+def test_native_token_does_not_separate_write_and_publish_scopes(client, admin_user, blog, post) -> None:
+    user = _page_permission_user(blog, "change_page", "publish_page")
+    token = _bearer_token(user)
+    base_revision = post.get_latest_revision_as_object().save_revision(user=admin_user)
+
+    update = _adapter_update(client, token, post, base_revision.pk, {"cover_alt_text": "Same token"})
+    assert update.status_code == 200
+    publish = _publish_action(client, token, post)
+
+    _assert_cast_write_response_failure(publish, Post)
+    post.refresh_from_db()
+    assert post.live_revision_id == update.json()["latest_revision_id"]
+    token_fields = {field.name for field in APIToken._meta.get_fields()}
+    assert "scope" not in token_fields
+    assert "scopes" not in token_fields
