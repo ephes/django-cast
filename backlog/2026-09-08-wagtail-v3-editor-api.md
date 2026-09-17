@@ -2,14 +2,12 @@
 
 Date: 2026-09-08
 
-Status: evaluation in progress; isolated mounting/discovery, scalar
-draft-write, revision-aware update-adapter, and publication-policy slices are
-implemented in test configuration only, along with an authorization/scope
-experiment, a draft-state precondition experiment, a revision-bound
-publication experiment, a scheduling-input experiment, a draft read and
-preview experiment, a body-conversion experiment, a media experiment, and
-PostgreSQL concurrency proofs for the adapter locks. No production v3 integration or client migration is
-implemented.
+Status: evaluation complete (2026-09-17). Decision: keep Cast's editor API as
+the supported authoring transport and reuse upstream Wagtail functionality
+selectively below it; defer direct v3 adoption. This is a decision only. No
+production v3 route, writable production field, client migration, or route
+retirement has been implemented. The experiment remains test-only in the
+Wagtail 8 tox environments.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
@@ -127,10 +125,10 @@ but was not exercised through a Cast integration test in this slice;
 | Test-only mount | upstream equivalent | **Test:** the v3 namespace reverses under the disposable URLconf, while ``tests.urls`` does not mount it. | Decide a production route only after the evaluation; none exists now. |
 | Schema discovery | upstream equivalent | **Test:** bearer-authenticated ``/schema/`` discovery includes ``cast.Post`` and ``cast.Episode`` and returns read/create/patch schemas for both. | Add agent-facing Cast block guidance only if v3 is selected. |
 | Authentication identity | upstream equivalent | **Test:** anonymous and session-only schema requests return 401; a native Wagtail ``APIToken`` bearer succeeds. **Source:** bearer auth overwrites any session user. | Token migration and service-account lifecycle remain unverified. |
-| Page authorization | upstream equivalent | **Test:** a non-staff token owner with change permission on one Blog can update its Post but receives 403 for a Post under another Blog and for publish. A publish-only user cannot update an Episode but can publish it. **Source:** Wagtail's route permission and action layers perform the model-level and instance/tree checks. | Extend to create-parent and page-restriction cases only if v3 remains a candidate. |
+| Update/publish authorization | upstream equivalent | **Test:** a non-staff token owner with change permission on one Blog can update its Post but receives 403 for a Post under another Blog and for publish. A publish-only user cannot update an Episode but can publish it. **Source:** Wagtail's route permission and action layers perform the model-level and instance/tree checks. | Create-parent and page-restriction authorization are unverified. They cannot make direct v3 adoption viable given the other incompatibilities, so they do not affect the decision, but they must be tested before any future v3 exposure. |
 | Wagtail admin access | Cast extension required | **Test:** a non-staff user without ``wagtailadmin.access_admin`` can update through v3 when its tree permission allows it. **Source:** the current editor API requires admin access in addition to page permission. | Explicitly choose the service-account admission policy before production enablement. |
 | Write/publish scopes | Cast extension required | **Test:** one native token for a user with change and publish page permissions performs both operations, and model-field introspection finds no ``scope`` or ``scopes`` field. **Inference:** tree permissions can separate drafting and publishing users, but native tokens cannot provide different write and publish scopes for the same user. | Prove a token-auth extension point or accept separate service accounts before exposing writes. |
-| Live page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Exclusion of restricted pages remains unverified. |
+| Unrestricted live-page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Exclusion of restricted pages is unverified. It does not affect the decision because no v3 route is enabled, but it must be tested before any future v3 exposure. |
 | Page detail reads | Cast extension required | **Test:** stock v3 detail for Post and Episode returns 422 for anonymous and bearer-authenticated callers, with ``version=live`` and ``version=draft``. The error locations are the inherited ``html_overview`` and ``html_detail`` fields. **Source:** v3's ``APIField(serializer=...)`` compatibility shim binds a copied DRF field with no parent and never passes the resolver context. Cast's ``HtmlField`` reads ``self.context["request"]``. **Inference:** stock v3 cannot currently read any Cast Post or Episode detail. The failure is in the shared serializer bridge, not in the write actions. | Choose between a transport-native Cast read schema and an upstream context fix. The write-response failures above report the same two fields. |
 | Draft read access | Cast extension required | **Test:** with a ``cast.Blog`` draft, whose schema has no ``HtmlField``, a publish-only user with no edit permission reads the draft title through ``version=draft``. An anonymous caller receives the live title from the same query, and a user with permissions only under another blog receives 404. **Source:** the detail route returns ``get_latest_revision_as_object()`` for any authenticated user within ``explorable_instances``. The editor API requires admin access and edit permission for draft reads and previews. | A Cast read route would need to keep the edit-permission rule, because stock v3 lets explore-only users read drafts. |
 | Rendered draft preview | Cast extension required | **Test:** the complete installed v3 page-route inventory contains detail, revision, and action routes but no preview route. A test-adapter route renders the latest Post or Episode draft as ``text/html`` without publishing it. It returns 401 for a session-only caller, 403 for a publish-only user and for a change user outside the page tree, and 404 for a missing page; none of the denied bodies contains the draft title. A tree-scoped editor receives the preview. The rendered request is anonymous for a bearer-only call, but sees the session user when a session cookie is also sent. A preview GET also re-adds a body image to the page's stored media relationship. **Source:** the route delegates to the same ``make_preview_request`` used by the editor API. Wagtail copies cookies and other original headers into the fake request and runs middleware, so the bearer principal is not the rendering identity. Cast's ``Post.serve_preview`` calls ``prepare_post_media``, which adds and removes stored media relationships and creates missing renditions. **Inference:** rendered previews are not read-only in the existing editor API, the Wagtail admin, or this adapter. | Keep rendered previews Cast-owned. Before exposing a v3 preview, define the rendering identity (strip cookies, or render as the bearer user) and decide whether preview may synchronize media relationships; this also applies to the existing editor preview. Admin-access admission remains the policy decision recorded above. |
@@ -218,9 +216,177 @@ order. That ordering issue is unrelated to v3 and is recorded as follow-up
 work.
 
 The evaluation now has test evidence or explicit open decisions for every
-safeguard in the matrix. The next slice is the architecture decision.
+safeguard in the matrix. The architecture decision below closes the
+evaluation.
 
-## Upstream capabilities and remaining questions
+## Architecture decision (2026-09-17)
+
+**Decision: selective upstream reuse.** Keep ``/api/editor/`` as Cast's
+supported programmatic authoring contract. Reuse Wagtail's actions, locks,
+permissions, and preview/form machinery beneath it where that removes
+duplicated behavior. Do not adopt the v3 preview API directly, and do not
+build a permanent Cast adapter on top of it now. Revisit when the trigger
+conditions below are met.
+
+### Options compared
+
+1. **Selective reuse (chosen).** Every safeguard already exists in the editor
+   API. The measured upstream gains are Wagtail's own actions, locks, and
+   forms, and those can be adopted without changing the transport. Wagtail's
+   revision publish actions and lock API exist on Wagtail 7.0-8.0. The
+   executable edit action and the ``wagtail.actions`` action registry exist
+   only in Wagtail 8 (**Source:** the installed 7.0.9 and 7.4
+   ``wagtail.actions`` packages have no ``edit`` or ``registry`` module), so
+   reusing them needs a version gate while Wagtail 7 is supported.
+2. **Cast adapter over v3.** Feasible: the test adapter reproduced revision
+   tokens, the draft-only and revision-bound preconditions, author-block
+   conversion, and a rendered preview, with the locks proved on PostgreSQL.
+   But it would be the editor API again on a transport that
+   Wagtail marks as preview and that Wagtail 7 does not provide at all. Stock
+   v3 page detail and write responses also fail for every Cast Post and
+   Episode, so the adapter could not lean on any stock page route
+   unchanged. It adds a second authoring surface without removing Cast
+   code.
+3. **Direct v3 adoption plus extensions.** Rejected for now. Nearly every
+   matrix row is "Cast extension required" or "incompatible":
+   - response serialization;
+   - revision preconditions and revision-bound publication;
+   - latest-draft partial updates;
+   - draft-read permission;
+   - rendered preview;
+   - native body writes;
+   - media choice and audio/video ingestion;
+   - token scopes and admin admission.
+   Clients would need those extensions anyway.
+4. **Deferral of all work.** Rejected. The evaluation surfaced concrete,
+   transport-independent improvements (below) that are worth doing now.
+
+### What stays Cast-owned
+
+- The editor transport and its response envelopes, revision tokens,
+  ``require_unpublished``, optional ``If-Match`` publish binding, and
+  scoped tokens with the Wagtail admin-access requirement.
+- Author-block body conversion and sanitization (``cast.content``), including
+  per-section preservation and media ``choose`` checks.
+- Rendered draft previews under edit permission.
+- Audio, video, and transcript ingestion (lock, probe budget, derivation,
+  cleanup) and image uploads that require ``add`` and ``choose`` on an
+  explicit collection.
+- Episode publication policy in ``cast.publication``. Every tested v3 path
+  already reached it, so the policy needs no transport-specific copy.
+
+### What upstream provides or can replace
+
+Every bullet here is **Source** evidence from the installed code unless it
+names a test.
+
+- Publication, scheduling, and scheduler execution through Wagtail's revision
+  actions. The editor API already publishes through them:
+  ``Revision.publish`` calls ``Page.publish``, which executes
+  ``PublishPageRevisionAction``. The v3 experiment tests exercise that path.
+- Tree-scoped page permissions and ``ScheduledForPublishLock`` (tested in the
+  experiment).
+- Wagtail's lock API on all supported versions. ``page.get_lock()`` returns a
+  lock whose ``for_user(user)`` decides whether it applies; a basic lock
+  normally lets its owner edit, while a scheduled-publication lock applies to
+  everyone. That check can guard the editor API's direct ``save_revision``
+  call. On Wagtail 8 only, the registered edit action performs the same check
+  and logs ``wagtail.edit``, so it can replace that call; see follow-up 1.
+- Wagtail's image form for validation and collection scoping. The editor
+  upload already calls ``get_image_form``.
+- Wagtail's preview request machinery. The editor preview already calls
+  ``make_preview_request``.
+- Public image reads with the same exposure as Cast's existing v2 endpoint
+  (tested).
+
+### Known incompatibilities in installed Wagtail 8.0
+
+The details are in the matrix above:
+- Stock detail and write responses fail on Cast's ``HtmlField`` because the
+  v2 serializer shim passes no request context.
+- There is no revision precondition; standalone publish always takes the
+  latest revision.
+- Partial updates start from the live row.
+- Draft reads need only explore permission.
+- There is no rendered preview.
+- Native body writes replace whole fields, are untyped, and skip ``choose``.
+- Image uploads may silently substitute the collection and skip ``choose``.
+- There are no Cast audio, video, or transcript routes.
+- Native tokens have no scopes and do not require admin access.
+- Partial schedule input skips the go-live/expiry cross-check.
+
+**Inference:** these are candidate upstream reports. Filing them is an
+outward-facing action and needs separate confirmation.
+
+### Wagtail version policy and preview risk
+
+- django-cast keeps supporting Wagtail 7.0-8.0 with the editor API.
+  **Source:** nothing under ``src/`` imports ``wagtail.api.v3``. This decision
+  adds no Wagtail-8-only production code, and any follow-up that reuses
+  Wagtail-8-only actions must keep a Wagtail 7 path.
+- The experiment module stays in the ``wagtail80`` tox environments as a
+  compatibility canary. Because v3 is a preview API that may change in any
+  Wagtail release, a failing experiment test under a newer Wagtail is a
+  signal to re-evaluate, not a production regression. Update or retire the
+  module when widening the Wagtail upper bound.
+- Retiring Wagtail 7 support is a separate decision and is not implied here.
+
+### Client and route policy
+
+- Daybook stays on ``/api/editor/``; no Daybook migration is planned.
+- No route is deprecated or retired, and no consumer inventory is required
+  until a later decision proposes retirement.
+
+### Revisit triggers
+
+Re-run the experiment and reconsider options 2 or 3 when all of these hold:
+- Wagtail declares v3 stable, or at least stops marking it as a preview.
+- django-cast's supported Wagtail floor includes v3.
+- Upstream (or a supported extension point) provides request-context
+  serialization and revision-bound writes.
+
+### Follow-up slices
+
+Each is independent unless a dependency is listed.
+
+1. **Wagtail lock checks and edit logging for editor writes.** **Source:** the
+   current PATCH path checks only ``can_edit()`` and calls ``save_revision``
+   directly, so it neither consults ``page.get_lock()`` nor logs
+   ``wagtail.edit``. Specify the lock-conflict response first. On every
+   supported Wagtail version, reject a write when
+   ``lock is not None and lock.for_user(user)``, and record a ``wagtail.edit``
+   log entry. On Wagtail 7, keep ``save_revision`` and log directly. On
+   Wagtail 8, the registered edit action may be used behind a version gate.
+   Done when tests on the oldest Wagtail 7 and the Wagtail 8 tox edges cover
+   an applicable lock (rejected), a non-applicable owner lock (allowed), and
+   edit-log creation.
+2. **Move body section selection and merging into ``cast.content``.** The
+   adapter had to import ``_section_value`` and
+   ``_body_sections_with_replacements`` from the DRF view. Move them behind a
+   transport-neutral function and keep the editor tests unchanged.
+3. **Preview side effects and identity.** Decide whether a preview GET may
+   synchronize stored media relationships (it currently does in the editor,
+   admin, and adapter). Also decide whether previews render as the token user,
+   anonymously, or with the session cookie Wagtail copies.
+4. **PostgreSQL test job.** Add a PostgreSQL-backed tox environment or CI job
+   that runs the editor and experiment PostgreSQL-only tests. Fix the
+   order-dependent "Database access not allowed" failures seen in
+   ``tests/publication_test.py`` under randomized PostgreSQL runs.
+5. **Mandatory publish revision binding.** Make ``If-Match`` required for
+   editor publication in the next editor API version, as deferred in the
+   security review. Depends on a versioning decision for the editor API.
+6. **Tolerate missing serializer context in ``HtmlField``.** Optional. It lets
+   v3 or other bridges read Cast pages if a site enables v3 on its own.
+   Pair it with an upstream report about the v3 serializer shim (confirm
+   before filing).
+7. **Programmatic scheduling.** Only if a client needs it: add schedule input
+   to the editor API with validation of the merged go-live/expiry pair.
+
+## Initial assessment (historical)
+
+This section and the plan below record the 2026-09-08 starting point. The
+architecture decision above supersedes their open questions and steps.
+
 
 Wagtail 8 v3 provides writable page operations, revisions, images, documents,
 API-enabled snippets, bearer tokens tied to users, rich-text conversion, and
@@ -263,7 +429,7 @@ The experiments establish two important action-path findings:
    page-row lock and then delegate to the same Wagtail action. A threaded
    PostgreSQL test shows that a concurrent draft save waits for that lock.
 
-## Proposed plan
+## Original evaluation plan (historical)
 
 ### 1. Capture the compatibility contract
 
@@ -344,7 +510,7 @@ version/compatibility policy. Keeping current endpoints is an acceptable
 outcome if v3 cannot yet preserve their guarantees economically.
 
 Record reproducible upstream gaps for possible issue reports; publishing
-issues is a separate action. The decision must state what can be removed,
+issues is a separate action. (Outcome: see "Architecture decision" above.) The decision must state what can be removed,
 what remains Cast-owned, what awaits upstream changes, and how Wagtail 7
 support is maintained or eventually retired through a separate decision.
 

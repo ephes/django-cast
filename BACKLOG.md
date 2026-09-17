@@ -22,29 +22,39 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
     against a fixed `modelsearch` release or the version gate and its retention reason are documented.
 
-- [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
-  - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-  - Progress: 0.2.66 adds test-only Wagtail 8 mounting, discovery, scalar draft-write,
-    revision-aware update-adapter, publication-policy, authorization, draft-state, revision-bound publication,
-    scheduling-input, draft read/preview, body-conversion, and media experiments, plus PostgreSQL proofs of the
-    adapter locks. The adapter resolves measured response and latest-draft gaps; v3 actions reuse Cast's audio
-    policy, tree permissions, and scheduled-page lock. Native tokens lack Cast scopes and work without Wagtail admin
-    access, while live-page draft-only updates still need a Cast precondition. Stock standalone publish can make a
-    newer unreviewed draft live, so publication also needs a selected-revision precondition. Schedule input needs
-    a field opt-in and merged go-live/expiry validation. Stock v3 cannot serialize Cast page detail, lets
-    explore-only users read drafts, and has no rendered preview. Native body writes replace whole fields and skip
-    media-choice checks, while ``cast.content`` is reusable from an adapter. v3 image uploads can substitute the
-    requested collection and skip ``choose``; there are no v3 audio/video routes. The architecture decision
-    remains.
-  - Implemented prerequisites: the publication policy and content converter seams —
-    [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and
-    [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
-  - Scope: prove Post and Episode editing through Wagtail 8's preview API, compare it with the existing editor
-    contract, and identify upstream functionality that can replace Cast implementation without losing automation
-    safeguards or podcast/media behavior. Daybook is owned by us and can change in a coordinated migration;
-    preserving its current API contract is not a prerequisite.
-  - Done when: a tested compatibility matrix and architecture decision identify what to reuse, retain, or report
-    upstream, with concrete follow-up slices and an explicit Wagtail 7 support and client migration policy.
+- [ ] Enforce Wagtail page locks and edit logging for editor API writes
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    ("Architecture decision", follow-up 1)
+  - Scope: editor PATCH currently checks `can_edit()` and calls `save_revision()` directly, so it neither honors
+    Wagtail edit locks nor logs `wagtail.edit`. Specify the lock-conflict response, reject writes when
+    `page.get_lock()` returns a lock whose `for_user(user)` applies, and log `wagtail.edit`. Keep
+    `save_revision()` with direct logging on Wagtail 7, which has no executable `EditAction` or `wagtail.actions`
+    action registry; the Wagtail 8 edit action may be used behind a version gate.
+  - Done when: tests on the oldest Wagtail 7 and the Wagtail 8 tox edges cover an applicable lock (rejected), a
+    non-applicable owner lock (allowed), and edit-log creation.
+
+- [ ] Move body section merging into `cast.content`
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    (follow-up 2)
+  - Scope: move `PostEditorMixin._section_value` and `_body_sections_with_replacements` behind a
+    transport-neutral function so non-DRF callers need not import the editor view.
+  - Done when: the editor uses the new function and its body tests pass unchanged.
+
+- [ ] Decide editor preview side effects and rendering identity
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    (follow-up 3)
+  - Scope: `Post.serve_preview` synchronizes stored media relationships and creates renditions on every preview
+    GET, and Wagtail's preview request copies the caller's session cookie. Decide whether previews may write and
+    which identity renders them.
+  - Done when: the chosen behavior is documented and covered by regressions.
+
+- [ ] Run PostgreSQL-only tests in CI
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    (follow-up 4)
+  - Scope: add a PostgreSQL-backed tox environment or CI job for the editor and Wagtail v3 experiment row-lock
+    tests, and fix the order-dependent "Database access not allowed" failures seen in `tests/publication_test.py`
+    under randomized PostgreSQL runs.
+  - Done when: the PostgreSQL-only tests run automatically and pass.
 
 - [ ] Triage remaining security hardening observations
   - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
@@ -88,6 +98,19 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
+
+- [ ] Require publish revision binding in the next editor API version
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    (follow-up 5); deferral recorded in [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
+  - Depends on: an editor API versioning decision.
+
+- [ ] Revisit Wagtail v3 adoption
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    ("Revisit triggers"; follow-ups 6 and 7)
+  - Scope: re-run the test-only experiment when v3 is no longer a preview, the supported Wagtail floor includes
+    it, and upstream offers request-context serialization and revision-bound writes. Optional preparatory work:
+    let `HtmlField` tolerate missing serializer context, and add editor schedule input only if a client needs it.
+    Upstream reports for the recorded v3 gaps need separate confirmation before filing.
 
 - [ ] Editor API preservation of paragraphs containing inline media
   - Related design:

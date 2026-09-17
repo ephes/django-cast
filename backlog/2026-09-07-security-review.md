@@ -147,7 +147,8 @@ attacks or additional demonstrated authorization bypasses.
   required `If-Match` for backwards compatibility. Callers that omit the token
   therefore retain the documented latest-revision behavior and its original
   co-editor race; requiring revision binding is deferred to the next editor API
-  version alongside the Wagtail v3 decision.
+  version. The Wagtail v3 evaluation (2026-09-17) kept the editor API as the
+  authoring transport; the mandatory binding is tracked in `BACKLOG.md`.
 - **Author self-edit/delete after page access revocation:** the opt-in author
   action endpoints check session ownership and comment eligibility, but not the
   target page's current visibility (`src/cast/comments/views.py`,

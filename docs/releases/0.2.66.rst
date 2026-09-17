@@ -15,8 +15,8 @@
 - Extend the Wagtail 8 experiment across Episode publication paths. Cast's
   shared publication policy rejects audio-less create, edit, and standalone
   publication while permitting a valid audio Episode. The scheduler also
-  rechecks a revision approved through v3 if its audio later disappears; v3
-  scheduling input remains unverified.
+  rechecks a revision approved through v3 if its audio later disappears.
+  Scheduling input is measured separately below.
 - Confirm that native v3 actions enforce Wagtail's tree-scoped change and
   publish permissions for separate drafting and publishing users. Native API
   tokens do not require Wagtail admin access and cannot carry Cast's separate
@@ -56,3 +56,8 @@
   PostgreSQL 17 server they show that the disposable adapter's page and
   revision locks make concurrent draft saves, schedule approvals, and
   same-base updates wait; they are skipped on SQLite.
+- Complete the Wagtail v3 evaluation with an architecture decision: keep the
+  existing editor API as the supported authoring transport, reuse Wagtail's
+  actions, locks, and forms beneath it, and defer direct v3 adoption. No
+  production v3 routes, client migrations, or route retirements are part of
+  this release.
