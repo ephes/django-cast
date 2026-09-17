@@ -12,7 +12,7 @@ from django.urls import NoReverseMatch, reverse
 from django.urls.base import clear_url_caches
 from django.utils import timezone as django_timezone
 from wagtail import VERSION as WAGTAIL_VERSION
-from wagtail.models import GroupPagePermission, Page, PageLogEntry, Revision
+from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page, PageLogEntry, Revision
 
 if (
     WAGTAIL_VERSION < (8, 0)
@@ -21,9 +21,11 @@ if (
 ):
     pytest.skip("Wagtail v3 experiment settings are not active", allow_module_level=True)
 
+from wagtail.images import get_image_model  # noqa: E402
 from wagtail.locks import ScheduledForPublishLock  # noqa: E402
 from wagtail.models import APIToken  # noqa: E402
 
+from cast.content.media_refs import get_choosable_image  # noqa: E402
 from cast.models import Episode, Post  # noqa: E402
 from cast.publication import EPISODE_AUDIO_REQUIRED  # noqa: E402
 from tests.factories import BlogFactory, EpisodeFactory, PostFactory, UserFactory  # noqa: E402
@@ -46,6 +48,7 @@ EPISODE_FIELDS = POST_FIELDS | {
     "explicit",
     "block",
 }
+NATIVE_OVERVIEW_BODY = [{"type": "overview", "value": [{"type": "paragraph", "value": "<p>Native body</p>"}]}]
 WRITABLE_FIELDS = {
     Post: POST_WRITABLE_FIELDS,
     Episode: POST_WRITABLE_FIELDS | EPISODE_ONLY_WRITABLE_FIELDS,
@@ -561,6 +564,7 @@ def test_create_and_publish_rejects_audio_less_episode_atomically(client, admin_
         {
             "meta": {"type": Episode._meta.label, "parent_id": podcast.pk, "action": "publish"},
             "title": title,
+            "body": NATIVE_OVERVIEW_BODY,
         },
         content_type="application/json",
         HTTP_AUTHORIZATION=f"Bearer {_bearer_token(admin_user)}",
@@ -1167,3 +1171,199 @@ def test_adapter_preview_reports_missing_page(client, admin_user) -> None:
     )
 
     assert response.status_code == 404
+
+
+def _body_update(client, token: str, page: Post, base_revision_id: int, values: dict) -> Any:
+    return client.patch(
+        reverse("wagtailapi_v3:cast_body_update", kwargs={"page_id": page.pk}),
+        values,
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+        HTTP_IF_MATCH=f'"{base_revision_id}"',
+    )
+
+
+def _stock_body_update(client, token: str, page: Post, body: list) -> Any:
+    return client.patch(
+        reverse("wagtailapi_v3:update_page", kwargs={"page_id": page.pk}),
+        {"body": body},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+
+def _grant_image_choice(user: AbstractUser) -> None:
+    group = Group.objects.create(name=f"v3 image choosers {user.pk}")
+    permission = Permission.objects.get(codename="choose_image", content_type__app_label="wagtailimages")
+    GroupCollectionPermission.objects.create(
+        group=group, collection=Collection.get_first_root_node(), permission=permission
+    )
+    user.groups.add(group)
+
+
+def _section_types(page: Post) -> list[str]:
+    return [section["type"] for section in page.get_latest_revision_as_object().body.raw_data]
+
+
+def test_stock_body_schema_has_no_block_guidance(client, admin_user) -> None:
+    schema = _schema(client, _bearer_token(admin_user), Post)
+
+    assert schema["patch"]["properties"]["body"] == {"default": [], "items": {}, "title": "Body", "type": "array"}
+
+
+def test_stock_body_write_replaces_whole_field_and_sanitizes_rich_text(client, admin_user, post) -> None:
+    assert _section_types(post) == ["overview", "detail"]
+    unsafe = '<p>Kept<script>alert(1)</script><a href="javascript:run()">link</a><img src="x" onerror="run()"></p>'
+
+    response = _stock_body_update(
+        client,
+        _bearer_token(admin_user),
+        post,
+        [{"type": "overview", "value": [{"type": "paragraph", "value": unsafe}]}],
+    )
+
+    _assert_cast_write_response_failure(response, Post)
+    post.refresh_from_db()
+    assert _section_types(post) == ["overview"]
+    paragraph = post.get_latest_revision_as_object().body.raw_data[0]["value"][0]["value"]
+    assert "Kept" in paragraph
+    for fragment in ("<script", "javascript:", "onerror", "<img"):
+        assert fragment not in paragraph
+
+
+def test_stock_body_write_accepts_unchoosable_image_and_nulls_missing_image(client, blog, post, image) -> None:
+    user = _page_permission_user(blog, "change_page")
+    assert get_image_model().objects.filter(pk=image.pk).exists()
+    assert get_choosable_image(image.pk, user) is None
+    missing_image_id = image.pk + 1000
+
+    response = _stock_body_update(
+        client,
+        _bearer_token(user),
+        post,
+        [
+            {
+                "type": "overview",
+                "value": [{"type": "image", "value": image.pk}, {"type": "image", "value": missing_image_id}],
+            }
+        ],
+    )
+
+    _assert_cast_write_response_failure(response, Post)
+    post.refresh_from_db()
+    blocks = post.get_latest_revision_as_object().body.raw_data[0]["value"]
+    assert [(block["type"], block["value"]) for block in blocks] == [
+        ("image", image.pk),
+        ("image", None),
+    ]
+
+
+def test_stock_body_write_rejects_unknown_block_without_revision(client, admin_user, post) -> None:
+    revision_count = post.revisions.count()
+
+    response = _stock_body_update(
+        client, _bearer_token(admin_user), post, [{"type": "overview", "value": [{"type": "unknown", "value": 1}]}]
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Validation failed"
+    assert post.revisions.count() == revision_count
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+def test_body_adapter_converts_author_blocks_and_preserves_other_section(
+    client, admin_user, request, fixture_name, image
+) -> None:
+    page = request.getfixturevalue(fixture_name)
+    _grant_image_choice(admin_user)
+    assert get_choosable_image(image.pk, admin_user) == image
+    base_revision = page.get_latest_revision_as_object().save_revision(user=admin_user)
+    detail_before = base_revision.as_object().body.raw_data[1]
+
+    response = _body_update(
+        client,
+        _bearer_token(admin_user),
+        page,
+        base_revision.pk,
+        {
+            "overview": [
+                {"type": "paragraph", "value": "<p>Adapter overview</p>"},
+                {"type": "image", "value": {"id": image.pk}},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    page.refresh_from_db()
+    assert page.latest_revision_id == response.json()["latest_revision_id"]
+    sections = page.get_latest_revision_as_object().body.raw_data
+    assert [section["type"] for section in sections] == ["overview", "detail"]
+    assert [(block["type"], block["value"]) for block in sections[0]["value"]] == [
+        ("paragraph", "<p>Adapter overview</p>"),
+        ("image", image.pk),
+    ]
+    assert sections[1] == detail_before
+
+
+def test_body_adapter_rejects_unchoosable_image_without_revision(client, admin_user, blog, post, image) -> None:
+    base_revision = post.get_latest_revision_as_object().save_revision(user=admin_user)
+    user = _page_permission_user(blog, "change_page")
+    assert get_choosable_image(image.pk, user) is None
+
+    response = _body_update(
+        client,
+        _bearer_token(user),
+        post,
+        base_revision.pk,
+        {"detail": [{"type": "image", "value": {"id": image.pk}}]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+    assert [error["code"] for error in response.json()["errors"]["detail.0.value.id"]] == ["not_found"]
+    post.refresh_from_db()
+    assert post.latest_revision_id == base_revision.pk
+
+
+def test_body_adapter_rejects_unsupported_author_block(client, admin_user, post) -> None:
+    base_revision = post.get_latest_revision_as_object().save_revision(user=admin_user)
+
+    response = _body_update(
+        client, _bearer_token(admin_user), post, base_revision.pk, {"overview": [{"type": "unknown", "value": 1}]}
+    )
+
+    assert response.status_code == 422
+    assert set(response.json()["errors"]) == {"overview.0.type"}
+    post.refresh_from_db()
+    assert post.latest_revision_id == base_revision.pk
+
+
+def test_body_adapter_preconditions(client, admin_user, site, post, body) -> None:
+    other_blog = BlogFactory(owner=admin_user, parent=site.root_page, title="Other blog", slug="other-blog")
+    stale = post.get_latest_revision_as_object().save_revision(user=admin_user)
+    current = post.get_latest_revision_as_object().save_revision(user=admin_user)
+    token = _bearer_token(admin_user)
+    overview = {"overview": [{"type": "paragraph", "value": "<p>Ignored</p>"}]}
+
+    empty = _body_update(client, token, post, current.pk, {})
+    conflict = _body_update(client, token, post, stale.pk, overview)
+    outsider_token = _bearer_token(_page_permission_user(other_blog, "change_page"))
+    outsider = _body_update(client, outsider_token, post, stale.pk, overview)
+    unquoted = client.patch(
+        reverse("wagtailapi_v3:cast_body_update", kwargs={"page_id": post.pk}),
+        overview,
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+        HTTP_IF_MATCH=str(current.pk),
+    )
+
+    assert empty.status_code == 400
+    assert empty.json()["code"] == "empty_body_update"
+    assert conflict.status_code == 409
+    assert conflict.json()["current_revision_id"] == current.pk
+    assert outsider.status_code == 403
+    assert str(current.pk) not in outsider.content.decode()
+    assert unquoted.status_code == 400
+    assert unquoted.json()["code"] == "invalid_base_revision"
+    post.refresh_from_db()
+    assert post.latest_revision_id == current.pk

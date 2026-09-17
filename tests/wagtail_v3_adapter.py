@@ -1,6 +1,6 @@
 """Test-only revision-aware adapter over Wagtail 8's v3 update and publish helpers."""
 
-from typing import Literal
+from typing import Any, Literal
 
 import swapper
 from django.core.exceptions import PermissionDenied
@@ -14,6 +14,11 @@ from wagtail.api.v3.form_data import build_page_update_form
 from wagtail.api.v3.permissions import require_any_permission
 from wagtail.api.v3.routers.pages import PageUpdateSchema
 from wagtail.api.v3.schemas.pages import PageTypeInjectingBody
+
+from cast.api.editor.views import PostEditorMixin
+from cast.content.blocks import ConversionContext
+from cast.content.convert import author_blocks_to_section
+from cast.content.errors import ContentValidationError
 
 Page = swapper.load_model("wagtailcore", "Page")
 
@@ -32,7 +37,7 @@ class RevisionUpdateResult(Schema):
 
 
 class AdapterError(Schema):
-    code: Literal["invalid_base_revision", "publish_not_supported"]
+    code: Literal["invalid_base_revision", "publish_not_supported", "empty_body_update"]
     detail: str
 
 
@@ -53,6 +58,16 @@ class RevisionPublishResult(Schema):
     revision_id: int
     live: bool
     live_revision_id: int | None
+
+
+class AuthorBodyUpdate(Schema):
+    overview: list[dict[str, Any]] | None = None
+    detail: list[dict[str, Any]] | None = None
+
+
+class BodyValidationError(Schema):
+    code: Literal["validation_error"]
+    errors: dict[str, list[dict[str, str]]]
 
 
 def _base_revision_id(request: HttpRequest) -> int | None:
@@ -207,3 +222,65 @@ def draft_preview(request: HttpRequest, page_id: int):
     if not page.permissions_for_user(request.user).can_edit():
         raise PermissionDenied
     return page.get_latest_revision_as_object().make_preview_request(original_request=request)
+
+
+@router.patch(
+    "/{page_id}/body/",
+    response={200: RevisionUpdateResult, 400: AdapterError, 409: RevisionConflict, 422: BodyValidationError},
+    url_name="cast_body_update",
+    summary="Cast author-block body update experiment",
+)
+@require_any_permission(Page, ("change",))
+@transaction.atomic
+def author_body_update(request: HttpRequest, page_id: int, data: AuthorBodyUpdate):
+    base_revision_id = _base_revision_id(request)
+    if base_revision_id is None:
+        return Status(
+            400,
+            {
+                "code": "invalid_base_revision",
+                "detail": 'Supply the base revision as a quoted integer in the "If-Match" header.',
+            },
+        )
+    sections = {name: blocks for name, blocks in data.dict().items() if blocks is not None}
+    if not sections:
+        return Status(400, {"code": "empty_body_update", "detail": "Supply overview, detail, or both."})
+
+    page = get_object_or_404(Page.objects.select_for_update(), pk=page_id).specific
+    if not page.permissions_for_user(request.user).can_edit():
+        raise PermissionDenied
+    if page.latest_revision_id != base_revision_id:
+        return Status(
+            409,
+            {
+                "code": "revision_conflict",
+                "current_revision_id": page.latest_revision_id,
+                "submitted_base_revision_id": base_revision_id,
+            },
+        )
+
+    draft = page.get_latest_revision().as_object()
+    # The section merge lives on the DRF editor mixin rather than in cast.content.
+    body_sections = PostEditorMixin()
+    replacements = {}
+    try:
+        for section, blocks in sections.items():
+            ctx = ConversionContext(
+                section=section,
+                user=request.user,
+                existing_section=body_sections._section_value(draft, section),
+            )
+            replacements[section] = author_blocks_to_section(blocks, ctx=ctx)
+    except ContentValidationError as error:
+        return Status(422, {"code": "validation_error", "errors": error.error_map})
+    draft.body = body_sections._body_sections_with_replacements(draft, replacements)
+
+    action_class = action_registry.get_action_class(type(draft), "edit")
+    action = action_class(draft, user=request.user, publish=False)
+    action.execute()
+    return {
+        "id": page.pk,
+        "meta": {"type": page._meta.label},
+        "base_revision_id": base_revision_id,
+        "latest_revision_id": action.revision.pk,
+    }

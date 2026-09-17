@@ -6,7 +6,7 @@ from wagtail.api import APIField
 
 from cast.models import Episode, Post
 
-POST_WRITABLE_FIELDS = frozenset({"visible_date", "cover_alt_text"})
+POST_WRITABLE_FIELDS = frozenset({"visible_date", "cover_alt_text", "body"})
 EPISODE_ONLY_WRITABLE_FIELDS = frozenset({"episode_number", "episode_type", "keywords", "explicit", "block"})
 # Wagtail's own scheduling fields are not in v3's base page inventory.
 SCHEDULE_WRITABLE_FIELDS = frozenset({"go_live_at", "expire_at"})
