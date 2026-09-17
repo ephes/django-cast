@@ -8,3 +8,7 @@
 - Extend the disposable experiment with selected scalar draft fields. It
   reproduces write-response failures from Cast's computed v2 fields and shows
   that partial updates are based on the live row rather than the latest draft.
+- Add a disposable revision-aware update adapter that returns a truthful
+  transport-native response, preserves omitted values from the latest Post or
+  Episode draft, and rejects stale base revisions without creating a revision.
+  Publishing remains deliberately unavailable through the adapter.

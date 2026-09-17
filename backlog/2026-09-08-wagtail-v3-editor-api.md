@@ -2,9 +2,10 @@
 
 Date: 2026-09-08
 
-Status: evaluation in progress; isolated mounting/discovery and scalar
-draft-write slices are implemented in test configuration only. No production
-v3 integration or client migration is implemented.
+Status: evaluation in progress; isolated mounting/discovery, scalar
+draft-write, and revision-aware update-adapter slices are implemented in test
+configuration only. No production v3 integration or client migration is
+implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
@@ -60,12 +61,18 @@ The first slice adds ``wagtail.api.v3`` and mounts its URLs only through
 ``tests.wagtail_v3_settings`` and ``tests.wagtail_v3_urls``. The second slice,
 measured on 2026-09-17 in the same environment, adds a disposable AppConfig
 that marks selected Post and Episode scalar fields writable before Wagtail
-builds its v3 registry. Every Wagtail 8 tox environment first runs the complete
-suite with normal ``tests.settings`` and ``tests.urls``, then runs only the
-experiment module in a second process with the disposable settings. Every
-django-cast production module remains unchanged. Normal Wagtail 8 test runs and
-Wagtail 7 collect the experiment as a configuration-gated skip without
-importing a v3 module.
+builds its v3 registry. The third slice, measured on 2026-09-17, registers a
+disposable Cast router over Wagtail's v3 form builder and edit action. It
+requests a row lock, checks a strong ``If-Match`` revision identifier,
+materializes the latest draft, and returns a minimal response that does not
+invoke Cast's v2 serializers. The row lock is effective on databases such as
+PostgreSQL but is a no-op on the experiment's SQLite database, so concurrent
+atomicity is not yet proven. Every Wagtail 8 tox environment first runs the
+complete suite with normal ``tests.settings`` and ``tests.urls``, then runs
+only the experiment module in a second process with the disposable settings.
+Every django-cast production module remains unchanged. Normal Wagtail 8 test
+runs and Wagtail 7 collect the experiment as a configuration-gated skip
+without importing a v3 module.
 
 Evidence labels below are deliberate: **test** means
 ``tests/wagtail_v3_experiment_test.py`` exercised the behavior; **source**
@@ -83,23 +90,30 @@ but was not exercised through a Cast integration test in this slice.
 | Post field inventory | Cast extension required | **Test:** the disposable configuration makes ``visible_date`` and ``cover_alt_text`` writable; read schemas also expose ``cover_image`` and ``body``. ``cover_image``, ``body``, ``tags``, and ``categories`` remain absent from writes. **Source:** the read fields originate in existing v2 ``APIField`` declarations. | Evaluate relations and body conversion only after safe scalar updates exist. |
 | Episode field inventory | Cast extension required | **Test:** Episode inherits the two Post write fields and additionally exposes ``episode_number``, ``episode_type``, ``keywords``, ``explicit``, and ``block``. A draft Episode without audio is persisted. ``podcast_audio`` and ``season`` remain absent from read/create/patch schemas. | Evaluate FK representation, same-podcast season policy, and media permissions separately. |
 | StreamField schema | incompatible for self-describing agent input | **Source and test schema:** ``body`` is read as ``list[Any]`` and is absent from writes, so discovery cannot currently describe Cast's author block contract. | Evaluate a Cast adapter over ``cast.content`` rather than duplicating conversion. |
-| Revision conflict and draft-only guards | unverified | **Source:** the inspected v3 update route has no Cast revision token or ``require_unpublished`` precondition. | Reproduce concurrent and scheduled-state behavior after a field is writable. |
-| Write response serialization | incompatible | **Test:** Post and Episode draft creates persist, and a Post PATCH creates a revision, but each response is 422 because the inherited ``html_overview`` and ``html_detail`` v2 serializers require a request context that the v3 write response lacks. The write has committed before serialization fails. | Give v3 a transport-native read schema or establish an upstream response-context extension; do not mask committed writes as validation failures. |
-| Partial update against a newer draft | incompatible | **Test:** after a newer draft changes ``cover_alt_text``, a v3 PATCH that supplies only ``visible_date`` creates a revision whose omitted cover text comes from the live row. **Source:** ``build_page_update_form`` binds the database page object and narrows the form to submitted fields. | A Cast adapter must materialize the latest draft and enforce an explicit base revision before editing. |
+| Revision conflict guard | Cast extension required | **Test:** the disposable adapter accepts a quoted base revision and returns 409 for a sequential stale request without creating a revision. **Source:** the stock v3 update route has no revision precondition; the adapter uses a transaction and ``select_for_update``. SQLite ignores that lock, and no concurrent test was run. | Prove the race on PostgreSQL and SQLite or retain the existing editor guard; do not infer atomicity from the sequential test. |
+| Draft-only and scheduled-state guards | unverified | **Source:** the stock v3 update route has no equivalent to Cast's ``require_unpublished`` precondition. The adapter intentionally evaluates revision safety only. | Reproduce live and scheduled state changes around an atomic update before migration. |
+| Write response serialization | Cast extension required | **Test:** stock Post and Episode creates and a stock Post PATCH commit before returning 422 because inherited ``html_overview`` and ``html_detail`` v2 serializers lack request context. The adapter returns 200 with ids and native metadata only after its revision is created; Wagtail's form-error handler returns 422 for an invalid Episode scalar without creating a revision. | Decide whether a supported transport-native schema extension is preferable to an upstream response-context change. |
+| Partial update against a newer draft | Cast extension required | **Test:** the stock route replaces an omitted newer-draft cover value with the live value. The adapter preserves omitted values for both Post and Episode while updating a supplied scalar. **Source:** Wagtail's form builder preserves omitted fields on the object it is given, so the adapter supplies the latest revision object instead of the live row. | Extend the proof to relations and StreamField only in later focused slices. |
 | Episode publication policy | unverified | **Source:** v3 publish uses Wagtail's action registry and revision publish path, which should reach ``cast.publication``. | Test create/edit/standalone/scheduled publication, including audio-less rejection. |
 | Media and body conversion | Cast extension required | Existing Cast services remain the required policy seams; no v3 write path exercised them in this slice. | Keep ``cast.content`` transport-neutral and reuse media ingestion without internal HTTP calls. |
 
-The write experiment reproduced two runtime incompatibilities without enabling
-production routes: response serialization reports failure after committing a
-write, and partial updates discard omitted values from a newer draft. The
+The stock write experiment reproduced two runtime incompatibilities without
+enabling production routes: response serialization reports failure after
+committing a write, and partial updates discard omitted values from a newer
+draft. The third slice proves that a small Cast adapter can avoid both for
+scalar updates while reusing Wagtail's form builder and edit action. It also
+proves bearer authentication on the adapter and rejects action-bearing
+requests (``publish`` is the only action accepted by Wagtail 8.0's update
+schema) so this experiment cannot become an untested publication path. The
 StreamField limitation remains a separate schema incompatibility for the
 intended self-describing agent workflow.
 
-The next smallest experiment slice is a test-only revision-aware update
-adapter. It should expose a transport-native response shape, require a base
-revision, materialize the latest draft before applying an update, and prove
-that stale requests fail without creating a revision. Body, publication,
-preview, media upload, and Daybook migration remain later slices.
+The next smallest experiment slice is publication-policy evaluation through
+Wagtail's v3 action path. It should prove that an audio-less Episode cannot be
+published by create-and-publish, edit-and-publish, standalone publish, or a
+scheduled revision, and that a valid Episode can be published, before deciding
+whether a Cast action adapter is required. Body, preview, media upload,
+draft-state race handling, and Daybook migration remain later slices.
 
 ## Upstream capabilities and remaining questions
 

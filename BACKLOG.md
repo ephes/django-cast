@@ -24,8 +24,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
   - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-  - Progress: 0.2.66 adds test-only Wagtail 8 mounting, discovery, and scalar draft-write
-    experiments. Writes currently expose response-serialization and latest-draft compatibility gaps.
+  - Progress: 0.2.66 adds test-only Wagtail 8 mounting, discovery, scalar draft-write, and
+    revision-aware update-adapter experiments. The adapter resolves the measured response and latest-draft gaps
+    for Post and Episode scalar updates; publication and draft-state safeguards remain to be evaluated.
   - Implemented prerequisites: the publication policy and content converter seams —
     [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and
     [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
