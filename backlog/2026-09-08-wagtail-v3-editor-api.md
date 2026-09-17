@@ -3,9 +3,9 @@
 Date: 2026-09-08
 
 Status: evaluation in progress; isolated mounting/discovery, scalar
-draft-write, and revision-aware update-adapter slices are implemented in test
-configuration only. No production v3 integration or client migration is
-implemented.
+draft-write, revision-aware update-adapter, and publication-policy slices are
+implemented in test configuration only. No production v3 integration or
+client migration is implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
@@ -67,12 +67,15 @@ requests a row lock, checks a strong ``If-Match`` revision identifier,
 materializes the latest draft, and returns a minimal response that does not
 invoke Cast's v2 serializers. The row lock is effective on databases such as
 PostgreSQL but is a no-op on the experiment's SQLite database, so concurrent
-atomicity is not yet proven. Every Wagtail 8 tox environment first runs the
-complete suite with normal ``tests.settings`` and ``tests.urls``, then runs
-only the experiment module in a second process with the disposable settings.
-Every django-cast production module remains unchanged. Normal Wagtail 8 test
-runs and Wagtail 7 collect the experiment as a configuration-gated skip
-without importing a v3 module.
+atomicity is not yet proven. The fourth slice, measured on 2026-09-17, invokes
+the stock create-and-publish, edit-and-publish, and standalone publish routes
+for Episodes, and executes a scheduled revision that was approved through the
+standalone route. Every Wagtail 8 tox environment first runs the complete suite
+with normal ``tests.settings`` and ``tests.urls``, then runs only the experiment
+module in a second process with the disposable settings. Every django-cast
+production module remains unchanged. Normal Wagtail 8 test runs and Wagtail 7
+collect the experiment as a configuration-gated skip without importing a v3
+module.
 
 Evidence labels below are deliberate: **test** means
 ``tests/wagtail_v3_experiment_test.py`` exercised the behavior; **source**
@@ -92,9 +95,11 @@ but was not exercised through a Cast integration test in this slice.
 | StreamField schema | incompatible for self-describing agent input | **Source and test schema:** ``body`` is read as ``list[Any]`` and is absent from writes, so discovery cannot currently describe Cast's author block contract. | Evaluate a Cast adapter over ``cast.content`` rather than duplicating conversion. |
 | Revision conflict guard | Cast extension required | **Test:** the disposable adapter accepts a quoted base revision and returns 409 for a sequential stale request without creating a revision. **Source:** the stock v3 update route has no revision precondition; the adapter uses a transaction and ``select_for_update``. SQLite ignores that lock, and no concurrent test was run. | Prove the race on PostgreSQL and SQLite or retain the existing editor guard; do not infer atomicity from the sequential test. |
 | Draft-only and scheduled-state guards | unverified | **Source:** the stock v3 update route has no equivalent to Cast's ``require_unpublished`` precondition. The adapter intentionally evaluates revision safety only. | Reproduce live and scheduled state changes around an atomic update before migration. |
-| Write response serialization | Cast extension required | **Test:** stock Post and Episode creates and a stock Post PATCH commit before returning 422 because inherited ``html_overview`` and ``html_detail`` v2 serializers lack request context. The adapter returns 200 with ids and native metadata only after its revision is created; Wagtail's form-error handler returns 422 for an invalid Episode scalar without creating a revision. | Decide whether a supported transport-native schema extension is preferable to an upstream response-context change. |
+| Write response serialization | Cast extension required | **Test:** stock Post and Episode creates and a stock Post PATCH commit before returning 422 because inherited ``html_overview`` and ``html_detail`` v2 serializers lack request context. A successful standalone Episode publish and schedule also commit before returning the same 422. The adapter returns 200 with ids and native metadata only after its revision is created; Wagtail's form-error handler returns 422 for an invalid Episode scalar without creating a revision. | Decide whether a supported transport-native schema extension is preferable to an upstream response-context change. |
 | Partial update against a newer draft | Cast extension required | **Test:** the stock route replaces an omitted newer-draft cover value with the live value. The adapter preserves omitted values for both Post and Episode while updating a supplied scalar. **Source:** Wagtail's form builder preserves omitted fields on the object it is given, so the adapter supplies the latest revision object instead of the live row. | Extend the proof to relations and StreamField only in later focused slices. |
-| Episode publication policy | unverified | **Source:** v3 publish uses Wagtail's action registry and revision publish path, which should reach ``cast.publication``. | Test create/edit/standalone/scheduled publication, including audio-less rejection. |
+| Episode publication policy | Cast extension required | **Test:** Cast's existing publication hook rejects audio-less Episodes through stock create-and-publish, edit-and-publish, and standalone publish. Create and edit roll back the tentative page/revision. A valid audio Episode becomes live. A revision scheduled through the standalone route is rechecked and rejected after its audio is deleted. **Source:** all routes delegate to Wagtail revision actions, where ``cast.publication`` is installed. | Preserve the existing shared Cast hook; no v3-specific publication policy adapter is needed for these paths. Test revision-bound publication and permissions separately. |
+| Publication validation response | Cast extension required | **Test:** policy rejection is a truthful 422 and does not publish, but Wagtail's generic Django validation handler returns only the message, without Cast's ``podcast_audio`` field or ``required`` code. | Define a transport-native structured error adapter if v3 is selected. |
+| Scheduling input | unverified | **Test:** a fixture revision with ``go_live_at`` set can be approved through the v3 standalone publish action and is protected when the scheduler executes it. The schedule value itself was not submitted through v3. | Determine whether scheduling belongs in a Cast adapter; do not claim v3 scheduling support from this execution-path proof. |
 | Media and body conversion | Cast extension required | Existing Cast services remain the required policy seams; no v3 write path exercised them in this slice. | Keep ``cast.content`` transport-neutral and reuse media ingestion without internal HTTP calls. |
 
 The stock write experiment reproduced two runtime incompatibilities without
@@ -105,15 +110,20 @@ scalar updates while reusing Wagtail's form builder and edit action. It also
 proves bearer authentication on the adapter and rejects action-bearing
 requests (``publish`` is the only action accepted by Wagtail 8.0's update
 schema) so this experiment cannot become an untested publication path. The
-StreamField limitation remains a separate schema incompatibility for the
-intended self-describing agent workflow.
+fourth slice shows that stock v3 publication reaches the shared Cast policy;
+it does not require policy duplication. Successful publication still inherits
+the stock response-serialization failure, while rejected publication returns a
+truthful but less structured validation response. The StreamField limitation
+remains a separate schema incompatibility for the intended self-describing
+agent workflow.
 
-The next smallest experiment slice is publication-policy evaluation through
-Wagtail's v3 action path. It should prove that an audio-less Episode cannot be
-published by create-and-publish, edit-and-publish, standalone publish, or a
-scheduled revision, and that a valid Episode can be published, before deciding
-whether a Cast action adapter is required. Body, preview, media upload,
-draft-state race handling, and Daybook migration remain later slices.
+The next smallest experiment slice is authorization and scope evaluation. It
+should exercise a drafting user and a publishing user against Post and Episode
+pages, distinguish Wagtail's per-page permissions from Cast's token-level
+``write``/``publish`` scopes, and determine the smallest supported extension
+point. Body, preview, media upload, scheduling input, revision-bound
+publication, draft-state race handling, and Daybook migration remain later
+slices.
 
 ## Upstream capabilities and remaining questions
 
@@ -133,17 +143,17 @@ in any release until stabilized. Enabling it requires separate app/URL setup.
 | Rich text | Wagtail has reusable conversion/sanitization code, including nested rich-text handling in the installed v3 implementation. | Run Cast's sanitization and feature-preservation cases; retain explicit raw-HTML/inline-media policy. |
 | Preview and publishing | Cast renders authenticated draft previews; its current publish action publishes the latest revision without a revision precondition. | Prove preview behavior and explicitly decide how publication binds to the revision reviewed by a human. |
 
-Two source-level concerns need focused regression proofs:
+The experiments establish two important action-path findings:
 
 1. The installed v3 update router builds its update form from the model row.
    The scalar write experiment confirms that a partial edit of a live page
    with a newer draft reconstructs omitted values from the live row. Any Cast
    adapter must start from the latest revision and reject stale base revisions.
 2. `CustomEpisodeForm.clean()` identifies publication using the admin's
-   `action-publish` form input, while Cast's editor publish handler explicitly
-   checks the revision for `podcast_audio`. A v3 standalone publish bypasses
-   that Cast handler. Verify create-and-publish, edit-and-publish, standalone
-   publish, and scheduled publication before enabling Episode writes.
+   `action-publish` form input, but v3 does not need to emulate that input.
+   Create, edit, standalone, and scheduled publication all reach the shared
+   ``cast.publication`` revision hook. Rejected create/edit operations roll
+   back, and successful publication must still solve the response-schema gap.
 
 ## Proposed plan
 

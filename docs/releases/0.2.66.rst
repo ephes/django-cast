@@ -12,3 +12,8 @@
   transport-native response, preserves omitted values from the latest Post or
   Episode draft, and rejects stale base revisions without creating a revision.
   Publishing remains deliberately unavailable through the adapter.
+- Extend the Wagtail 8 experiment across Episode publication paths. Cast's
+  shared publication policy rejects audio-less create, edit, and standalone
+  publication while permitting a valid audio Episode. The scheduler also
+  rechecks a revision approved through v3 if its audio later disappears; v3
+  scheduling input remains unverified.

@@ -1,13 +1,16 @@
-"""Wagtail 8 v3 discovery, authentication, exposure, and draft-write experiment."""
+"""Wagtail 8 v3 discovery, draft-write, and publication experiment."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Any, Protocol
 
 import pytest
 from django.conf import settings
+from django.core.management import call_command
 from django.urls import NoReverseMatch, reverse
 from django.urls.base import clear_url_caches
+from django.utils import timezone as django_timezone
 from wagtail import VERSION as WAGTAIL_VERSION
-from wagtail.models import Revision
+from wagtail.models import PageLogEntry, Revision
 
 if (
     WAGTAIL_VERSION < (8, 0)
@@ -19,6 +22,8 @@ if (
 from wagtail.models import APIToken  # noqa: E402
 
 from cast.models import Episode, Post  # noqa: E402
+from cast.publication import EPISODE_AUDIO_REQUIRED  # noqa: E402
+from tests.factories import EpisodeFactory  # noqa: E402
 from tests.wagtail_v3_writable import (  # noqa: E402
     EPISODE_ONLY_WRITABLE_FIELDS,
     POST_WRITABLE_FIELDS,
@@ -41,6 +46,12 @@ WRITABLE_FIELDS = {
     Post: POST_WRITABLE_FIELDS,
     Episode: POST_WRITABLE_FIELDS | EPISODE_ONLY_WRITABLE_FIELDS,
 }
+
+
+class ClientResponse(Protocol):
+    status_code: int
+
+    def json(self) -> dict[str, Any]: ...
 
 
 def _bearer_token(user: object) -> str:
@@ -75,6 +86,38 @@ def _adapter_update(client, token: str, page: Post, base_revision_id: int, value
         HTTP_AUTHORIZATION=f"Bearer {token}",
         HTTP_IF_MATCH=f'"{base_revision_id}"',
     )
+
+
+def _draft_episode(podcast, body: str, *, slug: str, audio=None, go_live_at=None) -> Episode:
+    return EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title=slug.replace("-", " ").title(),
+        slug=slug,
+        live=False,
+        first_published_at=None,
+        podcast_audio=audio,
+        go_live_at=go_live_at,
+        body=body,
+    )
+
+
+def _publish_action(client, token: str, episode: Episode) -> ClientResponse:
+    return client.post(
+        reverse("wagtailapi_v3:pages_actions_publish", kwargs={"page_id": episode.pk}),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+
+def _assert_audio_required(response: ClientResponse) -> None:
+    assert response.status_code == 422
+    assert response.json() == {
+        "type": "about:blank",
+        "title": "Unprocessable Entity",
+        "status": 422,
+        "detail": "Validation failed",
+        "errors": [{"msg": str(EPISODE_AUDIO_REQUIRED)}],
+    }
 
 
 def test_normal_test_urls_do_not_mount_wagtail_v3(settings) -> None:
@@ -349,3 +392,100 @@ def test_revision_adapter_does_not_expose_publish(client, admin_user, post) -> N
     post.refresh_from_db()
     assert post.latest_revision_id == base_revision.pk
     assert Revision.objects.filter(object_id=str(post.pk)).count() == revision_count
+
+
+def test_create_and_publish_rejects_audio_less_episode_atomically(client, admin_user, podcast) -> None:
+    title = "v3 audio-less create and publish"
+    revision_count = Revision.objects.count()
+    log_count = PageLogEntry.objects.count()
+
+    response = client.post(
+        reverse("wagtailapi_v3:create_page"),
+        {
+            "meta": {"type": Episode._meta.label, "parent_id": podcast.pk, "action": "publish"},
+            "title": title,
+        },
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {_bearer_token(admin_user)}",
+    )
+
+    _assert_audio_required(response)
+    assert not Episode.objects.filter(title=title).exists()
+    assert Revision.objects.count() == revision_count
+    assert PageLogEntry.objects.count() == log_count
+
+
+def test_edit_and_publish_rejects_audio_less_episode_without_revision(client, admin_user, podcast, body) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-audio-less-edit-publish")
+    base_revision = episode.save_revision(user=admin_user)
+    revision_count = episode.revisions.count()
+
+    response = client.patch(
+        reverse("wagtailapi_v3:update_page", kwargs={"page_id": episode.pk}),
+        {"meta": {"action": "publish"}, "episode_type": "bonus"},
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {_bearer_token(admin_user)}",
+    )
+
+    _assert_audio_required(response)
+    episode.refresh_from_db()
+    assert episode.live is False
+    assert episode.latest_revision_id == base_revision.pk
+    assert episode.revisions.count() == revision_count
+
+
+def test_standalone_publish_rejects_audio_less_episode(client, admin_user, podcast, body) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-audio-less-standalone-publish")
+    revision = episode.save_revision(user=admin_user)
+
+    response = _publish_action(client, _bearer_token(admin_user), episode)
+
+    _assert_audio_required(response)
+    episode.refresh_from_db()
+    assert episode.live is False
+    assert episode.live_revision_id is None
+    assert episode.latest_revision_id == revision.pk
+
+
+def test_standalone_publish_allows_episode_with_audio(client, admin_user, podcast, audio, body) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-valid-standalone-publish", audio=audio)
+    revision = episode.save_revision(user=admin_user)
+
+    response = _publish_action(client, _bearer_token(admin_user), episode)
+
+    _assert_cast_write_response_failure(response, Episode)
+    episode.refresh_from_db()
+    assert episode.live is True
+    assert episode.live_revision_id == revision.pk
+    assert episode.podcast_audio_id == audio.pk
+
+
+def test_v3_scheduled_revision_is_rechecked_after_audio_deletion(client, admin_user, podcast, audio, body) -> None:
+    scheduled_for = (django_timezone.now() + timedelta(days=1)).replace(microsecond=0)
+    episode = _draft_episode(
+        podcast,
+        body,
+        slug="v3-scheduled-publication",
+        audio=audio,
+        go_live_at=scheduled_for,
+    )
+    revision = episode.save_revision(user=admin_user)
+
+    response = _publish_action(client, _bearer_token(admin_user), episode)
+
+    _assert_cast_write_response_failure(response, Episode)
+    episode.refresh_from_db()
+    revision.refresh_from_db()
+    assert episode.live is False
+    assert revision.approved_go_live_at == scheduled_for
+
+    audio.delete()
+    Revision.objects.filter(pk=revision.pk).update(approved_go_live_at=django_timezone.now() - timedelta(minutes=1))
+    call_command("publish_scheduled", verbosity=0)
+
+    episode.refresh_from_db()
+    revision.refresh_from_db()
+    assert episode.live is False
+    assert episode.live_revision_id is None
+    assert revision.approved_go_live_at is None
+    assert PageLogEntry.objects.filter(page_id=episode.pk, action="cast.publish.rejected").exists()
