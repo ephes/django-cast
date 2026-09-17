@@ -52,3 +52,7 @@
   apply Wagtail's validation and collection scoping, but can store an image in
   a different collection than requested and do not require ``choose``
   permission. v3 exposes no Cast audio, video, or transcript routes.
+- Add PostgreSQL-only threaded tests to the Wagtail 8 experiment. On a local
+  PostgreSQL 17 server they show that the disposable adapter's page and
+  revision locks make concurrent draft saves, schedule approvals, and
+  same-base updates wait; they are skipped on SQLite.

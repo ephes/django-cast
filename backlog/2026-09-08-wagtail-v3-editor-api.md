@@ -7,7 +7,8 @@ draft-write, revision-aware update-adapter, and publication-policy slices are
 implemented in test configuration only, along with an authorization/scope
 experiment, a draft-state precondition experiment, a revision-bound
 publication experiment, a scheduling-input experiment, a draft read and
-preview experiment, a body-conversion experiment, and a media experiment. No production v3 integration or client migration is
+preview experiment, a body-conversion experiment, a media experiment, and
+PostgreSQL concurrency proofs for the adapter locks. No production v3 integration or client migration is
 implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
@@ -69,8 +70,8 @@ disposable Cast router over Wagtail's v3 form builder and edit action. It
 requests a row lock, checks a strong ``If-Match`` revision identifier,
 materializes the latest draft, and returns a minimal response that does not
 invoke Cast's v2 serializers. The row lock is effective on databases such as
-PostgreSQL but is a no-op on the experiment's SQLite database, so concurrent
-atomicity is not yet proven. The fourth slice, measured on 2026-09-17, invokes
+PostgreSQL but is a no-op on the experiment's SQLite database, so that slice
+did not prove concurrent atomicity; the twelfth slice does. The fourth slice, measured on 2026-09-17, invokes
 the stock create-and-publish, edit-and-publish, and standalone publish routes
 for Episodes, and executes a scheduled revision that was approved through the
 standalone route. Every Wagtail 8 tox environment first runs the complete suite
@@ -101,7 +102,16 @@ submits native StreamField values through stock v3, and adds a test-adapter
 route that converts Cast author blocks through ``cast.content``. The
 eleventh slice, measured on 2026-09-17, inventories the installed v3 media
 types and exercises stock v3 image uploads under collection permissions and
-anonymous image listing. Every django-cast
+anonymous image listing. The twelfth slice, measured on 2026-09-17, runs the
+experiment module against a disposable local PostgreSQL 17.11 server. It uses
+a scratch virtualenv with the same 65 pinned packages as
+``py312-django61-wagtail80`` plus psycopg 3.3.5, and selects the backend
+through the existing ``CAST_TEST_DB_ENGINE`` test settings. Three new threaded
+tests pause an adapter request after it takes its locks. Before releasing it,
+each test requires ``pg_stat_activity`` to report another backend in the test
+database waiting on a lock, and requires the competing writer not to have
+finished. They are skipped on SQLite, and no tox environment or
+CI job runs them. Every django-cast
 production module remains unchanged. Normal Wagtail 8 test runs and Wagtail 7
 collect the experiment as a configuration-gated skip without importing a v3
 module.
@@ -128,14 +138,14 @@ but was not exercised through a Cast integration test in this slice;
 | Post field inventory | Cast extension required | **Test:** the disposable configuration makes ``visible_date``, ``cover_alt_text``, and (since the body slice) ``body`` writable; read schemas also expose ``cover_image``. ``cover_image``, ``tags``, and ``categories`` remain absent from writes. Once ``body`` is writable, stock create-and-publish requires a valid body before Cast's publication policy runs. **Source:** the read fields originate in existing v2 ``APIField`` declarations. | Evaluate relation fields only if v3 writes are selected. |
 | Episode field inventory | Cast extension required | **Test:** Episode inherits the two Post write fields and additionally exposes ``episode_number``, ``episode_type``, ``keywords``, ``explicit``, and ``block``. A draft Episode without audio is persisted. ``podcast_audio`` and ``season`` remain absent from read/create/patch schemas. | Evaluate FK representation, same-podcast season policy, and media permissions separately. |
 | StreamField schema | incompatible for self-describing agent input | **Test:** the opted-in Post patch schema describes ``body`` only as an array with an empty ``items`` schema. **Source:** v3 reads ``body`` as ``list[Any]``, so discovery cannot describe Cast's author block contract. | Publish Cast block guidance separately if an agent-facing v3 route is chosen. |
-| Revision conflict guard | Cast extension required | **Test:** the disposable adapter accepts a quoted base revision and returns 409 for a sequential stale request without creating a revision. **Source:** the stock v3 update route has no revision precondition; the adapter uses a transaction and ``select_for_update``. SQLite ignores that lock, and no concurrent test was run. | Prove the race on PostgreSQL and SQLite or retain the existing editor guard; do not infer atomicity from the sequential test. |
-| Draft-only live-page guard | Cast extension required | **Test:** after the same latest Post or Episode revision becomes live, stock v3 accepts another draft edit and creates a revision. The test adapter's optional precondition instead returns ``409 published_post`` without writing, while still allowing an unpublished page. This proves sequential behavior on SQLite only. **Source:** the stock update route and edit action have no live-page equivalent to Cast's ``require_unpublished`` check. | Preserve the client-selectable precondition in any v3 adapter and explicitly decide its default; the revision id alone does not detect publication of that same revision. Prove its concurrency behavior on PostgreSQL. |
-| Scheduled-state guard | upstream equivalent | **Test:** stock v3 returns 403 and creates no revision after the same latest Post or Episode revision is scheduled. The adapter can map that state to Cast's explicit ``409 scheduled_post`` contract before invoking the action. **Source:** Wagtail's ``ScheduledForPublishLock`` applies to every user, and the edit action checks it. | Reuse the upstream lock unless a stable machine-readable conflict code is required; PostgreSQL concurrency remains unproven. |
+| Revision conflict guard | Cast extension required | **Test:** the disposable adapter accepts a quoted base revision and returns 409 for a sequential stale request without creating a revision. On PostgreSQL, a second adapter update from the same base waits while the first holds the page-row lock, then returns 409 with the first writer's revision id; only the first value is stored. Removing the adapter's page-row lock makes that test fail. **Source:** the stock v3 update route has no revision precondition; the adapter uses a transaction and ``select_for_update``. SQLite ignores that lock. | Run the PostgreSQL-only tests in CI before relying on them; a production adapter needs the same lock. |
+| Draft-only live-page guard | Cast extension required | **Test:** after the same latest Post or Episode revision becomes live, stock v3 accepts another draft edit and creates a revision. The test adapter's optional precondition instead returns ``409 published_post`` without writing, while still allowing an unpublished page. On PostgreSQL, approving the base revision for scheduling waits while a ``require_unpublished`` adapter update holds the page and revision-row locks, and completes only after the update commits. Removing the revision-row lock makes that test fail. **Source:** the stock update route and edit action have no live-page equivalent to Cast's ``require_unpublished`` check. | Preserve the client-selectable precondition in any v3 adapter and explicitly decide its default; the revision id alone does not detect publication of that same revision. The PostgreSQL proof covers schedule approval of an existing revision; a concurrent live publication of the same revision was not threaded separately. |
+| Scheduled-state guard | upstream equivalent | **Test:** stock v3 returns 403 and creates no revision after the same latest Post or Episode revision is scheduled. The adapter can map that state to Cast's explicit ``409 scheduled_post`` contract before invoking the action. **Source:** Wagtail's ``ScheduledForPublishLock`` applies to every user, and the edit action checks it. | Reuse the upstream lock unless a stable machine-readable conflict code is required. The stock lock itself was not tested under concurrency; the adapter's own revision-row lock was (see above). |
 | Write response serialization | Cast extension required | **Test:** stock Post and Episode creates and a stock Post PATCH commit before returning 422 because inherited ``html_overview`` and ``html_detail`` v2 serializers lack request context. A successful standalone Episode publish and schedule also commit before returning the same 422. The adapter returns 200 with ids and native metadata only after its revision is created; Wagtail's form-error handler returns 422 for an invalid Episode scalar without creating a revision. | Decide whether a supported transport-native schema extension is preferable to an upstream response-context change. |
 | Partial update against a newer draft | Cast extension required | **Test:** the stock route replaces an omitted newer-draft cover value with the live value. The adapter preserves omitted values for both Post and Episode while updating a supplied scalar. **Source:** Wagtail's form builder preserves omitted fields on the object it is given, so the adapter supplies the latest revision object instead of the live row. | Extend the proof to relations and StreamField only in later focused slices. |
 | Episode publication policy | Cast extension required | **Test:** Cast's existing publication hook rejects audio-less Episodes through stock create-and-publish, edit-and-publish, and standalone publish. Create and edit roll back the tentative page/revision. A valid audio Episode becomes live. A revision scheduled through the standalone route is rechecked and rejected after its audio is deleted. **Source:** all routes delegate to Wagtail revision actions, where ``cast.publication`` is installed. | Preserve the existing shared Cast hook; no v3-specific publication policy adapter is needed for these paths. Revision binding and permissions are recorded in their own rows. |
 | Publication validation response | Cast extension required | **Test:** policy rejection is a truthful 422 and does not publish, but Wagtail's generic Django validation handler returns only the message, without Cast's ``podcast_audio`` field or ``required`` code. | Define a transport-native structured error adapter if v3 is selected. |
-| Revision-bound publication | Cast extension required | **Test:** a caller selects revision A from the v3 revision listing, then revision B is saved. Stock standalone publish ignores a quoted ``If-Match: "A"`` and makes B live for both Post and Episode, still returning the post-commit 422. For an Episode whose newer revision lacks audio, Cast's policy rejects B, so neither revision is published. The test adapter instead returns ``409 revision_conflict`` with B's id and publishes neither revision, including when B is a valid audio Episode and A is not. When A is still latest, the adapter returns 200 and A becomes the live revision. An audio-less selected Episode revision receives the shared policy's 422 without publication. Missing, bare, non-integer, and weak tokens return 400. Session-only calls return 401; change-only users and publish users outside the page's tree return 403 without the conflict body. **Source:** the stock route accepts no body or revision parameter, reads ``page.get_latest_revision()``, and has no route transaction or row lock. ``PublishPageRevisionAction`` checks only page publish permission, not Wagtail edit locks. Cast's policy hook opens its own transaction around the revision action. The ``revert`` action takes a ``revision_id`` but creates a new draft revision with change permission; it does not publish the selected revision. **Inference:** stock v3 has the same latest-revision race that Cast's optional editor ``If-Match`` mitigates, and a thin adapter can bind approval to a revision without duplicating publication policy. | The adapter's row lock matches the editor API design, but SQLite ignores it; prove the publish-versus-draft race on PostgreSQL. Decide whether the token is mandatory, whether an already-live page with no newer draft is rejected as in the editor API, and whether publication should honor Wagtail edit locks. |
+| Revision-bound publication | Cast extension required | **Test:** a caller selects revision A from the v3 revision listing, then revision B is saved. Stock standalone publish ignores a quoted ``If-Match: "A"`` and makes B live for both Post and Episode, still returning the post-commit 422. For an Episode whose newer revision lacks audio, Cast's policy rejects B, so neither revision is published. The test adapter instead returns ``409 revision_conflict`` with B's id and publishes neither revision, including when B is a valid audio Episode and A is not. When A is still latest, the adapter returns 200 and A becomes the live revision. An audio-less selected Episode revision receives the shared policy's 422 without publication. Missing, bare, non-integer, and weak tokens return 400. Session-only calls return 401; change-only users and publish users outside the page's tree return 403 without the conflict body. **Source:** the stock route accepts no body or revision parameter, reads ``page.get_latest_revision()``, and has no route transaction or row lock. ``PublishPageRevisionAction`` checks only page publish permission, not Wagtail edit locks. Cast's policy hook opens its own transaction around the revision action. The ``revert`` action takes a ``revision_id`` but creates a new draft revision with change permission; it does not publish the selected revision. **Inference:** stock v3 has the same latest-revision race that Cast's optional editor ``If-Match`` mitigates, and a thin adapter can bind approval to a revision without duplicating publication policy. | **Test (PostgreSQL):** while revision-bound publication holds the page-row lock, a concurrent draft save waits. The selected revision becomes live, and the concurrent draft then becomes the latest revision with ``has_unpublished_changes``. Removing the lock makes the test fail. Decide whether the token is mandatory, whether an already-live page with no newer draft is rejected as in the editor API, and whether publication should honor Wagtail edit locks. |
 | Scheduling input | Cast extension required | **Test:** stock ``cast.Blog`` read/create/patch schemas have no ``go_live_at`` or ``expire_at``; the disposable opt-in makes both writable for Post and Episode. A future ``go_live_at`` written through the adapter, followed by revision-bound publication, returns 200 with ``live: false`` and no live revision. The selected revision receives ``approved_go_live_at``, is the only item in the v3 revision listing filtered by that time, and places the page under ``ScheduledForPublishLock``. A past ``go_live_at`` publishes immediately. An audio-less Episode is rejected with 422 before approval, and no schedule log is written. Submitting ``go_live_at`` later than ``expire_at`` in one request returns 422 for both fields without a revision. Submitting only ``go_live_at`` after an earlier request set ``expire_at`` is accepted, leaving a draft whose ``go_live_at`` is later than its ``expire_at``. Earlier tests show that the scheduler rechecks an approved revision. **Source:** v3's base page write inventory is ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``. Wagtail's admin form checks ``go_live_at``/``expire_at`` only when both are bound, and v3 partial updates bind only submitted fields. Cast's editor API accepts no schedule input and only reports ``status: "scheduled"``. **Inference:** scheduling is not a current editor-API guarantee. Exposing it through v3 needs an explicit field opt-in plus a Cast check against the stored counterpart value. | Decide whether programmatic scheduling is required at all. If it is, validate the merged ``go_live_at``/``expire_at`` pair in the adapter and define its read representation; the page detail schema exposes it only after the opt-in. |
 | Native body writes | incompatible with Cast body safeguards | **Test:** a stock native body PATCH replaces the whole field, dropping the omitted ``detail`` section, and commits before the known 422. Wagtail's rich-text input sanitizer removes a script, a ``javascript:`` link, and an ``onerror`` image. A non-staff page editor without image permissions can store an existing image id, and a missing image id is stored as ``null``. An unknown block type returns 422 without a revision. **Source:** v3 flattens native values into the StreamField form (``form_data.flatten_block_value``). Chooser blocks resolve ids without a ``choose`` permission check. Rich text passes through ``DbHTMLConverter``. **Inference:** native writes bypass Cast's per-section preservation and media-choice policy. | Do not expose native ``body`` writes for Cast pages. |
 | Author-block body conversion | Cast extension required | **Test:** a test-adapter route with a strong ``If-Match`` converts Post and Episode ``overview`` author blocks through ``cast.content``, stores the converted paragraph and image, and leaves the existing ``detail`` section unchanged in parsed StreamField data. A caller without image ``choose`` permission receives ``422 validation_error`` at ``detail.0.value.id`` with code ``not_found``, and an unsupported author block is reported at ``overview.0.type``. Neither creates a revision. Empty input returns 400, a stale base returns 409, an unquoted token returns 400, and an out-of-tree editor receives 403 without the current revision id. **Source:** the adapter calls ``cast.content.convert.author_blocks_to_section`` and saves through Wagtail's registered edit action. It reuses ``_section_value`` and ``_body_sections_with_replacements`` from the DRF ``PostEditorMixin``. **Inference:** ``cast.content`` is reusable without transport coupling, but the section-merge rule still lives in the DRF editor view. | Move section selection and merging into ``cast.content`` before any production adapter reuses them. Media upload remains a separate slice. |
@@ -160,8 +170,8 @@ agent workflow. The sixth slice shows that Wagtail's scheduled-publication lock
 already blocks scheduled edits, but a live-page draft-only precondition still
 requires a Cast adapter. Sequential checks in that test adapter preserve Cast's
 explicit conflict codes without adding production behavior; the locking design
-mirrors the editor API, but this SQLite slice does not prove its concurrency
-behavior.
+mirrors the editor API. That SQLite slice did not prove its concurrency
+behavior; the twelfth slice proves it on PostgreSQL.
 
 The seventh slice shows that stock standalone publication publishes the latest
 revision at request time, so a newer draft can go live instead of the reviewed
@@ -196,11 +206,19 @@ validation and collection scoping, but may substitute the requested
 collection and do not require ``choose``. v3 has no route for Cast audio,
 video, or transcripts, so Cast's ingestion service stays authoritative.
 
-The remaining decision-relevant gap is concurrency: the adapter row locks and
-the editor API's guards are proved only by sequential SQLite tests. The next
-slice should determine whether a PostgreSQL run is available for the
-experiment; if not, record that as an explicit blocker and state whether it
-changes the architecture choice. The architecture decision follows.
+The twelfth slice proves the adapter's page and revision-row locks on
+PostgreSQL 17.11: a competing draft save, schedule approval, or second update
+waits for the adapter transaction, and removing each lock makes one test fail.
+The existing editor API tests, including its PostgreSQL-only schedule
+serialization test, also pass on that server (497 tests in ``tests/api``).
+Nothing in tox or CI runs PostgreSQL. In one randomized combined run, three
+non-database unit tests in ``tests/publication_test.py`` failed with
+"Database access not allowed"; the module passes in isolation and in file
+order. That ordering issue is unrelated to v3 and is recorded as follow-up
+work.
+
+The evaluation now has test evidence or explicit open decisions for every
+safeguard in the matrix. The next slice is the architecture decision.
 
 ## Upstream capabilities and remaining questions
 
@@ -215,7 +233,7 @@ in any release until stabilized. Enabling it requires separate app/URL setup.
 | Authentication | Wagtail manages native tokens with the owning user's permissions. | Decide how service accounts and existing per-token scopes coexist; do not silently grant a drafting token publish rights. |
 | Body format | v3 uses native StreamField structures and replaces the whole supplied field. Cast exposes separate overview/detail authoring lists. | The body-conversion experiment above shows a thin ``cast.content`` adapter preserving the other section; custom and unsupported block round trips remain covered only by existing editor tests. |
 | Agent discovery | v3 provides generated OpenAPI, but its StreamField schema is currently `list[Any]`. | Supply enough Cast block guidance for an agent to produce valid payloads; do not assume OpenAPI describes every block. |
-| Concurrent editing | Installed v3 code has no revision token or live-page `require_unpublished` equivalent; its scheduled-publication lock does reject scheduled edits. | Prove the remaining PostgreSQL races, or retain Cast's page-locking guarded update path. |
+| Concurrent editing | Installed v3 code has no revision token or live-page `require_unpublished` equivalent; its scheduled-publication lock does reject scheduled edits. | The adapter's page and revision-row locks were proved on PostgreSQL; any production route must keep them and gain PostgreSQL CI coverage. |
 | Podcast/media behavior | Generic Wagtail endpoints do not automatically implement Cast audio/video processing or episode rules. | Verify permissions, upload/probe budgets, audio requirements, seasons, and numbering on every proposed path. |
 | Rich text | Wagtail has reusable conversion/sanitization code, including nested rich-text handling in the installed v3 implementation. | Run Cast's sanitization and feature-preservation cases; retain explicit raw-HTML/inline-media policy. |
 | Preview and publishing | Cast renders authenticated draft previews; its publish actions bind to a reviewed revision only when the optional ``If-Match`` header is sent. Stock v3 publishes the latest revision and has no selector or rendered preview. | The experiments above show that both need Cast routes; decide whether the revision token is mandatory. |
@@ -236,14 +254,14 @@ The experiments establish two important action-path findings:
    edit action rejects a scheduled page through ``ScheduledForPublishLock``.
    In sequential tests, the adapter preserves Cast's explicit live and
    scheduled conflict responses while requesting the same page and existing
-   revision-row locks as the editor API. PostgreSQL serialization remains
-   unproven in this experiment.
+   revision-row locks as the editor API. The twelfth slice proves those locks
+   on PostgreSQL 17.11.
 4. Stock standalone publication is not bound to the revision a caller
    reviewed: it publishes whichever revision is latest when the request runs,
    and ignores ``If-Match``. Publication policy still inspects that published
    revision. A test adapter can check a quoted revision id under a requested
-   page-row lock and then delegate to the same Wagtail action; its sequential
-   SQLite tests do not prove the concurrent guarantee.
+   page-row lock and then delegate to the same Wagtail action. A threaded
+   PostgreSQL test shows that a concurrent draft save waits for that lock.
 
 ## Proposed plan
 

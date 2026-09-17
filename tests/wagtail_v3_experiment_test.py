@@ -1,5 +1,7 @@
 """Wagtail 8 v3 discovery, draft-write, and publication experiment."""
 
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Protocol
 
@@ -8,12 +10,21 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.db import close_old_connections, connection, transaction
 from django.test import Client
 from django.urls import NoReverseMatch, reverse
 from django.urls.base import clear_url_caches
 from django.utils import timezone as django_timezone
 from wagtail import VERSION as WAGTAIL_VERSION
-from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page, PageLogEntry, Revision
+from wagtail.models import (
+    Collection,
+    GroupCollectionPermission,
+    GroupPagePermission,
+    Locale,
+    Page,
+    PageLogEntry,
+    Revision,
+)
 
 if (
     WAGTAIL_VERSION < (8, 0)
@@ -1469,3 +1480,193 @@ def test_anonymous_image_listing_matches_cast_v2_exposure(client, image) -> None
     assert v3.status_code == v2.status_code == 200
     assert [item["id"] for item in v3.json()["items"]] == [image.pk]
     assert [item["id"] for item in v2.json()["items"]] == [image.pk]
+
+
+postgres_only = pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL row-lock semantics")
+
+
+@pytest.fixture()
+def restored_wagtail_roots(transactional_db) -> None:
+    """Recreate the roots that a previous transactional test's flush removed."""
+    locale, _created = Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE)
+    if Page.get_first_root_node() is None:
+        Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
+    if Collection.get_first_root_node() is None:
+        Collection.add_root(instance=Collection(name="Root"))
+
+
+@pytest.fixture()
+def pg_actors(restored_wagtail_roots, request) -> tuple[AbstractUser, Post]:
+    """Request user and page fixtures only after the roots exist again."""
+    return request.getfixturevalue("admin_user"), request.getfixturevalue("post")
+
+
+class _Pause:
+    """Pause one adapter call after its locks are held, then delegate."""
+
+    def __init__(self, target: Any, *, calls: int = 1) -> None:
+        self.target = target
+        self.remaining = calls
+        self.reached = threading.Event()
+        self.release = threading.Event()
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if self.remaining:
+            self.remaining -= 1
+            self.reached.set()
+            assert self.release.wait(timeout=5)
+        return self.target(*args, **kwargs)
+
+
+def _in_thread(errors: list, work: Any, *, finished: threading.Event | None = None) -> threading.Thread:
+    def run() -> None:
+        close_old_connections()
+        try:
+            work()
+            if finished is not None:
+                finished.set()
+        except Exception as exc:  # pragma: no cover - surfaced by the caller's assertion
+            errors.append(exc)
+        finally:
+            close_old_connections()
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    return thread
+
+
+def _wait_for_lock_waiter() -> None:
+    """Wait until another backend in this database is blocked on a lock."""
+    deadline = time.monotonic() + 5
+    with connection.cursor() as cursor:
+        while time.monotonic() < deadline:
+            cursor.execute(
+                "SELECT count(*) FROM pg_stat_activity "
+                "WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()"
+            )
+            if cursor.fetchone()[0]:
+                return
+            time.sleep(0.02)
+    raise AssertionError("the competing writer never waited on a PostgreSQL lock")
+
+
+def _assert_blocked_until_release(pause: _Pause, finished: threading.Event, threads: list, errors: list) -> None:
+    try:
+        _wait_for_lock_waiter()
+        assert not finished.is_set()
+    finally:
+        pause.release.set()
+        for thread in threads:
+            thread.join(timeout=10)
+    assert not any(thread.is_alive() for thread in threads)
+    assert errors == []
+    assert finished.is_set()
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_postgres_revision_bound_publish_serializes_with_new_draft(pg_actors, monkeypatch) -> None:
+    from tests import wagtail_v3_adapter
+
+    admin_user, post = pg_actors
+    token = _bearer_token(admin_user)
+    selected = _save_cover_revision(post, admin_user, "Reviewed draft")
+    registry = wagtail_v3_adapter.action_registry
+    pause = _Pause(registry.get_action_class)
+    monkeypatch.setattr(wagtail_v3_adapter, "action_registry", type("Registry", (), {"get_action_class": pause})())
+    errors: list = []
+    responses: list = []
+    newer: list = []
+    finished = threading.Event()
+
+    def publish() -> None:
+        responses.append(_adapter_publish(Client(), token, post, f'"{selected.pk}"'))
+
+    def save_newer_draft() -> None:
+        assert pause.reached.wait(timeout=5)
+        page = Post.objects.get(pk=post.pk)
+        newer.append(_save_cover_revision(page, admin_user, "Concurrent draft"))
+
+    threads = [_in_thread(errors, publish)]
+    assert pause.reached.wait(timeout=5)
+    threads.append(_in_thread(errors, save_newer_draft, finished=finished))
+    _assert_blocked_until_release(pause, finished, threads, errors)
+
+    assert responses[0].status_code == 200
+    assert responses[0].json()["live_revision_id"] == selected.pk
+    post.refresh_from_db()
+    assert post.live_revision_id == selected.pk
+    assert post.cover_alt_text == "Reviewed draft"
+    assert post.latest_revision_id == newer[0].pk
+    assert post.has_unpublished_changes is True
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_postgres_draft_only_update_serializes_with_schedule_approval(pg_actors, monkeypatch) -> None:
+    from tests import wagtail_v3_adapter
+
+    admin_user, post = pg_actors
+    token = _bearer_token(admin_user)
+    base_revision = _unpublished_base_revision(post, admin_user)
+    pause = _Pause(wagtail_v3_adapter.build_page_update_form)
+    monkeypatch.setattr(wagtail_v3_adapter, "build_page_update_form", pause)
+    errors: list = []
+    responses: list = []
+    finished = threading.Event()
+
+    def update() -> None:
+        responses.append(
+            _adapter_update(
+                Client(), token, post, base_revision.pk, {"cover_alt_text": "Serialized"}, require_unpublished=True
+            )
+        )
+
+    def approve_base_revision() -> None:
+        assert pause.reached.wait(timeout=5)
+        with transaction.atomic():
+            Revision.objects.filter(pk=base_revision.pk).update(
+                approved_go_live_at=django_timezone.now() + timedelta(days=1)
+            )
+
+    threads = [_in_thread(errors, update)]
+    assert pause.reached.wait(timeout=5)
+    threads.append(_in_thread(errors, approve_base_revision, finished=finished))
+    _assert_blocked_until_release(pause, finished, threads, errors)
+
+    assert responses[0].status_code == 200
+    base_revision.refresh_from_db()
+    assert base_revision.approved_go_live_at is not None
+
+
+@postgres_only
+@pytest.mark.django_db(transaction=True)
+def test_postgres_concurrent_updates_from_same_base_conflict(pg_actors, monkeypatch) -> None:
+    from tests import wagtail_v3_adapter
+
+    admin_user, post = pg_actors
+    token = _bearer_token(admin_user)
+    base_revision = post.get_latest_revision_as_object().save_revision(user=admin_user)
+    pause = _Pause(wagtail_v3_adapter.build_page_update_form)
+    monkeypatch.setattr(wagtail_v3_adapter, "build_page_update_form", pause)
+    errors: list = []
+    first: list = []
+    second: list = []
+    finished = threading.Event()
+
+    def update(results: list, value: str) -> Any:
+        return lambda: results.append(
+            _adapter_update(Client(), token, post, base_revision.pk, {"cover_alt_text": value})
+        )
+
+    threads = [_in_thread(errors, update(first, "First writer"))]
+    assert pause.reached.wait(timeout=5)
+    threads.append(_in_thread(errors, update(second, "Second writer"), finished=finished))
+    _assert_blocked_until_release(pause, finished, threads, errors)
+
+    assert first[0].status_code == 200
+    assert second[0].status_code == 409
+    assert second[0].json()["current_revision_id"] == first[0].json()["latest_revision_id"]
+    post.refresh_from_db()
+    assert post.latest_revision_id == first[0].json()["latest_revision_id"]
+    assert post.get_latest_revision_as_object().cover_alt_text == "First writer"
