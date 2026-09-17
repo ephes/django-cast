@@ -29,6 +29,7 @@ from tests.factories import BlogFactory, EpisodeFactory, PostFactory, UserFactor
 from tests.wagtail_v3_writable import (  # noqa: E402
     EPISODE_ONLY_WRITABLE_FIELDS,
     POST_WRITABLE_FIELDS,
+    SCHEDULE_WRITABLE_FIELDS,
 )
 
 pytestmark = pytest.mark.django_db
@@ -896,3 +897,126 @@ def test_revision_bound_publish_enforces_page_publish_permission(client, admin_u
     assert post.live_revision_id is None
     assert _publish_log_count(post) == 0
     assert other_post.live_revision_id == other_selected.pk
+
+
+def _unpublished_base_revision(page: Post, user: AbstractUser) -> Revision:
+    page.unpublish(user=user)
+    page.refresh_from_db()
+    return page.get_latest_revision_as_object().save_revision(user=user)
+
+
+def test_stock_page_schema_has_no_schedule_input(client, admin_user) -> None:
+    token = _bearer_token(admin_user)
+    stock_schema = client.get(
+        reverse("wagtailapi_v3:get_schema_for_type", kwargs={"type_name": "cast.Blog"}),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    ).json()
+    opted_in_schemas = [_schema(client, token, model) for model in (Post, Episode)]
+
+    for operation in ("read", "create", "patch"):
+        assert not SCHEDULE_WRITABLE_FIELDS & set(stock_schema[operation]["properties"])
+        for schema in opted_in_schemas:
+            assert SCHEDULE_WRITABLE_FIELDS <= set(schema[operation]["properties"])
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+def test_revision_bound_publish_schedules_selected_future_revision(client, admin_user, request, fixture_name) -> None:
+    page = request.getfixturevalue(fixture_name)
+    token = _bearer_token(admin_user)
+    base_revision = _unpublished_base_revision(page, admin_user)
+    go_live_at = datetime(2099, 1, 2, 3, 4, tzinfo=timezone.utc)
+
+    update = _adapter_update(client, token, page, base_revision.pk, {"go_live_at": go_live_at.isoformat()})
+    assert update.status_code == 200
+    selected_id = update.json()["latest_revision_id"]
+    response = _adapter_publish(client, token, page, f'"{selected_id}"')
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": page.pk,
+        "meta": {"type": page._meta.label},
+        "revision_id": selected_id,
+        "live": False,
+        "live_revision_id": None,
+    }
+    page.refresh_from_db()
+    assert page.live is False
+    assert page.live_revision_id is None
+    assert page.go_live_at == go_live_at
+    assert Revision.objects.get(pk=selected_id).approved_go_live_at == go_live_at
+    assert isinstance(Page.objects.get(pk=page.pk).specific.get_lock(), ScheduledForPublishLock)
+    listed = client.get(
+        reverse("wagtailapi_v3:list_page_revisions", kwargs={"page_id": page.pk}),
+        {"approved_go_live_at_from": go_live_at.isoformat()},
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert listed.status_code == 200
+    assert [(item["id"], item["approved_go_live_at"]) for item in listed.json()["items"]] == [
+        (selected_id, "2099-01-02T03:04:00Z")
+    ]
+
+
+def test_revision_bound_publish_with_past_go_live_at_publishes_now(client, admin_user, post) -> None:
+    token = _bearer_token(admin_user)
+    base_revision = _unpublished_base_revision(post, admin_user)
+    go_live_at = django_timezone.now() - timedelta(days=1)
+
+    update = _adapter_update(client, token, post, base_revision.pk, {"go_live_at": go_live_at.isoformat()})
+    assert update.status_code == 200
+    selected_id = update.json()["latest_revision_id"]
+    response = _adapter_publish(client, token, post, f'"{selected_id}"')
+
+    assert response.status_code == 200
+    assert response.json()["live"] is True
+    post.refresh_from_db()
+    assert post.live_revision_id == selected_id
+    assert Revision.objects.get(pk=selected_id).approved_go_live_at is None
+
+
+def test_scheduled_audio_less_episode_is_rejected_before_approval(client, admin_user, podcast, body) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-scheduled-audio-less")
+    token = _bearer_token(admin_user)
+    base_revision = episode.save_revision(user=admin_user)
+    update = _adapter_update(client, token, episode, base_revision.pk, {"go_live_at": "2099-01-02T03:04:00Z"})
+    assert update.status_code == 200
+    selected_id = update.json()["latest_revision_id"]
+
+    response = _adapter_publish(client, token, episode, f'"{selected_id}"')
+
+    _assert_audio_required(response)
+    episode.refresh_from_db()
+    assert episode.live is False
+    assert not episode.revisions.filter(approved_go_live_at__isnull=False).exists()
+    assert not PageLogEntry.objects.filter(page_id=episode.pk, action="wagtail.publish.schedule").exists()
+
+
+def test_schedule_input_rejects_expiry_before_go_live_in_one_request(client, admin_user, post) -> None:
+    base_revision = _unpublished_base_revision(post, admin_user)
+
+    response = _adapter_update(
+        client,
+        _bearer_token(admin_user),
+        post,
+        base_revision.pk,
+        {"go_live_at": "2099-01-03T00:00:00Z", "expire_at": "2099-01-02T00:00:00Z"},
+    )
+
+    assert response.status_code == 422
+    assert {tuple(error["loc"]) for error in response.json()["errors"]} == {("go_live_at",), ("expire_at",)}
+    post.refresh_from_db()
+    assert post.latest_revision_id == base_revision.pk
+
+
+def test_partial_schedule_input_skips_cross_field_validation(client, admin_user, post) -> None:
+    token = _bearer_token(admin_user)
+    base_revision = _unpublished_base_revision(post, admin_user)
+    expiring = _adapter_update(client, token, post, base_revision.pk, {"expire_at": "2099-01-02T00:00:00Z"})
+    assert expiring.status_code == 200
+
+    response = _adapter_update(
+        client, token, post, expiring.json()["latest_revision_id"], {"go_live_at": "2099-01-03T00:00:00Z"}
+    )
+
+    assert response.status_code == 200
+    draft = Revision.objects.get(pk=response.json()["latest_revision_id"]).as_object()
+    assert draft.go_live_at > draft.expire_at

@@ -5,8 +5,8 @@ Date: 2026-09-08
 Status: evaluation in progress; isolated mounting/discovery, scalar
 draft-write, revision-aware update-adapter, and publication-policy slices are
 implemented in test configuration only, along with an authorization/scope
-experiment, a draft-state precondition experiment, and a revision-bound
-publication experiment. No production v3 integration or client migration is
+experiment, a draft-state precondition experiment, a revision-bound
+publication experiment, and a scheduling-input experiment. No production v3 integration or client migration is
 implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
@@ -87,7 +87,11 @@ revision listing, saves a newer draft, and then calls stock standalone
 publication. It compares that with a test-adapter publish route that requires
 the selected revision in a strong ``If-Match`` header, requests a page-row
 lock, and delegates to Wagtail's registered page publish action. Those tests
-are also sequential on SQLite. Every django-cast
+are also sequential on SQLite. The eighth slice, measured on 2026-09-17,
+opts Wagtail's own ``go_live_at`` and ``expire_at`` fields into the disposable
+Post and Episode write inventory, submits them through the adapter, and
+schedules the selected revision through the revision-bound publish route.
+Every django-cast
 production module remains unchanged. Normal Wagtail 8 test runs and Wagtail 7
 collect the experiment as a configuration-gated skip without importing a v3
 module.
@@ -119,7 +123,7 @@ but was not exercised through a Cast integration test in this slice;
 | Episode publication policy | Cast extension required | **Test:** Cast's existing publication hook rejects audio-less Episodes through stock create-and-publish, edit-and-publish, and standalone publish. Create and edit roll back the tentative page/revision. A valid audio Episode becomes live. A revision scheduled through the standalone route is rechecked and rejected after its audio is deleted. **Source:** all routes delegate to Wagtail revision actions, where ``cast.publication`` is installed. | Preserve the existing shared Cast hook; no v3-specific publication policy adapter is needed for these paths. Revision binding and permissions are recorded in their own rows. |
 | Publication validation response | Cast extension required | **Test:** policy rejection is a truthful 422 and does not publish, but Wagtail's generic Django validation handler returns only the message, without Cast's ``podcast_audio`` field or ``required`` code. | Define a transport-native structured error adapter if v3 is selected. |
 | Revision-bound publication | Cast extension required | **Test:** a caller selects revision A from the v3 revision listing, then revision B is saved. Stock standalone publish ignores a quoted ``If-Match: "A"`` and makes B live for both Post and Episode, still returning the post-commit 422. For an Episode whose newer revision lacks audio, Cast's policy rejects B, so neither revision is published. The test adapter instead returns ``409 revision_conflict`` with B's id and publishes neither revision, including when B is a valid audio Episode and A is not. When A is still latest, the adapter returns 200 and A becomes the live revision. An audio-less selected Episode revision receives the shared policy's 422 without publication. Missing, bare, non-integer, and weak tokens return 400. Session-only calls return 401; change-only users and publish users outside the page's tree return 403 without the conflict body. **Source:** the stock route accepts no body or revision parameter, reads ``page.get_latest_revision()``, and has no route transaction or row lock. ``PublishPageRevisionAction`` checks only page publish permission, not Wagtail edit locks. Cast's policy hook opens its own transaction around the revision action. The ``revert`` action takes a ``revision_id`` but creates a new draft revision with change permission; it does not publish the selected revision. **Inference:** stock v3 has the same latest-revision race that Cast's optional editor ``If-Match`` mitigates, and a thin adapter can bind approval to a revision without duplicating publication policy. | The adapter's row lock matches the editor API design, but SQLite ignores it; prove the publish-versus-draft race on PostgreSQL. Decide whether the token is mandatory, whether an already-live page with no newer draft is rejected as in the editor API, and whether publication should honor Wagtail edit locks. |
-| Scheduling input | unverified | **Test:** a fixture revision with ``go_live_at`` set can be approved through the v3 standalone publish action and is protected when the scheduler executes it. The schedule value itself was not submitted through v3. | Determine whether scheduling belongs in a Cast adapter; do not claim v3 scheduling support from this execution-path proof. |
+| Scheduling input | Cast extension required | **Test:** stock ``cast.Blog`` read/create/patch schemas have no ``go_live_at`` or ``expire_at``; the disposable opt-in makes both writable for Post and Episode. A future ``go_live_at`` written through the adapter, followed by revision-bound publication, returns 200 with ``live: false`` and no live revision. The selected revision receives ``approved_go_live_at``, is the only item in the v3 revision listing filtered by that time, and places the page under ``ScheduledForPublishLock``. A past ``go_live_at`` publishes immediately. An audio-less Episode is rejected with 422 before approval, and no schedule log is written. Submitting ``go_live_at`` later than ``expire_at`` in one request returns 422 for both fields without a revision. Submitting only ``go_live_at`` after an earlier request set ``expire_at`` is accepted, leaving a draft whose ``go_live_at`` is later than its ``expire_at``. Earlier tests show that the scheduler rechecks an approved revision. **Source:** v3's base page write inventory is ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``. Wagtail's admin form checks ``go_live_at``/``expire_at`` only when both are bound, and v3 partial updates bind only submitted fields. Cast's editor API accepts no schedule input and only reports ``status: "scheduled"``. **Inference:** scheduling is not a current editor-API guarantee. Exposing it through v3 needs an explicit field opt-in plus a Cast check against the stored counterpart value. | Decide whether programmatic scheduling is required at all. If it is, validate the merged ``go_live_at``/``expire_at`` pair in the adapter and define its read representation; the page detail schema exposes it only after the opt-in. |
 | Media and body conversion | Cast extension required | Existing Cast services remain the required policy seams; no v3 write path exercised them in this slice. | Keep ``cast.content`` transport-neutral and reuse media ingestion without internal HTTP calls. |
 
 The stock write experiment reproduced two runtime incompatibilities without
@@ -148,10 +152,15 @@ one. A test adapter that requires the selected revision id rejects that case
 with ``409`` before invoking Wagtail's publish action, while successful
 publication and Episode policy still run through that action.
 
-The next smallest experiment slice is scheduling input: determine whether
-``go_live_at`` can be submitted through v3 or the adapter, how it is validated
-and represented, and whether revision-bound publication then schedules the
-selected revision. Body conversion, authenticated preview, media upload,
+The eighth slice shows that stock v3 has no schedule input. After a
+disposable field opt-in, revision-bound publication schedules exactly the
+selected revision through Wagtail's action, and Cast's audio policy still
+rejects it before approval. Partial updates, however, skip Wagtail's
+go-live/expiry cross-check when only one of the two fields is submitted.
+
+The next smallest experiment slice is authenticated draft preview: establish
+what v3 returns for a Post or Episode draft read and whether any v3 path
+replaces Cast's rendered editor preview. Body conversion, media upload,
 PostgreSQL concurrency, and the architecture decision remain later slices;
 Daybook migration is outside this evaluation.
 

@@ -31,3 +31,8 @@
   selected revision in ``If-Match``, returns ``409`` without publishing either
   revision when it is stale, and otherwise delegates to Wagtail's publish
   action and Cast's Episode publication policy.
+- Measure scheduling input in the Wagtail 8 experiment. Stock v3 page schemas
+  do not accept ``go_live_at`` or ``expire_at``. After a disposable opt-in,
+  revision-bound publication schedules the selected revision and Cast's
+  Episode audio policy still applies, but a partial update can set a go-live
+  time after an existing expiry time.
