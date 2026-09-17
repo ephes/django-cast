@@ -2,7 +2,9 @@
 
 Date: 2026-09-08
 
-Status: proposed evaluation plan; no v3 integration or client migration implemented.
+Status: evaluation in progress; the first isolated mounting/discovery slice is
+implemented in test configuration only. No production v3 integration or client
+migration is implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
@@ -14,8 +16,9 @@ deliverable is a compatibility experiment and decision, not a rewrite.
 
 ## Current state
 
-- django-cast 0.2.65 allows patched Wagtail 7 releases and Wagtail 8. The local
-  environment and lockfile resolve to 8.0, and tox includes Wagtail 8 coverage.
+- django-cast 0.2.66 allows patched Wagtail 7 releases and Wagtail 8. The
+  default ``.venv`` resolves to Wagtail 7.4.3; the exact Wagtail 8 experiment
+  runs in the ``py312-django61-wagtail80`` tox environment.
   The inspected homepage and python-podcast lockfiles also resolve to 8.0;
   this is not evidence of production deployment or v3 enablement.
 - Cast currently mounts its own `/api/editor/` endpoints and the Wagtail v2
@@ -43,6 +46,56 @@ are already implemented despite older deferred-status text there.
 The initial analysis ran `just check` on Wagtail 8.0: 2,616 tests passed,
 one skipped, 100% coverage, with lint and type checks passing. This establishes
 the current Cast baseline; it does not validate v3 integration.
+
+## Slice 1: isolated mounting and discovery baseline
+
+Measured on 2026-09-16 with Python 3.12, Django 6.1.1, and Wagtail 8.0 in
+``py312-django61-wagtail80``. The default development environment remained on
+Wagtail 7.4.3. Installed source under that tox interpreter was treated as
+authoritative, specifically ``wagtail.api.v3.api``, ``auth``, ``registry``,
+``routers.pages``, ``routers.schema``, the read/write schema generators, and
+``form_data``.
+
+The experiment adds ``wagtail.api.v3`` and mounts its URLs only through
+``tests.wagtail_v3_settings`` and ``tests.wagtail_v3_urls``. Every Wagtail 8
+tox environment first runs the complete suite with normal ``tests.settings``
+and ``tests.urls``, then runs only the experiment module in a second process
+with the disposable settings. Every django-cast production module remains
+unchanged. Normal Wagtail 8 test runs and Wagtail 7 collect the experiment as
+a configuration-gated skip without importing a v3 module.
+
+Evidence labels below are deliberate: **test** means
+``tests/wagtail_v3_experiment_test.py`` exercised the behavior; **source**
+means it was established by reading the installed Wagtail 8.0 implementation
+but was not exercised through a Cast integration test in this slice.
+
+| Area | Classification | Evidence from this slice | Remaining work |
+| --- | --- | --- | --- |
+| Test-only mount | upstream equivalent | **Test:** the v3 namespace reverses under the disposable URLconf, while ``tests.urls`` does not mount it. | Decide a production route only after the evaluation; none exists now. |
+| Schema discovery | upstream equivalent | **Test:** bearer-authenticated ``/schema/`` discovery includes ``cast.Post`` and ``cast.Episode`` and returns read/create/patch schemas for both. | Add agent-facing Cast block guidance only if v3 is selected. |
+| Authentication identity | upstream equivalent | **Test:** anonymous and session-only schema requests return 401; a native Wagtail ``APIToken`` bearer succeeds. **Source:** bearer auth overwrites any session user. | Token migration and service-account lifecycle remain unverified. |
+| Write/publish scopes | Cast extension required | **Source:** native tokens represent a user but carry no Cast ``write`` versus ``publish`` scopes. | Prove an extension point before exposing writes. |
+| Live page exposure | upstream equivalent | **Test:** each anonymous type-filtered listing contains the live Post or Episode fixture id with the correct ``meta.type``. | Draft reads, exclusion behavior, and per-page permission behavior remain unverified. |
+| Common page fields | upstream equivalent | **Test:** Post and Episode create/patch schemas include ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``. | Exercise create and partial update behavior before relying on it. |
+| Post field inventory | Cast extension required | **Test:** read schemas expose ``visible_date``, ``cover_image``, ``cover_alt_text``, and ``body``; create/patch expose none of the intended Cast fields ``visible_date``, ``cover_image``, ``cover_alt_text``, ``body``, ``tags``, or ``categories``. **Source:** the read fields come from existing v2 ``APIField`` declarations. | Opt in only test-local fields, then measure conversion, permissions, and omission semantics. |
+| Episode field inventory | Cast extension required | **Test:** Episode inherits the Post read shape, but ``podcast_audio``, ``episode_number``, ``episode_type``, ``season``, ``keywords``, ``explicit``, and ``block`` are absent from read/create/patch schemas. | Add a test-only Episode field inventory before attempting a write. |
+| StreamField schema | incompatible for self-describing agent input | **Source and test schema:** ``body`` is read as ``list[Any]`` and is absent from writes, so discovery cannot currently describe Cast's author block contract. | Evaluate a Cast adapter over ``cast.content`` rather than duplicating conversion. |
+| Revision conflict and draft-only guards | unverified | **Source:** the inspected v3 update route has no Cast revision token or ``require_unpublished`` precondition. | Reproduce concurrent and scheduled-state behavior after a field is writable. |
+| Partial update against a newer draft | unverified | **Source:** ``build_page_update_form`` binds the materialized page object and narrows the form to submitted fields. | Reproduce the live-row/newer-draft case; do not classify it as a bug yet. |
+| Episode publication policy | unverified | **Source:** v3 publish uses Wagtail's action registry and revision publish path, which should reach ``cast.publication``. | Test create/edit/standalone/scheduled publication, including audio-less rejection. |
+| Media and body conversion | Cast extension required | Existing Cast services remain the required policy seams; no v3 write path exercised them in this slice. | Keep ``cast.content`` transport-neutral and reuse media ingestion without internal HTTP calls. |
+
+No incompatible runtime behavior was reproduced because this prerequisite did
+not enable writes. The StreamField discovery limitation above is a schema
+incompatibility for the intended self-describing agent workflow, not evidence
+that a future adapter cannot make body writes safe.
+
+The next smallest experiment slice is a test-only writable-field opt-in for the
+minimum Post and Episode draft inventory. It should exercise one draft create
+and one partial draft update, prove whether omitted fields come from the latest
+draft or the live row, and route body input through ``cast.content`` rather than
+adding transport logic there. Publication, preview, media upload, and Daybook
+migration remain later slices.
 
 ## Upstream capabilities and remaining questions
 
