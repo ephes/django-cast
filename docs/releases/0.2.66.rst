@@ -25,3 +25,9 @@
   scheduled-publication lock already rejects scheduled Post and Episode edits,
   while preserving Cast's draft-only live-page safeguard requires an explicit
   adapter precondition.
+- Measure revision-bound publication in the Wagtail 8 experiment. Stock v3
+  standalone publication makes the latest Post or Episode revision live even
+  after a caller selected an older one. The disposable adapter requires the
+  selected revision in ``If-Match``, returns ``409`` without publishing either
+  revision when it is stale, and otherwise delegates to Wagtail's publish
+  action and Cast's Episode publication policy.

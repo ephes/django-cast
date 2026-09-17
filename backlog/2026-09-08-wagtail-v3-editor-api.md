@@ -5,8 +5,9 @@ Date: 2026-09-08
 Status: evaluation in progress; isolated mounting/discovery, scalar
 draft-write, revision-aware update-adapter, and publication-policy slices are
 implemented in test configuration only, along with an authorization/scope
-experiment and a draft-state precondition experiment. No production v3
-integration or client migration is implemented.
+experiment, a draft-state precondition experiment, and a revision-bound
+publication experiment. No production v3 integration or client migration is
+implemented.
 
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
@@ -80,7 +81,13 @@ and outside those trees. The sixth slice, measured on 2026-09-17, changes the
 same latest Post and Episode revision from draft to live or scheduled before an
 update. It compares stock v3 with an explicit test-adapter precondition that
 requests locks on the page and existing revision rows. The test is sequential
-on SQLite and does not prove PostgreSQL serialization. Every django-cast
+on SQLite and does not prove PostgreSQL serialization. The seventh slice,
+measured on 2026-09-17, selects a Post or Episode revision through the v3
+revision listing, saves a newer draft, and then calls stock standalone
+publication. It compares that with a test-adapter publish route that requires
+the selected revision in a strong ``If-Match`` header, requests a page-row
+lock, and delegates to Wagtail's registered page publish action. Those tests
+are also sequential on SQLite. Every django-cast
 production module remains unchanged. Normal Wagtail 8 test runs and Wagtail 7
 collect the experiment as a configuration-gated skip without importing a v3
 module.
@@ -109,8 +116,9 @@ but was not exercised through a Cast integration test in this slice;
 | Scheduled-state guard | upstream equivalent | **Test:** stock v3 returns 403 and creates no revision after the same latest Post or Episode revision is scheduled. The adapter can map that state to Cast's explicit ``409 scheduled_post`` contract before invoking the action. **Source:** Wagtail's ``ScheduledForPublishLock`` applies to every user, and the edit action checks it. | Reuse the upstream lock unless a stable machine-readable conflict code is required; PostgreSQL concurrency remains unproven. |
 | Write response serialization | Cast extension required | **Test:** stock Post and Episode creates and a stock Post PATCH commit before returning 422 because inherited ``html_overview`` and ``html_detail`` v2 serializers lack request context. A successful standalone Episode publish and schedule also commit before returning the same 422. The adapter returns 200 with ids and native metadata only after its revision is created; Wagtail's form-error handler returns 422 for an invalid Episode scalar without creating a revision. | Decide whether a supported transport-native schema extension is preferable to an upstream response-context change. |
 | Partial update against a newer draft | Cast extension required | **Test:** the stock route replaces an omitted newer-draft cover value with the live value. The adapter preserves omitted values for both Post and Episode while updating a supplied scalar. **Source:** Wagtail's form builder preserves omitted fields on the object it is given, so the adapter supplies the latest revision object instead of the live row. | Extend the proof to relations and StreamField only in later focused slices. |
-| Episode publication policy | Cast extension required | **Test:** Cast's existing publication hook rejects audio-less Episodes through stock create-and-publish, edit-and-publish, and standalone publish. Create and edit roll back the tentative page/revision. A valid audio Episode becomes live. A revision scheduled through the standalone route is rechecked and rejected after its audio is deleted. **Source:** all routes delegate to Wagtail revision actions, where ``cast.publication`` is installed. | Preserve the existing shared Cast hook; no v3-specific publication policy adapter is needed for these paths. Test revision-bound publication and permissions separately. |
+| Episode publication policy | Cast extension required | **Test:** Cast's existing publication hook rejects audio-less Episodes through stock create-and-publish, edit-and-publish, and standalone publish. Create and edit roll back the tentative page/revision. A valid audio Episode becomes live. A revision scheduled through the standalone route is rechecked and rejected after its audio is deleted. **Source:** all routes delegate to Wagtail revision actions, where ``cast.publication`` is installed. | Preserve the existing shared Cast hook; no v3-specific publication policy adapter is needed for these paths. Revision binding and permissions are recorded in their own rows. |
 | Publication validation response | Cast extension required | **Test:** policy rejection is a truthful 422 and does not publish, but Wagtail's generic Django validation handler returns only the message, without Cast's ``podcast_audio`` field or ``required`` code. | Define a transport-native structured error adapter if v3 is selected. |
+| Revision-bound publication | Cast extension required | **Test:** a caller selects revision A from the v3 revision listing, then revision B is saved. Stock standalone publish ignores a quoted ``If-Match: "A"`` and makes B live for both Post and Episode, still returning the post-commit 422. For an Episode whose newer revision lacks audio, Cast's policy rejects B, so neither revision is published. The test adapter instead returns ``409 revision_conflict`` with B's id and publishes neither revision, including when B is a valid audio Episode and A is not. When A is still latest, the adapter returns 200 and A becomes the live revision. An audio-less selected Episode revision receives the shared policy's 422 without publication. Missing, bare, non-integer, and weak tokens return 400. Session-only calls return 401; change-only users and publish users outside the page's tree return 403 without the conflict body. **Source:** the stock route accepts no body or revision parameter, reads ``page.get_latest_revision()``, and has no route transaction or row lock. ``PublishPageRevisionAction`` checks only page publish permission, not Wagtail edit locks. Cast's policy hook opens its own transaction around the revision action. The ``revert`` action takes a ``revision_id`` but creates a new draft revision with change permission; it does not publish the selected revision. **Inference:** stock v3 has the same latest-revision race that Cast's optional editor ``If-Match`` mitigates, and a thin adapter can bind approval to a revision without duplicating publication policy. | The adapter's row lock matches the editor API design, but SQLite ignores it; prove the publish-versus-draft race on PostgreSQL. Decide whether the token is mandatory, whether an already-live page with no newer draft is rejected as in the editor API, and whether publication should honor Wagtail edit locks. |
 | Scheduling input | unverified | **Test:** a fixture revision with ``go_live_at`` set can be approved through the v3 standalone publish action and is protected when the scheduler executes it. The schedule value itself was not submitted through v3. | Determine whether scheduling belongs in a Cast adapter; do not claim v3 scheduling support from this execution-path proof. |
 | Media and body conversion | Cast extension required | Existing Cast services remain the required policy seams; no v3 write path exercised them in this slice. | Keep ``cast.content`` transport-neutral and reuse media ingestion without internal HTTP calls. |
 
@@ -134,12 +142,18 @@ explicit conflict codes without adding production behavior; the locking design
 mirrors the editor API, but this SQLite slice does not prove its concurrency
 behavior.
 
-The next smallest experiment slice is revision-bound publication. It should
-reproduce a newer draft arriving after a caller selected a revision, establish
-which revision the stock standalone publish action uses, and determine whether
-the adapter can apply an atomic revision precondition before delegating to the
-same Wagtail action. Body, preview, media upload, scheduling input, and Daybook
-migration remain later slices.
+The seventh slice shows that stock standalone publication publishes the latest
+revision at request time, so a newer draft can go live instead of the reviewed
+one. A test adapter that requires the selected revision id rejects that case
+with ``409`` before invoking Wagtail's publish action, while successful
+publication and Episode policy still run through that action.
+
+The next smallest experiment slice is scheduling input: determine whether
+``go_live_at`` can be submitted through v3 or the adapter, how it is validated
+and represented, and whether revision-bound publication then schedules the
+selected revision. Body conversion, authenticated preview, media upload,
+PostgreSQL concurrency, and the architecture decision remain later slices;
+Daybook migration is outside this evaluation.
 
 ## Upstream capabilities and remaining questions
 
@@ -157,7 +171,7 @@ in any release until stabilized. Enabling it requires separate app/URL setup.
 | Concurrent editing | Installed v3 code has no revision token or live-page `require_unpublished` equivalent; its scheduled-publication lock does reject scheduled edits. | Prove the remaining PostgreSQL races, or retain Cast's page-locking guarded update path. |
 | Podcast/media behavior | Generic Wagtail endpoints do not automatically implement Cast audio/video processing or episode rules. | Verify permissions, upload/probe budgets, audio requirements, seasons, and numbering on every proposed path. |
 | Rich text | Wagtail has reusable conversion/sanitization code, including nested rich-text handling in the installed v3 implementation. | Run Cast's sanitization and feature-preservation cases; retain explicit raw-HTML/inline-media policy. |
-| Preview and publishing | Cast renders authenticated draft previews; its current publish action publishes the latest revision without a revision precondition. | Prove preview behavior and explicitly decide how publication binds to the revision reviewed by a human. |
+| Preview and publishing | Cast renders authenticated draft previews; its publish actions bind to a reviewed revision only when the optional ``If-Match`` header is sent. Stock v3 publishes the latest revision and has no selector. | Prove preview behavior. The revision-bound publication experiment above shows that a v3 route needs a Cast precondition; decide whether it is mandatory. |
 
 The experiments establish two important action-path findings:
 
@@ -177,6 +191,12 @@ The experiments establish two important action-path findings:
    scheduled conflict responses while requesting the same page and existing
    revision-row locks as the editor API. PostgreSQL serialization remains
    unproven in this experiment.
+4. Stock standalone publication is not bound to the revision a caller
+   reviewed: it publishes whichever revision is latest when the request runs,
+   and ignores ``If-Match``. Publication policy still inspects that published
+   revision. A test adapter can check a quoted revision id under a requested
+   page-row lock and then delegate to the same Wagtail action; its sequential
+   SQLite tests do not prove the concurrent guarantee.
 
 ## Proposed plan
 

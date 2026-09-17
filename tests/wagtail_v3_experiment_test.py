@@ -150,6 +150,25 @@ def _publish_action(client, token: str, page: Post) -> ClientResponse:
     )
 
 
+def _adapter_publish(client, token: str, page: Post, if_match: str | None) -> ClientResponse:
+    headers = {} if if_match is None else {"HTTP_IF_MATCH": if_match}
+    return client.post(
+        reverse("wagtailapi_v3:cast_revision_publish", kwargs={"page_id": page.pk}),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+        **headers,
+    )
+
+
+def _save_cover_revision(page: Post, user: AbstractUser, cover_alt_text: str) -> Revision:
+    draft = page.get_latest_revision_as_object()
+    draft.cover_alt_text = cover_alt_text
+    return draft.save_revision(user=user)
+
+
+def _publish_log_count(page: Post) -> int:
+    return PageLogEntry.objects.filter(page_id=page.pk, action="wagtail.publish").count()
+
+
 def _assert_audio_required(response: ClientResponse) -> None:
     assert response.status_code == 422
     assert response.json() == {
@@ -690,3 +709,190 @@ def test_native_token_does_not_separate_write_and_publish_scopes(client, admin_u
     token_fields = {field.name for field in APIToken._meta.get_fields()}
     assert "scope" not in token_fields
     assert "scopes" not in token_fields
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+def test_stock_publish_ignores_selected_revision_and_publishes_newer_draft(
+    client, admin_user, request, fixture_name
+) -> None:
+    page = request.getfixturevalue(fixture_name)
+    token = _bearer_token(admin_user)
+    selected = _save_cover_revision(page, admin_user, "Reviewed draft")
+    listed = client.get(
+        reverse("wagtailapi_v3:list_page_revisions", kwargs={"page_id": page.pk}),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["id"] == selected.pk
+    newer = _save_cover_revision(page, admin_user, "Unreviewed draft")
+
+    # Stock v3 accepts no revision selector; an If-Match header is ignored.
+    response = client.post(
+        reverse("wagtailapi_v3:pages_actions_publish", kwargs={"page_id": page.pk}),
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+        HTTP_IF_MATCH=f'"{selected.pk}"',
+    )
+
+    _assert_cast_write_response_failure(response, type(page))
+    page.refresh_from_db()
+    assert page.live is True
+    assert page.live_revision_id == newer.pk
+    assert page.latest_revision_id == newer.pk
+    assert page.cover_alt_text == "Unreviewed draft"
+
+
+def test_stock_publish_checks_newer_episode_revision_not_selected_one(
+    client, admin_user, podcast, audio, body
+) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-stock-newer-audio-less", audio=audio)
+    selected = episode.save_revision(user=admin_user)
+    draft = episode.get_latest_revision_as_object()
+    draft.podcast_audio = None
+    newer = draft.save_revision(user=admin_user)
+
+    response = _publish_action(client, _bearer_token(admin_user), episode)
+
+    _assert_audio_required(response)
+    episode.refresh_from_db()
+    selected.refresh_from_db()
+    assert episode.live is False
+    assert episode.live_revision_id is None
+    assert episode.latest_revision_id == newer.pk
+    assert selected.approved_go_live_at is None
+    assert _publish_log_count(episode) == 0
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+def test_revision_bound_publish_publishes_selected_latest_revision(client, admin_user, request, fixture_name) -> None:
+    page = request.getfixturevalue(fixture_name)
+    selected = _save_cover_revision(page, admin_user, "Reviewed draft")
+
+    response = _adapter_publish(client, _bearer_token(admin_user), page, f'"{selected.pk}"')
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": page.pk,
+        "meta": {"type": page._meta.label},
+        "revision_id": selected.pk,
+        "live": True,
+        "live_revision_id": selected.pk,
+    }
+    page.refresh_from_db()
+    assert page.live_revision_id == selected.pk
+    assert page.latest_revision_id == selected.pk
+    assert page.has_unpublished_changes is False
+    assert page.cover_alt_text == "Reviewed draft"
+    assert _publish_log_count(page) == 1
+
+
+@pytest.mark.parametrize("fixture_name", ["post", "episode"])
+def test_revision_bound_publish_rejects_stale_selection_without_publishing(
+    client, admin_user, request, fixture_name
+) -> None:
+    page = request.getfixturevalue(fixture_name)
+    live_revision_id = page.live_revision_id
+    live_cover_alt_text = type(page).objects.get(pk=page.pk).cover_alt_text
+    selected = _save_cover_revision(page, admin_user, "Reviewed draft")
+    newer = _save_cover_revision(page, admin_user, "Unreviewed draft")
+    revision_count = page.revisions.count()
+
+    response = _adapter_publish(client, _bearer_token(admin_user), page, f'"{selected.pk}"')
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "revision_conflict",
+        "current_revision_id": newer.pk,
+        "submitted_base_revision_id": selected.pk,
+    }
+    page.refresh_from_db()
+    assert page.live_revision_id == live_revision_id
+    assert page.latest_revision_id == newer.pk
+    assert page.cover_alt_text == live_cover_alt_text
+    assert page.revisions.count() == revision_count
+    assert not page.revisions.filter(approved_go_live_at__isnull=False).exists()
+    assert _publish_log_count(page) == 0
+
+
+def test_revision_bound_publish_rejects_stale_episode_even_when_newer_is_valid(
+    client, admin_user, podcast, audio, body
+) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-bound-stale-audio-less")
+    selected = episode.save_revision(user=admin_user)
+    draft = episode.get_latest_revision_as_object()
+    draft.podcast_audio = audio
+    newer = draft.save_revision(user=admin_user)
+
+    response = _adapter_publish(client, _bearer_token(admin_user), episode, f'"{selected.pk}"')
+
+    assert response.status_code == 409
+    assert response.json()["current_revision_id"] == newer.pk
+    episode.refresh_from_db()
+    assert episode.live is False
+    assert episode.live_revision_id is None
+    assert _publish_log_count(episode) == 0
+
+
+def test_revision_bound_publish_applies_episode_policy_to_selected_revision(client, admin_user, podcast, body) -> None:
+    episode = _draft_episode(podcast, body, slug="v3-bound-audio-less")
+    selected = episode.save_revision(user=admin_user)
+
+    response = _adapter_publish(client, _bearer_token(admin_user), episode, f'"{selected.pk}"')
+
+    _assert_audio_required(response)
+    episode.refresh_from_db()
+    selected.refresh_from_db()
+    assert episode.live is False
+    assert episode.live_revision_id is None
+    assert episode.latest_revision_id == selected.pk
+    assert selected.approved_go_live_at is None
+    assert _publish_log_count(episode) == 0
+
+
+@pytest.mark.parametrize("if_match", [None, "not-a-revision", '"not-a-revision"', 'W/"12"'])
+def test_revision_bound_publish_requires_quoted_integer_revision(client, admin_user, post, if_match) -> None:
+    _save_cover_revision(post, admin_user, "Reviewed draft")
+
+    response = _adapter_publish(client, _bearer_token(admin_user), post, if_match)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_base_revision"
+    post.refresh_from_db()
+    assert post.live_revision_id is None
+    assert _publish_log_count(post) == 0
+
+
+def test_revision_bound_publish_requires_bearer_authentication(client, admin_user, post) -> None:
+    selected = _save_cover_revision(post, admin_user, "Reviewed draft")
+    client.force_login(admin_user)
+
+    response = client.post(
+        reverse("wagtailapi_v3:cast_revision_publish", kwargs={"page_id": post.pk}),
+        HTTP_IF_MATCH=f'"{selected.pk}"',
+    )
+
+    assert response.status_code == 401
+    post.refresh_from_db()
+    assert post.live_revision_id is None
+
+
+def test_revision_bound_publish_enforces_page_publish_permission(client, admin_user, site, blog, post, body) -> None:
+    other_blog = BlogFactory(owner=admin_user, parent=site.root_page, title="Other blog", slug="other-blog")
+    other_post = PostFactory(owner=admin_user, parent=other_blog, title="Other post", slug="other-post", body=body)
+    selected = _save_cover_revision(post, admin_user, "Reviewed draft")
+    other_selected = _save_cover_revision(other_post, admin_user, "Other reviewed draft")
+    change_only = _bearer_token(_page_permission_user(blog, "change_page"))
+    other_publisher = _bearer_token(_page_permission_user(other_blog, "publish_page"))
+
+    model_denied = _adapter_publish(client, change_only, post, f'"{selected.pk}"')
+    tree_denied = _adapter_publish(client, other_publisher, post, f'"{selected.pk + 1}"')
+    allowed = _adapter_publish(client, other_publisher, other_post, f'"{other_selected.pk}"')
+
+    assert model_denied.status_code == 403
+    assert tree_denied.status_code == 403
+    assert str(selected.pk) not in tree_denied.content.decode()
+    assert allowed.status_code == 200
+    post.refresh_from_db()
+    other_post.refresh_from_db()
+    assert post.live_revision_id is None
+    assert _publish_log_count(post) == 0
+    assert other_post.live_revision_id == other_selected.pk

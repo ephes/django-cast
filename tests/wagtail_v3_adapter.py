@@ -1,8 +1,9 @@
-"""Test-only revision-aware adapter over Wagtail 8's v3 update helpers."""
+"""Test-only revision-aware adapter over Wagtail 8's v3 update and publish helpers."""
 
 from typing import Literal
 
 import swapper
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
@@ -44,6 +45,14 @@ class RevisionConflict(Schema):
 class DraftStateConflict(Schema):
     code: Literal["published_post", "scheduled_post"]
     detail: str
+
+
+class RevisionPublishResult(Schema):
+    id: int
+    meta: RevisionUpdateMeta
+    revision_id: int
+    live: bool
+    live_revision_id: int | None
 
 
 def _base_revision_id(request: HttpRequest) -> int | None:
@@ -132,4 +141,54 @@ def revision_aware_update(
         "meta": {"type": page._meta.label},
         "base_revision_id": base_revision_id,
         "latest_revision_id": action.revision.pk,
+    }
+
+
+@router.post(
+    "/{page_id}/actions/publish/",
+    response={200: RevisionPublishResult, 400: AdapterError, 409: RevisionConflict},
+    url_name="cast_revision_publish",
+    summary="Revision-bound Cast page publish experiment",
+)
+@require_any_permission(Page, ("publish",))
+@transaction.atomic
+def revision_bound_publish(request: HttpRequest, page_id: int):
+    selected_revision_id = _base_revision_id(request)
+    if selected_revision_id is None:
+        return Status(
+            400,
+            {
+                "code": "invalid_base_revision",
+                "detail": 'Supply the selected revision as a quoted integer in the "If-Match" header.',
+            },
+        )
+
+    # A draft writer must update this locked row to make its revision latest.
+    # SQLite ignores the lock, so the sequential tests do not prove that race.
+    page = get_object_or_404(Page.objects.select_for_update(), pk=page_id).specific
+    if not page.permissions_for_user(request.user).can_publish():
+        # Check before comparing so an unauthorized caller learns no revision id.
+        raise PermissionDenied
+    current_revision_id = page.latest_revision_id
+    if current_revision_id != selected_revision_id:
+        return Status(
+            409,
+            {
+                "code": "revision_conflict",
+                "current_revision_id": current_revision_id,
+                "submitted_base_revision_id": selected_revision_id,
+            },
+        )
+
+    revision = page.revisions.get(pk=selected_revision_id)
+    action_class = action_registry.get_action_class(Page, "publish")
+    action_class(revision, user=request.user).execute()
+
+    published = Page.objects.get(pk=page.pk)
+    return {
+        "id": published.pk,
+        "meta": {"type": page._meta.label},
+        "revision_id": revision.pk,
+        "live": published.live,
+        "live_revision_id": published.live_revision_id,
     }
