@@ -25,6 +25,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Enforce Wagtail page locks and edit logging for editor API writes
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     ("Architecture decision", follow-up 1)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
   - Scope: editor PATCH currently checks `can_edit()` and calls `save_revision()` directly, so it neither honors
     Wagtail edit locks nor logs `wagtail.edit`. Specify the lock-conflict response, reject writes when
     `page.get_lock()` returns a lock whose `for_user(user)` applies, and log `wagtail.edit`. Keep
@@ -36,6 +37,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Move body section merging into `cast.content`
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 2)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
   - Scope: move `PostEditorMixin._section_value` and `_body_sections_with_replacements` behind a
     transport-neutral function so non-DRF callers need not import the editor view.
   - Done when: the editor uses the new function and its body tests pass unchanged.
@@ -43,6 +45,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Decide editor preview side effects and rendering identity
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 3)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
   - Scope: `Post.serve_preview` synchronizes stored media relationships and creates renditions on every preview
     GET, and Wagtail's preview request copies the caller's session cookie. Decide whether previews may write and
     which identity renders them.
@@ -51,6 +54,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Run PostgreSQL-only tests in CI
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 4)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
   - Scope: add a PostgreSQL-backed tox environment or CI job for the editor and Wagtail v3 experiment row-lock
     tests, and fix the order-dependent "Database access not allowed" failures seen in `tests/publication_test.py`
     under randomized PostgreSQL runs.
@@ -102,11 +106,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Require publish revision binding in the next editor API version
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 5); deferral recorded in [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
   - Depends on: an editor API versioning decision.
 
 - [ ] Revisit Wagtail v3 adoption
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     ("Revisit triggers"; follow-ups 6 and 7)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
   - Scope: re-run the test-only experiment when v3 is no longer a preview, the supported Wagtail floor includes
     it, and upstream offers request-context serialization and revision-bound writes. Optional preparatory work:
     let `HtmlField` tolerate missing serializer context, and add editor schedule input only if a client needs it.

@@ -382,6 +382,116 @@ Each is independent unless a dependency is listed.
 7. **Programmatic scheduling.** Only if a client needs it: add schedule input
    to the editor API with validation of the merged go-live/expiry pair.
 
+## Resuming the work (state as of 2026-09-18)
+
+### Where things stand
+
+- The evaluation is complete at ``ac808caf`` on ``develop``. It ran as
+  thirteen commits, from ``c8b6ec56`` (baseline) to ``ac808caf`` (decision).
+  django-cast is at 0.2.66 (unreleased), and every slice has a bullet in
+  ``docs/releases/0.2.66.rst``.
+- Nothing is in progress. None of the follow-ups below has been started.
+- Production code is unchanged. The experiment lives only in test files:
+  - ``tests/wagtail_v3_settings.py`` and ``tests/wagtail_v3_urls.py``: the
+    disposable settings and URLconf.
+  - ``tests/wagtail_v3_app/apps.py`` and ``tests/wagtail_v3_writable.py``:
+    the field opt-in (scalar fields, ``go_live_at``/``expire_at``, and
+    ``body``).
+  - ``tests/wagtail_v3_adapter.py``: the test-only Cast routes. It has a
+    revision-aware ``PATCH`` with ``require_unpublished``, revision-bound
+    publish, a rendered preview, and an author-block body ``PATCH``.
+  - ``tests/wagtail_v3_experiment_test.py``: 93 tests. Of these, 90 run on
+    SQLite; the other 3 run only on PostgreSQL and are skipped on SQLite.
+
+### How to run the experiment
+
+- Wagtail 8, SQLite:
+  ``.tox/py312-django61-wagtail80/bin/python -m pytest -q
+  --ds=tests.wagtail_v3_settings tests/wagtail_v3_experiment_test.py``.
+  Every ``wagtail80`` tox environment runs this as a second command. Under
+  normal settings and under Wagtail 7, the module skips before importing v3.
+- PostgreSQL: no tox environment or CI job does this yet (follow-up 4), and
+  the tox environments do not include ``psycopg``. The 2026-09-17 runs used
+  this recipe:
+  1. Create a scratch virtualenv with ``uv venv``. Install
+     ``uv pip freeze --python .tox/py312-django61-wagtail80/bin/python``
+     (excluding ``django-cast``) plus ``psycopg[binary]``.
+  2. Start a throwaway cluster:
+     ``initdb -D <dir> -U postgres --auth=trust``, then
+     ``pg_ctl -D <dir> -o "-p 55432 -c unix_socket_directories='' -c
+     listen_addresses=127.0.0.1" start``. Unix sockets are disabled because
+     long scratch paths exceed the 103-byte socket limit.
+  3. Run pytest from that venv with ``PYTHONPATH=src``,
+     ``CAST_TEST_DB_ENGINE=django.db.backends.postgresql``,
+     ``CAST_TEST_DB=<name>``, ``CAST_TEST_DB_HOST=127.0.0.1``,
+     ``CAST_TEST_DB_PORT=55432``, and separate
+     ``CAST_TEST_MEDIA_ROOT``/``CAST_TEST_PRIVATE_MEDIA_ROOT`` directories.
+  Run ``tests/api`` in the same way for the editor API's PostgreSQL test.
+
+### Suggested order for the follow-ups
+
+1. Follow-up 2 (section merge into ``cast.content``): a pure refactor that
+   needs no product decision.
+2. Follow-up 1 (page locks and edit logging): first choose the
+   lock-conflict response envelope.
+3. Follow-up 4 (PostgreSQL CI): choose how CI gets PostgreSQL.
+   ``.github/workflows/workflow.yml`` currently runs SQLite only, and the
+   ``tests/publication_test.py`` ordering failure must be fixed first.
+4. Follow-up 3 (preview side effects and identity): needs a product
+   decision.
+5. Later: follow-up 5 (depends on an editor API versioning decision), then
+   the revisit triggers and follow-ups 6-7.
+
+### Decisions still owed by the maintainer
+
+- The lock-conflict response for editor writes (follow-up 1).
+- Whether a preview GET may synchronize media relationships, and which user
+  the preview renders as (follow-up 3).
+- How CI provides PostgreSQL (follow-up 4).
+- Editor API versioning, which is the prerequisite for mandatory publish
+  binding (follow-up 5).
+- Whether to file the recorded upstream v3 gaps. None are filed; filing is
+  outward-facing and needs confirmation. The candidates are:
+  - the serializer shim passes no request context;
+  - standalone publish has no revision selector;
+  - partial updates start from the live row;
+  - ``body`` is described only as ``list[Any]``;
+  - silent image-collection substitution;
+  - chooser blocks skip ``choose``;
+  - partial schedule input skips the go-live/expiry cross-check.
+
+### Workflow that was used
+
+- Work in small slices: one reviewable question per commit, with
+  implementation plus tests kept under about 300 changed lines.
+- Update this note, ``BACKLOG.md``, and the current release notes in the same
+  slice.
+- Verify with ``git diff --check``, ``just check`` (100% coverage), the tox
+  environments ``py312-django52-wagtail70`` and ``py312-django61-wagtail80``,
+  and ``just docs``. Run test suites one after another unless each has its
+  own ``CAST_TEST_DB``.
+- Review each staged slice with Pi and ``openai-codex/gpt-5.6-sol`` (high
+  thinking) through the ``cross-agent-review-cycle`` skill. Require an
+  evidence section: one run returned a bare ``CLEAN`` without inspection.
+  Re-review only the repair delta.
+
+### Traps met during the evaluation
+
+- The default ``.venv`` is Wagtail 7.4.3. Use the ``wagtail80`` tox
+  interpreter for v3 work and for reading v3 source.
+- Stock v3 writes commit before returning 422, so assert database state, not
+  just the status code.
+- The ``admin_user`` fixture has no image collection permissions. Grant
+  ``choose_image`` explicitly when a test needs a choosable image.
+- ``get_latest_revision_as_object()`` returns the page instance itself when
+  no revision exists. Mutating that object also mutates the fixture.
+- ``transaction=True`` tests flush the session-created Wagtail roots.
+  Restore them first, as ``pg_actors``/``restored_wagtail_roots`` do.
+  ``serialized_rollback`` did not help.
+- Opting ``body`` into v3 writes makes it required for create-and-publish.
+- Threaded PostgreSQL tests must observe a real lock wait (for example with
+  ``pg_stat_activity``); an elapsed-time check alone is not proof.
+
 ## Initial assessment (historical)
 
 This section and the plan below record the 2026-09-08 starting point. The
