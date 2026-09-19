@@ -127,6 +127,8 @@ follow-up status and resume notes below for current work.
 Follow-up 1 is also implemented: editor PATCH now honors applicable Wagtail
 locks and records edit logs; statements about its earlier gaps below are
 historical evaluation evidence.
+Follow-up 4 now adds a focused PostgreSQL CI job and opt-in tox environment;
+earlier statements that PostgreSQL tests were manual describe the evaluation.
 
 | Area | Classification | Evidence from this slice | Remaining work |
 | --- | --- | --- | --- |
@@ -379,10 +381,13 @@ Each is independent unless a dependency is listed.
    synchronize stored media relationships (it currently does in the editor,
    admin, and adapter). Also decide whether previews render as the token user,
    anonymously, or with the session cookie Wagtail copies.
-4. **PostgreSQL test job.** Add a PostgreSQL-backed tox environment or CI job
-   that runs the editor and experiment PostgreSQL-only tests. Fix the
-   order-dependent "Database access not allowed" failures seen in
-   ``tests/publication_test.py`` under randomized PostgreSQL runs.
+4. **PostgreSQL test job — implemented (2026-09-19).** The ``postgres-locks``
+   CI job starts a disposable PostgreSQL 17 service and runs ``tox -e postgres``
+   on Python 3.12 / Django 6.1 / Wagtail 8. Only four concurrency tests plus the
+   publication-policy module run; default local tests need no PostgreSQL.
+   Reproduced the three publication failures: Wagtail page construction queries
+   content types with a cold cache. Explicit database markers fix their hidden
+   dependency. Local PostgreSQL validation passes; the hosted job runs after push.
 5. **Mandatory publish revision binding.** Make ``If-Match`` required for
    editor publication in the next editor API version, as deferred in the
    security review. Depends on a versioning decision for the editor API.
@@ -401,7 +406,7 @@ Each is independent unless a dependency is listed.
   thirteen commits, from ``c8b6ec56`` (baseline) to ``ac808caf`` (decision).
   django-cast is at 0.2.66 (unreleased), and every slice has a bullet in
   ``docs/releases/0.2.66.rst``.
-- Follow-ups 1 (editor locks/logging) and 2 (section selection and merging) are implemented. The remaining
+- Follow-ups 1 (editor locks/logging), 2 (section selection and merging), and 4 (PostgreSQL CI) are implemented. The remaining
   follow-ups have not been started.
 - The evaluation itself left production code unchanged; follow-up 2 now shares
   production content helpers with the adapter. The experiment remains test-only:
@@ -423,9 +428,10 @@ Each is independent unless a dependency is listed.
   --ds=tests.wagtail_v3_settings tests/wagtail_v3_experiment_test.py``.
   Every ``wagtail80`` tox environment runs this as a second command. Under
   normal settings and under Wagtail 7, the module skips before importing v3.
-- PostgreSQL: no tox environment or CI job does this yet (follow-up 4), and
-  the tox environments do not include ``psycopg``. The 2026-09-17 runs used
-  this recipe:
+- PostgreSQL: use the opt-in ``uv run tox -e postgres`` with a disposable
+  PostgreSQL server; see ``docs/development.rst`` for connection overrides.
+  The CI job provides its own service container. The historical 2026-09-17
+  full-experiment runs used this recipe:
   1. Create a scratch virtualenv with ``uv venv``. Install
      ``uv pip freeze --python .tox/py312-django61-wagtail80/bin/python``
      (excluding ``django-cast``) plus ``psycopg[binary]``.
@@ -443,19 +449,15 @@ Each is independent unless a dependency is listed.
 
 ### Suggested order for the follow-ups
 
-1. Follow-up 4 (PostgreSQL CI): choose how CI gets PostgreSQL.
-   ``.github/workflows/workflow.yml`` currently runs SQLite only, and the
-   ``tests/publication_test.py`` ordering failure must be fixed first.
-2. Follow-up 3 (preview side effects and identity): needs a product
+1. Follow-up 3 (preview side effects and identity): needs a product
    decision.
-3. Later: follow-up 5 (depends on an editor API versioning decision), then
+2. Later: follow-up 5 (depends on an editor API versioning decision), then
    the revisit triggers and follow-ups 6-7.
 
 ### Decisions still owed by the maintainer
 
 - Whether a preview GET may synchronize media relationships, and which user
   the preview renders as (follow-up 3).
-- How CI provides PostgreSQL (follow-up 4).
 - Editor API versioning, which is the prerequisite for mandatory publish
   binding (follow-up 5).
 - Whether to file the recorded upstream v3 gaps. None are filed; filing is

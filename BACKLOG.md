@@ -31,14 +31,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     which identity renders them.
   - Done when: the chosen behavior is documented and covered by regressions.
 
-- [ ] Run PostgreSQL-only tests in CI
-  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-    (follow-up 4)
-  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
-  - Scope: add a PostgreSQL-backed tox environment or CI job for the editor and Wagtail v3 experiment row-lock
-    tests, and fix the order-dependent "Database access not allowed" failures seen in `tests/publication_test.py`
-    under randomized PostgreSQL runs.
-  - Done when: the PostgreSQL-only tests run automatically and pass.
+- [ ] Verify the first hosted PostgreSQL CI run
+  - The focused ``postgres-locks`` job and local PostgreSQL validation are implemented.
+  - After pushing, confirm the GitHub Actions job passes and executes all four row-lock tests without skips.
+  - Remove this verification item after the first green hosted run.
 
 - [ ] Triage remaining security hardening observations
   - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)

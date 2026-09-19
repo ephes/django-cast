@@ -375,6 +375,43 @@ supported dependency combination (Django 5.2, Wagtail 7.0) and once with the new
 
    $ uv run tox -e migrations-oldest,migrations-latest
 
+PostgreSQL Lock Tests (Optional Locally)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Normal ``just check`` and default tox environments use SQLite. Contributors do
+not need PostgreSQL or Docker installed. Four concurrency tests require real
+PostgreSQL row locks and skip on SQLite.
+
+CI runs those four tests plus the publication-policy module in one dedicated
+``postgres-locks`` job on a standard Ubuntu runner. GitHub Actions starts and
+discards a PostgreSQL 17 service container for that job. It uses Python 3.12,
+Django 6.1 and Wagtail 8, has a ten-minute timeout, and runs on pushes and pull
+requests, not the weekly dependency-audit schedule. It does not repeat the full
+test matrix or require a permanent database. Standard GitHub-hosted runners
+are currently free for public repositories; see
+`GitHub Actions billing <https://docs.github.com/en/actions/concepts/billing-and-usage>`_.
+
+To run the same checks locally, optionally start a disposable PostgreSQL server
+(or a PostgreSQL 17 Docker container) and run:
+
+.. code-block:: bash
+
+   $ uv run tox -e postgres
+
+This opt-in environment installs its own PostgreSQL driver. Defaults are host
+``127.0.0.1``, port ``5432``, user/password ``postgres`` and database
+``cast_postgres_tests``. Override these with ``CAST_TEST_DB_HOST``,
+``CAST_TEST_DB_PORT``, ``CAST_TEST_DB_USER``, ``CAST_TEST_DB_PASSWORD`` and
+``CAST_TEST_DB``. Use only a disposable test database: each pytest command
+recreates it, and the role must be able to create databases. Public/private
+test media remain isolated under ``.tox/postgres``.
+
+The first command runs the editor schedule-approval race together with the
+publication-policy tests (including their database-access regressions); the
+second runs the three v3 adapter races under their isolated settings.
+Both commands load a pytest guard that fails before collection if the selected
+backend is not PostgreSQL, so a SQLite fallback cannot silently skip the lock tests.
+
 Test Media Files
 ~~~~~~~~~~~~~~~~
 

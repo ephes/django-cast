@@ -1,6 +1,11 @@
 0.2.66 (unreleased)
 -------------------
 
+- Run PostgreSQL row-lock tests in a focused CI job with a disposable PostgreSQL
+  17 service. The opt-in ``tox -e postgres`` environment runs four concurrency
+  tests and the publication-policy module; normal local tests still use SQLite.
+  Mark three publication tests as database users so cold Wagtail content-type
+  caches no longer cause order-dependent failures.
 - Honor Wagtail editorial locks on Post and Episode editor API PATCH requests,
   returning ``409 page_locked`` when a lock applies to the caller. Existing
   revision-conflict and draft-only errors retain precedence. Successful edits
