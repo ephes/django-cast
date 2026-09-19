@@ -22,18 +22,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
     against a fixed `modelsearch` release or the version gate and its retention reason are documented.
 
-- [ ] Enforce Wagtail page locks and edit logging for editor API writes
-  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-    ("Architecture decision", follow-up 1)
-  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
-  - Scope: editor PATCH currently checks `can_edit()` and calls `save_revision()` directly, so it neither honors
-    Wagtail edit locks nor logs `wagtail.edit`. Specify the lock-conflict response, reject writes when
-    `page.get_lock()` returns a lock whose `for_user(user)` applies, and log `wagtail.edit`. Keep
-    `save_revision()` with direct logging on Wagtail 7, which has no executable `EditAction` or `wagtail.actions`
-    action registry; the Wagtail 8 edit action may be used behind a version gate.
-  - Done when: tests on the oldest Wagtail 7 and the Wagtail 8 tox edges cover an applicable lock (rejected), a
-    non-applicable owner lock (allowed), and edit-log creation.
-
 - [ ] Decide editor preview side effects and rendering identity
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 3)
@@ -94,6 +82,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
+
+- [ ] Decide whether editor API publication should honor editorial locks
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    (revision-bound publication matrix row; follow-up 1 covers PATCH only).
+  - Scope: editor PATCH enforces applicable Wagtail locks, but the publish endpoint does not.
+    Decide the publication policy for basic, global, workflow and scheduled locks, independently of edit logging.
+  - Done when: the chosen publish-lock policy is documented and covered by regression tests.
 
 - [ ] Require publish revision binding in the next editor API version
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)

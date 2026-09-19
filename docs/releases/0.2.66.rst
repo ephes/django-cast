@@ -1,6 +1,10 @@
 0.2.66 (unreleased)
 -------------------
 
+- Honor Wagtail editorial locks on Post and Episode editor API PATCH requests,
+  returning ``409 page_locked`` when a lock applies to the caller. Existing
+  revision-conflict and draft-only errors retain precedence. Successful edits
+  now record a ``wagtail.edit`` audit entry atomically with the new revision.
 - Move body section selection and merging into the transport-neutral
   ``cast.content`` package, shared by the editor API and test-only Wagtail v3
   adapter. Existing editor payloads and section-preservation behavior are unchanged.

@@ -124,6 +124,9 @@ This matrix records the evaluation slices. Follow-up 2 was implemented on
 2026-09-19: section selection and merging now live in ``cast.content.sections``,
 and the adapter no longer imports these helpers from the DRF view. See the
 follow-up status and resume notes below for current work.
+Follow-up 1 is also implemented: editor PATCH now honors applicable Wagtail
+locks and records edit logs; statements about its earlier gaps below are
+historical evaluation evidence.
 
 | Area | Classification | Evidence from this slice | Remaining work |
 | --- | --- | --- | --- |
@@ -354,17 +357,19 @@ Re-run the experiment and reconsider options 2 or 3 when all of these hold:
 
 Each is independent unless a dependency is listed.
 
-1. **Wagtail lock checks and edit logging for editor writes.** **Source:** the
-   current PATCH path checks only ``can_edit()`` and calls ``save_revision``
-   directly, so it neither consults ``page.get_lock()`` nor logs
-   ``wagtail.edit``. Specify the lock-conflict response first. On every
-   supported Wagtail version, reject a write when
-   ``lock is not None and lock.for_user(user)``, and record a ``wagtail.edit``
-   log entry. On Wagtail 7, keep ``save_revision`` and log directly. On
-   Wagtail 8, the registered edit action may be used behind a version gate.
-   Done when tests on the oldest Wagtail 7 and the Wagtail 8 tox edges cover
-   an applicable lock (rejected), a non-applicable owner lock (allowed), and
-   edit-log creation.
+1. **Wagtail lock checks and edit logging for editor writes — implemented
+   (2026-09-19).** Post and Episode PATCH return ``409 page_locked`` when
+   ``page.get_lock()`` returns a lock whose ``for_user(user)`` applies.
+   Existing permission, revision-conflict and draft-only errors retain precedence.
+   The check runs on the locked database page before draft mutations. Successful
+   updates use ``save_revision(user=user, log_action="wagtail.edit")`` on both
+   Wagtail 7 and 8, retaining existing validation and persistence semantics.
+   Revision creation and audit logging share the PATCH transaction. Tests cover
+   ordinary, owner, global and scheduled locks, precondition precedence, log
+   attribution, and rollback if logging fails.
+   This closes the PATCH scope only: the editor publish endpoint does not check
+   editorial locks. The publication lock policy remains a separate backlog item,
+   matching the open decision in the revision-bound publication matrix row.
 2. **Move body section selection and merging into ``cast.content`` — implemented
    (2026-09-19).** The editor and test adapter now call ``section_value`` and
    ``body_sections_with_replacements`` in ``cast.content.sections`` with raw
@@ -396,7 +401,7 @@ Each is independent unless a dependency is listed.
   thirteen commits, from ``c8b6ec56`` (baseline) to ``ac808caf`` (decision).
   django-cast is at 0.2.66 (unreleased), and every slice has a bullet in
   ``docs/releases/0.2.66.rst``.
-- Follow-up 2 (section selection and merging) is implemented. The remaining
+- Follow-ups 1 (editor locks/logging) and 2 (section selection and merging) are implemented. The remaining
   follow-ups have not been started.
 - The evaluation itself left production code unchanged; follow-up 2 now shares
   production content helpers with the adapter. The experiment remains test-only:
@@ -438,19 +443,16 @@ Each is independent unless a dependency is listed.
 
 ### Suggested order for the follow-ups
 
-1. Follow-up 1 (page locks and edit logging): first choose the
-   lock-conflict response envelope.
-2. Follow-up 4 (PostgreSQL CI): choose how CI gets PostgreSQL.
+1. Follow-up 4 (PostgreSQL CI): choose how CI gets PostgreSQL.
    ``.github/workflows/workflow.yml`` currently runs SQLite only, and the
    ``tests/publication_test.py`` ordering failure must be fixed first.
-3. Follow-up 3 (preview side effects and identity): needs a product
+2. Follow-up 3 (preview side effects and identity): needs a product
    decision.
-4. Later: follow-up 5 (depends on an editor API versioning decision), then
+3. Later: follow-up 5 (depends on an editor API versioning decision), then
    the revisit triggers and follow-ups 6-7.
 
 ### Decisions still owed by the maintainer
 
-- The lock-conflict response for editor writes (follow-up 1).
 - Whether a preview GET may synchronize media relationships, and which user
   the preview renders as (follow-up 3).
 - How CI provides PostgreSQL (follow-up 4).

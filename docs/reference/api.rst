@@ -782,6 +782,27 @@ A scheduled page is likewise left unchanged and returns ``409`` with code
 ``scheduled_post``. Post and episode responses expose this state as ``status:
 "scheduled"`` even when ``live`` is false.
 
+Post and Episode PATCH also honor Wagtail editorial locks. If
+``page.get_lock().for_user(user)`` applies, the request returns ``409``:
+
+.. code-block:: json
+
+    {"code": "page_locked", "detail": "This page is locked for editing."}
+
+No revision, slug change, or edit log is saved for a rejected write. A basic
+lock normally allows its owner to edit; global edit locks and scheduled
+publication locks apply to their owners too. These checks apply even when
+``require_unpublished`` is false. Permission checks, revision conflicts, and
+the explicit draft-only precondition take precedence, so a scheduled page with
+``require_unpublished: true`` still returns ``scheduled_post``.
+
+Each successful PATCH records one ``wagtail.edit`` audit entry with the acting
+user and new revision. The log and revision are saved in the same transaction.
+This applies on both Wagtail 7 and 8; publication and creation behavior is unchanged.
+The publish endpoint does not check editorial locks: a user with the required
+publish permissions and token scope can still publish a locked page. Do not
+use a PATCH edit lock as a publication freeze.
+
 Instead of putting the token in the JSON body, clients may send the same
 revision id as a strict ``If-Match`` header:
 

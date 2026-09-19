@@ -149,6 +149,15 @@ class ParentsListView(EditorAPIView):
 class PostEditorMixin:
     detail_url_name = "cast:api:editor_post_detail"
 
+    def _check_edit_lock(self, post: Post, user: Any) -> None:
+        lock = post.get_lock()
+        if lock is not None and lock.for_user(user):
+            raise EditorFlatError(
+                "page_locked",
+                "This page is locked for editing.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
     def _get_parent(self, parent_id: int) -> Blog:
         blog = Blog.objects.filter(pk=parent_id).first()
         if blog is None:
@@ -523,6 +532,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
                 edit_url=edit_url,
             )
         self._enforce_draft_only(post, required=data["require_unpublished"], noun="post")
+        self._check_edit_lock(post, user)
 
         draft = post.get_latest_revision().as_object()
         if "title" in data:
@@ -561,7 +571,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         if body_replacements:
             draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 
-        revision = draft.save_revision(user=user)
+        revision = draft.save_revision(user=user, log_action="wagtail.edit")
         post.refresh_from_db()
         return Response(self._serialize(post, user=user, content_post=draft, revision=revision))
 
@@ -786,6 +796,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
                 edit_url=edit_url,
             )
         self._enforce_draft_only(episode, required=data["require_unpublished"], noun="episode")
+        self._check_edit_lock(episode, user)
 
         # ``parent`` is immutable on PATCH, so the season constraint resolves against
         # the episode's existing podcast parent — fetched lazily only when a season is sent.
@@ -827,7 +838,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if body_replacements:
             draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 
-        revision = draft.save_revision(user=user)
+        revision = draft.save_revision(user=user, log_action="wagtail.edit")
         episode.refresh_from_db()
         return Response(self._serialize(episode, user=user, content_post=draft, revision=revision))
 
