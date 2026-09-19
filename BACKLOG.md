@@ -34,14 +34,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: tests on the oldest Wagtail 7 and the Wagtail 8 tox edges cover an applicable lock (rejected), a
     non-applicable owner lock (allowed), and edit-log creation.
 
-- [ ] Move body section merging into `cast.content`
-  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-    (follow-up 2)
-  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
-  - Scope: move `PostEditorMixin._section_value` and `_body_sections_with_replacements` behind a
-    transport-neutral function so non-DRF callers need not import the editor view.
-  - Done when: the editor uses the new function and its body tests pass unchanged.
-
 - [ ] Decide editor preview side effects and rendering identity
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 3)

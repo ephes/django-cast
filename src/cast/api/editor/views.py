@@ -15,6 +15,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ...content.sections import body_sections_with_replacements, section_value
 from ...models import Audio, Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
 from ...publication import PublicationRejected, check_publishable
@@ -146,7 +147,6 @@ class ParentsListView(EditorAPIView):
 
 
 class PostEditorMixin:
-    body_section_order = ("overview", "detail")
     detail_url_name = "cast:api:editor_post_detail"
 
     def _get_parent(self, parent_id: int) -> Blog:
@@ -256,38 +256,6 @@ class PostEditorMixin:
             )
         return [found_by_id[category_id] for category_id in ids]
 
-    def _section_value(self, post: Post, section_type: str) -> list[dict]:
-        for block in post.body.raw_data:
-            if block.get("type") == section_type:
-                value = block.get("value")
-                if isinstance(value, list):
-                    return value
-        return []
-
-    def _body_sections_with_replacements(self, post: Post, replacements: dict[str, list[dict]]) -> str:
-        sections = []
-        remaining = dict(replacements)
-        for section in post.body.raw_data:
-            section_data = dict(section)
-            section_type = section_data["type"]
-            if section_type in replacements:
-                section_data["value"] = replacements[section_type]
-                remaining.pop(section_type, None)
-            sections.append(section_data)
-        section_order = {section_type: index for index, section_type in enumerate(self.body_section_order)}
-        for section_type, value in sorted(remaining.items(), key=lambda item: section_order[item[0]]):
-            new_section = {"type": section_type, "value": value}
-            current_order = section_order[section_type]
-            insert_index = 0
-            for index, section in enumerate(sections):
-                existing_order = section_order.get(section["type"])
-                if existing_order is not None and existing_order > current_order:
-                    insert_index = index
-                    break
-                insert_index = index + 1
-            sections.insert(insert_index, new_section)
-        return json.dumps(sections)
-
     def _serialize(
         self, post: Post, *, user: Any, content_post: Post | None = None, revision: Any | None = None
     ) -> dict:
@@ -318,10 +286,10 @@ class PostEditorMixin:
             "categories": [category.pk for category in content_post.categories.all()],
             "cover_image": cover,
             "overview": section_to_author_blocks(
-                self._section_value(content_post, "overview"), path_prefix="overview", user=user
+                section_value(content_post.body.raw_data, "overview"), path_prefix="overview", user=user
             ),
             "detail": section_to_author_blocks(
-                self._section_value(content_post, "detail"), path_prefix="detail", user=user
+                section_value(content_post.body.raw_data, "detail"), path_prefix="detail", user=user
             ),
             "latest_revision_id": latest_revision_id,
             "previous_revision_id": _previous_page_revision_id(post, latest_revision_id),
@@ -581,14 +549,17 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         body_replacements = {}
         if "overview" in data:
             body_replacements["overview"] = author_blocks_to_overview(
-                data["overview"], user=user, existing_section=self._section_value(draft, "overview")
+                data["overview"], user=user, existing_section=section_value(draft.body.raw_data, "overview")
             )
         if "detail" in data:
             body_replacements["detail"] = author_blocks_to_section(
-                data["detail"], user=user, path_prefix="detail", existing_section=self._section_value(draft, "detail")
+                data["detail"],
+                user=user,
+                path_prefix="detail",
+                existing_section=section_value(draft.body.raw_data, "detail"),
             )
         if body_replacements:
-            draft.body = self._body_sections_with_replacements(draft, body_replacements)
+            draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 
         revision = draft.save_revision(user=user)
         post.refresh_from_db()
@@ -844,14 +815,17 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         body_replacements = {}
         if "overview" in data:
             body_replacements["overview"] = author_blocks_to_overview(
-                data["overview"], user=user, existing_section=self._section_value(draft, "overview")
+                data["overview"], user=user, existing_section=section_value(draft.body.raw_data, "overview")
             )
         if "detail" in data:
             body_replacements["detail"] = author_blocks_to_section(
-                data["detail"], user=user, path_prefix="detail", existing_section=self._section_value(draft, "detail")
+                data["detail"],
+                user=user,
+                path_prefix="detail",
+                existing_section=section_value(draft.body.raw_data, "detail"),
             )
         if body_replacements:
-            draft.body = self._body_sections_with_replacements(draft, body_replacements)
+            draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 
         revision = draft.save_revision(user=user)
         episode.refresh_from_db()

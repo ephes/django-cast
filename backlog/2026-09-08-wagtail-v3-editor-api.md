@@ -120,6 +120,11 @@ means it was established by reading the installed Wagtail 8.0 implementation
 but was not exercised through a Cast integration test in this slice;
 **inference** identifies a conclusion drawn from that evidence.
 
+This matrix records the evaluation slices. Follow-up 2 was implemented on
+2026-09-19: section selection and merging now live in ``cast.content.sections``,
+and the adapter no longer imports these helpers from the DRF view. See the
+follow-up status and resume notes below for current work.
+
 | Area | Classification | Evidence from this slice | Remaining work |
 | --- | --- | --- | --- |
 | Test-only mount | upstream equivalent | **Test:** the v3 namespace reverses under the disposable URLconf, while ``tests.urls`` does not mount it. | Decide a production route only after the evaluation; none exists now. |
@@ -360,10 +365,11 @@ Each is independent unless a dependency is listed.
    Done when tests on the oldest Wagtail 7 and the Wagtail 8 tox edges cover
    an applicable lock (rejected), a non-applicable owner lock (allowed), and
    edit-log creation.
-2. **Move body section selection and merging into ``cast.content``.** The
-   adapter had to import ``_section_value`` and
-   ``_body_sections_with_replacements`` from the DRF view. Move them behind a
-   transport-neutral function and keep the editor tests unchanged.
+2. **Move body section selection and merging into ``cast.content`` — implemented
+   (2026-09-19).** The editor and test adapter now call ``section_value`` and
+   ``body_sections_with_replacements`` in ``cast.content.sections`` with raw
+   StreamField data. The adapter no longer imports the DRF view for these helpers.
+   Existing editor tests remain unchanged.
 3. **Preview side effects and identity.** Decide whether a preview GET may
    synchronize stored media relationships (it currently does in the editor,
    admin, and adapter). Also decide whether previews render as the token user,
@@ -382,7 +388,7 @@ Each is independent unless a dependency is listed.
 7. **Programmatic scheduling.** Only if a client needs it: add schedule input
    to the editor API with validation of the merged go-live/expiry pair.
 
-## Resuming the work (state as of 2026-09-18)
+## Resuming the work (state as of 2026-09-19)
 
 ### Where things stand
 
@@ -390,8 +396,10 @@ Each is independent unless a dependency is listed.
   thirteen commits, from ``c8b6ec56`` (baseline) to ``ac808caf`` (decision).
   django-cast is at 0.2.66 (unreleased), and every slice has a bullet in
   ``docs/releases/0.2.66.rst``.
-- Nothing is in progress. None of the follow-ups below has been started.
-- Production code is unchanged. The experiment lives only in test files:
+- Follow-up 2 (section selection and merging) is implemented. The remaining
+  follow-ups have not been started.
+- The evaluation itself left production code unchanged; follow-up 2 now shares
+  production content helpers with the adapter. The experiment remains test-only:
   - ``tests/wagtail_v3_settings.py`` and ``tests/wagtail_v3_urls.py``: the
     disposable settings and URLconf.
   - ``tests/wagtail_v3_app/apps.py`` and ``tests/wagtail_v3_writable.py``:
@@ -430,16 +438,14 @@ Each is independent unless a dependency is listed.
 
 ### Suggested order for the follow-ups
 
-1. Follow-up 2 (section merge into ``cast.content``): a pure refactor that
-   needs no product decision.
-2. Follow-up 1 (page locks and edit logging): first choose the
+1. Follow-up 1 (page locks and edit logging): first choose the
    lock-conflict response envelope.
-3. Follow-up 4 (PostgreSQL CI): choose how CI gets PostgreSQL.
+2. Follow-up 4 (PostgreSQL CI): choose how CI gets PostgreSQL.
    ``.github/workflows/workflow.yml`` currently runs SQLite only, and the
    ``tests/publication_test.py`` ordering failure must be fixed first.
-4. Follow-up 3 (preview side effects and identity): needs a product
+3. Follow-up 3 (preview side effects and identity): needs a product
    decision.
-5. Later: follow-up 5 (depends on an editor API versioning decision), then
+4. Later: follow-up 5 (depends on an editor API versioning decision), then
    the revisit triggers and follow-ups 6-7.
 
 ### Decisions still owed by the maintainer

@@ -320,8 +320,13 @@ Code Organization
     └── wagtail_hooks.py  # Admin customizations
 
 The ``cast.content`` package owns conversion, rich-text normalization, media
-reference resolution, and validation without depending on REST Framework. It
-is an internal architectural boundary, not yet a supported extension API.
+reference resolution, validation, and body section selection and merging without
+depending on REST Framework. Its ``sections`` module accepts raw StreamField
+section data and merges converted replacements while preserving existing section
+IDs, order, and omitted values. Missing overview/detail sections are inserted in
+canonical order. The editor API and test-only Wagtail v3 adapter share these
+functions. This package is an internal architectural boundary, not yet a supported
+extension API.
 
 Extension Points
 ----------------

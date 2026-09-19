@@ -15,10 +15,10 @@ from wagtail.api.v3.permissions import require_any_permission
 from wagtail.api.v3.routers.pages import PageUpdateSchema
 from wagtail.api.v3.schemas.pages import PageTypeInjectingBody
 
-from cast.api.editor.views import PostEditorMixin
 from cast.content.blocks import ConversionContext
 from cast.content.convert import author_blocks_to_section
 from cast.content.errors import ContentValidationError
+from cast.content.sections import body_sections_with_replacements, section_value
 
 Page = swapper.load_model("wagtailcore", "Page")
 
@@ -260,20 +260,18 @@ def author_body_update(request: HttpRequest, page_id: int, data: AuthorBodyUpdat
         )
 
     draft = page.get_latest_revision().as_object()
-    # The section merge lives on the DRF editor mixin rather than in cast.content.
-    body_sections = PostEditorMixin()
     replacements = {}
     try:
         for section, blocks in sections.items():
             ctx = ConversionContext(
                 section=section,
                 user=request.user,
-                existing_section=body_sections._section_value(draft, section),
+                existing_section=section_value(draft.body.raw_data, section),
             )
             replacements[section] = author_blocks_to_section(blocks, ctx=ctx)
     except ContentValidationError as error:
         return Status(422, {"code": "validation_error", "errors": error.error_map})
-    draft.body = body_sections._body_sections_with_replacements(draft, replacements)
+    draft.body = body_sections_with_replacements(draft.body.raw_data, replacements)
 
     action_class = action_registry.get_action_class(type(draft), "edit")
     action = action_class(draft, user=request.user, publish=False)
