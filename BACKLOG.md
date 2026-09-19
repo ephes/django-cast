@@ -15,13 +15,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
-- [ ] Upstream the modelsearch Django 6.1 MATCH fix and remove the shim
-  - Notes: [backlog/2026-08-10-modelsearch-django61-upstream.md](backlog/2026-08-10-modelsearch-django61-upstream.md)
-  - Scope: report the Django 6.1 `MATCH` compilation break to `modelsearch` upstream, then drop
-    `src/cast/modelsearch_compat.py`, its `apps.py` call and its tests once a fixed release exists.
-  - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
-    against a fixed `modelsearch` release or the version gate and its retention reason are documented.
-
 - [ ] Audit existing editor API rich text and historical revisions
   - Design record:
     [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)

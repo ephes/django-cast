@@ -1,6 +1,9 @@
 0.2.66 (unreleased)
 -------------------
 
+- Require modelsearch 1.3.2 or newer and remove Cast's SQLite ``MATCH``
+  compatibility patch. The upstream release fixes search compilation on Django
+  6.1; existing search behavior is unchanged.
 - Require current page access for comment author editing and deletion. Session
   ownership no longer permits actions after a page is unpublished or becomes
   inaccessible under direct or inherited view restrictions. Both endpoints return

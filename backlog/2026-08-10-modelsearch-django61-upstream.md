@@ -1,6 +1,7 @@
 # Upstream the modelsearch Django 6.1 MATCH fix, then remove the shim
 
-Status: OPEN — django-cast carries a workaround; the proper fix belongs in `modelsearch`.
+Status: IMPLEMENTED (2026-09-19) — modelsearch 1.3.2 is now required and the local shim is removed.
+Retained as historical context.
 
 ## Background
 
@@ -17,20 +18,23 @@ becomes `<fts_table> MATCH ? = ?`, which SQLite rejects with
 `OperationalError: unable to use function MATCH in the requested context`. Before the
 workaround this broke every SQLite full-text search (29 test failures).
 
-## The workaround in django-cast
+## Former workaround in django-cast
 
-`src/cast/modelsearch_compat.py` (added in 0.2.64, commit `a66a82a7`) wraps the match
-expression in a `Lookup` subclass — whitelisted, so Django compiles it bare and emits
-identical SQL. It is applied from `CastConfig.ready()` when `django.VERSION >= (6, 1)`,
-is idempotent, and tolerates `modelsearch` being absent (Wagtail 7.0). Tests:
-`tests/modelsearch_compat_test.py`.
+`src/cast/modelsearch_compat.py` (added in 0.2.64, commit `a66a82a7`) wrapped the match
+expression in a `Lookup` subclass so Django compiled it bare and emitted identical
+SQL. It was applied from `CastConfig.ready()` when `django.VERSION >= (6, 1)`,
+was idempotent, and tolerated `modelsearch` being absent (Wagtail 7.0). Its tests
+lived in `tests/modelsearch_compat_test.py`.
 
-## Remaining work
+## Resolution
 
-1. File the issue against `modelsearch` (github: wagtail org) with the analysis above;
-   the shim's `MatchCondition` class is essentially the patch they need. Filing an issue
-   is an outward-facing action — confirm with Jochen before posting.
-2. Once a fixed `modelsearch` release exists: delete `src/cast/modelsearch_compat.py`,
-   its call in `cast/apps.py`, and `tests/modelsearch_compat_test.py`; require the fixed
-   version (or gate the shim on the broken version range); note the removal in the
-   release notes.
+Upstream [issue #104](https://github.com/wagtail/django-modelsearch/issues/104)
+was fixed by [PR #105](https://github.com/wagtail/django-modelsearch/pull/105),
+which makes `MatchExpression` a `Lookup` subclass. The fix shipped in
+[modelsearch 1.3.2](https://github.com/wagtail/django-modelsearch/releases/tag/v1.3.2).
+No duplicate report is needed.
+
+django-cast now requires `modelsearch>=1.3.2,<1.4` (the lockfile already resolved
+1.3.2). The shim, its startup hook and implementation-specific tests are removed;
+the existing functional search regressions remain. Consumer sites homepage and
+python-podcast accept this dependency range, so no sibling changes are required.
