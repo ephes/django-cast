@@ -93,7 +93,9 @@ class PostDetailContext:
         cache_page_url(post_id, page_url)
 
     @classmethod
-    def create_from_django_models(cls, request: HttpRequest, post: "Post") -> "PostDetailContext":
+    def create_from_django_models(
+        cls, request: HttpRequest, post: "Post", *, preview: bool = False
+    ) -> "PostDetailContext":
         """Build a ``PostDetailContext`` from a live post and the current request."""
         # The page-link cache is request-scoped and repopulated by repository construction.
         clear_cached_page_urls()
@@ -101,13 +103,24 @@ class PostDetailContext:
         owner_username = "unknown"
         if post.owner is not None:
             owner_username = post.owner.username
-        image_by_id = {}  # post.media_lookup.get("image", {}) is not enough because gallery images are missing
-        for _, image in post.get_all_images():
-            image_by_id[image.pk] = image
+        from ..pages import Episode
+
+        if preview:
+            from cast.preview_media import PreviewMedia
+
+            media = PreviewMedia.from_post(post)
+            image_by_id, audio_by_id, video_by_id = media.images, media.audios, media.videos
+            renditions = media.renditions
+            has_audio = bool(audio_by_id) or (isinstance(post, Episode) and post.podcast_audio is not None)
+        else:
+            image_by_id = {image.pk: image for _, image in post.get_all_images()}
+            audio_by_id = post.media_lookup.get("audio", {})
+            video_by_id = post.media_lookup.get("video", {})
+            renditions = post.get_all_renditions_from_queryset([post])
+            has_audio = post.has_audio
         cover_image_url = ""
         if post.cover_image is not None:
             cover_image_url = cast(Image, post.cover_image).file.url
-        from ..pages import Episode
 
         episode_contributors = None
         if isinstance(post, Episode):
@@ -123,17 +136,17 @@ class PostDetailContext:
             blog=blog,
             comments_are_enabled=post.get_comments_are_enabled(blog),
             root_nav_links=[(p.get_url(), p.title) for p in blog.get_root().get_children().live()],
-            has_audio=post.has_audio,
+            has_audio=has_audio,
             page_url=post.get_url(request=request),
             absolute_page_url=cast(str, post.get_full_url(request=request)),
             owner_username=owner_username,
             blog_url=_blog_url_from_referer(request, blog.get_url(request=request)),
             cover_image_url=cover_image_url,
             cover_alt_text=post.cover_alt_text,
-            audio_by_id=post.media_lookup.get("audio", {}),
-            video_by_id=post.media_lookup.get("video", {}),
+            audio_by_id=audio_by_id,
+            video_by_id=video_by_id,
             image_by_id=image_by_id,
-            renditions_for_posts=post.get_all_renditions_from_queryset([post]),
+            renditions_for_posts=renditions,
             episode_contributors=episode_contributors,
         )
 

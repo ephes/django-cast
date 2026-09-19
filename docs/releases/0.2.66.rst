@@ -1,6 +1,13 @@
 0.2.66 (unreleased)
 -------------------
 
+- Make Post and Episode previews render media from the preview body without
+  changing stored media links or creating Gallery records. Missing image
+  renditions remain permitted cache writes; publication preparation is unchanged.
+- Render editor API previews anonymously without forwarding credentials or
+  session theme preferences. Admin previews retain editor identity and themes.
+  Preview HTML is private and non-storable, and internal preview requests use
+  isolated cache keys so a cached live page cannot mask the draft.
 - Raise the SoupSieve security floor to 2.9.0 and audit that minimum in CI.
 - Let the test-only Wagtail v3 experiment expect the interpreter's HTTP 422
   reason phrase (``Unprocessable Content`` on Python 3.14). The status code and
@@ -60,9 +67,8 @@
   receive no request context, and draft reads are gated by explore rather
   than edit permission. A disposable adapter route renders the latest draft
   through Wagtail's preview machinery under the editor API's edit rule. The
-  experiment also records that preview rendering sees the session user, not
-  the bearer token, and that Cast's preview synchronizes stored media
-  relationships.
+  initial experiment recorded session-derived identity and persisted media
+  synchronization; the preview-policy changes above supersede that behavior.
 - Measure body conversion in the Wagtail 8 experiment. Native v3 StreamField
   writes replace the whole body and accept images the caller cannot choose.
   A disposable adapter converts Cast author blocks through ``cast.content``,

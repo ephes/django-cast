@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 from ...content.sections import body_sections_with_replacements, section_value
 from ...models import Audio, Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
+from ...preview import render_editor_preview
 from ...publication import PublicationRejected, check_publishable
 from .body import (
     author_blocks_to_overview,
@@ -596,8 +597,7 @@ class PreviewMixin:
     required_scopes: dict[str, str | None] = {"GET": None}
 
     def _render_preview(self, page: Post, request: Request) -> HttpResponse:
-        draft = page.get_latest_revision_as_object()
-        return draft.make_preview_request(original_request=request._request)
+        return render_editor_preview(page, request._request)
 
 
 class PostPreviewView(PreviewMixin, PostEditorMixin, EditorAPIView):

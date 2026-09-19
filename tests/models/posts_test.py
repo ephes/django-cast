@@ -924,10 +924,11 @@ class TestPostModel:
         post._media_lookup = "foobar"
         assert post.media_lookup == post._media_lookup
 
-    def test_ignore_value_error_in_serve_preview_during_sync_media_ids(self, rf, mocker, post):
-        mocker.patch("cast.post_media.synchronize_post_media", side_effect=ValueError())
+    def test_serve_preview_does_not_sync_media_ids(self, rf, mocker, post):
+        synchronize = mocker.patch("cast.post_media.synchronize_post_media", side_effect=AssertionError())
         request = rf.get("/")
         post.serve_preview(request, "")
+        synchronize.assert_not_called()
         assert post.media_lookup == {"audio": {}, "image": {}, "video": {}, "gallery": {}}
 
     def test_images_all_raises_value_error_on_preview(self, mocker):

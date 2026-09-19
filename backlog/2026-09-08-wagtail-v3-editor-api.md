@@ -129,6 +129,8 @@ locks and records edit logs; statements about its earlier gaps below are
 historical evaluation evidence.
 Follow-up 4 now adds a focused PostgreSQL CI job and opt-in tox environment;
 earlier statements that PostgreSQL tests were manual describe the evaluation.
+Follow-up 3 now isolates preview media and makes API rendering anonymous;
+the preview row below records the old behavior, not the current contract.
 
 | Area | Classification | Evidence from this slice | Remaining work |
 | --- | --- | --- | --- |
@@ -377,10 +379,18 @@ Each is independent unless a dependency is listed.
    ``body_sections_with_replacements`` in ``cast.content.sections`` with raw
    StreamField data. The adapter no longer imports the DRF view for these helpers.
    Existing editor tests remain unchanged.
-3. **Preview side effects and identity.** Decide whether a preview GET may
-   synchronize stored media relationships (it currently does in the editor,
-   admin, and adapter). Also decide whether previews render as the token user,
-   anonymously, or with the session cookie Wagtail copies.
+3. **Preview side effects and identity — implemented (2026-09-19).** The approved
+   policy leaves saved content, media links and Gallery records untouched. A
+   request-local repository resolves media from the actual preview body, including
+   unsaved admin changes; missing renditions remain permitted derived-cache writes.
+   API previews authorize the caller as before but render anonymously without
+   cookies or Authorization headers, using the configured blog/site theme. Admin
+   previews retain editor identity and session theme preferences. HTML responses
+   are private/no-store; unique internal request cache keys prevent cached live
+   pages from replacing draft output. Publication media preparation is unchanged.
+   Protected media endpoints still require their own authorization. Custom
+   middleware, blocks and site overrides must honor the same no-content-write policy.
+   This supersedes the historical preview findings in the evaluation matrix.
 4. **PostgreSQL test job — implemented (2026-09-19).** The ``postgres-locks``
    CI job starts a disposable PostgreSQL 17 service and runs ``tox -e postgres``
    on Python 3.12 / Django 6.1 / Wagtail 8. Only four concurrency tests plus the
@@ -411,7 +421,7 @@ Each is independent unless a dependency is listed.
   thirteen commits, from ``c8b6ec56`` (baseline) to ``ac808caf`` (decision).
   django-cast is at 0.2.66 (unreleased), and every slice has a bullet in
   ``docs/releases/0.2.66.rst``.
-- Follow-ups 1 (editor locks/logging), 2 (section selection and merging), and 4 (PostgreSQL CI) are implemented. The remaining
+- Follow-ups 1 (editor locks/logging), 2 (section selection and merging), 3 (preview policy), and 4 (PostgreSQL CI) are implemented. The remaining
   follow-ups have not been started.
 - The evaluation itself left production code unchanged; follow-up 2 now shares
   production content helpers with the adapter. The experiment remains test-only:
@@ -454,15 +464,11 @@ Each is independent unless a dependency is listed.
 
 ### Suggested order for the follow-ups
 
-1. Follow-up 3 (preview side effects and identity): needs a product
-   decision.
-2. Later: follow-up 5 (depends on an editor API versioning decision), then
+1. Follow-up 5 (depends on an editor API versioning decision), then
    the revisit triggers and follow-ups 6-7.
 
 ### Decisions still owed by the maintainer
 
-- Whether a preview GET may synchronize media relationships, and which user
-  the preview renders as (follow-up 3).
 - Editor API versioning, which is the prerequisite for mandatory publish
   binding (follow-up 5).
 - Whether to file the recorded upstream v3 gaps. None are filed; filing is

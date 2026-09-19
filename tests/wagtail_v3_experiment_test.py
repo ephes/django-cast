@@ -1155,7 +1155,7 @@ def test_adapter_preview_enforces_authentication_and_edit_permission(client, adm
     assert "Secret preview title" in editor.content.decode()
 
 
-def test_adapter_preview_renders_with_session_identity_not_bearer(client, admin_user, blog, post, mocker) -> None:
+def test_adapter_preview_renders_anonymously_even_with_session(client, admin_user, blog, post, mocker) -> None:
     spy = mocker.spy(Post, "serve_preview")
     token = _bearer_token(_page_permission_user(blog, "change_page"))
 
@@ -1166,10 +1166,10 @@ def test_adapter_preview_renders_with_session_identity_not_bearer(client, admin_
     assert bearer_only.status_code == with_session.status_code == 200
     rendered_users = [call.args[1].user for call in spy.call_args_list]
     assert rendered_users[0].is_authenticated is False
-    assert rendered_users[1] == admin_user
+    assert rendered_users[1].is_authenticated is False
 
 
-def test_adapter_preview_synchronizes_draft_media_relationships(client, admin_user, post_with_image) -> None:
+def test_adapter_preview_preserves_stored_media_relationships(client, admin_user, post_with_image) -> None:
     image = post_with_image.images.get()
     post_with_image.images.remove(image)
 
@@ -1177,7 +1177,9 @@ def test_adapter_preview_synchronizes_draft_media_relationships(client, admin_us
 
     assert response.status_code == 200
     assert post_with_image.revisions.count() == 0
-    assert list(Post.objects.get(pk=post_with_image.pk).images.all()) == [image]
+    assert list(Post.objects.get(pk=post_with_image.pk).images.all()) == []
+    assert "private" in response["Cache-Control"]
+    assert "no-store" in response["Cache-Control"]
 
 
 def test_adapter_preview_reports_missing_page(client, admin_user) -> None:

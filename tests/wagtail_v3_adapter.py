@@ -19,6 +19,7 @@ from cast.content.blocks import ConversionContext
 from cast.content.convert import author_blocks_to_section
 from cast.content.errors import ContentValidationError
 from cast.content.sections import body_sections_with_replacements, section_value
+from cast.preview import render_editor_preview
 
 Page = swapper.load_model("wagtailcore", "Page")
 
@@ -221,7 +222,7 @@ def draft_preview(request: HttpRequest, page_id: int):
     # Match the editor API: previewing a draft requires edit permission.
     if not page.permissions_for_user(request.user).can_edit():
         raise PermissionDenied
-    return page.get_latest_revision_as_object().make_preview_request(original_request=request)
+    return render_editor_preview(page, request)
 
 
 @router.patch(

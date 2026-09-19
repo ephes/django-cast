@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.validators import MinValueValidator
@@ -16,6 +17,7 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.cache import patch_cache_control
 from django.utils.encoding import smart_str
 from django.utils.translation import gettext_lazy as _
 from django_comments import get_model as get_comment_model
@@ -606,18 +608,24 @@ class Post(Page):
         return super().serve(request, *args, **kwargs)
 
     def get_preview_context(self, request: HttpRequest, mode_name: str) -> "ContextDict":
-        return self.get_context(request, render_detail=True, is_preview=True)
+        repository = PostDetailContext.create_from_django_models(request=request, post=self, preview=True)
+        return self.get_context(request, render_detail=True, is_preview=True, repository=repository)
+
+    def _get_dummy_headers(self, original_request: HttpRequest | None = None) -> dict[str, Any]:
+        # Private Wagtail 7/8 hook: keep the middleware cache-isolation regression
+        # in the compatibility matrix when upgrading Wagtail.
+        headers = super()._get_dummy_headers(original_request)
+        # Wagtail runs preview through middleware at the public page URL. Give
+        # each render a distinct cache key so a cached live response cannot win.
+        headers["QUERY_STRING"] = f"{headers.get('QUERY_STRING', '')}&_cast_preview={uuid.uuid4().hex}".lstrip("&")
+        return headers
 
     def serve_preview(self, request: HttpRequest, mode_name: str, *args: Any, **kwargs: Any) -> HttpResponse:
-        # sync media ids before preview, because otherwise the repository
-        # will not have the correct media ids and fail to get the correct
-        # renditions and fail with a w1110 not found rendition key error.
-        try:
-            prepare_post_media(self)
-        except ValueError:
-            # will be raised on wagtail preview because page_ptr is not set
-            pass
-        return super().serve_preview(request, mode_name)
+        if getattr(request, "cast_preview_as_visitor", False):
+            request.user = AnonymousUser()
+        response = super().serve_preview(request, mode_name)
+        patch_cache_control(response, private=True, no_store=True)
+        return response
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         sync_media = kwargs.pop("sync_media", False)

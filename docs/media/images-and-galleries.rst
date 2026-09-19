@@ -139,8 +139,11 @@ which wraps a list of image choosers with an optional layout selector:
 Programmatic Post Updates
 -------------------------
 
-Wagtail preview and publication prepare built-in media relationships and image
-renditions automatically. A direct model save deliberately has no media I/O.
+Publication prepares built-in media relationships and image renditions
+automatically. Wagtail previews instead resolve media from the preview body
+into a request-local lookup, including unsaved admin changes. They may create
+missing image renditions but do not synchronize stored media links or create
+Gallery records. A direct model save deliberately has no media I/O.
 When code changes a post body outside those Wagtail boundaries, prepare its
 media explicitly after persistence:
 
@@ -152,8 +155,9 @@ media explicitly after persistence:
     post.save()
     prepare_post_media(post)
 
-The preparation step is synchronous because previews and repository rendering
-need the derived relationships and renditions immediately.
+Publication preparation is synchronous because repository rendering needs the
+derived relationships and renditions immediately. Preview rendering prepares
+only missing renditions synchronously, without changing those relationships.
 
 .. _rendition_system:
 

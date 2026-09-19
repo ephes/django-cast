@@ -22,15 +22,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
     against a fixed `modelsearch` release or the version gate and its retention reason are documented.
 
-- [ ] Decide editor preview side effects and rendering identity
-  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-    (follow-up 3)
-  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
-  - Scope: `Post.serve_preview` synchronizes stored media relationships and creates renditions on every preview
-    GET, and Wagtail's preview request copies the caller's session cookie. Decide whether previews may write and
-    which identity renders them.
-  - Done when: the chosen behavior is documented and covered by regressions.
-
 - [ ] Triage remaining security hardening observations
   - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
   - Scope: decide whether authors retain self-edit/delete rights after losing

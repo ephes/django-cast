@@ -709,6 +709,32 @@ caller cannot edit the page. Preview is a read action and requires no token
 scope, but the caller must still be authenticated, have Wagtail admin access,
 and have edit permission for the page.
 
+Preview authorization and rendering identity are separate. Post and Episode API
+previews render as an anonymous visitor, using the configured blog/site theme;
+the internal render receives neither the caller's Authorization header nor
+cookies. A browser session therefore cannot change the rendered identity or
+theme. Wagtail admin previews retain the editor's session identity and theme
+preferences. Preview HTML is marked ``Cache-Control: private, no-store``.
+API preview query parameters are not forwarded to the internal page render.
+Cache isolation appends a unique internal query parameter through Wagtail's
+private ``_get_dummy_headers`` hook, tested against supported Wagtail 7 and 8
+versions. Keep the cache-isolation regression in the compatibility matrix when
+upgrading Wagtail. Any query string supplied by that upstream hook is preserved;
+the current Wagtail hook does not forward the original request's query string.
+The configured ``SECURE_PROXY_SSL_HEADER`` is retained as transport metadata,
+so proxy-terminated HTTPS still reaches the internal renderer as HTTPS.
+
+Previews use the preview body's media in memory. They do not save pages,
+revisions, edit logs, media relationships, or Gallery records. Missing image
+renditions (including cover images and contributor avatars) may be generated as
+derived cache data; previews do not delete obsolete renditions. Publication
+still synchronizes persisted media relationships. Custom blocks, middleware,
+and site overrides must respect this policy too.
+
+Anonymous rendering does not grant access to protected audio or transcript
+endpoints. Interactive requests still require their own authorization; previews
+do not embed access tokens or make private media public.
+
 **Update a draft post**::
 
     PATCH /api/editor/posts/{id}/
