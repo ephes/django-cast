@@ -42,7 +42,10 @@ def test_preview_media_ignores_empty_and_missing_choosers(post):
 
 
 @pytest.mark.django_db
-def test_preview_renders_draft_media_without_content_writes(rf, post_with_image, image, audio, video, settings):
+@pytest.mark.parametrize("captioned", [False, True])
+def test_preview_renders_draft_media_without_content_writes(
+    rf, post_with_image, image, audio, video, settings, captioned
+):
     from cast.devdata import create_image
 
     # Rolled-back tests reuse image IDs, but Wagtail's rendition cache outlives
@@ -65,7 +68,12 @@ def test_preview_renders_draft_media_without_content_writes(rf, post_with_image,
                         "layout": "default",
                         "gallery": [
                             {"type": "item", "value": draft_image.pk},
-                            {"type": "item", "value": image.pk},
+                            {
+                                "type": "item",
+                                "value": {"image": image.pk, "caption": "Gallery-only preview image"}
+                                if captioned
+                                else image.pk,
+                            },
                         ],
                     },
                 },
@@ -93,6 +101,7 @@ def test_preview_renders_draft_media_without_content_writes(rf, post_with_image,
         html = response.content.decode()
         assert any(rendition.url in html for rendition in repository.renditions_for_posts[draft_image.pk])
         assert 'class="cast-gallery-thumbnail"' in html
+        assert ("<figcaption>Gallery-only preview image</figcaption>" in html) is captioned
         assert f'id="audio_{audio.pk}"' in html
         assert video.original.url in html
     assert before == (Gallery.objects.count(), Revision.objects.count(), PageLogEntry.objects.count())

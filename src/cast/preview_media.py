@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from wagtail.images.models import Image, Rendition
 
+from .blocks import gallery_item_parts
 from .models.image_renditions import get_obsolete_and_missing_rendition_strings
 from .models.repository.types import AudioById, ImageById, RenditionsForPosts, VideoById
 from .renditions import ImageType
@@ -39,6 +40,8 @@ class PreviewMedia:
                     continue
                 values = block.value.get("gallery", []) if kind == "gallery" else [block.value]
                 for value in values:
+                    if kind == "gallery":
+                        value, _caption = gallery_item_parts(value)
                     if (pk := _media_id(value)) is not None:
                         ids[kind].add(pk)
 

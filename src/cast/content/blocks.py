@@ -10,6 +10,7 @@ from uuid import uuid4
 from django.core.exceptions import ValidationError as DjangoValidationError
 from wagtail.blocks import Block
 
+from cast.blocks import gallery_item_parts
 from cast.post_body_blocks import configured_content_blocks, default_content_blocks
 
 from .errors import ErrorCollector, flatten_django_validation_error
@@ -248,7 +249,12 @@ class GalleryConverter:
                 )
                 valid = False
                 continue
-            items.append({"id": str(uuid4()), "type": "item", "value": image_id})
+            caption = ref.get("caption", "")
+            if not isinstance(caption, str) or len(caption) > 250:
+                errors.add(f"{path}.{index}.caption", "invalid", "Caption must be a string of at most 250 characters.")
+                valid = False
+                continue
+            items.append({"id": str(uuid4()), "type": "item", "value": {"image": image_id, "caption": caption}})
         if not valid:
             return None
         return {"layout": "default", "gallery": items}
@@ -259,10 +265,20 @@ class GalleryConverter:
             isinstance(items, list)
             and len(items) > 0
             and all(isinstance(item, dict) and "value" in item for item in items)
-            and (ctx.user is None or all(get_choosable_image(item["value"], ctx.user) is not None for item in items))
         ):
             return UNSUPPORTED
-        return [{"id": item["value"]} for item in items]
+        result = []
+        for item in items:
+            image_id, caption = gallery_item_parts(item)
+            if not isinstance(caption, str) or len(caption) > 250:
+                return UNSUPPORTED
+            if ctx.user is not None and get_choosable_image(image_id, ctx.user) is None:
+                return UNSUPPORTED
+            ref = {"id": image_id}
+            if caption:
+                ref["caption"] = caption
+            result.append(ref)
+        return result
 
 
 def content_converters(section: str | None) -> dict[str, BlockConverter]:

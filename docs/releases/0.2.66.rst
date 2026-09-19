@@ -107,3 +107,19 @@
   actions, locks, and forms beneath it, and defer direct v3 adoption. No
   production v3 routes, client migrations, or route retirements are part of
   this release.
+
+Gallery captions
+----------------
+
+- Add optional per-entry gallery captions (plain text, maximum 250 characters).
+  The Wagtail editor and the shared content converter used by the editor API
+  preserve distinct captions for repeated images. Draft previews resolve both
+  legacy and captioned gallery entries without persisting media relationships.
+  Built-in templates render
+  escaped captions beside thumbnails. Existing integer-valued galleries and
+  revisions remain readable; saves can write the new structured format.
+  Keep a matching content backup before upgrading if code rollback is needed.
+- Templates receive ``gallery_entries`` alongside the unchanged ``images``
+  context. The Bootstrap 5 theme supports captions starting at commit
+  ``f2a21ba``; older Bootstrap and Vue themes still render the images but do
+  not display captions. Modal caption transport is unchanged.

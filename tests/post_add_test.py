@@ -93,7 +93,8 @@ class TestPostAdd:
         post_data_wagtail["body-0-value-0-value-0-id"] = ""
         post_data_wagtail["body-0-value-0-value-layout"] = "default"
         post_data_wagtail["body-0-value-0-value-gallery-count"] = gallery.images.count()
-        post_data_wagtail["body-0-value-0-value-gallery-0-value"] = gallery.images.first().pk
+        post_data_wagtail["body-0-value-0-value-gallery-0-value-image"] = gallery.images.first().pk
+        post_data_wagtail["body-0-value-0-value-gallery-0-value-caption"] = "An example caption"
         post_data_wagtail["body-0-value-0-value-gallery-0-deleted"] = ""
         post_data_wagtail["body-0-value-0-value-gallery-0-order"] = "0"
 
@@ -110,6 +111,7 @@ class TestPostAdd:
 
         # make sure there was a gallery added
         assert post.galleries.count() == 1
+        assert post.body.raw_data[0]["value"][0]["value"]["gallery"][0]["value"]["caption"] == "An example caption"
         assert post.galleries.first() == gallery
         assert list(post.galleries.first().images.all()) == list(gallery.images.all())
 

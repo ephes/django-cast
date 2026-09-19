@@ -1428,3 +1428,18 @@ Security Notes
 - CSRF protection is enabled for state-changing operations
 - Media uploads are validated for type and size before metadata extraction
 - Images API includes null byte protection
+
+Gallery entry captions
+----------------------
+
+Editor API gallery references accept an optional plain-text ``caption`` of
+at most 250 characters, for example ``{"id": 456, "caption": "An example"}``.
+Reads return non-empty captions on the matching entry, including repeated
+uses of the same image. Omitting the caption writes an empty caption; clients
+must retain returned captions when updating a section. Explicit ``null`` and
+non-string captions are invalid. Image chooser permissions
+continue to apply to each reference. Captions are rendered as escaped text.
+
+Both legacy integer-valued and structured stored entries remain readable.
+Editor API clients use the ``id``/``caption`` format above, independently of
+the internal stored representation.
