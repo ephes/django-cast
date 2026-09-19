@@ -31,11 +31,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     which identity renders them.
   - Done when: the chosen behavior is documented and covered by regressions.
 
-- [ ] Verify the first hosted PostgreSQL CI run
-  - The focused ``postgres-locks`` job and local PostgreSQL validation are implemented.
-  - After pushing, confirm the GitHub Actions job passes and executes all four row-lock tests without skips.
-  - Remove this verification item after the first green hosted run.
-
 - [ ] Triage remaining security hardening observations
   - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
   - Scope: decide whether authors retain self-edit/delete rights after losing

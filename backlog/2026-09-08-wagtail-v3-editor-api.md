@@ -387,7 +387,12 @@ Each is independent unless a dependency is listed.
    publication-policy module run; default local tests need no PostgreSQL.
    Reproduced the three publication failures: Wagtail page construction queries
    content types with a cold cache. Explicit database markers fix their hidden
-   dependency. Local PostgreSQL validation passes; the hosted job runs after push.
+   dependency. Local validation and the first hosted PostgreSQL job pass.
+   [Hosted job on ec977a9e](https://github.com/ephes/django-cast/actions/runs/35425655578/job/105851013176)
+   ran on 2026-09-19: 26 tests under normal settings and 3 v3 concurrency tests,
+   no skips, on PostgreSQL 17.11. All four row-lock tests executed. Total job time
+   was 44 seconds, including service startup; tox reported 16 seconds. This is
+   verification of the PostgreSQL job, not a claim that the entire workflow passed.
 5. **Mandatory publish revision binding.** Make ``If-Match`` required for
    editor publication in the next editor API version, as deferred in the
    security review. Depends on a versioning decision for the editor API.
