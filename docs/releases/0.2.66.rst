@@ -1,6 +1,12 @@
 0.2.66 (unreleased)
 -------------------
 
+- Require current page access for comment author editing and deletion. Session
+  ownership no longer permits actions after a page is unpublished or becomes
+  inaccessible under direct or inherited view restrictions. Both endpoints return
+  the existing generic 403 and leave comment/metadata state unchanged; controls
+  follow the same rule. Authorized restricted-page visitors retain their actions,
+  and staff moderation is unchanged. Missing comment targets are denied.
 - Enforce editorial locks on Post and Episode editor API publication, returning
   ``409 page_locked`` for applicable locks or approved schedules. Active workflows
   (including needs-changes) return ``409 workflow_active`` for all callers,

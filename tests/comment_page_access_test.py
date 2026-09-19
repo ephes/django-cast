@@ -99,6 +99,25 @@ def test_generic_comment_targets_keep_existing_policy(client, comment_endpoint, 
     assert get_model().objects.count() == before + (not preview)
 
 
+@pytest.mark.parametrize("target_kind", ["page", "generic"])
+def test_deleted_targets_still_fail_before_access_check(client, post, comment_endpoint, preview, target_kind, mocker):
+    # Creation/preview already reject missing objects during target resolution,
+    # independently of the shared access helper's new author-action None guard.
+    from cast.comments import views
+
+    target = post if target_kind == "page" else Group.objects.create(name="Deleted target")
+    data = comment_payload(target, preview)
+    target.delete()
+    access_check = mocker.spy(views, "comment_target_is_accessible")
+    before = get_model().objects.count()
+
+    response = submit(client, comment_endpoint, data)
+
+    assert response.status_code == 400
+    assert get_model().objects.count() == before
+    access_check.assert_not_called()
+
+
 def test_direct_restriction_access_does_not_bypass_inherited_restriction(
     client, post, comments_enabled, comment_endpoint, preview
 ):

@@ -16,6 +16,7 @@ from django.conf import settings
 from django.http import HttpRequest
 
 from . import appsettings
+from .utils import comment_target_is_accessible
 
 if TYPE_CHECKING:
     from .models import CommentAuthorMeta
@@ -215,6 +216,7 @@ def comment_action_context(
         and session is not None
         and owns_id(session, comment.pk)
         and comment_is_actionable(comment)
+        and comment_target_is_accessible(comment.content_object, request)
     )
     if edited_pks is not None:
         edited = str(comment.pk) in edited_pks

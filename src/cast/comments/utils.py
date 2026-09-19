@@ -46,7 +46,9 @@ def comments_are_moderated(content_object: object) -> bool:
 
 
 def comment_target_is_accessible(content_object: object, request: HttpRequest) -> bool:
-    """Recheck page visibility; generic comment targets keep their existing policy."""
+    """Reject missing targets, recheck pages, and allow existing non-page targets."""
+    if content_object is None:
+        return False
     if isinstance(content_object, Page):
         return page_is_publicly_viewable(content_object, request)
     return True

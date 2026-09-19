@@ -22,14 +22,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
     against a fixed `modelsearch` release or the version gate and its retention reason are documented.
 
-- [ ] Triage remaining security hardening observations
-  - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
-  - Scope: decide whether authors retain self-edit/delete rights after losing
-    access to the target page. The upload limits, media probe/concurrency limits,
-    and optional publication revision binding have been implemented or resolved;
-    the review's hardening observations record the accepted omitted-token race.
-  - Done when: the author action policy is specified and covered by regressions.
-
 - [ ] Audit existing editor API rich text and historical revisions
   - Design record:
     [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)

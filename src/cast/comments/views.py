@@ -276,7 +276,8 @@ def _load_locked_actionable(
     request: HttpRequest, model: type[Any], comment_id: str, using: str | None
 ) -> BaseComment | HttpResponse:
     """Inside an open transaction: lock the comment and confirm it is still
-    actionable (public, not removed, not answered). Returns the locked comment, or
+    actionable (public, not removed, not answered) and its target is accessible.
+    Returns the locked comment, or
     a denial response. Ownership was already established in the preamble and is
     request-stable, so it is not re-checked here."""
     try:
@@ -287,6 +288,8 @@ def _load_locked_actionable(
     except (model.DoesNotExist, ValueError, TypeError, ValidationError):
         return _generic_denial()
     if not author_edits.comment_is_actionable(comment):
+        return _generic_denial()
+    if not comment_target_is_accessible(comment.content_object, request):
         return _generic_denial()
     return comment
 
