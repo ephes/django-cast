@@ -3,6 +3,7 @@
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from http import HTTPStatus
 from typing import Any, Literal, Protocol
 
 import pytest
@@ -189,9 +190,11 @@ def _publish_log_count(page: Post) -> int:
 
 def _assert_audio_required(response: ClientResponse) -> None:
     assert response.status_code == 422
+    # This test-only v3 endpoint inherits Wagtail's stdlib-derived problem title.
+    # HTTP 422's phrase changed in Python 3.14; status and domain error stay fixed.
     assert response.json() == {
         "type": "about:blank",
-        "title": "Unprocessable Entity",
+        "title": HTTPStatus(422).phrase,
         "status": 422,
         "detail": "Validation failed",
         "errors": [{"msg": str(EPISODE_AUDIO_REQUIRED)}],

@@ -1,6 +1,11 @@
 0.2.66 (unreleased)
 -------------------
 
+- Raise the SoupSieve security floor to 2.9.0 and audit that minimum in CI.
+- Let the test-only Wagtail v3 experiment expect the interpreter's HTTP 422
+  reason phrase (``Unprocessable Content`` on Python 3.14). The status code and
+  domain-error assertions remain fixed; production editor responses are
+  unchanged.
 - Run PostgreSQL row-lock tests in a focused CI job with a disposable PostgreSQL
   17 service. The opt-in ``tox -e postgres`` environment runs four concurrency
   tests and the publication-policy module; normal local tests still use SQLite.
