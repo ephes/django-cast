@@ -1,6 +1,13 @@
 0.2.66 (unreleased)
 -------------------
 
+- Enforce editorial locks on Post and Episode editor API publication, returning
+  ``409 page_locked`` for applicable locks or approved schedules. Active workflows
+  (including needs-changes) return ``409 workflow_active`` for all callers,
+  including reviewers and superusers. Ordinary lock owners may still publish
+  unless global edit-lock mode is enabled. Refusals preserve publication and
+  workflow state; admin, workflow-completion and scheduler behavior is unchanged.
+  Extend the existing PostgreSQL CI job with publication-lock regressions.
 - Make Post and Episode previews render media from the preview body without
   changing stored media links or creating Gallery records. Missing image
   renditions remain permitted cache writes; publication preparation is unchanged.
@@ -14,8 +21,8 @@
   domain-error assertions remain fixed; production editor responses are
   unchanged.
 - Run PostgreSQL row-lock tests in a focused CI job with a disposable PostgreSQL
-  17 service. The opt-in ``tox -e postgres`` environment runs four concurrency
-  tests and the publication-policy module; normal local tests still use SQLite.
+  17 service. The opt-in ``tox -e postgres`` environment runs focused concurrency
+  tests and publication-policy modules; normal local tests still use SQLite.
   Mark three publication tests as database users so cold Wagtail content-type
   caches no longer cause order-dependent failures.
 - Honor Wagtail editorial locks on Post and Episode editor API PATCH requests,

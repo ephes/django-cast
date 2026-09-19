@@ -617,6 +617,20 @@ def file_instance(user, m4a_audio):
 
 
 @pytest.fixture()
+def pg_editor_actors(transactional_db, settings, request):
+    """Restore roots flushed by earlier threaded tests before requesting actors."""
+    locale, _ = Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE)
+    # Match the session bootstrap's regional/base locales after a flush.
+    Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE.split("-")[0])
+    if Page.get_first_root_node() is None:
+        Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
+    if Collection.get_first_root_node() is None:
+        Collection.add_root(instance=Collection(name="Root"))
+    # blog requests site, which recreates the default Site against the restored root.
+    return request.getfixturevalue("admin_user"), request.getfixturevalue("blog")
+
+
+@pytest.fixture()
 def site(db, ensure_wagtail_roots):
     # `ensure_wagtail_roots` is the source of truth for root page + default site bootstrap.
     # This fixture only returns/repairs the current default site if tests removed it.

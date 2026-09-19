@@ -379,11 +379,11 @@ PostgreSQL Lock Tests (Optional Locally)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Normal ``just check`` and default tox environments use SQLite. Contributors do
-not need PostgreSQL or Docker installed. Four concurrency tests require real
+not need PostgreSQL or Docker installed. Seven concurrency cases require real
 PostgreSQL row locks and skip on SQLite.
 
-CI runs those four tests plus the publication-policy module in one dedicated
-``postgres-locks`` job on a standard Ubuntu runner. GitHub Actions starts and
+CI runs those cases plus the publication-policy and editor publication-lock
+modules in one dedicated ``postgres-locks`` job on a standard Ubuntu runner. GitHub Actions starts and
 discards a PostgreSQL 17 service container for that job. It uses Python 3.12,
 Django 6.1 and Wagtail 8, has a ten-minute timeout, and runs on pushes and pull
 requests, not the weekly dependency-audit schedule. It does not repeat the full

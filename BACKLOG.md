@@ -65,13 +65,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
-- [ ] Decide whether editor API publication should honor editorial locks
-  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-    (revision-bound publication matrix row; follow-up 1 covers PATCH only).
-  - Scope: editor PATCH enforces applicable Wagtail locks, but the publish endpoint does not.
-    Decide the publication policy for basic, global, workflow and scheduled locks, independently of edit logging.
-  - Done when: the chosen publish-lock policy is documented and covered by regression tests.
-
 - [ ] Require publish revision binding in the next editor API version
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 5); deferral recorded in [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)

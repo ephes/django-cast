@@ -223,6 +223,30 @@ class PostEditorMixin:
         locked_schedules = post.revisions.select_for_update().values_list("id", "approved_go_live_at")
         return any(approved_go_live_at is not None for _, approved_go_live_at in locked_schedules)
 
+    def _check_publication_lock(self, post: Post, user: Any) -> None:
+        """Guard API publication without changing admin or workflow completion.
+
+        The caller holds the page row lock. Also lock revisions before checking
+        schedules, since approving an existing revision need not update the page.
+        An active workflow is a stronger constraint than its per-user edit lock:
+        reviewers must not bypass approval by publishing through this API.
+        """
+        if self._has_approved_schedule(post, for_update=True):
+            raise EditorFlatError(
+                "page_locked", "This page is locked for publication.", status_code=status.HTTP_409_CONFLICT
+            )
+        if post.current_workflow_state is not None:
+            raise EditorFlatError(
+                "workflow_active",
+                "Complete or cancel the active workflow in Wagtail before publishing through the API.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        lock = post.get_lock()
+        if lock is not None and lock.for_user(user):
+            raise EditorFlatError(
+                "page_locked", "This page is locked for publication.", status_code=status.HTTP_409_CONFLICT
+            )
+
     def _enforce_draft_only(self, post: Post, *, required: bool, noun: str) -> None:
         if not required:
             return
@@ -367,6 +391,7 @@ class PostEditorMixin:
                 f"This {noun} has no draft revision to publish.",
                 status_code=status.HTTP_409_CONFLICT,
             )
+        self._check_publication_lock(page, user)
         revision = page.revisions.get(pk=current_revision_id)
 
         self._reject_unpublishable_episode(revision.as_object())

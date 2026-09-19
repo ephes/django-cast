@@ -163,6 +163,11 @@ the preview row below records the old behavior, not the current contract.
 | Audio, video, and transcripts | Cast extension required | **Test:** the v3 schema registry lists ``wagtailimages.Image`` and ``wagtaildocs.Document`` but no ``cast.Audio``, ``cast.Video``, or ``cast.Transcript``; the installed route names contain no audio, video, or transcript routes. **Source:** v3 registers snippet types only for registered snippet models with API fields; Cast media are not among them. Cast's upload lock, probe budget, derivation, and cleanup live in its media-ingestion service. | Keep Cast audio/video/transcript upload routes over the existing ingestion service; do not use snippet registration as a substitute. |
 | Public image reads | upstream equivalent | **Test:** anonymous v3 and Cast's existing v2 image listings both return the same unrestricted image. **Source:** v3 uses the v2-parity queryset that excludes only restricted collections. The editor media list additionally filters by ``choose``. | Keep editor-style choose filtering for authoring pickers. |
 
+The revision-bound publication row records the experiment's original open
+decisions. The production editor API now enforces the publication-lock policy
+recorded under follow-up 1 below; requiring `If-Match` remains deferred to the
+next API version. The experimental v3 routes remain test-only and unchanged.
+
 The stock write experiment reproduced two runtime incompatibilities without
 enabling production routes: response serialization reports failure after
 committing a write, and partial updates discard omitted values from a newer
@@ -371,9 +376,19 @@ Each is independent unless a dependency is listed.
    Revision creation and audit logging share the PATCH transaction. Tests cover
    ordinary, owner, global and scheduled locks, precondition precedence, log
    attribution, and rollback if logging fails.
-   This closes the PATCH scope only: the editor publish endpoint does not check
-   editorial locks. The publication lock policy remains a separate backlog item,
-   matching the open decision in the revision-bound publication matrix row.
+   The subsequent publication-policy slice also guards Post/Episode publication
+   (including Episodes through the Post route). Ordinary locks permit only their
+   owner unless global edit-lock mode is enabled; custom locks use `for_user`.
+   Approved schedules return `409 page_locked`. Active workflows, including
+   needs-changes, return `409 workflow_active` for every caller, deliberately
+   stricter than admin reviewer/superuser overrides. Configured but inactive
+   workflows do not block. Existing preconditions keep precedence; there is no
+   force flag, unlock or implicit cancellation. Guards remain API-local so normal
+   workflow completion and scheduled publication continue unchanged. The policy
+   is implemented with regression coverage and documented in `docs/reference/api.rst`.
+   Publication holds page and existing revision locks; the existing PostgreSQL
+   job covers concurrent locking, schedule approval and stock group-approval
+   workflow submission, not arbitrary custom workflow persistence paths.
 2. **Move body section selection and merging into ``cast.content`` — implemented
    (2026-09-19).** The editor and test adapter now call ``section_value`` and
    ``body_sections_with_replacements`` in ``cast.content.sections`` with raw

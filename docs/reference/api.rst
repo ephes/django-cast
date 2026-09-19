@@ -824,10 +824,8 @@ the explicit draft-only precondition take precedence, so a scheduled page with
 
 Each successful PATCH records one ``wagtail.edit`` audit entry with the acting
 user and new revision. The log and revision are saved in the same transaction.
-This applies on both Wagtail 7 and 8; publication and creation behavior is unchanged.
-The publish endpoint does not check editorial locks: a user with the required
-publish permissions and token scope can still publish a locked page. Do not
-use a PATCH edit lock as a publication freeze.
+This applies on both Wagtail 7 and 8. Publication has its own, stricter
+:ref:`lock and workflow policy <editor_api_publish>` below.
 
 Instead of putting the token in the JSON body, clients may send the same
 revision id as a strict ``If-Match`` header:
@@ -878,6 +876,45 @@ returns the same ``409 revision_conflict`` envelope, and the newer revision is
 not published. When the header is omitted, the endpoint remains backwards
 compatible and publishes the latest revision found while holding the page-row
 lock.
+
+Publication honors editorial locks for both Posts and Episodes, including
+Episodes addressed through the Post endpoint:
+
+- An ordinary lock allows its owner to publish, without removing the lock.
+  A lock owned by someone else (or with no owner) rejects publication, even for
+  superusers. With ``WAGTAILADMIN_GLOBAL_EDIT_LOCK=True``, a locked page also
+  rejects its owner's publication; unlocked pages are unaffected.
+- Any approved scheduled revision blocks API publication, even when a newer
+  draft exists. Cancel or change the schedule explicitly in Wagtail admin.
+- An active workflow, including ``needs_changes``, blocks every API caller,
+  including reviewers and superusers. Complete or explicitly cancel it in
+  Wagtail first. Merely assigning a workflow without starting it does not block
+  publication. This follows Wagtail's workflow-enabled setting.
+- Other/custom locks are honored when ``page.get_lock().for_user(user)`` is true.
+
+Lock refusals return ``409`` with
+``{"code": "page_locked", "detail": "This page is locked for publication."}``.
+Active workflows return ``409 workflow_active`` with guidance to complete or
+cancel the workflow. Existing permission, revision-conflict, no-unpublished-draft
+and no-revision checks retain precedence. After those checks, approved schedules
+take precedence over active workflows, which take precedence over other locks.
+Episode audio validation follows these publication guards, so a locked Episode
+without audio returns the lock/workflow error rather than an audio error.
+Refusal leaves page content, revisions, schedules, workflows, media links and
+audit entries unchanged. There is no automatic unlock, workflow cancellation,
+or force-publish option.
+
+The workflow rule is deliberately stricter than Wagtail admin: permission to
+edit during review is not approval to bypass the workflow. It applies regardless
+of ``WAGTAIL_WORKFLOW_CANCEL_ON_PUBLISH``. These guards are specific to the
+editor API; normal admin publication, workflow completion and scheduled
+publication retain Wagtail's behavior. Optional ``If-Match`` semantics are unchanged.
+
+The API checks persisted state inside its publication transaction while holding
+the page and existing revision row locks. PostgreSQL regression tests exercise
+concurrent ordinary locking, schedule approval and stock group-approval workflow
+submission. This is not a universal serialization contract for custom workflow
+tasks or external writers that use different persistence paths.
 
 The success response is the normal editor post shape plus publish metadata:
 
