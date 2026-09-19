@@ -8,6 +8,7 @@ from wagtail.blocks import Block
 from wagtail.images import get_image_model
 from wagtail.images.permissions import permission_policy as image_permission_policy
 
+from ...blocks import gallery_item_parts
 from ...post_body_blocks import POST_BODY_SECTIONS, configured_content_blocks, default_content_blocks
 from .errors import EditorValidationError
 from .richtext import sanitize_block_value
@@ -344,7 +345,15 @@ def author_blocks_to_section(
                     ]
                     gallery_ok = False
                     continue
-                items.append({"id": str(uuid.uuid4()), "type": "item", "value": image_id})
+                caption = ref.get("caption", "")
+                if not isinstance(caption, str) or len(caption) > 250:
+                    errors[f"{base}.value.{img_index}.caption"] = [
+                        {"code": "invalid", "message": "Caption must be a string of at most 250 characters."}
+                    ]
+                    gallery_ok = False
+                    continue
+                item_value = {"image": image_id, "caption": caption} if caption else image_id
+                items.append({"id": str(uuid.uuid4()), "type": "item", "value": item_value})
             if not gallery_ok:
                 continue
             result.append({"type": "gallery", "value": {"layout": "default", "gallery": items}})
@@ -422,10 +431,18 @@ def section_to_author_blocks(
                 and all(isinstance(item, dict) and "value" in item for item in items)
                 and (
                     user is None
-                    or all(image_choosable_by(item["value"], user) for item in items if isinstance(item, dict))
+                    or all(
+                        image_choosable_by(gallery_item_parts(item)[0], user)
+                        for item in items
+                        if isinstance(item, dict)
+                    )
                 )
             ):
-                author.append({"type": "gallery", "value": [{"id": item["value"]} for item in items]})
+                refs = []
+                for item in items:
+                    image_id, caption = gallery_item_parts(item)
+                    refs.append({"id": image_id, **({"caption": caption} if caption else {})})
+                author.append({"type": "gallery", "value": refs})
             else:
                 author.append(_unsupported_placeholder(block_type, path_prefix=path_prefix, index=index))
         elif block_type in custom_blocks:

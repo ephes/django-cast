@@ -31,6 +31,8 @@ def media_ids_from_body(post: Post, body: StreamField) -> TypeToIdSet:
     """Extract built-in media ids from a Post StreamField value."""
     from wagtail.images.models import Image
 
+    from cast.blocks import gallery_item_parts
+
     from cast.models.gallery import get_or_create_gallery
 
     from_body: TypeToIdSet = {}
@@ -39,10 +41,9 @@ def media_ids_from_body(post: Post, body: StreamField) -> TypeToIdSet:
             if block.block_type == "gallery":
                 images = block.value.get("gallery", [])
                 image_ids = []
-                for image in images:
-                    if isinstance(image, dict) and "value" in image:
-                        image_ids.append(image["value"])
-                    elif isinstance(image, Image):
+                for item in images:
+                    image, _caption = gallery_item_parts(item)
+                    if isinstance(image, Image):
                         image_ids.append(image.pk)
                     elif isinstance(image, int):
                         image_ids.append(image)

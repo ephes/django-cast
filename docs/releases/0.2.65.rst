@@ -97,3 +97,11 @@
 - Make the known-speaker quick-apply action publish confident suggestions only.
   Uncertain hand-offs remain unchanged until an editor reviews them instead of
   being filled from a surrounding confident speaker automatically.
+
+- Add optional per-entry gallery captions (plain text, maximum 250 characters).
+  The Wagtail editor and editor API preserve distinct captions for repeated
+  images; built-in gallery templates render escaped captions beside thumbnails.
+  Existing image-only gallery values and revisions remain readable without a
+  data migration. Custom themes can adopt the new ``gallery_entries`` context;
+  the existing ``images`` context remains available. Modal caption transport
+  and the standalone HomePage gallery are unchanged.

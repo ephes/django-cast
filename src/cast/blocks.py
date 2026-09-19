@@ -234,6 +234,7 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     context["image_pks"] = ",".join([str(pk) for pk in image_pks])
     context["gallery_token"] = sign_gallery_image_pks(image_pks)
     context["images"] = images_list
+    context["gallery_entries"] = [{"image": image, "caption": ""} for image in images_list]
     return context
 
 
@@ -318,13 +319,95 @@ class GalleryBlock(ListBlock):
         return prepare_context_for_gallery(images, context)
 
 
+def gallery_item_parts(item: Any) -> tuple[Any, str]:
+    """Return image and per-occurrence text from current or legacy gallery values."""
+    if isinstance(item, dict) and "value" in item:
+        item = item["value"]
+    if isinstance(item, dict):
+        return item.get("image"), item.get("caption", "")
+    return item, ""
+
+
+class GalleryItemBlock(StructBlock):
+    def deconstruct(self) -> tuple[str, list[Any], dict[str, Any]]:
+        _path, args, kwargs = super().deconstruct()
+        return "cast.blocks.GalleryItemBlock", args, kwargs
+
+    def deconstruct_with_lookup(self, lookup: Any) -> tuple[str, list[Any], dict[str, Any]]:
+        _path, args, kwargs = super().deconstruct_with_lookup(lookup)
+        return "cast.blocks.GalleryItemBlock", args, kwargs
+
+    image = CastImageChooserBlock()
+    caption = CharBlock(
+        required=False,
+        max_length=250,
+        label=_("Caption"),
+        help_text=_("Optional plain text, up to 250 characters. No formatting or links."),
+    )
+
+    @staticmethod
+    def _normalized_data(value: Any) -> dict[str, Any]:
+        image, caption = gallery_item_parts(value)
+        return {"image": image, "caption": caption}
+
+    def normalize(self, value: Any) -> Any:
+        return super().normalize(self._normalized_data(value))
+
+    def to_python(self, value: Any) -> Any:
+        return super().to_python(self._normalized_data(value))
+
+    def bulk_to_python(self, values: Any) -> Any:
+        return super().bulk_to_python([self._normalized_data(value) for value in values])
+
+    def get_prep_value(self, value: Any) -> Any:
+        return super().get_prep_value(self._normalized_data(value))
+
+    def get_form_state(self, value: Any) -> Any:
+        return super().get_form_state(self._normalized_data(value))
+
+    def get_api_representation(self, value: Any, context: Any = None) -> Any:
+        return super().get_api_representation(self._normalized_data(value), context=context)
+
+    def get_searchable_content(self, value: Any) -> list[str]:
+        return super().get_searchable_content(self._normalized_data(value))
+
+
+class CaptionedGalleryBlock(GalleryBlock):
+    def _list_value(self, value: Any) -> ListValue:
+        if isinstance(value, ListValue):
+            return value
+        return ListValue(
+            self,
+            bound_blocks=[
+                ListValue.ListChild(self.child_block, item["value"], id=item.get("id"))
+                if isinstance(item, dict) and "value" in item
+                else ListValue.ListChild(self.child_block, item)
+                for item in value
+            ],
+        )
+
+    def normalize(self, value: Any) -> ListValue:
+        value = self._list_value(value)
+        for child in value.bound_blocks:
+            child.value = self.child_block.normalize(child.value)
+        return value
+
+    def get_form_state(self, value: Any) -> Any:
+        # The parent implements the legacy image-only workaround; struct entries
+        # use ListBlock directly so both image and caption reach the editor.
+        return ListBlock.get_form_state(self, self._list_value(value))
+
+    def get_prep_value(self, value: Any) -> Any:
+        return [item for item in super().get_prep_value(self._list_value(value)) if item["value"]["image"] is not None]
+
+
 class GalleryBlockWithLayout(StructBlock):
     """
     A gallery block with a layout. The layout parameter controls
     which template is used to render the gallery.
     """
 
-    gallery = GalleryBlock(GalleryImageChooserBlock())
+    gallery = CaptionedGalleryBlock(GalleryItemBlock())
     layout = ChoiceBlock(
         choices=[
             ("default", _("Web Component with Modal")),
@@ -362,20 +445,15 @@ class GalleryBlockWithLayout(StructBlock):
         repository: HasImagesAndRenditions,
         values: dict[str, Any],
     ) -> dict[str, Any]:
+        values = dict(values)
         images = []
         for item in values["gallery"]:
-            if item is None:
-                # empty image chooser slot -> skip it
+            image, caption = gallery_item_parts(item)
+            if image is None:
                 continue
-            if isinstance(item, dict) and item.get("type") == "item":
-                if (image_id := item["value"]) is None:
-                    # serialized empty image chooser slot -> skip it
-                    continue
-                # missing ids have to raise a KeyError to trigger the database fallback
-                images.append(repository.image_by_id[image_id])
-            else:
-                # it's an Image object
-                images.append(item)
+            # Missing ids raise KeyError to trigger the database fallback.
+            image = repository.image_by_id[image] if isinstance(image, int) else image
+            images.append({"image": image, "caption": caption} if caption else image)
         values["gallery"] = images
         return values
 
@@ -385,25 +463,13 @@ class GalleryBlockWithLayout(StructBlock):
 
     @staticmethod
     def bulk_to_python_from_database(values: dict[str, Any]) -> dict[str, Any]:
-        # empty image chooser slots are None -> drop them
-        image_ids_or_images = list(filter(None, values["gallery"]))
-        if len(image_ids_or_images) == 0:
-            values["gallery"] = []
-            return values
-        if isinstance(image_ids_or_images[0], Image):
-            values["gallery"] = image_ids_or_images
-            return values
-        # serialized empty image chooser slots have a null value -> drop them, too
-        image_ids = [item["value"] for item in image_ids_or_images if item["value"] is not None]
-        if len(image_ids) == 0:
-            values["gallery"] = []
-            return values
-        assert isinstance(image_ids[0], int)
-        # we have to fetch the images from the database
-        # Fetch all images in one query but preserve the order
-        images_by_id = {img.pk: img for img in Image.objects.filter(pk__in=image_ids)}
-        # Reconstruct the list in the original order, allowing duplicates
-        values["gallery"] = [images_by_id[pk] for pk in image_ids if pk in images_by_id]
+        values = dict(values)
+        parts = [gallery_item_parts(item) for item in values["gallery"]]
+        image_ids = [image for image, _caption in parts if isinstance(image, int)]
+        images_by_id = {img.pk: img for img in Image.objects.filter(pk__in=image_ids)} if image_ids else {}
+        entries = [(images_by_id.get(image) if isinstance(image, int) else image, caption) for image, caption in parts]
+        entries = [(image, caption) for image, caption in entries if image is not None]
+        values["gallery"] = [{"image": image, "caption": caption} if caption else image for image, caption in entries]
         return values
 
     def from_repository_to_python(
@@ -421,7 +487,10 @@ class GalleryBlockWithLayout(StructBlock):
         repository = parent_context["repository"]
         value = self.from_repository_to_python(repository, value)
         context = super().get_context(value, parent_context=parent_context)
-        return prepare_context_for_gallery(value["gallery"], context)
+        entries = [gallery_item_parts(item) for item in value["gallery"]]
+        context = prepare_context_for_gallery([image for image, _caption in entries], context)
+        context["gallery_entries"] = [{"image": image, "caption": caption} for image, caption in entries]
+        return context
 
 
 class RepositoryChooserBlock(ChooserGetPrepValueMixin, ChooserBlock):

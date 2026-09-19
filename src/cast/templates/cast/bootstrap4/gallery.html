@@ -1,6 +1,8 @@
 <image-gallery-bs4 id="gallery-{{ block.id }}">
   <div class="cast-gallery-container">
-    {% for image in images %}
+    {% for entry in gallery_entries %}
+      {% with image=entry.image %}
+      {% if entry.caption %}<figure class="cast-gallery-figure">{% endif %}
       <a
         class="cast-gallery-modal"
         data-toggle="modal"
@@ -36,6 +38,8 @@
           />
         </picture>
       </a>
+    {% if entry.caption %}<figcaption>{{ entry.caption }}</figcaption></figure>{% endif %}
+      {% endwith %}
     {% endfor %}
     <!-- Modal -->
     <div class="modal fade" id="galleryModal-{{ block.id }}" tabindex="-1" role="dialog"
