@@ -180,7 +180,6 @@ jobs:
             Django==6.0.8
             Django==6.1.0
             wagtail==7.0.9
-            wagtail==7.3.4
             wagtail==7.4.3
             wagtail==8.0.0
             djangorestframework==3.17.2
@@ -267,8 +266,6 @@ jobs:
         include:
           - tox-env: py311-django52-wagtail70
             python-version: "3.11"
-          - tox-env: py312-django52-wagtail73
-            python-version: "3.12"
           - tox-env: py312-django60-wagtail7latest
             python-version: "3.12"
           - tox-env: py314-django61-wagtail80

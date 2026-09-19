@@ -1,6 +1,11 @@
 0.2.66 (unreleased)
 -------------------
 
+- Drop Wagtail 7.3 support, which ended upstream on 25 August 2026. Sites on
+  7.3 must upgrade to Wagtail 7.4.3+ on the 7.4 LTS branch before updating
+  django-cast. Wagtail 7.0 LTS, 7.4 LTS, and 8.x remain supported within the
+  package's existing patch-version constraints. Remove the obsolete 7.3 CI/tox
+  entry and advisory-floor audit target.
 - Require modelsearch 1.3.2 or newer and remove Cast's SQLite ``MATCH``
   compatibility patch. The upstream release fixes search compilation on Django
   6.1; existing search behavior is unchanged.

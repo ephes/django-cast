@@ -38,3 +38,11 @@ django-cast now requires `modelsearch>=1.3.2,<1.4` (the lockfile already resolve
 1.3.2). The shim, its startup hook and implementation-specific tests are removed;
 the existing functional search regressions remain. Consumer sites homepage and
 python-podcast accept this dependency range, so no sibling changes are required.
+
+The initial cleanup exposed a supported-matrix conflict in CI: Wagtail 7.3.4
+requires modelsearch below 1.3. After explicitly approving the support change,
+the maintainer chose to exclude all Wagtail 7.3 releases rather than restore the
+shim. Upstream security support for 7.3 ended on 25 August 2026
+([release schedule](https://github.com/wagtail/wagtail/wiki/Release-schedule)).
+Installation guidance directs affected sites to 7.4 LTS. Wagtail 7.0 LTS remains
+supported; both known consumer sites already require Wagtail 8.0.
