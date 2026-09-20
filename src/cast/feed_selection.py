@@ -137,14 +137,14 @@ class _BeforeBoundary(models.Lookup):
             models.Func(value, key, output_field=models.Field()),
         )
 
-    def as_sql(self, compiler: Any, connection: Any) -> tuple[str, list[Any]]:
+    def as_sql(self, compiler: Any, connection: Any) -> tuple[str, tuple[Any, ...]]:
         (date, dp), (pk, pp), (value, vp), (key, kp) = (
             compiler.compile(expression)
             for expression in [*self.lhs.get_source_expressions(), *self.rhs.get_source_expressions()]
         )
         if connection.vendor in ("sqlite", "postgresql"):
-            return f"({date}, {pk}) < ({value}, {key})", [*dp, *pp, *vp, *kp]
-        return f"({date} < {value} OR ({date} = {value} AND {pk} < {key}))", [*dp, *vp, *dp, *vp, *pp, *kp]
+            return f"({date}, {pk}) < ({value}, {key})", (*dp, *pp, *vp, *kp)
+        return f"({date} < {value} OR ({date} = {value} AND {pk} < {key}))", (*dp, *vp, *dp, *vp, *pp, *kp)
 
 
 def _public_queryset(scope: FeedScope) -> tuple[Blog, models.QuerySet[Post]]:

@@ -84,6 +84,11 @@ Initial focused runs: 78 cases passed on SQLite and PostgreSQL 17, with PostgreS
 applying real migrations. The final tree has 79 focused cases, all passing.
 The existing PostgreSQL CI job now includes selection tests, with no new job.
 Commit, push and CI verification were authorized after local review closure.
+The first CI run caught an `as_sql` return-type incompatibility under Python
+3.14. Return bound parameters as tuples to match Django's expression contract;
+SQL and parameter ordering are unchanged. Cold-cache mypy on the locked Python
+3.14 environment passes, and the focused Opus/high repair review returned CLEAN
+with no findings or evidence omissions.
 
 Local disposable verification/review artifacts: `/tmp/cast-feed-selection.0RBCCb/`.
 
