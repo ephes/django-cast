@@ -224,15 +224,28 @@ Feeds are also available via the REST API:
 Configuration
 =============
 
+Internal pagination groundwork
+------------------------------
+
+An internal selection service prepares bounded pages for future RSS/Atom
+endpoints. It selects IDs and dates before either repository loads media, using
+signed continuation cursors and stable date/ID ordering. It requires
+``USE_TZ=True`` so UTC cursors round-trip timestamps without ambiguity.
+It does not add public paged URLs or enable any pagination setting yet.
+Existing full feeds and their five-minute caching are unchanged; that staleness
+is accepted behavior, not an immediate-removal guarantee.
+
+Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
+Run the normal ``migrate`` command after upgrading. Creating the index can lock
+the post table; schedule the migration appropriately for large installations.
+
 Feed Limits
 -----------
 
-Control the number of items in feeds:
-
-.. code-block:: python
-
-    # In settings.py
-    CAST_FEED_ITEM_LIMIT = 50  # Default: 50 items
+Feeds currently include all eligible live, publicly accessible entries; there
+is no configurable item limit or pagination. ``CAST_FEED_ITEM_LIMIT`` is not
+implemented and setting it has no effect. Podcast feeds additionally require
+podcast audio.
 
 Follow Links
 ------------
@@ -250,12 +263,13 @@ Configure platform links shown on the feed detail page for podcasts:
 Cache Duration
 --------------
 
-Configure feed cache timeout:
-
-.. code-block:: python
-
-    # Cache feeds for 1 hour
-    CAST_FEED_CACHE_TIMEOUT = 3600
+The built-in XML feed routes cache responses for five minutes.
+``CAST_FEED_CACHE_TIMEOUT`` is not implemented and setting it has no effect.
+The feed root's public accessibility is rechecked before serving cached output.
+Changes to individual entries (including removal or new view restrictions) can
+remain in a warm response until it expires or is invalidated. When restricting
+previously public content, account for application and downstream caches; a
+cached feed is not an immediate-revocation mechanism.
 
 Best Practices
 ==============
@@ -284,5 +298,7 @@ Common Issues
 
 1. **Missing Enclosures**: Ensure episodes have ``podcast_audio`` set
 2. **Invalid Characters**: Check for special characters in titles/descriptions
-3. **Large Feed Size**: Reduce ``CAST_FEED_ITEM_LIMIT`` if needed
+3. **Large Feed Size**: Feeds currently include the complete eligible archive;
+   there is no supported item-limit setting. Measure response size and generation
+   cost before choosing deployment-specific caching or customization.
 4. **Cache Issues**: Clear cache after major content updates

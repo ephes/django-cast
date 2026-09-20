@@ -3,8 +3,8 @@
 Status: Confirmed findings fixed and validated on 2026-09-08. Independent review
 closed at diminishing returns with an advisory verdict. The subsequent upload,
 probe and author-access hardening is implemented. Mandatory publication revision
-binding remains deferred to the next API version; historical rich text remains
-a separate audit task.
+binding remains deferred to the next API version. Historical rich-text audit
+tooling is deferred pending an identified deployment with pre-fix API content.
 
 Reviewed commit: `04220c4d0a42165413df43e82c9d9c4ca6700190` (`develop`).
 
@@ -166,8 +166,11 @@ attacks or additional demonstrated authorization bypasses.
 
 ## Existing risk and negative results
 
-- Historical unsafe rich text remains a separate, already tracked audit task in
+- Historical rich-text audit tooling is deferred as recorded in
   [the sanitization design record](2026-09-07-editor-richtext-sanitization.md).
+  On 2026-09-19 the maintainer confirmed development-only use of the pre-fix API,
+  with no known production exposure through that path. Revisit tooling if a
+  deployment with pre-fix API content is identified.
   New-write sanitization does not establish that old rows or revisions are safe.
   This review found no new sanitizer bypass in the inspected standard block paths.
 - Inspected public page/feed restrictions, request-local feed state, transcript

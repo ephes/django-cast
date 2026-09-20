@@ -151,6 +151,9 @@ class HasPostDetails(Protocol):
 
 
 class Post(Page):
+    class Meta:
+        indexes = [models.Index(fields=["visible_date", "page_ptr"], name="cast_post_feed_boundary_idx")]
+
     uuid: models.UUIDField = models.UUIDField(default=uuid.uuid4, editable=False)
     visible_date: models.DateTimeField = models.DateTimeField(
         default=timezone.now,

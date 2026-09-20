@@ -118,8 +118,8 @@ Cache Configuration
         }
     }
 
-    # Feed cache timeout
-    CAST_FEED_CACHE_TIMEOUT = 3600  # 1 hour
+    # Built-in feed routes explicitly use a five-minute response cache.
+    # CAST_FEED_CACHE_TIMEOUT is not a supported setting.
 
     # Image slot settings
     CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [
@@ -281,8 +281,8 @@ Common Performance Issues
 
 3. **Feed Generation Timeout**
 
-   - Enable feed caching
-   - Reduce feed item limit
+   - Configure an appropriate Django cache backend for the built-in feed cache
+   - Measure full-archive feed size (there is no built-in item-limit setting)
    - Use FeedContext
 
 4. **Search Performance**

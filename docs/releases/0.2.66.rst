@@ -1,6 +1,19 @@
 0.2.66 (unreleased)
 -------------------
 
+- Add internal paged-feed selection and bounded repository construction, with
+  signed date/ID continuation cursors. This groundwork requires ``USE_TZ=True``;
+  it does not expose paged endpoints or change existing full feeds or caching.
+  Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
+  Run ``migrate`` on upgrade; index creation may lock the post table on large sites.
+  Exercise selection in the existing PostgreSQL CI job; no additional job or
+  local PostgreSQL requirement is introduced.
+
+- Correct feed documentation: ``CAST_FEED_ITEM_LIMIT`` and
+  ``CAST_FEED_CACHE_TIMEOUT`` were never implemented and have no effect. Built-in
+  feeds include all eligible entries and cache XML responses for five minutes.
+  Document that child-entry changes can remain visible in a warm feed cache.
+  This documentation correction does not change feed output or cache behavior.
 - Drop Wagtail 7.3 support, which ended upstream on 25 August 2026. Sites on
   7.3 must upgrade to Wagtail 7.4.3+ on the 7.4 LTS branch before updating
   django-cast. Wagtail 7.0 LTS, 7.4 LTS, and 8.x remain supported within the

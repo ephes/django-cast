@@ -15,13 +15,17 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
-- [ ] Audit existing editor API rich text and historical revisions
-  - Design record:
-    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
-  - Scope: provide read-only tooling to inspect published content, drafts, and restorable revisions after the
-    editor API sanitization fix. Normalization differences alone must not be reported as proof of an attack.
-  - Done when: operators can locate potentially unsafe historical content and follow a documented remediation
-    workflow without silently rewriting pages or destroying revision history.
+- [ ] Paged feeds — research and reviewed migration concept
+  - Design record: [backlog/2026-09-19-paged-feeds.md](backlog/2026-09-19-paged-feeds.md)
+  - First approved investigation: [baseline and contracts](backlog/2026-09-19-paged-feeds-slice1.md).
+  - Implemented and reviewed: [selection service](backlog/2026-09-19-paged-feeds-selection.md).
+    Five-minute cache staleness is accepted; no cache repair is required.
+  - Next slice: additive opt-in RSS/Atom endpoints; no public paged endpoints exist yet.
+  - Scope: scalable RSS/Atom feed infrastructure, documented client-compatibility evidence with unknowns recorded, additive opt-in endpoints,
+    and an explicit migration/rollback policy for existing complete feeds. No template work.
+  - Gate: research, concept and implementation slices must be independently reviewed and approved before coding.
+  - Done when: approved slices are implemented with stable URLs/identities, documented pagination/migration
+    behavior, large-archive tests and existing-feed compatibility checks. Research approval alone does not close this item.
 
 - [ ] Local authoring and sync workflow
   - Design record:
@@ -49,6 +53,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
+
+- [ ] Historical editor API rich-text audit tooling — deferred
+  - Design record:
+    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
+  - Decision (2026-09-19): the maintainer confirmed that the pre-fix editor API was used only in development,
+    not on the production sites. No known production exposure through that path justifies building tooling now.
+  - Revisit only when a deployment with content written through the pre-fix API is identified.
+  - If resumed: inspect published content, drafts, and restorable revisions read-only; distinguish potentially
+    unsafe markup from harmless normalization and document remediation without silently rewriting history.
 
 - [ ] Require publish revision binding in the next editor API version
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
@@ -130,12 +143,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: add progressive-enhancement page/view transitions for the built-in themes.
   - Done when: navigation feels smoother where supported, unsupported browsers keep the current behavior, and motion
     can respect reduced-motion preferences.
-
-- [ ] Paged feeds
-  - Scope: add paginated feed support so large podcasts and blogs can expose older posts or episodes without huge
-    feed responses.
-  - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
-    existing feed compatibility.
 
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)

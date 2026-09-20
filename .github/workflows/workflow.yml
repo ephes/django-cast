@@ -132,7 +132,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Test PostgreSQL row locks and publication policy
+      - name: Test PostgreSQL row locks, publication policy, and feed selection
         run: uvx --from tox==4.61.2 --with tox-uv==1.36.0 tox -e postgres
 
   dependency-audit-resolved:

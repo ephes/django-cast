@@ -52,12 +52,19 @@ fails before the fix.
    record. Existing rows, omitted PATCH sections, unsupported placeholders,
    historical revisions, and non-API writes are not automatically rewritten.
 
-## Follow-up
+## Follow-up — deferred 2026-09-19
 
-Provide read-only audit tooling for existing content and revisions separately.
-Normalization differences alone are not proof of malicious content. Operators
-must account for published bodies, drafts, and restorable revisions before
-re-enabling an API that was blocked as a mitigation.
+The maintainer confirmed that the pre-fix editor API was used only in development,
+not on the production sites. There is no known production exposure through this
+path, so building a historical-content audit command is deferred. Revisit only
+when a deployment with content written through the pre-fix API is identified.
+
+The new-write sanitization fix remains in place. This exposure assessment is not
+an audit of stored content or a safety guarantee for other deployments. Sites
+that did use the pre-fix API still need to assess published bodies, drafts, and
+restorable revisions, as documented in the API reference. If tooling becomes
+necessary, keep it read-only and do not treat normalization differences alone as
+proof of malicious content.
 
 ## Verification
 
