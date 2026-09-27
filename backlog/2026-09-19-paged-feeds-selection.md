@@ -2,6 +2,9 @@
 
 Status: internal service implemented and verified; independent plan and code
 review cycles closed with advisory dispositions.
+The later [additive endpoint slice](2026-09-21-paged-feeds-endpoints.md) was also
+implemented and independently reviewed on 2026-09-27. References below to future
+HTTP adapters describe this service slice's original scope, not outstanding work.
 This record supersedes earlier cache-repair/no-store requirements in the research
 and spike notes. The user accepts five-minute stale feed content as normal caching.
 Do not remove caching or introduce immediate revocation as a feature prerequisite.

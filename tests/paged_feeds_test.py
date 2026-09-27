@@ -1,4 +1,4 @@
-"""Internal paged feed admission and serializer adapters, before public routes exist."""
+"""Paged feed admission, serializer adapters and uncached route behavior (cache: paged_feed_cache_test)."""
 
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, replace
@@ -9,7 +9,7 @@ from django.core import signing
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.http import Http404
-from django.urls import NoReverseMatch, reverse, set_script_prefix
+from django.urls import reverse, set_script_prefix
 from django.utils import timezone as django_timezone, translation
 from wagtail.models import PageViewRestriction
 
@@ -17,6 +17,7 @@ from cast import appsettings, paged_feeds
 from cast.devdata import create_transcript
 from cast.feed_selection import CURSOR_SALT, FeedScope, InvalidFeedCursor, select_feed_page
 from cast.feeds import RepositoryMixin
+from cast.middleware import MIDDLEWARE_PATH
 from cast.models import Audio, ChapterMark, Post
 from cast.models.repository import PostQuerySnapshot
 from cast.paged_feeds import (
@@ -51,6 +52,7 @@ def config(blog_path, **extra):
 @pytest.fixture()
 def paged_config(settings):
     settings.CAST_FEED_PAGINATION = [config("/test_blog/"), config("/test_podcast/")]
+    settings.MIDDLEWARE = [MIDDLEWARE_PATH, *settings.MIDDLEWARE]
     cache.clear()
     yield settings
     cache.clear()
@@ -234,7 +236,8 @@ def test_traversal_matches_legacy_full_feed(
     mime = "application/rss+xml" if representation == "rss" else "application/atom+xml"
     for index, page in enumerate(pages):
         assert page["Content-Type"] == f"{mime}; charset=utf-8"
-        assert page["Cache-Control"] == "no-store"
+        assert page["Cache-Control"] == "public, max-age=300"
+        assert page["ETag"].startswith('W/"')
         assert not page.has_header("Last-Modified")
         assert page.content.startswith(b'<?xml version="1.0" encoding="utf-8"?>\n<?xml-stylesheet')
         page_links = links(page.content)
@@ -314,6 +317,8 @@ def test_empty_head_and_exhausted_continuation(
         "first": [head],
     }
     entries = make_entries(root, kind, 3)
+    # The empty head stays cached for up to 300 seconds; expire it to observe new entries.
+    cache.clear()
     first = client.get(head, **HOST)
     ((next_url, _),) = links(first.content)["next"]
     min(entries, key=lambda entry: (entry.visible_date, entry.pk)).delete()
@@ -429,9 +434,12 @@ def test_methods_and_head(client, paged_config, blog):
 # URL mounts, prefixes and origins
 
 
-def test_no_public_paged_routes_exist_yet(blog):
-    with pytest.raises(NoReverseMatch):
-        reverse("cast:paged_entries_feed", kwargs={"slug": blog.slug})
+def test_public_paged_routes_are_additive(blog):
+    assert reverse("cast:paged_entries_feed", kwargs={"slug": blog.slug}) == "/cast/test_blog/feed/paged/rss.xml"
+    assert reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug}) == "/cast/test_blog/feed/rss.xml"
+    kwargs = {"slug": "p", "audio_format": "mp3"}
+    assert reverse("cast:paged_podcast_feed_atom", kwargs=kwargs) == "/cast/p/feed/podcast/mp3/paged/atom.xml"
+    assert reverse("cast:podcast_feed_atom", kwargs=kwargs) == "/cast/p/feed/podcast/mp3/atom.xml"
 
 
 @pytest.fixture()

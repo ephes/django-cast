@@ -15,6 +15,7 @@ from cast import appsettings
 from cast.apps import CAST_MIDDLEWARE
 from cast.appsettings import CAST_SETTING_REGISTRY
 from cast.feed_pagination import FeedOwnerError, resolve_feed_owner, validate_feed_pagination
+from cast.middleware import paged_feed_middleware_errors
 from cast.post_body_blocks import validate_post_body_block_setting
 
 # Source extensions to consider
@@ -387,6 +388,27 @@ def check_feed_pagination_settings(
             )
         )
     return errors
+
+
+@register("cast")
+def check_feed_pagination_middleware(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Require the outermost paged-feed middleware and reject Django full-site caching, without a database."""
+    records, messages = validate_feed_pagination(appsettings.CAST_FEED_PAGINATION)
+    if messages or not records:
+        return []
+    hints = {
+        "cast.E015": "Put cast.middleware.PagedFeedCacheMiddleware first in MIDDLEWARE, exactly once.",
+        "cast.E016": "Remove UpdateCacheMiddleware/FetchFromCacheMiddleware (and subclasses); paged feeds "
+        "cache their own responses and other views need endpoint-specific caching.",
+    }
+    return [
+        Error(message, hint=hints[check_id], id=check_id)
+        for check_id, message in paged_feed_middleware_errors(getattr(settings, "MIDDLEWARE", []))
+    ]
 
 
 @register(Tags.database, deploy=True)

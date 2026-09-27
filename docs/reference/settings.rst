@@ -134,11 +134,14 @@ Defaults to ``5``.
 CAST_FEED_PAGINATION
 ====================
 
-Reserved for future paged RSS/Atom endpoints. Defaults to ``[]``. It is
-validated by system checks (``cast.E011`` to ``cast.E014``), but no URL uses
-it yet, so it currently changes no feed. ``page_size`` is the number of entries
-per page for the internal adapters. See the internal pagination
-groundwork section of :doc:`../features/feeds` for the record format.
+Enables the opt-in paged RSS/Atom endpoints for the listed Blogs and Podcasts.
+Defaults to ``[]`` (disabled; the paged routes return 404). Each record has
+``hostname``, ``port``, ``blog_path`` and an optional ``page_size`` (entries per
+page, default ``100``, maximum ``500``). When records are configured,
+``cast.middleware.PagedFeedCacheMiddleware`` must be the first ``MIDDLEWARE``
+entry and Django's full-site cache middleware must not be used. Validated by
+system checks ``cast.E011`` to ``cast.E016``. See :ref:`paged_feeds` for the
+record format, deployment checks, caching and rollback behavior.
 
 CHOOSER_PAGINATION
 ==================

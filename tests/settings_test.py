@@ -27,3 +27,23 @@ def test_test_media_roots_honor_environment_overrides(tmp_path):
     )
 
     assert json.loads(result.stdout) == [str(media_root), str(private_media_root)]
+
+
+def installed_apps_for(engine):
+    env = os.environ.copy()
+    env.pop("CAST_TEST_DB_ENGINE", None)
+    if engine:
+        env["CAST_TEST_DB_ENGINE"] = engine
+    result = subprocess.run(
+        [sys.executable, "-c", "import json; from tests import settings; print(json.dumps(settings.INSTALLED_APPS))"],
+        check=True,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+    return json.loads(result.stdout)
+
+
+def test_postgres_contrib_app_is_only_installed_for_postgresql():
+    assert "django.contrib.postgres" not in installed_apps_for(None)
+    assert "django.contrib.postgres" in installed_apps_for("django.db.backends.postgresql")

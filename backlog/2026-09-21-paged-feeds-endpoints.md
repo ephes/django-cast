@@ -1,10 +1,11 @@
 # Paged feeds: additive HTTP endpoint contract
 
-Status: independent review complete with advisory clarifications; implementation
-approved by the maintainer on 2026-09-27 and proceeding slice by slice. Only step 1
-groundwork and step 2 internal adapters are implemented and independently
-reviewed (see Implementation progress). No public endpoints, live routes,
-caching or subscription changes exist yet.
+Status: implemented and independently reviewed, 2026-09-27. This is the retained
+contract and implementation record, not an active implementation backlog.
+All three implementation slices passed their review gates and local validation
+(see Implementation progress). Client interoperability and subscription migration
+remain separate, unapproved follow-ups.
+No subscription changes or consumer opt-ins exist.
 Based on the implemented [selection service](2026-09-19-paged-feeds-selection.md).
 This contract supersedes the spike's no-store-success/cache-repair proposal:
 five-minute stale child content is accepted ordinary caching, not a defect.
@@ -285,12 +286,97 @@ conditional headers must not turn them into 304. Do not cache recovery responses
   by restoring the active language around that fixture before review. A transient
   provider/PyPI DNS outage interrupted the first implementation run; a bounded
   fresh Claude session completed it after connectivity returned.
-- Deferred to step 3: `PagedFeedCacheMiddleware`, its first-position check and
-  the full-site cache middleware rejection, which need the real middleware; the
-  public routes in `cast.urls` (composing `admit`/`select`/`render` with the
-  cache layer, replacing the internal no-store adapter policy) and no-store
-  handling for raised 404s.
-- Steps 4–5 remain as listed above.
+- Step 3 (implemented, independently reviewed; final delta CLEAN):
+  `cast.urls` adds the four routes to `paged_feeds.paged_feed_view`. Order: the
+  view first marks the request state as paged when the middleware set it; empty
+  configuration returns an explicit `no-store` 404 without validators (so
+  non-opted-in sites need no middleware); otherwise the view fails
+  closed with `ImproperlyConfigured` unless the request carries the state set by
+  `cast.middleware.PagedFeedCacheMiddleware` and the pure placement check passes;
+  then 405, admission (fresh owner/config/access, canonical path, strict query)
+  and `decode_cursor` (the unchanged selection decoder, so signature/scope/version
+  handling equals selection) before any cache lookup. A warm hit skips selection
+  and hydration. Entries are immutable `(namespace, bytes, content_type, etag,
+  generated_at)` tuples under `cast.paged-feeds.v1:<sha256>`; the key digests
+  document URL, Site/Blog, scope, record policy incl. page size, repository mode,
+  LANGUAGE_CODE, TIME_ZONE and a `salted_hmac` digest of the active SECRET_KEY.
+  Entries outside `0 <= age < 300` are deleted and regenerated; hits never call
+  set/touch. Weak ETag = sha256 over bytes, document URL, language, timezone.
+  The view always returns the complete GET body (also for HEAD and conditional
+  requests) as a `no-store` candidate without validators, so inner
+  ConditionalGetMiddleware ignores it and Common/GZip middleware produce GET's
+  representation headers. The middleware creates request state for every
+  request but acts only when the view marked it paged. Its final hook treats
+  anything but the view's own 200 candidate object as an uncached `no-store`
+  error without validators (raised 404s, 400, 302, 405, replaced responses);
+  for the candidate it runs Django's `get_conditional_response` with the entry
+  ETag (weak/wildcard If-None-Match → 304 keeping Vary and cookies, plus a
+  literal Set-Cookie header; failed If-Match → `no-store` 412; no
+  Last-Modified, so IMS alone is ignored while a valid IUS without If-Match
+  always fails → 412, and IUS is skipped when If-Match is present).
+  Set-Cookie (`response.cookies` or
+  a literal header) or Vary outside Accept-Encoding/Accept-Language on the
+  candidate or final response yields `private, no-store`, strips validators,
+  keeps cookies and the bodyless 304 and evicts a warm key; otherwise it
+  applies public headers and inserts cold entries (also after a cold 304) with
+  `cache.set(..., 300)`. HEAD bodies are removed last, so HEAD keeps GET's
+  Content-Length/Content-Encoding/Vary. Pure checks `cast.E015` (missing, not first or
+  duplicated guard, subclasses accepted) and `cast.E016` (Update/Fetch cache
+  middleware or subclasses anywhere) import classes only, without DB access.
+  Cost: GZip compresses the body of HEAD and 304 responses before it is dropped.
+  `internal_paged_feed_response` remains an isolated no-store adapter used only
+  by direct-call tests; test URLconfs now mount the real `cast.urls`.
+  Tests: `tests/paged_feed_cache_test.py` (+ `tests/paged_feed_middleware.py`)
+  and adapted `tests/paged_feeds_test.py`.
+  Review round 1 (gpt-6-sol, 2026-09-27) accepted four Warnings, all repaired
+  in repair 1: disabled 404 lacked no-store (the view raised before marking
+  the route); HEAD built an empty body before Common/GZip (Content-Length 0,
+  missing Content-Encoding/Vary); the view's early 304 lost GZip's
+  `Vary: Accept-Encoding`; `_is_shared_cache_safe` missed a literal Set-Cookie
+  header. Repair tests run the real middleware stack in both GZip/ConditionalGet
+  orders (cold/warm, GET/HEAD, fixed GZip padding for header parity, test
+  client HEAD body removal disabled), disabled routes with and without the
+  middleware, error/redirect HEAD parity and literal Set-Cookie provocations.
+  Review round 2 (gpt-6-sol, 2026-09-27) verified the four repairs and raised
+  one Warning: the docs claimed IUS → 412 although no Last-Modified is passed.
+  Checked against installed Django 6.1 `get_conditional_response`:
+  `_if_unmodified_since_passes(None, ...)` is falsy, so IUS without If-Match
+  returns 412 (probe: IUS → 412, IMS → 200, matching If-Match + IUS → 200).
+  The finding's premise is refuted; docs repair 2 only makes the IUS/If-Match
+  interaction explicit in `docs/features/feeds.rst` and here, and notes that
+  the weak ETag only passes `If-Match: *`. No runtime change. Regression
+  `test_date_preconditions_through_the_full_middleware_stack` runs the real
+  middleware stack in both GZip/ConditionalGet orders (IUS past/future → 412,
+  unparseable IUS → 200, IMS → 200, `If-Match: *` + IUS → 200, echoed weak
+  ETag in If-Match + IUS → 412); Django 5.2 and 6.x share this
+  `get_conditional_response` logic.
+  Expanded PostgreSQL run (697 tests) had one failure: the deploy/database
+  `check` test hit `postgres.E005` because `tests/settings.py` omitted
+  `django.contrib.postgres` for Wagtail's search index models. Test settings now
+  add it only when `CAST_TEST_DB_ENGINE` is PostgreSQL (SQLite runs unchanged,
+  covered by `tests/settings_test.py`). Focused PostgreSQL rerun of
+  `tests/feed_pagination_test.py` and `tests/paged_feed_cache_test.py` passes;
+  the expanded PostgreSQL run and focused oldest/latest matrix also pass (see step 5).
+  Review round 3 verified the documentation/test-settings delta and returned CLEAN.
+  All four accepted runtime Warnings are closed; the refuted documentation Warning
+  is rejected with source and regression evidence. All rounds used Codex GPT-6 Sol
+  at medium effort, with no skipped/truncated files. Only a synthetic test signing
+  key was redacted, which does not limit the reviewed behavior. Implementation and
+  repairs used Claude Code Opus 5.5 at medium effort. No further review cycle is
+  warranted: the gate has converged with no unresolved required findings.
+- Step 4 docs (implemented, reviewed with step 3; updated in repair 1): feeds (routes, root/nested
+  examples, mandatory middleware, deployment checks, host/port/proxy, cache,
+  staleness, CDN path policy, key rotation, disable/rollback, legacy
+  recommendation), settings, performance and 0.2.66 release notes.
+- Step 5 (locally verified): independent `just check` passes with 3,434 tests,
+  five PostgreSQL-only skips and 100% coverage. Locked Python 3.14 cold-cache
+  mypy and Sphinx `-W` pass. The focused feed suite passes on Python 3.11 /
+  Django 5.2.17 / Wagtail 7.0.9 and Python 3.14 / Django 6.1.1 / Wagtail 8.0
+  (557 tests each). A dedicated temporary PostgreSQL 17 instance passes 709
+  expanded feed/publication/lock tests plus three Wagtail-V3 PostgreSQL lock tests.
+  Existing CI jobs and artifact policy are unchanged; no push or CI run is claimed.
+  The complete tox matrix was not run; the approved oldest/latest focused bounds
+  and existing PostgreSQL job selections were exercised locally.
 
 ## Acceptance matrix and rollout boundaries
 
@@ -376,10 +462,11 @@ could not resolve pypi.org to fetch uv-build. The full check is therefore NOT
 green in that session. No runtime
 test failure was diagnosed and no test was disabled or weakened.
 
-Current validation (2026-09-27): `just check` passes, including lint, mypy,
+Historical plan-review validation (2026-09-27): `just check` passed, including lint, mypy,
 3,094 tests, five skips and 100% coverage. The earlier packaging dependency-fetch
 blocker is resolved. Later changes in this review are planning prose only;
-`git diff --check` passes. Release notes await actual endpoint implementation.
+`git diff --check` passed. That pre-implementation record is superseded by the
+implementation validation above; release notes now describe the shipped endpoints.
 
 Workflow lesson: an installed review CLI and historical successful reviews do
 not establish that the current restricted session can authenticate. Verify a

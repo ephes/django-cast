@@ -1,4 +1,4 @@
-"""Internal keyset selection for future paged feeds; existing endpoints do not use it."""
+"""Keyset selection for the opt-in paged feeds; legacy full feeds do not use it."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class FeedCursorError(Exception):
 
 
 class InvalidFeedCursor(FeedCursorError):
-    """Malformed or wrong-scope cursor; a future HTTP adapter should return 400."""
+    """Malformed or wrong-scope cursor; the paged HTTP adapter returns 400."""
 
 
 class RestartFeedCursor(FeedCursorError):

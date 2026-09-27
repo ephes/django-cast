@@ -224,22 +224,48 @@ Feeds are also available via the REST API:
 Configuration
 =============
 
-Internal pagination groundwork
-------------------------------
+.. _paged_feeds:
 
-An internal selection service prepares bounded pages for future RSS/Atom
-endpoints. It selects IDs and dates before either repository loads media, using
+Paged feeds (opt-in)
+--------------------
+
+Paged feeds are additive, opt-in RSS/Atom endpoints that serve an archive in
+bounded pages linked with RFC 5005 ``next`` links. They are disabled by default
+(``CAST_FEED_PAGINATION = []``). The existing full feeds, their URLs, feed-detail
+links, autodiscovery and five-minute caching are unchanged and remain the
+default. **Keep recommending the full feeds for podcast apps and readers you
+have not verified yourself:** django-cast makes no claim that any particular
+client follows ``next`` links, and paging-unaware clients only see the first page.
+
+Four routes are added beneath the existing ``cast.urls`` mount:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Relative route
+     - URL name
+   * - ``<slug>/feed/paged/rss.xml``
+     - ``cast:paged_entries_feed``
+   * - ``<slug>/feed/paged/atom.xml``
+     - ``cast:paged_entries_atom_feed``
+   * - ``<slug>/feed/podcast/<audio_format>/paged/rss.xml``
+     - ``cast:paged_podcast_feed_rss``
+   * - ``<slug>/feed/podcast/<audio_format>/paged/atom.xml``
+     - ``cast:paged_podcast_feed_atom``
+
+With Cast mounted at ``/blogs/`` a nested Blog ``podcast`` serves
+``/blogs/podcast/feed/podcast/mp3/paged/rss.xml``; with Cast mounted at ``/`` it
+is ``/podcast/feed/podcast/mp3/paged/rss.xml``. URL language prefixes from
+``i18n_patterns`` are kept in the document URL. Always reverse the URL names
+instead of hard-coding paths. A Podcast record enables both blog feeds and the
+podcast feeds in every supported audio format; a plain Blog only the two blog feeds.
+
+Selection loads IDs and dates before either repository hydrates media, using
 signed continuation cursors and stable date/ID ordering. It requires
 ``USE_TZ=True`` so UTC cursors round-trip timestamps without ambiguity.
-It does not add public paged URLs or enable any pagination setting yet.
-Existing full feeds and their five-minute caching are unchanged; that staleness
-is accepted behavior, not an immediate-removal guarantee.
 
-The reserved ``CAST_FEED_PAGINATION`` setting (default ``[]``) and its checks
-are also groundwork. Validation and target resolution exist, but no URL uses
-them yet, so setting it serves no paged feed and changes no existing feed.
-Endpoint routes, caching and the complete operator opt-in procedure are not
-implemented yet. Treat the record format below as internal until they are.
+Enabling paged feeds
+~~~~~~~~~~~~~~~~~~~~
 
 The setting is a ``list`` of records; each record is a ``dict`` with required
 ``hostname``, ``port`` and ``blog_path`` and an optional ``page_size`` (default
@@ -262,6 +288,42 @@ booleans used as integers are rejected:
         {"hostname": "example.com", "port": 443, "blog_path": "/podcast/", "page_size": 50},
     ]
 
+The first record enables a Blog that is the Site root page, the second a nested
+Podcast. Paged feeds also require the finalizing middleware as the **first**
+``MIDDLEWARE`` entry, and Django's full-site cache middleware must be removed:
+
+.. code-block:: python
+
+    MIDDLEWARE = [
+        "cast.middleware.PagedFeedCacheMiddleware",  # must be first
+        "django.middleware.gzip.GZipMiddleware",
+        "django.middleware.http.ConditionalGetMiddleware",
+        "django.middleware.security.SecurityMiddleware",
+        "django.contrib.sessions.middleware.SessionMiddleware",
+        # ... the rest of your middleware, without UpdateCacheMiddleware,
+        # FetchFromCacheMiddleware or CacheMiddleware (or subclasses)
+    ]
+
+The middleware is transparent for every request except the four paged routes.
+Its response hook runs after session, CSRF, locale, conditional-GET and
+compression middleware, so it sees the final headers. The paged view always
+returns the complete ``GET`` representation, also for ``HEAD`` and conditional
+requests, so other middleware (for example ``CommonMiddleware`` and
+``GZipMiddleware``) produce the same representation headers for every request;
+the hook then evaluates preconditions and removes ``HEAD`` bodies. There is no setting to
+bypass either requirement. If a paged route is requested while pagination is
+configured but the middleware is missing or misplaced, the request fails with
+``ImproperlyConfigured`` instead of serving an unguarded response.
+
+Deployment steps:
+
+1. Upgrade and run ``python manage.py migrate``.
+2. Add the records and the middleware, then run ``python manage.py check``
+   (pure checks) and ``python manage.py check --deploy --database default``
+   (database-backed target resolution) before routing traffic.
+3. Request the paged head through your real host, port and proxy and confirm
+   ``200``, ``Cache-Control: public, max-age=300`` and the expected ``self`` URL.
+
 A record resolves only to the ``Site`` with exactly that hostname and port;
 Wagtail's default-site fallback never applies. The page at ``blog_path`` under
 that site root (inclusive) must be a Blog or Podcast. Its slug must be unique
@@ -271,6 +333,14 @@ are addressed by slug. Requests must use the configured host, validated by
 and scheme headers count only through Django's ``USE_X_FORWARDED_HOST`` and
 ``SECURE_PROXY_SSL_HEADER``. Owners are rechecked for live, unrestricted
 public access (including inherited view restrictions) on every resolution.
+Only the configured exact hostname and port are served: other aliases of the
+Site return 404 even if Wagtail would route them, unlike the full feeds. The
+record's port, the Wagtail Site port and the effective request port must all
+agree: behind a TLS-terminating proxy that forwards ``https`` on port 443,
+configure ``"port": 443``, a Site with port 443 and a trusted
+``SECURE_PROXY_SSL_HEADER``, and make the proxy pass the original ``Host``
+header. Renames and moves require updating the record; old paged URLs are not
+redirected automatically.
 
 System checks for this setting:
 
@@ -282,17 +352,29 @@ System checks for this setting:
   renames and moves, or make the slug unique.
 - ``cast.E014``: target resolution could not read the database. Run
   ``migrate`` first.
+- ``cast.E015``: ``cast.middleware.PagedFeedCacheMiddleware`` is missing, not
+  the first ``MIDDLEWARE`` entry, or listed more than once. Move it to the top.
+- ``cast.E016``: Django's ``UpdateCacheMiddleware``,
+  ``FetchFromCacheMiddleware`` or ``CacheMiddleware`` (or a subclass) is in
+  ``MIDDLEWARE``. Remove it; paged feeds cache their own responses and other
+  views need endpoint-specific caching.
 
-``cast.E011`` and ``cast.E012`` run in every ``check`` without database
-access. ``cast.E013`` and ``cast.E014`` query the database, so they run only
+``cast.E011``, ``cast.E012``, ``cast.E015`` and ``cast.E016`` run in every
+``check`` without database access (``E015``/``E016`` only when records are
+configured). ``cast.E013`` and ``cast.E014`` query the database, so they run only
 with ``python manage.py check --deploy --database default`` after migrations,
 never during ordinary checks, ``migrate`` or ``check --tag cast``.
 
-Internal paged serializers (``cast.paged_feeds``) are also in place, but no URL
-pattern uses them yet, so they serve nothing. They admit a request only for a
-configured, live and public owner; accept either an empty query or exactly one
-nonempty ``cursor`` (raw query bounded to 4096 bytes, strict percent escapes);
-select at most ``page_size + 1`` lightweight rows and hydrate only the page.
+Requests and pages
+~~~~~~~~~~~~~~~~~~
+
+Only ``GET`` and ``HEAD`` are allowed (other methods get ``405``). A request is
+admitted only for a configured, live and public owner (otherwise ``404``); the
+query must be empty or exactly one nonempty ``cursor`` (raw query bounded to
+4096 bytes, strict percent escapes), otherwise ``400``. A cursor with a
+signature that no current or fallback key verifies, or an unsupported version,
+redirects (``302``) to the paged head. At most ``page_size + 1`` lightweight rows
+are selected and only the page is hydrated.
 Each page is serialized by request-local subclasses of the existing RSS, Atom
 and podcast feed classes, so item GUIDs, links, content, dates, enclosures,
 iTunes/Podcasting 2.0 elements, chapters, transcripts, stylesheets and Atom feed
@@ -303,9 +385,74 @@ with the representation MIME type (inside the RSS channel for RSS).
 Rendering uses an anonymous request with the validated origin and resolved Site
 only, ``settings.LANGUAGE_CODE`` and ``settings.TIME_ZONE``; caller cookies,
 session themes, users and HTMX headers are ignored and the caller's active
-language and timezone are restored. Public routes, their shared cache policy
-and conditional responses ship together in a later step; until then these
-adapters make no client compatibility claim.
+language and timezone are restored. Custom feed templates must not depend on
+other request inputs, because the XML is shared between all callers.
+Pages are mutable views, not snapshots: concurrent edits can shorten pages or
+cause repeats or omissions while a client walks the archive.
+
+Caching and HTTP validators
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Successful pages are cached for 300 seconds in Django's ``default`` cache,
+under a versioned namespace separate from the full feeds. The key covers the
+canonical document URL (scheme, host, port, mount, cursor), Site and Blog,
+feed kind/format/representation, page size, repository mode, the fixed
+language and timezone, and a one-way digest of the active signing key. Hits
+never renew the entry. Responses carry ``Cache-Control: public, max-age=300``,
+an ``Age`` counted from generation, and a weak ``ETag`` derived from the XML
+bytes, the document URL and the fixed language/timezone. There is deliberately
+no ``Last-Modified``: the newest item date misses edits to older entries.
+``If-None-Match`` (including ``*``) on ``GET``/``HEAD`` returns a bodyless
+``304``; ``If-Modified-Since`` alone returns the normal page. Preconditions are
+evaluated by the finalizing middleware after compression, in either order of
+``GZipMiddleware`` and ``ConditionalGetMiddleware``, so a ``304`` keeps the
+``Vary`` headers of the ``200`` (``Accept-Encoding``, ``Accept-Language``) as
+well as its ``ETag``, ``Cache-Control`` and ``Age``. A failed ``If-Match``
+returns an uncached ``412``; ``If-Match`` uses strong comparison, so only
+``If-Match: *`` passes against the weak ``ETag``. Because there is no ``Last-Modified``, a valid
+``If-Unmodified-Since`` sent without ``If-Match`` can never pass and also
+returns ``412``; when ``If-Match`` is present, ``If-Unmodified-Since`` is not
+evaluated. ``HEAD`` responses carry
+the ``GET`` headers, including ``Content-Length``, ``Content-Encoding`` and
+``Vary``, without a body. As a consequence, compression runs for every
+successful request, including ``HEAD`` and ``304`` responses, before the body is
+discarded.
+
+Accepted staleness: deleting, restricting, unpublishing or editing a *child*
+entry, or changing its media, can stay visible in a cached page for up to five
+minutes; there is no immediate revocation. The Blog itself, its configuration,
+and the cursor (including signature) are checked freshly on every request that
+reaches Django, before the cache is consulted. Browser and CDN caches cannot
+perform these checks.
+
+Errors, redirects and ``405`` responses are never cached and carry
+``Cache-Control: no-store`` without validators. If other middleware adds
+``Set-Cookie`` (through ``response.cookies`` or as a literal header) or a
+``Vary`` header other than ``Accept-Encoding`` or
+``Accept-Language`` (for example ``Vary: Cookie`` after session access), the
+``200``/``304`` becomes ``Cache-Control: private, no-store`` without validators,
+keeps its cookies, is not stored, and an existing cache entry is evicted.
+
+CDN and proxy policy: a CDN in front of these paths must honor the origin's
+``Cache-Control``/``Age`` and must not extend freshness beyond five minutes,
+ignore ``no-store``/``private``, or answer requests without forwarding the
+query string. If your CDN cannot guarantee that, exclude the
+``*/feed/paged/*`` and ``*/feed/podcast/*/paged/*`` paths from CDN caching.
+
+Key rotation: continuation links are signed with ``SECRET_KEY``. When rotating,
+move the old key to ``SECRET_KEY_FALLBACKS`` so existing links keep working;
+rotation also starts a new cache partition, so no cached page offers links
+signed by an old key. Removing a key from the fallbacks makes its links restart
+at the paged head, even for pages that are still cached.
+
+Disabling and rollback: removing a record (or clearing the setting) makes its
+paged URLs return ``404`` immediately; the full feeds are untouched. With the
+setting empty the middleware is optional, and the ``404`` is ``no-store``
+without validators either way. This
+withdraws the endpoints; it is not a transparent rollback for anyone who
+already subscribed to a paged URL. Keep records, cursor decoding and fallback
+keys while such subscribers need continuation support. Existing subscriptions
+are not migrated to paged URLs by django-cast.
 
 Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
 Run the normal ``migrate`` command after upgrading. Creating the index can lock
@@ -314,8 +461,9 @@ the post table; schedule the migration appropriately for large installations.
 Feed Limits
 -----------
 
-Feeds currently include all eligible live, publicly accessible entries; there
-is no configurable item limit or pagination. ``CAST_FEED_ITEM_LIMIT`` is not
+The full feeds include all eligible live, publicly accessible entries; there
+is no configurable item limit. Use the opt-in :ref:`paged feeds <paged_feeds>`
+for bounded pages. ``CAST_FEED_ITEM_LIMIT`` is not
 implemented and setting it has no effect. Podcast feeds additionally require
 podcast audio.
 

@@ -1,4 +1,4 @@
-"""Test-only URLconf mounting Cast and the internal paged adapters at the site root."""
+"""Test-only URLconf mounting Cast and its paged routes at the site root."""
 
 from django.urls import path
 

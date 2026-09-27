@@ -20,8 +20,26 @@
   query admission, bounded page selection, and request-local RSS/Atom blog and
   podcast serializers with ``self``/``first``/``next`` navigation links, rendered
   anonymously with fixed ``LANGUAGE_CODE``/``TIME_ZONE``. They reuse the
-  existing feed classes, whose behavior is unchanged. No URL uses them yet:
-  public routes and caching arrive in a later step.
+  existing feed classes, whose behavior is unchanged.
+- Add opt-in paged RSS/Atom feeds: four additive routes beneath ``cast.urls``
+  (``paged_entries_feed``, ``paged_entries_atom_feed``, ``paged_podcast_feed_rss``,
+  ``paged_podcast_feed_atom``) for Blogs and Podcasts listed in
+  ``CAST_FEED_PAGINATION``. They return 404 unless configured; full feeds, their
+  URLs, links and caching are unchanged and remain the default and the
+  recommendation for unverified clients (no client compatibility is claimed).
+  Pages are cached for 300 seconds in the ``default`` cache (never renewed on
+  hits), with ``Cache-Control: public, max-age=300``, ``Age``, a weak ``ETag``,
+  ``If-None-Match`` support and no ``Last-Modified``; child-entry changes may stay
+  visible for up to five minutes. Owner, configuration and cursor signatures are
+  checked before every cache lookup. ``HEAD`` and ``304`` responses keep the
+  representation headers of ``GET`` (including compression ``Vary``). Opting in requires the new
+  ``cast.middleware.PagedFeedCacheMiddleware`` as the first ``MIDDLEWARE`` entry
+  and no Django full-site cache middleware (new pure checks ``cast.E015`` and
+  ``cast.E016``); responses with ``Set-Cookie`` or unexpected ``Vary`` become
+  ``private, no-store``. Run ``check --deploy --database default`` after
+  ``migrate``. Disabling a record withdraws its paged URLs (404); it is not a
+  transparent rollback for existing paged subscribers. Sites that do not opt in
+  need no changes.
 
 - Correct feed documentation: ``CAST_FEED_ITEM_LIMIT`` and
   ``CAST_FEED_CACHE_TIMEOUT`` were never implemented and have no effect. Built-in

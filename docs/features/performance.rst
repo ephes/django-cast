@@ -104,6 +104,14 @@ Django Cast implements caching at multiple levels:
    - Conditional GET support
    - Hourly refresh default
 
+4. **Paged Feed Cache** (opt-in, see :ref:`paged_feeds`)
+
+   - Serialized page bytes, content type, weak ETag and generation time
+   - Django ``default`` cache, versioned namespace, 300 seconds, never renewed on hits
+   - Owner, configuration and cursor checks run before every cache lookup
+   - Requires ``cast.middleware.PagedFeedCacheMiddleware`` first in ``MIDDLEWARE``
+     and is incompatible with Django's full-site cache middleware
+
 Cache Configuration
 -------------------
 

@@ -1,4 +1,4 @@
-"""Test-only URLconf mounting Cast and the internal paged adapters below a language prefix."""
+"""Test-only URLconf mounting Cast and its paged routes below a language prefix."""
 
 from django.conf.urls.i18n import i18n_patterns
 from django.urls import path

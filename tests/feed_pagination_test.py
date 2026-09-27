@@ -396,6 +396,7 @@ def test_check_command_runs_target_check_only_with_deploy_and_database(settings,
     from django.core.management.base import SystemCheckError
 
     settings.CAST_FEED_PAGINATION = [entry(hostname="localhost", port=80, blog_path="/missing/")]
+    settings.MIDDLEWARE = ["cast.middleware.PagedFeedCacheMiddleware", *settings.MIDDLEWARE]
 
     call_command("check", "--database", "default")
     call_command("check", "--deploy", "--tag", "cast")

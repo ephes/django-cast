@@ -1,5 +1,10 @@
 # Paged feeds: research, migration concept, and implementation plan
 
+Historical research record. The [additive endpoint contract](2026-09-21-paged-feeds-endpoints.md)
+was subsequently approved, implemented and independently reviewed on 2026-09-27.
+The approval/status statements below describe this original research slice;
+only client interoperability and subscription migration remain active follow-ups.
+
 Policy update: five-minute cache staleness is accepted, not a repair requirement.
 The [selection-service plan](2026-09-19-paged-feeds-selection.md) supersedes older
 immediate-revocation/no-store requirements. Selection implementation is approved;

@@ -48,6 +48,9 @@ INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.messages",
 ] + list(CAST_APPS)
+if TEST_DATABASE_ENGINE == "django.db.backends.postgresql":
+    # Wagtail's PostgreSQL search backend models use SearchVectorField/GinIndex (postgres.E005 otherwise).
+    INSTALLED_APPS.append("django.contrib.postgres")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

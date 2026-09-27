@@ -1,5 +1,9 @@
 # Paged feeds — baseline and contract spike
 
+Historical investigation record. The [additive endpoints](2026-09-21-paged-feeds-endpoints.md)
+were subsequently approved, implemented and independently reviewed on 2026-09-27.
+Runtime proposals below describe the earlier spike, not current implementation status.
+
 Policy update: the user accepts five-minute cache staleness. The later
 [selection-service plan](2026-09-19-paged-feeds-selection.md) supersedes this
 record's no-store and full-feed repair requirements. Measurements remain valid.

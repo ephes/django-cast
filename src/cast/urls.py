@@ -3,7 +3,7 @@ from typing import Any
 from django.urls import include, path
 from django.views.decorators.cache import cache_page
 
-from . import feeds
+from . import feeds, paged_feeds
 from .models import Blog
 from .site_lookup import unrestricted_page_required
 from .views import meta
@@ -59,6 +59,31 @@ urlpatterns: list[Any] = [
         "<slug:slug>/feed/podcast/<audio_format>/atom.xml",
         view=public_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.AtomPodcastFeed))),
         name="podcast_feed_atom",
+    ),
+    # Opt-in paged feeds (CAST_FEED_PAGINATION); finalized by cast.middleware.PagedFeedCacheMiddleware
+    path(
+        "<slug:slug>/feed/paged/rss.xml",
+        view=paged_feeds.paged_feed_view,
+        kwargs={"kind": "blog", "representation": "rss"},
+        name="paged_entries_feed",
+    ),
+    path(
+        "<slug:slug>/feed/paged/atom.xml",
+        view=paged_feeds.paged_feed_view,
+        kwargs={"kind": "blog", "representation": "atom"},
+        name="paged_entries_atom_feed",
+    ),
+    path(
+        "<slug:slug>/feed/podcast/<audio_format>/paged/rss.xml",
+        view=paged_feeds.paged_feed_view,
+        kwargs={"kind": "podcast", "representation": "rss"},
+        name="paged_podcast_feed_rss",
+    ),
+    path(
+        "<slug:slug>/feed/podcast/<audio_format>/paged/atom.xml",
+        view=paged_feeds.paged_feed_view,
+        kwargs={"kind": "podcast", "representation": "atom"},
+        name="paged_podcast_feed_atom",
     ),
     # Meta views like twitter player cards etc
     path("<slug:blog_slug>/<slug:episode_slug>/twitter-player/", view=meta.twitter_player, name="twitter-player"),

@@ -1,7 +1,6 @@
-"""Internal configuration and owner resolution for future paged feed endpoints.
+"""Configuration and owner resolution for the opt-in paged feed endpoints.
 
-No URL uses this module yet: configuring ``CAST_FEED_PAGINATION`` currently only
-enables system checks. Parsing is pure; resolution queries the database.
+Parsing is pure; resolution queries the database.
 """
 
 from __future__ import annotations
