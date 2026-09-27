@@ -16,6 +16,12 @@
   ``cast.E013`` and ``cast.E014`` resolve targets only with
   ``check --deploy --database default``. No paged URLs exist yet, and setting it
   changes no existing feed, URL or cache.
+- Add internal paged feed adapters (``cast.paged_feeds``): strict single-cursor
+  query admission, bounded page selection, and request-local RSS/Atom blog and
+  podcast serializers with ``self``/``first``/``next`` navigation links, rendered
+  anonymously with fixed ``LANGUAGE_CODE``/``TIME_ZONE``. They reuse the
+  existing feed classes, whose behavior is unchanged. No URL uses them yet:
+  public routes and caching arrive in a later step.
 
 - Correct feed documentation: ``CAST_FEED_ITEM_LIMIT`` and
   ``CAST_FEED_CACHE_TIMEOUT`` were never implemented and have no effect. Built-in

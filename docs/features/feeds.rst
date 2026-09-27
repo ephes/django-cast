@@ -288,6 +288,25 @@ access. ``cast.E013`` and ``cast.E014`` query the database, so they run only
 with ``python manage.py check --deploy --database default`` after migrations,
 never during ordinary checks, ``migrate`` or ``check --tag cast``.
 
+Internal paged serializers (``cast.paged_feeds``) are also in place, but no URL
+pattern uses them yet, so they serve nothing. They admit a request only for a
+configured, live and public owner; accept either an empty query or exactly one
+nonempty ``cursor`` (raw query bounded to 4096 bytes, strict percent escapes);
+select at most ``page_size + 1`` lightweight rows and hydrate only the page.
+Each page is serialized by request-local subclasses of the existing RSS, Atom
+and podcast feed classes, so item GUIDs, links, content, dates, enclosures,
+iTunes/Podcasting 2.0 elements, chapters, transcripts, stylesheets and Atom feed
+IDs match the full feed. An episode missing the requested audio format fails
+exactly as it does in the full feed. Pages carry one ``self``, a ``first`` link
+to the bare paged head and ``next`` only when more entries follow, as Atom links
+with the representation MIME type (inside the RSS channel for RSS).
+Rendering uses an anonymous request with the validated origin and resolved Site
+only, ``settings.LANGUAGE_CODE`` and ``settings.TIME_ZONE``; caller cookies,
+session themes, users and HTMX headers are ignored and the caller's active
+language and timezone are restored. Public routes, their shared cache policy
+and conditional responses ship together in a later step; until then these
+adapters make no client compatibility claim.
+
 Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
 Run the normal ``migrate`` command after upgrading. Creating the index can lock
 the post table; schedule the migration appropriately for large installations.

@@ -2,7 +2,8 @@
 
 Status: independent review complete with advisory clarifications; implementation
 approved by the maintainer on 2026-09-27 and proceeding slice by slice. Only step 1
-groundwork is implemented (see Implementation progress); no endpoints, routes,
+groundwork and step 2 internal adapters are implemented and independently
+reviewed (see Implementation progress). No public endpoints, live routes,
 caching or subscription changes exist yet.
 Based on the implemented [selection service](2026-09-19-paged-feeds-selection.md).
 This contract supersedes the spike's no-store-success/cache-repair proposal:
@@ -244,11 +245,51 @@ conditional headers must not turn them into 304. Do not cache recovery responses
   two valid rounds; the repair review returned CLEAN with no evidence omissions.
   An earlier harness launch failed before review under the old system Python;
   using the project's Python resolved that invocation issue.
-- Deferred to step 2: strict query/cursor parsing (4096-byte bound, single
-  `cursor`), scope construction and internal serializer adapters. Public routes
-  are held until step 3 so caching/access/conditional handling ship together.
+- Step 2 (implemented, independently reviewed): internal
+  `src/cast/paged_feeds.py`. `admit_paged_feed_request` resolves the owner with
+  the step-1 resolver (404 first), reverses the planned URL name under the
+  `cast` namespace (mount, script and request-path language prefix; no rendering
+  language), requires the request path to equal it, then admits the raw query:
+  4096-byte bound, ASCII, complete percent escapes, strict UTF-8, empty or exactly
+  one nonempty `cursor`. `InvalidPagedFeedQuery` subclasses `InvalidFeedCursor`,
+  so decoder distinctions stay intact (400 vs. restart). `select_paged_feed`
+  reuses `select_feed_page` with the record's page size; `render_paged_feed`
+  reuses `build_feed_page_context` in an `IsolatedFeedRequest` (anonymous, no
+  cookies/session/HTMX, validated normalized origin, resolved Site preset) under
+  `translation.override(LANGUAGE_CODE)`/`timezone.override(TIME_ZONE)`. Four
+  request-local subclasses of the legacy feed classes take the bounded context
+  and navigation explicitly and raise instead of building a full repository once
+  the context is used; generator mixins append `first`/`next` Atom links (type =
+  representation MIME) after all existing root elements, and `feed_url` supplies
+  the single canonical `self` including the re-encoded cursor. Serialization
+  mirrors `Feed.__call__` without its Last-Modified header. Legacy classes and
+  URLs are unchanged. `internal_paged_feed_response` is an explicitly internal,
+  `Cache-Control: no-store` adapter (405/400/302/200; HEAD without body) used only
+  by test URLconfs (`tests/paged_feed_urls.py`, root and `i18n_patterns` variants);
+  it is not the public cache policy. Raised 404s still use Django's handler.
+  Tests (`tests/paged_feeds_test.py`): both repository modes and four feed types
+  with exact per-GUID item bytes and head metadata parity against the legacy full
+  feed (distinct per-episode media and lengths, chapters, transcript), tie-break
+  order, empty head and exhausted continuation, page-size change, 404 guards
+  preceding cursor handling, generic 400s, restart redirects and key rotation,
+  mounts/prefixes/script prefix/origins/canonical re-encoding, fixed locale with
+  restored caller language/timezone and unmutated caller request, and bounded
+  selection/hydration/rendering. Finding: an episode lacking the requested format
+  raises `ValueError` in the legacy full feed in both modes; the adapters keep
+  that behavior rather than silently changing membership.
+  Implementer: Claude Code Opus 5.5 / medium. Reviewer: Codex GPT-6 Sol / medium,
+  one valid round, CLEAN; no skipped or truncated files, only a synthetic test
+  signing key redacted. Full independent `just check`: 3,311 passed, five skipped,
+  100% coverage; locked Python 3.14 cold-cache mypy and Sphinx `-W` passed.
+  The initial full run caught a test-only LocaleMiddleware language leak, repaired
+  by restoring the active language around that fixture before review. A transient
+  provider/PyPI DNS outage interrupted the first implementation run; a bounded
+  fresh Claude session completed it after connectivity returned.
 - Deferred to step 3: `PagedFeedCacheMiddleware`, its first-position check and
-  the full-site cache middleware rejection, which need the real middleware.
+  the full-site cache middleware rejection, which need the real middleware; the
+  public routes in `cast.urls` (composing `admit`/`select`/`render` with the
+  cache layer, replacing the internal no-store adapter policy) and no-store
+  handling for raised 404s.
 - Steps 4–5 remain as listed above.
 
 ## Acceptance matrix and rollout boundaries
