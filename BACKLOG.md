@@ -20,8 +20,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - First approved investigation: [baseline and contracts](backlog/2026-09-19-paged-feeds-slice1.md).
   - Implemented and reviewed: [selection service](backlog/2026-09-19-paged-feeds-selection.md).
     Five-minute cache staleness is accepted; no cache repair is required.
-  - Next slice: [additive opt-in RSS/Atom endpoint contract](backlog/2026-09-21-paged-feeds-endpoints.md)
-    — draft; independent review blocked by Claude authentication, approval pending.
+  - In progress: [additive opt-in RSS/Atom endpoint contract](backlog/2026-09-21-paged-feeds-endpoints.md)
+    — independently reviewed with Opus 5.5; implementation approved 2026-09-27.
+    Step 1 groundwork (setting parsing, pure/deployment checks, exact owner resolution) is implemented;
+    steps 2–5 (view adapters/routes, response cache and middleware, operator docs, final validation) remain.
     No public paged endpoints exist yet.
   - Scope: scalable RSS/Atom feed infrastructure, documented client-compatibility evidence with unknowns recorded, additive opt-in endpoints,
     and an explicit migration/rollback policy for existing complete feeds. No template work.

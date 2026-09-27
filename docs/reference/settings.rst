@@ -131,6 +131,14 @@ POST_LIST_PAGINATION
 The number of posts to show per page on the user facing blog list page.
 Defaults to ``5``.
 
+CAST_FEED_PAGINATION
+====================
+
+Reserved for future paged RSS/Atom endpoints. Defaults to ``[]``. It is
+validated by system checks (``cast.E011`` to ``cast.E014``), but no URL uses
+it yet, so it currently changes no feed. See the internal pagination
+groundwork section of :doc:`../features/feeds` for the record format.
+
 CHOOSER_PAGINATION
 ==================
 

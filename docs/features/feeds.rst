@@ -235,6 +235,59 @@ It does not add public paged URLs or enable any pagination setting yet.
 Existing full feeds and their five-minute caching are unchanged; that staleness
 is accepted behavior, not an immediate-removal guarantee.
 
+The reserved ``CAST_FEED_PAGINATION`` setting (default ``[]``) and its checks
+are also groundwork. Validation and target resolution exist, but no URL uses
+them yet, so setting it serves no paged feed and changes no existing feed.
+Endpoint routes, caching and the complete operator opt-in procedure are not
+implemented yet. Treat the record format below as internal until they are.
+
+The setting is a ``list`` of records; each record is a ``dict`` with required
+``hostname``, ``port`` and ``blog_path`` and an optional ``page_size`` (default
+``100``). Tuples, other mappings, unknown fields, duplicate targets and
+booleans used as integers are rejected:
+
+- ``hostname`` is a bare ASCII host (no scheme, port or path). Case and one
+  trailing dot are normalized; IPv6 literals use brackets.
+- ``port`` is an integer from 1 to 65535 and must match the Wagtail ``Site``.
+- ``blog_path`` is the Blog's page path relative to the ``Site`` root page,
+  with leading and trailing slashes: ``"/"`` for a Blog that is the site root,
+  ``"/blog/"`` for a nested one. It is not a feed URL; queries, fragments,
+  percent escapes and empty or dot segments are rejected.
+- ``page_size`` is an integer from 1 to 500.
+
+.. code-block:: python
+
+    CAST_FEED_PAGINATION = [
+        {"hostname": "example.com", "port": 443, "blog_path": "/"},
+        {"hostname": "example.com", "port": 443, "blog_path": "/podcast/", "page_size": 50},
+    ]
+
+A record resolves only to the ``Site`` with exactly that hostname and port;
+Wagtail's default-site fallback never applies. The page at ``blog_path`` under
+that site root (inclusive) must be a Blog or Podcast. Its slug must be unique
+among Blog and Podcast pages on the site, including drafts, because feed routes
+are addressed by slug. Requests must use the configured host, validated by
+``ALLOWED_HOSTS``; an omitted port follows the request scheme. Forwarded host
+and scheme headers count only through Django's ``USE_X_FORWARDED_HOST`` and
+``SECURE_PROXY_SSL_HEADER``. Owners are rechecked for live, unrestricted
+public access (including inherited view restrictions) on every resolution.
+
+System checks for this setting:
+
+- ``cast.E011``: malformed ``CAST_FEED_PAGINATION``. Fix the reported entry.
+- ``cast.E012``: records are configured while ``USE_TZ`` is disabled. Enable
+  ``USE_TZ`` or remove the records.
+- ``cast.E013``: a record does not resolve to exactly one Site and Blog, or its
+  slug is ambiguous on that Site. Update the hostname, port or path after
+  renames and moves, or make the slug unique.
+- ``cast.E014``: target resolution could not read the database. Run
+  ``migrate`` first.
+
+``cast.E011`` and ``cast.E012`` run in every ``check`` without database
+access. ``cast.E013`` and ``cast.E014`` query the database, so they run only
+with ``python manage.py check --deploy --database default`` after migrations,
+never during ordinary checks, ``migrate`` or ``check --tag cast``.
+
 Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
 Run the normal ``migrate`` command after upgrading. Creating the index can lock
 the post table; schedule the migration appropriately for large installations.

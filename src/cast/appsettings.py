@@ -46,6 +46,8 @@ CAST_SETTING_REGISTRY: dict[str, CastSetting] = {
     "CAST_GALLERY_IMAGE_SLOT_DIMENSIONS": CastSetting([(1110, 740), (120, 80)], list),
     "CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB": CastSetting(True, bool),
     "CAST_REPOSITORY": CastSetting("default", str),
+    # Validated by cast.E011/E012 system checks rather than the generic type check.
+    "CAST_FEED_PAGINATION": CastSetting([]),
     "CAST_PODLOVE_PLAYER_THEMES": CastSetting({}, dict),
     "CAST_AUDIO_PLAYER": CastSetting("podlove", str),
     "CAST_EDITOR_SCOPES": CastSetting(
@@ -112,6 +114,7 @@ if TYPE_CHECKING:
     CAST_GALLERY_IMAGE_SLOT_DIMENSIONS: list[tuple[int, int]]
     CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB: bool
     CAST_REPOSITORY: str
+    CAST_FEED_PAGINATION: list[dict[str, Any]]
     CAST_PODLOVE_PLAYER_THEMES: dict[str, Any]
     CAST_AUDIO_PLAYER: str
     CAST_EDITOR_SCOPES: dict[str, set[str]]

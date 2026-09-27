@@ -1,7 +1,9 @@
 # Paged feeds: additive HTTP endpoint contract
 
-Status: draft for independent review and maintainer approval. Planning only;
-no endpoints, settings or subscription changes have been implemented here.
+Status: independent review complete with advisory clarifications; implementation
+approved by the maintainer on 2026-09-27 and proceeding slice by slice. Only step 1
+groundwork is implemented (see Implementation progress); no endpoints, routes,
+caching or subscription changes exist yet.
 Based on the implemented [selection service](2026-09-19-paged-feeds-selection.md).
 This contract supersedes the spike's no-store-success/cache-repair proposal:
 five-minute stale child content is accepted ordinary caching, not a defect.
@@ -117,16 +119,64 @@ No second repository-data cache or TTL extension on hits. Store bytes, safe
 representation headers, ETag and generation time; never cache request, repository
 or mutable feed instances. Key digest includes canonical absolute document URL
 (scheme/host/port/mount/cursor), Site/Blog identity, kind/format/representation,
-effective normalized policy including page size, repository mode, language and
-timezone. Include the active signing-key generation via a one-way digest so key
+effective normalized policy including page size, repository mode, fixed language
+and timezone (defined below). Include the active signing-key generation via a one-way digest so key
 rotation cannot reuse cached next links signed by a removed key; never log keys.
 Version the namespace when serialized semantics change across deployments.
 
 Render with an isolated anonymous public request: no credentials, caller user,
 session theme overrides or HTMX state may influence shared XML. Retain only the
-validated origin, path and resolved Site; use the site's theme and active language
-and timezone (included in cache identity). Do not mutate the caller request.
-Do not store responses with Set-Cookie or unexpected Vary headers. Built-in
+validated origin, path and resolved Site; use the site's theme. For this first
+release, fix rendering to Django settings.LANGUAGE_CODE and settings.TIME_ZONE,
+using scoped translation/timezone overrides around repository construction and
+serialization. Set the isolated request's LANGUAGE_CODE consistently and restore
+the caller's active translation/timezone afterwards. Ignore Accept-Language,
+django_language cookies, session/user timezone and middleware's negotiated active
+language; no per-request language negotiation or per-Site language setting is
+introduced. URL language prefixes, if deployed, remain part of the document URL
+but do not override the fixed rendering language. Include both fixed setting
+values in the origin cache key and ETag input, including for language-neutral XML.
+Do not mutate the caller request.
+Do not store responses with Set-Cookie or unexpected Vary headers. The permitted
+Vary set is Accept-Encoding (compression) and Accept-Language (a redundant but
+safe addition by LocaleMiddleware for this fixed-language representation).
+Preserve these on downstream responses/304s; any other Vary, including Cookie,
+precludes shared caching and must result in private, no-store output. Verify
+this at the complete middleware boundary, not only before middleware runs.
+
+Enforcement mechanism: add `cast.middleware.PagedFeedCacheMiddleware`, required
+as the first entry in MIDDLEWARE only when pagination is configured. A pure
+configuration check reports an error if it is absent or not first. It is
+transparent for all non-paged routes. Its outermost response hook runs after
+SessionMiddleware, CsrfViewMiddleware, LocaleMiddleware, ConditionalGetMiddleware
+and GZipMiddleware on the return path. The adapter marks its responses/request
+with private internal metadata; the hook finalizes both 200 and 304, and marks
+paged errors/redirects no-store. Unexpected Vary or Set-Cookie forces private,
+no-store and removes validators on either status. A private 304 does not gain a
+body; it carries the no-store policy, so downstream caches cannot reuse it as a
+public freshness extension. Do not delete cookies required by other middleware.
+
+Defer origin-cache insertion until this final hook has accepted the final
+response headers; the view only prepares a candidate on a cache miss. The
+candidate contains a full 200 pre-compression anonymous XML representation and
+whitelisted metadata, not the final compressed or cookie-bearing response. If a
+cold conditional request ultimately returns 304, insert the full 200 candidate
+after its final 304 headers pass the safety check; never store the 304 response
+itself or a bodyless representation. A hit-derived 304 does not cause insertion
+or renew TTL. Other non-200 outcomes discard any candidate. Test miss-then-304
+insertion and subsequent unconditional hits. On an unsafe warm hit, also evict the origin key;
+never reset TTL on a safe hit. Apply the same response check to hits and misses.
+Document the mandatory middleware placement and test it with real session/CSRF
+cookie-setting response hooks, compression and conditional requests. When
+pagination is enabled, the pure check rejects Django's UpdateCacheMiddleware
+and FetchFromCacheMiddleware anywhere in MIDDLEWARE (including subclasses),
+avoiding both ordering conflicts and guard bypass. There is no built-in bypass
+setting in this slice. Operators must remove those full-site cache middlewares
+and use endpoint-specific caching; external proxies must follow the documented
+path policy. Document this opt-in deployment constraint and test both checks.
+No new middleware behavior applies to legacy full feeds.
+
+Built-in
 rendering must be shown deterministic across logged-in/anonymous requests; custom
 templates are responsible for not depending on other unkeyed request inputs.
 
@@ -136,12 +186,14 @@ on every hit or on 304. Expired entries are regenerated, not served stale on err
 Child deletion/restriction/unpublish/edit/media changes may remain visible in a
 warm representation for that window. No immediate revocation claim. Fresh root
 checks apply to requests reaching Django; browser/CDN caches cannot perform them.
-Full-site cache middleware/CDNs must not bypass these guards at the origin or
-extend this freshness window; document the required path exclusions/configuration.
+CDNs must not bypass these guards at the origin or extend this freshness window;
+document the required path exclusions/configuration. Django full-site cache
+middleware is incompatible with this opt-in, as specified above.
 
 Remove Django Feed.__call__'s item-date Last-Modified header on these new routes
 only: a newest-item timestamp misses changes to older entries. Use a weak ETag
-derived from the serialized bytes and canonical document URL, not max publication
+derived from the serialized bytes, canonical document URL and fixed language/
+timezone settings, not max publication
 date. Weak validation tolerates downstream compression differences. Apply
 If-None-Match after current guards and cache lookup/rendering; matching GET/HEAD
 returns bodyless 304 carrying ETag, Cache-Control, Age and relevant Vary. With no
@@ -158,7 +210,8 @@ conditional headers must not turn them into 304. Do not cache recovery responses
 2. Add shared paged view adapter using the existing selector/context builder,
    four request-local generator adapters and URL names. Add navigation and parity
    tests before caching; do not alter legacy classes' behavior.
-3. Add the bounded response cache and conditional handling above; test complete
+3. Add the bounded response cache, required outermost finalization middleware,
+   placement system check and conditional handling above; test complete
    middleware paths, cache partitioning and anonymous rendering isolation.
 4. Update feed/settings/performance docs and current release notes, with opt-in,
    post-migration checks, key rotation, limitations and disable/rollback examples.
@@ -167,6 +220,36 @@ conditional headers must not turn them into 304. Do not cache recovery responses
    oldest/latest dependency checks and existing PostgreSQL selection job. Reuse
    jobs; no additional Actions service, benchmark job or artifact uploads.
    Independently review code before any later commit request.
+
+## Implementation progress
+
+- Step 1 (implemented, independently reviewed): `src/cast/feed_pagination.py`
+  parses and normalizes `CAST_FEED_PAGINATION` (default `[]`) without database
+  access; `cast.E011` (malformed) and `cast.E012` (USE_TZ) are pure checks.
+  `cast.E013`/`cast.E014` are deploy-only checks tagged solely `database`, so
+  they run with `check --deploy --database default` and not during `migrate`,
+  ordinary checks or `check --tag cast`. Resolution requires the exact Site
+  hostname/port (no default-Site fallback), a Blog/Podcast at the root-relative
+  path (inclusive root) and a slug unique among all Blog pages on that Site,
+  drafts included. Request helpers validate the host through ALLOWED_HOSTS,
+  infer an omitted port from the trusted scheme, require Site.find_for_request
+  agreement and freshly recheck live/public access. Tests: `tests/feed_pagination_test.py`.
+  Docs: internal-groundwork notes in feeds/settings docs and 0.2.66 release notes,
+  with no operator opt-in promise.
+  Independent review finding (accepted, repaired and re-reviewed): the parser
+  had accepted a top-level tuple and any `Mapping` record. It now requires a
+  `list` of `dict` records, with regression tests for empty/non-empty tuples,
+  `MappingProxyType` and `UserDict` across parser, checks and request entry.
+  Implementer: Claude Code Opus 5.5 / medium. Reviewer: Codex GPT-6 Sol / medium,
+  two valid rounds; the repair review returned CLEAN with no evidence omissions.
+  An earlier harness launch failed before review under the old system Python;
+  using the project's Python resolved that invocation issue.
+- Deferred to step 2: strict query/cursor parsing (4096-byte bound, single
+  `cursor`), scope construction and internal serializer adapters. Public routes
+  are held until step 3 so caching/access/conditional handling ship together.
+- Deferred to step 3: `PagedFeedCacheMiddleware`, its first-position check and
+  the full-site cache middleware rejection, which need the real middleware.
+- Steps 4–5 remain as listed above.
 
 ## Acceptance matrix and rollout boundaries
 
@@ -184,6 +267,13 @@ key removal even on warm hits, size-policy changes and independent request state
 Warm-cache tests cover accepted child staleness until expiry, fresh root denial,
 config removal before cache, ETag stability/changes on older-entry edits/deletions
 after expiry, matching/nonmatching/wildcard If-None-Match and HEAD/304 parity.
+Through LocaleMiddleware, ConditionalGetMiddleware and GZipMiddleware, vary
+Accept-Language, django_language cookies and active user/session timezones: for
+the same URL, XML and ETag must remain identical under fixed settings, with no
+caller context mutation. Changing fixed language/timezone settings partitions
+the cache and validator even if bytes happen to match. Cover URL-language
+prefixes, permitted Vary preservation on 200/304 and private/no-store fallback
+for unexpected middleware Vary or Set-Cookie, with no shared-cache reuse.
 
 Ordinary XML/parser fixtures prove serialization and link extraction, not that
 installed podcast clients traverse pages. Legacy full URLs stay recommended for
@@ -210,22 +300,45 @@ rechecked: next/first navigation and RSS Atom-namespace links support this contr
 the standard explicitly does not promise coherent snapshots. Client evidence in
 the original research is historical, not re-certified by this plan.
 
-Independent review: blocked, not passed. The 2026-09-21 isolated Opus/high
+Historical blocked attempt: the 2026-09-21 isolated Opus/high
 harness attempt returned PROVIDER_ERROR before reviewing any content because
 Claude Code reported no authenticated session. A prior launch could not write
 the shared lock directory; the supported temporary lock directory resolved that
-local setup issue, but not authentication. No valid review round or verdict
-exists. Resume the same draft through the review harness after authentication
-is available, adjudicate findings, then seek implementation approval.
+local setup issue, but not authentication. No valid verdict came from that attempt.
+On 2026-09-27, restoring session access made Claude authentication available.
+First valid review: Opus 5.5 / medium, one Warning about request-derived locale
+and shared HTTP caches. Accepted: explicitly fix language/timezone to Django
+settings, include them in cache/validator identity, enumerate safe Vary headers,
+and add full-middleware acceptance tests. Round 2 confirmed this repair and
+raised one directly coupled Warning: final Set-Cookie/Vary handling needs an
+explicit outermost response hook. Accepted: specify opt-in-required first-position
+middleware, deferred cache insertion and identical final checks for 200/304,
+hits/misses. Another delta review is required because this repair adds a concrete
+middleware-ordering contract rather than just rewording the original locale rule.
+Round 3 independently verified the repair: no Critical/Warning remained, two
+Suggestions. Accepted both as contract clarifications: a cold 304 may populate
+the cache with its complete safe 200 candidate, and pure checks reject Django's
+full-site cache middleware instead of promising an unspecified bypass. Stop at
+advisory convergence; no further agreement-seeking round is needed. This is not
+a CLEAN verdict and does not certify a future implementation.
+All three valid rounds used claude-opus-5-5 at medium effort, with no skipped,
+truncated or redacted evidence and no reviewer subagents. Current artifacts:
+`/tmp/cast-endpoint-review.hmSrPg/round1/` through `round3/` (ephemeral).
 Artifacts: `/tmp/cast-feed-endpoints.oxsakp/review2/` (ephemeral).
-Implementation approval: pending. No source changes, commits or pushes.
+Implementation approval: pending at review time; granted 2026-09-27 (see Status). No runtime changes, commits or pushes in this
+review turn; the earlier draft was already committed as 8dc43197.
 
-Local validation: `git diff --check`, lint and mypy pass. `just check` with a
+Historical validation: `git diff --check`, lint and mypy passed. `just check` with a
 temporary writable uv cache and the existing environment reached 3,093 passing
 tests and five skips; one packaging test failed because the restricted session
 could not resolve pypi.org to fetch uv-build. The full check is therefore NOT
-green; rerun in an environment with the build dependency available. No runtime
+green in that session. No runtime
 test failure was diagnosed and no test was disabled or weakened.
+
+Current validation (2026-09-27): `just check` passes, including lint, mypy,
+3,094 tests, five skips and 100% coverage. The earlier packaging dependency-fetch
+blocker is resolved. Later changes in this review are planning prose only;
+`git diff --check` passes. Release notes await actual endpoint implementation.
 
 Workflow lesson: an installed review CLI and historical successful reviews do
 not establish that the current restricted session can authenticate. Verify a

@@ -8,11 +8,13 @@ from typing import Any
 
 from django.apps import AppConfig, apps
 from django.conf import settings
-from django.core.checks import Error, Warning, register
+from django.core.checks import Error, Tags, Warning, register
+from django.db import DatabaseError, router
 
 from cast import appsettings
 from cast.apps import CAST_MIDDLEWARE
 from cast.appsettings import CAST_SETTING_REGISTRY
+from cast.feed_pagination import FeedOwnerError, resolve_feed_owner, validate_feed_pagination
 from cast.post_body_blocks import validate_post_body_block_setting
 
 # Source extensions to consider
@@ -358,3 +360,72 @@ def check_voxhelm_transcripts_task_backend(
             id="cast.E009",
         )
     ]
+
+
+@register("cast")
+def check_feed_pagination_settings(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Validate CAST_FEED_PAGINATION structurally, without database access."""
+    records, messages = validate_feed_pagination(appsettings.CAST_FEED_PAGINATION)
+    errors = [
+        Error(
+            message,
+            hint="Each entry needs hostname, port and blog_path, with optional page_size (1-500).",
+            id="cast.E011",
+        )
+        for message in messages
+    ]
+    if records and not settings.USE_TZ:
+        errors.append(
+            Error(
+                "CAST_FEED_PAGINATION requires USE_TZ=True.",
+                hint="Enable USE_TZ or remove the CAST_FEED_PAGINATION entries.",
+                id="cast.E012",
+            )
+        )
+    return errors
+
+
+@register(Tags.database, deploy=True)
+def check_feed_pagination_targets(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Resolve each CAST_FEED_PAGINATION entry to its Site and Blog.
+
+    Deployment-only and tagged only ``database``, so it runs with
+    ``check --deploy --database <alias>`` after migrations, never during
+    ordinary or pre-migration checks, ``migrate`` or ``check --tag cast``.
+    """
+    from wagtail.models import Page
+
+    records, messages = validate_feed_pagination(appsettings.CAST_FEED_PAGINATION)
+    if messages or not records or router.db_for_read(Page) not in (databases or ()):
+        return []
+    errors: list[Error] = []
+    try:
+        for record in records:
+            try:
+                resolve_feed_owner(record)
+            except FeedOwnerError as exc:
+                errors.append(
+                    Error(
+                        f"CAST_FEED_PAGINATION entry {exc}.",
+                        hint="Point the entry at the current Site hostname/port and canonical Blog path, "
+                        "and keep Blog slugs unique within that Site.",
+                        id="cast.E013",
+                    )
+                )
+    except DatabaseError:
+        return [
+            Error(
+                "CAST_FEED_PAGINATION targets could not be resolved because the database is unavailable.",
+                hint="Run 'migrate' first, then 'check --deploy --database default'.",
+                id="cast.E014",
+            )
+        ]
+    return errors

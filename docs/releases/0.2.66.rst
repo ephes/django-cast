@@ -8,6 +8,14 @@
   Run ``migrate`` on upgrade; index creation may lock the post table on large sites.
   Exercise selection in the existing PostgreSQL CI job; no additional job or
   local PostgreSQL requirement is introduced.
+- Add internal groundwork for future paged feed endpoints: the reserved
+  ``CAST_FEED_PAGINATION`` setting (default ``[]``) with strict record parsing,
+  exact hostname/port/path Blog and Podcast resolution without Wagtail's
+  default-site fallback, and fresh live/public owner checks. New checks:
+  ``cast.E011`` and ``cast.E012`` validate the setting without database access;
+  ``cast.E013`` and ``cast.E014`` resolve targets only with
+  ``check --deploy --database default``. No paged URLs exist yet, and setting it
+  changes no existing feed, URL or cache.
 
 - Correct feed documentation: ``CAST_FEED_ITEM_LIMIT`` and
   ``CAST_FEED_CACHE_TIMEOUT`` were never implemented and have no effect. Built-in
