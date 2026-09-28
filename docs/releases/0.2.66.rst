@@ -1,13 +1,9 @@
 0.2.66 (unreleased)
 -------------------
 
-- Add internal paged-feed selection and bounded repository construction, with
-  signed date/ID continuation cursors. This groundwork requires ``USE_TZ=True``;
-  it does not expose paged endpoints or change existing full feeds or caching.
-  Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
-  Run ``migrate`` on upgrade; index creation may lock the post table on large sites.
-  Exercise selection in the existing PostgreSQL CI job; no additional job or
-  local PostgreSQL requirement is introduced.
+- Add migration ``0083_post_feed_boundary_index``, a composite post date/ID
+  index that supports date-ordered feed queries. Run ``migrate`` on upgrade;
+  index creation may lock the post table on large sites.
 
 - Correct feed documentation: ``CAST_FEED_ITEM_LIMIT`` and
   ``CAST_FEED_CACHE_TIMEOUT`` were never implemented and have no effect. Built-in

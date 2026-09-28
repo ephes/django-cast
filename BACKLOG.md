@@ -15,20 +15,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
-- [ ] Paged feeds — research and reviewed migration concept
-  - Design record: [backlog/2026-09-19-paged-feeds.md](backlog/2026-09-19-paged-feeds.md)
-  - First approved investigation: [baseline and contracts](backlog/2026-09-19-paged-feeds-slice1.md).
-  - Implemented and reviewed: [selection service](backlog/2026-09-19-paged-feeds-selection.md).
-    Five-minute cache staleness is accepted; no cache repair is required.
-  - Next slice: [additive opt-in RSS/Atom endpoint contract](backlog/2026-09-21-paged-feeds-endpoints.md)
-    — draft; independent review blocked by Claude authentication, approval pending.
-    No public paged endpoints exist yet.
-  - Scope: scalable RSS/Atom feed infrastructure, documented client-compatibility evidence with unknowns recorded, additive opt-in endpoints,
-    and an explicit migration/rollback policy for existing complete feeds. No template work.
-  - Gate: research, concept and implementation slices must be independently reviewed and approved before coding.
-  - Done when: approved slices are implemented with stable URLs/identities, documented pagination/migration
-    behavior, large-archive tests and existing-feed compatibility checks. Research approval alone does not close this item.
-
 - [ ] Local authoring and sync workflow
   - Design record:
     [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
@@ -55,6 +41,12 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
+
+- [ ] Paged feeds (deferred)
+  - Decision record: [backlog/2026-09-28-paged-feeds-deferred.md](backlog/2026-09-28-paged-feeds-deferred.md);
+    implementation parked on the `archive/paged-feeds` branch.
+  - Revisit only if a major podcast client documents RFC 5005 `next` support, or if a site's feed stays too
+    large after conditional GET, compression and payload trimming.
 
 - [ ] Historical editor API rich-text audit tooling — deferred
   - Design record:

@@ -1,5 +1,8 @@
 # Paged feeds: additive HTTP endpoint contract
 
+Historical: paged feeds were deferred on 2026-09-28; see [the decision record](2026-09-28-paged-feeds-deferred.md).
+The implementation is parked on the `archive/paged-feeds` branch.
+
 Status: draft for independent review and maintainer approval. Planning only;
 no endpoints, settings or subscription changes have been implemented here.
 Based on the implemented [selection service](2026-09-19-paged-feeds-selection.md).

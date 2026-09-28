@@ -1,5 +1,8 @@
 # Paged feeds: selection-service slice
 
+Historical: paged feeds were deferred on 2026-09-28; see [the decision record](2026-09-28-paged-feeds-deferred.md).
+The implementation is parked on the `archive/paged-feeds` branch.
+
 Status: internal service implemented and verified; independent plan and code
 review cycles closed with advisory dispositions.
 This record supersedes earlier cache-repair/no-store requirements in the research

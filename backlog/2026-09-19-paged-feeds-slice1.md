@@ -1,5 +1,8 @@
 # Paged feeds — baseline and contract spike
 
+Historical: paged feeds were deferred on 2026-09-28; see [the decision record](2026-09-28-paged-feeds-deferred.md).
+The implementation is parked on the `archive/paged-feeds` branch.
+
 Policy update: the user accepts five-minute cache staleness. The later
 [selection-service plan](2026-09-19-paged-feeds-selection.md) supersedes this
 record's no-store and full-feed repair requirements. Measurements remain valid.

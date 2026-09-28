@@ -1,5 +1,8 @@
 # Paged feeds: research, migration concept, and implementation plan
 
+Historical: paged feeds were deferred on 2026-09-28; see [the decision record](2026-09-28-paged-feeds-deferred.md).
+The implementation is parked on the `archive/paged-feeds` branch.
+
 Policy update: five-minute cache staleness is accepted, not a repair requirement.
 The [selection-service plan](2026-09-19-paged-feeds-selection.md) supersedes older
 immediate-revocation/no-store requirements. Selection implementation is approved;

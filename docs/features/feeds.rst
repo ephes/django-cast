@@ -224,16 +224,8 @@ Feeds are also available via the REST API:
 Configuration
 =============
 
-Internal pagination groundwork
-------------------------------
-
-An internal selection service prepares bounded pages for future RSS/Atom
-endpoints. It selects IDs and dates before either repository loads media, using
-signed continuation cursors and stable date/ID ordering. It requires
-``USE_TZ=True`` so UTC cursors round-trip timestamps without ambiguity.
-It does not add public paged URLs or enable any pagination setting yet.
-Existing full feeds and their five-minute caching are unchanged; that staleness
-is accepted behavior, not an immediate-removal guarantee.
+Post date index
+---------------
 
 Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
 Run the normal ``migrate`` command after upgrading. Creating the index can lock
