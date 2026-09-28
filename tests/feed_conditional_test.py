@@ -133,8 +133,8 @@ def test_itunes_summary_is_emitted_by_default(client, episode, clear_cache, rout
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("route_name", ["podcast_feed_rss", "podcast_feed_atom"])
-def test_itunes_summary_can_be_disabled(client, episode, clear_cache, monkeypatch, route_name):
-    monkeypatch.setattr(appsettings, "CAST_FEED_ITUNES_SUMMARY", False)
+def test_itunes_summary_can_be_disabled(client, episode, clear_cache, settings, route_name):
+    settings.CAST_FEED_ITUNES_SUMMARY = False
     url = reverse(f"cast:{route_name}", kwargs={"slug": episode.blog.slug, "audio_format": "m4a"})
     content = client.get(url).content
     assert b"itunes:summary" not in content

@@ -12,9 +12,11 @@ from cast import appsettings
 from tests.factories import EpisodeFactory, PostFactory
 
 
+# Use the settings fixture, not monkeypatch on cast.appsettings: undoing a module
+# monkeypatch leaves a real attribute behind that shadows appsettings.__getattr__.
 @pytest.fixture(params=["default", "django"])
-def feed_repository(request, monkeypatch):
-    monkeypatch.setattr(appsettings, "CAST_REPOSITORY", request.param)
+def feed_repository(request, settings):
+    settings.CAST_REPOSITORY = request.param
     cache.clear()
     yield request.param
     cache.clear()
@@ -38,8 +40,8 @@ def _dated_posts(factory, parent, owner, count, **extra):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("route_name", ["latest_entries_feed", "latest_entries_atom_feed"])
-def test_blog_feed_keeps_only_newest_posts(client, post, feed_repository, monkeypatch, route_name):
-    monkeypatch.setattr(appsettings, "CAST_BLOG_FEED_ITEM_LIMIT", 3)
+def test_blog_feed_keeps_only_newest_posts(client, post, feed_repository, settings, route_name):
+    settings.CAST_BLOG_FEED_ITEM_LIMIT = 3
     posts = [post, *_dated_posts(PostFactory, post.blog, post.owner, 5)]
     newest = sorted(posts, key=lambda item: item.visible_date, reverse=True)[:3]
 
@@ -61,8 +63,8 @@ def test_blog_feed_is_complete_without_limit(client, post, feed_repository):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("route_name", ["podcast_feed_rss", "podcast_feed_atom"])
-def test_podcast_feed_ignores_blog_feed_limit(client, episode, feed_repository, monkeypatch, route_name):
-    monkeypatch.setattr(appsettings, "CAST_BLOG_FEED_ITEM_LIMIT", 1)
+def test_podcast_feed_ignores_blog_feed_limit(client, episode, feed_repository, settings, route_name):
+    settings.CAST_BLOG_FEED_ITEM_LIMIT = 1
     _dated_posts(EpisodeFactory, episode.blog, episode.owner, 3, podcast_audio=episode.podcast_audio)
 
     url = reverse(f"cast:{route_name}", kwargs={"slug": episode.blog.slug, "audio_format": "m4a"})

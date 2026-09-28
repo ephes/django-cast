@@ -381,6 +381,20 @@ def restore_site_root_paths_cache(baseline_site_root_paths_cache):
 
 
 @pytest.fixture(autouse=True)
+def _drop_appsettings_module_overrides():
+    """Keep cast.appsettings reading Django settings across tests.
+
+    ``monkeypatch.setattr(appsettings, NAME, ...)`` restores the previous value
+    as a real module attribute, which then shadows ``appsettings.__getattr__``
+    and hides later ``settings.NAME`` changes. Autouse fixtures tear down after
+    ``monkeypatch``, so removing the leftovers here isolates every test.
+    """
+    yield
+    for name in appsettings.CAST_SETTING_REGISTRY:
+        vars(appsettings).pop(name, None)
+
+
+@pytest.fixture(autouse=True)
 def _clear_theme_cache():
     """Clear the template base dir choices cache before and after each test."""
     _clear_template_base_dir_choices_cache()
