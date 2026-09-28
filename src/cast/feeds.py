@@ -29,7 +29,7 @@ from cast.presenters import render_post_description
 from cast.site_lookup import get_site_specific_unrestricted_page_or_404
 
 from .models import Audio, Blog, EpisodeContributor, Podcast, Post
-from .models.repository import FeedContext
+from .models.repository import FeedContext, limit_blog_feed_posts
 
 if django.VERSION >= (5, 2):
     from django.utils.feedgenerator import Stylesheet
@@ -114,7 +114,9 @@ class RepositoryMixin(Feed):
                     .order_by("-visible_date")
                 )
             else:
-                post_queryset = Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
+                post_queryset = limit_blog_feed_posts(
+                    Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
+                )
             return FeedContext.create_from_django_models(
                 request=request,
                 blog=blog,

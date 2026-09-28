@@ -13,6 +13,7 @@ from .contexts import (
     EpisodeFeedContext,
     FeedContext,
     PostDetailContext,
+    limit_blog_feed_posts,
 )
 from .serialization import (
     deserialize_audio,
@@ -106,6 +107,7 @@ __all__ = [
     "deserialize_transcript",
     "deserialize_video",
     "get_facet_choices",
+    "limit_blog_feed_posts",
     "rendition_to_dict",
     "serialize_audio",
     "serialize_blog",

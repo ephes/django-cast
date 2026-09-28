@@ -102,6 +102,25 @@ def check_cast_audio_player_settings(
 
 
 @register("cast")
+def check_blog_feed_item_limit(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Validate CAST_BLOG_FEED_ITEM_LIMIT: None (complete archive) or a positive integer."""
+    limit = appsettings.CAST_BLOG_FEED_ITEM_LIMIT
+    if limit is None or (type(limit) is int and limit >= 1):
+        return []
+    return [
+        Error(
+            "CAST_BLOG_FEED_ITEM_LIMIT must be None or a positive integer.",
+            hint="Use None to include every post, or e.g. 50 to keep the newest 50 posts in blog feeds.",
+            id="cast.E011",
+        )
+    ]
+
+
+@register("cast")
 def check_post_body_block_setting(
     app_configs: Sequence[AppConfig] | None = None,
     databases: Sequence[str] | None = None,

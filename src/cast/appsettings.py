@@ -47,6 +47,8 @@ CAST_SETTING_REGISTRY: dict[str, CastSetting] = {
     "CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB": CastSetting(True, bool),
     "CAST_REPOSITORY": CastSetting("default", str),
     "CAST_FEED_ITUNES_SUMMARY": CastSetting(True, bool),
+    # Validated by the cast.E011 system check (None or a positive int).
+    "CAST_BLOG_FEED_ITEM_LIMIT": CastSetting(None),
     "CAST_PODLOVE_PLAYER_THEMES": CastSetting({}, dict),
     "CAST_AUDIO_PLAYER": CastSetting("podlove", str),
     "CAST_EDITOR_SCOPES": CastSetting(
@@ -114,6 +116,7 @@ if TYPE_CHECKING:
     CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB: bool
     CAST_REPOSITORY: str
     CAST_FEED_ITUNES_SUMMARY: bool
+    CAST_BLOG_FEED_ITEM_LIMIT: int | None
     CAST_PODLOVE_PLAYER_THEMES: dict[str, Any]
     CAST_AUDIO_PLAYER: str
     CAST_EDITOR_SCOPES: dict[str, set[str]]

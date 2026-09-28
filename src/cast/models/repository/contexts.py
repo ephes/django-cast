@@ -7,6 +7,7 @@ from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
 
+from cast import appsettings
 from cast.blog_index import (
     cover_image_context,
     create_blog_filterset,
@@ -170,6 +171,19 @@ class EpisodeFeedContext:
         self.chapters = chapters
 
 
+def limit_blog_feed_posts(post_queryset: QuerySet["Post"]) -> QuerySet["Post"]:
+    """Keep only the newest ``CAST_BLOG_FEED_ITEM_LIMIT`` posts of a blog feed queryset.
+
+    The newest IDs are selected first, so the limited queryset can still be
+    filtered and prefetched. ``None`` keeps the complete archive.
+    """
+    limit = appsettings.CAST_BLOG_FEED_ITEM_LIMIT
+    if limit is None:
+        return post_queryset
+    newest_ids = list(post_queryset.order_by("-visible_date", "-pk").values_list("pk", flat=True)[:limit])
+    return post_queryset.filter(pk__in=newest_ids)
+
+
 class FeedContext:
     """Container for data needed to render an RSS or Atom feed.
 
@@ -278,7 +292,9 @@ class FeedContext:
         else:
             from ..pages import Post
 
-            post_queryset = Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
+            post_queryset = limit_blog_feed_posts(
+                Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
+            )
         data = data_for_blog_cachable(request=request, blog=blog, post_queryset=post_queryset, is_paginated=False)
         data["blog_url"] = blog.get_url(request=request)
         return data

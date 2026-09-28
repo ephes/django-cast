@@ -8,6 +8,9 @@
 - Add ``CAST_FEED_ITUNES_SUMMARY`` (default ``True``). Set it to ``False`` to
   omit ``<itunes:summary>``, which duplicates ``<description>`` and made up about
   a third of a 206-episode podcast feed.
+- Add ``CAST_BLOG_FEED_ITEM_LIMIT`` (default ``None``, no limit) to keep only the
+  newest posts in the blog RSS/Atom feeds. Podcast feeds stay complete. The new
+  ``cast.E011`` system check requires ``None`` or a positive integer.
 
 - Add migration ``0083_post_feed_boundary_index``, a composite post date/ID
   index that supports date-ordered feed queries. Run ``migrate`` on upgrade;

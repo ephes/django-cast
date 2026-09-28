@@ -234,10 +234,21 @@ the post table; schedule the migration appropriately for large installations.
 Feed Limits
 -----------
 
-Feeds currently include all eligible live, publicly accessible entries; there
-is no configurable item limit or pagination. ``CAST_FEED_ITEM_LIMIT`` is not
-implemented and setting it has no effect. Podcast feeds additionally require
-podcast audio.
+Feeds include all eligible live, publicly accessible entries by default.
+Podcast feeds additionally require podcast audio. ``CAST_FEED_ITEM_LIMIT`` is
+not implemented and setting it has no effect.
+
+Set ``CAST_BLOG_FEED_ITEM_LIMIT`` to keep only the newest entries in the blog
+feeds (``latest_entries_feed`` and ``latest_entries_atom_feed``):
+
+.. code-block:: python
+
+    CAST_BLOG_FEED_ITEM_LIMIT = 50
+
+Feed readers keep entries they have already fetched, so a limited blog feed
+does not remove older posts for existing subscribers. Podcast feeds always
+include every episode: most podcast apps show only the episodes that are
+currently in the feed, so a limit would hide the back catalog.
 
 Follow Links
 ------------
@@ -303,10 +314,11 @@ Common Issues
 
 1. **Missing Enclosures**: Ensure episodes have ``podcast_audio`` set
 2. **Invalid Characters**: Check for special characters in titles/descriptions
-3. **Large Feed Size**: Feeds currently include the complete eligible archive;
-   there is no supported item-limit setting. Serve feeds compressed (for example
-   gzip or brotli at the reverse proxy), rely on the ``ETag``/``304`` support, and
-   consider ``CAST_FEED_ITUNES_SUMMARY = False`` to drop the duplicated episode
+3. **Large Feed Size**: Feeds include the complete eligible archive unless
+   ``CAST_BLOG_FEED_ITEM_LIMIT`` limits the blog feeds; podcast feeds have no item
+   limit. Serve feeds compressed (for example gzip or brotli at the reverse
+   proxy), rely on the ``ETag``/``304`` support, and consider
+   ``CAST_FEED_ITUNES_SUMMARY = False`` to drop the duplicated episode
    descriptions. Measure response size and generation cost before choosing
    deployment-specific caching or customization.
 4. **Cache Issues**: Clear cache after major content updates
