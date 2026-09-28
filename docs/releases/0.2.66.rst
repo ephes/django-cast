@@ -1,6 +1,14 @@
 0.2.66 (unreleased)
 -------------------
 
+- Send a weak ``ETag`` with every built-in RSS/Atom feed response and answer a
+  matching ``If-None-Match`` with ``304 Not Modified``, also for cached
+  responses. ``If-Modified-Since`` alone still returns the full feed, because
+  ``Last-Modified`` tracks only the newest entry.
+- Add ``CAST_FEED_ITUNES_SUMMARY`` (default ``True``). Set it to ``False`` to
+  omit ``<itunes:summary>``, which duplicates ``<description>`` and made up about
+  a third of a 206-episode podcast feed.
+
 - Add migration ``0083_post_feed_boundary_index``, a composite post date/ID
   index that supports date-ordered feed queries. Run ``migrate`` on upgrade;
   index creation may lock the post table on large sites.

@@ -263,6 +263,19 @@ remain in a warm response until it expires or is invalidated. When restricting
 previously public content, account for application and downstream caches; a
 cached feed is not an immediate-revocation mechanism.
 
+Conditional Requests
+--------------------
+
+Feed responses carry a weak ``ETag`` computed from the XML body. A client that
+sends a matching ``If-None-Match`` header gets ``304 Not Modified`` without a
+body, including when the response comes from the five-minute cache. This saves
+most of the bandwidth for podcast clients that poll often, such as Apple
+Podcasts and Spotify.
+
+``If-Modified-Since`` alone never produces a ``304``. The ``Last-Modified``
+header reflects only the newest entry's date, so it does not change when an
+older entry is edited or removed.
+
 Best Practices
 ==============
 
@@ -291,6 +304,9 @@ Common Issues
 1. **Missing Enclosures**: Ensure episodes have ``podcast_audio`` set
 2. **Invalid Characters**: Check for special characters in titles/descriptions
 3. **Large Feed Size**: Feeds currently include the complete eligible archive;
-   there is no supported item-limit setting. Measure response size and generation
-   cost before choosing deployment-specific caching or customization.
+   there is no supported item-limit setting. Serve feeds compressed (for example
+   gzip or brotli at the reverse proxy), rely on the ``ETag``/``304`` support, and
+   consider ``CAST_FEED_ITUNES_SUMMARY = False`` to drop the duplicated episode
+   descriptions. Measure response size and generation cost before choosing
+   deployment-specific caching or customization.
 4. **Cache Issues**: Clear cache after major content updates

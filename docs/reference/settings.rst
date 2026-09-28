@@ -782,6 +782,23 @@ optimized SQL. If you want to fetch data using the Django ORM, set
 
     CAST_REPOSITORY = "django"
 
+*****
+Feeds
+*****
+
+CAST_FEED_ITUNES_SUMMARY
+========================
+
+Whether podcast feeds emit ``<itunes:summary>`` for the podcast and each
+episode. Defaults to ``True``. The element repeats the ``<description>``
+content, so it can make up a large share of a feed with long show notes.
+Apple Podcasts reads ``<description>``; set this to ``False`` to shrink the
+feed when your clients do not need the duplicate.
+
+.. code-block:: python
+
+    CAST_FEED_ITUNES_SUMMARY = False
+
 .. _cdn_configuration:
 
 *********************************

@@ -169,6 +169,7 @@ class TestCheckCastSettingTypes:
             ("CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", list),
             ("CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB", bool),
             ("CAST_REPOSITORY", str),
+            ("CAST_FEED_ITUNES_SUMMARY", bool),
             ("CAST_PODLOVE_PLAYER_THEMES", dict),
             ("CAST_AUDIO_PLAYER", str),
             ("CAST_TRANSCRIPT_UPLOAD_MAX_BYTES", int),

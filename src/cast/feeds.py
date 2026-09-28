@@ -1,7 +1,8 @@
+import hashlib
 import logging
 from collections.abc import Callable
 from datetime import datetime, time
-from functools import update_wrapper
+from functools import update_wrapper, wraps
 from typing import Any, Protocol, cast
 
 import django
@@ -10,6 +11,8 @@ from django.contrib.syndication.views import Feed
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
+from django.http.response import HttpResponseBase
+from django.utils.cache import get_conditional_response
 from django.utils.feedgenerator import (
     Atom1Feed,
     Rss201rev2Feed,
@@ -188,6 +191,30 @@ def request_local_feed(feed_class: type[RepositoryMixin]) -> Callable[..., HttpR
     return update_wrapper(view, feed_class, updated=())
 
 
+def etag_conditional_feed(view: Callable[..., HttpResponseBase]) -> Callable[..., HttpResponseBase]:
+    """Add a weak content ETag to successful feed responses and answer matching If-None-Match with 304.
+
+    Wrap the response cache so cache hits are revalidated too. Only the ETag is
+    evaluated: a feed's Last-Modified is the newest entry's date and does not
+    change when older entries are edited or removed, so If-Modified-Since alone
+    never produces a 304. The ETag is weak because proxies may compress the body.
+    """
+
+    @wraps(view)
+    def wrapped(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        response = view(request, *args, **kwargs)
+        if request.method not in ("GET", "HEAD") or response.status_code != 200 or response.streaming:
+            return response
+        full_response = cast(HttpResponse, response)
+        if not full_response.has_header("ETag"):
+            digest = hashlib.md5(full_response.content, usedforsecurity=False).hexdigest()
+            full_response["ETag"] = f'W/"{digest}"'
+        conditional = get_conditional_response(request, etag=full_response["ETag"], response=full_response)
+        return cast(HttpResponseBase, conditional)
+
+    return wrapped
+
+
 class AtomStylesheetsMixin:
     """Atom feed generator mixin that supports XSL stylesheets."""
 
@@ -318,7 +345,8 @@ class ITunesElements(SyndicationFeed):
 
         self.add_itunes_categories(blog, handler)
 
-        haqe("itunes:summary", blog.description)
+        if appsettings.CAST_FEED_ITUNES_SUMMARY:
+            haqe("itunes:summary", blog.description)
         haqe("itunes:explicit", blog.get_explicit_display())
         if _is_itunes_type(itunes_type := getattr(blog, "itunes_type", "")):
             haqe("itunes:type", itunes_type)
@@ -349,7 +377,8 @@ class ITunesElements(SyndicationFeed):
         # haqe("copyright", "{0} {1}".format("insert license", year))
         haqe("itunes:author", post.owner.get_full_name())
         haqe("itunes:subtitle", post.title)
-        haqe("itunes:summary", post.description)
+        if appsettings.CAST_FEED_ITUNES_SUMMARY:
+            haqe("itunes:summary", post.description)
         haqe("itunes:duration", post.podcast_audio.duration_str)
         haqe("itunes:keywords", post.keywords)
         haqe("itunes:explicit", post.get_explicit_display())
