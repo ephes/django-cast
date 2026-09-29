@@ -709,6 +709,32 @@ caller cannot edit the page. Preview is a read action and requires no token
 scope, but the caller must still be authenticated, have Wagtail admin access,
 and have edit permission for the page.
 
+Preview authorization and rendering identity are separate. Post and Episode API
+previews render as an anonymous visitor, using the configured blog/site theme;
+the internal render receives neither the caller's Authorization header nor
+cookies. A browser session therefore cannot change the rendered identity or
+theme. Wagtail admin previews retain the editor's session identity and theme
+preferences. Preview HTML is marked ``Cache-Control: private, no-store``.
+API preview query parameters are not forwarded to the internal page render.
+Cache isolation appends a unique internal query parameter through Wagtail's
+private ``_get_dummy_headers`` hook, tested against supported Wagtail 7 and 8
+versions. Keep the cache-isolation regression in the compatibility matrix when
+upgrading Wagtail. Any query string supplied by that upstream hook is preserved;
+the current Wagtail hook does not forward the original request's query string.
+The configured ``SECURE_PROXY_SSL_HEADER`` is retained as transport metadata,
+so proxy-terminated HTTPS still reaches the internal renderer as HTTPS.
+
+Previews use the preview body's media in memory. They do not save pages,
+revisions, edit logs, media relationships, or Gallery records. Missing image
+renditions (including cover images and contributor avatars) may be generated as
+derived cache data; previews do not delete obsolete renditions. Publication
+still synchronizes persisted media relationships. Custom blocks, middleware,
+and site overrides must respect this policy too.
+
+Anonymous rendering does not grant access to protected audio or transcript
+endpoints. Interactive requests still require their own authorization; previews
+do not embed access tokens or make private media public.
+
 **Update a draft post**::
 
     PATCH /api/editor/posts/{id}/
@@ -782,6 +808,25 @@ A scheduled page is likewise left unchanged and returns ``409`` with code
 ``scheduled_post``. Post and episode responses expose this state as ``status:
 "scheduled"`` even when ``live`` is false.
 
+Post and Episode PATCH also honor Wagtail editorial locks. If
+``page.get_lock().for_user(user)`` applies, the request returns ``409``:
+
+.. code-block:: json
+
+    {"code": "page_locked", "detail": "This page is locked for editing."}
+
+No revision, slug change, or edit log is saved for a rejected write. A basic
+lock normally allows its owner to edit; global edit locks and scheduled
+publication locks apply to their owners too. These checks apply even when
+``require_unpublished`` is false. Permission checks, revision conflicts, and
+the explicit draft-only precondition take precedence, so a scheduled page with
+``require_unpublished: true`` still returns ``scheduled_post``.
+
+Each successful PATCH records one ``wagtail.edit`` audit entry with the acting
+user and new revision. The log and revision are saved in the same transaction.
+This applies on both Wagtail 7 and 8. Publication has its own, stricter
+:ref:`lock and workflow policy <editor_api_publish>` below.
+
 Instead of putting the token in the JSON body, clients may send the same
 revision id as a strict ``If-Match`` header:
 
@@ -831,6 +876,45 @@ returns the same ``409 revision_conflict`` envelope, and the newer revision is
 not published. When the header is omitted, the endpoint remains backwards
 compatible and publishes the latest revision found while holding the page-row
 lock.
+
+Publication honors editorial locks for both Posts and Episodes, including
+Episodes addressed through the Post endpoint:
+
+- An ordinary lock allows its owner to publish, without removing the lock.
+  A lock owned by someone else (or with no owner) rejects publication, even for
+  superusers. With ``WAGTAILADMIN_GLOBAL_EDIT_LOCK=True``, a locked page also
+  rejects its owner's publication; unlocked pages are unaffected.
+- Any approved scheduled revision blocks API publication, even when a newer
+  draft exists. Cancel or change the schedule explicitly in Wagtail admin.
+- An active workflow, including ``needs_changes``, blocks every API caller,
+  including reviewers and superusers. Complete or explicitly cancel it in
+  Wagtail first. Merely assigning a workflow without starting it does not block
+  publication. This follows Wagtail's workflow-enabled setting.
+- Other/custom locks are honored when ``page.get_lock().for_user(user)`` is true.
+
+Lock refusals return ``409`` with
+``{"code": "page_locked", "detail": "This page is locked for publication."}``.
+Active workflows return ``409 workflow_active`` with guidance to complete or
+cancel the workflow. Existing permission, revision-conflict, no-unpublished-draft
+and no-revision checks retain precedence. After those checks, approved schedules
+take precedence over active workflows, which take precedence over other locks.
+Episode audio validation follows these publication guards, so a locked Episode
+without audio returns the lock/workflow error rather than an audio error.
+Refusal leaves page content, revisions, schedules, workflows, media links and
+audit entries unchanged. There is no automatic unlock, workflow cancellation,
+or force-publish option.
+
+The workflow rule is deliberately stricter than Wagtail admin: permission to
+edit during review is not approval to bypass the workflow. It applies regardless
+of ``WAGTAIL_WORKFLOW_CANCEL_ON_PUBLISH``. These guards are specific to the
+editor API; normal admin publication, workflow completion and scheduled
+publication retain Wagtail's behavior. Optional ``If-Match`` semantics are unchanged.
+
+The API checks persisted state inside its publication transaction while holding
+the page and existing revision row locks. PostgreSQL regression tests exercise
+concurrent ordinary locking, schedule approval and stock group-approval workflow
+submission. This is not a universal serialization contract for custom workflow
+tasks or external writers that use different persistence paths.
 
 The success response is the normal editor post shape plus publish metadata:
 
@@ -1344,3 +1428,18 @@ Security Notes
 - CSRF protection is enabled for state-changing operations
 - Media uploads are validated for type and size before metadata extraction
 - Images API includes null byte protection
+
+Gallery entry captions
+----------------------
+
+Editor API gallery references accept an optional plain-text ``caption`` of
+at most 250 characters, for example ``{"id": 456, "caption": "An example"}``.
+Reads return non-empty captions on the matching entry, including repeated
+uses of the same image. Omitting the caption writes an empty caption; clients
+must retain returned captions when updating a section. Explicit ``null`` and
+non-string captions are invalid. Image chooser permissions
+continue to apply to each reference. Captions are rendered as escaped text.
+
+Both legacy integer-valued and structured stored entries remain readable.
+Editor API clients use the ``id``/``caption`` format above, independently of
+the internal stored representation.

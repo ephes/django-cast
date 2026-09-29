@@ -50,9 +50,7 @@ class CastConfig(AppConfig):
     def ready(self) -> None:
         from . import checks  # noqa: F401 — registers @register("cast") decorators
         from .appsettings import init_cast_settings
-        from .modelsearch_compat import apply_modelsearch_sqlite_match_patch
         from .publication import install_publication_policy
 
-        apply_modelsearch_sqlite_match_patch()
         init_cast_settings()
         install_publication_policy()

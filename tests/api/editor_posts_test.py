@@ -587,8 +587,9 @@ class TestEditorPostUpdate:
     @pytest.mark.django_db(transaction=True)
     @pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL row-lock semantics")
     def test_postgres_schedule_approval_serializes_with_draft_only_patch(
-        self, api_client, blog, admin_user, monkeypatch
+        self, api_client, pg_editor_actors, monkeypatch
     ):
+        admin_user, blog = pg_editor_actors
         created = self._create(api_client, blog, admin_user)
         revision_id = created["latest_revision_id"]
         url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})

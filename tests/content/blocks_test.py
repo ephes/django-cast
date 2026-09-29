@@ -153,8 +153,8 @@ def test_gallery_converter_writes_curated_stream_value(mocker):
     assert converter.to_stream([{"id": 3}, {"id": 5}], ctx=ctx, path="overview.0.value", errors=errors) == {
         "layout": "default",
         "gallery": [
-            {"id": "first", "type": "item", "value": 3},
-            {"id": "second", "type": "item", "value": 5},
+            {"id": "first", "type": "item", "value": {"image": 3, "caption": ""}},
+            {"id": "second", "type": "item", "value": {"image": 5, "caption": ""}},
         ],
     }
     assert not errors
@@ -188,3 +188,42 @@ def test_gallery_converter_read_skips_filter_without_user_and_rejects_inaccessib
     assert converter.to_author(value, ctx=ConversionContext(section="overview", user=None)) == [{"id": 3}]
     assert converter.to_author(value, ctx=ConversionContext(section="overview", user="user")) is UNSUPPORTED
     resolver.assert_called_once_with(3, "user")
+
+
+@pytest.mark.parametrize("caption", [None, 4, "x" * 251])
+def test_gallery_converter_rejects_invalid_caption_with_field_error(mocker, caption):
+    mocker.patch("cast.content.blocks.get_choosable_image", return_value=object())
+    errors = ErrorCollector()
+    result = GalleryConverter().to_stream(
+        [{"id": 3, "caption": caption}],
+        ctx=ConversionContext(section="detail", user="user"),
+        path="detail.2.value",
+        errors=errors,
+    )
+    assert result is None
+    assert errors.error_map == {
+        "detail.2.value.0.caption": [
+            {"code": "invalid", "message": "Caption must be a string of at most 250 characters."}
+        ]
+    }
+
+
+@pytest.mark.parametrize("caption", [None, 4, "x" * 251])
+def test_gallery_converter_keeps_malformed_stored_captions_unsupported(caption):
+    value = {"gallery": [{"type": "item", "value": {"image": 3, "caption": caption}}]}
+    assert GalleryConverter().to_author(value, ctx=ConversionContext(section="overview", user=None)) is UNSUPPORTED
+
+
+def test_gallery_converter_roundtrips_duplicate_occurrences_and_plain_text(mocker):
+    resolver = mocker.patch("cast.content.blocks.get_choosable_image", return_value=object())
+    converter = GalleryConverter()
+    ctx = ConversionContext(section="overview", user="user")
+    author = [{"id": 3, "caption": "<b>First</b>"}, {"id": 3, "caption": "x" * 250}, {"id": 3}]
+    errors = ErrorCollector()
+    stored = converter.to_stream(author, ctx=ctx, path="overview.0.value", errors=errors)
+    assert not errors
+    assert converter.to_author(stored, ctx=ctx) == author
+    assert resolver.call_count == 6
+    assert len({item["id"] for item in stored["gallery"]}) == 3
+    resolver.return_value = None
+    assert converter.to_author(stored, ctx=ctx) is UNSUPPORTED

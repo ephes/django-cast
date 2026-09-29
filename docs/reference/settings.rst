@@ -782,6 +782,35 @@ optimized SQL. If you want to fetch data using the Django ORM, set
 
     CAST_REPOSITORY = "django"
 
+*****
+Feeds
+*****
+
+CAST_FEED_ITUNES_SUMMARY
+========================
+
+Whether podcast feeds emit ``<itunes:summary>`` for the podcast and each
+episode. Defaults to ``True``. The element repeats the ``<description>``
+content, so it can make up a large share of a feed with long show notes.
+Apple Podcasts reads ``<description>``; set this to ``False`` to shrink the
+feed when your clients do not need the duplicate.
+
+.. code-block:: python
+
+    CAST_FEED_ITUNES_SUMMARY = False
+
+CAST_BLOG_FEED_ITEM_LIMIT
+=========================
+
+Maximum number of entries in the blog RSS and Atom feeds. Defaults to ``None``,
+which includes every live, public post. Set a positive integer to keep only the
+newest posts; the ``cast.E011`` system check rejects other values. Podcast
+feeds are not affected and always include every episode.
+
+.. code-block:: python
+
+    CAST_BLOG_FEED_ITEM_LIMIT = 50
+
 .. _cdn_configuration:
 
 *********************************

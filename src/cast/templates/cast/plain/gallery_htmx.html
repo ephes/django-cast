@@ -1,7 +1,9 @@
 <div class="cast-gallery">
   <ul class="cast-gallery-list">
-    {% for image in images %}
+    {% for entry in gallery_entries %}
+      {% with image=entry.image %}
       <li class="cast-gallery-item">
+      {% if entry.caption %}<figure class="cast-gallery-figure">{% endif %}
         <a
           class="cast-gallery-link"
           href="{{ image.modal.src.jpeg }}"
@@ -28,7 +30,9 @@
             />
           </picture>
         </a>
+    {% if entry.caption %}<figcaption>{{ entry.caption }}</figcaption></figure>{% endif %}
       </li>
+      {% endwith %}
     {% endfor %}
   </ul>
 </div>

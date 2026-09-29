@@ -1,8 +1,10 @@
 # Security review: 2026-09-07
 
 Status: Confirmed findings fixed and validated on 2026-09-08. Independent review
-closed at diminishing returns with an advisory verdict. Separate hardening
-observations remain follow-ups.
+closed at diminishing returns with an advisory verdict. The subsequent upload,
+probe and author-access hardening is implemented. Mandatory publication revision
+binding remains deferred to the next API version. Historical rich-text audit
+tooling is deferred pending an identified deployment with pre-fix API content.
 
 Reviewed commit: `04220c4d0a42165413df43e82c9d9c4ca6700190` (`develop`).
 
@@ -119,7 +121,7 @@ Implementation follow-up (2026-09-08):
   restriction type, inherited restrictions, permitted restricted visitors,
   previews, and generic targets on both endpoints.
 
-## Hardening observations requiring separate triage
+## Hardening observations and follow-up dispositions
 
 These are source-confirmed missing safeguards, not reproduced resource-exhaustion
 attacks or additional demonstrated authorization bypasses.
@@ -147,20 +149,28 @@ attacks or additional demonstrated authorization bypasses.
   required `If-Match` for backwards compatibility. Callers that omit the token
   therefore retain the documented latest-revision behavior and its original
   co-editor race; requiring revision binding is deferred to the next editor API
-  version alongside the Wagtail v3 decision.
-- **Author self-edit/delete after page access revocation:** the opt-in author
-  action endpoints check session ownership and comment eligibility, but not the
-  target page's current visibility (`src/cast/comments/views.py`,
-  `_author_action_guard()` / `_load_locked_actionable()`). This pre-existing
-  behavior is separate from the confirmed comment creation/preview defect.
-  Specify whether authors should retain control over their own eligible
-  comments after losing page access, then add explicit regressions for that
-  policy. The current repair does not change this ownership contract.
+  version. The Wagtail v3 evaluation (2026-09-17) kept the editor API as the
+  authoring transport; the mandatory binding is tracked in `BACKLOG.md`.
+- **Author self-edit/delete after page access revocation (implemented
+  2026-09-19):** the approved policy requires current target access as well as
+  session ownership and existing comment eligibility. Both actions recheck live
+  state and direct/inherited view restrictions before mutation or moderation,
+  returning the existing generic 403 if unavailable. The controls use the same
+  predicate. Authorized restricted-page visitors retain their actions; unpublished
+  pages have no staff/superuser bypass. Missing targets are denied, existing
+  generic targets retain their policy, and staff moderation is unchanged.
+  Authors who lose access must request removal from a moderator. Regressions
+  cover both endpoints, each restriction type, inherited restrictions, loss of
+  group membership, metadata preservation and UI flags. This is a separate
+  policy hardening slice, not a reclassification of the original creation defect.
 
 ## Existing risk and negative results
 
-- Historical unsafe rich text remains a separate, already tracked audit task in
+- Historical rich-text audit tooling is deferred as recorded in
   [the sanitization design record](2026-09-07-editor-richtext-sanitization.md).
+  On 2026-09-19 the maintainer confirmed development-only use of the pre-fix API,
+  with no known production exposure through that path. Revisit tooling if a
+  deployment with pre-fix API content is identified.
   New-write sanitization does not establish that old rows or revisions are safe.
   This review found no new sanitizer bypass in the inspected standard block paths.
 - Inspected public page/feed restrictions, request-local feed state, transcript
@@ -220,8 +230,8 @@ attacks or additional demonstrated authorization bypasses.
   adds only a search-test control and completes this evidence record; no
   application code changed after the first review. Another model pass would
   mostly recheck a small assertion and bookkeeping. This is an adjudicated
-  advisory closure, not a `CLEAN` verdict. The separate author-action policy
-  observation remains explicitly tracked above.
+  advisory closure, not a `CLEAN` verdict. The author-action policy observation
+  was deferred at that point and has since been implemented as recorded above.
 - Final validation after the search-test refinement: `just check` passed
   (2,616 passed, one PostgreSQL-only skip, 100% Python statement/branch
   coverage; Ruff and mypy passed). No application fixes or review findings

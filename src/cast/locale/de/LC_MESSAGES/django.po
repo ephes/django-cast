@@ -136,3 +136,11 @@ msgstr "antworten"
 #: build/lib/cast/widgets.py:54 cast/widgets.py:54
 msgid "All"
 msgstr "Alle"
+
+#: src/cast/blocks.py
+msgid "Caption"
+msgstr "Bildunterschrift"
+
+#: src/cast/blocks.py
+msgid "Optional plain text, up to 250 characters. No formatting or links."
+msgstr "Optionaler Klartext, bis zu 250 Zeichen. Keine Formatierung oder Links."

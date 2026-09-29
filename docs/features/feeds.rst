@@ -224,15 +224,31 @@ Feeds are also available via the REST API:
 Configuration
 =============
 
+Post date index
+---------------
+
+Migration ``0083_post_feed_boundary_index`` adds a composite post date/ID index.
+Run the normal ``migrate`` command after upgrading. Creating the index can lock
+the post table; schedule the migration appropriately for large installations.
+
 Feed Limits
 -----------
 
-Control the number of items in feeds:
+Feeds include all eligible live, publicly accessible entries by default.
+Podcast feeds additionally require podcast audio. ``CAST_FEED_ITEM_LIMIT`` is
+not implemented and setting it has no effect.
+
+Set ``CAST_BLOG_FEED_ITEM_LIMIT`` to keep only the newest entries in the blog
+feeds (``latest_entries_feed`` and ``latest_entries_atom_feed``):
 
 .. code-block:: python
 
-    # In settings.py
-    CAST_FEED_ITEM_LIMIT = 50  # Default: 50 items
+    CAST_BLOG_FEED_ITEM_LIMIT = 50
+
+Feed readers keep entries they have already fetched, so a limited blog feed
+does not remove older posts for existing subscribers. Podcast feeds always
+include every episode: most podcast apps show only the episodes that are
+currently in the feed, so a limit would hide the back catalog.
 
 Follow Links
 ------------
@@ -250,12 +266,26 @@ Configure platform links shown on the feed detail page for podcasts:
 Cache Duration
 --------------
 
-Configure feed cache timeout:
+The built-in XML feed routes cache responses for five minutes.
+``CAST_FEED_CACHE_TIMEOUT`` is not implemented and setting it has no effect.
+The feed root's public accessibility is rechecked before serving cached output.
+Changes to individual entries (including removal or new view restrictions) can
+remain in a warm response until it expires or is invalidated. When restricting
+previously public content, account for application and downstream caches; a
+cached feed is not an immediate-revocation mechanism.
 
-.. code-block:: python
+Conditional Requests
+--------------------
 
-    # Cache feeds for 1 hour
-    CAST_FEED_CACHE_TIMEOUT = 3600
+Feed responses carry a weak ``ETag`` computed from the XML body. A client that
+sends a matching ``If-None-Match`` header gets ``304 Not Modified`` without a
+body, including when the response comes from the five-minute cache. This saves
+most of the bandwidth for podcast clients that poll often, such as Apple
+Podcasts and Spotify.
+
+``If-Modified-Since`` alone never produces a ``304``. The ``Last-Modified``
+header reflects only the newest entry's date, so it does not change when an
+older entry is edited or removed.
 
 Best Practices
 ==============
@@ -284,5 +314,11 @@ Common Issues
 
 1. **Missing Enclosures**: Ensure episodes have ``podcast_audio`` set
 2. **Invalid Characters**: Check for special characters in titles/descriptions
-3. **Large Feed Size**: Reduce ``CAST_FEED_ITEM_LIMIT`` if needed
+3. **Large Feed Size**: Feeds include the complete eligible archive unless
+   ``CAST_BLOG_FEED_ITEM_LIMIT`` limits the blog feeds; podcast feeds have no item
+   limit. Serve feeds compressed (for example gzip or brotli at the reverse
+   proxy), rely on the ``ETag``/``304`` support, and consider
+   ``CAST_FEED_ITUNES_SUMMARY = False`` to drop the duplicated episode
+   descriptions. Measure response size and generation cost before choosing
+   deployment-specific caching or customization.
 4. **Cache Issues**: Clear cache after major content updates

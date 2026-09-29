@@ -15,8 +15,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ...content.sections import body_sections_with_replacements, section_value
 from ...models import Audio, Blog, Episode, Podcast, Post, Season
 from ...models.snippets import PostCategory
+from ...preview import render_editor_preview
 from ...publication import PublicationRejected, check_publishable
 from .body import (
     author_blocks_to_overview,
@@ -146,8 +148,16 @@ class ParentsListView(EditorAPIView):
 
 
 class PostEditorMixin:
-    body_section_order = ("overview", "detail")
     detail_url_name = "cast:api:editor_post_detail"
+
+    def _check_edit_lock(self, post: Post, user: Any) -> None:
+        lock = post.get_lock()
+        if lock is not None and lock.for_user(user):
+            raise EditorFlatError(
+                "page_locked",
+                "This page is locked for editing.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
 
     def _get_parent(self, parent_id: int) -> Blog:
         blog = Blog.objects.filter(pk=parent_id).first()
@@ -213,6 +223,30 @@ class PostEditorMixin:
         locked_schedules = post.revisions.select_for_update().values_list("id", "approved_go_live_at")
         return any(approved_go_live_at is not None for _, approved_go_live_at in locked_schedules)
 
+    def _check_publication_lock(self, post: Post, user: Any) -> None:
+        """Guard API publication without changing admin or workflow completion.
+
+        The caller holds the page row lock. Also lock revisions before checking
+        schedules, since approving an existing revision need not update the page.
+        An active workflow is a stronger constraint than its per-user edit lock:
+        reviewers must not bypass approval by publishing through this API.
+        """
+        if self._has_approved_schedule(post, for_update=True):
+            raise EditorFlatError(
+                "page_locked", "This page is locked for publication.", status_code=status.HTTP_409_CONFLICT
+            )
+        if post.current_workflow_state is not None:
+            raise EditorFlatError(
+                "workflow_active",
+                "Complete or cancel the active workflow in Wagtail before publishing through the API.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        lock = post.get_lock()
+        if lock is not None and lock.for_user(user):
+            raise EditorFlatError(
+                "page_locked", "This page is locked for publication.", status_code=status.HTTP_409_CONFLICT
+            )
+
     def _enforce_draft_only(self, post: Post, *, required: bool, noun: str) -> None:
         if not required:
             return
@@ -256,38 +290,6 @@ class PostEditorMixin:
             )
         return [found_by_id[category_id] for category_id in ids]
 
-    def _section_value(self, post: Post, section_type: str) -> list[dict]:
-        for block in post.body.raw_data:
-            if block.get("type") == section_type:
-                value = block.get("value")
-                if isinstance(value, list):
-                    return value
-        return []
-
-    def _body_sections_with_replacements(self, post: Post, replacements: dict[str, list[dict]]) -> str:
-        sections = []
-        remaining = dict(replacements)
-        for section in post.body.raw_data:
-            section_data = dict(section)
-            section_type = section_data["type"]
-            if section_type in replacements:
-                section_data["value"] = replacements[section_type]
-                remaining.pop(section_type, None)
-            sections.append(section_data)
-        section_order = {section_type: index for index, section_type in enumerate(self.body_section_order)}
-        for section_type, value in sorted(remaining.items(), key=lambda item: section_order[item[0]]):
-            new_section = {"type": section_type, "value": value}
-            current_order = section_order[section_type]
-            insert_index = 0
-            for index, section in enumerate(sections):
-                existing_order = section_order.get(section["type"])
-                if existing_order is not None and existing_order > current_order:
-                    insert_index = index
-                    break
-                insert_index = index + 1
-            sections.insert(insert_index, new_section)
-        return json.dumps(sections)
-
     def _serialize(
         self, post: Post, *, user: Any, content_post: Post | None = None, revision: Any | None = None
     ) -> dict:
@@ -318,10 +320,10 @@ class PostEditorMixin:
             "categories": [category.pk for category in content_post.categories.all()],
             "cover_image": cover,
             "overview": section_to_author_blocks(
-                self._section_value(content_post, "overview"), path_prefix="overview", user=user
+                section_value(content_post.body.raw_data, "overview"), path_prefix="overview", user=user
             ),
             "detail": section_to_author_blocks(
-                self._section_value(content_post, "detail"), path_prefix="detail", user=user
+                section_value(content_post.body.raw_data, "detail"), path_prefix="detail", user=user
             ),
             "latest_revision_id": latest_revision_id,
             "previous_revision_id": _previous_page_revision_id(post, latest_revision_id),
@@ -389,6 +391,7 @@ class PostEditorMixin:
                 f"This {noun} has no draft revision to publish.",
                 status_code=status.HTTP_409_CONFLICT,
             )
+        self._check_publication_lock(page, user)
         revision = page.revisions.get(pk=current_revision_id)
 
         self._reject_unpublishable_episode(revision.as_object())
@@ -555,6 +558,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
                 edit_url=edit_url,
             )
         self._enforce_draft_only(post, required=data["require_unpublished"], noun="post")
+        self._check_edit_lock(post, user)
 
         draft = post.get_latest_revision().as_object()
         if "title" in data:
@@ -581,16 +585,19 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         body_replacements = {}
         if "overview" in data:
             body_replacements["overview"] = author_blocks_to_overview(
-                data["overview"], user=user, existing_section=self._section_value(draft, "overview")
+                data["overview"], user=user, existing_section=section_value(draft.body.raw_data, "overview")
             )
         if "detail" in data:
             body_replacements["detail"] = author_blocks_to_section(
-                data["detail"], user=user, path_prefix="detail", existing_section=self._section_value(draft, "detail")
+                data["detail"],
+                user=user,
+                path_prefix="detail",
+                existing_section=section_value(draft.body.raw_data, "detail"),
             )
         if body_replacements:
-            draft.body = self._body_sections_with_replacements(draft, body_replacements)
+            draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 
-        revision = draft.save_revision(user=user)
+        revision = draft.save_revision(user=user, log_action="wagtail.edit")
         post.refresh_from_db()
         return Response(self._serialize(post, user=user, content_post=draft, revision=revision))
 
@@ -615,8 +622,7 @@ class PreviewMixin:
     required_scopes: dict[str, str | None] = {"GET": None}
 
     def _render_preview(self, page: Post, request: Request) -> HttpResponse:
-        draft = page.get_latest_revision_as_object()
-        return draft.make_preview_request(original_request=request._request)
+        return render_editor_preview(page, request._request)
 
 
 class PostPreviewView(PreviewMixin, PostEditorMixin, EditorAPIView):
@@ -815,6 +821,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
                 edit_url=edit_url,
             )
         self._enforce_draft_only(episode, required=data["require_unpublished"], noun="episode")
+        self._check_edit_lock(episode, user)
 
         # ``parent`` is immutable on PATCH, so the season constraint resolves against
         # the episode's existing podcast parent — fetched lazily only when a season is sent.
@@ -844,16 +851,19 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         body_replacements = {}
         if "overview" in data:
             body_replacements["overview"] = author_blocks_to_overview(
-                data["overview"], user=user, existing_section=self._section_value(draft, "overview")
+                data["overview"], user=user, existing_section=section_value(draft.body.raw_data, "overview")
             )
         if "detail" in data:
             body_replacements["detail"] = author_blocks_to_section(
-                data["detail"], user=user, path_prefix="detail", existing_section=self._section_value(draft, "detail")
+                data["detail"],
+                user=user,
+                path_prefix="detail",
+                existing_section=section_value(draft.body.raw_data, "detail"),
             )
         if body_replacements:
-            draft.body = self._body_sections_with_replacements(draft, body_replacements)
+            draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 
-        revision = draft.save_revision(user=user)
+        revision = draft.save_revision(user=user, log_action="wagtail.edit")
         episode.refresh_from_db()
         return Response(self._serialize(episode, user=user, content_post=draft, revision=revision))
 

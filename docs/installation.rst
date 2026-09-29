@@ -43,10 +43,19 @@ Before you begin, ensure you have:
 
 - Python 3.11 or higher
 - Django 5.2.17+, 6.0.8+, or 6.1+
-- Wagtail 7.0.9+ on the 7.0 LTS branch, 7.3.4+, 7.4.3+, or 8.0+
-  (the unpatched 7.1 and 7.2 branches are excluded)
+- Wagtail 7.0.9+ on the 7.0 LTS branch, 7.4.3+ on the 7.4 LTS branch,
+  or 8.x (the unpatched 7.1 and 7.2 branches and the end-of-life 7.3 branch
+  are excluded)
 - `uv <https://docs.astral.sh/uv/>`_ (recommended) or pip
 - `ffmpeg <https://ffmpeg.org/download.html>`_ (optional, for video/audio processing)
+
+Wagtail 7.3 is no longer supported starting with django-cast 0.2.66. Its upstream
+security support ended on 25 August 2026, and its modelsearch dependency range
+conflicts with django-cast's new minimum of 1.3.2. Sites on 7.3 should upgrade to
+Wagtail 7.4.3 or newer on the 7.4 LTS branch before updating django-cast. Follow
+the `Wagtail upgrade guide <https://docs.wagtail.org/en/stable/releases/upgrading.html>`_,
+including migrations and static asset collection. Wagtail 7.0 LTS support is
+unchanged; the minimum Python and Django versions are unchanged.
 
 ******************
 New Project Setup

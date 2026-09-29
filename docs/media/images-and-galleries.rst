@@ -118,7 +118,7 @@ Galleries in StreamField
 ------------------------
 
 Galleries are added to posts via the ``GalleryBlockWithLayout`` block,
-which wraps a list of image choosers with an optional layout selector:
+which wraps a list of image-and-caption entries with an optional layout selector:
 
 * **Web Component with Modal** (default) -- Renders thumbnails using the
   ``<image-gallery-bs4>`` web component with a modal for the full-size
@@ -136,11 +136,48 @@ which wraps a list of image choosers with an optional layout selector:
         # ...
     ])
 
+Each entry has a required ``image`` chooser and an optional plain-text
+``caption`` (up to 250 characters). Captions belong to the entry: the same
+image may occur multiple times with different captions. They do not change
+the image title or alternative text. Rich text and caption links are not
+supported by this field.
+
+Newly saved list items use the following JSON value::
+
+    {"type": "item", "id": "entry-uuid", "value": {"image": 123, "caption": "An example"}}
+
+Custom StreamFields serialize the ``GalleryItemBlock`` class into their schema
+migrations so historical models retain the legacy decoder. Keep this import
+available while those migrations exist.
+
+Legacy integer-valued items remain readable, including old revisions. Saving
+can rewrite them into structured values, including programmatic and editor-API
+saves. No bulk content migration is required.
+Older django-cast versions cannot read newly saved structured items; before
+allowing edits or imports, retain a content backup for code-and-content rollback.
+Entry order, repeated images, and list-item IDs are retained. The separate
+``Gallery`` model remains an image-set cache; captions live in Post.body.
+
+Templates receive ``gallery_entries`` containing ``image`` and ``caption``
+for each occurrence. The existing ``images`` context is retained for themes
+that have not adopted captions. Built-in templates render escaped text in
+``figcaption`` next to the thumbnail; modal captions are not transported.
+Custom themes must render ``gallery_entries`` to display captions. The
+standalone HomePage gallery retains its image-only editing schema.
+
+During rendering, ``value.gallery`` retains image objects for uncaptioned
+entries; captioned entries contain ``image`` and ``caption`` mappings. Custom
+themes should use ``images`` for image-only rendering or ``gallery_entries``
+for a uniform caption-aware representation.
+
 Programmatic Post Updates
 -------------------------
 
-Wagtail preview and publication prepare built-in media relationships and image
-renditions automatically. A direct model save deliberately has no media I/O.
+Publication prepares built-in media relationships and image renditions
+automatically. Wagtail previews instead resolve media from the preview body
+into a request-local lookup, including unsaved admin changes. They may create
+missing image renditions but do not synchronize stored media links or create
+Gallery records. A direct model save deliberately has no media I/O.
 When code changes a post body outside those Wagtail boundaries, prepare its
 media explicitly after persistence:
 
@@ -152,8 +189,9 @@ media explicitly after persistence:
     post.save()
     prepare_post_media(post)
 
-The preparation step is synchronous because previews and repository rendering
-need the derived relationships and renditions immediately.
+Publication preparation is synchronous because repository rendering needs the
+derived relationships and renditions immediately. Preview rendering prepares
+only missing renditions synchronously, without changing those relationships.
 
 .. _rendition_system:
 

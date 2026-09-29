@@ -1,0 +1,145 @@
+0.2.66 (2026-09-29)
+-------------------
+
+- Send a weak ``ETag`` with every built-in RSS/Atom feed response and answer a
+  matching ``If-None-Match`` with ``304 Not Modified``, also for cached
+  responses. ``If-Modified-Since`` alone still returns the full feed, because
+  ``Last-Modified`` tracks only the newest entry.
+- Add ``CAST_FEED_ITUNES_SUMMARY`` (default ``True``). Set it to ``False`` to
+  omit ``<itunes:summary>``, which duplicates ``<description>`` and made up about
+  a third of a 206-episode podcast feed.
+- Add ``CAST_BLOG_FEED_ITEM_LIMIT`` (default ``None``, no limit) to keep only the
+  newest posts in the blog RSS/Atom feeds. Podcast feeds stay complete. The new
+  ``cast.E011`` system check requires ``None`` or a positive integer.
+
+- Add migration ``0083_post_feed_boundary_index``, a composite post date/ID
+  index that supports date-ordered feed queries. Run ``migrate`` on upgrade;
+  index creation may lock the post table on large sites.
+
+- Correct feed documentation: ``CAST_FEED_ITEM_LIMIT`` and
+  ``CAST_FEED_CACHE_TIMEOUT`` were never implemented and have no effect. Built-in
+  feeds include all eligible entries and cache XML responses for five minutes.
+  Document that child-entry changes can remain visible in a warm feed cache.
+  This documentation correction does not change feed output or cache behavior.
+- Drop Wagtail 7.3 support, which ended upstream on 25 August 2026. Sites on
+  7.3 must upgrade to Wagtail 7.4.3+ on the 7.4 LTS branch before updating
+  django-cast. Wagtail 7.0 LTS, 7.4 LTS, and 8.x remain supported within the
+  package's existing patch-version constraints. Remove the obsolete 7.3 CI/tox
+  entry and advisory-floor audit target.
+- Require modelsearch 1.3.2 or newer and remove Cast's SQLite ``MATCH``
+  compatibility patch. The upstream release fixes search compilation on Django
+  6.1; existing search behavior is unchanged.
+- Require current page access for comment author editing and deletion. Session
+  ownership no longer permits actions after a page is unpublished or becomes
+  inaccessible under direct or inherited view restrictions. Both endpoints return
+  the existing generic 403 and leave comment/metadata state unchanged; controls
+  follow the same rule. Authorized restricted-page visitors retain their actions,
+  and staff moderation is unchanged. Missing comment targets are denied.
+- Enforce editorial locks on Post and Episode editor API publication, returning
+  ``409 page_locked`` for applicable locks or approved schedules. Active workflows
+  (including needs-changes) return ``409 workflow_active`` for all callers,
+  including reviewers and superusers. Ordinary lock owners may still publish
+  unless global edit-lock mode is enabled. Refusals preserve publication and
+  workflow state; admin, workflow-completion and scheduler behavior is unchanged.
+  Extend the existing PostgreSQL CI job with publication-lock regressions.
+- Make Post and Episode previews render media from the preview body without
+  changing stored media links or creating Gallery records. Missing image
+  renditions remain permitted cache writes; publication preparation is unchanged.
+- Render editor API previews anonymously without forwarding credentials or
+  session theme preferences. Admin previews retain editor identity and themes.
+  Preview HTML is private and non-storable, and internal preview requests use
+  isolated cache keys so a cached live page cannot mask the draft.
+- Raise the SoupSieve security floor to 2.9.0 and audit that minimum in CI.
+- Let the test-only Wagtail v3 experiment expect the interpreter's HTTP 422
+  reason phrase (``Unprocessable Content`` on Python 3.14). The status code and
+  domain-error assertions remain fixed; production editor responses are
+  unchanged.
+- Run PostgreSQL row-lock tests in a focused CI job with a disposable PostgreSQL
+  17 service. The opt-in ``tox -e postgres`` environment runs focused concurrency
+  tests and publication-policy modules; normal local tests still use SQLite.
+  Mark three publication tests as database users so cold Wagtail content-type
+  caches no longer cause order-dependent failures.
+- Honor Wagtail editorial locks on Post and Episode editor API PATCH requests,
+  returning ``409 page_locked`` when a lock applies to the caller. Existing
+  revision-conflict and draft-only errors retain precedence. Successful edits
+  now record a ``wagtail.edit`` audit entry atomically with the new revision.
+- Move body section selection and merging into the transport-neutral
+  ``cast.content`` package, shared by the editor API and test-only Wagtail v3
+  adapter. Existing editor payloads and section-preservation behavior are unchanged.
+  The internal ``PostEditorMixin.body_section_order`` attribute is removed;
+  overriding it no longer changes section insertion order.
+- Add an isolated Wagtail 8 v3 compatibility experiment to the Wagtail 8 tox
+  environments. It proves bearer-authenticated schema discovery and public
+  Post/Episode page exposure without mounting v3 in normal django-cast URLs or
+  enabling any Cast fields for v3 writes in production.
+- Extend the disposable experiment with selected scalar draft fields. It
+  reproduces write-response failures from Cast's computed v2 fields and shows
+  that partial updates are based on the live row rather than the latest draft.
+- Add a disposable revision-aware update adapter that returns a truthful
+  transport-native response, preserves omitted values from the latest Post or
+  Episode draft, and rejects stale base revisions without creating a revision.
+  Publishing remains deliberately unavailable through the adapter.
+- Extend the Wagtail 8 experiment across Episode publication paths. Cast's
+  shared publication policy rejects audio-less create, edit, and standalone
+  publication while permitting a valid audio Episode. The scheduler also
+  rechecks a revision approved through v3 if its audio later disappears.
+  Scheduling input is measured separately below.
+- Confirm that native v3 actions enforce Wagtail's tree-scoped change and
+  publish permissions for separate drafting and publishing users. Native API
+  tokens do not require Wagtail admin access and cannot carry Cast's separate
+  ``write`` and ``publish`` scopes.
+- Measure draft-state update behavior in the disposable v3 adapter. Wagtail's
+  scheduled-publication lock already rejects scheduled Post and Episode edits,
+  while preserving Cast's draft-only live-page safeguard requires an explicit
+  adapter precondition.
+- Measure revision-bound publication in the Wagtail 8 experiment. Stock v3
+  standalone publication makes the latest Post or Episode revision live even
+  after a caller selected an older one. The disposable adapter requires the
+  selected revision in ``If-Match``, returns ``409`` without publishing either
+  revision when it is stale, and otherwise delegates to Wagtail's publish
+  action and Cast's Episode publication policy.
+- Measure scheduling input in the Wagtail 8 experiment. Stock v3 page schemas
+  do not accept ``go_live_at`` or ``expire_at``. After a disposable opt-in,
+  revision-bound publication schedules the selected revision and Cast's
+  Episode audio policy still applies, but a partial update can set a go-live
+  time after an existing expiry time.
+- Measure draft reads and previews in the Wagtail 8 experiment. Stock v3
+  detail reads fail for Cast Posts and Episodes because inherited HTML fields
+  receive no request context, and draft reads are gated by explore rather
+  than edit permission. A disposable adapter route renders the latest draft
+  through Wagtail's preview machinery under the editor API's edit rule. The
+  initial experiment recorded session-derived identity and persisted media
+  synchronization; the preview-policy changes above supersede that behavior.
+- Measure body conversion in the Wagtail 8 experiment. Native v3 StreamField
+  writes replace the whole body and accept images the caller cannot choose.
+  A disposable adapter converts Cast author blocks through ``cast.content``,
+  preserves the other body section, and reports Cast's field-level errors.
+- Measure media handling in the Wagtail 8 experiment. Stock v3 image uploads
+  apply Wagtail's validation and collection scoping, but can store an image in
+  a different collection than requested and do not require ``choose``
+  permission. v3 exposes no Cast audio, video, or transcript routes.
+- Add PostgreSQL-only threaded tests to the Wagtail 8 experiment. On a local
+  PostgreSQL 17 server they show that the disposable adapter's page and
+  revision locks make concurrent draft saves, schedule approvals, and
+  same-base updates wait; they are skipped on SQLite.
+- Complete the Wagtail v3 evaluation with an architecture decision: keep the
+  existing editor API as the supported authoring transport, reuse Wagtail's
+  actions, locks, and forms beneath it, and defer direct v3 adoption. No
+  production v3 routes, client migrations, or route retirements are part of
+  this release.
+
+Gallery captions
+----------------
+
+- Add optional per-entry gallery captions (plain text, maximum 250 characters).
+  The Wagtail editor and the shared content converter used by the editor API
+  preserve distinct captions for repeated images. Draft previews resolve both
+  legacy and captioned gallery entries without persisting media relationships.
+  Built-in templates render
+  escaped captions beside thumbnails. Existing integer-valued galleries and
+  revisions remain readable; saves can write the new structured format.
+  Keep a matching content backup before upgrading if code rollback is needed.
+- Templates receive ``gallery_entries`` alongside the unchanged ``images``
+  context. The Bootstrap 5 theme supports captions starting at commit
+  ``f2a21ba``; older Bootstrap and Vue themes still render the images but do
+  not display captions. Modal caption transport is unchanged.

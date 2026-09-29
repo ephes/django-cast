@@ -75,10 +75,13 @@ def test_publication_rejected_adapts_to_form_errors():
     }
 
 
+# Wagtail's Page constructor queries ContentType when its cache is cold.
+@pytest.mark.django_db
 def test_plain_post_has_no_publication_violations():
     assert violations_for(Post()) == []
 
 
+@pytest.mark.django_db
 def test_episode_without_audio_is_not_publishable():
     episode = Episode(podcast_audio_id=None)
 
@@ -88,6 +91,7 @@ def test_episode_without_audio_is_not_publishable():
     assert error.value.violations == (episode_audio_violation(None),)
 
 
+@pytest.mark.django_db
 def test_episode_with_audio_is_publishable():
     check_publishable(Episode(podcast_audio_id=42))
 

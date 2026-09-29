@@ -288,8 +288,9 @@ Server-side session requirement
 
 Ownership is tracked entirely server-side: the ids of the comments created in
 a browser are stored in that browser's Django session, and edit or delete
-requests are authorized only against that list — never against anything the
-client supplies. This requires a **server-side session backend**. The
+requests prove ownership only against that list — never against anything the
+client supplies. Current target access and comment eligibility are checked
+separately. This requires a **server-side session backend**. The
 ``signed_cookies`` ``SESSION_ENGINE`` stores the session in a client-held
 cookie, which cannot be revoked, so it is rejected by the cast system checks
 (``cast.E006``). Use the database, cache, or file session backend instead.
@@ -310,6 +311,18 @@ edit and delete controls on that comment:
   comment's submission time even if the session is still valid. After a reply
   lands the comment is frozen and the controls disappear, so editing history
   cannot diverge from a conversation that already built on it.
+- For Wagtail pages, both actions also require the page to be **live and
+  accessible to the current request**, including inherited login, group and
+  password restrictions. Access is rechecked for each action; retained session
+  ownership does not preserve access after unpublication or restriction changes.
+  Authorized visitors to restricted live pages can still act on eligible comments
+  they own. There is no author-action bypass for staff or superusers on unpublished
+  pages. Missing targets are denied; existing non-page targets retain their policy.
+- Unavailable page access returns the same generic HTTP 403 response as a missing,
+  unowned or ineligible comment, without changing the comment or its author-action
+  metadata or running edit moderation. The controls are hidden under the same
+  access rule. An author who loses page access must contact a moderator to request
+  removal; the existing staff moderation tools are unchanged.
 - Edits are **re-moderated**. An edited comment goes back through the spam
   filter (see :ref:`comments_moderation`), so an edit can become hidden pending
   moderation just like a freshly posted comment. Edited comments are marked

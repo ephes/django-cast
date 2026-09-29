@@ -234,7 +234,7 @@ class TestAuthorBlocksToOverview:
         assert len(struct["gallery"]) == 1
         item = struct["gallery"][0]
         assert item["type"] == "item"
-        assert item["value"] == image.id
+        assert item["value"] == {"image": image.id, "caption": ""}
         assert isinstance(item["id"], str) and len(item["id"]) > 0
 
     def test_image_not_choosable_by_caller_reports_not_found(self, image):

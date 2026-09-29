@@ -1,5 +1,7 @@
 <div class="cast-gallery-container">
-  {% for image in images %}
+  {% for entry in gallery_entries %}
+      {% with image=entry.image %}
+      {% if entry.caption %}<figure class="cast-gallery-figure">{% endif %}
     <a
       data-hx-get="{% url 'cast:gallery-modal' template_base_dir=template_base_dir %}?image_pks={{ image_pks }}&current_image_index={{ forloop.counter0 }}&block_id={{ block.id }}&gallery_token={{ gallery_token|urlencode }}"
       data-hx-trigger="click"
@@ -38,7 +40,9 @@
         />
       </picture>
     </a>
-  {% endfor %}
+  {% if entry.caption %}<figcaption>{{ entry.caption }}</figcaption></figure>{% endif %}
+      {% endwith %}
+    {% endfor %}
   <!-- Modal -->
   <div class="modal fade" id="imageGalleryModal-{{ block.id }}" tabindex="-1" role="dialog"
        aria-labelledby="galleryModalLabel-{{ block.id }}" aria-hidden="true">

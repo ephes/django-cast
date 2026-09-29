@@ -15,41 +15,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Research / Shaping
 
-- [ ] Upstream the modelsearch Django 6.1 MATCH fix and remove the shim
-  - Notes: [backlog/2026-08-10-modelsearch-django61-upstream.md](backlog/2026-08-10-modelsearch-django61-upstream.md)
-  - Scope: report the Django 6.1 `MATCH` compilation break to `modelsearch` upstream, then drop
-    `src/cast/modelsearch_compat.py`, its `apps.py` call and its tests once a fixed release exists.
-  - Done when: the issue is filed (an outward-facing action, so confirm first) and either the shim is removed
-    against a fixed `modelsearch` release or the version gate and its retention reason are documented.
-
-- [ ] Evaluate Wagtail v3 API reuse for programmatic authoring
-  - Plan: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
-  - Implemented prerequisites: the publication policy and content converter seams —
-    [backlog/2026-09-16-publication-policy-service.md](backlog/2026-09-16-publication-policy-service.md) and
-    [backlog/2026-09-16-transport-neutral-content-converter.md](backlog/2026-09-16-transport-neutral-content-converter.md)
-  - Scope: prove Post and Episode editing through Wagtail 8's preview API, compare it with the existing editor
-    contract, and identify upstream functionality that can replace Cast implementation without losing automation
-    safeguards or podcast/media behavior. Daybook is owned by us and can change in a coordinated migration;
-    preserving its current API contract is not a prerequisite.
-  - Done when: a tested compatibility matrix and architecture decision identify what to reuse, retain, or report
-    upstream, with concrete follow-up slices and an explicit Wagtail 7 support and client migration policy.
-
-- [ ] Triage remaining security hardening observations
-  - Review: [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
-  - Scope: decide whether authors retain self-edit/delete rights after losing
-    access to the target page. The upload limits, media probe/concurrency limits,
-    and optional publication revision binding have been implemented or resolved;
-    the review's hardening observations record the accepted omitted-token race.
-  - Done when: the author action policy is specified and covered by regressions.
-
-- [ ] Audit existing editor API rich text and historical revisions
-  - Design record:
-    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
-  - Scope: provide read-only tooling to inspect published content, drafts, and restorable revisions after the
-    editor API sanitization fix. Normalization differences alone must not be reported as proof of an attack.
-  - Done when: operators can locate potentially unsafe historical content and follow a documented remediation
-    workflow without silently rewriting pages or destroying revision history.
-
 - [ ] Local authoring and sync workflow
   - Design record:
     [backlog/2026-07-09-cast-studio-product-boundary.md](backlog/2026-07-09-cast-studio-product-boundary.md)
@@ -76,6 +41,36 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
 
 ## Later
+
+- [ ] Paged feeds (deferred)
+  - Decision record: [backlog/2026-09-28-paged-feeds-deferred.md](backlog/2026-09-28-paged-feeds-deferred.md);
+    implementation parked on the `archive/paged-feeds` branch.
+  - Revisit only if a major podcast client documents RFC 5005 `next` support, or if a site's feed stays too
+    large after conditional GET, compression and payload trimming.
+
+- [ ] Historical editor API rich-text audit tooling — deferred
+  - Design record:
+    [backlog/2026-09-07-editor-richtext-sanitization.md](backlog/2026-09-07-editor-richtext-sanitization.md)
+  - Decision (2026-09-19): the maintainer confirmed that the pre-fix editor API was used only in development,
+    not on the production sites. No known production exposure through that path justifies building tooling now.
+  - Revisit only when a deployment with content written through the pre-fix API is identified.
+  - If resumed: inspect published content, drafts, and restorable revisions read-only; distinguish potentially
+    unsafe markup from harmless normalization and document remediation without silently rewriting history.
+
+- [ ] Require publish revision binding in the next editor API version
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    (follow-up 5); deferral recorded in [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
+  - Depends on: an editor API versioning decision.
+
+- [ ] Revisit Wagtail v3 adoption
+  - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
+    ("Revisit triggers"; follow-ups 6 and 7)
+  - Resume notes: "Resuming the work" in the decision record (current state, run recipes, suggested order)
+  - Scope: re-run the test-only experiment when v3 is no longer a preview, the supported Wagtail floor includes
+    it, and upstream offers request-context serialization and revision-bound writes. Optional preparatory work:
+    let `HtmlField` tolerate missing serializer context, and add editor schedule input only if a client needs it.
+    Upstream reports for the recorded v3 gaps need separate confirmation before filing.
 
 - [ ] Editor API preservation of paragraphs containing inline media
   - Related design:
@@ -142,12 +137,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: add progressive-enhancement page/view transitions for the built-in themes.
   - Done when: navigation feels smoother where supported, unsupported browsers keep the current behavior, and motion
     can respect reduced-motion preferences.
-
-- [ ] Paged feeds
-  - Scope: add paginated feed support so large podcasts and blogs can expose older posts or episodes without huge
-    feed responses.
-  - Done when: feed pagination behavior is documented, feed URLs are stable, and tests cover large archives and
-    existing feed compatibility.
 
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)

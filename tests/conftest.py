@@ -381,6 +381,20 @@ def restore_site_root_paths_cache(baseline_site_root_paths_cache):
 
 
 @pytest.fixture(autouse=True)
+def _drop_appsettings_module_overrides():
+    """Keep cast.appsettings reading Django settings across tests.
+
+    ``monkeypatch.setattr(appsettings, NAME, ...)`` restores the previous value
+    as a real module attribute, which then shadows ``appsettings.__getattr__``
+    and hides later ``settings.NAME`` changes. Autouse fixtures tear down after
+    ``monkeypatch``, so removing the leftovers here isolates every test.
+    """
+    yield
+    for name in appsettings.CAST_SETTING_REGISTRY:
+        vars(appsettings).pop(name, None)
+
+
+@pytest.fixture(autouse=True)
 def _clear_theme_cache():
     """Clear the template base dir choices cache before and after each test."""
     _clear_template_base_dir_choices_cache()
@@ -614,6 +628,20 @@ def file_instance(user, m4a_audio):
     file_instance = File(user=user, original=m4a_audio)
     file_instance.save()
     return file_instance
+
+
+@pytest.fixture()
+def pg_editor_actors(transactional_db, settings, request):
+    """Restore roots flushed by earlier threaded tests before requesting actors."""
+    locale, _ = Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE)
+    # Match the session bootstrap's regional/base locales after a flush.
+    Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE.split("-")[0])
+    if Page.get_first_root_node() is None:
+        Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
+    if Collection.get_first_root_node() is None:
+        Collection.add_root(instance=Collection(name="Root"))
+    # blog requests site, which recreates the default Site against the restored root.
+    return request.getfixturevalue("admin_user"), request.getfixturevalue("blog")
 
 
 @pytest.fixture()

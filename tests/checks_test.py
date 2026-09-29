@@ -169,6 +169,7 @@ class TestCheckCastSettingTypes:
             ("CAST_GALLERY_IMAGE_SLOT_DIMENSIONS", list),
             ("CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB", bool),
             ("CAST_REPOSITORY", str),
+            ("CAST_FEED_ITUNES_SUMMARY", bool),
             ("CAST_PODLOVE_PLAYER_THEMES", dict),
             ("CAST_AUDIO_PLAYER", str),
             ("CAST_TRANSCRIPT_UPLOAD_MAX_BYTES", int),
@@ -438,3 +439,20 @@ def test_system_check_is_registered():
         if saved_attr is not None:
             cast_pkg.checks = saved_attr
         registry.registered_checks |= original_cast_checks
+
+
+class TestCheckBlogFeedItemLimit:
+    @pytest.mark.parametrize("value", [None, 1, 50])
+    def test_valid_limits_pass(self, settings, value):
+        from cast.checks import check_blog_feed_item_limit
+
+        settings.CAST_BLOG_FEED_ITEM_LIMIT = value
+        assert check_blog_feed_item_limit(None) == []
+
+    @pytest.mark.parametrize("value", [0, -1, True, "10", 1.5])
+    def test_invalid_limits_fail(self, settings, value):
+        from cast.checks import check_blog_feed_item_limit
+
+        settings.CAST_BLOG_FEED_ITEM_LIMIT = value
+        errors = check_blog_feed_item_limit(None)
+        assert [error.id for error in errors] == ["cast.E011"]

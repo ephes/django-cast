@@ -257,11 +257,13 @@ def test_gallery_signature_refreshes_after_image_deletion(image):
 
 
 @pytest.mark.django_db
-def test_serve_preview_calls_media_sync(rf, post_with_image):
+def test_serve_preview_keeps_media_relationships_unchanged(rf, post_with_image):
     image = post_with_image.images.first()
     post_with_image.images.remove(image)  # remove image link
     assert image not in post_with_image.images.all()
 
     request = rf.get("/post/1/")
-    post_with_image.serve_preview(request, "draft")
-    assert image in post_with_image.images.all()
+    response = post_with_image.serve_preview(request, "draft")
+    response.render()
+    assert image not in post_with_image.images.all()
+    assert image.pk in response.context_data["repository"].image_by_id
