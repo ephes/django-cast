@@ -1,3 +1,8 @@
 0.2.67 (unreleased)
 -------------------
 
+- Add cross-document view transitions to the built-in ``bootstrap4`` and
+  ``plain`` themes. Ordinary same-origin page loads crossfade under the
+  ``cast-page`` transition type when the reader has no reduced-motion
+  preference. HTMX pagination keeps its existing fade, and unsupported browsers
+  load pages as before.

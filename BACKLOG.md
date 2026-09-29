@@ -134,10 +134,25 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: improve the built-in theme design while keeping theme contracts stable for existing sites.
   - Done when: the default theme feels more polished, remains accessible, and existing theme overrides keep working.
 
-- [ ] Add view transitions to existing themes
-  - Scope: add progressive-enhancement page/view transitions for the built-in themes.
-  - Done when: navigation feels smoother where supported, unsupported browsers keep the current behavior, and motion
-    can respect reduced-motion preferences.
+- [ ] Shared-element view transitions between post lists and detail pages
+  - Current state (2026-09-29): `plain`, `bootstrap4` and `cast-bootstrap5` fade the htmx pagination swap of
+    `#paging-area`. `plain` and `bootstrap4` also crossfade ordinary page loads under the `cast-page` transition type,
+    opting in only without a reduced-motion preference. `cast-bootstrap5` declares `@view-transition` but disables the
+    root animation and names `#paging-area` only during htmx swaps, so ordinary page loads show no visible
+    transition. `cast-vue` paginates through Vue, keeps only unused htmx transition markup, and has no route
+    transitions. No theme names post titles, images or players.
+  - Scope: morph a post's title and lead image from a list card into its detail page with unique per-post
+    `view-transition-name`s, starting with `cast-bootstrap5`, then the built-in themes. Decide how many elements
+    move at once and how Podlove/audio players are handled.
+  - Related: the play-button/player morph is implemented only in python-podcast; its generic rollout stays deferred
+    ([backlog/2026-06-08-persistent-player-staging.md](backlog/2026-06-08-persistent-player-staging.md)).
+  - Done when: list-to-detail navigation morphs shared elements where supported, names never collide on a page,
+    reduced-motion readers and unsupported browsers keep plain page loads, and theme docs describe the contract.
+
+- [ ] Vue theme route transitions
+  - Scope: wrap `cast-vue` router navigation in progressive-enhancement view transitions and remove the unused htmx
+    pagination transition markup.
+  - Done when: route changes animate where supported and respect reduced motion.
 
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)

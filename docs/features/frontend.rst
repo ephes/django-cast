@@ -555,3 +555,31 @@ A small companion script (``paging-view-transition-fix.js``) listens for
 ``htmx:beforeTransition`` events targeting the ``#paging-area`` element and
 scrolls to the top of the page before the view transition snapshot is taken,
 ensuring a clean transition. Other HTMX transitions are not affected.
+
+Page Navigation Transitions
+---------------------------
+
+The built-in ``bootstrap4`` and ``plain`` themes also opt in to cross-document
+view transitions for ordinary same-origin page loads, such as opening a post
+from a blog list. Their ``cast.css`` enables the transition only when the
+reader has no reduced-motion preference:
+
+.. code-block:: css
+
+   @media (prefers-reduced-motion: no-preference) {
+     @view-transition {
+       navigation: auto;
+       types: cast-page;
+     }
+   }
+
+Page loads carry the ``cast-page`` transition type. For this type the old page
+fades out over 200 ms and the new page fades in over 250 ms, including the
+``#paging-area`` layer when either page has one. HTMX pagination swaps carry no
+type and keep the fade described above.
+
+Browsers without cross-document view transition support, and readers who
+prefer reduced motion, get the usual immediate page load. Custom themes can
+reuse the ``cast-page`` type with
+``html:active-view-transition-type(cast-page)`` selectors, or omit the
+``@view-transition`` rule to keep plain page loads.

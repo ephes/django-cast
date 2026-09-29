@@ -1,5 +1,30 @@
 /* These styles are generated from project.scss. */
 
+/* Cross-document view transitions for ordinary page navigations. Opt in only
+   when the reader has no reduced-motion preference; the cast-page type keeps
+   these rules separate from the htmx pagination swaps below. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+    types: cast-page;
+  }
+}
+
+html:active-view-transition-type(cast-page)::view-transition-old(root),
+html:active-view-transition-type(cast-page)::view-transition-old(paging-area) {
+  animation: 200ms ease-out both cast-fade-out;
+}
+
+html:active-view-transition-type(cast-page)::view-transition-new(root),
+html:active-view-transition-type(cast-page)::view-transition-new(paging-area) {
+  animation: 250ms ease-in both cast-fade-in;
+}
+
+@keyframes cast-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 /* View transition for htmx pagination swaps */
 ::view-transition-old(root),
 ::view-transition-new(root) {

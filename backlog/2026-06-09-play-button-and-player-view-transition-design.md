@@ -1,7 +1,8 @@
 # Play Button & Player View-Transition Design
 
 **Date:** 2026-06-09
-**Status:** Design proposal (for Pi review before any implementation)
+**Status:** Implemented in python-podcast only (see the as-built note below); generic rollout to django-cast
+and themes is deferred per [2026-06-08-persistent-player-staging.md](2026-06-08-persistent-player-staging.md).
 **Scope:** The custom audio player's *play affordance* and the *visual hand-off*
 from an inline, in-episode play surface to a single persistent/global player.
 
