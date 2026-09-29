@@ -134,15 +134,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Scope: improve the built-in theme design while keeping theme contracts stable for existing sites.
   - Done when: the default theme feels more polished, remains accessible, and existing theme overrides keep working.
 
-- [ ] Vue theme route transitions
-  - Current state (2026-09-29): `plain`, `bootstrap4` and `cast-bootstrap5` crossfade ordinary page loads under the
-    `cast-page` view-transition type and morph a post's title and first overview image between list and detail pages
-    through `cast/js/post-view-transition.js`. `cast-vue` paginates through Vue, keeps only unused htmx transition
-    markup, and has no route transitions.
-  - Scope: wrap `cast-vue` router navigation in progressive-enhancement view transitions and remove the unused htmx
-    pagination transition markup.
-  - Done when: route changes animate where supported and respect reduced motion.
-
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)
   - Related design:
