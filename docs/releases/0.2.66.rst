@@ -1,4 +1,4 @@
-0.2.66 (unreleased)
+0.2.66 (2026-09-29)
 -------------------
 
 - Send a weak ``ETag`` with every built-in RSS/Atom feed response and answer a
