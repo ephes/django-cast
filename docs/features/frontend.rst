@@ -610,6 +610,10 @@ templates, handles this:
   page loads render as usual.
 - Names are removed when the transition finishes, so they never collide with
   HTMX pagination swaps or pages restored from the back/forward cache.
+- During ``cast-page`` transitions the theme CSS forces
+  ``content-visibility: visible`` on ``#paging-area``. Otherwise a site that
+  sets ``content-visibility: auto`` there would skip the post list on the first
+  frame, and a post could not morph back into it.
 
 Navigations without a shared post, such as between list pages, keep the plain
 crossfade. Posts without an overview image morph only their title. Custom

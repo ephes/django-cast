@@ -13,3 +13,6 @@
   being opened or left, during ``cast-page`` transitions. Sites that ship their
   own copy of a theme's ``base.html`` instead of extending it need to add the
   script to the ``<head>`` to get the morph.
+- Render ``#paging-area`` during ``cast-page`` transitions in the
+  ``bootstrap4`` and ``plain`` themes, so posts also morph back into the list on
+  sites that give it ``content-visibility: auto``.

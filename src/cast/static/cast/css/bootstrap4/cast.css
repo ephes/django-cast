@@ -32,6 +32,13 @@ html:active-view-transition-type(cast-page)::view-transition-new(cast-post-image
   animation-timing-function: ease-in-out;
 }
 
+/* Sites that add content-visibility: auto to #paging-area would otherwise skip
+   the post list on the first frame of a cast-page transition, so a post could
+   not morph back into it. */
+html:active-view-transition-type(cast-page) #paging-area {
+  content-visibility: visible;
+}
+
 @keyframes cast-fade-out {
   from { opacity: 1; }
   to { opacity: 0; }
