@@ -13,7 +13,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - The implemented typeahead architecture, performance measurements, and UX rationale remain available in
   [backlog/2026-07-16-typeahead-search.md](backlog/2026-07-16-typeahead-search.md).
 
-## Research / Shaping
+## Later
 
 - [ ] Local authoring and sync workflow
   - Design record:
@@ -25,6 +25,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     Cast Studio's local Electron playground: that product packages the complete Django/Wagtail site and edits its local
     database through Wagtail. A future **Put this site online** action still requires a separate portable import or
     hosted-trial design and must never overwrite a production database with local SQLite.
+  - Status: deferred (2026-09-29). The maintainer has no current need for local editing with sync back to a
+    production site. Revisit when a concrete local-edit/sync workflow is wanted for a real site.
   - Done when: tradeoffs are documented for data ownership, conflict resolution, media files, revision history,
     authentication, rollback, and production safety, with a recommended first slice.
 
@@ -37,10 +39,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Notes: this is distinct from Cast Studio. Cast Studio is initially a distribution/lifecycle shell around a complete
     local Django/Wagtail site and uses Wagtail admin as its editor; it does not need the editor API or a second content
     editor for its first proof. Candidates for this separate external client include Electron, Tauri, or a PWA.
+  - Status: deferred (2026-09-29) together with the local authoring and sync workflow it depends on.
   - Done when: concrete demand exists and there is a small prototype or design note showing how the client would
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
-
-## Later
 
 - [ ] Paged feeds (deferred)
   - Decision record: [backlog/2026-09-28-paged-feeds-deferred.md](backlog/2026-09-28-paged-feeds-deferred.md);
