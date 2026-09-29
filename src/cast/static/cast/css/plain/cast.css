@@ -20,6 +20,18 @@ html:active-view-transition-type(cast-page)::view-transition-new(paging-area) {
   animation: 250ms ease-in both cast-fade-in;
 }
 
+/* Shared post title and first overview image, named by post-view-transition.js
+   only for the post that is being opened or left. */
+html:active-view-transition-type(cast-page)::view-transition-group(cast-post-title),
+html:active-view-transition-type(cast-page)::view-transition-group(cast-post-image),
+html:active-view-transition-type(cast-page)::view-transition-old(cast-post-title),
+html:active-view-transition-type(cast-page)::view-transition-new(cast-post-title),
+html:active-view-transition-type(cast-page)::view-transition-old(cast-post-image),
+html:active-view-transition-type(cast-page)::view-transition-new(cast-post-image) {
+  animation-duration: 300ms;
+  animation-timing-function: ease-in-out;
+}
+
 @keyframes cast-fade-out {
   from { opacity: 1; }
   to { opacity: 0; }

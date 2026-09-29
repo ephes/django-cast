@@ -583,3 +583,35 @@ prefer reduced motion, get the usual immediate page load. Custom themes can
 reuse the ``cast-page`` type with
 ``html:active-view-transition-type(cast-page)`` selectors, or omit the
 ``@view-transition`` rule to keep plain page loads.
+
+Shared Post Title and Image
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+During a ``cast-page`` transition between a post list and a post detail page,
+both built-in themes morph the post's title and its first overview image from
+one page to the other, in both directions. The render-time script
+``cast/js/post-view-transition.js``, loaded in the ``<head>`` of both base
+templates, handles this:
+
+- On ``pageswap`` it finds the ``<article>`` whose header links to the
+  destination (on a list page) or to the current page (on a detail page). It
+  names that article's header heading ``cast-post-title`` and the first ``img``
+  inside ``.block-overview`` ``cast-post-image``.
+- It hands the post URL and the destination URL to the next page through
+  ``sessionStorage``. On ``pagereveal`` the destination names the same post's
+  elements, but only when the destination URL matches. It never names
+  elements from two different posts.
+- When a handoff targets the page being loaded, the script adds
+  ``<link rel="expect" blocking="render">`` so the first render waits until
+  the document is parsed and ``pagereveal`` can find the incoming post. This
+  applies only to ``cast-page`` navigations that open or leave a post. Other
+  page loads render as usual.
+- Names are removed when the transition finishes, so they never collide with
+  HTMX pagination swaps or pages restored from the back/forward cache.
+
+Navigations without a shared post, such as between list pages, keep the plain
+crossfade. Posts without an overview image morph only their title. Custom
+templates keep the morph as long as each post renders as an ``<article>``
+whose direct ``<header>`` contains a heading (``h1`` to ``h3``) and a link to
+the post, and whose overview section has the ``block-overview`` class. The
+heading itself does not need to be the link.
