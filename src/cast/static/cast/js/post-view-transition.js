@@ -11,6 +11,9 @@
   var STORAGE_KEY = "cast-post-view-transition";
   var TITLE_NAME = "cast-post-title";
   var IMAGE_NAME = "cast-post-image";
+  // Audio players render their own cover art, and list and detail pages load
+  // players in different modes, so player images never count as post images.
+  var PLAYER_SELECTOR = "podlove-player, cast-audio-player";
 
   function pagePath(url) {
     try {
@@ -35,6 +38,16 @@
     return null;
   }
 
+  function firstOverviewImage(article) {
+    var images = article.querySelectorAll(".block-overview img");
+    for (var i = 0; i < images.length; i++) {
+      if (!images[i].closest(PLAYER_SELECTOR)) {
+        return images[i];
+      }
+    }
+    return null;
+  }
+
   function isCastPageTransition(viewTransition) {
     return Boolean(viewTransition && viewTransition.types && viewTransition.types.has(TRANSITION_TYPE));
   }
@@ -42,7 +55,7 @@
   function nameElements(article, viewTransition) {
     var named = [];
     var title = article.querySelector("header h1, header h2, header h3");
-    var image = article.querySelector(".block-overview img");
+    var image = firstOverviewImage(article);
     if (title) {
       title.style.viewTransitionName = TITLE_NAME;
       named.push(title);

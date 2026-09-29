@@ -596,7 +596,9 @@ templates, handles this:
 - On ``pageswap`` it finds the ``<article>`` whose header links to the
   destination (on a list page) or to the current page (on a detail page). It
   names that article's header heading ``cast-post-title`` and the first ``img``
-  inside ``.block-overview`` ``cast-post-image``.
+  inside ``.block-overview`` ``cast-post-image``. Images inside
+  ``<podlove-player>`` or ``<cast-audio-player>`` are skipped, because list and
+  detail pages load audio players in different modes.
 - It hands the post URL and the destination URL to the next page through
   ``sessionStorage``. On ``pagereveal`` the destination names the same post's
   elements, but only when the destination URL matches. It never names

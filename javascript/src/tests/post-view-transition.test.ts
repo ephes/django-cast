@@ -105,6 +105,38 @@ describe("post-view-transition", () => {
       expect(namedElements()).toEqual(["H2:cast-post-title", "IMG:cast-post-image"]);
     });
 
+    it("skips audio player cover images when choosing the post image", () => {
+      setLocation("/blog/episode/");
+      document.body.innerHTML = `<article>
+        <header><h2><a href="/blog/episode/">Episode</a></h2></header>
+        <section class="block-overview">
+          <podlove-player><img class="podlove-facade-cover" src="/cover.jpg"></podlove-player>
+          <cast-audio-player><img src="/poster.jpg"></cast-audio-player>
+          <section class="block-image"><img class="cast-image" src="/image.jpg"></section>
+        </section>
+      </article>`;
+      const { viewTransition } = fakeTransition();
+
+      dispatchPageSwap(viewTransition, `${ORIGIN}/blog/`);
+
+      expect(document.querySelector(".cast-image")?.getAttribute("style")).toContain("cast-post-image");
+      expect(namedElements()).toEqual(["H2:cast-post-title", "IMG:cast-post-image"]);
+      expect(document.querySelector(".podlove-facade-cover")?.getAttribute("style") ?? "").toBe("");
+    });
+
+    it("names only the title when the only overview image belongs to a player", () => {
+      setLocation("/blog/episode/");
+      document.body.innerHTML = `<article>
+        <header><h2><a href="/blog/episode/">Episode</a></h2></header>
+        <section class="block-overview"><podlove-player><img src="/cover.jpg"></podlove-player></section>
+      </article>`;
+      const { viewTransition } = fakeTransition();
+
+      dispatchPageSwap(viewTransition, `${ORIGIN}/blog/`);
+
+      expect(namedElements()).toEqual(["H2:cast-post-title"]);
+    });
+
     it("names only the title when the post has no overview image", () => {
       setLocation("/blog/");
       document.body.innerHTML = article("first", false);

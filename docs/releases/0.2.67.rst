@@ -6,8 +6,9 @@
   ``cast-page`` transition type when the reader has no reduced-motion
   preference. HTMX pagination keeps its existing fade, and unsupported browsers
   load pages as before.
-- Morph a post's title and first overview image between blog lists and the
-  post detail page in the ``bootstrap4`` and ``plain`` themes. The new
+- Morph a post's title and first overview image (not counting audio player
+  cover art) between blog lists and the post detail page in the ``bootstrap4``
+  and ``plain`` themes. The new
   render-time script ``cast/js/post-view-transition.js`` names only the post
   being opened or left, during ``cast-page`` transitions. Sites that ship their
   own copy of a theme's ``base.html`` instead of extending it need to add the
