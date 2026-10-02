@@ -211,6 +211,18 @@ and satisfy one of those paths; a missing, mismatched, or non-public anchor is
 rejected rather than silently ignored. Every denial returns ``Http404`` (never
 ``403``) so object existence is not leaked.
 
+The Podlove audio detail API marks responses authorized through a draft or
+restricted page as ``Cache-Control: private, no-store`` and varies on ``Cookie``
+and ``Authorization``. This keeps Django's full-site cache from replaying a
+previously authorized response after credentials or group membership are revoked.
+When multiple anchors are supplied, any draft or restricted granting anchor
+makes the response private. Unrestricted public responses retain their existing
+cache behavior. This policy applies to the Podlove detail API; it does not add a
+new cache policy to other legacy transcript or chapter endpoints.
+On deployment, purge existing Podlove detail responses from application and
+downstream caches: the new headers prevent future storage but cannot evict
+responses stored before the upgrade.
+
 Configure ``STORAGES["cast_public_transcripts"]`` for production when transcript
 artifacts should use a dedicated public storage backend or prefix. If that alias
 is omitted, django-cast uses an explicitly configured ``cast_private_media``

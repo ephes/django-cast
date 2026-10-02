@@ -13,6 +13,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - The implemented typeahead architecture, performance measurements, and UX rationale remain available in
   [backlog/2026-07-16-typeahead-search.md](backlog/2026-07-16-typeahead-search.md).
 
+- The scoped Podlove response-cache security audit and its completed regression
+  evidence are recorded in
+  [backlog/2026-10-03-security-audit.md](backlog/2026-10-03-security-audit.md).
+
 ## Later
 
 - [ ] Local authoring and sync workflow

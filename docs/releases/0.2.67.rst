@@ -16,3 +16,10 @@
 - Render ``#paging-area`` during ``cast-page`` transitions in the
   ``bootstrap4`` and ``plain`` themes, so posts also morph back into the list on
   sites that give it ``content-visibility: auto``.
+- Prevent the Podlove audio detail API from caching draft or restricted
+  responses in Django's full-site cache. Such responses now use
+  ``Cache-Control: private, no-store`` and vary on ``Cookie`` and
+  ``Authorization``, so revoked credentials or group membership are checked on
+  the next request instead of receiving a cached authorized response. Purge
+  existing Podlove detail responses from application and downstream caches when
+  deploying; the new headers cannot evict previously cached responses.

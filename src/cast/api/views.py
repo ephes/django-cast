@@ -163,10 +163,11 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
         # context consistent; a mismatched or non-public anchor is a 404.
         anchors = [anchor for anchor in (post_id, episode_id) if anchor is not None]
         if anchors:
-            for anchor in anchors:
-                authorize_audio_access(request, audio=instance, explicit_anchor_id=anchor)
+            granting_pages = [
+                authorize_audio_access(request, audio=instance, explicit_anchor_id=anchor) for anchor in anchors
+            ]
         else:
-            authorize_audio_access(request, audio=instance)
+            granting_pages = [authorize_audio_access(request, audio=instance)]
         if episode_id is not None:
             instance.set_episode_id(int(episode_id))
 
@@ -182,7 +183,13 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
             context["post"] = post
 
         serializer = self.get_serializer(instance, context=context)
-        return Response(serializer.data)
+        response = Response(serializer.data)
+        if any(not page_is_unrestricted_public(page) for page in granting_pages):
+            # Preview/restricted authorization must be rechecked on every request,
+            # including after credentials or page permissions are revoked.
+            response["Cache-Control"] = "private, no-store"
+            patch_vary_headers(response, ("Cookie", "Authorization"))
+        return response
 
 
 class AudioPlayerTranscriptView(generics.RetrieveAPIView):
