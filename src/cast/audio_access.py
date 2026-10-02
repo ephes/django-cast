@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.http import Http404
+from django.http import Http404, HttpResponse
+from django.utils.cache import patch_vary_headers
 
 
 def page_is_publicly_viewable(page: Any, request: Any) -> bool:
@@ -116,3 +117,11 @@ def authorize_transcript_access(request: Any, *, transcript: Any, explicit_ancho
     """Authorize access to ``transcript``'s public content or raise ``Http404``."""
     audio = getattr(transcript, "audio", None)
     return authorize_audio_access(request, audio=audio, explicit_anchor_id=explicit_anchor_id)
+
+
+def prevent_private_media_caching(response: HttpResponse, *, granting_page: Any) -> HttpResponse:
+    """Keep request-specific media out of caches that would skip access checks."""
+    if not page_is_unrestricted_public(granting_page):
+        response["Cache-Control"] = "private, no-store"
+        patch_vary_headers(response, ("Cookie", "Authorization"))
+    return response

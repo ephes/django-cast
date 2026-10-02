@@ -15,7 +15,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - The scoped Podlove response-cache security audit and its completed regression
   evidence are recorded in
-  [backlog/2026-10-03-security-audit.md](backlog/2026-10-03-security-audit.md).
+  [backlog/2026-10-03-security-audit.md](backlog/2026-10-03-security-audit.md);
+  the adjacent raw transcript/chapter cache audit and HTML negative evidence are in
+  [backlog/2026-10-03-adjacent-media-cache-audit.md](backlog/2026-10-03-adjacent-media-cache-audit.md).
 
 ## Later
 

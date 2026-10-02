@@ -23,3 +23,10 @@
   the next request instead of receiving a cached authorized response. Purge
   existing Podlove detail responses from application and downstream caches when
   deploying; the new headers cannot evict previously cached responses.
+- Apply the private-response cache policy to raw Podlove JSON, PodcastIndex
+  JSON, WebVTT, and chapters endpoints. Responses granted through restricted or
+  draft pages use ``private, no-store`` and vary on ``Cookie`` and
+  ``Authorization``. Purge existing endpoint cache entries on deployment.
+  Previously public responses retain their cache lifetime after new restrictions;
+  purge those URLs when immediate removal is required. HTML transcript views
+  retain their existing behavior.

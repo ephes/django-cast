@@ -92,8 +92,10 @@ uncached denial controls distinguish the exploit from ordinary permission checks
   were performed. This is not a comprehensive clean security verdict.
 - Other legacy transcript/chapter views also lack an explicit private/no-store
   policy; they were inspected but were not reproduced or repaired in this slice.
-  Their full-site-cache revocation behavior remains unverified. Existing custom
-  player transcript private/no-store protection remains unchanged.
+  Their full-site-cache revocation behavior was unverified at the conclusion
+  of this first slice. The subsequent bounded reproduction and repair are
+  recorded in [the adjacent media audit](2026-10-03-adjacent-media-cache-audit.md).
+  Existing custom player transcript private/no-store protection remains unchanged.
 
 ## Independent verification and review
 

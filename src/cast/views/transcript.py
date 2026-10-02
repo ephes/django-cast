@@ -15,7 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from wagtail.admin import messages
 from wagtail.search.backends import get_search_backends
 
-from ..audio_access import authorize_transcript_access, request_may_view_page
+from ..audio_access import authorize_transcript_access, prevent_private_media_caching, request_may_view_page
 from ..forms import (
     KNOWN_SPEAKER_APPLY_ACTION,
     KNOWN_SPEAKER_REVIEW_ACTION,
@@ -574,7 +574,9 @@ def _read_transcript_artifact(field: FieldFile) -> str | None:
 def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
-    authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
+    granting_page = authorize_transcript_access(
+        request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id")
+    )
     if transcript.podlove:
         content = _read_transcript_artifact(transcript.podlove)
         if content is None:
@@ -586,14 +588,16 @@ def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
         episode = public_episode_from_request(request, transcript=transcript)
         data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
         data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
-        return JsonResponse(data)
+        return prevent_private_media_caching(JsonResponse(data), granting_page=granting_page)
     return HttpResponse("Podlove file not available", status=404)
 
 
 def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podcastindex transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
-    authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
+    granting_page = authorize_transcript_access(
+        request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id")
+    )
     if not transcript.dote:
         return HttpResponse("podcastindex JSON file not available", status=404)
     content = _read_transcript_artifact(transcript.dote)
@@ -605,19 +609,23 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     except json.JSONDecodeError:
         return HttpResponse("Invalid JSON format in dote file", status=400)
     if not dote_data:
-        return JsonResponse(dote_data)
+        return prevent_private_media_caching(JsonResponse(dote_data), granting_page=granting_page)
     dote_data = apply_public_speaker_mapping_to_dote_data(dote_data, transcript, episode=episode)
     dote_data = sanitize_dote_data(
         dote_data,
         strict_public_speaker_labels_for_transcript(transcript, episode=episode),
     )
-    return JsonResponse(convert_dote_to_podcastindex_transcript(dote_data))
+    return prevent_private_media_caching(
+        JsonResponse(convert_dote_to_podcastindex_transcript(dote_data)), granting_page=granting_page
+    )
 
 
 def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the transcript content as WebVTT because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
-    authorize_transcript_access(request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id"))
+    granting_page = authorize_transcript_access(
+        request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id")
+    )
     if transcript.vtt:
         content = _read_transcript_artifact(transcript.vtt)
         if content is None:
@@ -628,7 +636,9 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
             content,
             strict_public_speaker_labels_for_transcript(transcript, episode=episode),
         )
-        return HttpResponse(content, content_type="text/vtt")
+        return prevent_private_media_caching(
+            HttpResponse(content, content_type="text/vtt"), granting_page=granting_page
+        )
     return HttpResponse("WebVTT file not available", status=404)
 
 

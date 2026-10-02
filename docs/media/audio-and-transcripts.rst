@@ -217,11 +217,15 @@ and ``Authorization``. This keeps Django's full-site cache from replaying a
 previously authorized response after credentials or group membership are revoked.
 When multiple anchors are supplied, any draft or restricted granting anchor
 makes the response private. Unrestricted public responses retain their existing
-cache behavior. This policy applies to the Podlove detail API; it does not add a
-new cache policy to other legacy transcript or chapter endpoints.
-On deployment, purge existing Podlove detail responses from application and
-downstream caches: the new headers prevent future storage but cannot evict
-responses stored before the upgrade.
+cache behavior. The same private-response policy applies to the raw Podlove JSON, PodcastIndex
+JSON, WebVTT, and chapters views, using the page that grants object access.
+The HTML transcript views retain their existing response behavior.
+On deployment, purge existing responses for these media endpoints from
+application and downstream caches: the new headers prevent future private
+response storage but cannot evict responses stored before the upgrade.
+Previously unrestricted public responses keep their existing cache lifetime;
+adding a restriction or unpublishing a page does not invalidate those stored
+responses. Purge the affected media URLs when immediate removal is needed.
 
 Configure ``STORAGES["cast_public_transcripts"]`` for production when transcript
 artifacts should use a dedicated public storage backend or prefix. If that alias
