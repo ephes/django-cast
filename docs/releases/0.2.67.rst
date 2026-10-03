@@ -30,3 +30,10 @@
   Previously public responses retain their cache lifetime after new restrictions;
   purge those URLs when immediate removal is required. HTML transcript views
   retain their existing behavior.
+- Exclude Django 6.1.0 for CVE-2026-15830 reported by the dependency audit;
+  require 6.1.1 or later on that branch while retaining patched Django 5.2
+  and 6.0 support. Align the strict advisory-floor audit and compatibility
+  environments with that minimum. Refresh application locks that retain 6.1.0.
+- Raise the urllib3 security floor to 2.8.0 for the streaming and HTTPS-proxy
+  advisories also exposed by checking every audit minimum. Keep both strict
+  dependency audit jobs; refresh application locks retaining earlier urllib3.
