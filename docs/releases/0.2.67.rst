@@ -48,3 +48,12 @@
   (``django-cast[markdown]``); without it, Markdown requests return a
   ``markdown_unavailable`` validation error and block-list writes are
   unaffected.
+- Stop cached RSS and Atom feeds (blog and podcast) from listing an entry after
+  a Wagtail login, password, or group restriction is added to it. Previously a
+  warm feed kept serving the entry, with its content and enclosure, for up to
+  five minutes, and a feed render in flight during the change could refill the
+  cache with the stale entry. Feed cache keys now carry a generation that a
+  committed ``PageViewRestriction`` save or delete rotates with a single cache
+  write, so in-flight renders store their responses where no later request
+  reads them. Use a shared cache backend for ``CACHE_MIDDLEWARE_ALIAS`` in
+  multi-process deployments; downstream HTTP caches are not purged.

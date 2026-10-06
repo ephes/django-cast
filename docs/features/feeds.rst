@@ -269,10 +269,19 @@ Cache Duration
 The built-in XML feed routes cache responses for five minutes.
 ``CAST_FEED_CACHE_TIMEOUT`` is not implemented and setting it has no effect.
 The feed root's public accessibility is rechecked before serving cached output.
-Changes to individual entries (including removal or new view restrictions) can
-remain in a warm response until it expires or is invalidated. When restricting
-previously public content, account for application and downstream caches; a
-cached feed is not an immediate-revocation mechanism.
+When a Wagtail view restriction (login, password, or group) is added to or
+removed from any page and the change commits, every cached feed response is
+retired: the feed cache key carries a generation that the change rotates. A
+feed render already in flight during the change stores its response under the
+old generation, so no later request is served the stale entry. The generation
+lives in the cache named by ``CACHE_MIDDLEWARE_ALIAS``; with a per-process
+cache such as ``LocMemCache`` only the process that committed the change sees
+the rotation, so use a shared cache backend in multi-process deployments.
+
+Other entry changes (edits, unpublishing, deletion) can remain in a warm
+response until it expires. Downstream HTTP caches and proxies are not purged;
+a cached feed is not an immediate-revocation mechanism outside this
+application.
 
 Conditional Requests
 --------------------
