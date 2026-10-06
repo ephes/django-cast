@@ -22,7 +22,7 @@ from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -31,6 +31,7 @@ from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.images.api.v2.views import ImagesAPIViewSet
 from wagtail.models import Site
 
+from .. import appsettings
 from ..audio_access import authorize_audio_access, page_grants_audio_access, page_is_unrestricted_public
 from ..filters import PostFilterset
 from ..forms import SelectThemeForm
@@ -434,8 +435,36 @@ class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
         return super().get_queryset()
 
 
+def public_images_api_enabled() -> bool:
+    # Fail closed: only a real ``True`` opens the endpoint (``cast.E001`` reports non-bool values).
+    return appsettings.CAST_PUBLIC_IMAGES_API is True
+
+
+class CastImagesAPIPermission(BasePermission):
+    """Restrict the Wagtail images API to active staff unless ``CAST_PUBLIC_IMAGES_API`` is enabled.
+
+    The stock Wagtail images endpoint lists every original upload in unrestricted
+    collections, including images only used by drafts or private pages, together
+    with a ``download_url`` pointing at the unprocessed original file.
+    """
+
+    def has_permission(self, request: Request, view: APIView) -> bool:
+        if public_images_api_enabled():
+            return True
+        user = request.user
+        return bool(user and user.is_active and user.is_staff)
+
+
 class CastImagesAPIViewSet(RemoveNullBytesMixin, ImagesAPIViewSet):
-    pass
+    permission_classes = (CastImagesAPIPermission,)
+
+    def finalize_response(self, request: Request, response: Response, *args: Any, **kwargs: Any) -> Response:
+        response = super().finalize_response(request, response, *args, **kwargs)
+        if not public_images_api_enabled():
+            # Staff-only responses must not be stored by shared or full-site caches.
+            patch_cache_control(response, private=True, no_store=True)
+            patch_vary_headers(response, ("Cookie", "Authorization"))
+        return response
 
 
 # Wagtail API

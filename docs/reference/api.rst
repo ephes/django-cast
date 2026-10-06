@@ -202,10 +202,25 @@ Combined filters::
 
 **Images API**
 
-Access images::
+Access images (active staff users only by default)::
 
     GET /api/wagtail/images/
     GET /api/wagtail/images/{id}/
+
+This is Wagtail's stock images endpoint. It lists every image in unrestricted
+collections, including images only used by draft or private posts, and each
+item's ``meta.download_url`` points at the unprocessed original upload (which
+may still carry EXIF metadata such as GPS coordinates). It therefore requires an
+authenticated, active staff user; anonymous and non-staff callers receive
+``403`` (or ``401`` when the first configured authentication class sends an
+authentication challenge). Responses are marked ``Cache-Control: private,
+no-store`` and vary on ``Cookie`` and ``Authorization``. Wagtail still applies
+collection view restrictions per request, so images in a restricted collection
+are only listed for callers who pass that restriction (a logged-in staff user
+passes a login restriction, for example).
+
+Set :ref:`CAST_PUBLIC_IMAGES_API <cast_public_images_api>` to ``True`` to
+restore the previous anonymous access.
 
 Search and Discovery
 ~~~~~~~~~~~~~~~~~~~~

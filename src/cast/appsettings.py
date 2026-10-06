@@ -82,6 +82,7 @@ CAST_SETTING_REGISTRY: dict[str, CastSetting] = {
     "CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS": CastSetting(12),
     "CAST_STYLEGUIDE_IMAGE_SOURCE_URLS": CastSetting(None),
     "CAST_POST_BODY_BLOCKS": CastSetting(None),
+    "CAST_PUBLIC_IMAGES_API": CastSetting(False, bool),
     # Defaults for settings whose accessor lives in comments/appsettings.py
     # (it layers legacy FLUENT_* fallbacks on top of these).
     "CAST_COMMENTS_EXCLUDE_FIELDS": CastSetting(()),
@@ -140,6 +141,7 @@ if TYPE_CHECKING:
     CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS: int
     CAST_STYLEGUIDE_IMAGE_SOURCE_URLS: list[str] | str | None
     CAST_POST_BODY_BLOCKS: dict[str, list[str]] | None
+    CAST_PUBLIC_IMAGES_API: bool
     CAST_COMMENTS_EXCLUDE_FIELDS: tuple[str, ...]
     CAST_COMMENTS_DEFAULT_MODERATOR: str
 
