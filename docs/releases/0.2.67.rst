@@ -48,3 +48,12 @@
   (``django-cast[markdown]``); without it, Markdown requests return a
   ``markdown_unavailable`` validation error and block-list writes are
   unaffected.
+- Recover transcript generations interrupted by a worker restart. A queued or
+  running generation older than the new ``CAST_VOXHELM_STALE_AFTER`` setting
+  (default: ``CAST_VOXHELM_POLL_TIMEOUT`` plus 15 minutes) is reported as
+  interrupted and no longer keeps the Generate control disabled. Generating
+  again resumes completing the interrupted Voxhelm job instead of submitting a
+  new one, so a job Voxhelm already finished is picked up rather than
+  transcribed twice. The completion task now
+  also marks the generation failed when the Voxhelm service cannot be
+  configured, instead of leaving it running.

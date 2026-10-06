@@ -332,6 +332,25 @@ Per-request HTTP timeout in seconds for Voxhelm API calls and artifact
 downloads. Defaults to ``30.0`` seconds. This is separate from
 ``CAST_VOXHELM_POLL_TIMEOUT``, which controls the overall job wait deadline.
 
+CAST_VOXHELM_STALE_AFTER
+========================
+
+Age in seconds after which a queued or running Wagtail-admin transcript
+generation counts as interrupted. Running generations are measured from when
+the completion task started, queued ones from their last update. Defaults to
+``CAST_VOXHELM_POLL_TIMEOUT`` plus 15 minutes.
+
+A worker restart (deploy, backup, restore, or a ``SIGKILL`` after the stop
+timeout) can end the completion task before it records a result. Once a
+generation is older than this threshold, the admin shows "Transcript generation
+was interrupted" and the Generate control is enabled again. Generating again
+resumes completing the interrupted Voxhelm job instead of submitting a new one,
+so a job Voxhelm already finished is picked up without transcribing the audio a
+second time. If that job failed on the Voxhelm side, the generation is marked
+failed and the next Generate submits a fresh job. Keep the value above the
+poll timeout so a task that is still waiting on Voxhelm is not treated as
+interrupted.
+
 Wagtail Admin Configuration
 ===========================
 
