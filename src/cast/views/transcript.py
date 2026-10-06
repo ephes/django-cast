@@ -615,9 +615,11 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
         dote_data,
         strict_public_speaker_labels_for_transcript(transcript, episode=episode),
     )
-    return prevent_private_media_caching(
-        JsonResponse(convert_dote_to_podcastindex_transcript(dote_data)), granting_page=granting_page
-    )
+    try:
+        podcastindex_data = convert_dote_to_podcastindex_transcript(dote_data)
+    except (ValueError, KeyError, TypeError):
+        return HttpResponse("Invalid timestamp format in dote file", status=400)
+    return prevent_private_media_caching(JsonResponse(podcastindex_data), granting_page=granting_page)
 
 
 def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:

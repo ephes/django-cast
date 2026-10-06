@@ -64,3 +64,14 @@
   responses for ``/api/wagtail/images/`` from application and CDN caches when
   deploying. The original files themselves remain reachable at their existing
   media URLs; this change only stops the API from enumerating them.
+- Accept DOTe transcript timestamps that use ``.`` as well as ``,`` before the
+  fraction, and read one- or two-digit fractions as decimal fractions of a
+  second (``00:00:01,5`` is 1.5 s, not 1.005 s). Previously a DOTe file with
+  ``.`` separators passed upload validation and then made the public
+  PodcastIndex transcript endpoint return a server error. DOTe uploads now
+  reject ``startTime``/``endTime`` values that are not ``HH:MM:SS,mmm``, and the
+  PodcastIndex endpoint answers ``400`` for an already stored file with an
+  invalid timestamp.
+- Format ``Audio.duration_str`` as total ``H:MM:SS`` hours, so episodes of 24
+  hours or more no longer produce values like ``1 day, 0:05:00`` in
+  ``itunes:duration``, the API ``duration`` field and the player JSON.

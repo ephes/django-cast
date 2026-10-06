@@ -42,6 +42,7 @@ from .models import (
 )
 from .models.contributors import ContributorVoiceReference
 from .transcripts import known_speakers, parsing
+from .transcripts.dote import dote_timestamp_to_ms
 from .transcripts.known_speakers import (
     KNOWN_SPEAKER_DECISION_APPROVE,
     KNOWN_SPEAKER_DECISION_CORRECT,
@@ -344,6 +345,12 @@ class TranscriptForm(BaseCollectionMemberForm):
                     _("DOTe transcript lines must include keys: %(keys)s."),
                     params={"keys": missing_display},
                 )
+            for key in ("startTime", "endTime"):
+                if dote_timestamp_to_ms(line[key]) is None:
+                    raise ValidationError(
+                        _("DOTe transcript %(key)s values must use the HH:MM:SS,mmm format, got %(value)s."),
+                        params={"key": key, "value": repr(line[key])[:50]},
+                    )
         return dote
 
     def clean_vtt(self) -> Any:
