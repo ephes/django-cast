@@ -232,6 +232,26 @@ author-facing JSON shape; they do not send Wagtail's internal ``ListBlock``
 item wrappers. Custom blocks that reference images, pages, snippets, or media
 are responsible for their own validation and permission semantics.
 
+**********
+Images API
+**********
+
+.. _cast_public_images_api:
+
+CAST_PUBLIC_IMAGES_API
+======================
+
+Defaults to ``False``. The Wagtail images API at ``<cast>/api/wagtail/images/``
+then only answers active staff users, because it lists original uploads
+(including images only used by drafts) with download URLs to the unprocessed
+originals. Set it to ``True`` to let anonymous callers list and fetch images
+again, as in releases before 0.2.67. Either way, images in view-restricted
+collections are only listed for callers who pass the collection's restriction.
+
+.. code-block:: python
+
+    CAST_PUBLIC_IMAGES_API = True
+
 *************
 Transcription
 *************
