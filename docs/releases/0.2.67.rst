@@ -48,3 +48,19 @@
   (``django-cast[markdown]``); without it, Markdown requests return a
   ``markdown_unavailable`` validation error and block-list writes are
   unaffected.
+- Restrict the Wagtail images API (``<cast>/api/wagtail/images/``, including
+  its detail and ``find`` views) to active staff users. It listed every
+  original upload in unrestricted collections, including images only used by
+  drafts, with ``download_url`` links to the unprocessed originals, which can
+  carry GPS EXIF data. Anonymous and non-staff callers now receive ``403`` (or
+  ``401`` with an authentication challenge), and responses use
+  ``Cache-Control: private, no-store`` and vary on ``Cookie`` and
+  ``Authorization``. The new ``CAST_PUBLIC_IMAGES_API`` setting (default
+  ``False``) restores anonymous access.
+
+  **Upgrade note:** clients that read this endpoint anonymously stop working
+  unless the site sets ``CAST_PUBLIC_IMAGES_API = True``. The bundled themes,
+  ``cast-vue`` and ``cast-bootstrap5`` do not use it. Purge previously cached
+  responses for ``/api/wagtail/images/`` from application and CDN caches when
+  deploying. The original files themselves remain reachable at their existing
+  media URLs; this change only stops the API from enumerating them.
