@@ -31,6 +31,13 @@ restrictions change. Authorized visitors can still comment on restricted live
 pages when comments are enabled. Non-page targets retain the generic
 ``django-contrib-comments`` behavior and their comment-enabled checks.
 
+The comment permalink route (``comments-url-redirect``, ``cr/<content type>/<pk>/``,
+used by ``Comment.get_absolute_url()``) only redirects to Wagtail pages that the
+requester can view: live pages that pass their view restrictions, or pages the
+logged-in user may edit. Every other target, including non-page objects such as
+users, returns 404. Permalinks to comments on pages that were later unpublished
+or restricted return 404 for visitors who can no longer view the page.
+
 .. _comments_configuration:
 
 Configuration
