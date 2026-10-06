@@ -37,3 +37,14 @@
 - Raise the urllib3 security floor to 2.8.0 for the streaming and HTTPS-proxy
   advisories also exposed by checking every audit minimum. Keep both strict
   dependency audit jobs; refresh application locks retaining earlier urllib3.
+- Accept optional ``overview_markdown`` and ``detail_markdown`` inputs on the
+  editor API post and episode create and PATCH endpoints. Markdown is converted
+  server-side into the canonical ``paragraph``/``code`` block list and then
+  validated and sanitized like a submitted block list; responses keep returning
+  blocks. Raw HTML in Markdown is escaped, Markdown images are rejected in
+  favor of structured media blocks, and sending a block list and Markdown for
+  the same section is a ``conflict`` validation error. The parser
+  (``markdown-it-py``) ships behind the new optional ``markdown`` extra
+  (``django-cast[markdown]``); without it, Markdown requests return a
+  ``markdown_unavailable`` validation error and block-list writes are
+  unaffected.

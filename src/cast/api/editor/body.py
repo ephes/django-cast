@@ -8,7 +8,8 @@ from ...content.convert import (
     content_section,
     section_to_author_blocks as convert_section_to_author_blocks,
 )
-from ...content.errors import ContentValidationError
+from ...content.errors import ContentValidationError, ErrorCollector
+from ...content.markdown import markdown_to_author_blocks
 from ...content.media_refs import (
     get_choosable_audio as get_choosable_audio,
     get_choosable_image as get_choosable_image,
@@ -39,6 +40,31 @@ def author_blocks_to_overview(
 ) -> list[dict]:
     """Backward-compatible wrapper for overview conversion."""
     return author_blocks_to_section(blocks, user=user, path_prefix=path_prefix, existing_section=existing_section)
+
+
+def markdown_field(section: str) -> str:
+    """Request field carrying the Markdown alternative for a body section."""
+    return f"{section}_markdown"
+
+
+def markdown_to_section(source: str, *, user: Any, section: str) -> list[dict]:
+    """Convert Markdown into a body-section value through the canonical block pipeline.
+
+    The generated ``paragraph``/``code`` author blocks are validated and sanitized
+    exactly like a submitted block list. Errors are reported under
+    ``<section>_markdown``; indexed paths refer to the generated block list.
+    """
+    field = markdown_field(section)
+    errors = ErrorCollector()
+    blocks = markdown_to_author_blocks(source, path=field, errors=errors)
+    if errors:
+        raise EditorValidationError(errors.error_map)
+    try:
+        return author_blocks_to_section(blocks, user=user, path_prefix=section)
+    except EditorValidationError as exc:
+        raise EditorValidationError(
+            {field + path.removeprefix(section): items for path, items in exc.error_map.items()}
+        ) from exc
 
 
 def section_to_author_blocks(

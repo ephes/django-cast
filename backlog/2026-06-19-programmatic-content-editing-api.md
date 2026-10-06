@@ -66,8 +66,9 @@ Remaining follow-ups beyond slice 4 (triaged 2026-06-29 into concrete `BACKLOG.m
   existing `base_revision_id` conflict semantics; see Conflict Detection.
 - **Media replacement workflows — later.** Replacing an existing media object's file versus only creating new objects;
   see Open Questions.
-- **Optional Markdown convenience input — later.** An optional `*_markdown` input converted server-side into the
-  canonical block list behind an optional dependency; see Body Serialization, Tier 2.
+- **Optional Markdown convenience input — implemented (2026-10-06, 0.2.67).** Optional `overview_markdown` /
+  `detail_markdown` inputs converted server-side into the canonical block list behind the `markdown` extra; see Body
+  Serialization, Tier 2.
 - **`embed` body block support — later.** Adding `embed` as an author-facing block once URL validation and provider
   behavior are specified; stored `embed` blocks are currently preserved only as unsupported placeholders.
 
@@ -512,7 +513,8 @@ media/detail slice that adds the editor media endpoints described below:
 - Unsupported block types in either section are rejected with the existing editor `validation_error` envelope, using an
   `unsupported_block_type` code at the section-prefixed path such as `detail.0.type`.
 
-Tier 2, later — optional Markdown convenience:
+Tier 2 — optional Markdown convenience (implemented 2026-10-06, 0.2.67; `docs/reference/api.rst` "Markdown input"
+holds the shipped contract and conversion policy; the planning note below is historical):
 
 - An optional `overview_markdown` input may be added later as a convenience for human-driven or Markdown-native
   clients. It would be converted server-side into the same block list, behind an optional dependency so the Markdown
@@ -1240,7 +1242,8 @@ Resolved (2026-06-22):
   IndieAuth/token auth are later config-only additions (see Authentication And Permissions).
 - **Body contract** — a structured `overview` block list is the canonical first-slice contract; there is no Markdown
   parser in the request path (see Body Serialization).
-- **Markdown** — demoted to an optional later convenience behind an optional dependency, not part of the first slice.
+- **Markdown** — demoted to an optional later convenience behind an optional dependency, not part of the first slice;
+  implemented in 0.2.67 behind the `markdown` extra.
 
 Still open (each remaining content-editing follow-up is now tracked as a concrete `BACKLOG.md` item; see the triaged
 list near the top of this PRD and the "Episode Endpoints (Implemented Slice)" section):
@@ -1284,4 +1287,5 @@ Resolved by media/detail planning (2026-06-25):
 - A dedicated rendered-preview endpoint was later implemented in 0.2.61. The existing admin-session `preview_url`
   remains in create/read/update responses for human Wagtail-admin review, and token-only clients can use
   `GET /api/editor/posts/{id}/preview/` or `GET /api/editor/episodes/{id}/preview/` for server-rendered draft HTML.
-- Markdown input is deferred. Structured JSON remains the canonical write contract for now.
+- Markdown input was later implemented in 0.2.67 as optional `overview_markdown` / `detail_markdown` fields behind the
+  `markdown` extra. Structured JSON remains the canonical write contract.

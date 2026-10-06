@@ -534,9 +534,13 @@ Request fields:
 - ``cover_image`` (optional): ``{"id": <image id>, "alt_text": "…"}``.
 - ``tags`` (optional): list of tag name strings.
 - ``categories`` (optional): list of ``PostCategory`` IDs.
-- ``overview`` (required): ordered list of body blocks (see below). Send
-  ``[]`` when creating a post that only populates ``detail``.
+- ``overview`` (required unless ``overview_markdown`` is sent): ordered list of
+  body blocks (see below). Send ``[]`` when creating a post that only populates
+  ``detail``.
+- ``overview_markdown`` (optional): Markdown alternative to ``overview``; see
+  :ref:`Markdown input <editor_api_markdown>`.
 - ``detail`` (optional): ordered list of body blocks.
+- ``detail_markdown`` (optional): Markdown alternative to ``detail``.
 - ``publish`` (optional): must be ``false`` or absent.
 
 Body block types accepted in ``overview`` and ``detail``:
@@ -596,6 +600,74 @@ section, send the placeholder back with the same ``stored_type`` and
 section; ``position`` identifies the original stored block to preserve.
 Omitting a placeholder removes that stored block as part of the full-section
 replacement.
+
+.. _editor_api_markdown:
+
+**Markdown input (optional)**
+
+Clients that author in Markdown can send ``overview_markdown`` and/or
+``detail_markdown`` instead of the matching block list on create and PATCH, for
+posts and episodes. The structured block list remains the canonical contract:
+Markdown is converted server-side into ``paragraph`` and ``code`` blocks, then
+validated and sanitized exactly like a submitted block list, and responses always
+return the block list (the Markdown source is not stored).
+
+This input needs the optional ``markdown`` extra, which installs
+``markdown-it-py``::
+
+    uv pip install "django-cast[markdown]"
+
+Without the extra, requests that use a ``*_markdown`` field return ``400
+validation_error`` with code ``markdown_unavailable`` at that field; block-list
+writes are unaffected and the parser is never imported.
+
+Conversion policy:
+
+- Markdown is parsed as CommonMark. Consecutive top-level prose becomes one
+  ``paragraph`` block; each top-level fenced or indented code block becomes a
+  ``code`` block. The first word of the fence info string is the language, or
+  ``text`` when absent. Code nested in lists or quotes stays in the paragraph.
+- Raw HTML in the Markdown source is escaped and kept as text, never passed
+  through as markup. The parser leaves ``javascript:``, ``vbscript:``,
+  ``file:`` and most ``data:`` links as literal text; any link that does become
+  markup is still subject to the rich-text sanitizer's link-scheme rules.
+- The generated paragraph HTML then goes through the same rich-text sanitizer as
+  submitted ``paragraph`` blocks, so formatting outside the resolved feature list
+  is reduced to text. With Wagtail's default features, ``#`` headings become
+  paragraphs and block quotes lose their quoting; enable the features you need.
+- Markdown images (``![alt](url)``) are rejected with code ``inline_image``.
+  The message names the source line, or line range, of each paragraph or
+  heading that contains images. Use structured ``image``/``gallery`` blocks so
+  media permission checks apply.
+- Sending both ``overview`` and ``overview_markdown`` (or both ``detail`` and
+  ``detail_markdown``) returns ``400 validation_error`` with code ``conflict`` at
+  the Markdown field. The two sections are independent, so one may use Markdown
+  and the other a block list.
+- Errors in generated blocks are reported at ``<section>_markdown.<index>...``,
+  where the index refers to the generated block list, e.g.
+  ``detail_markdown.1.value.source`` for an empty fenced code block.
+- A Markdown section replaces the whole section on PATCH, like a block list. It
+  cannot carry ``unsupported`` placeholders, so stored unsupported blocks in that
+  section are removed; send the block list to preserve them.
+
+Example:
+
+.. code-block:: json
+
+    {
+      "parent": {"id": 123},
+      "title": "Weeknotes 2026-25",
+      "overview_markdown": "## Notes\n\nShipped the *first* draft.\n\n```python\nprint(\"hello\")\n```\n"
+    }
+
+stores the same overview as:
+
+.. code-block:: json
+
+    [
+      {"type": "paragraph", "value": "<h2>Notes</h2><p>Shipped the <i>first</i> draft.</p>"},
+      {"type": "code", "value": {"language": "python", "source": "print(\"hello\")"}}
+    ]
 
 Full create request example:
 
@@ -775,7 +847,11 @@ Update fields:
 - ``tags`` (optional): full replacement list of tag name strings.
 - ``categories`` (optional): full replacement list of ``PostCategory`` IDs.
 - ``overview`` (optional): full replacement ordered list of body blocks.
+- ``overview_markdown`` (optional): full replacement as Markdown; mutually
+  exclusive with ``overview`` (see :ref:`Markdown input <editor_api_markdown>`).
 - ``detail`` (optional): full replacement ordered list of body blocks.
+- ``detail_markdown`` (optional): full replacement as Markdown; mutually
+  exclusive with ``detail``.
 - ``publish`` (optional): must be ``false`` or absent.
 
 Example update request:

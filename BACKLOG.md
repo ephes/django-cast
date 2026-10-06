@@ -114,15 +114,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the decision and, if accepted, a safe replacement contract (permissions, reference safety, cleanup) are
     documented or the option is explicitly deferred.
 
-- [ ] Editor API Markdown convenience input
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Body Serialization, Tier 2)
-  - Scope: add an optional `overview_markdown`/`detail_markdown` convenience input converted server-side into the
-    canonical block list, behind an optional dependency so the Markdown parser is not forced onto all installs.
-  - Done when: the optional-dependency boundary and conversion policy are documented, the structured block list stays
-    canonical, and tests cover the conversion plus the dependency-absent path.
-
 - [ ] Editor API embed body block support
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
