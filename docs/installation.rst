@@ -42,7 +42,7 @@ Prerequisites
 Before you begin, ensure you have:
 
 - Python 3.11 or higher
-- Django 5.2.17+, 6.0.8+, or 6.1+
+- Django 5.2.17+, 6.0.8+, or 6.1.1+
 - Wagtail 7.0.9+ on the 7.0 LTS branch, 7.4.3+ on the 7.4 LTS branch,
   or 8.x (the unpatched 7.1 and 7.2 branches and the end-of-life 7.3 branch
   are excluded)

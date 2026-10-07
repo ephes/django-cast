@@ -1,0 +1,7 @@
+0.2.67 (unreleased)
+-------------------
+
+- Exclude Django 6.1.0, which is affected by CVE-2026-15830. Django 6.1 sites
+  must run 6.1.1 or newer; the 5.2 (5.2.17+) and 6.0 (6.0.8+) floors already
+  include the fix. The advisory-floor audit and the ``django61`` tox
+  environment now check 6.1.1.

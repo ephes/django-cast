@@ -178,7 +178,7 @@ jobs:
           AUDITED_FLOORS: |
             Django==5.2.17
             Django==6.0.8
-            Django==6.1.0
+            Django==6.1.1
             wagtail==7.0.9
             wagtail==7.4.3
             wagtail==8.0.0

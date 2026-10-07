@@ -36,7 +36,7 @@ classifiers = [
 
 dependencies = [
     "crispy-bootstrap4",  # bootstrap4 theme
-    "django>=5.2.17,<7,!=6.0.0,!=6.0.1,!=6.0.2,!=6.0.3,!=6.0.4,!=6.0.5,!=6.0.6,!=6.0.7",  # Django itself
+    "django>=5.2.17,<7,!=6.0.0,!=6.0.1,!=6.0.2,!=6.0.3,!=6.0.4,!=6.0.5,!=6.0.6,!=6.0.7,!=6.1.0",  # Django itself
     "django-crispy-forms",  # bootstrap4 theme
     "django-contrib-comments",  # comments framework
     "django-filter",  # filter section on blog index
