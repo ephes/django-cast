@@ -318,8 +318,11 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     def duration_str(self) -> str:
         if self.duration is None:
             return ""
-        dur = str(self.duration)
-        return dur.split(".")[0]
+        # Total hours, never "1 day, ..." -- itunes:duration needs H:MM:SS.
+        total_seconds = int(self.duration.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
 
     def size_to_metadata(self) -> None:
         self.data["size"] = self.data.get("size", {})

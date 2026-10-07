@@ -173,7 +173,9 @@ can use. And two other file formats that are used for to be referenced in the
 feed:
 
 * `vtt` - WebVTT, a subtitle format in plain text
-* `dote` - DOTE, a json transcript format
+* `dote` - DOTE, a json transcript format. Each line's ``startTime`` and
+  ``endTime`` must be ``HH:MM:SS,mmm`` (``.`` also works before the fraction,
+  which has one to three digits); uploads with other timestamps are rejected.
 
 Transcript admin permissions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
