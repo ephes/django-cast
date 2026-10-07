@@ -5,3 +5,6 @@
   must run 6.1.1 or newer; the 5.2 (5.2.17+) and 6.0 (6.0.8+) floors already
   include the fix. The advisory-floor audit and the ``django61`` tox
   environment now check 6.1.1.
+- Raise the direct ``urllib3`` security floor to 2.8.0, which fixes
+  PYSEC-2026-4175, PYSEC-2026-4176, and PYSEC-2026-4177. The advisory-floor
+  audit now checks 2.8.0.

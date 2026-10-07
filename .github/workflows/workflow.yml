@@ -190,7 +190,7 @@ jobs:
             requests==2.33.0
             soupsieve==2.9.0
             sqlparse==0.6.0
-            urllib3==2.7.0
+            urllib3==2.8.0
         run: |
           set -euo pipefail
           requirement_file="$(mktemp)"

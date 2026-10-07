@@ -57,7 +57,7 @@ dependencies = [
     "rich",  # progress bars for management commands
     "soupsieve>=2.9.0",  # security floor for Wagtail's HTML parser stack
     "sqlparse>=0.6.0",  # security floor for Django's SQL formatting dependency
-    "urllib3>=2.7.0",  # security floor for the runtime HTTP stack
+    "urllib3>=2.8.0",  # security floor for the runtime HTTP stack
     "wagtail>=7.0.9,<9,!=7.1.*,!=7.2.*,!=7.3.*,!=7.4.0,!=7.4.1,!=7.4.2",  # supported LTS and current branches
 ]
 
