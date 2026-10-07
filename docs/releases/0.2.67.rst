@@ -1,6 +1,13 @@
 0.2.67 (unreleased)
 -------------------
 
+- Make the default comment moderator (``cast.moderation.Moderator``) look up
+  the spam filter for every posted comment instead of once per process. It
+  used to keep the filter it found on the first comment after a start: if no
+  ``SpamFilter`` row existed yet, every later comment was published unmoderated
+  even after a model was installed, and a retrained or replaced model only took
+  effect after the web workers restarted. A filter passed to the constructor
+  is still used as is. Moderating a comment costs one extra single-row query.
 - Add cross-document view transitions to the built-in ``bootstrap4`` and
   ``plain`` themes. Ordinary same-origin page loads crossfade under the
   ``cast-page`` transition type when the reader has no reduced-motion

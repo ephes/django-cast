@@ -151,6 +151,10 @@ it from scratch using existing comment classifications:
 
 The filter's precision and recall metrics are shown in the admin list view.
 
+The new model is used for the next posted comment; running web workers do not
+need a restart. If spam is published without moderation, check that a
+``SpamFilter`` row exists: without one, every comment is published.
+
 Comments Not Appearing
 ======================
 

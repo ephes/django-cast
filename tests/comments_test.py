@@ -6,6 +6,7 @@ from django.urls import reverse
 from django_comments import get_model as get_comments_model, signals
 from django_comments.forms import CommentForm
 
+from cast.models.moderation import NaiveBayes, SpamFilter
 from cast.moderation import Moderator
 
 from .factories import UserFactory
@@ -169,3 +170,92 @@ class TestCommentModeration:
             signals.comment_will_be_posted.send(sender=self.comment_class, comment=self.comment, request=self.request)
             assert self.comment.is_public
             assert not self.comment.is_removed
+
+
+class TestModeratorUsesCurrentSpamFilter:
+    """The default moderator lives for the whole process, so it must not cache the spam filter row."""
+
+    @staticmethod
+    def make_comment():
+        class StubComment:
+            name = "name"
+            email = "foo@example.com"
+            title = "buy pills"
+            comment = "cheap pills now"
+            is_removed = False
+            is_public = True
+
+        return StubComment()
+
+    @staticmethod
+    def make_filter(name, label):
+        model = NaiveBayes().fit([(label, "name foo@example.com buy pills cheap pills now")])
+        return SpamFilter.objects.create(name=name, model=model)
+
+    @pytest.mark.django_db
+    def test_filter_installed_after_moderator_creation_is_used(self):
+        moderator = Moderator(None)  # built before any SpamFilter row exists
+        self.make_filter("first", "spam")
+
+        comment = self.make_comment()
+        assert moderator.moderate(comment, None, None) is True
+        assert comment.is_removed
+        assert not comment.is_public
+
+    @pytest.mark.django_db
+    def test_retrained_filter_is_used_by_next_comment(self):
+        spamfilter = self.make_filter("default", "ham")
+        moderator = Moderator(None)
+
+        comment = self.make_comment()
+        assert moderator.moderate(comment, None, None) is False
+        assert comment.is_public
+
+        spamfilter.model = NaiveBayes().fit([("spam", "name foo@example.com buy pills cheap pills now")])
+        spamfilter.save()
+
+        comment = self.make_comment()
+        assert moderator.moderate(comment, None, None) is True
+        assert comment.is_removed
+        assert not comment.is_public
+
+    @pytest.mark.django_db
+    def test_replaced_filter_row_is_used_by_next_comment(self):
+        self.make_filter("old", "ham")
+        moderator = Moderator(None)
+        assert moderator.moderate(self.make_comment(), None, None) is False
+
+        SpamFilter.objects.all().delete()
+        self.make_filter("new", "spam")
+
+        assert moderator.moderate(self.make_comment(), None, None) is True
+
+    @pytest.mark.django_db
+    def test_removed_filter_falls_back_to_publishing(self):
+        self.make_filter("old", "spam")
+        moderator = Moderator(None)
+        SpamFilter.objects.all().delete()
+
+        comment = self.make_comment()
+        assert moderator.moderate(comment, None, None) is False
+        assert comment.is_public
+        assert not comment.is_removed
+
+    @pytest.mark.django_db
+    def test_assigned_filter_is_kept_and_none_restores_lookup(self):
+        self.make_filter("default", "ham")
+        moderator = Moderator(None)
+
+        class PredictSpam:
+            @staticmethod
+            def predict_label(_):
+                return "spam"
+
+        class StubFilter:
+            model = PredictSpam()
+
+        moderator.spamfilter = StubFilter()
+        assert moderator.moderate(self.make_comment(), None, None) is True
+
+        moderator.spamfilter = None
+        assert moderator.moderate(self.make_comment(), None, None) is False

@@ -36,6 +36,12 @@ that have been manually classified as spam or ham:
 The admin list view shows precision and recall metrics for each filter,
 helping you assess filter quality.
 
+The default ``cast.moderation.Moderator`` looks up the spam filter (the first
+``SpamFilter`` row) for every posted comment, so a retrained, newly installed,
+replaced or deleted filter applies to the next comment without restarting the
+web workers. While no ``SpamFilter`` row exists, comments are published
+unmoderated.
+
 Wagtail Admin Customizations
 =============================
 
