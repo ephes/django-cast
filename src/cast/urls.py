@@ -1,7 +1,7 @@
+from collections.abc import Callable
 from typing import Any
 
 from django.urls import include, path
-from django.views.decorators.cache import cache_page
 
 from . import feeds
 from .models import Blog
@@ -23,6 +23,19 @@ from .views.transcript import (
 
 app_name = "cast"
 public_feed = unrestricted_page_required(Blog)
+
+
+def cached_public_feed(feed_class: type[feeds.RepositoryMixin]) -> Callable[..., Any]:
+    """Compose a built-in feed route; the cache generation is read before the guard queries."""
+    return feeds.capture_feed_cache_generation(
+        public_feed(
+            feeds.etag_conditional_feed(
+                feeds.restriction_aware_cache_page(5 * 60)(feeds.request_local_feed(feed_class))
+            )
+        )
+    )
+
+
 urlpatterns: list[Any] = [
     # API
     path("api/", include("cast.api.urls", namespace="api")),
@@ -42,30 +55,22 @@ urlpatterns: list[Any] = [
     # Feeds
     path(
         "<slug:slug>/feed/rss.xml",
-        view=public_feed(
-            feeds.etag_conditional_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.LatestEntriesFeed)))
-        ),
+        view=cached_public_feed(feeds.LatestEntriesFeed),
         name="latest_entries_feed",
     ),
     path(
         "<slug:slug>/feed/atom.xml",
-        view=public_feed(
-            feeds.etag_conditional_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.LatestEntriesAtomFeed)))
-        ),
+        view=cached_public_feed(feeds.LatestEntriesAtomFeed),
         name="latest_entries_atom_feed",
     ),
     path(
         "<slug:slug>/feed/podcast/<audio_format>/rss.xml",
-        view=public_feed(
-            feeds.etag_conditional_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.RssPodcastFeed)))
-        ),
+        view=cached_public_feed(feeds.RssPodcastFeed),
         name="podcast_feed_rss",
     ),
     path(
         "<slug:slug>/feed/podcast/<audio_format>/atom.xml",
-        view=public_feed(
-            feeds.etag_conditional_feed(cache_page(5 * 60)(feeds.request_local_feed(feeds.AtomPodcastFeed)))
-        ),
+        view=cached_public_feed(feeds.AtomPodcastFeed),
         name="podcast_feed_atom",
     ),
     # Meta views like twitter player cards etc

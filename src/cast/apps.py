@@ -51,6 +51,8 @@ class CastConfig(AppConfig):
         from . import checks  # noqa: F401 — registers @register("cast") decorators
         from .appsettings import init_cast_settings
         from .publication import install_publication_policy
+        from .receivers import connect_receivers
 
         init_cast_settings()
         install_publication_policy()
+        connect_receivers()

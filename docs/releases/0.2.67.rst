@@ -62,6 +62,15 @@
   ``get_absolute_url``, every username. The route now only redirects to Wagtail
   pages the requester may view (or edit) and returns 404 for everything else.
   ``Comment.get_absolute_url()`` keeps working for comments on public posts.
+- Stop cached RSS and Atom feeds (blog and podcast) from listing an entry after
+  a Wagtail login, password, or group restriction is added to it. Previously a
+  warm feed kept serving the entry, with its content and enclosure, for up to
+  five minutes, and a feed render in flight during the change could refill the
+  cache with the stale entry. Feed cache keys now carry a generation that a
+  committed ``PageViewRestriction`` save or delete rotates with a single cache
+  write, so in-flight renders store their responses where no later request
+  reads them. Use a shared cache backend for ``CACHE_MIDDLEWARE_ALIAS`` in
+  multi-process deployments; downstream HTTP caches are not purged.
 - Restrict the Wagtail images API (``<cast>/api/wagtail/images/``, including
   its detail and ``find`` views) to active staff users. It listed every
   original upload in unrestricted collections, including images only used by
