@@ -55,6 +55,13 @@
   (``django-cast[markdown]``); without it, Markdown requests return a
   ``markdown_unavailable`` validation error and block-list writes are
   unaffected.
+- Guard the comment permalink redirect (``comments/cr/<content type>/<pk>/``).
+  The stock ``django-contrib-comments`` route redirected anonymous visitors to
+  the URL of any object by primary key, which exposed slugs of draft and
+  view-restricted posts and, on sites whose user model defines
+  ``get_absolute_url``, every username. The route now only redirects to Wagtail
+  pages the requester may view (or edit) and returns 404 for everything else.
+  ``Comment.get_absolute_url()`` keeps working for comments on public posts.
 - Restrict the Wagtail images API (``<cast>/api/wagtail/images/``, including
   its detail and ``find`` views) to active staff users. It listed every
   original upload in unrestricted collections, including images only used by
