@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from copy import copy
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
@@ -302,7 +303,8 @@ class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
         collection = _resolve_collection(request, _usable_image_collections(request.user))
         image_model = get_image_model()
         image = image_model(uploaded_by_user=request.user, collection=collection)
-        form_data = request.data.copy()
+        # QueryDict.copy() deep-copies uploads, which fails for disk-backed files.
+        form_data = copy(request.data)
         form_data["collection"] = str(collection.pk)
         form_class = get_image_form(image_model)
         form = form_class(form_data, request.FILES, instance=image, user=request.user)

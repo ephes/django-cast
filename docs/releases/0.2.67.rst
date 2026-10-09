@@ -1,6 +1,10 @@
 0.2.67 (unreleased)
 -------------------
 
+- Strip EXIF GPS from new Wagtail image uploads before storage, retaining other
+  EXIF data such as orientation, for both in-memory and disk-backed uploads.
+  Add ``report_image_gps``, a read-only inventory of existing originals with
+  EXIF GPS. Existing media is not rewritten.
 - Make the default comment moderator (``cast.moderation.Moderator``) look up
   the spam filter for every posted comment instead of once per process. It
   used to keep the filter it found on the first comment after a start: if no
