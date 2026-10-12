@@ -509,7 +509,8 @@ warnings summary that the rest of the matrix - and a plain ``pytest`` run - supp
 ``filterwarnings`` list in ``pyproject.toml``. The warnings do not fail the run. Treat a new one
 coming from ``src/cast`` as work to schedule before the framework release that removes the API, and
 ignore third-party noise until the whole matrix is quiet enough to turn deprecations into errors.
-CI runs ``py314-django61-wagtail80`` in its tox matrix job, so the same summary shows up there.
+CI runs ``py314-django61-wagtail80`` and ``py315-django61-wagtail80`` in its tox matrix job, so the
+same summary shows up there.
 
 Code Quality
 ============

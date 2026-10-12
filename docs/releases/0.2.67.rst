@@ -113,3 +113,8 @@
 - Format ``Audio.duration_str`` as total ``H:MM:SS`` hours, so episodes of 24
   hours or more no longer produce values like ``1 day, 0:05:00`` in
   ``itunes:duration``, the API ``duration`` field and the player JSON.
+- Add Python 3.15 to the tox matrix. The ``py315`` environments cover Django
+  5.2, 6.0 and 6.1 with Wagtail 7.4 and 8.0, so 3.15 is tested against the
+  supported framework range and not only against the locked dependencies.
+  CI runs ``py315-django61-wagtail80`` in its tox matrix job and no longer
+  allows Python prereleases, now that 3.15.0 is final.
