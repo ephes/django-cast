@@ -19,8 +19,8 @@ to continue unless
   ``DJANGO_SETTINGS_MODULE`` of a real project is not overridden, so it is
   rejected instead), and
 * the selected database is empty (no tables at all), freshly migrated, or
-  holds only data of an earlier benchmark run: the tables are those of this
-  project's migrations and nothing else, no Blog outside the
+  holds only data of an earlier benchmark run: the tables are exactly those
+  this project's migrations create, no Blog outside the
   ``typeahead-benchmark-`` prefix, no page outside those Blogs other than the
   tree root and Wagtail's default home page exactly as the migrations create
   it (stock title, never edited, no SEO fields, no children), and no user
@@ -71,6 +71,11 @@ BENCHMARK_SETTINGS_MODULE = "scripts.typeahead_benchmark_settings"
 BENCHMARK_SLUG_PREFIX = "typeahead-benchmark-"
 BENCHMARK_USERNAME = "typeahead-benchmark"
 WAGTAIL_DEFAULT_HOME_TITLE = "Welcome to your new Wagtail site!"
+# Wagtail's SQLite search migration creates an FTS5 table next to the index
+# model's table; SQLite adds these shadow tables. No model describes them.
+SEARCH_INDEX_TABLES = frozenset(
+    f"wagtailsearch_indexentry_fts{suffix}" for suffix in ("", "_config", "_content", "_data", "_docsize", "_idx")
+)
 TITLE_STEMS = (
     "Python performance",
     "Django testing",
@@ -158,10 +163,8 @@ def non_benchmark_content(tables: set[str]) -> list[str]:
     missing = sorted(required - tables)
     if missing:
         return [f"tables without the benchmark schema (missing {', '.join(missing[:5])})"]
-    known = set(connection.introspection.django_table_names()) | {"django_migrations"}
-    unknown = sorted(
-        table for table in tables if table not in known and not any(table.startswith(f"{name}_") for name in known)
-    )
+    known = set(connection.introspection.django_table_names()) | {"django_migrations"} | SEARCH_INDEX_TABLES
+    unknown = sorted(tables - known)
     if unknown:
         return [f"tables that do not belong to the benchmark schema: {', '.join(unknown[:5])}"]
 

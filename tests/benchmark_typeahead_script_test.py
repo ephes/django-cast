@@ -149,14 +149,17 @@ def test_preflight_refuses_a_database_with_foreign_tables_only(script, mocker):
     migrate.assert_not_called()
 
 
-def test_seed_refuses_foreign_tables_next_to_the_benchmark_schema(script, migrated_db):
+@pytest.mark.parametrize(
+    "foreign", ["customer_invoice", "auth_user_customer_invoice", "wagtailsearch_indexentry_fts_export"]
+)
+def test_seed_refuses_foreign_tables_next_to_the_benchmark_schema(script, migrated_db, foreign):
     benchmark, _migrate = script
     tables = connection().introspection.table_names()
-    # Tables that migrations create next to a model table (search indexes) are fine.
-    assert benchmark.non_benchmark_content({*tables, "wagtailsearch_indexentry_fts_data"}) == []
+    # The FTS tables Wagtail's SQLite search migration creates are part of the schema.
+    assert benchmark.non_benchmark_content({*tables, *benchmark.SEARCH_INDEX_TABLES}) == []
 
-    with patch.object(benchmark.connection.introspection, "table_names", return_value=[*tables, "customer_invoice"]):
-        assert_refused_without_changes(script, "tables that do not belong to the benchmark schema: customer_invoice")
+    with patch.object(benchmark.connection.introspection, "table_names", return_value=[*tables, foreign]):
+        assert_refused_without_changes(script, f"tables that do not belong to the benchmark schema: {foreign}")
 
 
 def test_seed_refuses_a_schema_this_project_did_not_migrate(script, db):
