@@ -25,8 +25,11 @@ def rotate_feed_cache_on_view_restriction_change(sender: type, **kwargs: Any) ->
 
 
 def connect_receivers() -> None:
-    from django.db.models.signals import post_delete, post_save
+    from django.db.models.signals import post_delete, post_save, pre_save
+    from wagtail.images import get_image_model
     from wagtail.models import PageViewRestriction
+
+    from .image_metadata import strip_upload_gps
 
     for signal, name in ((post_save, "saved"), (post_delete, "deleted")):
         signal.connect(
@@ -34,3 +37,5 @@ def connect_receivers() -> None:
             sender=PageViewRestriction,
             dispatch_uid=f"cast_rotate_feed_cache_on_view_restriction_{name}",
         )
+
+    pre_save.connect(strip_upload_gps, sender=get_image_model(), dispatch_uid="cast_strip_upload_gps")

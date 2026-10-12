@@ -15,6 +15,43 @@ Images are mostly just the normal Wagtail Images. But they are
 rendered using a ``picture`` tag supporting ``srcset`` and ``sizes`` attributes
 for :ref:`responsive images <response_images_overview>`.
 
+Upload GPS privacy
+------------------
+
+New Wagtail image uploads (including replacement files, admin and editor API
+uploads, and direct model saves) have the EXIF GPS directory removed before
+storage. Other EXIF data, including orientation, is retained. Images without
+EXIF GPS and SVG files are unchanged. GPS-bearing raster images are re-encoded
+with Pillow; JPEG quantization settings are retained, but the encoding is not
+lossless. GPS removal supports JPEG, PNG, WebP, AVIF and HEIF. GPS-bearing
+multi-frame images and other formats (such as TIFF) are rejected rather than
+flattened or silently stored with GPS. This includes multi-picture JPEGs (MPO),
+such as phone photos containing HDR gain maps, even when named ``.jpg``.
+Admin and editor API uploads receive a file validation error for these files.
+
+Cast wraps the configured ``WAGTAILIMAGES_IMAGE_FORM_BASE`` during app startup,
+retaining custom form behavior. Validation sanitizes files before Wagtail stores
+either a normal image or a deferred multi-upload. Both in-memory and disk-backed
+uploads are supported; stripped bytes are written back to the upload before
+storage. Custom upload code that writes
+files directly through storage or ``FieldFile.save()`` must call
+``cast.image_metadata.sanitize_upload()`` before writing; model signals cannot
+intercept an earlier direct storage write.
+Unreadable raster uploads fail before storage. This policy covers EXIF GPS,
+not location information embedded in XMP, image content, or other metadata.
+
+Existing originals and renditions are not rewritten. To inventory existing
+Wagtail originals, run::
+
+    python manage.py report_image_gps
+
+This read-only command lists each matching image ID and storage name, followed
+by counts. It opens files through their configured storage backend and never
+saves images, creates renditions, or changes files or database rows. SVG files
+are skipped. Missing or unreadable raster files are reported on stderr; the
+command continues scanning and exits with an error if the report is incomplete.
+No GPS coordinates are printed. Review and remediate existing files separately.
+
 .. _response_images_overview:
 
 Responsive Images
