@@ -40,7 +40,7 @@ const KEYBOARD_ICON =
 export class CastTranscriptElement extends CastPlayerView {
   private section?: HTMLElement;
   private panelBody?: HTMLElement;
-  private scroll?: HTMLElement;
+  private scrollRegion?: HTMLElement;
   private list?: HTMLElement;
   private toggleButton?: HTMLButtonElement;
   private toolsEl?: HTMLElement;
@@ -143,7 +143,7 @@ export class CastTranscriptElement extends CastPlayerView {
     reveal.appendChild(clip);
     body.appendChild(reveal);
     this.panelBody = body;
-    this.scroll = scroll;
+    this.scrollRegion = scroll;
     this.list = list;
     // A collapsed panel is only visually clipped; mark it inert so its buttons
     // are removed from the tab order and not interactive while hidden.
@@ -240,7 +240,7 @@ export class CastTranscriptElement extends CastPlayerView {
     // Busy semantics on the scroll region so assistive tech announces the
     // in-flight fetch; cleared when cues (or an error) land. Reserving the row
     // height keeps the toolbar/panel from shifting when cues replace it.
-    this.scroll?.setAttribute("aria-busy", "true");
+    this.scrollRegion?.setAttribute("aria-busy", "true");
     const loading = document.createElement("p");
     loading.className = "cast-transcript__loading";
     loading.setAttribute("role", "status");
@@ -266,7 +266,7 @@ export class CastTranscriptElement extends CastPlayerView {
     }
     this.list.textContent = "";
     this.loadingEl = undefined;
-    this.scroll?.removeAttribute("aria-busy");
+    this.scrollRegion?.removeAttribute("aria-busy");
     if (this.toolsEl) {
       this.toolsEl.hidden = true;
     }
@@ -326,7 +326,7 @@ export class CastTranscriptElement extends CastPlayerView {
     this.cues = cues;
     this.list.textContent = "";
     this.loadingEl = undefined;
-    this.scroll?.removeAttribute("aria-busy");
+    this.scrollRegion?.removeAttribute("aria-busy");
     this.cueButtons = [];
     if (this.countLabel) {
       this.countLabel.textContent = cues.length ? `${cues.length} lines` : "";
@@ -450,19 +450,19 @@ export class CastTranscriptElement extends CastPlayerView {
     }
     const current = this.cueButtons[index];
     if (current && this.open && (this.follow || forceScroll) && !this.searchSuspended) {
-      this.scrollIntoView(current);
+      this.scrollCueIntoView(current);
     }
   }
 
-  private scrollIntoView(element: HTMLElement): void {
+  private scrollCueIntoView(element: HTMLElement): void {
     const reduce =
       typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let behavior: ScrollBehavior = reduce ? "auto" : "smooth";
     // A far target (search jump, chapter seek) would smooth-scroll for seconds
     // across a long transcript — land instantly instead. Smooth stays for the
     // neighbor-line steps of follow-along.
-    if (behavior === "smooth" && this.scroll) {
-      const panel = this.scroll.getBoundingClientRect();
+    if (behavior === "smooth" && this.scrollRegion) {
+      const panel = this.scrollRegion.getBoundingClientRect();
       const target = element.getBoundingClientRect();
       const overshoot = Math.max(panel.top - target.bottom, target.top - panel.bottom);
       if (panel.height > 0 && overshoot > panel.height * 2) {
@@ -557,7 +557,7 @@ export class CastTranscriptElement extends CastPlayerView {
     const button = this.cueButtons[cueIndex];
     if (button) {
       button.querySelector("mark")?.classList.add("is-active-match");
-      this.scrollIntoView(button);
+      this.scrollCueIntoView(button);
       if (focus) {
         button.focus(); // explicit prev/next: scroll + focus, never seek
       }

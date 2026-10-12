@@ -138,7 +138,7 @@ js-test-watch:
 js-coverage:
     cd javascript && npm run coverage
 
-# Type-check the TypeScript sources (reports known pre-existing errors, not in CI yet)
+# Type-check the TypeScript sources and tests (also enforced in CI)
 js-typecheck:
     cd javascript && npm run typecheck
 

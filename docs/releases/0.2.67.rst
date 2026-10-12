@@ -1,6 +1,8 @@
 0.2.67 (unreleased)
 -------------------
 
+- Fix the TypeScript typecheck baseline in audio components and frontend tests,
+  add missing module declarations, and enforce ``tsc --noEmit`` in JavaScript CI.
 - Make the default comment moderator (``cast.moderation.Moderator``) look up
   the spam filter for every posted comment instead of once per process. It
   used to keep the filter it found on the first comment after a start: if no

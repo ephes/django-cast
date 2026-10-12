@@ -548,7 +548,7 @@ describe("image gallery test", () => {
         expect(mockHide).toHaveBeenCalledTimes(1);
 
         // Verify _isTransitioning was cleared before hide()
-        const inst = MockModal.mock.instances[0];
+        const inst = MockModal.mock.instances[0] as { _isTransitioning: boolean };
         expect(inst._isTransitioning).toBe(false);
 
         gallery.disconnectedCallback();

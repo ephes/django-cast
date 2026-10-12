@@ -33,6 +33,10 @@ jobs:
         working-directory: javascript
         run: npm ci
 
+      - name: Type-check JavaScript sources and tests
+        working-directory: javascript
+        run: npm run typecheck
+
       - name: Run JavaScript tests
         working-directory: javascript
         run: npm test

@@ -449,14 +449,13 @@ The coverage gate produces real tests, not pragma sprawl: 37 `pragma: no cover` 
   target. Direction: create the deferred `tests/support/` package (`reuse_db.py` registered via `pytest_plugins`, the
   only supported way to register hook-bearing modules; `wagtail_bootstrap.py` with a migration pointer; `media.py`
   for the media builders), move comment fixtures into a `tests/comments/` package, split `feed_test.py`.
-- **T4. TypeScript is never type-checked and `just js-coverage` cannot run** (medium, tooling) —
+- **T4. Implemented: TypeScript and coverage gates** (medium, tooling) —
   `javascript/tsconfig.json:12`. All 13 sources are `.ts` with `strict: true`, but Vite/esbuild and Vitest only strip
   types and nothing runs `tsc --noEmit`, so the flag is decorative; the `paths` alias also disagrees with
   `vite.config.ts`'s `@ -> ./src/`. Separately `vitest run --coverage` needs `@vitest/coverage-v8`, present in the
   lock only as an optional peer and absent from `node_modules`, so the recipe fails on a fresh checkout (reproduced).
-  Direction: add `typescript`, `@types/node` and `@vitest/coverage-v8` to devDependencies plus a `typecheck` script
-  run in the CI `javascript` job, drop `@types/jest` (Vitest 4 ships globals via `vitest/globals`), fix or delete
-  `paths`.
+  Implemented: tooling dependencies, coverage command and alias were repaired in 0.2.65;
+  the remaining type errors are fixed and CI now runs `npm run typecheck` alongside tests.
 - **T5. `DeprecationWarning` is globally silenced while supporting Django 5.2–6.1 and Wagtail 7.0–8.0** (medium,
   tooling) — `pyproject.toml:141`. 20 tox envs and a history of compatibility breaks found after the fact, yet the
   one early signal is discarded everywhere, including the `*-django61-wagtail80` envs whose purpose is to hear it;
