@@ -1,6 +1,16 @@
 0.2.68 (unreleased)
 -------------------
 
+- Rate-limit comment posting. Both comment post views used to accept any
+  number of comments from one client. They now allow
+  ``CAST_COMMENTS_POST_RATE_LIMIT`` posts (default ``20``) per
+  ``CAST_COMMENTS_POST_RATE_WINDOW`` seconds (default ``600``) per logged-in
+  user or anonymous client address and answer further posts with ``429`` and
+  ``Retry-After``; the AJAX view returns the usual JSON error shape so the
+  bundled script shows the message at the comment field. Previews are not
+  counted, and ``0`` disables the limit. Sites behind a reverse proxy need
+  ``REST_FRAMEWORK["NUM_PROXIES"]`` for the client address to be correct; see
+  :ref:`CAST_COMMENTS_POST_RATE_LIMIT <cast_comments_post_rate_limit>`.
 - ``media_replace --yes`` now exits with ``CommandError`` (non-zero status)
   when at least one replacement failed. It used to print ``errors=<n>`` in the
   summary and still exit successfully, so scripts could not tell a failed or
