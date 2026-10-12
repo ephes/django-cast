@@ -31,3 +31,14 @@
 - Warn when known-speaker recognition is enabled but a diarized request sends
   no voice references. ``generate_transcripts`` prints the warning, and the
   service logs it on ``cast.voxhelm.service`` for queued requests.
+- ``recalc_video_posters`` now exits with ``CommandError`` (non-zero status)
+  when at least one poster could not be recalculated. It used to print
+  ``errors=<n>`` and still exit successfully. All videos are still attempted,
+  healthy ones are saved, and the summary is printed first. Automation that
+  relied on the old exit status needs to handle the failure.
+- ``styleguide_prefetch --with-renditions`` no longer leaves
+  ``CAST_STYLEGUIDE_GENERATE_RENDITIONS`` switched on. The command changed the
+  process-wide setting and never put it back, so after ``call_command`` in a
+  long-running process the styleguide kept generating renditions, also when
+  the command had failed. The previous value (or the absence of the setting)
+  is now restored on success and on failure.

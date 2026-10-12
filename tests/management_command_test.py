@@ -1001,34 +1001,55 @@ def test_media_replace_warns_when_staged_replacement_cleanup_fails(mocker):
     assert "cleanup failed" in error_output.getvalue()
 
 
-def test_recalc_video_posters_continues_after_error_and_reports_summary(mocker):
-    output = StringIO()
-    error_output = StringIO()
-    first = Mock(pk=1)
-    first.create_poster.side_effect = RuntimeError("boom")
-    second = Mock(pk=2)
-    videos = [first, second]
+def _stub_videos(mocker, videos):
     manager = mocker.Mock()
     manager.all.return_value.order_by.return_value = videos
     mocker.patch("cast.management.commands.recalc_video_posters.Video.objects", manager)
     mocker.patch("cast.management.commands.recalc_video_posters.track", side_effect=lambda iterable, **_: iterable)
 
-    call_command("recalc_video_posters", stdout=output, stderr=error_output)
 
+def test_recalc_video_posters_continues_after_error_and_exits_nonzero(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    first = Mock(pk=1)
+    first.create_poster.side_effect = RuntimeError("boom")
+    second = Mock(pk=2)
+    third = Mock(pk=3)
+    third.save.side_effect = RuntimeError("cannot save")
+    _stub_videos(mocker, [first, second, third])
+
+    with pytest.raises(CommandError, match="^2 of 3 video posters could not be recalculated$"):
+        call_command("recalc_video_posters", stdout=output, stderr=error_output)
+
+    # Every video was attempted; the healthy one was saved despite the failures around it.
     first.create_poster.assert_called_once_with()
     first.save.assert_not_called()
     second.create_poster.assert_called_once_with()
     second.save.assert_called_once_with(poster=False)
+    third.create_poster.assert_called_once_with()
     assert "error recalculating poster for video 1: boom" in error_output.getvalue()
-    assert "processed=2 errors=1" in output.getvalue()
+    assert "error recalculating poster for video 3: cannot save" in error_output.getvalue()
+    # The summary is still printed before the command fails.
+    assert "processed=3 errors=2" in output.getvalue()
+
+
+def test_recalc_video_posters_succeeds_when_every_poster_was_recalculated(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    videos = [Mock(pk=1), Mock(pk=2)]
+    _stub_videos(mocker, videos)
+
+    call_command("recalc_video_posters", stdout=output, stderr=error_output)
+
+    for video in videos:
+        video.save.assert_called_once_with(poster=False)
+    assert "processed=2 errors=0" in output.getvalue()
+    assert error_output.getvalue() == ""
 
 
 def test_recalc_video_posters_reports_zero_processed(mocker):
     output = StringIO()
-    manager = mocker.Mock()
-    manager.all.return_value.order_by.return_value = []
-    mocker.patch("cast.management.commands.recalc_video_posters.Video.objects", manager)
-    mocker.patch("cast.management.commands.recalc_video_posters.track", side_effect=lambda iterable, **_: iterable)
+    _stub_videos(mocker, [])
 
     call_command("recalc_video_posters", stdout=output)
 
@@ -1066,16 +1087,90 @@ def test_styleguide_prefetch_command_invalid_theme(settings, mocker):
         call_command("styleguide_prefetch", theme="not-a-theme")
 
 
-def test_styleguide_prefetch_command_with_renditions(settings, mocker):
+def _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data):
+    """Record what the styleguide helpers see through the public app setting."""
+    from cast import appsettings
+
+    seen = []
+
+    def build(_request):
+        seen.append(("build", appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS))
+        return styleguide_data
+
+    def render(*_args):
+        seen.append(("render", appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS))
+
+    build_styleguide_data.side_effect = build
+    render_styleguide_context.side_effect = render
+    return seen
+
+
+@pytest.mark.parametrize("previous", [False, True, None, "from-project-settings"])
+def test_styleguide_prefetch_command_with_renditions_restores_the_setting(settings, mocker, previous):
+    settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = previous
+    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
+        mocker
+    )
+    seen = _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data)
+
+    call_command("styleguide_prefetch", theme="plain", with_renditions=True)
+
+    request = build_styleguide_data.call_args.args[0]
+    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
+    assert seen == [("build", True), ("render", True)]
+    assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS == previous
+
+    # A later call without the option in the same process uses the project's own value.
+    seen.clear()
+    call_command("styleguide_prefetch", theme="plain")
+    assert seen == [("build", previous), ("render", previous)]
+
+
+def test_styleguide_prefetch_command_with_renditions_keeps_the_setting_absent(settings, mocker):
+    from django.conf import settings as django_settings
+
+    from cast import appsettings
+
+    del settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS
+    assert not hasattr(django_settings, "CAST_STYLEGUIDE_GENERATE_RENDITIONS")
+    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
+        mocker
+    )
+    seen = _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data)
+
+    call_command("styleguide_prefetch", theme="plain", with_renditions=True)
+
+    assert seen == [("build", True), ("render", True)]
+    assert not hasattr(django_settings, "CAST_STYLEGUIDE_GENERATE_RENDITIONS")
+    assert appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False  # the default again
+
+
+@pytest.mark.parametrize("failing", ["build", "render"])
+def test_styleguide_prefetch_command_restores_the_setting_when_the_build_fails(settings, mocker, failing):
+    settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = False
+    _styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
+        mocker
+    )
+    failing_mock = build_styleguide_data if failing == "build" else render_styleguide_context
+    failing_mock.side_effect = RuntimeError("remote media unavailable")
+
+    with pytest.raises(RuntimeError, match="remote media unavailable"):
+        call_command("styleguide_prefetch", theme="plain", with_renditions=True)
+
+    assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False
+
+
+def test_styleguide_prefetch_command_without_renditions_leaves_the_setting_alone(settings, mocker):
     settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = False
     styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
         mocker
     )
+    seen = _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data)
 
-    call_command("styleguide_prefetch", theme="plain", with_renditions=True)
-    request = build_styleguide_data.call_args.args[0]
-    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
-    assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is True
+    call_command("styleguide_prefetch", theme="plain")
+
+    assert seen == [("build", False), ("render", False)]
+    assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False
 
 
 def test_generate_transcripts_requires_targets():

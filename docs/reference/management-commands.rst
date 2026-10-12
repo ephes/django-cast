@@ -129,6 +129,12 @@ Regenerate poster images for all videos from the video files. Requires
 ``ffmpeg`` to be installed. The command keeps going if one video fails and
 prints a final ``processed=<n> errors=<n>`` summary.
 
+If at least one poster could not be recalculated, the command then exits with
+``CommandError`` (non-zero status). The other videos have still been
+processed and saved, so a failed run is a partial success: fix the reported
+videos and run the command again. With no errors, or no videos at all, it
+exits successfully.
+
 .. code-block:: bash
 
     python manage.py recalc_video_posters
@@ -368,7 +374,12 @@ Options:
     theme (preferring bootstrap5, bootstrap4, plain in that order).
 
 ``--with-renditions``
-    Generate missing renditions while prefetching.
+    Generate missing renditions while prefetching. This turns
+    ``CAST_STYLEGUIDE_GENERATE_RENDITIONS`` on for this run only: when the
+    command returns or fails, the setting has its previous value again, or is
+    unset again if the project does not define it. Calling the command with
+    ``call_command`` from a long-running process therefore does not change how
+    the styleguide behaves afterwards.
 
 On success, the command prints ``Styleguide prefetch complete for theme
 '<theme>'``.
