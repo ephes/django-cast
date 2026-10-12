@@ -74,6 +74,38 @@ class TestGetTranscriptAsPodcastIndexJson:
             ],
         }
 
+    def test_get_transcript_as_json_dot_and_short_fraction_timestamps(self, client, episode):
+        dote = {
+            "lines": [
+                {"startTime": "00:00:00.5", "endTime": "00:00:01.250", "speakerDesignation": "", "text": "Hi"},
+            ]
+        }
+        transcript = create_transcript(audio=episode.podcast_audio, dote=dote)
+
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        assert r.status_code == 200
+        assert r.json()["segments"][0]["startTime"] == 0.5
+        assert r.json()["segments"][0]["endTime"] == 1.25
+
+    def test_get_transcript_as_json_invalid_timestamp_returns_400(self, client, episode):
+        # Given a stored DOTe file whose timestamp cannot be parsed
+        dote = {
+            "lines": [
+                {"startTime": "00:00:01;500", "endTime": "00:00:02,000", "speakerDesignation": "", "text": "Hi"},
+            ]
+        }
+        transcript = create_transcript(audio=episode.podcast_audio, dote=dote)
+
+        # When we request the transcript as JSON
+        url = reverse("cast:podcastindex-transcript-json", kwargs={"pk": transcript.id})
+        r = client.get(url)
+
+        # Then we get a 400 response instead of a server error
+        assert r.status_code == 400
+        assert r.content.decode("utf-8") == "Invalid timestamp format in dote file"
+
     def test_get_transcript_as_json_empty_dote_lines_returns_empty_segments(self, client, episode):
         transcript = create_transcript(audio=episode.podcast_audio, dote={"lines": []})
 

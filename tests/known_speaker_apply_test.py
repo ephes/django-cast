@@ -73,6 +73,9 @@ SPEAKERS = {
 def test_dote_timestamp_to_ms():
     assert dote_timestamp_to_ms("00:00:10,000") == 10000
     assert dote_timestamp_to_ms("01:02:03.500") == 3723500
+    assert dote_timestamp_to_ms("00:00:01,5") == 1500
+    assert dote_timestamp_to_ms("00:00:01.05") == 1050
+    assert dote_timestamp_to_ms("00:00:01,5000") is None
     assert dote_timestamp_to_ms("bad") is None
     assert dote_timestamp_to_ms(None) is None
 

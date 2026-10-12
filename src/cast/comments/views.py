@@ -9,11 +9,13 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import transaction
 from django.http import (
+    Http404,
     HttpRequest,
     HttpResponse,
     HttpResponseBadRequest,
     HttpResponseForbidden,
     HttpResponseNotFound,
+    HttpResponseRedirect,
     JsonResponse,
     QueryDict,
 )
@@ -25,6 +27,9 @@ from django_comments import signals
 from django_comments.forms import COMMENT_MAX_LENGTH
 from django_comments.views.comments import CommentPostBadRequest
 from django_comments.views.utils import next_redirect
+from wagtail.models import Page
+
+from cast.audio_access import page_is_publicly_viewable, user_can_edit_page
 
 from . import appsettings, author_edits
 from .utils import comment_target_is_accessible, comments_are_open, get_comment_context_data, get_comment_template_name
@@ -431,3 +436,34 @@ def post_comment_delete_ajax(request: HttpRequest, using: str | None = None) -> 
         author_edits.mark_deleted(comment)
 
     return JsonResponse({"success": True, "action": "delete", "comment_id": str(comment.pk)})
+
+
+def comment_target_redirect(request: HttpRequest, content_type_id: str, object_id: str) -> HttpResponse:
+    """Redirect to a comment target page the requester may view.
+
+    Replaces django-contrib-comments' stock ``comments-url-redirect`` route
+    (Django's ``contenttypes.views.shortcut``), which redirects to the
+    ``get_absolute_url()`` of any object of any content type without checking
+    permissions. That leaked draft and view-restricted post URLs and, on sites
+    whose user model defines ``get_absolute_url``, every username.
+
+    Only Wagtail pages are resolved. A page must be publicly viewable for this
+    request, or editable by the logged-in user. Everything else returns 404.
+    """
+    try:
+        content_type = ContentType.objects.get_for_id(int(content_type_id))
+    except (ValueError, ContentType.DoesNotExist):
+        raise Http404("Content type not found.")
+    model_class = content_type.model_class()
+    if model_class is None or not issubclass(model_class, Page):
+        raise Http404("Content type not found.")
+    try:
+        page = cast(Page, model_class._default_manager.get(pk=object_id)).specific
+    except (ObjectDoesNotExist, ValueError, ValidationError):
+        raise Http404("Page not found.")
+    if not (page_is_publicly_viewable(page, request) or user_can_edit_page(page, getattr(request, "user", None))):
+        raise Http404("Page not found.")
+    url = page.get_url(request=request)
+    if not url:
+        raise Http404("Page has no URL.")
+    return HttpResponseRedirect(url)

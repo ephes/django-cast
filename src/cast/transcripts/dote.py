@@ -11,15 +11,24 @@ PodcastIndexSegment = dict[str, str | float]
 PodcastIndexTranscript = dict[str, str | list[PodcastIndexSegment]]
 
 
+DOTE_TIMESTAMP_RE = re.compile(r"(\d{1,3}):([0-5]\d):([0-5]\d)[,.](\d{1,3})")
+
+
 def dote_timestamp_to_ms(value: object) -> int | None:
-    """Parse a DOTe ``HH:MM:SS,mmm`` timestamp into milliseconds."""
+    """Parse a DOTe ``HH:MM:SS,mmm`` (or ``HH:MM:SS.mmm``) timestamp into milliseconds.
+
+    The fraction has one to three digits and is a decimal fraction of a second,
+    so ``,5`` means 500 ms and ``,05`` means 50 ms. Return ``None`` for anything
+    else.
+    """
     if not isinstance(value, str):
         return None
-    match = re.fullmatch(r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})", value.strip())
+    match = DOTE_TIMESTAMP_RE.fullmatch(value.strip())
     if match is None:
         return None
-    hours, minutes, seconds, millis = (int(part) for part in match.groups())
-    return ((hours * 3600 + minutes * 60 + seconds) * 1000) + millis
+    hours, minutes, seconds, fraction = match.groups()
+    millis = int(fraction.ljust(3, "0"))
+    return ((int(hours) * 3600 + int(minutes) * 60 + int(seconds)) * 1000) + millis
 
 
 def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
@@ -71,11 +80,11 @@ def rewrite_speakers(data: dict[str, Any], mapping: Mapping[str, str]) -> bool:
 
 
 def time_to_seconds(time_str: str) -> float:
-    match = re.match(r"(\d+):(\d+):(\d+),(\d+)", time_str)
-    if match:
-        hours, minutes, seconds, milliseconds = map(int, match.groups())
-        return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000
-    raise ValueError(f"Invalid time format: {time_str}")
+    """Parse a DOTe timestamp into seconds; raise ``ValueError`` if it is invalid."""
+    millis = dote_timestamp_to_ms(time_str)
+    if millis is None:
+        raise ValueError(f"Invalid time format: {time_str!r}")
+    return millis / 1000
 
 
 def convert_segments(segments: list[DoteSegment]) -> list[PodcastIndexSegment]:

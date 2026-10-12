@@ -13,7 +13,16 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - The implemented typeahead architecture, performance measurements, and UX rationale remain available in
   [backlog/2026-07-16-typeahead-search.md](backlog/2026-07-16-typeahead-search.md).
 
-## Research / Shaping
+- The scoped Podlove response-cache security audit and its completed regression
+  evidence are recorded in
+  [backlog/2026-10-03-security-audit.md](backlog/2026-10-03-security-audit.md);
+  the adjacent raw transcript/chapter cache audit and HTML negative evidence are in
+  [backlog/2026-10-03-adjacent-media-cache-audit.md](backlog/2026-10-03-adjacent-media-cache-audit.md).
+
+- The completed Django 6.1 advisory-floor CI repair is recorded in
+  [backlog/2026-10-03-dependency-floor-ci-repair.md](backlog/2026-10-03-dependency-floor-ci-repair.md).
+
+## Later
 
 - [ ] Local authoring and sync workflow
   - Design record:
@@ -25,6 +34,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     Cast Studio's local Electron playground: that product packages the complete Django/Wagtail site and edits its local
     database through Wagtail. A future **Put this site online** action still requires a separate portable import or
     hosted-trial design and must never overwrite a production database with local SQLite.
+  - Status: deferred (2026-09-29). The maintainer has no current need for local editing with sync back to a
+    production site. Revisit when a concrete local-edit/sync workflow is wanted for a real site.
   - Done when: tradeoffs are documented for data ownership, conflict resolution, media files, revision history,
     authentication, rollback, and production safety, with a recommended first slice.
 
@@ -37,10 +48,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Notes: this is distinct from Cast Studio. Cast Studio is initially a distribution/lifecycle shell around a complete
     local Django/Wagtail site and uses Wagtail admin as its editor; it does not need the editor API or a second content
     editor for its first proof. Candidates for this separate external client include Electron, Tauri, or a PWA.
+  - Status: deferred (2026-09-29) together with the local authoring and sync workflow it depends on.
   - Done when: concrete demand exists and there is a small prototype or design note showing how the client would
     authenticate, list content, edit drafts, preview posts, sync changes, and handle conflicts.
-
-## Later
 
 - [ ] Paged feeds (deferred)
   - Decision record: [backlog/2026-09-28-paged-feeds-deferred.md](backlog/2026-09-28-paged-feeds-deferred.md);
@@ -104,15 +114,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: the decision and, if accepted, a safe replacement contract (permissions, reference safety, cleanup) are
     documented or the option is explicitly deferred.
 
-- [ ] Editor API Markdown convenience input
-  - PRD:
-    [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
-    (see Body Serialization, Tier 2)
-  - Scope: add an optional `overview_markdown`/`detail_markdown` convenience input converted server-side into the
-    canonical block list, behind an optional dependency so the Markdown parser is not forced onto all installs.
-  - Done when: the optional-dependency boundary and conversion policy are documented, the structured block list stays
-    canonical, and tests cover the conversion plus the dependency-absent path.
-
 - [ ] Editor API embed body block support
   - PRD:
     [backlog/2026-06-19-programmatic-content-editing-api.md](backlog/2026-06-19-programmatic-content-editing-api.md)
@@ -132,11 +133,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Default theme design improvements
   - Scope: improve the built-in theme design while keeping theme contracts stable for existing sites.
   - Done when: the default theme feels more polished, remains accessible, and existing theme overrides keep working.
-
-- [ ] Add view transitions to existing themes
-  - Scope: add progressive-enhancement page/view transitions for the built-in themes.
-  - Done when: navigation feels smoother where supported, unsupported browsers keep the current behavior, and motion
-    can respect reduced-motion preferences.
 
 - [ ] Podcast feed import
   - Notes: [backlog/2026-05-18-podcast-feed-import.md](backlog/2026-05-18-podcast-feed-import.md)

@@ -464,8 +464,8 @@ Type-check the TypeScript sources with ``tsc --noEmit``:
    $ npm run typecheck
 
 Vite and Vitest only strip types, so this is the only command that actually checks them.
-It currently reports pre-existing errors, mostly in the test files, and is therefore not
-part of CI yet; treat new errors in the code you touch as something to fix.
+CI runs this check for sources and tests alongside ``npm test``. Run both checks
+before submitting JavaScript changes.
 
 Build shipped JavaScript assets:
 
@@ -509,7 +509,8 @@ warnings summary that the rest of the matrix - and a plain ``pytest`` run - supp
 ``filterwarnings`` list in ``pyproject.toml``. The warnings do not fail the run. Treat a new one
 coming from ``src/cast`` as work to schedule before the framework release that removes the API, and
 ignore third-party noise until the whole matrix is quiet enough to turn deprecations into errors.
-CI runs ``py314-django61-wagtail80`` in its tox matrix job, so the same summary shows up there.
+CI runs ``py314-django61-wagtail80`` and ``py315-django61-wagtail80`` in its tox matrix job, so the
+same summary shows up there.
 
 Code Quality
 ============

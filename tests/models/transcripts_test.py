@@ -89,12 +89,39 @@ def test_convert_dote_to_podcastindex_transcript(dote):
         ("00:01:00,000", 60.0),
         ("01:00:00,000", 3600.0),
         ("01:00:00,500", 3600.5),
+        ("00:00:01.500", 1.5),
+        ("00:00:01,5", 1.5),
+        ("00:00:01.5", 1.5),
+        ("00:00:01,05", 1.05),
+        ("00:00:01,050", 1.05),
+        ("25:00:03,000", 90003.0),
+        ("999:59:59,999", 3599999.999),
+        (" 00:00:01,250 ", 1.25),
     ],
 )
 def test_time_to_seconds(time_str, expected):
     assert time_to_seconds(time_str) == expected
 
 
-def test_time_to_seconds_invalid():
+@pytest.mark.parametrize(
+    "time_str",
+    [
+        "foobar",
+        "",
+        "00:00:01",
+        "00:00:01,",
+        "00:00:01,5000",
+        "00:00:01;500",
+        "00:00:01,500 trailing",
+        "0:0:1,500",
+        "00:60:00,000",
+        "00:00:60,000",
+        "1000:00:00,000",
+        "9" * 4301 + ":00:00,000",
+        None,
+        1.5,
+    ],
+)
+def test_time_to_seconds_invalid(time_str):
     with pytest.raises(ValueError):
-        time_to_seconds("foobar")
+        time_to_seconds(time_str)

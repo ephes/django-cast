@@ -555,3 +555,69 @@ A small companion script (``paging-view-transition-fix.js``) listens for
 ``htmx:beforeTransition`` events targeting the ``#paging-area`` element and
 scrolls to the top of the page before the view transition snapshot is taken,
 ensuring a clean transition. Other HTMX transitions are not affected.
+
+Page Navigation Transitions
+---------------------------
+
+The built-in ``bootstrap4`` and ``plain`` themes also opt in to cross-document
+view transitions for ordinary same-origin page loads, such as opening a post
+from a blog list. Their ``cast.css`` enables the transition only when the
+reader has no reduced-motion preference:
+
+.. code-block:: css
+
+   @media (prefers-reduced-motion: no-preference) {
+     @view-transition {
+       navigation: auto;
+       types: cast-page;
+     }
+   }
+
+Page loads carry the ``cast-page`` transition type. For this type the old page
+fades out over 200 ms and the new page fades in over 250 ms, including the
+``#paging-area`` layer when either page has one. HTMX pagination swaps carry no
+type and keep the fade described above.
+
+Browsers without cross-document view transition support, and readers who
+prefer reduced motion, get the usual immediate page load. Custom themes can
+reuse the ``cast-page`` type with
+``html:active-view-transition-type(cast-page)`` selectors, or omit the
+``@view-transition`` rule to keep plain page loads.
+
+Shared Post Title and Image
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+During a ``cast-page`` transition between a post list and a post detail page,
+both built-in themes morph the post's title and its first overview image from
+one page to the other, in both directions. The render-time script
+``cast/js/post-view-transition.js``, loaded in the ``<head>`` of both base
+templates, handles this:
+
+- On ``pageswap`` it finds the ``<article>`` whose header links to the
+  destination (on a list page) or to the current page (on a detail page). It
+  names that article's header heading ``cast-post-title`` and the first ``img``
+  inside ``.block-overview`` ``cast-post-image``. Images inside
+  ``<podlove-player>`` or ``<cast-audio-player>`` are skipped, because list and
+  detail pages load audio players in different modes.
+- It hands the post URL and the destination URL to the next page through
+  ``sessionStorage``. On ``pagereveal`` the destination names the same post's
+  elements, but only when the destination URL matches. It never names
+  elements from two different posts.
+- When a handoff targets the page being loaded, the script adds
+  ``<link rel="expect" blocking="render">`` so the first render waits until
+  the document is parsed and ``pagereveal`` can find the incoming post. This
+  applies only to ``cast-page`` navigations that open or leave a post. Other
+  page loads render as usual.
+- Names are removed when the transition finishes, so they never collide with
+  HTMX pagination swaps or pages restored from the back/forward cache.
+- During ``cast-page`` transitions the theme CSS forces
+  ``content-visibility: visible`` on ``#paging-area``. Otherwise a site that
+  sets ``content-visibility: auto`` there would skip the post list on the first
+  frame, and a post could not morph back into it.
+
+Navigations without a shared post, such as between list pages, keep the plain
+crossfade. Posts without an overview image morph only their title. Custom
+templates keep the morph as long as each post renders as an ``<article>``
+whose direct ``<header>`` contains a heading (``h1`` to ``h3``) and a link to
+the post, and whose overview section has the ``block-overview`` class. The
+heading itself does not need to be the link.

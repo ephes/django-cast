@@ -21,10 +21,11 @@ from ...models.snippets import PostCategory
 from ...preview import render_editor_preview
 from ...publication import PublicationRejected, check_publishable
 from .body import (
-    author_blocks_to_overview,
     author_blocks_to_section,
     get_choosable_audio,
     get_choosable_image,
+    markdown_field,
+    markdown_to_section,
     section_to_author_blocks,
 )
 from .errors import (
@@ -279,6 +280,29 @@ class PostEditorMixin:
             )
         return image, cover.get("alt_text", "")
 
+    def _submitted_body_sections(
+        self, data: dict[str, Any], *, user: Any, existing_body: list[dict] | None = None
+    ) -> list[dict[str, Any]]:
+        """Convert submitted ``overview``/``detail`` block lists or their Markdown alternatives.
+
+        The serializer guarantees at most one of ``<section>`` and ``<section>_markdown``
+        per section. Markdown is converted into the canonical block list first, so both
+        inputs share the same validation and rich-text sanitization.
+        """
+        sections = []
+        for section in ("overview", "detail"):
+            if markdown_field(section) in data:
+                value = markdown_to_section(data[markdown_field(section)], user=user, section=section)
+            elif section in data:
+                existing_section = section_value(existing_body, section) if existing_body is not None else None
+                value = author_blocks_to_section(
+                    data[section], user=user, path_prefix=section, existing_section=existing_section
+                )
+            else:
+                continue
+            sections.append({"type": section, "value": value})
+        return sections
+
     def _resolve_categories(self, ids: list[int]) -> list[PostCategory]:
         if not ids:
             return []
@@ -482,16 +506,11 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         slug = data.get("slug") or slugify(title)
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
-        overview_value = author_blocks_to_overview(data["overview"], user=user)
-        body_sections = [{"type": "overview", "value": overview_value}]
-        if "detail" in data:
-            body_sections.append(
-                {"type": "detail", "value": author_blocks_to_section(data["detail"], user=user, path_prefix="detail")}
-            )
+        body_sections = self._submitted_body_sections(data, user=user)
 
         # Assign body as a JSON string (the proven pattern in tests/conftest.py);
-        # the StreamField parses it on access. ``overview_value`` is the list of
-        # internal block dicts produced by author_blocks_to_overview().
+        # the StreamField parses it on access. Each section value is the list of
+        # internal block dicts produced by the canonical block conversion.
         with transaction.atomic():
             parent = self._lock_parent_for_slug_check(parent, noun="Post")
             self._check_unique_slug(parent, slug)
@@ -582,18 +601,10 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
             draft.tags.set(data["tags"])
         if "categories" in data:
             draft.categories.set(self._resolve_categories(data["categories"]))
-        body_replacements = {}
-        if "overview" in data:
-            body_replacements["overview"] = author_blocks_to_overview(
-                data["overview"], user=user, existing_section=section_value(draft.body.raw_data, "overview")
-            )
-        if "detail" in data:
-            body_replacements["detail"] = author_blocks_to_section(
-                data["detail"],
-                user=user,
-                path_prefix="detail",
-                existing_section=section_value(draft.body.raw_data, "detail"),
-            )
+        body_replacements = {
+            section["type"]: section["value"]
+            for section in self._submitted_body_sections(data, user=user, existing_body=draft.body.raw_data)
+        }
         if body_replacements:
             draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 
@@ -749,12 +760,7 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
 
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
-        overview_value = author_blocks_to_overview(data["overview"], user=user)
-        body_sections = [{"type": "overview", "value": overview_value}]
-        if "detail" in data:
-            body_sections.append(
-                {"type": "detail", "value": author_blocks_to_section(data["detail"], user=user, path_prefix="detail")}
-            )
+        body_sections = self._submitted_body_sections(data, user=user)
 
         episode = Episode(
             title=title,
@@ -848,18 +854,10 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         if "categories" in data:
             draft.categories.set(self._resolve_categories(data["categories"]))
         self._apply_episode_metadata(draft, data, user, get_podcast=lambda: episode.get_parent().specific)
-        body_replacements = {}
-        if "overview" in data:
-            body_replacements["overview"] = author_blocks_to_overview(
-                data["overview"], user=user, existing_section=section_value(draft.body.raw_data, "overview")
-            )
-        if "detail" in data:
-            body_replacements["detail"] = author_blocks_to_section(
-                data["detail"],
-                user=user,
-                path_prefix="detail",
-                existing_section=section_value(draft.body.raw_data, "detail"),
-            )
+        body_replacements = {
+            section["type"]: section["value"]
+            for section in self._submitted_body_sections(data, user=user, existing_body=draft.body.raw_data)
+        }
         if body_replacements:
             draft.body = body_sections_with_replacements(draft.body.raw_data, body_replacements)
 

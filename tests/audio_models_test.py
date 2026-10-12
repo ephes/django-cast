@@ -97,6 +97,20 @@ class TestAudioModel:
         audio.duration = None
         assert audio.duration_str == ""
 
+    @pytest.mark.parametrize(
+        "duration, expected",
+        [
+            (timedelta(seconds=0), "0:00:00"),
+            (timedelta(minutes=5, seconds=3, microseconds=900000), "0:05:03"),
+            (timedelta(hours=23, minutes=59, seconds=59), "23:59:59"),
+            (timedelta(hours=25, seconds=3), "25:00:03"),
+            (timedelta(days=4, hours=1, minutes=2, seconds=3), "97:02:03"),
+        ],
+    )
+    def test_audio_duration_str(self, audio, duration, expected):
+        audio.duration = duration
+        assert audio.duration_str == expected
+
     def test_audio_audio_without_file_fields(self, audio, mocker):
         class Field:  # not a FileField
             foo = "bar"

@@ -4,7 +4,7 @@
     "name": "defineProperty"
   },
   "src/audio/custom-player.ts": {
-    "file": "customPlayer-DbnfRrCD.js",
+    "file": "customPlayer-DhfwX59j.js",
     "name": "customPlayer",
     "src": "src/audio/custom-player.ts",
     "isEntry": true,
@@ -16,7 +16,7 @@
     ]
   },
   "src/audio/podlove-player.ts": {
-    "file": "podlovePlayer-B2nMCmm6.js",
+    "file": "podlovePlayer-Cj0-VhyT.js",
     "name": "podlovePlayer",
     "src": "src/audio/podlove-player.ts",
     "isEntry": true,
@@ -25,7 +25,7 @@
     ]
   },
   "src/gallery/image-gallery-bs4.ts": {
-    "file": "main-CgQCtecY.js",
+    "file": "main-DLvq5QSe.js",
     "name": "main",
     "src": "src/gallery/image-gallery-bs4.ts",
     "isEntry": true,

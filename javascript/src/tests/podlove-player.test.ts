@@ -7,7 +7,12 @@ import '@testing-library/jest-dom';
 import '@/audio/podlove-player';
 
 
-class IntersectionObserverMock {
+class IntersectionObserverMock implements IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = "200px 0px";
+  readonly scrollMargin = "0px";
+  readonly thresholds = [0];
+  takeRecords(): IntersectionObserverEntry[] { return []; }
   callback: IntersectionObserverCallback;
   observedElements: Set<Element>;
   options?: IntersectionObserverInit;
@@ -39,10 +44,17 @@ class IntersectionObserverMock {
   }
 }
 
-globalThis.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver;
+globalThis.IntersectionObserver = IntersectionObserverMock;
 
-// Mock the podlovePlayer function
-global.podlovePlayer = vi.fn();
+// Keep mock methods on the local mock, not on the production global type.
+const podlovePlayerMock = vi.fn<NonNullable<typeof podlovePlayer>>();
+globalThis.podlovePlayer = podlovePlayerMock;
+
+function intersectionEntry(target: Element, isIntersecting: boolean): IntersectionObserverEntry {
+  const rect = target.getBoundingClientRect();
+  return { target, isIntersecting, boundingClientRect: rect, intersectionRect: rect,
+    intersectionRatio: isIntersecting ? 1 : 0, rootBounds: null, time: 0 };
+}
 
 describe('PodlovePlayerElement', () => {
   beforeEach(() => {
@@ -51,7 +63,7 @@ describe('PodlovePlayerElement', () => {
     document.documentElement.removeAttribute('data-theme');
     document.body.removeAttribute('data-bs-theme');
     document.body.removeAttribute('data-theme');
-    global.podlovePlayer.mockReset();
+    podlovePlayerMock.mockReset();
     globalThis.matchMedia = vi.fn().mockImplementation(() => ({
       matches: false,
       media: '',
@@ -80,7 +92,7 @@ describe('PodlovePlayerElement', () => {
 
     const observerInstance = element.observer as IntersectionObserverMock;
     observerInstance.trigger([
-      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+      intersectionEntry(element, true),
     ]);
 
     return element.querySelector('.podlove-player-host') as HTMLDivElement | null;
@@ -132,10 +144,10 @@ describe('PodlovePlayerElement', () => {
     document.body.appendChild(element);
 
     // Access the observer
-    const observerInstance = element.observer;
+    const observerInstance = element.observer as IntersectionObserverMock;
 
     // Simulate the IntersectionObserver callback
-    const entries = [{ isIntersecting: true, target: element }];
+    const entries = [intersectionEntry(element, true)];
     observerInstance.callback(entries, observerInstance);
 
     // Check that podlovePlayer was called
@@ -161,7 +173,7 @@ describe('PodlovePlayerElement', () => {
 
     const observerInstance = element.observer as IntersectionObserverMock;
     observerInstance.trigger([
-      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+      intersectionEntry(element, true),
     ]);
 
     expect(container?.style.minHeight).toBe('auto');
@@ -334,10 +346,10 @@ describe('PodlovePlayerElement', () => {
     document.body.appendChild(element);
 
     // Access the observer
-    const observerInstance = element.observer;
+    const observerInstance = element.observer as IntersectionObserverMock;
 
     // Simulate the IntersectionObserver callback with isIntersecting false
-    const entries = [{ isIntersecting: false, target: element }];
+    const entries = [intersectionEntry(element, false)];
     observerInstance.callback(entries, observerInstance);
 
     // Check that podlovePlayer was not called
@@ -356,7 +368,7 @@ describe('PodlovePlayerElement', () => {
     const observerInstance = element.observer as IntersectionObserverMock;
 
     // Simulate the IntersectionObserver callback multiple times
-    const entries = [{ isIntersecting: true, target: element } as IntersectionObserverEntry];
+    const entries = [intersectionEntry(element, true)];
 
     // First trigger
     observerInstance.trigger(entries);
@@ -424,7 +436,7 @@ describe('PodlovePlayerElement', () => {
 
     const observerInstance = element.observer as IntersectionObserverMock;
     observerInstance.trigger([
-      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+      intersectionEntry(element, true),
     ]);
 
     const script = document.querySelector('script[data-podlove-embed]') as HTMLScriptElement | null;
@@ -454,7 +466,7 @@ describe('PodlovePlayerElement', () => {
 
     const observerInstance = element.observer as IntersectionObserverMock;
     observerInstance.trigger([
-      { isIntersecting: true, target: element } as IntersectionObserverEntry,
+      intersectionEntry(element, true),
     ]);
 
     await new Promise((resolve) => setTimeout(resolve, 0));

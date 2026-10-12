@@ -17,8 +17,8 @@ def complete_transcript_generation(generation_id: int) -> None:
         return
 
     generation.mark_running()
-    service = VoxhelmTranscriptService(request_or_site=generation.site)
     try:
+        service = VoxhelmTranscriptService(request_or_site=generation.site)
         service.complete_audio_job(
             generation.audio,
             job_id=generation.voxhelm_job_id,

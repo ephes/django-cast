@@ -197,10 +197,16 @@ Caching
 
 - **Repository-ready data**: repositories can produce JSON-serializable dicts (useful for caching, if configured)
 - **Rendition cache**: Generated image sizes
-- **Feed cache**: Feed endpoints are wrapped with Django's ``cache_page`` (see
-  ``src/cast/urls.py``). Cache misses create request-local feed instances so
-  the renderer's request, page, repository, and audio-format state is never
-  shared between concurrent requests.
+- **Feed cache**: Feed endpoints are wrapped with
+  ``cast.feeds.restriction_aware_cache_page`` (see ``src/cast/urls.py``), a
+  ``cache_page`` whose key prefix carries a feed cache generation. The
+  generation is captured when the request starts, before the restricted-root
+  guard or the render queries the database, so a snapshot-isolated request never
+  pairs pre-change rows with the post-change key. A committed ``PageViewRestriction`` save or delete rotates that
+  generation (``src/cast/receivers.py``), so cached feeds and renders in flight
+  during the change are never served afterwards. Cache misses create
+  request-local feed instances so the renderer's request, page, repository, and
+  audio-format state is never shared between concurrent requests.
 
 Media Handling
 --------------

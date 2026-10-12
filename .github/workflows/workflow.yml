@@ -33,6 +33,10 @@ jobs:
         working-directory: javascript
         run: npm ci
 
+      - name: Type-check JavaScript sources and tests
+        working-directory: javascript
+        run: npm run typecheck
+
       - name: Run JavaScript tests
         working-directory: javascript
         run: npm test
@@ -178,7 +182,7 @@ jobs:
           AUDITED_FLOORS: |
             Django==5.2.17
             Django==6.0.8
-            Django==6.1.0
+            Django==6.1.1
             wagtail==7.0.9
             wagtail==7.4.3
             wagtail==8.0.0
@@ -190,7 +194,7 @@ jobs:
             requests==2.33.0
             soupsieve==2.9.0
             sqlparse==0.6.0
-            urllib3==2.7.0
+            urllib3==2.8.0
         run: |
           set -euo pipefail
           requirement_file="$(mktemp)"
@@ -246,7 +250,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
 
       - name: Install ffmpeg
         uses: FedericoCarboni/setup-ffmpeg@v2
@@ -270,6 +273,8 @@ jobs:
             python-version: "3.12"
           - tox-env: py314-django61-wagtail80
             python-version: "3.14"
+          - tox-env: py315-django61-wagtail80
+            python-version: "3.15"
     steps:
       - uses: actions/checkout@v4
 

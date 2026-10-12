@@ -1,6 +1,31 @@
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import serializers
+from rest_framework.exceptions import ErrorDetail
+
+BODY_SECTIONS = ("overview", "detail")
+
+
+def markdown_input_field() -> serializers.CharField:
+    """Optional Markdown alternative to a body-section block list."""
+    return serializers.CharField(required=False, allow_blank=True, trim_whitespace=False)
+
+
+def validate_body_inputs(attrs: dict[str, Any], *, require_overview: bool) -> dict[str, Any]:
+    """Allow either the block list or the Markdown input per body section, never both."""
+    errors: dict[str, list[ErrorDetail]] = {}
+    for section in BODY_SECTIONS:
+        if section in attrs and f"{section}_markdown" in attrs:
+            errors[f"{section}_markdown"] = [
+                ErrorDetail(f"Send either '{section}' or '{section}_markdown', not both.", code="conflict")
+            ]
+    if require_overview and "overview" not in attrs and "overview_markdown" not in attrs:
+        errors["overview"] = [ErrorDetail("This field is required.", code="required")]
+    if errors:
+        raise serializers.ValidationError(errors)
+    return attrs
 
 
 class ParentSerializer(serializers.Serializer):
@@ -34,9 +59,15 @@ class PostCreateSerializer(serializers.Serializer):
     cover_image = CoverImageSerializer(required=False)
     tags = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     categories = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
-    overview = serializers.ListField()  # required: the structured overview block list
+    # ``overview`` or ``overview_markdown`` is required; the block list is canonical.
+    overview = serializers.ListField(required=False)
+    overview_markdown = markdown_input_field()
     detail = serializers.ListField(required=False)
+    detail_markdown = markdown_input_field()
     publish = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        return validate_body_inputs(attrs, require_overview=True)
 
 
 class PostUpdateSerializer(serializers.Serializer):
@@ -51,8 +82,13 @@ class PostUpdateSerializer(serializers.Serializer):
     tags = serializers.ListField(child=serializers.CharField(), required=False)
     categories = serializers.ListField(child=serializers.IntegerField(), required=False)
     overview = serializers.ListField(required=False)
+    overview_markdown = markdown_input_field()
     detail = serializers.ListField(required=False)
+    detail_markdown = markdown_input_field()
     publish = serializers.BooleanField(required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        return validate_body_inputs(attrs, require_overview=False)
 
 
 class MediaRefSerializer(serializers.Serializer):

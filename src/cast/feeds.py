@@ -4,10 +4,13 @@ from collections.abc import Callable
 from datetime import datetime, time
 from functools import update_wrapper, wraps
 from typing import Any, Protocol, cast
+from uuid import uuid4
 
 import django
+from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.syndication.views import Feed
+from django.core.cache import BaseCache, caches
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.db.models import Model, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
@@ -21,6 +24,7 @@ from django.utils.feedgenerator import (
 )
 from django.utils.safestring import SafeText
 from django.utils.xmlutils import SimplerXMLGenerator
+from django.views.decorators.cache import cache_page
 from wagtail.images.models import Image
 
 from cast import appsettings
@@ -191,6 +195,78 @@ def request_local_feed(feed_class: type[RepositoryMixin]) -> Callable[..., HttpR
         return feed_class()(request, *args, **kwargs)
 
     return update_wrapper(view, feed_class, updated=())
+
+
+FEED_CACHE_GENERATION_KEY = "cast:feed-cache-generation"
+
+
+def _feed_response_cache() -> BaseCache:
+    # cache_page stores responses in the middleware cache alias; keep the
+    # generation next to them so both are dropped and rotated together.
+    return caches[settings.CACHE_MIDDLEWARE_ALIAS]
+
+
+def feed_cache_generation() -> str:
+    """Return the current feed cache generation, creating one if it is missing."""
+    response_cache = _feed_response_cache()
+    generation = response_cache.get(FEED_CACHE_GENERATION_KEY)
+    if generation is None:
+        candidate = uuid4().hex
+        response_cache.add(FEED_CACHE_GENERATION_KEY, candidate, timeout=None)
+        generation = response_cache.get(FEED_CACHE_GENERATION_KEY) or candidate
+    return str(generation)
+
+
+def rotate_feed_cache_generation() -> None:
+    """Make every cached feed response unreachable with one atomic key write."""
+    _feed_response_cache().set(FEED_CACHE_GENERATION_KEY, uuid4().hex, timeout=None)
+
+
+_CAPTURED_GENERATION_ATTR = "_cast_feed_cache_generation"
+
+
+def capture_feed_cache_generation(view: Callable[..., Any]) -> Callable[..., Any]:
+    """Read the feed cache generation before the wrapped view touches the database.
+
+    Wrap this around everything that queries, including the restricted-root
+    guard. Under ``ATOMIC_REQUESTS`` with snapshot isolation the first query
+    fixes the request's view of the data; a generation read after it could
+    already be the rotated one while the render still sees the pre-restriction
+    rows, and the stale feed would be cached under the current key.
+    """
+
+    @wraps(view)
+    def captured(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
+        setattr(request, _CAPTURED_GENERATION_ATTR, feed_cache_generation())
+        return view(request, *args, **kwargs)
+
+    return captured
+
+
+def restriction_aware_cache_page(
+    timeout: int,
+) -> Callable[[Callable[..., HttpResponseBase]], Callable[..., HttpResponseBase]]:
+    """``cache_page`` whose key prefix carries the feed cache generation.
+
+    The generation comes from ``capture_feed_cache_generation`` (read when the
+    request starts) or, without it, is read here, before the feed renders. A
+    render that was already running when a view restriction change committed
+    finishes under the old generation, so its stale response is stored where no
+    later request looks for it. See ``cast.receivers``.
+    """
+
+    def decorator(view: Callable[..., HttpResponseBase]) -> Callable[..., HttpResponseBase]:
+        @wraps(view)
+        def cached_view(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+            generation = getattr(request, _CAPTURED_GENERATION_ATTR, None)
+            if generation is None:
+                generation = feed_cache_generation()
+            key_prefix = f"{settings.CACHE_MIDDLEWARE_KEY_PREFIX}:cast-feed:{generation}"
+            return cache_page(timeout, key_prefix=key_prefix)(view)(request, *args, **kwargs)
+
+        return cached_view
+
+    return decorator
 
 
 def etag_conditional_feed(view: Callable[..., HttpResponseBase]) -> Callable[..., HttpResponseBase]:

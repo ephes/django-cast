@@ -453,26 +453,42 @@ def enqueue_audio_transcript_generation(
     )
     if not created and generation.is_active:
         return TranscriptEnqueueResult(generation=generation, enqueued=False)
-
-    try:
-        submission = service.submit_for_audio(
-            audio,
-            task_ref=task_ref,
-            episode=episode,
-        )
-    except Exception as exc:
-        if created:
-            generation.mark_failed(str(exc))
-        raise
+    # A stale QUEUED/RUNNING row was interrupted (for example by a worker
+    # restart killed the completion task). When its Voxhelm job is known, resume
+    # completing that exact job instead of submitting again: the job may already
+    # be finished, and a changed diarization configuration would otherwise
+    # derive a different task_ref and transcribe the audio a second time.
+    interrupted = not created and generation.is_stale
     site = request_or_site if isinstance(request_or_site, Site) else None
-    generation.queue_submission(
-        task_ref=submission.task_ref,
-        voxhelm_job_id=submission.job_id,
-        source_url=submission.source_url,
-        task_result_id="",
-        site=site,
-        requested_by=requested_by,
-    )
+    if interrupted and generation.voxhelm_job_id:
+        generation.queue_submission(
+            task_ref=generation.task_ref,
+            voxhelm_job_id=generation.voxhelm_job_id,
+            source_url=generation.source_url,
+            task_result_id="",
+            # The job lives on the Voxhelm endpoint of the original site.
+            site=generation.site,
+            requested_by=requested_by,
+        )
+    else:
+        try:
+            submission = service.submit_for_audio(
+                audio,
+                task_ref=task_ref,
+                episode=episode,
+            )
+        except Exception as exc:
+            if created or interrupted:
+                generation.mark_failed(str(exc))
+            raise
+        generation.queue_submission(
+            task_ref=submission.task_ref,
+            voxhelm_job_id=submission.job_id,
+            source_url=submission.source_url,
+            task_result_id="",
+            site=site,
+            requested_by=requested_by,
+        )
     try:
         task_result = complete_transcript_generation.enqueue(generation.pk)
     except Exception as exc:

@@ -312,6 +312,22 @@ class TestTranscriptForm:
         assert form.is_valid() is False
         assert "dote" in form.errors
 
+    def test_dote_valid_with_dot_and_short_fraction(self, audio):
+        line = {"startTime": "00:00:00.5", "endTime": "00:00:01.250", "speakerDesignation": "", "text": "Hi"}
+        dote = self._json_upload("dote.json", {"lines": [line]})
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid()
+
+    @pytest.mark.parametrize("key", ["startTime", "endTime"])
+    @pytest.mark.parametrize("value", ["00:00:01;500", "1.5", "00:00:01,5000", "9" * 4301 + ":00:00,000", None])
+    def test_dote_invalid_timestamp(self, audio, key, value):
+        line = {"startTime": "00:00:00,000", "endTime": "00:00:01,000", "speakerDesignation": "", "text": "Hi"}
+        line[key] = value
+        dote = self._json_upload("dote.json", {"lines": [line]})
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid() is False
+        assert "dote" in form.errors
+
     def test_dote_line_item_not_dict(self, audio):
         dote = self._json_upload("dote.json", {"lines": ["not a dict"]})
         form = TranscriptForm({"audio": audio.id}, {"dote": dote})

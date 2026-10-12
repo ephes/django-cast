@@ -42,7 +42,7 @@ Prerequisites
 Before you begin, ensure you have:
 
 - Python 3.11 or higher
-- Django 5.2.17+, 6.0.8+, or 6.1+
+- Django 5.2.17+, 6.0.8+, or 6.1.1+
 - Wagtail 7.0.9+ on the 7.0 LTS branch, 7.4.3+ on the 7.4 LTS branch,
   or 8.x (the unpatched 7.1 and 7.2 branches and the end-of-life 7.3 branch
   are excluded)
@@ -91,11 +91,18 @@ The package metadata excludes the vulnerable dependency releases identified by
 the project's security audit. Refresh the resolved dependencies in an existing
 environment when upgrading django-cast, then audit that application-specific
 resolution rather than assuming package metadata covers future advisories.
+Supported Django security floors are 5.2.17, 6.0.8 and 6.1.1;
+Django 6.1.0 is excluded because the advisory audit reports CVE-2026-15830.
+CI audits each minimum separately as well as the resolved runtime dependencies.
+These checks use current advisory data, so a previously passing minimum can
+require a policy update without an application-code regression.
+
 Security floors for Wagtail's HTTP, HTML parsing, and image-decoding dependency
 stack are published in django-cast's metadata deliberately: this makes an
 upgrade replace vulnerable versions retained in an otherwise compatible
 application lock. The oldest supported Wagtail branch is tested with these
-floors. Applications should review any conflicting pins rather than bypass the
+floors. urllib3 requires 2.8.0 or later for the streaming and HTTPS-proxy
+advisories identified by the floor audit. Applications should review any conflicting pins rather than bypass the
 security constraints.
 
 .. warning::

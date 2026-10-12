@@ -1478,7 +1478,15 @@ def test_stock_image_upload_does_not_require_choose_permission(client, admin_use
     assert [error["code"] for error in attach.json()["errors"]["overview.0.value.id"]] == ["not_found"]
 
 
-def test_anonymous_image_listing_matches_cast_v2_exposure(client, image) -> None:
+def test_cast_v2_image_listing_denies_anonymous_callers_by_default(client, image) -> None:
+    v2 = client.get(reverse("cast:api:wagtail:images:listing"))
+
+    assert v2.status_code in (401, 403)
+    assert image.file.url not in v2.content.decode()
+
+
+def test_anonymous_image_listing_matches_public_cast_v2_exposure(client, image, settings) -> None:
+    settings.CAST_PUBLIC_IMAGES_API = True
     v3 = client.get(reverse("wagtailapi_v3:list_images"))
     v2 = client.get(reverse("cast:api:wagtail:images:listing"))
 

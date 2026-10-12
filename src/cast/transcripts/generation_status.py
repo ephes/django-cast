@@ -50,6 +50,14 @@ def get_transcript_generation_status_context(*, audio: Audio) -> dict[str, str |
         TranscriptGeneration.Status.SUCCEEDED.value: "Transcript generation completed.",
         TranscriptGeneration.Status.FAILED.value: "Transcript generation failed.",
     }
+    if generation.is_stale:
+        return {
+            "transcript_generation_active": False,
+            "transcript_generation_status": "Interrupted",
+            "transcript_generation_message": "Transcript generation was interrupted. Generate the transcript again.",
+            "transcript_generation_error": generation.error_message,
+            "transcript_generation_transcript_url": "",
+        }
     transcript_url = ""
     if generation.status == TranscriptGeneration.Status.SUCCEEDED and hasattr(audio, "transcript"):
         transcript_url = reverse("cast-transcript:edit", args=(audio.transcript.pk,))

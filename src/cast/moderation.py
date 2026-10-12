@@ -8,12 +8,21 @@ from .models import SpamFilter
 class Moderator:
     def __init__(self, model: type[Any] | None, spamfilter: SpamFilter | None = None) -> None:
         self.model = model
-        # Allow spamfilter to be set for tests
-        self.spamfilter: SpamFilter | None
-        if spamfilter is not None:
-            self.spamfilter = spamfilter
-        else:
-            self.spamfilter = SpamFilter.get_default()
+        # An injected spam filter (used by tests) is kept for the moderator's lifetime.
+        # Without one, the default filter is looked up for every moderated comment:
+        # the default moderator lives for the whole process, so a cached row would
+        # ignore a filter installed, retrained, replaced or removed after startup.
+        self._spamfilter = spamfilter
+
+    @property
+    def spamfilter(self) -> SpamFilter | None:
+        if self._spamfilter is not None:
+            return self._spamfilter
+        return SpamFilter.get_default()
+
+    @spamfilter.setter
+    def spamfilter(self, spamfilter: SpamFilter | None) -> None:
+        self._spamfilter = spamfilter
 
     def allow(self, comment: Any, content_object: Any, request: HttpRequest) -> bool:
         """
@@ -25,8 +34,9 @@ class Moderator:
 
     def moderate(self, comment: Any, content_object: Any, request: HttpRequest) -> bool:
         message = SpamFilter.comment_to_message(comment)
-        if self.spamfilter is not None:
-            predicted_label = self.spamfilter.model.predict_label(message)
+        spamfilter = self.spamfilter
+        if spamfilter is not None:
+            predicted_label = spamfilter.model.predict_label(message)
         else:
             predicted_label = "unknown"
         if predicted_label == "spam":

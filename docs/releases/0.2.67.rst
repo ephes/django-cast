@@ -1,0 +1,121 @@
+0.2.67 (2026-10-12)
+-------------------
+
+- Strip EXIF GPS from new Wagtail image uploads before storage, retaining other
+  EXIF data such as orientation, for both in-memory and disk-backed uploads.
+  Add ``report_image_gps``, a read-only inventory of existing originals with
+  EXIF GPS. Existing media is not rewritten.
+- Fix the TypeScript typecheck baseline in audio components and frontend tests,
+  add missing module declarations, and enforce ``tsc --noEmit`` in JavaScript CI.
+- Make the default comment moderator (``cast.moderation.Moderator``) look up
+  the spam filter for every posted comment instead of once per process. It
+  used to keep the filter it found on the first comment after a start: if no
+  ``SpamFilter`` row existed yet, every later comment was published unmoderated
+  even after a model was installed, and a retrained or replaced model only took
+  effect after the web workers restarted. A filter passed to the constructor
+  is still used as is. Moderating a comment costs one extra single-row query.
+- Add cross-document view transitions to the built-in ``bootstrap4`` and
+  ``plain`` themes. Ordinary same-origin page loads crossfade under the
+  ``cast-page`` transition type when the reader has no reduced-motion
+  preference. HTMX pagination keeps its existing fade, and unsupported browsers
+  load pages as before.
+- Morph a post's title and first overview image (not counting audio player
+  cover art) between blog lists and the post detail page in the ``bootstrap4``
+  and ``plain`` themes. The new
+  render-time script ``cast/js/post-view-transition.js`` names only the post
+  being opened or left, during ``cast-page`` transitions. Sites that ship their
+  own copy of a theme's ``base.html`` instead of extending it need to add the
+  script to the ``<head>`` to get the morph.
+- Render ``#paging-area`` during ``cast-page`` transitions in the
+  ``bootstrap4`` and ``plain`` themes, so posts also morph back into the list on
+  sites that give it ``content-visibility: auto``.
+- Prevent the Podlove audio detail API from caching draft or restricted
+  responses in Django's full-site cache. Such responses now use
+  ``Cache-Control: private, no-store`` and vary on ``Cookie`` and
+  ``Authorization``, so revoked credentials or group membership are checked on
+  the next request instead of receiving a cached authorized response. Purge
+  existing Podlove detail responses from application and downstream caches when
+  deploying; the new headers cannot evict previously cached responses.
+- Apply the private-response cache policy to raw Podlove JSON, PodcastIndex
+  JSON, WebVTT, and chapters endpoints. Responses granted through restricted or
+  draft pages use ``private, no-store`` and vary on ``Cookie`` and
+  ``Authorization``. Purge existing endpoint cache entries on deployment.
+  Previously public responses retain their cache lifetime after new restrictions;
+  purge those URLs when immediate removal is required. HTML transcript views
+  retain their existing behavior.
+- Exclude Django 6.1.0 for CVE-2026-15830 reported by the dependency audit;
+  require 6.1.1 or later on that branch while retaining patched Django 5.2
+  and 6.0 support. Align the strict advisory-floor audit and compatibility
+  environments with that minimum. Refresh application locks that retain 6.1.0.
+- Raise the urllib3 security floor to 2.8.0 for the streaming and HTTPS-proxy
+  advisories also exposed by checking every audit minimum. Keep both strict
+  dependency audit jobs; refresh application locks retaining earlier urllib3.
+- Accept optional ``overview_markdown`` and ``detail_markdown`` inputs on the
+  editor API post and episode create and PATCH endpoints. Markdown is converted
+  server-side into the canonical ``paragraph``/``code`` block list and then
+  validated and sanitized like a submitted block list; responses keep returning
+  blocks. Raw HTML in Markdown is escaped, Markdown images are rejected in
+  favor of structured media blocks, and sending a block list and Markdown for
+  the same section is a ``conflict`` validation error. The parser
+  (``markdown-it-py``) ships behind the new optional ``markdown`` extra
+  (``django-cast[markdown]``); without it, Markdown requests return a
+  ``markdown_unavailable`` validation error and block-list writes are
+  unaffected.
+- Guard the comment permalink redirect (``comments/cr/<content type>/<pk>/``).
+  The stock ``django-contrib-comments`` route redirected anonymous visitors to
+  the URL of any object by primary key, which exposed slugs of draft and
+  view-restricted posts and, on sites whose user model defines
+  ``get_absolute_url``, every username. The route now only redirects to Wagtail
+  pages the requester may view (or edit) and returns 404 for everything else.
+  ``Comment.get_absolute_url()`` keeps working for comments on public posts.
+- Stop cached RSS and Atom feeds (blog and podcast) from listing an entry after
+  a Wagtail login, password, or group restriction is added to it. Previously a
+  warm feed kept serving the entry, with its content and enclosure, for up to
+  five minutes, and a feed render in flight during the change could refill the
+  cache with the stale entry. Feed cache keys now carry a generation that a
+  committed ``PageViewRestriction`` save or delete rotates with a single cache
+  write, so in-flight renders store their responses where no later request
+  reads them. Use a shared cache backend for ``CACHE_MIDDLEWARE_ALIAS`` in
+  multi-process deployments; downstream HTTP caches are not purged.
+- Recover transcript generations interrupted by a worker restart. A queued or
+  running generation older than the new ``CAST_VOXHELM_STALE_AFTER`` setting
+  (default: ``CAST_VOXHELM_POLL_TIMEOUT`` plus 15 minutes) is reported as
+  interrupted and no longer keeps the Generate control disabled. Generating
+  again resumes completing the interrupted Voxhelm job instead of submitting a
+  new one, so a job Voxhelm already finished is picked up rather than
+  transcribed twice. The completion task now
+  also marks the generation failed when the Voxhelm service cannot be
+  configured, instead of leaving it running.
+- Restrict the Wagtail images API (``<cast>/api/wagtail/images/``, including
+  its detail and ``find`` views) to active staff users. It listed every
+  original upload in unrestricted collections, including images only used by
+  drafts, with ``download_url`` links to the unprocessed originals, which can
+  carry GPS EXIF data. Anonymous and non-staff callers now receive ``403`` (or
+  ``401`` with an authentication challenge), and responses use
+  ``Cache-Control: private, no-store`` and vary on ``Cookie`` and
+  ``Authorization``. The new ``CAST_PUBLIC_IMAGES_API`` setting (default
+  ``False``) restores anonymous access.
+
+  **Upgrade note:** clients that read this endpoint anonymously stop working
+  unless the site sets ``CAST_PUBLIC_IMAGES_API = True``. The bundled themes,
+  ``cast-vue`` and ``cast-bootstrap5`` do not use it. Purge previously cached
+  responses for ``/api/wagtail/images/`` from application and CDN caches when
+  deploying. The original files themselves remain reachable at their existing
+  media URLs; this change only stops the API from enumerating them.
+- Accept DOTe transcript timestamps that use ``.`` as well as ``,`` before the
+  fraction, and read one- or two-digit fractions as decimal fractions of a
+  second (``00:00:01,5`` is 1.5 s, not 1.005 s). Previously a DOTe file with
+  ``.`` separators passed upload validation and then made the public
+  PodcastIndex transcript endpoint return a server error. DOTe uploads now
+  reject ``startTime``/``endTime`` values that are not ``HH:MM:SS,mmm``, and the
+  PodcastIndex endpoint answers ``400`` for an already stored file with an
+  invalid timestamp.
+- Format ``Audio.duration_str`` as total ``H:MM:SS`` hours, so episodes of 24
+  hours or more no longer produce values like ``1 day, 0:05:00`` in
+  ``itunes:duration``, the API ``duration`` field and the player JSON.
+- Verify Python 3.15 support against the final 3.15.0 release and add Python
+  3.15 to the tox matrix. The ``py315`` environments cover Django
+  5.2, 6.0 and 6.1 with Wagtail 7.4 and 8.0, so 3.15 is tested against the
+  supported framework range and not only against the locked dependencies.
+  CI runs ``py315-django61-wagtail80`` in its tox matrix job and no longer
+  allows Python prereleases, now that 3.15.0 is final.
