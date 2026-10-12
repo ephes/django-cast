@@ -11,9 +11,11 @@ from types import SimpleNamespace
 import pytest
 from django.core.files.base import ContentFile
 
-from cast.models import Contributor, Transcript
+from cast.models import Contributor, EpisodeContributor, Transcript
 from cast.models.contributors import ContributorVoiceReference
 from cast.voxhelm import (
+    TranscriptGenerationResult,
+    TranscriptSubmission,
     VoxhelmClient,
     VoxhelmError,
     VoxhelmTranscriptService,
@@ -340,6 +342,78 @@ def test_submit_for_audio_omits_known_speakers_when_disabled(settings, mocker, a
     VoxhelmTranscriptService(client=client).submit_for_audio(audio, episode=episode_with(johannes))
 
     assert "strategy" not in request_json.call_args.kwargs["payload"]["diarization"]
+
+
+def known_speaker_client():
+    return VoxhelmClient(
+        api_base="https://voxhelm.example",
+        api_key="secret",
+        diarization_enabled=True,
+        known_speaker_enabled=True,
+    )
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_resolves_episode_from_audio_for_known_speakers(settings, mocker, episode):
+    # Naming only the audio (``generate_transcripts --audio-id``) must still send the references.
+    settings.MEDIA_URL = "https://media.example.com/"
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/ref.m4a")
+    host = Contributor.objects.create(display_name="Host", slug="audio-only-host")
+    EpisodeContributor.objects.create(episode=episode, contributor=host, role=EpisodeContributor.ROLE_HOST)
+    approved_range_reference(host, episode.podcast_audio, "10.0", "20.0")
+    client = known_speaker_client()
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(episode.podcast_audio)
+
+    diarization = request_json.call_args.kwargs["payload"]["diarization"]
+    assert [speaker["name"] for speaker in diarization["known_speakers"]] == ["Host"]
+    assert submission.warnings == ()
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_warns_when_audio_has_no_single_episode(settings, mocker, audio, caplog):
+    settings.MEDIA_URL = "https://media.example.com/"
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/ref.m4a")
+    client = known_speaker_client()
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job", "state": "queued"})
+
+    with caplog.at_level("WARNING", logger="cast.voxhelm.service"):
+        submission = VoxhelmTranscriptService(client=client).submit_for_audio(audio)
+
+    assert "known_speakers" not in request_json.call_args.kwargs["payload"]["diarization"]
+    assert len(submission.warnings) == 1
+    assert "does not belong to exactly one episode" in submission.warnings[0]
+    assert submission.warnings[0] in caplog.text
+
+
+@pytest.mark.django_db
+def test_submit_for_audio_warns_when_episode_has_no_usable_references(settings, mocker, audio):
+    settings.MEDIA_URL = "https://media.example.com/"
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://cdn.example/ref.m4a")
+    unseeded = Contributor.objects.create(display_name="Unseeded", slug="unseeded")
+    client = known_speaker_client()
+    mocker.patch.object(client, "request_json", return_value={"id": "job", "state": "queued"})
+
+    submission = VoxhelmTranscriptService(client=client).submit_for_audio(audio, episode=episode_with(unseeded))
+
+    assert len(submission.warnings) == 1
+    assert "no assigned contributor with an approved, usable voice reference" in submission.warnings[0]
+
+
+@pytest.mark.django_db
+def test_generate_for_audio_passes_submission_warnings_on(mocker, audio):
+    service = VoxhelmTranscriptService(client=known_speaker_client())
+    submission = TranscriptSubmission(
+        job_id="job", source_url="https://cdn.example/a.m4a", task_ref="ref", job_payload={}, warnings=("careful",)
+    )
+    mocker.patch.object(service, "submit_for_audio", return_value=submission)
+    completed = TranscriptGenerationResult(
+        transcript=Transcript(audio=audio), created=True, job_id="job", source_url=submission.source_url
+    )
+    mocker.patch.object(service, "complete_audio_job", return_value=completed)
+
+    assert service.generate_for_audio(audio).warnings == ("careful",)
 
 
 class FakeCompleteClient:

@@ -1177,6 +1177,25 @@ def test_generate_transcripts_does_not_skip_empty_transcript(mocker, audio):
 
 
 @pytest.mark.django_db
+def test_generate_transcripts_reports_service_warnings(mocker, audio):
+    service = mocker.Mock()
+    service.generate_for_audio.return_value = TranscriptGenerationResult(
+        transcript=create_transcript(audio=audio),
+        created=False,
+        job_id="job-123",
+        source_url="https://media.example.com/episode.m4a",
+        warnings=("no voice references were sent",),
+    )
+    mocker.patch("cast.management.commands.generate_transcripts.VoxhelmTranscriptService", return_value=service)
+    output, errors = StringIO(), StringIO()
+
+    call_command("generate_transcripts", "--audio-id", str(audio.pk), "--force", stdout=output, stderr=errors)
+
+    assert f"warning audio={audio.pk}: no voice references were sent" in errors.getvalue()
+    assert "processed=1 created=0 updated=1 skipped=0 errors=0" in output.getvalue()
+
+
+@pytest.mark.django_db
 def test_generate_transcripts_calls_service_for_episode(mocker, audio):
     transcript = create_transcript(audio=audio)
     queryset = mocker.Mock()

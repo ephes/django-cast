@@ -23,3 +23,11 @@
   ``allow_overwrite``) can leave a partial file. Failures are reported, the
   remaining paths are still processed, and the command exits non-zero. The
   default mode and ``media_restore`` are unchanged.
+- Send known-speaker voice references whenever a diarized transcript request
+  names only the audio, such as ``generate_transcripts --audio-id``. The
+  episode is now resolved from the audio when it belongs to exactly one
+  episode; before, such requests silently ran without references and returned
+  anonymous diarization labels only.
+- Warn when known-speaker recognition is enabled but a diarized request sends
+  no voice references. ``generate_transcripts`` prints the warning, and the
+  service logs it on ``cast.voxhelm.service`` for queued requests.

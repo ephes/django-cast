@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -22,6 +23,8 @@ from .task_refs import resolve_audio_task_ref
 if TYPE_CHECKING:
     from cast.models.audio import Audio
 
+logger = logging.getLogger(__name__)
+
 DOTE_REQUIRED_KEYS = {"startTime", "endTime", "speakerDesignation", "text"}
 
 
@@ -31,6 +34,7 @@ class TranscriptGenerationResult:
     created: bool
     job_id: str
     source_url: str
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,7 @@ class TranscriptSubmission:
     source_url: str
     task_ref: str
     job_payload: dict[str, Any]
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -164,9 +169,15 @@ def count_episode_diarization_speakers(episode: Any) -> int | None:
     return len(contributor_ids)
 
 
-def resolve_diarization_speaker_count(audio: Audio, *, episode: Any | None = None) -> int | None:
+def resolve_audio_episode(audio: Audio, *, episode: Any | None = None) -> Any | None:
+    """Return the episode that supplies contributor context for an audio.
+
+    An explicitly passed episode wins. Otherwise the audio's own episode is
+    used when it belongs to exactly one, so a request that only names the audio
+    still gets the speaker-count hint and the known-speaker voice references.
+    """
     if episode is not None:
-        return count_episode_diarization_speakers(episode)
+        return episode
     episode_manager = getattr(audio, "episodes", None)
     if episode_manager is None:
         return None
@@ -174,7 +185,25 @@ def resolve_diarization_speaker_count(audio: Audio, *, episode: Any | None = Non
     episodes = list(episode_manager.all())
     if len(episodes) != 1:
         return None
-    return count_episode_diarization_speakers(episodes[0])
+    return episodes[0]
+
+
+def resolve_diarization_speaker_count(audio: Audio, *, episode: Any | None = None) -> int | None:
+    resolved_episode = resolve_audio_episode(audio, episode=episode)
+    if resolved_episode is None:
+        return None
+    return count_episode_diarization_speakers(resolved_episode)
+
+
+def build_missing_known_speakers_warning(audio: Audio, *, episode: Any | None) -> str:
+    if episode is None:
+        reason = "the audio does not belong to exactly one episode; pass the episode explicitly"
+    else:
+        reason = "the episode has no assigned contributor with an approved, usable voice reference"
+    return (
+        f"Known-speaker recognition is enabled, but no voice references were sent for audio {audio.pk}: {reason}. "
+        "The transcript will only carry anonymous diarization labels."
+    )
 
 
 def build_known_speaker_references(episode: Any) -> list[dict[str, Any]]:
@@ -293,8 +322,15 @@ class VoxhelmTranscriptService:
             diarization_speaker_count=speaker_count,
         )
         known_speakers: list[dict[str, Any]] = []
-        if diarization_enabled and client_known_speaker_enabled(self.client) and episode is not None:
-            known_speakers = build_known_speaker_references(episode)
+        warnings: list[str] = []
+        if diarization_enabled and client_known_speaker_enabled(self.client):
+            reference_episode = resolve_audio_episode(audio, episode=episode)
+            if reference_episode is not None:
+                known_speakers = build_known_speaker_references(reference_episode)
+            if not known_speakers:
+                warning = build_missing_known_speakers_warning(audio, episode=reference_episode)
+                logger.warning(warning)
+                warnings.append(warning)
         extra_job_kwargs: dict[str, Any] = {}
         if known_speakers:
             extra_job_kwargs["known_speakers"] = known_speakers
@@ -317,6 +353,7 @@ class VoxhelmTranscriptService:
             source_url=source_url,
             task_ref=resolved_task_ref,
             job_payload=job_payload,
+            warnings=tuple(warnings),
         )
 
     def complete_audio_job(
@@ -360,12 +397,13 @@ class VoxhelmTranscriptService:
         episode: Any | None = None,
     ) -> TranscriptGenerationResult:
         submission = self.submit_for_audio(audio, task_ref=task_ref, episode=episode)
-        return self.complete_audio_job(
+        result = self.complete_audio_job(
             audio,
             job_id=submission.job_id,
             source_url=submission.source_url,
             initial_job_payload=submission.job_payload,
         )
+        return replace(result, warnings=submission.warnings)
 
     @staticmethod
     def _get_or_create_transcript(*, audio: Audio) -> tuple[Transcript, bool]:

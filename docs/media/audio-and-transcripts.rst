@@ -441,6 +441,14 @@ temporary URL, as uploaded clips. Uploaded clips on no-URL private storage are
 kept private and skipped for automatic handoff; use source ranges for those
 references. References are never public profile URLs.
 
+The references come from the episode the audio belongs to. A request that names
+only the audio, such as ``generate_transcripts --audio-id``, resolves that
+episode itself when the audio belongs to exactly one episode. If no references
+can be sent, because the audio is shared by several episodes or has none, or
+because no assigned contributor has an approved usable reference, the request
+still runs but returns anonymous diarization labels only. django-cast then logs
+a warning on ``cast.voxhelm.service``, and ``generate_transcripts`` prints it.
+
 Voxhelm classifies the transcript segments against those references and returns
 per-segment *suggestions*: the most likely contributor, a candidate list,
 confidence, a margin, an uncertainty flag, and the raw anonymous diarization

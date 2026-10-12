@@ -74,6 +74,8 @@ class Command(BaseCommand):
                 self.stderr.write(f"error audio={audio.pk}: {exc}")
                 continue
 
+            for warning in result.warnings:
+                self.stderr.write(self.style.WARNING(f"warning audio={audio.pk}: {warning}"))
             if result.created:
                 created += 1
                 action = "created"
