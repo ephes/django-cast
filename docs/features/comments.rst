@@ -58,6 +58,13 @@ Settings
     Master switch for the entire comment system. Set to ``True`` to enable
     comments. Defaults to ``False``.
 
+``CAST_COMMENTS_POST_RATE_LIMIT`` / ``CAST_COMMENTS_POST_RATE_WINDOW``
+    How many comments one client may post per window (defaults: ``20`` per
+    ``600`` seconds, ``0`` disables the limit). Further posts get a ``429``
+    response. Behind a reverse proxy this needs
+    ``REST_FRAMEWORK["NUM_PROXIES"]``; see
+    :ref:`CAST_COMMENTS_POST_RATE_LIMIT <cast_comments_post_rate_limit>`.
+
 ``CAST_COMMENTS_EXCLUDE_FIELDS``
     Tuple of form field names to hide from the comment form. Useful for
     removing fields like ``email``, ``url``, or ``title``. Defaults to ``()``.
@@ -185,6 +192,12 @@ Server-Side Flow
 
 The ``post_comment_ajax`` view handles the request:
 
+0. **Rate limit** -- a post that is not a preview counts against the
+   client's budget (:ref:`CAST_COMMENTS_POST_RATE_LIMIT
+   <cast_comments_post_rate_limit>`). Over the limit the view answers ``429``
+   with a ``Retry-After`` header and the JSON error shape described below
+   (``success`` false, the message under ``errors.comment``). The non-AJAX
+   post view shares the budget and answers ``429`` as plain text.
 1. **Authentication check** -- if the user is logged in, ``name`` and
    ``email`` are auto-filled from the user profile when not provided.
 2. **Target resolution** -- the ``content_type`` and ``object_pk`` fields

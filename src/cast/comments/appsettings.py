@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     AUTHOR_EDIT_WINDOW: int
     EDIT_RATE_LIMIT: int
     EDIT_RATE_WINDOW: int
+    POST_RATE_LIMIT: int
+    POST_RATE_WINDOW: int
 
 
 def _central_default(setting_name: str) -> Any:
@@ -81,5 +83,13 @@ def __getattr__(name: str) -> Any:
     if name == "EDIT_RATE_WINDOW":
         return int(
             getattr(settings, "CAST_COMMENTS_EDIT_RATE_WINDOW", _central_default("CAST_COMMENTS_EDIT_RATE_WINDOW"))
+        )
+    if name == "POST_RATE_LIMIT":
+        return int(
+            getattr(settings, "CAST_COMMENTS_POST_RATE_LIMIT", _central_default("CAST_COMMENTS_POST_RATE_LIMIT"))
+        )
+    if name == "POST_RATE_WINDOW":
+        return int(
+            getattr(settings, "CAST_COMMENTS_POST_RATE_WINDOW", _central_default("CAST_COMMENTS_POST_RATE_WINDOW"))
         )
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

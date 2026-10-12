@@ -233,7 +233,7 @@ def check_cast_comments_author_edits_tunables(
     databases: Sequence[str] | None = None,
     **kwargs: Any,
 ) -> list[Error]:
-    """Validate the numeric author-edit tunables are non-negative integers.
+    """Validate the numeric comment tunables are non-negative integers.
 
     These are coerced with ``int()`` at runtime, so a non-integer value would
     otherwise surface as an opaque runtime error, and a negative value would give
@@ -241,12 +241,15 @@ def check_cast_comments_author_edits_tunables(
     """
     errors: list[Error] = []
     # ``OWNED_IDS_CAP`` 0 means "no cap", ``AUTHOR_EDIT_WINDOW`` 0 means disabled,
-    # and ``EDIT_RATE_LIMIT`` 0 means "disabled"; the rate window must be positive.
+    # and ``EDIT_RATE_LIMIT``/``POST_RATE_LIMIT`` 0 mean "disabled"; the rate
+    # windows must be positive.
     for name, minimum in (
         ("CAST_COMMENTS_OWNED_IDS_CAP", 0),
         ("CAST_COMMENTS_AUTHOR_EDIT_WINDOW", 0),
         ("CAST_COMMENTS_EDIT_RATE_LIMIT", 0),
         ("CAST_COMMENTS_EDIT_RATE_WINDOW", 1),
+        ("CAST_COMMENTS_POST_RATE_LIMIT", 0),
+        ("CAST_COMMENTS_POST_RATE_WINDOW", 1),
     ):
         value = getattr(settings, name, None)
         if value is None:

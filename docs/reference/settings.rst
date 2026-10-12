@@ -121,6 +121,34 @@ integer. Only relevant when
 :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
 enabled.
 
+.. _cast_comments_post_rate_limit:
+
+CAST_COMMENTS_POST_RATE_LIMIT
+=============================
+
+The maximum number of comments one client may post within
+``CAST_COMMENTS_POST_RATE_WINDOW`` seconds, over both comment post views.
+Defaults to ``20``; ``0`` **disables** the limit. Logged-in users are counted
+per user, anonymous visitors per client address. Further posts are answered
+with ``429 Too Many Requests`` and a ``Retry-After`` header until earlier posts
+leave the window. Previews are not counted.
+
+The client address is determined by Django REST framework: behind a reverse
+proxy set ``REST_FRAMEWORK["NUM_PROXIES"]`` to the number of trusted proxies,
+otherwise all visitors may share one budget or a client can pick its own
+address through ``X-Forwarded-For``. Counters live in the ``default`` cache,
+which has to be shared by all worker processes for the limit to hold across
+them.
+
+.. _cast_comments_post_rate_window:
+
+CAST_COMMENTS_POST_RATE_WINDOW
+==============================
+
+The length, in seconds, of the sliding window used by
+``CAST_COMMENTS_POST_RATE_LIMIT``. Defaults to ``600`` and must be a positive
+integer.
+
 **********
 Pagination
 **********

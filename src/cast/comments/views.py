@@ -32,6 +32,7 @@ from wagtail.models import Page
 from cast.audio_access import page_is_publicly_viewable, user_can_edit_page
 
 from . import appsettings, author_edits
+from .throttle import comment_post_retry_after
 from .utils import comment_target_is_accessible, comments_are_open, get_comment_context_data, get_comment_template_name
 
 if TYPE_CHECKING:
@@ -47,6 +48,11 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
     is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
     if not is_ajax:
         return HttpResponseBadRequest("Expecting Ajax call")
+
+    if "preview" not in request.POST:
+        retry_after = comment_post_retry_after(request)
+        if retry_after is not None:
+            return _too_many_posts(retry_after, ajax=True, object_id=request.POST.get("object_pk"))
 
     data = request.POST.copy()
     if request.user.is_authenticated:
@@ -115,6 +121,31 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
     # comment_was_posted receiver records session ownership for all post paths.
     signals.comment_was_posted.send(sender=comment.__class__, comment=comment, request=request)
     return _ajax_result(request, form, "post", comment, object_id=data.get("object_pk"))
+
+
+TOO_MANY_POSTS_MESSAGE = "Too many comments were posted from your connection. Please try again later."
+
+
+def _too_many_posts(retry_after: int, *, ajax: bool, object_id: str | None = None) -> HttpResponse:
+    """429 for a rate-limited post."""
+    response: HttpResponse
+    if ajax:
+        # Same shape as a validation failure, so the bundled script shows the
+        # message next to the comment field.
+        response = JsonResponse(
+            {
+                "success": False,
+                "action": "post",
+                "errors": {"comment": TOO_MANY_POSTS_MESSAGE},
+                "object_id": object_id,
+                "use_threadedcomments": bool(appsettings.USE_THREADEDCOMMENTS),
+            },
+            status=429,
+        )
+    else:
+        response = HttpResponse(TOO_MANY_POSTS_MESSAGE, status=429, content_type="text/plain; charset=utf-8")
+    response["Retry-After"] = str(retry_after)
+    return response
 
 
 def _resolve_comment_target(data: QueryDict, using: str | None = None) -> tuple[object | None, HttpResponse | None]:
@@ -338,6 +369,10 @@ def post_comment(request: HttpRequest, next: str | None = None, using: str | Non
     """
     from django_comments.views.comments import post_comment as stock_post_comment
 
+    if "preview" not in request.POST:
+        retry_after = comment_post_retry_after(request)
+        if retry_after is not None:
+            return _too_many_posts(retry_after, ajax=False)
     target, error = _resolve_comment_target(request.POST, using)
     if error is not None:
         return error
