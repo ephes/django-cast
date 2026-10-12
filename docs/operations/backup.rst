@@ -36,5 +36,10 @@ Media Backup/Restore
 Backup and restore are supported by the `media_backup` and `media_restore`
 :ref:`management commands <cast_management_commands>`.
 
+``media_backup`` only copies files that are missing in the backup. After
+replacing a file in place (``media_replace``), run
+``media_backup --refresh-changed`` so the backup does not keep the old bytes
+under the same path.
+
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.

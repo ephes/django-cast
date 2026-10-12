@@ -145,18 +145,66 @@ configured in your ``STORAGES`` setting. See
 media_backup
 ------------
 
-Copy all media files from production storage to backup storage. Only files
-not already present in the backup are copied.
+Copy all media files from production storage to backup storage. By default
+only files not already present in the backup are copied; a file that exists
+under the same path in both storages is never read or compared.
 
 .. code-block:: bash
 
+    # Copy files that are missing in the backup
     python manage.py media_backup
+
+    # Also refresh backup copies whose content differs from production
+    python manage.py media_backup --refresh-changed
+
+Options:
+
+``--refresh-changed``
+    Also compare every file that exists in both storages and overwrite the
+    backup copy when it differs from production. Use this after changing a
+    file in place, for example with ``media_replace``: without it the backup
+    keeps the bytes it copied first, and a later ``media_restore`` would bring
+    back the old file.
+
+    Files are compared by content. Different sizes mark a file as changed
+    without reading it; equal sizes prove nothing, so both copies are then read
+    completely and their SHA-256 digests compared. Every existing file is
+    therefore downloaded from both storages on each run with this option, which
+    costs time and transfer on remote storage. Unchanged files are not
+    rewritten.
+
+    A changed file is first copied to a temporary key next to the target
+    (``<path>.django-cast-refresh-<random>.tmp``) in the backup storage, and
+    the existing backup copy is only overwritten from that complete staged
+    copy. The existing copy is never deleted first. If production cannot be
+    read, the staged copy cannot be written, or the backup storage stores the
+    new bytes under a generated name instead of overwriting (Django's
+    ``FileSystemStorage`` without ``allow_overwrite``, or S3 storage with
+    ``file_overwrite = False``), the previous backup copy is kept, the generated
+    copy is removed, and the path is reported as an error. A staged copy is
+    removed again whether the refresh succeeds or fails.
+
+    The final overwrite itself is only as safe as the backup storage backend
+    makes it. Object storage replaces an object atomically, so a failed
+    overwrite keeps the previous object. A backend that writes in place
+    (``FileSystemStorage`` with ``allow_overwrite``) can leave a partial file
+    under the path if that last write fails; run the command again to repair
+    it. A run that is killed can leave a staged ``.tmp`` key in the backup
+    storage; remove it before running ``media_restore``.
+
+    With this option the command prints
+    ``copied=<n> refreshed=<n> unchanged=<n> errors=<n>``. A path that cannot be
+    checked, copied, compared or refreshed does not stop the run, but the
+    command then exits with ``CommandError`` (a non-zero exit status). Without
+    the option the first storage error still aborts the command.
 
 media_restore
 -------------
 
 Restore media files from backup storage to production storage. Only files
-not already present in production are copied.
+not already present in production are copied. ``media_restore`` never
+overwrites an existing production file, so it has no ``--refresh-changed``
+option.
 
 .. code-block:: bash
 

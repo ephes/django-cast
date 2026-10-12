@@ -7,3 +7,19 @@
   partial run from a clean one. The remaining paths are still attempted and the
   summary is still printed first. Automation that relied on the old exit status
   needs to handle the failure.
+- Add ``media_backup --refresh-changed``. ``media_backup`` skips every path
+  that already exists in the backup, so a file changed in place (for example by
+  ``media_replace``) kept its old bytes in the backup forever and
+  ``media_restore`` would have brought the old file back. The new option
+  compares existing files by content (size as a shortcut for "different",
+  SHA-256 of both copies when the sizes match) and overwrites backup copies
+  that differ. The new bytes are staged in the backup storage first and the
+  previous copy is never deleted, so a production file that cannot be read, a
+  staged copy that cannot be written, or a backup storage that does not
+  overwrite existing names leaves the previous backup copy in place. If the
+  final overwrite itself fails, what remains under the path depends on the
+  backup storage backend: object storage keeps the previous object, a
+  backend that writes in place (``FileSystemStorage`` with
+  ``allow_overwrite``) can leave a partial file. Failures are reported, the
+  remaining paths are still processed, and the command exits non-zero. The
+  default mode and ``media_restore`` are unchanged.

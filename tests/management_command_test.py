@@ -168,6 +168,266 @@ def test_media_backup_existing_file_in_backup(stub_storages):
     assert backup.was_not_added_by_backup("foobar.jpg")  # type: ignore
 
 
+class StubOverwriteStorage:
+    """In-memory storage that overwrites existing names, like object storage does."""
+
+    def __init__(self, files: dict[str, bytes] | None = None) -> None:
+        self._files: dict[str, bytes] = dict(files or {})
+        self.saved: list[str] = []
+        self.deleted: list[str] = []
+        self.opened: list[str] = []
+
+    def exists(self, path: str) -> bool:
+        return path in self._files
+
+    def size(self, path: str) -> int:
+        return len(self._files[path])
+
+    def listdir(self, _path: str) -> tuple[list[str], list[str]]:
+        return [], list(self._files)
+
+    def save(self, name: str, content: BytesIO) -> str:
+        self.saved.append(name)
+        self._files[name] = content.read()
+        return name
+
+    def delete(self, path: str) -> None:
+        self.deleted.append(path)
+        self._files.pop(path, None)
+
+    @contextmanager
+    def open(self, name: str, _mode: str) -> Iterator[BytesIO]:
+        self.opened.append(name)
+        yield BytesIO(self._files[name])
+
+    def staged(self) -> list[str]:
+        return [name for name in self._files if ".django-cast-refresh-" in name]
+
+
+def patch_backup_storages(mocker, production, backup):
+    mocker.patch(
+        "cast.management.commands.media_backup.get_production_and_backup_storage",
+        return_value=(production, backup),
+    )
+
+
+def test_media_backup_default_keeps_changed_backup_copy(mocker):
+    # the default mode stays a cheap copy of missing paths
+    production = StubOverwriteStorage({"video.mp4": b"new!", "added.mp4": b"added"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!"})
+    patch_backup_storages(mocker, production, backup)
+    output = StringIO()
+
+    call_command("media_backup", stdout=output)
+
+    assert backup._files == {"video.mp4": b"old!", "added.mp4": b"added"}
+    assert "refreshed=" not in output.getvalue()
+
+
+def test_media_backup_refresh_changed_replaces_equal_length_changed_copy(mocker):
+    # same path, same length, different bytes: size alone would call them identical
+    production = StubOverwriteStorage({"video.mp4": b"new!", "same.mp4": b"same", "added.mp4": b"added"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!", "same.mp4": b"same"})
+    patch_backup_storages(mocker, production, backup)
+    output = StringIO()
+
+    call_command("media_backup", refresh_changed=True, stdout=output)
+
+    assert backup._files == {"video.mp4": b"new!", "same.mp4": b"same", "added.mp4": b"added"}
+    # the unchanged object was compared but never rewritten
+    assert "same.mp4" not in backup.saved
+    assert backup.staged() == []
+    assert "copied=1 refreshed=1 unchanged=1 errors=0" in output.getvalue()
+
+
+def test_media_backup_refresh_changed_skips_content_read_when_sizes_differ(mocker):
+    production = StubOverwriteStorage({"video.mp4": b"longer than before"})
+    backup = StubOverwriteStorage({"video.mp4": b"short"})
+    patch_backup_storages(mocker, production, backup)
+
+    call_command("media_backup", refresh_changed=True, stdout=StringIO())
+
+    assert backup._files == {"video.mp4": b"longer than before"}
+    # the backup copy was only read back from its staged key, never hashed
+    assert "video.mp4" not in backup.opened
+
+
+def test_media_backup_refresh_changed_compares_content_without_size_support(mocker):
+    production = StubOverwriteStorage({"video.mp4": b"new!", "same.mp4": b"same"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!", "same.mp4": b"same"})
+    mocker.patch.object(backup, "size", side_effect=NotImplementedError)
+    patch_backup_storages(mocker, production, backup)
+    output = StringIO()
+
+    call_command("media_backup", refresh_changed=True, stdout=output)
+
+    assert backup._files == {"video.mp4": b"new!", "same.mp4": b"same"}
+    assert "copied=0 refreshed=1 unchanged=1 errors=0" in output.getvalue()
+
+
+def test_media_backup_refresh_keeps_backup_copy_when_production_read_fails(mocker):
+    production = StubOverwriteStorage({"bad.mp4": b"new bad", "good.mp4": b"new good"})
+    backup = StubOverwriteStorage({"bad.mp4": b"old", "good.mp4": b"old"})
+    patch_backup_storages(mocker, production, backup)
+    original_save = backup.save
+
+    def fail_while_staging_bad(name, content):
+        if name.startswith("bad.mp4.django-cast-refresh-"):
+            content.read(3)
+            raise RuntimeError("connection reset")
+        return original_save(name, content)
+
+    mocker.patch.object(backup, "save", side_effect=fail_while_staging_bad)
+    output = StringIO()
+    error_output = StringIO()
+
+    with pytest.raises(CommandError, match=r"1 path\(s\) could not be backed up") as err:
+        call_command("media_backup", refresh_changed=True, stdout=output, stderr=error_output)
+
+    assert err.value.returncode == 1
+    # the previous backup bytes survive, and the later path was still refreshed
+    assert backup._files == {"bad.mp4": b"old", "good.mp4": b"new good"}
+    assert "error backing up bad.mp4: connection reset" in error_output.getvalue()
+    assert "copied=0 refreshed=1 unchanged=0 errors=1" in output.getvalue()
+
+
+def test_media_backup_refresh_removes_partial_staged_copy_when_staging_fails(mocker):
+    # like FileSystemStorage: the object exists under the requested key before save() raises
+    production = StubOverwriteStorage({"video.mp4": b"new!"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!"})
+    patch_backup_storages(mocker, production, backup)
+
+    def write_partial_object_then_fail(name, content):
+        backup._files[name] = content.read(2)
+        raise RuntimeError("connection reset")
+
+    mocker.patch.object(backup, "save", side_effect=write_partial_object_then_fail)
+    error_output = StringIO()
+
+    with pytest.raises(CommandError):
+        call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
+
+    # no partial .tmp object is left for media_restore to copy into production
+    assert backup._files == {"video.mp4": b"old!"}
+    assert "error backing up video.mp4: connection reset" in error_output.getvalue()
+
+
+def test_media_backup_refresh_counts_failed_existence_check_and_continues(mocker):
+    production = StubOverwriteStorage({"bad.mp4": b"new bad", "good.mp4": b"new good", "added.mp4": b"added"})
+    backup = StubOverwriteStorage({"bad.mp4": b"old", "good.mp4": b"old"})
+    patch_backup_storages(mocker, production, backup)
+    original_exists = backup.exists
+
+    def fail_for_bad(path):
+        if path == "bad.mp4":
+            raise RuntimeError("service unavailable")
+        return original_exists(path)
+
+    mocker.patch.object(backup, "exists", side_effect=fail_for_bad)
+    output = StringIO()
+    error_output = StringIO()
+
+    with pytest.raises(CommandError, match=r"1 path\(s\) could not be backed up"):
+        call_command("media_backup", refresh_changed=True, stdout=output, stderr=error_output)
+
+    assert backup._files == {"bad.mp4": b"old", "good.mp4": b"new good", "added.mp4": b"added"}
+    assert "error backing up bad.mp4: service unavailable" in error_output.getvalue()
+    assert "copied=1 refreshed=1 unchanged=0 errors=1" in output.getvalue()
+
+
+def test_media_backup_default_mode_still_stops_at_the_first_failure(mocker):
+    production = StubOverwriteStorage({"bad.mp4": b"bad", "later.mp4": b"later"})
+    backup = StubOverwriteStorage()
+    patch_backup_storages(mocker, production, backup)
+    mocker.patch.object(backup, "exists", side_effect=RuntimeError("service unavailable"))
+
+    with pytest.raises(RuntimeError, match="service unavailable"):
+        call_command("media_backup", stdout=StringIO())
+
+    assert backup._files == {}
+
+
+def test_media_backup_refresh_keeps_backup_copy_when_staged_copy_is_missing(mocker):
+    production = StubOverwriteStorage({"video.mp4": b"new!"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!"})
+    patch_backup_storages(mocker, production, backup)
+    mocker.patch.object(backup, "save", return_value="missing-stage.tmp")
+    error_output = StringIO()
+
+    with pytest.raises(CommandError):
+        call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
+
+    assert backup._files == {"video.mp4": b"old!"}
+    assert "error backing up video.mp4: staged copy missing-stage.tmp was not saved" in error_output.getvalue()
+
+
+@pytest.mark.parametrize("generated_copy_exists", [True, False])
+def test_media_backup_refresh_keeps_backup_copy_when_storage_does_not_overwrite(mocker, generated_copy_exists):
+    production = StubOverwriteStorage({"video.mp4": b"new!"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!"})
+    patch_backup_storages(mocker, production, backup)
+    original_save = backup.save
+
+    def save_under_generated_name(name, content):
+        if name == "video.mp4":
+            if generated_copy_exists:
+                return original_save("video_1.mp4", content)
+            return "video_1.mp4"
+        return original_save(name, content)
+
+    mocker.patch.object(backup, "save", side_effect=save_under_generated_name)
+    error_output = StringIO()
+
+    with pytest.raises(CommandError):
+        call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
+
+    # neither the stray generated copy nor the staged copy is left behind
+    assert backup._files == {"video.mp4": b"old!"}
+    assert "saved the refreshed copy as video_1.mp4 instead of overwriting video.mp4" in error_output.getvalue()
+
+
+def test_media_backup_refresh_reports_staged_copy_that_cannot_be_removed(mocker):
+    production = StubOverwriteStorage({"video.mp4": b"new!"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!"})
+    patch_backup_storages(mocker, production, backup)
+    mocker.patch.object(backup, "delete", side_effect=RuntimeError("denied"))
+    error_output = StringIO()
+
+    with pytest.raises(CommandError):
+        call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
+
+    assert backup._files["video.mp4"] == b"new!"
+    assert "error backing up video.mp4: could not remove staged copy video.mp4.django-cast-refresh-" in (
+        error_output.getvalue()
+    )
+
+
+def test_sync_media_files_counts_refresh_errors_without_reporter():
+    from cast.management.commands.storage_backend import sync_media_files
+
+    production = StubOverwriteStorage({"video.mp4": b"new!"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!"})
+    backup.save = Mock(side_effect=RuntimeError("boom"))  # type: ignore[method-assign]
+
+    result = sync_media_files(production, backup, refresh_changed=True)  # type: ignore[arg-type]
+
+    assert result.errors == 1
+    assert backup._files == {"video.mp4": b"old!"}
+
+
+def test_media_restore_never_overwrites_production(mocker):
+    production = StubOverwriteStorage({"video.mp4": b"new!"})
+    backup = StubOverwriteStorage({"video.mp4": b"old!", "lost.mp4": b"lost"})
+    mocker.patch(
+        "cast.management.commands.media_restore.get_production_and_backup_storage",
+        return_value=(production, backup),
+    )
+
+    call_command("media_restore")
+
+    assert production._files == {"video.mp4": b"new!", "lost.mp4": b"lost"}
+
+
 def test_media_replace_requires_explicit_confirmation(mocker):
     output = StringIO()
     production = StubProductionStorage()
