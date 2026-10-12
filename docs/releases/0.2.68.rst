@@ -42,3 +42,14 @@
   long-running process the styleguide kept generating renditions, also when
   the command had failed. The previous value (or the absence of the setting)
   is now restored on success and on failure.
+- ``scripts/benchmark_typeahead.py`` (development benchmark, not shipped)
+  checks its target before it migrates or writes. ``seed`` and ``all`` ran the
+  migrations, pointed the default Site at the page tree root and created the
+  benchmark user before refusing a database with real Blogs. A read-only
+  preflight now refuses first: any settings module other than
+  ``scripts.typeahead_benchmark_settings``, Blogs outside the
+  ``typeahead-benchmark-`` prefix, pages outside those Blogs (other than the
+  tree root and Wagtail's untouched default home page), and user accounts
+  other than ``typeahead-benchmark``. Empty, freshly migrated and previously
+  seeded benchmark databases work as before. ``scripts/benchmark_feeds.py``
+  seeds through the same check.
