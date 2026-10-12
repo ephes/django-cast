@@ -339,6 +339,9 @@ Sync media between storages::
     # Backup from production to backup storage
     python manage.py media_backup
 
+    # Also refresh backup copies of files that changed in place
+    python manage.py media_backup --refresh-changed
+
     # Restore from backup to production
     python manage.py media_restore
 
