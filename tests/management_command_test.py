@@ -1022,11 +1022,11 @@ def test_recalc_video_posters_continues_after_error_and_exits_nonzero(mocker):
         call_command("recalc_video_posters", stdout=output, stderr=error_output)
 
     # Every video was attempted; the healthy one was saved despite the failures around it.
-    first.create_poster.assert_called_once_with()
+    first.create_poster.assert_called_once_with(raise_errors=True)
     first.save.assert_not_called()
-    second.create_poster.assert_called_once_with()
+    second.create_poster.assert_called_once_with(raise_errors=True)
     second.save.assert_called_once_with(poster=False)
-    third.create_poster.assert_called_once_with()
+    third.create_poster.assert_called_once_with(raise_errors=True)
     assert "error recalculating poster for video 1: boom" in error_output.getvalue()
     assert "error recalculating poster for video 3: cannot save" in error_output.getvalue()
     # The summary is still printed before the command fails.
@@ -1045,6 +1045,51 @@ def test_recalc_video_posters_succeeds_when_every_poster_was_recalculated(mocker
         video.save.assert_called_once_with(poster=False)
     assert "processed=2 errors=0" in output.getvalue()
     assert error_output.getvalue() == ""
+
+
+@pytest.mark.django_db
+def test_recalc_video_posters_reports_real_poster_generation_failures(mocker):
+    """Through the real ``Video.create_poster``: it logs and swallows failures for uploads."""
+    from cast.models import Video
+
+    output = StringIO()
+    error_output = StringIO()
+    failing = Video(pk=1)
+    without_dimensions = Video(pk=2)
+    healthy = Video(pk=3)
+    existing = Video(pk=4, poster="cast_videos/poster/existing.jpg")
+    not_wanted = Video(pk=5)
+    not_wanted.calc_poster = False
+
+    def create(video):
+        if video is failing:
+            raise RuntimeError("ffmpeg exited with 1")
+        if video is healthy:
+            video.poster = "cast_videos/poster/new.jpg"
+        # without_dimensions: _create_poster returns without a poster
+
+    mocker.patch.object(Video, "_create_poster", autospec=True, side_effect=create)
+    save = mocker.patch.object(Video, "save", autospec=True)
+    _stub_videos(mocker, [failing, without_dimensions, healthy, existing, not_wanted])
+
+    with pytest.raises(CommandError, match="^2 of 5 video posters could not be recalculated$"):
+        call_command("recalc_video_posters", stdout=output, stderr=error_output)
+
+    assert "error recalculating poster for video 1: ffmpeg exited with 1" in error_output.getvalue()
+    assert "error recalculating poster for video 2: no poster was created" in error_output.getvalue()
+    assert [call.args[0].pk for call in save.call_args_list] == [3, 4, 5]
+    assert "processed=5 errors=2" in output.getvalue()
+
+
+@pytest.mark.django_db
+def test_video_create_poster_only_raises_on_request(mocker):
+    from cast.models import Video
+
+    mocker.patch.object(Video, "_create_poster", side_effect=RuntimeError("ffmpeg exited with 1"))
+
+    Video().create_poster()  # uploads keep working without a poster
+    with pytest.raises(RuntimeError, match="ffmpeg exited with 1"):
+        Video().create_poster(raise_errors=True)
 
 
 def test_recalc_video_posters_reports_zero_processed(mocker):

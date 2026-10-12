@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -25,6 +26,17 @@ def script(settings, mocker):
     settings.SETTINGS_MODULE = "scripts.typeahead_benchmark_settings"
     migrate = mocker.patch.object(benchmark_typeahead, "call_command")
     return benchmark_typeahead, migrate
+
+
+@pytest.fixture()
+def migrated_db(db):
+    """The test database is built without migrations; a migrated one has their bookkeeping table."""
+    # Plain SQL inside the test transaction: SQLite's schema editor cannot run there.
+    with connection().cursor() as cursor:
+        cursor.execute(
+            "CREATE TABLE django_migrations (id integer PRIMARY KEY, app varchar(255) NOT NULL, "
+            "name varchar(255) NOT NULL, applied timestamp NOT NULL)"
+        )
 
 
 def database_state():
@@ -59,7 +71,7 @@ def assert_refused_without_changes(script, match):
     assert not Blog.objects.filter(slug__startswith="typeahead-benchmark-").exists()
 
 
-def test_seed_refuses_a_real_site_before_migrating_or_writing(script, blog, site):
+def test_seed_refuses_a_real_site_before_migrating_or_writing(script, migrated_db, blog, site):
     # A real project: its Blog is the default Site's root page, not the tree root.
     site.root_page = blog
     site.save(update_fields=["root_page"])
@@ -70,7 +82,7 @@ def test_seed_refuses_a_real_site_before_migrating_or_writing(script, blog, site
     assert site.root_page_id == blog.pk
 
 
-def test_seed_refuses_pages_and_users_of_a_site_without_blogs(script, site, user):
+def test_seed_refuses_pages_and_users_of_a_site_without_blogs(script, migrated_db, site, user):
     home = site.root_page.add_child(instance=Page(title="Company", slug="company"))
     home.add_child(instance=Page(title="About", slug="about"))
 
@@ -80,16 +92,82 @@ def test_seed_refuses_pages_and_users_of_a_site_without_blogs(script, site, user
     )
 
 
-def test_seed_refuses_a_database_with_user_accounts_only(script, user):
+def test_seed_refuses_a_database_with_user_accounts_only(script, migrated_db, user):
     assert_refused_without_changes(script, r"1 user account\(s\) other than typeahead-benchmark\. Nothing was changed")
 
 
-def test_seed_refuses_an_edited_default_home_page(script, site):
-    root = Page.get_first_root_node()
-    home = root.add_child(instance=Page(title="Welcome", slug="home"))
+STOCK_HOME = {"title": "Welcome to your new Wagtail site!", "slug": "home"}
+
+
+def add_home_page(**changes):
+    locale, _created = Locale.objects.get_or_create(language_code="en")
+    root = Page.get_first_root_node() or Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
+    home = root.add_child(instance=Page(**{**STOCK_HOME, **changes}))
+    Site.objects.all().delete()
+    Site.objects.create(hostname="localhost", port=80, root_page=home, is_default_site=True)
+    return root, home
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"title": "Company homepage"},
+        {"seo_title": "Company"},
+        {"search_description": "What we do"},
+        {"title": "Company homepage", "seo_title": "Company", "search_description": "What we do"},
+    ],
+)
+def test_seed_refuses_an_edited_home_page(script, migrated_db, changes):
+    _root, home = add_home_page(**changes)
+
+    assert_refused_without_changes(script, "pages outside the benchmark Blogs: home")
+
+    assert Site.objects.get(is_default_site=True).root_page_id == home.pk
+
+
+def test_seed_refuses_a_home_page_with_a_saved_revision(script, migrated_db):
+    _root, home = add_home_page()
+    home.save_revision()
+
+    assert_refused_without_changes(script, "pages outside the benchmark Blogs: home")
+
+
+def test_seed_refuses_a_home_page_with_children(script, migrated_db):
+    _root, home = add_home_page()
     home.add_child(instance=Page(title="Imprint", slug="imprint"))
 
     assert_refused_without_changes(script, "pages outside the benchmark Blogs: home, imprint")
+
+
+def test_preflight_refuses_a_database_with_foreign_tables_only(script, mocker):
+    benchmark, migrate = script
+    mocker.patch.object(benchmark.connection.introspection, "table_names", return_value=["customer_invoice"])
+
+    with pytest.raises(RuntimeError, match="tables without the benchmark schema"):
+        benchmark.seed([2])
+
+    migrate.assert_not_called()
+
+
+def test_seed_refuses_foreign_tables_next_to_the_benchmark_schema(script, migrated_db):
+    benchmark, _migrate = script
+    tables = connection().introspection.table_names()
+    # Tables that migrations create next to a model table (search indexes) are fine.
+    assert benchmark.non_benchmark_content({*tables, "wagtailsearch_indexentry_fts_data"}) == []
+
+    with patch.object(benchmark.connection.introspection, "table_names", return_value=[*tables, "customer_invoice"]):
+        assert_refused_without_changes(script, "tables that do not belong to the benchmark schema: customer_invoice")
+
+
+def test_seed_refuses_a_schema_this_project_did_not_migrate(script, db):
+    # Model tables exist, but no migration was ever recorded in this database.
+    assert not MigrationRecorder(connection()).has_table()
+    benchmark, migrate = script
+
+    with pytest.raises(RuntimeError, match=r"tables without the benchmark schema \(missing django_migrations\)"):
+        benchmark.seed([2])
+
+    migrate.assert_not_called()
 
 
 def test_seed_refuses_other_settings_before_touching_the_database(script, settings):
@@ -103,7 +181,7 @@ def test_seed_refuses_other_settings_before_touching_the_database(script, settin
     migrate.assert_not_called()
 
 
-def test_seed_refuses_a_database_it_cannot_inspect(script, db, mocker):
+def test_seed_refuses_a_database_it_cannot_inspect(script, migrated_db, mocker):
     benchmark, migrate = script
     mocker.patch.object(benchmark, "non_benchmark_content", side_effect=DatabaseError("no such column"))
     before = database_state()
@@ -115,7 +193,7 @@ def test_seed_refuses_a_database_it_cannot_inspect(script, db, mocker):
     assert database_state() == before
 
 
-def test_isolated_database_seeds_and_can_be_seeded_again(script, db):
+def test_isolated_database_seeds_and_can_be_seeded_again(script, migrated_db):
     benchmark, migrate = script
 
     benchmark.seed([2])
@@ -135,13 +213,9 @@ def test_isolated_database_seeds_and_can_be_seeded_again(script, db):
     assert benchmark.non_benchmark_content(set(connection().introspection.table_names())) == []
 
 
-def test_freshly_migrated_database_with_default_home_page_seeds(script, db):
+def test_freshly_migrated_database_with_default_home_page_seeds(script, migrated_db):
     benchmark, _migrate = script
-    locale, _created = Locale.objects.get_or_create(language_code="en")
-    root = Page.get_first_root_node() or Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
-    home = root.add_child(instance=Page(title="Welcome to your new Wagtail site!", slug="home"))
-    Site.objects.all().delete()
-    Site.objects.create(hostname="localhost", port=80, root_page=home, is_default_site=True)
+    root, _home = add_home_page()
 
     benchmark.seed([1])
 

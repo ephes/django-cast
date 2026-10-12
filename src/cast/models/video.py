@@ -152,7 +152,12 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         logger.info(self.pk)
         logger.info(self.poster)
 
-    def create_poster(self) -> None:
+    def create_poster(self, *, raise_errors: bool = False) -> None:
+        """Create the poster if it is missing and wanted.
+
+        A failure is only logged by default, so an upload still succeeds without
+        a poster. With ``raise_errors`` the exception reaches the caller.
+        """
         if self.poster or not self.calc_poster:
             # poster is not null
             logger.info("skip creating poster")
@@ -162,6 +167,8 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             except Exception as e:
                 logger.info(e)
                 logger.info("create poster failed")
+                if raise_errors:
+                    raise
 
     def get_all_paths(self) -> set[str]:
         paths = set()

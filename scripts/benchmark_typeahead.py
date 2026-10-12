@@ -18,11 +18,13 @@ to continue unless
 * Django runs with ``scripts.typeahead_benchmark_settings`` (an exported
   ``DJANGO_SETTINGS_MODULE`` of a real project is not overridden, so it is
   rejected instead), and
-* the selected database is empty (no tables yet), freshly migrated, or holds
-  only data of an earlier benchmark run: no Blog outside the
+* the selected database is empty (no tables at all), freshly migrated, or
+  holds only data of an earlier benchmark run: the tables are those of this
+  project's migrations and nothing else, no Blog outside the
   ``typeahead-benchmark-`` prefix, no page outside those Blogs other than the
-  tree root and Wagtail's untouched default home page, and no user other than
-  ``typeahead-benchmark``.
+  tree root and Wagtail's default home page exactly as the migrations create
+  it (stock title, never edited, no SEO fields, no children), and no user
+  other than ``typeahead-benchmark``.
 
 A refused run has not migrated and has not written to the database.
 """
@@ -68,6 +70,7 @@ from cast.search_suggestions import get_search_suggestions  # noqa: E402
 BENCHMARK_SETTINGS_MODULE = "scripts.typeahead_benchmark_settings"
 BENCHMARK_SLUG_PREFIX = "typeahead-benchmark-"
 BENCHMARK_USERNAME = "typeahead-benchmark"
+WAGTAIL_DEFAULT_HOME_TITLE = "Welcome to your new Wagtail site!"
 TITLE_STEMS = (
     "Python performance",
     "Django testing",
@@ -144,34 +147,55 @@ def preflight_benchmark_database() -> None:
 
 def non_benchmark_content(tables: set[str]) -> list[str]:
     """Describe content that an empty, freshly migrated or benchmark-seeded database cannot have."""
-    problems: list[str] = []
-    has_pages = Page._meta.db_table in tables
-    benchmark_paths: list[str] = []
+    if not tables:
+        return []
 
-    if has_pages and Blog._meta.db_table in tables:
-        blogs = list(Blog.objects.order_by("path").values_list("slug", "path"))
-        benchmark_paths = [path for slug, path in blogs if slug.startswith(BENCHMARK_SLUG_PREFIX)]
-        foreign_slugs = [slug for slug, _path in blogs if not slug.startswith(BENCHMARK_SLUG_PREFIX)]
-        if foreign_slugs:
-            problems.append(f"non-benchmark Blogs: {', '.join(foreign_slugs[:5])}")
-
-    if has_pages:
-        outside = Page.objects.filter(depth__gt=1)
-        for path in benchmark_paths:
-            outside = outside.exclude(path__startswith=path)
-        # Wagtail's migrations create one plain "home" page below the root.
-        default_home = Q(
-            depth=2, slug="home", numchild=0, content_type__app_label="wagtailcore", content_type__model="page"
-        )
-        foreign_pages = list(outside.exclude(default_home).order_by("path").values_list("slug", flat=True)[:5])
-        if foreign_pages:
-            problems.append(f"pages outside the benchmark Blogs: {', '.join(foreign_pages)}")
-
+    # A database with tables must be one this project migrated: the tables the
+    # checks below read have to exist, and nothing else may live next to them.
     user_model = get_user_model()
-    if user_model._meta.db_table in tables:
-        other_users = user_model._default_manager.exclude(**{user_model.USERNAME_FIELD: BENCHMARK_USERNAME}).count()
-        if other_users:
-            problems.append(f"{other_users} user account(s) other than {BENCHMARK_USERNAME}")
+    required = {"django_migrations", Page._meta.db_table, Site._meta.db_table, Blog._meta.db_table}
+    required.add(user_model._meta.db_table)
+    missing = sorted(required - tables)
+    if missing:
+        return [f"tables without the benchmark schema (missing {', '.join(missing[:5])})"]
+    known = set(connection.introspection.django_table_names()) | {"django_migrations"}
+    unknown = sorted(
+        table for table in tables if table not in known and not any(table.startswith(f"{name}_") for name in known)
+    )
+    if unknown:
+        return [f"tables that do not belong to the benchmark schema: {', '.join(unknown[:5])}"]
+
+    problems: list[str] = []
+    blogs = list(Blog.objects.order_by("path").values_list("slug", "path"))
+    benchmark_paths = [path for slug, path in blogs if slug.startswith(BENCHMARK_SLUG_PREFIX)]
+    foreign_slugs = [slug for slug, _path in blogs if not slug.startswith(BENCHMARK_SLUG_PREFIX)]
+    if foreign_slugs:
+        problems.append(f"non-benchmark Blogs: {', '.join(foreign_slugs[:5])}")
+
+    outside = Page.objects.filter(depth__gt=1)
+    for path in benchmark_paths:
+        outside = outside.exclude(path__startswith=path)
+    # Wagtail's migrations create one plain "home" page below the root. Only
+    # that page exactly as created counts: never edited (no revision), stock
+    # title, no SEO fields.
+    default_home = Q(
+        depth=2,
+        slug="home",
+        numchild=0,
+        title=WAGTAIL_DEFAULT_HOME_TITLE,
+        seo_title="",
+        search_description="",
+        latest_revision__isnull=True,
+        content_type__app_label="wagtailcore",
+        content_type__model="page",
+    )
+    foreign_pages = list(outside.exclude(default_home).order_by("path").values_list("slug", flat=True)[:5])
+    if foreign_pages:
+        problems.append(f"pages outside the benchmark Blogs: {', '.join(foreign_pages)}")
+
+    other_users = user_model._default_manager.exclude(**{user_model.USERNAME_FIELD: BENCHMARK_USERNAME}).count()
+    if other_users:
+        problems.append(f"{other_users} user account(s) other than {BENCHMARK_USERNAME}")
 
     return problems
 

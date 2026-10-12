@@ -16,7 +16,10 @@ class Command(BaseCommand):
         for video in track(videos, description="Recalculating video posters"):
             total += 1
             try:
-                video.create_poster()
+                video.create_poster(raise_errors=True)
+                if video.calc_poster and not video.poster:
+                    # e.g. the video dimensions could not be determined
+                    raise RuntimeError("no poster was created")
                 video.save(poster=False)
             except Exception as exc:
                 errors += 1

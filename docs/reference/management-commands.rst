@@ -129,6 +129,12 @@ Regenerate poster images for all videos from the video files. Requires
 ``ffmpeg`` to be installed. The command keeps going if one video fails and
 prints a final ``processed=<n> errors=<n>`` summary.
 
+A video counts as failed when creating its poster raises an error (for
+example ``ffmpeg`` fails or is missing), when no poster results although one
+is wanted (for example the video dimensions cannot be read), or when the video
+cannot be saved. Videos that already have a poster, or have poster calculation
+switched off, are left as they are and do not count as errors.
+
 If at least one poster could not be recalculated, the command then exits with
 ``CommandError`` (non-zero status). The other videos have still been
 processed and saved, so a failed run is a partial success: fix the reported

@@ -34,8 +34,13 @@
 - ``recalc_video_posters`` now exits with ``CommandError`` (non-zero status)
   when at least one poster could not be recalculated. It used to print
   ``errors=<n>`` and still exit successfully. All videos are still attempted,
-  healthy ones are saved, and the summary is printed first. Automation that
-  relied on the old exit status needs to handle the failure.
+  healthy ones are saved, and the summary is printed first. Failed poster
+  generation is now counted at all: ``Video.create_poster()`` logs and
+  swallows errors so uploads succeed without a poster, which made the command
+  report ``errors=0`` for them. The command asks for the error
+  (``create_poster(raise_errors=True)``, default unchanged) and also counts a
+  video that ends up without a wanted poster. Automation that relied on the
+  old exit status needs to handle the failure.
 - ``styleguide_prefetch --with-renditions`` no longer leaves
   ``CAST_STYLEGUIDE_GENERATE_RENDITIONS`` switched on. The command changed the
   process-wide setting and never put it back, so after ``call_command`` in a
