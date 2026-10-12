@@ -23,3 +23,24 @@
   ``allow_overwrite``) can leave a partial file. Failures are reported, the
   remaining paths are still processed, and the command exits non-zero. The
   default mode and ``media_restore`` are unchanged.
+- Guard ``media_stale --delete`` against uploads that happen while it runs.
+  The command compared the storage listing with a database snapshot taken
+  earlier, so a file uploaded and committed in between was deleted although a
+  row referenced it. Each candidate is now checked again immediately before it
+  is deleted: it is kept when any row references it by then, when its storage
+  modification time is newer than the new ``--min-age-hours`` option (default
+  24, minimum 1), or when the storage backend cannot report that time. The age
+  rule protects uploads that have stored their file but not written their row
+  yet. Check and delete happen while writes to the tables with file columns
+  are held off (a short ``SHARE`` table lock on PostgreSQL, the write lock on
+  SQLite), so no reference can be committed between the two; a file is kept
+  when that lock cannot be taken in time (500 ms on PostgreSQL, the
+  connection's busy timeout on SQLite). On other database backends
+  ``--delete`` now refuses to run. References are now
+  collected from the file columns of all installed models through their base
+  managers instead of only django-cast models and Wagtail's default image
+  model, read from the database a model is written to, and paths are compared
+  without a leading slash. The command prints
+  ``deleted``/``retained`` lines and a ``deleted=<n> retained=<n>`` summary.
+  A run now deletes fewer files than before: stale files younger than the age
+  limit stay until a later run.

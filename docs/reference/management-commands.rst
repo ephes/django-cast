@@ -277,9 +277,12 @@ media_stale
 -----------
 
 Find media files in production storage that are not referenced by any
-database record. The command checks paths referenced by image, video,
-audio, transcript, contributor voice-reference, and file records before
-classifying anything as stale. Only known django-cast/Wagtail-managed media
+database record. The command collects the paths stored in every file column
+of every installed model (django-cast audio, video, transcript, contributor
+voice-reference, and file records, Wagtail images and renditions, and any
+model of your project) before classifying anything as stale. Rows are read
+through each model's base manager, so rows hidden by a custom default manager
+still count as references. Only known django-cast/Wagtail-managed media
 prefixes are eligible for stale reporting or deletion, so unrelated objects in
 the same storage backend are ignored by default.
 Requires configured ``production`` and ``backup`` storage backends.
@@ -289,8 +292,11 @@ Requires configured ``production`` and ``backup`` storage backends.
     # Show stale files
     python manage.py media_stale
 
-    # Show and delete stale files
+    # Show and delete stale files that are at least 24 hours old
     python manage.py media_stale --delete
+
+    # Use a longer safety margin
+    python manage.py media_stale --delete --min-age-hours 72
 
 Options:
 
@@ -298,7 +304,73 @@ Options:
     Delete the stale files under managed media prefixes instead of only listing
     them.
 
+``--min-age-hours HOURS``
+    With ``--delete``, only delete files whose storage modification time is at
+    least this many hours old. Defaults to ``24``; values below ``1`` are
+    rejected.
+
 The command prints matching stale paths and a final total stale size in MB.
+
+Deletion safeguards
+~~~~~~~~~~~~~~~~~~~
+
+The report is built from a snapshot: the database is read first and the
+storage listing afterwards, and both can take a long time. A file uploaded in
+between is in the listing but not in the snapshot. ``--delete`` therefore does
+not trust the report. For each candidate it
+
+1. holds off every write to the tables that have a file column, for the
+   moment it takes to decide about and delete this one file,
+2. asks the database again whether any row references that exact path, and
+   keeps the file if one does,
+3. reads the file's modification time from storage and keeps the file if it is
+   newer than ``--min-age-hours``, lies in the future, or cannot be determined
+   (for example because the storage backend does not implement
+   ``get_modified_time``), and
+4. only then deletes it and lets writes continue.
+
+Step 1 is what makes the check in step 2 binding. Without it a row that starts
+to reference the file could be committed after the check and before the
+delete. On PostgreSQL the command takes a ``SHARE`` lock on those tables in a
+transaction: reads continue, writes wait, and acquiring the lock waits for
+transactions that already wrote to one of the tables, so their rows are
+visible to step 2. That transaction always runs at ``READ COMMITTED``, also
+when the connection is configured for ``REPEATABLE READ`` or
+``SERIALIZABLE``, because the check has to read what was committed while it
+waited for the lock. The command waits at most 500 ms for the lock, which is
+shorter than PostgreSQL's default ``deadlock_timeout``; if it does not get it,
+for example because a request is in the middle of a longer transaction, it
+keeps the file. On SQLite the command becomes the database's single writer for
+that moment, and keeps the file when another connection is still writing after
+the connection's busy timeout. Other database backends offer no lock the command knows how to
+take; there ``--delete`` exits with ``CommandError`` before it deletes
+anything, while the report without ``--delete`` still works. References are
+always read from the database a model is written to, not from a read replica.
+
+While a file is checked and deleted, uploads and other writes to these tables
+wait: usually for the duration of one storage request, at most until the
+storage backend answers. Run the command at a quiet time when many files are
+stale.
+
+The age check protects uploads that are still in progress. Django writes an
+uploaded file to storage before it writes the row that references it, so for a
+short time there is nothing in the database to find or to lock. Choose
+``--min-age-hours`` longer than any upload or import on your site can take
+between storing a file and writing its row.
+
+When in doubt the command keeps the file. Each candidate is reported as
+``deleted <path>`` or ``retained <path>: <reason>``, followed by
+``deleted=<n> retained=<n>``. Retained files are not an error; a later run
+deletes them once they are old enough and still unreferenced.
+
+One window remains that the command cannot close, because Django's storage
+API has no conditional delete: if the production storage **overwrites**
+existing names (for example S3 storage with ``file_overwrite = True``), an
+upload that stores new bytes under the exact name of an old stale file after
+the age check and before the delete loses its new object. Storage backends
+that generate a new name for an existing one (Django's default) are not
+affected. With an overwriting backend, run ``media_stale --delete`` while no
+uploads are happening.
 
 Reference Site
 ==============

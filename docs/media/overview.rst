@@ -331,6 +331,11 @@ Find orphaned media files::
     python manage.py media_stale
     python manage.py media_stale --delete  # Remove orphaned managed media files
 
+``--delete`` re-checks each file against the database immediately before
+deleting it, holding off writes of file references for that moment, and keeps
+files newer than ``--min-age-hours`` (default 24), so an upload that happens
+while the command runs is not removed. Deleting needs PostgreSQL or SQLite.
+
 Backup and Restore
 ~~~~~~~~~~~~~~~~~~
 

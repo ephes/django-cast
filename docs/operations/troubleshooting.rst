@@ -115,6 +115,15 @@ To also delete them:
 The command ignores objects outside known django-cast/Wagtail media prefixes by
 default, even when they live in the same storage backend.
 
+``--delete`` checks every candidate again right before deleting it, while it
+briefly holds off writes to the tables that reference files: files that a
+database row references by now are kept, and so are files modified less than
+24 hours ago (``--min-age-hours``) or whose age the storage backend cannot
+report, because they may belong to an upload that is still in progress.
+Deleting needs PostgreSQL or SQLite. See
+:ref:`the command reference <cast_management_commands>` for the details and the
+one remaining limit with storage backends that overwrite existing names.
+
 Themes and Templates
 ====================
 

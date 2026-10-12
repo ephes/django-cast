@@ -1,6 +1,11 @@
-from collections.abc import Iterator
+import sqlite3
+import threading
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from io import BytesIO, StringIO
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -9,11 +14,13 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.core.management import CommandError, call_command
+from django.db import OperationalError, connection, transaction
+from django.utils import timezone
 
 from cast.devdata import create_transcript
 from cast.management.commands.media_backup import Command as MediaBackupCommand
-from cast.management.commands.media_stale import Command as MediaStaleCommand
-from cast.models import Contributor
+from cast.management.commands.media_stale import Command as MediaStaleCommand, reference_lock_statements
+from cast.models import Contributor, File
 from cast.models.contributors import ContributorVoiceReference
 from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
 
@@ -120,15 +127,33 @@ class StubLocalStorage:
 
 
 class StubWalkStorage:
-    def __init__(self, files: dict[str, bytes]) -> None:
+    """
+    Storage stub for ``media_stale``. Files are old unless ``modified`` says
+    otherwise; the hooks let a test interleave an upload with the command.
+    """
+
+    def __init__(self, files: dict[str, bytes], modified: dict[str, object] | None = None) -> None:
         self._files = files
+        self.modified: dict[str, object] = dict(modified or {})
         self.deleted: list[str] = []
+        self.before_listing: Callable[[], None] | None = None
+        self.before_modified_time: Callable[[str], None] | None = None
 
     def listdir(self, _path: str) -> tuple[list[str], list[str]]:
+        if self.before_listing is not None:
+            self.before_listing()
         return [], list(self._files.keys())
 
     def size(self, path: str) -> int:
         return len(self._files[path])
+
+    def get_modified_time(self, path: str) -> object:
+        if self.before_modified_time is not None:
+            self.before_modified_time(path)
+        modified = self.modified.get(path, timezone.now() - timedelta(days=30))
+        if isinstance(modified, Exception):
+            raise modified
+        return modified
 
     def delete(self, path: str) -> None:
         self.deleted.append(path)
@@ -567,28 +592,46 @@ def test_media_stale_get_models_paths_includes_all_managed_media(audio, video, f
 
 
 @pytest.mark.django_db
-def test_media_stale_get_image_paths_includes_renditions(image):
+def test_media_stale_get_models_paths_includes_images_and_renditions(image):
     rendition = image.get_rendition("fill-1x1")
 
-    paths = MediaStaleCommand.get_image_paths()
+    paths = MediaStaleCommand().get_models_paths()
 
     assert image.file.name in paths
     assert rendition.file.name in paths
 
 
-def test_media_stale_handle_reports_and_deletes_managed_stale_files(mocker, capsys):
-    production = StubWalkStorage(
-        {
-            "cast_audio/keep.mp3": b"keep",
-            "cast_audio/stale.mp3": b"stale",
-            "unrelated/stale.jpg": b"outside",
-        }
-    )
+@pytest.mark.django_db
+def test_media_stale_get_models_paths_uses_base_manager_and_normalizes(user, mocker):
+    # a default manager that hides rows must not hide their files
+    File.objects.create(user=user, original="/cast_files/hidden.pdf")
+    hiding_manager = Mock(**{"all.return_value": File.objects.none(), "values_list.return_value": File.objects.none()})
+    mocker.patch.object(File._meta, "default_manager", hiding_manager)
+    assert File._default_manager is hiding_manager
+
+    paths = MediaStaleCommand().get_models_paths()
+
+    assert "cast_files/hidden.pdf" in paths
+
+
+def patch_stale_storage(mocker, production):
     mocker.patch(
         "cast.management.commands.media_stale.get_production_and_backup_storage",
         return_value=(production, object()),
     )
-    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value={"cast_audio/keep.mp3"})
+
+
+@pytest.mark.django_db
+def test_media_stale_handle_reports_and_deletes_managed_stale_files(mocker, capsys, user):
+    File.objects.create(user=user, original="cast_files/keep.pdf")
+    production = StubWalkStorage(
+        {
+            "cast_files/keep.pdf": b"keep",
+            "cast_audio/stale.mp3": b"stale",
+            "unrelated/stale.jpg": b"outside",
+        }
+    )
+    patch_stale_storage(mocker, production)
 
     call_command("media_stale", delete=True)
 
@@ -596,29 +639,413 @@ def test_media_stale_handle_reports_and_deletes_managed_stale_files(mocker, caps
     text = capsys.readouterr().out
     assert "stale production" in text
     assert "cast_audio/stale.mp3" in text
+    assert "deleted cast_audio/stale.mp3" in text
+    assert "deleted=1 retained=0" in text
+    assert "cast_files/keep.pdf" not in text
     assert "unrelated/stale.jpg" not in text
 
 
-def test_media_stale_handle_without_delete_keeps_stale_files(mocker):
-    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
-    mocker.patch(
-        "cast.management.commands.media_stale.get_production_and_backup_storage",
-        return_value=(production, object()),
-    )
+@pytest.mark.django_db
+def test_media_stale_matches_storage_paths_with_leading_slash(mocker, user):
+    File.objects.create(user=user, original="cast_files/keep.pdf")
+    production = StubWalkStorage({"/cast_files/keep.pdf": b"keep"})
+    patch_stale_storage(mocker, production)
+    # even a snapshot that missed the row must not get the file deleted
     mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
 
-    call_command("media_stale")
+    call_command("media_stale", delete=True)
 
     assert production.deleted == []
 
 
+@pytest.mark.django_db
+def test_media_stale_delete_keeps_upload_published_during_scan(mocker, capsys, user):
+    """
+    The reference snapshot is taken before production storage is listed. An
+    upload that is saved and committed in between is in the listing but not in
+    the snapshot, and must not be deleted.
+    """
+    production = StubWalkStorage({"cast_audio/old-orphan.mp3": b"orphan"})
+    patch_stale_storage(mocker, production)
+
+    def publish_upload() -> None:
+        production._files["cast_files/new.pdf"] = b"new upload"
+        production.modified["cast_files/new.pdf"] = timezone.now()
+        File.objects.create(user=user, original="cast_files/new.pdf")
+
+    production.before_listing = publish_upload
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == ["cast_audio/old-orphan.mp3"]
+    text = capsys.readouterr().out
+    assert "retained cast_files/new.pdf: referenced by a database row" in text
+    assert "deleted=1 retained=1" in text
+
+
+@pytest.mark.django_db
+def test_media_stale_delete_keeps_old_object_referenced_before_deletion(mocker, capsys, user):
+    """A reference committed after the report, right before the delete, wins even for an old object."""
+    production = StubWalkStorage({"cast_files/a.pdf": b"a", "cast_files/b.pdf": b"b"})
+    patch_stale_storage(mocker, production)
+
+    def reference_b_while_a_is_checked(path: str) -> None:
+        if path == "cast_files/a.pdf":
+            File.objects.create(user=user, original="cast_files/b.pdf")
+
+    production.before_modified_time = reference_b_while_a_is_checked
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == ["cast_files/a.pdf"]
+    assert "retained cast_files/b.pdf: referenced by a database row" in capsys.readouterr().out
+
+
+@pytest.mark.django_db
+def test_media_stale_delete_keeps_recent_object_of_uncommitted_upload(mocker, capsys):
+    """
+    An upload in progress has written its file but not committed its row, so
+    no database check can see it. Only its age protects it.
+    """
+    production = StubWalkStorage(
+        {"cast_audio/in-progress.mp3": b"new", "cast_audio/old-orphan.mp3": b"old"},
+        modified={
+            "cast_audio/in-progress.mp3": timezone.now() - timedelta(hours=23),
+            "cast_audio/old-orphan.mp3": timezone.now() - timedelta(hours=25),
+        },
+    )
+    patch_stale_storage(mocker, production)
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == ["cast_audio/old-orphan.mp3"]
+    text = capsys.readouterr().out
+    assert "retained cast_audio/in-progress.mp3: modified less than 24 hours ago" in text
+
+
+@pytest.mark.django_db
+def test_media_stale_delete_honors_min_age_hours(mocker):
+    production = StubWalkStorage(
+        {"cast_audio/a.mp3": b"a", "cast_audio/b.mp3": b"b"},
+        modified={
+            "cast_audio/a.mp3": timezone.now() - timedelta(hours=3),
+            "cast_audio/b.mp3": timezone.now() - timedelta(minutes=90),
+        },
+    )
+    patch_stale_storage(mocker, production)
+
+    call_command("media_stale", delete=True, min_age_hours=2)
+
+    assert production.deleted == ["cast_audio/a.mp3"]
+
+
+@pytest.mark.parametrize("min_age_hours", [0, 0.5, -1, float("nan")])
+def test_media_stale_rejects_min_age_below_minimum(mocker, min_age_hours):
+    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
+    patch_stale_storage(mocker, production)
+
+    with pytest.raises(CommandError, match="--min-age-hours must be at least 1"):
+        call_command("media_stale", delete=True, min_age_hours=min_age_hours)
+
+    assert production.deleted == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("modified", "reason"),
+    [
+        (NotImplementedError(), "modification time unavailable (NotImplementedError)"),
+        (FileNotFoundError(), "modification time unavailable (FileNotFoundError)"),
+        (None, "modification time unavailable"),
+        # a clock that disagrees with storage never makes a file old enough
+        (timezone.now() + timedelta(days=2), "modified less than 24 hours ago"),
+    ],
+)
+def test_media_stale_delete_keeps_object_without_provable_age(mocker, capsys, modified, reason):
+    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"}, modified={"cast_audio/stale.mp3": modified})
+    patch_stale_storage(mocker, production)
+    if modified is None:
+        mocker.patch.object(production, "get_modified_time", return_value=None)
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == []
+    text = capsys.readouterr().out
+    assert f"retained cast_audio/stale.mp3: {reason}" in text
+    assert "deleted=0 retained=1" in text
+
+
+@pytest.mark.django_db
+def test_media_stale_delete_compares_naive_modification_times(mocker):
+    # storage backends return naive local times when USE_TZ is off
+    production = StubWalkStorage(
+        {"cast_audio/old.mp3": b"old", "cast_audio/new.mp3": b"new"},
+        modified={
+            "cast_audio/old.mp3": datetime.now() - timedelta(days=2),
+            "cast_audio/new.mp3": datetime.now() - timedelta(hours=1),
+        },
+    )
+    patch_stale_storage(mocker, production)
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == ["cast_audio/old.mp3"]
+
+
+def test_media_stale_lock_statements_for_postgresql():
+    statements = reference_lock_statements("postgresql", ['"cast_file"', '"wagtailimages_image"'])
+
+    assert statements == [
+        ("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", []),
+        ("SET LOCAL lock_timeout = '500ms'", []),
+        ('LOCK TABLE "cast_file", "wagtailimages_image" IN SHARE MODE', []),
+    ]
+
+
+def test_media_stale_lock_statements_for_sqlite():
+    assert reference_lock_statements("sqlite", ['"cast_file"', '"wagtailimages_image"']) == [
+        ('DELETE FROM "cast_file" WHERE 1 = 0', [])
+    ]
+
+
+@pytest.mark.django_db
+def test_media_stale_locks_every_table_with_a_file_column():
+    tables = MediaStaleCommand().get_reference_tables()
+
+    assert list(tables) == ["default"]
+    assert {"cast_file", "cast_audio", "cast_video", "wagtailimages_image", "wagtailimages_rendition"} <= set(
+        tables["default"]
+    )
+    assert tables["default"] == sorted(tables["default"])
+
+
+@pytest.mark.django_db
+def test_media_stale_delete_refuses_database_without_supported_lock(mocker, capsys):
+    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
+    patch_stale_storage(mocker, production)
+    mocker.patch.object(connection, "vendor", "mysql")
+
+    with pytest.raises(CommandError, match="cannot hold off writes of file references on the mysql database"):
+        call_command("media_stale", delete=True)
+
+    assert production.deleted == []
+    # the report alone needs no lock
+    call_command("media_stale")
+    assert "cast_audio/stale.mp3" in capsys.readouterr().out
+
+
+@pytest.mark.django_db
+def test_media_stale_delete_keeps_object_when_references_cannot_be_locked(mocker, capsys):
+    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
+    patch_stale_storage(mocker, production)
+
+    @contextmanager
+    def lock_times_out(_command: MediaStaleCommand) -> Iterator[None]:
+        raise OperationalError("lock timeout")
+        yield
+
+    mocker.patch.object(MediaStaleCommand, "reference_writes_blocked", lock_times_out)
+
+    call_command("media_stale", delete=True)
+
+    assert production.deleted == []
+    text = capsys.readouterr().out
+    assert "retained cast_audio/stale.mp3: file references could not be locked or checked (OperationalError)" in text
+    assert "deleted=0 retained=1" in text
+
+
+def sqlite_reference_lock(database: Path) -> tuple[sqlite3.Connection, sqlite3.Connection]:
+    """Two independent connections to one SQLite database with a table to lock."""
+    locker = sqlite3.connect(database, timeout=0.2, isolation_level=None)
+    writer = sqlite3.connect(database, timeout=0.2, isolation_level=None)
+    locker.execute('CREATE TABLE "cast_file" (original TEXT)')
+    return locker, writer
+
+
+def test_media_stale_sqlite_lock_statement_holds_off_other_writers(tmp_path):
+    locker, writer = sqlite_reference_lock(tmp_path / "lock.sqlite3")
+    try:
+        locker.execute("BEGIN")
+        for sql, params in reference_lock_statements("sqlite", ['"cast_file"']):
+            locker.execute(sql, params)
+
+        # no other connection can write a reference until the transaction ends
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            writer.execute("INSERT INTO \"cast_file\" VALUES ('cast_files/old.pdf')")
+
+        locker.execute("COMMIT")
+        writer.execute("INSERT INTO \"cast_file\" VALUES ('cast_files/old.pdf')")
+    finally:
+        locker.close()
+        writer.close()
+
+
+def test_media_stale_sqlite_lock_statement_fails_while_a_write_is_in_flight(tmp_path):
+    locker, writer = sqlite_reference_lock(tmp_path / "lock.sqlite3")
+    try:
+        writer.execute("BEGIN")
+        writer.execute("INSERT INTO \"cast_file\" VALUES ('cast_files/old.pdf')")
+
+        # an uncommitted reference is invisible, so the lock must not be granted
+        locker.execute("BEGIN")
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            for sql, params in reference_lock_statements("sqlite", ['"cast_file"']):
+                locker.execute(sql, params)
+    finally:
+        locker.close()
+        writer.close()
+
+
+POSTGRESQL_ONLY = pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL table-lock semantics")
+
+
+def write_file_reference_from_another_connection(user_pk: int, path: str, outcome: list[str]) -> None:
+    """Try to commit a row that references ``path``, like a concurrent request would."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SET lock_timeout = '300ms'")
+        File.objects.create(user_id=user_pk, original=path)
+        outcome.append("committed")
+    except OperationalError:
+        outcome.append("blocked")
+    finally:
+        connection.close()
+
+
+@pytest.mark.django_db(transaction=True)
+@POSTGRESQL_ONLY
+def test_media_stale_delete_holds_off_reference_writes_between_check_and_delete(mocker, user):
+    """
+    The window that a second reference query cannot close: a row that starts
+    to reference an old object after the last check and before the delete.
+    While the command decides about a path, no such row can be committed.
+    """
+    path = "cast_files/old.pdf"
+    production = StubWalkStorage({path: b"old"})
+    patch_stale_storage(mocker, production)
+    outcome: list[str] = []
+
+    def publish_reference_during_age_lookup(_path: str) -> None:
+        # the reference check for this path has already passed
+        writer = threading.Thread(target=write_file_reference_from_another_connection, args=(user.pk, path, outcome))
+        writer.start()
+        writer.join(timeout=10)
+        assert not writer.is_alive()
+
+    production.before_modified_time = publish_reference_during_age_lookup
+
+    call_command("media_stale", delete=True)
+
+    assert outcome == ["blocked"]
+    assert production.deleted == [path]
+    assert not File.objects.filter(original=path).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+@POSTGRESQL_ONLY
+@pytest.mark.parametrize("isolation_level", ["READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"])
+def test_media_stale_delete_sees_reference_committed_while_waiting_for_the_lock(mocker, capsys, user, isolation_level):
+    """
+    The lock is granted when the writer commits. The reference check that
+    follows must read that commit, also on a connection whose transactions
+    would otherwise keep the snapshot they started with.
+    """
+    path = "cast_files/old.pdf"
+    production = StubWalkStorage({path: b"old"})
+    patch_stale_storage(mocker, production)
+    written = threading.Event()
+    errors: list[BaseException] = []
+
+    def commit_reference_after_a_moment() -> None:
+        try:
+            with transaction.atomic():
+                File.objects.create(user_id=user.pk, original=path)
+                written.set()
+                # shorter than the command's lock timeout, long enough for it to start waiting
+                time.sleep(0.25)
+        except BaseException as exc:  # pragma: no cover - reported by the assertion below
+            errors.append(exc)
+        finally:
+            connection.close()
+
+    # the report's snapshot is taken before the writer exists
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    with connection.cursor() as cursor:
+        cursor.execute(f"SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL {isolation_level}")
+    writer = threading.Thread(target=commit_reference_after_a_moment)
+    writer.start()
+    try:
+        assert written.wait(timeout=10)
+
+        call_command("media_stale", delete=True)
+    finally:
+        writer.join(timeout=10)
+        # the session default must not outlive the test
+        connection.close()
+
+    assert errors == []
+    assert production.deleted == []
+    assert f"retained {path}: referenced by a database row" in capsys.readouterr().out
+    assert File.objects.filter(original=path).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+@POSTGRESQL_ONLY
+def test_media_stale_delete_keeps_object_while_a_reference_write_is_in_flight(mocker, capsys, user):
+    """A transaction that wrote a reference but has not committed it yet keeps the object."""
+    path = "cast_files/old.pdf"
+    production = StubWalkStorage({path: b"old"})
+    patch_stale_storage(mocker, production)
+    written, release = threading.Event(), threading.Event()
+    errors: list[BaseException] = []
+
+    def hold_uncommitted_reference() -> None:
+        try:
+            with transaction.atomic():
+                File.objects.create(user_id=user.pk, original=path)
+                written.set()
+                release.wait(timeout=30)
+        except BaseException as exc:  # pragma: no cover - reported by the assertion below
+            errors.append(exc)
+        finally:
+            connection.close()
+
+    writer = threading.Thread(target=hold_uncommitted_reference)
+    writer.start()
+    try:
+        assert written.wait(timeout=10)
+
+        call_command("media_stale", delete=True)
+    finally:
+        release.set()
+        writer.join(timeout=10)
+
+    assert errors == []
+    assert production.deleted == []
+    assert f"retained {path}: file references could not be locked or checked (OperationalError)" in (
+        capsys.readouterr().out
+    )
+    # the writer committed afterwards: the row references an object that still exists
+    assert File.objects.filter(original=path).exists()
+
+
+@pytest.mark.django_db
+def test_media_stale_handle_without_delete_keeps_stale_files(mocker, capsys):
+    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
+    patch_stale_storage(mocker, production)
+
+    call_command("media_stale")
+
+    assert production.deleted == []
+    text = capsys.readouterr().out
+    assert "cast_audio/stale.mp3" in text
+    assert "deleted=" not in text
+
+
+@pytest.mark.django_db
 def test_media_stale_handle_ignores_unmanaged_files(mocker, capsys):
     production = StubWalkStorage({"unrelated/stale.jpg": b"stale"})
-    mocker.patch(
-        "cast.management.commands.media_stale.get_production_and_backup_storage",
-        return_value=(production, object()),
-    )
-    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    patch_stale_storage(mocker, production)
 
     call_command("media_stale", delete=True)
 
@@ -630,6 +1057,7 @@ def test_media_stale_parser_registers_delete_flag():
     parser = MediaStaleCommand().create_parser("manage.py", "media_stale")
     option_strings = {option for action in parser._actions for option in action.option_strings}
     assert "--delete" in option_strings
+    assert "--min-age-hours" in option_strings
 
 
 @pytest.mark.django_db
