@@ -293,7 +293,10 @@ more frontend complexity.
 ## Performance Spike Results (2026-07-16)
 
 The reproducible harness lives in `scripts/benchmark_typeahead.py`, with
-isolated database selection in `scripts/typeahead_benchmark_settings.py`. It
+isolated database selection in `scripts/typeahead_benchmark_settings.py`.
+Before migrating or writing, `seed`/`all` run a read-only preflight that only
+accepts those settings and an empty, freshly migrated, or previously seeded
+benchmark database (see the module docstring). It
 creates deterministic Blogs with 100, 1,000, and 10,000 public posts plus one
 restricted control per archive, applies deterministic tags/categories/dates,
 and runs eight query shapes for 30 warm and five application-cold iterations.

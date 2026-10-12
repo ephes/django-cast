@@ -8,9 +8,25 @@ Examples::
     CAST_BENCHMARK_DB_ENGINE=postgresql \
       uv run --with 'psycopg[binary]' python -m scripts.benchmark_typeahead all
 
-The database must be isolated and disposable. The script runs migrations and
-creates deterministic benchmark Blogs and Posts; it refuses to seed a database
-that already contains non-benchmark Blogs.
+The database must be isolated and disposable. The script runs migrations,
+points the default Site at the page tree root and creates a benchmark user plus
+deterministic benchmark Blogs and Posts.
+
+Before any of that, ``seed`` and ``all`` run a read-only preflight and refuse
+to continue unless
+
+* Django runs with ``scripts.typeahead_benchmark_settings`` (an exported
+  ``DJANGO_SETTINGS_MODULE`` of a real project is not overridden, so it is
+  rejected instead), and
+* the selected database is empty (no tables at all), freshly migrated, or
+  holds only data of an earlier benchmark run: the tables are exactly those
+  this project's migrations create, no Blog outside the
+  ``typeahead-benchmark-`` prefix, no page outside those Blogs other than the
+  tree root and Wagtail's default home page exactly as the migrations create
+  it (stock title, never edited, no SEO fields, no children), and no user
+  other than ``typeahead-benchmark``.
+
+A refused run has not migrated and has not written to the database.
 """
 
 from __future__ import annotations
@@ -34,10 +50,12 @@ import django  # noqa: E402
 django.setup()
 
 import wagtail  # noqa: E402
+from django.conf import settings  # noqa: E402
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.core.cache import cache  # noqa: E402
 from django.core.management import call_command  # noqa: E402
-from django.db import close_old_connections, connection, connections  # noqa: E402
+from django.db import DatabaseError, close_old_connections, connection, connections  # noqa: E402
+from django.db.models import Q  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.utils import timezone  # noqa: E402
 from taggit.models import Tag  # noqa: E402
@@ -49,7 +67,15 @@ from cast.models.pages import PostTag  # noqa: E402
 from cast.models.snippets import PostCategory  # noqa: E402
 from cast.search_suggestions import get_search_suggestions  # noqa: E402
 
+BENCHMARK_SETTINGS_MODULE = "scripts.typeahead_benchmark_settings"
 BENCHMARK_SLUG_PREFIX = "typeahead-benchmark-"
+BENCHMARK_USERNAME = "typeahead-benchmark"
+WAGTAIL_DEFAULT_HOME_TITLE = "Welcome to your new Wagtail site!"
+# Wagtail's SQLite search migration creates an FTS5 table next to the index
+# model's table; SQLite adds these shadow tables. No model describes them.
+SEARCH_INDEX_TABLES = frozenset(
+    f"wagtailsearch_indexentry_fts{suffix}" for suffix in ("", "_config", "_content", "_data", "_docsize", "_idx")
+)
 TITLE_STEMS = (
     "Python performance",
     "Django testing",
@@ -95,6 +121,88 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def preflight_benchmark_database() -> None:
+    """Refuse a database that is not an isolated benchmark database, without changing it.
+
+    Runs before migrations and before any write. Only reads: the settings
+    module, the table list and, for tables that exist, Blogs, pages and users.
+    """
+    settings_module = settings.SETTINGS_MODULE
+    if settings_module != BENCHMARK_SETTINGS_MODULE:
+        raise RuntimeError(
+            f"Refusing to seed with DJANGO_SETTINGS_MODULE={settings_module}: "
+            f"only {BENCHMARK_SETTINGS_MODULE} selects an isolated benchmark database."
+        )
+
+    try:
+        tables = set(connection.introspection.table_names())
+        problems = non_benchmark_content(tables)
+    except DatabaseError as error:
+        raise RuntimeError(
+            "Refusing to seed: the database could not be checked for existing content "
+            f"({type(error).__name__}). Use a fresh database."
+        ) from error
+    if problems:
+        raise RuntimeError(
+            "Refusing to migrate or seed a database that is not an isolated benchmark database: "
+            + "; ".join(problems)
+            + ". Nothing was changed. Use a fresh database."
+        )
+
+
+def non_benchmark_content(tables: set[str]) -> list[str]:
+    """Describe content that an empty, freshly migrated or benchmark-seeded database cannot have."""
+    if not tables:
+        return []
+
+    # A database with tables must be one this project migrated: the tables the
+    # checks below read have to exist, and nothing else may live next to them.
+    user_model = get_user_model()
+    required = {"django_migrations", Page._meta.db_table, Site._meta.db_table, Blog._meta.db_table}
+    required.add(user_model._meta.db_table)
+    missing = sorted(required - tables)
+    if missing:
+        return [f"tables without the benchmark schema (missing {', '.join(missing[:5])})"]
+    known = set(connection.introspection.django_table_names()) | {"django_migrations"} | SEARCH_INDEX_TABLES
+    unknown = sorted(tables - known)
+    if unknown:
+        return [f"tables that do not belong to the benchmark schema: {', '.join(unknown[:5])}"]
+
+    problems: list[str] = []
+    blogs = list(Blog.objects.order_by("path").values_list("slug", "path"))
+    benchmark_paths = [path for slug, path in blogs if slug.startswith(BENCHMARK_SLUG_PREFIX)]
+    foreign_slugs = [slug for slug, _path in blogs if not slug.startswith(BENCHMARK_SLUG_PREFIX)]
+    if foreign_slugs:
+        problems.append(f"non-benchmark Blogs: {', '.join(foreign_slugs[:5])}")
+
+    outside = Page.objects.filter(depth__gt=1)
+    for path in benchmark_paths:
+        outside = outside.exclude(path__startswith=path)
+    # Wagtail's migrations create one plain "home" page below the root. Only
+    # that page exactly as created counts: never edited (no revision), stock
+    # title, no SEO fields.
+    default_home = Q(
+        depth=2,
+        slug="home",
+        numchild=0,
+        title=WAGTAIL_DEFAULT_HOME_TITLE,
+        seo_title="",
+        search_description="",
+        latest_revision__isnull=True,
+        content_type__app_label="wagtailcore",
+        content_type__model="page",
+    )
+    foreign_pages = list(outside.exclude(default_home).order_by("path").values_list("slug", flat=True)[:5])
+    if foreign_pages:
+        problems.append(f"pages outside the benchmark Blogs: {', '.join(foreign_pages)}")
+
+    other_users = user_model._default_manager.exclude(**{user_model.USERNAME_FIELD: BENCHMARK_USERNAME}).count()
+    if other_users:
+        problems.append(f"{other_users} user account(s) other than {BENCHMARK_USERNAME}")
+
+    return problems
+
+
 def ensure_benchmark_database() -> tuple[Site, Any]:
     call_command("migrate", interactive=False, verbosity=0)
 
@@ -113,7 +221,7 @@ def ensure_benchmark_database() -> tuple[Site, Any]:
         site.save(update_fields=["root_page"])
 
     user_model = get_user_model()
-    user, _created = user_model.objects.get_or_create(username="typeahead-benchmark")
+    user, _created = user_model.objects.get_or_create(username=BENCHMARK_USERNAME)
     return site, user
 
 
@@ -188,7 +296,11 @@ def add_facets(post_ids: list[int]) -> None:
 
 
 def seed(sizes: list[int]) -> None:
+    # Read-only: must stay ahead of ensure_benchmark_database(), which migrates
+    # and rewrites the default Site.
+    preflight_benchmark_database()
     site, user = ensure_benchmark_database()
+    # Second check after migrations, in case the first one could not see Blogs yet.
     refuse_non_benchmark_blogs()
     for size in sorted(set(sizes)):
         create_blog(site, user, size)
