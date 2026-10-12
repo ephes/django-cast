@@ -100,3 +100,5 @@ class Command(BaseCommand):
             raise CommandError("Use --yes to confirm destructive replacements.")
 
         self.stdout.write(f"planned={planned} replaced={replaced} skipped={skipped} errors={errors}")
+        if errors:
+            raise CommandError(f"{errors} of {planned} replacement(s) failed; see the errors above.")

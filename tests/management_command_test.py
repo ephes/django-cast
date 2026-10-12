@@ -506,10 +506,47 @@ def test_media_replace_logs_error_and_summary_when_save_fails(mocker):
     mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
     mocker.patch.object(production, "save", side_effect=RuntimeError("boom"))
 
-    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+    with pytest.raises(CommandError, match=r"1 of 1 replacement\(s\) failed"):
+        call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert "error replacing foo.jpg: boom" in error_output.getvalue()
     assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
+
+
+def test_media_replace_continues_after_failure_and_exits_nonzero(mocker):
+    output = StringIO()
+    error_output = StringIO()
+    production = StubProductionStorage()
+    production.add("bad.jpg", b"old bad")
+    production.add("good.jpg", b"old good")
+    local = StubLocalStorage({"bad.jpg": b"new bad", "good.jpg": b"new good"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    original_save = production.save
+
+    def fail_final_save_of_bad(path, content):
+        if path == "bad.jpg":
+            raise RuntimeError("boom")
+        return original_save(path, content)
+
+    mocker.patch.object(production, "save", side_effect=fail_final_save_of_bad)
+
+    with pytest.raises(CommandError, match=r"1 of 2 replacement\(s\) failed") as err:
+        call_command("media_replace", "bad.jpg", "good.jpg", yes=True, stdout=output, stderr=error_output)
+
+    # the failure is reported through the exit status, not swallowed
+    assert err.value.returncode == 1
+    # the independent replacement after the failure was still attempted and succeeded
+    assert production._files == {"bad.jpg": b"old bad", "good.jpg": b"new good"}
+    # both staged objects were cleaned up
+    assert len(production.deleted) == 2
+    assert all(".django-cast-replace-" in path for path in production.deleted)
+    assert "error replacing bad.jpg: boom" in error_output.getvalue()
+    assert "replaced: good.jpg" in output.getvalue()
+    assert "planned=2 replaced=1 skipped=0 errors=1" in output.getvalue()
 
 
 def test_media_replace_errors_when_staged_replacement_is_missing(mocker):
@@ -524,7 +561,8 @@ def test_media_replace_errors_when_staged_replacement_is_missing(mocker):
     mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
     mocker.patch.object(production, "save", return_value="missing-stage.tmp")
 
-    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+    with pytest.raises(CommandError, match=r"1 of 1 replacement\(s\) failed"):
+        call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert "error replacing foo.jpg: staged replacement missing-stage.tmp was not saved" in error_output.getvalue()
     assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
@@ -550,7 +588,8 @@ def test_media_replace_keeps_existing_file_when_final_save_fails(mocker):
 
     mocker.patch.object(production, "save", side_effect=fail_final_save)
 
-    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+    with pytest.raises(CommandError, match=r"1 of 1 replacement\(s\) failed"):
+        call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert production._files["foo.jpg"] == b"old"
     assert "foo.jpg" not in production.deleted
@@ -577,7 +616,8 @@ def test_media_replace_errors_when_existing_target_would_be_saved_under_differen
 
     mocker.patch.object(production, "save", side_effect=save_with_generated_name)
 
-    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+    with pytest.raises(CommandError, match=r"1 of 1 replacement\(s\) failed"):
+        call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert production._files["foo.jpg"] == b"old"
     assert "foo_1.jpg" not in production._files
@@ -612,7 +652,8 @@ def test_media_replace_warns_when_generated_replacement_cleanup_fails(mocker):
     mocker.patch.object(production, "save", side_effect=save_with_generated_name)
     mocker.patch.object(production, "delete", side_effect=fail_generated_delete)
 
-    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+    with pytest.raises(CommandError, match=r"1 of 1 replacement\(s\) failed"):
+        call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert production._files["foo.jpg"] == b"old"
     assert "foo_1.jpg" in production._files
@@ -641,7 +682,8 @@ def test_media_replace_errors_when_existing_target_generated_name_is_missing(moc
 
     mocker.patch.object(production, "save", side_effect=save_with_missing_generated_name)
 
-    call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
+    with pytest.raises(CommandError, match=r"1 of 1 replacement\(s\) failed"):
+        call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert production._files["foo.jpg"] == b"old"
     assert "storage saved replacement as foo_1.jpg; original foo.jpg was not replaced" in error_output.getvalue()

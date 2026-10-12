@@ -202,6 +202,12 @@ requested path; if the backend auto-generates a different name, the generated
 file is removed, the original path is left untouched, and the path is reported
 as an error.
 
+A failed replacement does not stop the run: the remaining paths are still
+attempted and staged objects are cleaned up. After printing the summary, the
+command exits with ``CommandError`` (a non-zero exit status) when at least one
+replacement failed, even if others succeeded, so automation can detect a
+partial run. Skipped paths and ``--dry-run`` do not affect the exit status.
+
 media_sizes
 -----------
 
