@@ -464,8 +464,8 @@ Type-check the TypeScript sources with ``tsc --noEmit``:
    $ npm run typecheck
 
 Vite and Vitest only strip types, so this is the only command that actually checks them.
-It currently reports pre-existing errors, mostly in the test files, and is therefore not
-part of CI yet; treat new errors in the code you touch as something to fix.
+CI runs this check for sources and tests alongside ``npm test``. Run both checks
+before submitting JavaScript changes.
 
 Build shipped JavaScript assets:
 

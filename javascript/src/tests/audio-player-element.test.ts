@@ -105,7 +105,7 @@ describe("cast-audio-player transport", () => {
     expect(remaining.textContent).toBe("--:--");
 
     const audio = audioOf(player);
-    audio.duration = 90;
+    Object.defineProperty(audio, "duration", { configurable: true, value: 90 });
     audio.dispatchEvent(new Event("durationchange"));
     expect(range.disabled).toBe(false);
     expect(range.max).toBe("90");

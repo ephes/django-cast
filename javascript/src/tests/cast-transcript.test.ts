@@ -647,3 +647,14 @@ describe("cast-transcript + chapters accordion", () => {
     expect(transcript.querySelector(".cast-panel.is-open")).toBeNull();
   });
 });
+
+
+describe("transcript DOM API", () => {
+  it("preserves native scrolling methods", () => {
+    const transcript = document.createElement("cast-transcript");
+    document.body.appendChild(transcript);
+    expect(Object.hasOwn(transcript, "scroll")).toBe(false);
+    expect(transcript.scroll).toBe(HTMLElement.prototype.scroll);
+    expect(transcript.scrollIntoView).toBe(HTMLElement.prototype.scrollIntoView);
+  });
+});

@@ -1,7 +1,12 @@
 // podlove-player.ts
-declare const podlovePlayer:
-  | ((playerTarget: HTMLElement | string, url: string, configUrl: string) => void)
-  | undefined;
+declare global {
+  var podlovePlayer:
+    | ((playerTarget: HTMLElement | string, url: string, configUrl: string) => void)
+    | undefined;
+  interface HTMLElementTagNameMap {
+    "podlove-player": PodlovePlayerElement;
+  }
+}
 
 let embedScriptPromise: Promise<void> | null = null;
 let pageLoadPromise: Promise<void> | null = null;
@@ -189,7 +194,7 @@ function appendDarkColorScheme(configUrl: string): string {
   return nextQuery ? `${path}?${nextQuery}${hash}` : `${path}${hash}`;
 }
 
-class PodlovePlayerElement extends HTMLElement {
+export class PodlovePlayerElement extends HTMLElement {
   observer: IntersectionObserver | null;
   isInitialized: boolean;
   isScheduled: boolean;

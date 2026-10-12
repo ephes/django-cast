@@ -5,6 +5,8 @@
   EXIF data such as orientation, for both in-memory and disk-backed uploads.
   Add ``report_image_gps``, a read-only inventory of existing originals with
   EXIF GPS. Existing media is not rewritten.
+- Fix the TypeScript typecheck baseline in audio components and frontend tests,
+  add missing module declarations, and enforce ``tsc --noEmit`` in JavaScript CI.
 - Make the default comment moderator (``cast.moderation.Moderator``) look up
   the spam filter for every posted comment instead of once per process. It
   used to keep the filter it found on the first comment after a start: if no
