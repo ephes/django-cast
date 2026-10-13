@@ -268,8 +268,10 @@ model/language defaults in ``Settings -> Voxhelm settings``.
 
 When an existing API token is stored in Wagtail, the token field is intentionally
 blank when you reopen the settings form. If the help text says that a token is
-configured, submit the form with the field blank to keep the stored token, or
-enter a new token to replace it.
+configured, keep the API base URL set and unchanged and submit the form with
+the token field blank to keep the stored token, or enter a new token to replace it. Changing the API base URL requires entering
+the token again. To use deployment credentials instead, clear both fields
+together; clearing the base and leaving the token blank removes the stored pair.
 
 Production sites can also keep Voxhelm credentials in deployment-managed Django
 settings or environment variables instead of the Wagtail database. django-cast
@@ -278,8 +280,15 @@ variables. Use ``CAST_VOXHELM_API_BASE`` and ``CAST_VOXHELM_API_KEY`` for the
 required service URL and bearer token; optional defaults use
 ``CAST_VOXHELM_MODEL``, ``CAST_VOXHELM_LANGUAGE``, and
 ``CAST_VOXHELM_DIARIZATION_ENABLED``. If the token should be managed as a
-deployment secret, leave the Wagtail API token blank and provide
-``CAST_VOXHELM_API_KEY`` to both the web process and transcript worker.
+deployment secret, leave both Wagtail credential fields blank and provide both
+``CAST_VOXHELM_API_BASE`` and ``CAST_VOXHELM_API_KEY`` to the web process and
+transcript worker at the same level (Django settings or environment).
+
+The API base and token resolve as a pair from one level: Wagtail site settings,
+then Django settings, then environment variables. Any nonempty credential at a
+level selects that level; an incomplete pair is not configured and never
+inherits the missing credential. Existing installations that mix levels must
+move both credentials to one level before upgrading.
 
 Each audio object also has a transcript diarization mode. The default
 ``inherit`` mode keeps using the site/global Voxhelm diarization setting for

@@ -37,6 +37,16 @@ def get_site_setting_value(name: str, request_or_site: HttpRequest | Site | None
 
 
 def get_setting(name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None) -> object:
+    credential_names = ("CAST_VOXHELM_API_BASE", "CAST_VOXHELM_API_KEY")
+    if name in credential_names:
+        # Any credential at a level selects the entire pair, even if incomplete.
+        site_pair = {key: get_site_setting_value(key, request_or_site) for key in credential_names}
+        if any(value not in {None, ""} for value in site_pair.values()):
+            return site_pair[name]
+        django_pair = {key: getattr(settings, key, None) for key in credential_names}
+        if any(value not in {None, ""} for value in django_pair.values()):
+            return django_pair[name]
+        return os.getenv(name, default)
     site_value = get_site_setting_value(name, request_or_site)
     if site_value not in {None, ""}:
         return site_value
@@ -47,7 +57,7 @@ def get_setting(name: str, default: object = None, *, request_or_site: HttpReque
 
 
 def voxhelm_configured(*, request_or_site: HttpRequest | Site | None = None) -> bool:
-    """True when the Voxhelm API base and key both resolve non-empty through the settings chain."""
+    """True when the Voxhelm API base and key both resolve non-empty from the same configuration level."""
     for name in ("CAST_VOXHELM_API_BASE", "CAST_VOXHELM_API_KEY"):
         value = get_setting(name, request_or_site=request_or_site)
         if not isinstance(value, str) or not value.strip():
