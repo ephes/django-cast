@@ -28,6 +28,9 @@ External Themes
 Theme Selection Precedence
 ==========================
 
+Feed descriptions use the blog theme or, when unset, the site default theme.
+Session choices and request previews do not affect shared feed rendering.
+
 When a page is rendered, django-cast resolves the active theme using the
 following precedence chain (highest wins):
 
@@ -340,7 +343,14 @@ templates:
     The Blog or Podcast page object.
 
 ``root_nav_links``
-    List of ``(url, text)`` tuples for the site navigation.
+    List of ``(url, text)`` tuples for live, public pages in the site navigation.
+    View-restricted pages and pages beneath a restricted page are omitted,
+    including for signed-in visitors; member-only sites must supply their own
+    navigation. Which pages are candidates is unchanged: blog index, feed and
+    cached blog data list the children of the site's root page, while post
+    detail pages list the children of the page tree root (the root pages of
+    all sites), so their navigation can still name public pages of other
+    sites.
 
 ``has_selectable_themes``
     Boolean indicating whether multiple themes are available.
