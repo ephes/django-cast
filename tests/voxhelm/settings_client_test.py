@@ -61,9 +61,10 @@ def test_normalize_api_base():
 
 
 def test_settings_helpers_and_client_from_settings(settings, monkeypatch):
-    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_BASE = ""
     settings.CAST_VOXHELM_API_KEY = ""
     settings.CAST_VOXHELM_POLL_INTERVAL = "1.5"
+    monkeypatch.setenv("CAST_VOXHELM_API_BASE", "https://voxhelm.example")
     monkeypatch.setenv("CAST_VOXHELM_API_KEY", "secret")
     monkeypatch.setenv("CAST_VOXHELM_POLL_TIMEOUT", "12.5")
     monkeypatch.setenv("CAST_VOXHELM_REQUEST_TIMEOUT", "45")
@@ -806,3 +807,31 @@ def test_client_wait_for_job_polls_until_terminal_state(mocker):
     assert client.wait_for_job("job-1") == {"id": "job-1", "state": "succeeded"}
     assert get_job.call_count == 2
     sleep_mock.assert_called_once_with(0.0)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("site_base,site_key", [("https://site.example", ""), ("", "site-key")])
+def test_incomplete_site_credentials_never_inherit(site, settings, monkeypatch, site_base, site_key):
+    from cast.voxhelm.settings import voxhelm_configured
+
+    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
+    settings.CAST_VOXHELM_API_KEY = "settings-key"
+    monkeypatch.setenv("CAST_VOXHELM_API_BASE", "https://env.example")
+    monkeypatch.setenv("CAST_VOXHELM_API_KEY", "env-key")
+    VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_base": site_base, "api_token": site_key})
+    assert not voxhelm_configured(request_or_site=site)
+    with pytest.raises(ImproperlyConfigured):
+        VoxhelmClient.from_settings(request_or_site=site)
+
+
+@pytest.mark.parametrize("base,key", [("https://settings.example", ""), ("", "settings-key")])
+def test_incomplete_django_credentials_never_inherit(settings, monkeypatch, base, key):
+    from cast.voxhelm.settings import voxhelm_configured
+
+    settings.CAST_VOXHELM_API_BASE = base
+    settings.CAST_VOXHELM_API_KEY = key
+    monkeypatch.setenv("CAST_VOXHELM_API_BASE", "https://env.example")
+    monkeypatch.setenv("CAST_VOXHELM_API_KEY", "env-key")
+    assert not voxhelm_configured()
+    with pytest.raises(ImproperlyConfigured):
+        VoxhelmClient.from_settings()

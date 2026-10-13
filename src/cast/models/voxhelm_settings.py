@@ -81,7 +81,8 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         if self.instance.pk and self.instance.api_token:
             self.fields["api_token"].help_text = _(
                 "A token is configured. The field is intentionally blank for security. Leave blank to keep the "
-                "existing token, or enter a new token to replace it."
+                "existing token when the API base URL remains set and unchanged, or enter a new token to replace it. "
+                "Saving with both credential fields blank removes the stored token."
             )
 
     def clean_api_base(self) -> str:
@@ -91,6 +92,10 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         token = self.cleaned_data.get("api_token", "").strip()
         if token:
             return token
+        if self.cleaned_data.get("api_base") == "":
+            return ""
+        if self.cleaned_data.get("api_base", self.instance.api_base) != self.instance.api_base:
+            raise forms.ValidationError(_("Enter the API token when changing the API base URL."))
         return self.instance.api_token
 
     def clean_model(self) -> str:

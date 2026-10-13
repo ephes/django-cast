@@ -8,6 +8,7 @@ Versions
 .. toctree::
    :maxdepth: 1
 
+   unreleased
    0.2.67
    0.2.66
    0.2.65

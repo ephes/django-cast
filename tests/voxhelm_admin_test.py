@@ -53,7 +53,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     response = admin_client.post(
         edit_url,
         {
-            "api_base": "https://voxhelm.internal",
+            "api_base": "https://voxhelm.example",
             "api_token": "",
             "model": "whisper-1",
             "language": "de",
@@ -64,7 +64,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
 
     assert response.status_code == 200
     setting = VoxhelmSettings.for_site(site)
-    assert setting.api_base == "https://voxhelm.internal"
+    assert setting.api_base == "https://voxhelm.example"
     assert setting.api_token == "very-secret-token"
     assert setting.model == "whisper-1"
     assert setting.language == "de"
@@ -710,3 +710,41 @@ def test_user_can_generate_transcript_for_episode_returns_false_without_page_per
     request.user = user
 
     assert voxhelm_views.user_can_generate_transcript_for_episode(request=request, episode=episode) is False
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("stored_token", ["stored-key", ""])
+def test_voxhelm_base_change_requires_fresh_token(admin_client, site, stored_token):
+    setting, _ = VoxhelmSettings.objects.update_or_create(
+        site=site, defaults={"api_base": "https://voxhelm.example", "api_token": stored_token}
+    )
+    response = admin_client.post(
+        reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
+        {"api_base": "https://other.example", "api_token": "", "model": "", "language": ""},
+    )
+    assert response.status_code == 200
+    assert "Enter the API token when changing the API base URL" in response.content.decode()
+    setting.refresh_from_db()
+    assert setting.api_base == "https://voxhelm.example"
+    assert setting.api_token == stored_token
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "stored_base,stored_token",
+    [("https://voxhelm.example", "stored-key"), ("https://voxhelm.example", ""), ("", "stored-key")],
+)
+def test_voxhelm_site_credentials_can_be_cleared(admin_client, site, stored_base, stored_token):
+    setting, _ = VoxhelmSettings.objects.update_or_create(
+        site=site, defaults={"api_base": stored_base, "api_token": stored_token}
+    )
+    response = admin_client.post(
+        reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
+        {"api_base": "", "api_token": "", "model": "", "language": ""},
+        follow=True,
+    )
+    assert response.status_code == 200
+    assert "Enter the API token when changing" not in response.content.decode()
+    setting.refresh_from_db()
+    assert setting.api_base == ""
+    assert setting.api_token == ""
