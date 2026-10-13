@@ -9,6 +9,8 @@ from typing import Any
 from django.apps import AppConfig, apps
 from django.conf import settings
 from django.core.checks import Error, Warning, register
+from django.template import TemplateDoesNotExist, TemplateSyntaxError
+from django.template.loader import get_template
 
 from cast import appsettings
 from cast.apps import CAST_MIDDLEWARE
@@ -380,3 +382,34 @@ def check_voxhelm_transcripts_task_backend(
             id="cast.E009",
         )
     ]
+
+
+@register("cast")
+def check_theme_contract(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Warning]:
+    """Report missing soft-required templates for configured and discovered themes."""
+    from cast.models.theme import get_soft_required_template_names, get_template_base_dir_choices
+
+    messages: list[Warning] = []
+    for theme in dict(get_template_base_dir_choices()):
+        for name in get_soft_required_template_names():
+            template_name = f"cast/{theme}/{name}"
+            try:
+                get_template(template_name)
+            except TemplateDoesNotExist:
+                message = f"Theme '{theme}' is missing soft-required template '{template_name}'."
+            except TemplateSyntaxError as exc:
+                message = f"Theme '{theme}' cannot load soft-required template '{template_name}': {exc}"
+            else:
+                continue
+            messages.append(
+                Warning(
+                    message,
+                    hint="Provide a valid template before it becomes strictly required in a future release.",
+                    id="cast.W002",
+                )
+            )
+    return messages

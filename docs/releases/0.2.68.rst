@@ -1,6 +1,11 @@
 0.2.68 (unreleased)
 -------------------
 
+- Fall back to the plain theme selector fragment for HTMX requests when a
+  theme omits the optional ``select_theme.html`` template.
+- Report missing soft-required theme templates as ``cast.W002`` system check
+  warnings, including configured themes and templates provided by custom loaders.
+  Template syntax errors also produce warnings rather than aborting startup checks.
 - Rename generic ``Speaker N:`` cue prefixes as well as voice tags through
   ``Transcript.rewrite_speaker_labels``. Renamed prefixes become voice tags
   for subsequent renames and public speaker sanitization.

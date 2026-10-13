@@ -49,7 +49,10 @@ def select_theme(request: HtmxHttpRequest) -> HttpResponse:
     }
     is_htmx = bool(getattr(request, "htmx", False))
     if is_htmx:
-        template_name = f"cast/{template_base_dir}/select_theme.html"
+        template_name: str | list[str] = [
+            f"cast/{template_base_dir}/select_theme.html",
+            "cast/plain/select_theme.html",
+        ]
     else:
         template_name = "cast/select_theme_page.html"
     return render(request, template_name, context=context)

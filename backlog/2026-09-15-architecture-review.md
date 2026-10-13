@@ -361,6 +361,10 @@ documented in tiers that match the code. The remaining problems are concentrated
   `check_theme_contract` system check iterating `get_template_base_dir_choices()` and probing required names with
   `get_template` (`cast.E010`/`cast.W002`), discovery made side-effect free, `docs/features/themes.rst` pointed at
   the check id. `tests/theme_test.py:420-440` assert the warning is emitted and must be rewritten in the same change.
+  Fix note (2026-10-13): `check_theme_contract` now probes soft-required templates
+  through Django loaders for built-in, configured, and discovered themes and
+  reports `cast.W002`. Discovery deprecation notices remain for compatibility;
+  strict discovery requirements are unchanged.
 - **X5. The theme fallback to `plain` is hand-rolled at five call sites** (low, duplication) — `views/theme.py:52`.
   `views/feed.py`, `views/gallery.py` and `views/transcript.py` each define a `_resolve_*_template` with its own
   `*_FALLBACK_THEME = "plain"`, and `blocks.py:248-258` / `views/defaults.py:24-60` implement the same probe
@@ -369,6 +373,9 @@ documented in tiers that match the code. The remaining problems are concentrated
   `resolve_theme_template(template_base_dir, name, fallback=...)` used everywhere including `select_theme`, taking a
   fallback *template name* (or `None`) rather than a theme slug — `blocks.get_block_template` falls back to the
   block's `default_template_name` and `views/defaults.py` to Django's built-in error views.
+  Fix note (partial, 2026-10-13): HTMX theme selection now uses Django
+  ordered template fallback to the plain selector. The broader resolver
+  consolidation remains open.
 - **X6. Dev tooling still ships and is imported by every deployment** (medium, architecture, prior M6) —
   `devdata.py:8`. `urls.py:14` imports `views.styleguide` unconditionally and that module (1595 lines, the largest in
   the wheel) imports `cast.devdata` at module level, so every production URLconf load pulls in fixture factories;
