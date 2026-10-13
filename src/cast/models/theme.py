@@ -37,7 +37,8 @@ def get_strictly_required_template_names() -> list[str]:
 def get_soft_required_template_names() -> list[str]:
     """
     Return template names that are part of the theme contract but only
-    produce a DeprecationWarning when missing (staged enforcement).
+    produce a cast.W002 system check warning when missing or invalid,
+    plus a DeprecationWarning during discovery (staged enforcement).
 
     In a future release these will become strictly required and missing
     ones will block theme discovery.

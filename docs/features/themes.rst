@@ -149,7 +149,7 @@ Required Templates
 
 Templates are split into two tiers: **strictly required** (must exist for
 the theme to be discovered) and **soft-required** (produce a
-``DeprecationWarning`` when missing but will become strictly required in a
+``cast.W002`` system check warning when missing but will become strictly required in a
 future release). The requirement change is tracked in the
 `project backlog <https://github.com/ephes/django-cast/blob/develop/BACKLOG.md>`__.
 
@@ -170,7 +170,14 @@ these:
     The podcast episode detail page. Extends ``post.html`` and adds
     audio-specific meta tags.
 
-**Soft-required** — missing these triggers a deprecation warning:
+**Soft-required** — missing these triggers a ``cast.W002`` warning in
+``manage.py check --tag cast``. The check uses Django template loaders for
+built-in, configured, and discovered themes, without requiring database access.
+Template syntax errors are also reported as ``cast.W002`` warnings rather
+than aborting the check. Duplicate theme slugs are checked once.
+Discovery also retains its staged ``DeprecationWarning`` notices.
+
+Soft-required templates:
 
 ``base.html``
     The root HTML template. All other full-page templates extend this.
@@ -209,7 +216,9 @@ functionality:
 
 ``select_theme.html``
     Theme selector UI (typically a dropdown in the navigation bar). Not
-    required for theme discovery, but both built-in themes include it.
+    required for theme discovery. HTMX selector requests fall back to
+    ``cast/plain/select_theme.html`` when absent; a theme-specific fragment
+    takes precedence. Both built-in themes include it.
     (Earlier versions of this documentation referred to the file as
     ``select_template.html``; the actual file name is ``select_theme.html``.)
 

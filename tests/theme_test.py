@@ -4,6 +4,7 @@ import warnings
 from pathlib import Path
 
 import pytest
+from django.core.checks import run_checks
 from django.db.utils import OperationalError
 from django.urls import reverse
 from wagtail.models import Site
@@ -183,6 +184,26 @@ def test_get_select_theme_view_htmx(client):
     assert response.status_code == 200
     select_template_name = response.templates[0].name
     assert select_template_name.endswith("/select_theme.html")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("method", ["get", "post"])
+@pytest.mark.parametrize("own_selector", [False, True])
+def test_htmx_selector_optional_fragment(client, theme_template_dir, method, own_selector):
+    theme_dir = create_new_theme(theme_template_dir, "minimal")
+    if own_selector:
+        (theme_dir / "select_theme.html").write_text("Custom selector {{ theme_form }}")
+    session = client.session
+    session["template_base_dir"] = "minimal"
+    session.save()
+    url = reverse("cast:select-theme")
+    response = getattr(client, method)(url, {"template_base_dir": "invalid", "next": "/"}, HTTP_HX_REQUEST="true")
+    assert response.status_code == 200
+    expected = "cast/minimal/select_theme.html" if own_selector else "cast/plain/select_theme.html"
+    assert response.templates[0].name == expected
+    if method == "post":
+        assert "template_base_dir" in response.context["theme_form"].errors
+    assert client.session["template_base_dir"] == "minimal"
 
 
 @pytest.mark.django_db
@@ -453,3 +474,73 @@ def test_theme_discovery_still_finds_theme_missing_soft_required(theme_template_
     # At least one DeprecationWarning should have been emitted
     deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
     assert len(deprecation_warnings) > 0
+
+
+def theme_contract_warnings():
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        return [message for message in run_checks(tags=["cast"]) if message.id == "cast.W002"]
+
+
+def test_theme_contract_reports_discovered_missing_base(theme_template_dir):
+    theme_dir = create_new_theme(theme_template_dir, "missing_base")
+    (theme_dir / "base.html").unlink()
+    # Warm discovery under the normal ignored-warning filter: the system check
+    # must still diagnose the theme even after its choices are cached.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        get_template_base_dir_choices()
+    messages = theme_contract_warnings()
+    assert len(messages) == 1
+    assert "missing_base" in messages[0].msg
+    assert "base.html" in messages[0].msg
+    assert "select_theme.html" not in messages[0].msg
+
+
+def test_theme_contract_complete_without_optional_selector(theme_template_dir):
+    create_new_theme(theme_template_dir, "complete")
+    assert theme_contract_warnings() == []
+
+
+def test_theme_contract_configured_theme_uses_template_loader(settings):
+    settings.CAST_CUSTOM_THEMES = [("memory_theme", "Memory theme")]
+    names = ["plain", "bootstrap4", "memory_theme"]
+    templates = {
+        f"cast/{theme}/{name}": ""
+        for theme in names
+        for name in get_required_template_names()
+        if theme != "memory_theme" or name != "base.html"
+    }
+    settings.TEMPLATES = [
+        {
+            "BACKEND": "django.template.backends.django.DjangoTemplates",
+            "OPTIONS": {"loaders": [("django.template.loaders.locmem.Loader", templates)]},
+        }
+    ]
+    messages = theme_contract_warnings()
+    assert len(messages) == 1
+    assert "memory_theme" in messages[0].msg
+    assert "base.html" in messages[0].msg
+
+
+def test_theme_contract_reports_template_syntax_error(theme_template_dir):
+    theme_dir = create_new_theme(theme_template_dir, "broken")
+    (theme_dir / "base.html").write_text("{% invalid_tag %}")
+    messages = theme_contract_warnings()
+    assert len(messages) == 1
+    assert "broken" in messages[0].msg
+    assert "base.html" in messages[0].msg
+    assert "cannot load" in messages[0].msg
+
+
+def test_theme_contract_deduplicates_choices(theme_template_dir, mocker):
+    theme_dir = create_new_theme(theme_template_dir, "duplicated")
+    (theme_dir / "base.html").unlink()
+    mocker.patch(
+        "cast.models.theme.get_template_base_dir_choices",
+        return_value=[
+            ("duplicated", "First"),
+            ("duplicated", "Second"),
+        ],
+    )
+    assert len(theme_contract_warnings()) == 1
