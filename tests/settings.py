@@ -158,8 +158,7 @@ PASSWORD_HASHERS = [
 # Use in memory cache for tests
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
-# The locmem cache is shared by the whole test run, so the comment post rate
-# limit would add up over unrelated tests. Tests of the limit enable it.
+# Tests post comments freely; tests of the comment post rate limit enable it.
 CAST_COMMENTS_POST_RATE_LIMIT = 0
 
 # crispy forms

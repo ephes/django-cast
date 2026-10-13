@@ -87,3 +87,7 @@
   other than ``typeahead-benchmark``. Empty, freshly migrated and previously
   seeded benchmark databases work as before. ``scripts/benchmark_feeds.py``
   seeds through the same check.
+- Clear the cache before every test. A feed response cached by one test was
+  served to a later test that requested the same feed URL, so
+  ``test_get_only_published_entries`` failed depending on the random test
+  order.

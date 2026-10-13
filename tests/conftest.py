@@ -364,7 +364,20 @@ def baseline_site_root_paths_cache(django_db_setup, django_db_blocker):
 
 
 @pytest.fixture(autouse=True)
-def restore_site_root_paths_cache(baseline_site_root_paths_cache):
+def isolated_cache():
+    """Start every test with an empty cache.
+
+    The locmem cache lives as long as the test process, and the database
+    rollback after a test does not touch it. The feed routes cache their
+    responses under the feed URL, and fixtures reuse blog and post slugs, so a
+    feed cached by one test would be served to a later test whose database
+    holds different entries.
+    """
+    cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def restore_site_root_paths_cache(isolated_cache, baseline_site_root_paths_cache):
     cache.set(
         SITE_ROOT_PATHS_CACHE_KEY,
         baseline_site_root_paths_cache,
