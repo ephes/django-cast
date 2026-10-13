@@ -8,6 +8,7 @@ from wagtail.images.models import Image
 from wagtail.models import Site
 
 from cast.blog_index import create_blog_filterset, pagination_context, published_posts_for_index
+from cast.models.theme import get_default_template_base_dir
 
 from .serialization import (
     serialize_audio,
@@ -144,7 +145,7 @@ def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, bl
 def add_root_nav_links(data: dict[str, Any]) -> dict:
     """Add top-level navigation links (root page children) to the data dict."""
     site = Site(**data["site"])
-    root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
+    root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live().public()]
     data["root_nav_links"] = root_nav_links
     return data
 
@@ -224,7 +225,11 @@ def data_for_blog_cachable(
     data["blog_cover_alt_text"] = blog.cover_alt_text
     data = add_site_raw(data, request=request, blog=blog)
     data = add_root_nav_links(data)
-    data["template_base_dir"] = blog.get_template_base_dir(cast("HtmxHttpRequest", request))
+    data["template_base_dir"] = (
+        blog.get_template_base_dir(cast("HtmxHttpRequest", request))
+        if is_paginated
+        else get_default_template_base_dir(request, blog.template_base_dir)
+    )
 
     # filters and pagination
     if is_paginated:

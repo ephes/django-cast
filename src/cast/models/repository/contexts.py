@@ -136,7 +136,7 @@ class PostDetailContext:
             template_base_dir=post.get_template_base_dir(request),
             blog=blog,
             comments_are_enabled=post.get_comments_are_enabled(blog),
-            root_nav_links=[(p.get_url(), p.title) for p in blog.get_root().get_children().live()],
+            root_nav_links=[(p.get_url(), p.title) for p in blog.get_root().get_children().live().public()],
             has_audio=has_audio,
             page_url=post.get_url(request=request),
             absolute_page_url=cast(str, post.get_full_url(request=request)),
@@ -249,7 +249,7 @@ class FeedContext:
             blog._last_build_date = max(visible_dates)
         root_nav_links: LinkTuples = []
         if site is not None:
-            root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live()]
+            root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live().public()]
         for post in queryset_data.queryset:
             post._media_lookup = build_media_lookup(
                 post.pk,
@@ -624,7 +624,7 @@ class BlogIndexContext:
         root_nav_links = []
         site = blog.get_site()
         if site is not None:
-            for page in site.root_page.get_children().live():
+            for page in site.root_page.get_children().live().public():
                 root_nav_links.append((page.get_url(request), page.title))
         queryset_data = PostQuerySnapshot.create_from_post_queryset(
             request=request, site=site, queryset=pagination["object_list"]

@@ -34,6 +34,7 @@ from cast.site_lookup import get_site_specific_unrestricted_page_or_404
 
 from .models import Audio, Blog, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext, limit_blog_feed_posts
+from .models.theme import get_default_template_base_dir
 
 if django.VERSION >= (5, 2):
     from django.utils.feedgenerator import Stylesheet
@@ -125,6 +126,7 @@ class RepositoryMixin(Feed):
                 request=request,
                 blog=blog,
                 post_queryset=post_queryset,
+                template_base_dir=get_default_template_base_dir(request, blog.template_base_dir),
             )
 
     def items(self) -> QuerySet[Post]:

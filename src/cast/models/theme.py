@@ -215,10 +215,14 @@ def get_template_base_dir(request: HttpRequest, pre_selected: str | None) -> str
                 return template_base_dir
     if hasattr(request, "session") and (template_base_dir := request.session.get("template_base_dir")) is not None:
         return template_base_dir
+    return get_default_template_base_dir(request, pre_selected)
+
+
+def get_default_template_base_dir(request: HttpRequest, pre_selected: str | None) -> str:
+    """Resolve the blog/site default without visitor theme overrides."""
     if pre_selected is not None:
         return pre_selected
-    else:
-        return TemplateBaseDirectory.for_request(request).name
+    return TemplateBaseDirectory.for_request(request).name
 
 
 @register_setting
