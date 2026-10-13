@@ -199,6 +199,22 @@ def rewrite_payload_line(line: str, mapping: Mapping[str, str]) -> tuple[str, bo
         return voice_opening(target_label, classes=match.group("classes"))
 
     rewritten_line = VOICE_OPENING_RE.sub(replace_voice_opening, line)
+    prefix_match = GENERIC_SPEAKER_PREFIX_RE.match(rewritten_line.lstrip())
+    if prefix_match is not None:
+        label = parsing.clean_speaker_label(prefix_match.group("label"))
+        target_label = mapping.get(label)
+        if target_label is not None:
+            offset = len(rewritten_line) - len(rewritten_line.lstrip())
+            start, end = prefix_match.span("label")
+            colon_end = rewritten_line.index(":", offset + end) + 1
+            payload_end = len(rewritten_line.rstrip("\r\n"))
+            rewritten_line = (
+                rewritten_line[: offset + start]
+                + voice_opening(target_label)
+                + rewritten_line[colon_end:payload_end]
+                + "</v>"
+                + rewritten_line[payload_end:]
+            )
     return rewritten_line, rewritten_line != line
 
 

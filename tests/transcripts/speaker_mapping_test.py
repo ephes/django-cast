@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from cast.devdata import create_transcript
 from cast.media_derivation import save_transcript_with_derivations
 from cast.models import Contributor, Transcript, TranscriptSpeakerMapping
+from cast.transcript_sanitization import sanitize_webvtt_content
 from cast.transcripts import parsing, speaker_samples, webvtt
 
 
@@ -450,6 +451,54 @@ class TestTranscriptSpeakerMapping:
             "<v Speaker 3>Unmapped voice</v>\n"
             "Speaker 1 remains cue text\n"
         )
+
+    def test_rewrite_generic_vtt_prefixes_preserves_surrounding_bytes(self, audio):
+        vtt = (
+            "WEBVTT\r\nSpeaker 1: header\r\n\r\n"
+            "NOTE\r\nSpeaker 1: note\r\n\r\n"
+            "Speaker 1: cue identifier\r\n"
+            "00:00:00.000 --> 00:00:01.000\r\n"
+            "  Speaker 1 \t:  Hello <v.special Speaker 1>voice</v>\r\n"
+            "Speaker 2: Unmapped\n"
+            "Speaker 1 remains ordinary text\n"
+        )
+        transcript = create_transcript(audio=audio, vtt=vtt)
+        assert transcript.get_speaker_labels() == ["Speaker 1", "Speaker 2"]
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Jochen"})
+        transcript.refresh_from_db()
+        with transcript.vtt.open("rb") as vtt_file:
+            assert vtt_file.read().decode("utf-8") == vtt.replace(
+                "  Speaker 1 \t:  Hello <v.special Speaker 1>voice</v>",
+                "  <v Jochen>  Hello <v.special Jochen>voice</v></v>",
+            )
+
+    @pytest.mark.parametrize("payload", ["Speaker 1: Hello\r\n", "Speaker 1:\r\n", "Speaker 1: Hello"])
+    def test_renamed_generic_prefix_remains_discoverable_and_sanitizable(self, audio, payload):
+        transcript = create_transcript(audio=audio, vtt="WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n" + payload)
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Jochen"})
+        assert transcript.get_speaker_labels() == ["Jochen"]
+        assert transcript.rewrite_speaker_labels({"Jochen": "Carol"})
+        assert transcript.get_speaker_labels() == ["Carol"]
+        with transcript.vtt.open("rb") as vtt_file:
+            content = vtt_file.read().decode("utf-8")
+        expected = (
+            "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n"
+            + payload.replace("Speaker 1:", "<v Carol>").rstrip("\r\n")
+            + "</v>"
+        )
+        expected += payload[len(payload.rstrip("\r\n")) :]
+        assert content == expected
+        sanitized = sanitize_webvtt_content(content, allowed_speaker_labels=set())
+        assert "Carol" not in sanitized
+        assert sanitized == "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n" + payload.replace("Speaker 1:", "")
+
+    @pytest.mark.parametrize("mapping", [{"Speaker 1": "Jochen"}, {"Speaker 1": "Jochen", "Speaker 2": "Carol"}])
+    def test_generic_prefix_voice_spans_end_at_each_payload_line(self, mapping):
+        vtt = "WEBVTT\n\n00:00.000 --> 00:01.000\nSpeaker 1: Hi\nSpeaker 2: Hello\n"
+        rewritten, changed = webvtt.rewrite_speakers(vtt, mapping)
+        assert changed
+        second = "<v Carol> Hello</v>" if "Speaker 2" in mapping else "Speaker 2: Hello"
+        assert rewritten == "WEBVTT\n\n00:00.000 --> 00:01.000\n<v Jochen> Hi</v>\n" + second + "\n"
 
     def test_rewrite_speaker_labels_saves_when_only_vtt_changes(self, audio, django_capture_on_commit_callbacks):
         transcript = create_transcript(

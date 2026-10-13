@@ -384,7 +384,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         """Rewrite speaker labels in stored transcript artifacts.
 
         The mapping is destructive: matching Podlove ``speaker``/``voice``,
-        DOTe ``speakerDesignation``, and WebVTT voice-label values are replaced
+        DOTe ``speakerDesignation``, and WebVTT voice labels and generic cue prefixes are replaced
         in-place.
         """
         return services.rewrite_speaker_labels(self, mapping)

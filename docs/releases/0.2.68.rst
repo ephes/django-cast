@@ -1,6 +1,9 @@
 0.2.68 (unreleased)
 -------------------
 
+- Rename generic ``Speaker N:`` cue prefixes as well as voice tags through
+  ``Transcript.rewrite_speaker_labels``. Renamed prefixes become voice tags
+  for subsequent renames and public speaker sanitization.
 - Resolve Voxhelm API base and token as a pair from one configuration level.
   Incomplete pairs no longer inherit deployment credentials. Move mixed-level
   credentials to one level before upgrading; changing the Wagtail API base
