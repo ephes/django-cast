@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import timedelta
 from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -9,6 +10,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.core.management import CommandError, call_command
+from django.utils import timezone
 
 from cast.devdata import create_transcript
 from cast.management.commands.media_backup import Command as MediaBackupCommand
@@ -127,6 +129,12 @@ class StubWalkStorage:
     def listdir(self, _path: str) -> tuple[list[str], list[str]]:
         return [], list(self._files.keys())
 
+    def get_modified_time(self, path: str):
+        return timezone.now() - timedelta(days=8)
+
+    def get_created_time(self, path: str):
+        raise NotImplementedError
+
     def size(self, path: str) -> int:
         return len(self._files[path])
 
@@ -179,6 +187,12 @@ class StubOverwriteStorage:
 
     def exists(self, path: str) -> bool:
         return path in self._files
+
+    def get_modified_time(self, path: str):
+        return timezone.now() - timedelta(days=8)
+
+    def get_created_time(self, path: str):
+        raise NotImplementedError
 
     def size(self, path: str) -> int:
         return len(self._files[path])
@@ -576,6 +590,7 @@ def test_media_stale_get_image_paths_includes_renditions(image):
     assert rendition.file.name in paths
 
 
+@pytest.mark.django_db
 def test_media_stale_handle_reports_and_deletes_managed_stale_files(mocker, capsys):
     production = StubWalkStorage(
         {
@@ -1443,3 +1458,138 @@ def test_generate_transcripts_resolve_targets_skips_unsaved_episode_audio(mocker
     mocker.patch("cast.management.commands.generate_transcripts.Audio.objects.filter", return_value=direct_queryset)
 
     assert Command()._resolve_targets(episode_ids=[1], audio_ids=[]) == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("delete", [False, True])
+@pytest.mark.parametrize("seconds", [-1, 0, 1])
+def test_media_stale_age_boundary(mocker, settings, capsys, delete, seconds):
+    settings.CAST_MEDIA_STALE_MIN_AGE_DAYS = 3
+    now = timezone.now()
+    production = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
+    mocker.patch("cast.management.commands.media_stale.timezone.now", return_value=now)
+    mocker.patch.object(production, "get_modified_time", return_value=now - timedelta(days=3, seconds=seconds))
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(production, None)
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+
+    call_command("media_stale", delete=delete)
+
+    assert production.deleted == (["cast_audio/stale.mp3"] if delete and seconds >= 0 else [])
+    assert f"skipped-too-young={int(seconds < 0)}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("kind", ["unsupported", "missing", "none", "naive", "created", "recent_creation"])
+def test_media_stale_storage_timestamps(mocker, kind):
+    storage = StubWalkStorage({})
+    cutoff = timezone.now() - timedelta(days=7)
+    old = cutoff - timedelta(days=1)
+    if kind == "unsupported":
+        mocker.patch.object(storage, "get_modified_time", side_effect=NotImplementedError)
+    elif kind == "missing":
+        mocker.patch.object(storage, "get_modified_time", side_effect=FileNotFoundError)
+    elif kind == "none":
+        mocker.patch.object(storage, "get_modified_time", return_value=None)
+    elif kind == "naive":
+        mocker.patch.object(storage, "get_modified_time", return_value=timezone.make_naive(old))
+    elif kind == "created":
+        mocker.patch.object(storage, "get_modified_time", side_effect=NotImplementedError)
+        mocker.patch.object(storage, "get_created_time", return_value=old)
+    else:
+        mocker.patch.object(storage, "get_created_time", return_value=cutoff + timedelta(seconds=1))
+
+    assert MediaStaleCommand.is_old_enough(storage, "cast_audio/file.mp3", cutoff) == (kind in {"naive", "created"})
+
+
+def test_media_stale_unknown_age_is_reported(mocker, capsys):
+    storage = StubWalkStorage({"cast_audio/unknown.mp3": b"unknown"})
+    mocker.patch.object(storage, "get_modified_time", side_effect=NotImplementedError)
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    call_command("media_stale", delete=True)
+    assert storage.deleted == []
+    output = capsys.readouterr().out
+    assert "Skipped too young or unknown age: cast_audio/unknown.mp3" in output
+    assert "skipped-too-young=1" in output
+
+
+@pytest.mark.django_db
+def test_media_stale_reference_created_after_selection(mocker, file_instance, capsys):
+    path = "cast_files/in-flight.txt"
+    storage = StubWalkStorage({path: b"upload"})
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
+    )
+    original_get_paths = MediaStaleCommand.get_paths
+
+    def select_and_reference(production):
+        paths = original_get_paths(production)
+        # Candidate snapshot has already been taken; the upload now saves its file name.
+        file_instance.original.name = path
+        file_instance.save()
+        return paths
+
+    mocker.patch.object(MediaStaleCommand, "get_paths", side_effect=select_and_reference)
+    call_command("media_stale", delete=True)
+    assert storage.deleted == []
+    assert "skipped-newly-referenced=1" in capsys.readouterr().out
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("rendition", [False, True])
+def test_media_stale_fresh_image_reference(image, rendition):
+    referenced = image.get_rendition("fill-1x1") if rendition else image
+    assert MediaStaleCommand.is_referenced(referenced.file.name)
+
+
+def test_media_stale_file_replaced_after_selection(mocker, capsys):
+    now = timezone.now()
+    storage = StubWalkStorage({"cast_audio/stale.mp3": b"stale"})
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    mocker.patch.object(storage, "get_modified_time", side_effect=[now - timedelta(days=8), now])
+    call_command("media_stale", delete=True)
+    assert storage.deleted == []
+    assert "skipped-too-young=1" in capsys.readouterr().out
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("delete", [False, True])
+@pytest.mark.parametrize("aware_storage_time", [False, True])
+def test_media_stale_without_timezone_support(mocker, settings, delete, aware_storage_time):
+    settings.USE_TZ = False
+    storage = StubWalkStorage({"cast_audio/old.mp3": b"old"})
+    old = timezone.now() - timedelta(days=8)
+    if aware_storage_time:
+        old = timezone.make_aware(old)
+    mocker.patch.object(storage, "get_modified_time", return_value=old)
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    call_command("media_stale", delete=delete)
+    assert storage.deleted == (["cast_audio/old.mp3"] if delete else [])
+
+
+@pytest.mark.parametrize("age", [-1, None, "7", True])
+def test_media_stale_rejects_invalid_min_age(mocker, settings, age):
+    settings.CAST_MEDIA_STALE_MIN_AGE_DAYS = age
+    storage = StubWalkStorage({"cast_audio/new.mp3": b"new"})
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    with pytest.raises(CommandError, match="must be a non-negative integer"):
+        call_command("media_stale", delete=True)
+    assert storage.deleted == []
+
+
+def test_media_stale_backend_metadata_error(mocker):
+    storage = StubWalkStorage({})
+    mocker.patch.object(storage, "get_modified_time", side_effect=RuntimeError("backend metadata unavailable"))
+    assert not MediaStaleCommand.is_old_enough(storage, "cast_audio/file.mp3", timezone.now())

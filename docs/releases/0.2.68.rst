@@ -91,3 +91,9 @@
   served to a later test that requested the same feed URL, so
   ``test_get_only_published_entries`` failed depending on the random test
   order.
+
+- Protect ``media_stale`` cleanup with a configurable minimum storage-file age
+  (``CAST_MEDIA_STALE_MIN_AGE_DAYS``, default 7 days). Skip unknown ages,
+  re-check age and exact database file references before each deletion, and
+  report files skipped as too young or newly referenced. Listing remains the
+  default; the command does not delete database rows.

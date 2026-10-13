@@ -885,6 +885,20 @@ feeds are not affected and always include every episode.
 
     CAST_BLOG_FEED_ITEM_LIMIT = 50
 
+*************
+Media cleanup
+*************
+
+CAST_MEDIA_STALE_MIN_AGE_DAYS
+=============================
+
+Minimum storage-file age in days for ``media_stale`` candidates. Defaults to
+``7``. Must be a non-negative integer (``0`` removes the age delay).
+The newest available creation/modification timestamp must be at least
+this old; files with unknown ages are skipped. See
+:doc:`management-commands` for the dry run and deletion behavior.
+
+
 .. _cdn_configuration:
 
 *********************************

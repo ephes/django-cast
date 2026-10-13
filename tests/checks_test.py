@@ -172,6 +172,7 @@ class TestCheckCastSettingTypes:
             ("CAST_FEED_ITUNES_SUMMARY", bool),
             ("CAST_PODLOVE_PLAYER_THEMES", dict),
             ("CAST_AUDIO_PLAYER", str),
+            ("CAST_MEDIA_STALE_MIN_AGE_DAYS", int),
             ("CAST_TRANSCRIPT_UPLOAD_MAX_BYTES", int),
             ("CAST_PUBLIC_IMAGES_API", bool),
         )
