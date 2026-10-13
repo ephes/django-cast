@@ -385,6 +385,13 @@ or sanitization step. One-off display names cannot duplicate a raw transcript
 speaker label; this keeps an approved one-off name from accidentally allowing an
 unmapped anonymous label with the same text.
 
+The explicit ``Transcript.rewrite_speaker_labels(mapping)`` API rewrites stored
+artifacts. For WebVTT it renames both voice tags and generic ``Speaker N:``
+prefixes inside cue payloads. Renamed prefixes become closed voice spans per payload line so
+subsequent renames and public label sanitization continue to work. Cue text and
+line endings are preserved.
+Headers, cue identifiers, and non-cue text remain unchanged.
+
 Private contributor voice references
 ------------------------------------
 

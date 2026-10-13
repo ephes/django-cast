@@ -348,6 +348,10 @@ documented in tiers that match the code. The remaining problems are concentrated
   `cast/transcripts/` (upstreaming the prefix handling so both paths agree) and the Episode-visibility policy into
   `audio_access.py` or a `transcripts/visibility.py`. The claim that its `from .models import Episode` reintroduces
   the models cycle is wrong — nothing under `cast/models` or `cast/transcripts` imports this module.
+  Fix note (partial, 2026-10-13): stored WebVTT generic prefixes now become
+  closed voice spans per payload line, keeping labels discoverable and sanitizable.
+  Read-time public mapping still uses named text prefixes; reconciling that
+  representation and the broader deduplication remain open.
 - **X4. The theme contract is enforced only by `DeprecationWarning`s emitted during discovery** (medium,
   architecture) — `models/theme.py:109`. The soft-required tier is the staged-enforcement mechanism the docs
   promise, but the warning is hidden by Python's default filters, by pytest's
@@ -409,6 +413,10 @@ documented in tiers that match the code. The remaining problems are concentrated
   `services.get_speaker_labels` surfaces to the editor, but `rewrite_payload_line` (193-202) rewrites only `<v>`
   spans, so the editor offers labels `services.rewrite_speaker_labels` cannot rename in the VTT artifact. X3's
   fix must correct `webvtt.py`'s own extraction/rewrite pair, not just the duplicate.
+
+  Fix note (2026-10-13, fixed): the transcript rewrite API now converts generic cue
+  prefixes to closed voice spans and renames existing voice tags. Regression
+  coverage checks follow-up renames, sanitization and unchanged non-cue bytes.
 
 Strengths: `CAST_SETTING_REGISTRY` plus module `__getattr__` (copy-on-read, `TYPE_CHECKING` stubs) is a clean single
 source of truth that `check_cast_setting_types` and `comments/appsettings.py` derive from, and every `CAST_*` name in
