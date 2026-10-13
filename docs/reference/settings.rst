@@ -293,6 +293,13 @@ may point at either the service root (for example
 either a Django setting or an environment variable, or per site through the
 Wagtail admin ``Settings -> Voxhelm settings`` screen.
 
+The base URL and API key must come from the same configuration level. A
+nonempty site credential selects the site pair; otherwise a nonempty Django
+credential selects the Django pair; otherwise the environment pair is used.
+Incomplete pairs disable generation rather than inheriting a credential.
+Changing the base URL in Wagtail requires re-entering the token. Clearing both
+fields together removes the site credentials and enables deployment fallback.
+
 CAST_VOXHELM_API_KEY
 ====================
 
