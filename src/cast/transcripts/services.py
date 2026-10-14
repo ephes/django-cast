@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -71,6 +71,55 @@ def sync_speaker_mappings(transcript: Transcript) -> None:
             mapping.save(update_fields=update_fields)
 
 
+def resolve_unreferenced_contributor_name(transcript: Transcript, sent_names: Collection[str]) -> str | None:
+    """Name of the one episode contributor Voxhelm got no voice reference for.
+
+    The episode is the one the transcript's audio belongs to; an audio shared
+    by several episodes has no unambiguous contributor list. Contributors are
+    compared by display name with ``sent_names``, the sidecar's
+    ``known_speakers`` list of everyone references were sent for. Exactly one
+    contributor must be missing from it, and that contributor must be visible,
+    because the name is published.
+    """
+    episodes = list(transcript.audio.episodes.all())
+    if len(episodes) != 1:
+        return None
+    contributors = {
+        assignment.contributor_id: assignment.contributor
+        for assignment in episodes[0].contributor_assignments.select_related("contributor")
+        if assignment.contributor_id is not None
+    }
+    unreferenced = [contributor for contributor in contributors.values() if contributor.display_name not in sent_names]
+    if len(unreferenced) != 1 or not unreferenced[0].visible:
+        return None
+    return unreferenced[0].display_name
+
+
+def resolve_unreferenced_label_names(transcript: Transcript, suggestions: list[dict]) -> dict[str, str]:
+    """Name the one unmatched diarization label after the one contributor without a reference.
+
+    A guest without a voice reference gets no suggestions from Voxhelm, but
+    diarization still separates them as a label that no known speaker is tied
+    to. When exactly one such label and exactly one such contributor exist,
+    and every speaker references were sent for is tied to a label of their
+    own, they are the same person. Otherwise the leftover label could be a
+    stray fragment of a known speaker, so any other combination names nobody.
+    """
+    summary = transcript.get_speaker_suggestion_summary()
+    label_speakers = known_speakers.raw_label_speakers(summary, suggestions)
+    label = known_speakers.find_unmatched_label(label_speakers)
+    if label is None:
+        return {}
+    sent_names = summary.get("known_speakers")
+    if not isinstance(sent_names, list):
+        return {}
+    sent = {name for name in sent_names if isinstance(name, str)}
+    if not sent <= {speaker for speaker in label_speakers.values() if speaker}:
+        return {}
+    name = resolve_unreferenced_contributor_name(transcript, sent)
+    return {label: name} if name else {}
+
+
 def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = True) -> int:
     """Apply known-speaker suggestions to public transcript output.
 
@@ -86,6 +135,13 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
     ones. With ``smooth=False`` only confident segments are labeled and
     uncertain ones are left blank for review.
 
+    Either way, a guest without a voice reference is named first: when the
+    episode has exactly one contributor references were not sent for and
+    exactly one diarization label belongs to no known speaker, the uncertain
+    segments on that label get the contributor's name. Segments flagged as
+    mixed speakers are not named by that rule; with ``smooth=True`` the usual
+    smoothing still fills them like any other remaining gap.
+
     Explicit per-segment editor decisions stored in the private sidecar
     take precedence over the confident/smoothed result. Rejected segments
     clear any existing public speaker label for that start time.
@@ -96,7 +152,9 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
     transcript entries matched across stored formats.
     """
     suggestions = sorted(transcript.get_speaker_suggestions(), key=parsing.segment_sort_key)
-    display_names = known_speakers.resolve_display_names(suggestions, smooth=smooth)
+    display_names = known_speakers.resolve_display_names(
+        suggestions, smooth=smooth, label_names=resolve_unreferenced_label_names(transcript, suggestions)
+    )
     names_by_start_ms: dict[int, str] = {}
     rejected_start_ms: set[int] = set()
     for segment, name in zip(suggestions, display_names):

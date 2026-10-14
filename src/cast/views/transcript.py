@@ -304,7 +304,7 @@ def _handle_known_speaker_apply(
             request,
             _(
                 "Applied known-speaker names to {0} public transcript entries. "
-                "Uncertain segments were left unchanged for review."
+                "Uncertain segments were left unchanged for review, except for an unambiguous guest without a voice reference."
             ).format(applied),
         )
     else:

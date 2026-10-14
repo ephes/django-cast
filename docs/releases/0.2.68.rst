@@ -60,6 +60,15 @@
 - Warn when known-speaker recognition is enabled but a diarized request sends
   no voice references. ``generate_transcripts`` prints the warning, and the
   service logs it on ``cast.voxhelm.service`` for queued requests.
+- Name a guest without a voice reference when applying known-speaker
+  suggestions. Before, such a guest's lines stayed blank, and on episodes whose
+  anonymous ``Speaker N`` labels had approved contributor mappings a
+  known-speaker re-run lost the guest's name. When exactly one assigned
+  contributor got no reference and exactly one diarization label is tied to no
+  known speaker, the uncertain segments on that label now get the
+  contributor's name. Ambiguous cases still stay blank. The label map comes
+  from Voxhelm's ``raw_diarization_labels`` summary or, for older sidecars,
+  from the same confident-segment vote.
 - ``recalc_video_posters`` now exits with ``CommandError`` (non-zero status)
   when at least one poster could not be recalculated. It used to print
   ``errors=<n>`` and still exit successfully. All videos are still attempted,

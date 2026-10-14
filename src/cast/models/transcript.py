@@ -223,6 +223,14 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         ones. With ``smooth=False`` only confident segments are labeled and
         uncertain ones are left blank for review.
 
+        Either way, a guest without a voice reference is named first: when the
+        episode has exactly one contributor references were not sent for and
+        exactly one diarization label belongs to no known speaker, the
+        uncertain segments on that label get the contributor's name. Segments
+        flagged as mixed speakers are not named by that rule; with
+        ``smooth=True`` the usual smoothing still fills them like any other
+        remaining gap.
+
         Explicit per-segment editor decisions stored in the private sidecar
         take precedence over the confident/smoothed result. Rejected segments
         clear any existing public speaker label for that start time.

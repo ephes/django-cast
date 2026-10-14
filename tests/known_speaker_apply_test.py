@@ -791,7 +791,7 @@ class TestKnownSpeakerReviewView:
         feedback = [str(message).strip() for message in get_messages(response.wsgi_request)]
         assert feedback == [
             "Applied known-speaker names to 6 public transcript entries. "
-            "Uncertain segments were left unchanged for review."
+            "Uncertain segments were left unchanged for review, except for an unambiguous guest without a voice reference."
         ]
         transcript.refresh_from_db()
         # The quick action applies only confident suggestions. The uncertain

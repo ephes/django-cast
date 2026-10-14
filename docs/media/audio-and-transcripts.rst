@@ -479,7 +479,8 @@ Known-speaker results are suggestions, not final identity. Voxhelm leaves the
 public Podlove, DOTe, and WebVTT artifacts unlabeled for known-speaker jobs, so
 no speaker identity is shown publicly until an editor reviews and approves the
 suggestions. Uncertain or low-margin segments are flagged for review rather than
-applied automatically.
+applied automatically; the one exception is an unambiguous guest without a
+voice reference, described below.
 
 The Wagtail transcript edit view shows a known-speaker review panel with the
 confident and uncertain suggestion counts and the confident speaker
@@ -488,12 +489,35 @@ resolved speaker names into the public Podlove ``speaker``/``voice``, DOTe
 ``speakerDesignation``, and matching WebVTT cue voice labels, matched to
 transcript segments or cues by start time. Confident suggestions are used
 directly; the Wagtail action explicitly leaves uncertain segments unchanged for
-review. Programmatic callers retain the existing smoothing default and should
+review, apart from the guest naming described below. Programmatic callers retain the existing smoothing default and should
 pass ``smooth=False`` to
 ``Transcript.apply_known_speaker_suggestions(...)`` when they need the same
 confident-only behavior. Smoothing fills uncertain gaps from the surrounding
 confident speaker so the public transcript has continuous labels, but it can
 misattribute a rapid hand-off between confident segments from the same person.
+
+A guest without a voice reference gets no suggestions, but diarization still
+separates their speech under its own raw label. Applying suggestions names that
+label after the guest automatically when the assignment is unambiguous:
+
+- the audio belongs to exactly one episode, and exactly one of its assigned
+  contributors is missing from the sidecar's ``known_speakers`` list (the
+  contributors references were sent for, compared by display name), and that
+  contributor is visible;
+- exactly one raw diarization label is tied to no known speaker, and every
+  speaker references were sent for is tied to a label of their own.
+
+The label-to-speaker map comes from the sidecar summary's
+``raw_diarization_labels`` (written by Voxhelm 0.1.7 and later). For older
+sidecars django-cast rebuilds it with the same vote Voxhelm uses: confident
+segments accepted on their own voiceprint vote for their speaker, and a label
+belongs to a speaker when at least five segments vote and 90 % agree. Then the
+uncertain segments on the leftover label get the guest's name, with or without
+smoothing. Segments flagged as mixed speakers are not named by this rule (with
+smoothing they are still filled like any other gap), confident suggestions are
+unchanged, and explicit editor decisions still take precedence. In every other case, for example two
+contributors without references or two leftover labels, the guest's segments
+stay blank rather than risk a wrong name.
 
 Editors can also review individual segments in the same panel. For each
 segment they can keep the bulk result, choose a speaker from the returned
