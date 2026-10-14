@@ -1,5 +1,7 @@
 import io
 import json
+import logging
+from http.client import IncompleteRead, RemoteDisconnected
 from types import SimpleNamespace
 from urllib.error import HTTPError, URLError
 
@@ -10,6 +12,7 @@ from django.test import RequestFactory
 from cast.models import Audio, Contributor, EpisodeContributor, VoxhelmSettings
 from cast.voxhelm import (
     VoxhelmClient,
+    VoxhelmConnectionError,
     VoxhelmError,
     append_diarization_speaker_count_to_task_ref,
     build_audio_task_ref,
@@ -727,6 +730,51 @@ def test_client_url_error_is_wrapped(mocker):
         client.request_bytes(method="GET", path="jobs/job-1")
 
 
+def test_client_url_error_is_a_connection_error(mocker):
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=URLError(ConnectionRefusedError(111, "Connection refused")))
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmConnectionError, match="Connection refused"):
+        client.request_bytes(method="GET", path="jobs/job-1")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RemoteDisconnected("Remote end closed connection without response"),
+        IncompleteRead(b"partial"),
+        ConnectionResetError(104, "Connection reset by peer"),
+        TimeoutError("The read operation timed out"),
+    ],
+)
+def test_client_wraps_connection_errors_outside_url_error(mocker, error):
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmConnectionError, match="Voxhelm request failed") as exc_info:
+        client.request_bytes(method="GET", path="jobs/job-1")
+
+    assert exc_info.value.__cause__ is error
+    assert isinstance(exc_info.value, VoxhelmError)
+
+
+def test_client_http_status_error_is_not_a_connection_error(mocker):
+    error = HTTPError(
+        url="https://voxhelm.example/v1/jobs/job-1",
+        code=502,
+        msg="Bad Gateway",
+        hdrs=None,
+        fp=io.BytesIO(b""),
+    )
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="502") as exc_info:
+        client.request_bytes(method="GET", path="jobs/job-1")
+
+    assert not isinstance(exc_info.value, VoxhelmConnectionError)
+
+
 def test_client_submit_job_includes_language_when_configured(settings, mocker):
     settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
     settings.CAST_VOXHELM_API_KEY = "secret"
@@ -835,3 +883,92 @@ def test_incomplete_django_credentials_never_inherit(settings, monkeypatch, base
     assert not voxhelm_configured()
     with pytest.raises(ImproperlyConfigured):
         VoxhelmClient.from_settings()
+
+
+def test_client_wait_for_job_retries_lost_connections(mocker, caplog):
+    client = VoxhelmClient(
+        api_base="https://voxhelm.example",
+        api_key="secret",
+        poll_interval_seconds=2.0,
+        job_timeout_seconds=60.0,
+    )
+    get_job = mocker.patch.object(
+        client,
+        "get_job",
+        side_effect=[
+            {"id": "job-1", "state": "running"},
+            VoxhelmConnectionError("Voxhelm request failed: RemoteDisconnected()"),
+            VoxhelmConnectionError("Voxhelm request failed: Connection refused"),
+            {"id": "job-1", "state": "succeeded"},
+        ],
+    )
+    mocker.patch("cast.voxhelm.client.monotonic", return_value=0.0)
+    sleep_mock = mocker.patch("cast.voxhelm.client.sleep")
+
+    with caplog.at_level(logging.WARNING, logger="cast.voxhelm.client"):
+        assert client.wait_for_job("job-1") == {"id": "job-1", "state": "succeeded"}
+
+    assert get_job.call_count == 4
+    assert sleep_mock.call_count == 3
+    assert [record.getMessage() for record in caplog.records] == [
+        "Polling Voxhelm job job-1 failed, retrying: Voxhelm request failed: RemoteDisconnected()",
+        "Polling Voxhelm job job-1 failed, retrying: Voxhelm request failed: Connection refused",
+    ]
+
+
+def test_client_wait_for_job_gives_up_on_lost_connection_after_deadline(mocker):
+    client = VoxhelmClient(
+        api_base="https://voxhelm.example",
+        api_key="secret",
+        poll_interval_seconds=0.0,
+        job_timeout_seconds=5.0,
+    )
+    mocker.patch.object(client, "get_job", side_effect=VoxhelmConnectionError("Voxhelm request failed: offline"))
+    mocker.patch("cast.voxhelm.client.monotonic", side_effect=[0.0, 1.0, 5.1])
+    sleep_mock = mocker.patch("cast.voxhelm.client.sleep")
+
+    with pytest.raises(VoxhelmError, match="Timed out waiting for Voxhelm job job-1: Voxhelm request failed: offline"):
+        client.wait_for_job("job-1")
+
+    sleep_mock.assert_called_once_with(0.0)
+
+
+def test_client_wait_for_job_does_not_retry_http_status_errors(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", poll_interval_seconds=0.0)
+    get_job = mocker.patch.object(
+        client, "get_job", side_effect=VoxhelmError("Voxhelm request failed with status 404")
+    )
+    mocker.patch("cast.voxhelm.client.sleep")
+
+    with pytest.raises(VoxhelmError, match="404"):
+        client.wait_for_job("job-1")
+
+    assert get_job.call_count == 1
+
+
+@pytest.mark.parametrize("body", [b"", b'{"id": "job-1", "sta', b"\xff\xfe"])
+def test_client_request_json_treats_unreadable_body_as_lost_connection(mocker, body):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+    mocker.patch.object(client, "request_bytes", return_value=body)
+
+    with pytest.raises(VoxhelmConnectionError, match="incomplete or invalid JSON"):
+        client.request_json(method="GET", path="jobs/job-1")
+
+
+@pytest.mark.parametrize("read_error", [TimeoutError("timed out"), IncompleteRead(b"par")])
+def test_client_http_status_error_survives_lost_error_body(mocker, read_error):
+    error = HTTPError(
+        url="https://voxhelm.example/v1/jobs/job-1",
+        code=503,
+        msg="Service Unavailable",
+        hdrs=None,
+        fp=io.BytesIO(b""),
+    )
+    mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
+    mocker.patch("cast.voxhelm.client.read_http_error_detail", side_effect=read_error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="status 503: Service Unavailable") as exc_info:
+        client.request_bytes(method="GET", path="jobs/job-1")
+
+    assert not isinstance(exc_info.value, VoxhelmConnectionError)

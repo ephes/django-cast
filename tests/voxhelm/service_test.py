@@ -10,6 +10,7 @@ from cast.voxhelm import (
     TranscriptGenerationResult,
     TranscriptSubmission,
     VoxhelmClient,
+    VoxhelmConnectionError,
     VoxhelmError,
     VoxhelmTranscriptService,
     build_audio_task_ref,
@@ -466,3 +467,31 @@ def test_submit_for_audio_requires_job_id(settings, user, m4a_audio):
 
     with pytest.raises(VoxhelmError, match="job id"):
         VoxhelmTranscriptService(client=StubClient()).submit_for_audio(audio)
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (
+            VoxhelmConnectionError("Voxhelm request failed: offline"),
+            "Voxhelm request failed: offline (Voxhelm job job-7)",
+        ),
+        (VoxhelmError("Voxhelm job job-7 ended in state 'failed'."), "Voxhelm job job-7 ended in state 'failed'."),
+    ],
+)
+def test_generate_for_audio_names_the_job_when_completion_fails(mocker, error, expected):
+    service = VoxhelmTranscriptService(client=SimpleNamespace())
+    submission = TranscriptSubmission(
+        job_id="job-7",
+        source_url="https://media.example.com/episode.mp3",
+        task_ref="cast-audio-1",
+        job_payload={"id": "job-7", "state": "queued"},
+    )
+    mocker.patch.object(service, "submit_for_audio", return_value=submission)
+    mocker.patch.object(service, "complete_audio_job", side_effect=error)
+
+    with pytest.raises(VoxhelmError) as exc_info:
+        service.generate_for_audio(SimpleNamespace(pk=1))
+
+    assert str(exc_info.value) == expected
+    assert type(exc_info.value) is type(error)

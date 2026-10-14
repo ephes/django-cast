@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from http.client import HTTPException
 from time import monotonic, sleep
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -17,7 +19,7 @@ from cast.safe_fetch import (
     read_response_bytes,
 )
 
-from .exceptions import VoxhelmError
+from .exceptions import VoxhelmConnectionError, VoxhelmError
 from .settings import get_bool_setting, get_float_setting, get_setting, require_setting
 
 TERMINAL_JOB_STATES = {"succeeded", "failed", "canceled", "expired"}
@@ -25,6 +27,8 @@ KNOWN_SPEAKER_STRATEGY = "pyannote_known_speaker"
 MAX_VOXHELM_ARTIFACT_BYTES = 10 * 1024 * 1024
 MAX_VOXHELM_API_RESPONSE_BYTES = 1024 * 1024
 MAX_VOXHELM_ERROR_BYTES = 16 * 1024
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_api_base(api_base: str) -> tuple[str, str]:
@@ -127,10 +131,18 @@ class VoxhelmClient:
         except ResponseTooLarge as exc:
             raise VoxhelmError(f"Voxhelm response exceeded the maximum size of {exc.max_bytes} bytes.") from exc
         except HTTPError as exc:
-            detail = read_http_error_detail(exc, max_bytes=MAX_VOXHELM_ERROR_BYTES)
+            try:
+                detail = read_http_error_detail(exc, max_bytes=MAX_VOXHELM_ERROR_BYTES)
+            except (HTTPException, OSError):
+                # The status is known; a lost error body must not hide it.
+                detail = str(exc.reason)
             raise VoxhelmError(f"Voxhelm request failed with status {exc.code}: {detail}") from exc
         except URLError as exc:
-            raise VoxhelmError(f"Voxhelm request failed: {exc.reason}") from exc
+            raise VoxhelmConnectionError(f"Voxhelm request failed: {exc.reason}") from exc
+        except (HTTPException, OSError) as exc:
+            # Raised outside URLError: a connection closed before or while the
+            # response arrives (RemoteDisconnected, IncompleteRead, resets, timeouts).
+            raise VoxhelmConnectionError(f"Voxhelm request failed: {exc!r}") from exc
 
     def request_json(self, *, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         raw = self.request_bytes(
@@ -140,7 +152,12 @@ class VoxhelmClient:
             max_bytes=MAX_VOXHELM_API_RESPONSE_BYTES,
             follow_redirects=False,
         )
-        data = json.loads(raw.decode("utf-8"))
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except ValueError as exc:
+            # A connection closed early can cut a body short without an error
+            # from the bounded read, so treat an unreadable answer as lost.
+            raise VoxhelmConnectionError(f"Voxhelm returned an incomplete or invalid JSON response: {exc}") from exc
         if not isinstance(data, dict):
             raise VoxhelmError("Voxhelm returned a non-object JSON payload.")
         return data
@@ -191,7 +208,16 @@ class VoxhelmClient:
     def wait_for_job(self, job_id: str) -> dict[str, Any]:
         deadline = monotonic() + self.job_timeout_seconds
         while True:
-            job_payload = self.get_job(job_id)
+            try:
+                job_payload = self.get_job(job_id)
+            except VoxhelmConnectionError as exc:
+                # Polling is read-only, so a connection lost for a moment (for
+                # example a proxy restart) is retried until the job deadline.
+                if monotonic() >= deadline:
+                    raise VoxhelmError(f"Timed out waiting for Voxhelm job {job_id}: {exc}") from exc
+                logger.warning("Polling Voxhelm job %s failed, retrying: %s", job_id, exc)
+                sleep(self.poll_interval_seconds)
+                continue
             state = str(job_payload.get("state", ""))
             if state in TERMINAL_JOB_STATES:
                 return job_payload

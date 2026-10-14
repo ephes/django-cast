@@ -380,6 +380,16 @@ CAST_VOXHELM_POLL_TIMEOUT
 Maximum time in seconds to wait for a Voxhelm batch job before the command
 fails. Defaults to ``900.0`` seconds.
 
+A status poll that cannot reach Voxhelm or loses the connection before the
+answer (refused, reset or timed-out connections, an empty, cut-off or
+unreadable JSON response) is logged as a warning on ``cast.voxhelm.client`` and repeated
+after ``CAST_VOXHELM_POLL_INTERVAL`` until this deadline, so a short outage
+such as a proxy restart does not abort the wait. HTTP error statuses are not
+repeated. Job submission is never repeated, because a lost answer to it can
+still have created the job. If waiting fails after submission, the error names
+the Voxhelm job so its result can be completed without submitting the audio
+again.
+
 CAST_VOXHELM_REQUEST_TIMEOUT
 ============================
 
