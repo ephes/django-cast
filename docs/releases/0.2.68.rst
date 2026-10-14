@@ -75,6 +75,18 @@
   contributor's name. Ambiguous cases still stay blank. The label map comes
   from Voxhelm's ``raw_diarization_labels`` summary or, for older sidecars,
   from the same confident-segment vote.
+- Keep waiting for a Voxhelm job when a status poll loses the connection.
+  ``generate_transcripts`` and the admin completion task used to abort on the
+  first refused or dropped connection, and some of them
+  (``RemoteDisconnected``, ``IncompleteRead``, socket resets and timeouts)
+  escaped as uncaught exceptions instead of ``VoxhelmError``. All
+  connection-level failures of Voxhelm requests now raise
+  ``VoxhelmConnectionError`` (a ``VoxhelmError``); polls retry them with a
+  warning until ``CAST_VOXHELM_POLL_TIMEOUT``. Submissions are not retried.
+  When completion fails after a job was submitted, the error message names
+  the job, so its result can be imported with
+  ``VoxhelmTranscriptService.complete_audio_job`` instead of transcribing the
+  audio again.
 - ``recalc_video_posters`` now exits with ``CommandError`` (non-zero status)
   when at least one poster could not be recalculated. It used to print
   ``errors=<n>`` and still exit successfully. All videos are still attempted,

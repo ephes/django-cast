@@ -25,7 +25,7 @@ from .client import (
     VoxhelmClient,
     normalize_api_base,
 )
-from .exceptions import VoxhelmError
+from .exceptions import VoxhelmConnectionError, VoxhelmError
 from .service import (
     DOTE_REQUIRED_KEYS,
     TranscriptEnqueueResult,
@@ -98,6 +98,7 @@ __all__ = [
     "TranscriptGenerationResult",
     "TranscriptSubmission",
     "VoxhelmClient",
+    "VoxhelmConnectionError",
     "VoxhelmError",
     "VoxhelmTranscriptService",
     "append_diarization_speaker_count_to_task_ref",

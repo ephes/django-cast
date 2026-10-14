@@ -397,12 +397,19 @@ class VoxhelmTranscriptService:
         episode: Any | None = None,
     ) -> TranscriptGenerationResult:
         submission = self.submit_for_audio(audio, task_ref=task_ref, episode=episode)
-        result = self.complete_audio_job(
-            audio,
-            job_id=submission.job_id,
-            source_url=submission.source_url,
-            initial_job_payload=submission.job_payload,
-        )
+        try:
+            result = self.complete_audio_job(
+                audio,
+                job_id=submission.job_id,
+                source_url=submission.source_url,
+                initial_job_payload=submission.job_payload,
+            )
+        except VoxhelmError as exc:
+            # The job keeps running in Voxhelm; name it so its result can be
+            # imported with complete_audio_job instead of submitting it again.
+            if submission.job_id in str(exc):
+                raise
+            raise type(exc)(f"{exc} (Voxhelm job {submission.job_id})") from exc
         return replace(result, warnings=submission.warnings)
 
     @staticmethod
