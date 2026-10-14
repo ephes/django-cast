@@ -96,8 +96,10 @@ class Command(BaseCommand):
 
     @staticmethod
     def is_old_enough(storage: Storage, path: str, cutoff: datetime) -> bool:
+        # Naive times are in the Django default timezone, regardless of the active one.
+        default_timezone = timezone.get_default_timezone()
         if timezone.is_naive(cutoff):
-            cutoff = timezone.make_aware(cutoff)
+            cutoff = timezone.make_aware(cutoff, default_timezone)
         timestamps = []
         for get_time in (storage.get_modified_time, storage.get_created_time):
             try:
@@ -108,7 +110,7 @@ class Command(BaseCommand):
             if timestamp is None:
                 continue
             if timezone.is_naive(timestamp):
-                timestamp = timezone.make_aware(timestamp)
+                timestamp = timezone.make_aware(timestamp, default_timezone)
             timestamps.append(timestamp)
         return bool(timestamps) and max(timestamps) <= cutoff
 

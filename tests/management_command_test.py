@@ -1589,6 +1589,16 @@ def test_media_stale_rejects_invalid_min_age(mocker, settings, age):
     assert storage.deleted == []
 
 
+def test_media_stale_naive_times_use_default_timezone(mocker, settings):
+    settings.TIME_ZONE = "UTC"
+    storage = StubWalkStorage({})
+    cutoff = timezone.now() - timedelta(days=7)
+    young = timezone.make_naive(cutoff + timedelta(minutes=30), timezone.get_default_timezone())
+    mocker.patch.object(storage, "get_modified_time", return_value=young)
+    with timezone.override("Europe/Berlin"):
+        assert not MediaStaleCommand.is_old_enough(storage, "cast_audio/file.mp3", cutoff)
+
+
 def test_media_stale_backend_metadata_error(mocker):
     storage = StubWalkStorage({})
     mocker.patch.object(storage, "get_modified_time", side_effect=RuntimeError("backend metadata unavailable"))
