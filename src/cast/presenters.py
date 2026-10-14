@@ -26,13 +26,21 @@ def render_post_description(
     htmx_request = cast(HtmxHttpRequest, request)
     if repository is None:
         repository = post.get_repository(htmx_request, {})
-    description = post.serve(
+    from cast.wagtail_hooks import PageLinkHandlerWithCache
+
+    response = post.serve(
         htmx_request,
         render_detail=render_detail,
         repository=repository,
         render_for_feed=render_for_feed,
         local_template_name="post_body.html",
-    ).rendered_content
+    )
+    if render_for_feed:
+        # Feed readers cannot resolve root-relative internal page links.
+        with PageLinkHandlerWithCache.absolute_urls():
+            description = response.rendered_content
+    else:
+        description = response.rendered_content
     if remove_newlines:
         description = description.replace("\n", "")
     if escape_html:

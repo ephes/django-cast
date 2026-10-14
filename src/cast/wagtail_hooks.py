@@ -7,13 +7,14 @@ from the Wagtail admin sidebar.
 """
 
 from collections.abc import Iterator, Mapping, MutableMapping
+from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, TypeVar, overload
 from urllib.parse import urlencode
 
 from django.http import HttpRequest
 from django.urls import include, path, reverse
-from django.utils.html import format_html
+from django.utils.html import escape, format_html
 from django.utils.translation import gettext_lazy as _
 from taggit.models import Tag
 from wagtail import hooks
@@ -233,13 +234,18 @@ class PageLinkHandlerWithCache(PageLinkHandler):
     for internal pages. This is useful when you have all the pages
     anyway in a repository, and you don't want to hit the database
     while rendering links.
+
+    Inside :meth:`absolute_urls` (feed rendering), links use absolute URLs so
+    they still resolve in feed readers; everywhere else they stay relative.
     """
 
     class _ContextLocalCache(MutableMapping[int, str]):
         """Context-local cache storage to avoid leaking URLs between requests."""
 
         _missing = object()
-        _storage: ContextVar[dict[int, str] | None] = ContextVar("page_link_handler_cache", default=None)
+
+        def __init__(self, name: str) -> None:
+            self._storage: ContextVar[dict[int, str] | None] = ContextVar(name, default=None)
 
         def _get_cache(self) -> dict[int, str]:
             cache = self._storage.get()
@@ -283,32 +289,54 @@ class PageLinkHandlerWithCache(PageLinkHandler):
                 return self._get_cache().pop(key)
             return self._get_cache().pop(key, default)
 
-    cache: MutableMapping[int, str] = _ContextLocalCache()
+    cache: MutableMapping[int, str] = _ContextLocalCache("page_link_handler_cache")
+    absolute_cache: MutableMapping[int, str] = _ContextLocalCache("page_link_handler_absolute_cache")
+    _render_absolute_urls: ContextVar[bool] = ContextVar("page_link_handler_absolute_urls", default=False)
 
     @classmethod
-    def cache_url(cls, page_id: int, url: str) -> None:
+    def cache_url(cls, page_id: int, url: str, absolute_url: str | None = None) -> None:
         cls.cache[page_id] = url
+        if absolute_url is not None:
+            cls.absolute_cache[page_id] = absolute_url
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        cls.cache.clear()
+        cls.absolute_cache.clear()
+
+    @classmethod
+    @contextmanager
+    def absolute_urls(cls) -> Iterator[None]:
+        """Render internal page links with absolute URLs inside this block."""
+        token = cls._render_absolute_urls.set(True)
+        try:
+            yield
+        finally:
+            cls._render_absolute_urls.reset(token)
 
     @classmethod
     def expand_db_attributes(cls, attrs: dict[str, Any]) -> str:
-        if (cached_url := cls.cache.get(int(attrs["id"]))) is not None:
-            return f'<a href="{cached_url}">'
-        return super().expand_db_attributes(attrs)
+        return cls.expand_db_attributes_many([attrs])[0]
 
     @classmethod
     def expand_db_attributes_many(cls, attrs_list: list[dict[str, Any]]) -> list[str]:
         """Required for Wagtail >= 6.1"""
-        links, all_cached = [], True
-        for attrs in attrs_list:
-            if (cached_url := cls.cache.get(int(attrs["id"]))) is not None:
-                links.append(f'<a href="{cached_url}">')
+        absolute = cls._render_absolute_urls.get()
+        cache = cls.absolute_cache if absolute else cls.cache
+        cached_urls = [cache.get(int(attrs["id"])) for attrs in attrs_list]
+        if all(url is not None for url in cached_urls):
+            return [f'<a href="{escape(url)}">' for url in cached_urls]
+        # if not all cached, fall back to the database
+        if not absolute:
+            return super().expand_db_attributes_many(attrs_list)
+        links = []
+        for page in cls.get_many(attrs_list):
+            if page is None:
+                links.append("<a>")
             else:
-                all_cached = False
-                break
-        if all_cached:
-            return links
-        # if not all cached, fallback to the super method
-        return super().expand_db_attributes_many(attrs_list)
+                localized = page.localized
+                links.append(f'<a href="{escape(localized.full_url or localized.url)}">')
+        return links
 
 
 @hooks.register("register_rich_text_features")

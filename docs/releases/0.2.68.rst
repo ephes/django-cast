@@ -1,6 +1,12 @@
 0.2.68 (unreleased)
 -------------------
 
+- Write internal page links in feed item descriptions as absolute URLs.
+  Rich-text links to other pages used to be root-relative in RSS/Atom output
+  and broke in feed readers. Post, blog index and other HTML pages keep
+  relative links. API HTML fields rendered with ``render_for_feed`` (the
+  default) also get absolute links; pass ``render_for_feed=false`` for
+  relative ones.
 - Fall back to the plain theme selector fragment for HTMX requests when a
   theme omits the optional ``select_theme.html`` template.
 - Report missing soft-required theme templates as ``cast.W002`` system check

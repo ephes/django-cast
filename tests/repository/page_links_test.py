@@ -15,6 +15,7 @@ from cast.models import (
     Blog,
 )
 from cast.wagtail_hooks import PageLinkHandlerWithCache
+from tests.factories import PostFactory
 from tests.repository.helpers import (
     blog_index_repository,
     feed_repository,
@@ -83,7 +84,10 @@ def test_internal_page_link_is_cached_blog_index(rf, post_with_link_to_itself):
     repository = blog_index_repository(
         blog=blog,
         pagination_context={"object_list": [post]},
-        queryset_data=queryset_data(page_url_by_id={post.id: page_url}),  # this will cache the page url
+        queryset_data=queryset_data(
+            page_url_by_id={post.id: page_url},  # this will cache the page url
+            absolute_page_url_by_id={post.id: f"http://testserver{page_url}"},
+        ),
     )
     request = rf.get("/blog-index/")
     request.htmx = False
@@ -92,7 +96,7 @@ def test_internal_page_link_is_cached_blog_index(rf, post_with_link_to_itself):
     # with connection.execute_wrapper(blocker):
     response = blog.serve(request, repository=repository).render()
     html = response.content.decode("utf-8")
-    # Then the internal link should be rendered
+    # Then the internal link should be rendered relative, even though an absolute url is cached too
     assert f'<a href="{page_url}">just an internal link</a>' in html
     # And the database should not be hit
     assert len(connection.queries) == 0
@@ -121,11 +125,50 @@ def test_internal_page_link_is_cached_feed(rf, post_with_link_to_itself):
     feed_view = LatestEntriesFeed(repository=repository)
     # When we render the feed
     response = feed_view(request, slug=blog.slug)
-    # Then the internal link should be rendered
+    # Then the internal link should be rendered with an absolute url for feed readers
     html = response.content.decode("utf-8")
-    assert f'&lt;a href="{page_url}"&gt;just an internal link&lt;/a&gt;' in html
+    assert f'&lt;a href="http://testserver{page_url}"&gt;just an internal link&lt;/a&gt;' in html
     # And the database should not be hit
     assert len(connection.queries) == 0
 
 
 # Test render post detail, blog index and blog feed with data from database
+
+
+def test_cached_page_link_is_absolute_only_inside_absolute_urls_block():
+    PageLinkHandlerWithCache.clear_cache()
+    PageLinkHandlerWithCache.cache_url(1, "/a/?x=1&y=2", "https://example.com/a/?x=1&y=2")
+    PageLinkHandlerWithCache.cache_url(2, "/b/")  # no absolute url known
+
+    assert PageLinkHandlerWithCache.expand_db_attributes({"id": 1}) == '<a href="/a/?x=1&amp;y=2">'
+    with PageLinkHandlerWithCache.absolute_urls():
+        assert PageLinkHandlerWithCache.expand_db_attributes({"id": 1}) == (
+            '<a href="https://example.com/a/?x=1&amp;y=2">'
+        )
+    assert PageLinkHandlerWithCache.expand_db_attributes({"id": 1}) == '<a href="/a/?x=1&amp;y=2">'
+
+
+@pytest.mark.django_db
+def test_uncached_page_link_falls_back_to_full_url_inside_absolute_urls_block(blog):
+    post = PostFactory(owner=blog.owner, parent=blog, title="linked", slug="linked")
+    PageLinkHandlerWithCache.clear_cache()
+
+    relative = PageLinkHandlerWithCache.expand_db_attributes({"id": post.id})
+    with PageLinkHandlerWithCache.absolute_urls():
+        absolute, missing = PageLinkHandlerWithCache.expand_db_attributes_many([{"id": post.id}, {"id": 99999}])
+
+    assert relative == f'<a href="{post.url}">'
+    assert absolute == f'<a href="{post.full_url}">'
+    assert post.full_url.startswith("http")
+    assert missing == "<a>"
+
+
+@pytest.mark.django_db
+def test_clear_cached_page_urls_clears_absolute_urls():
+    from cast.models.repository.snapshot import cache_page_url, clear_cached_page_urls
+
+    cache_page_url(99999, "/a/", "https://example.com/a/")
+    clear_cached_page_urls()
+
+    assert 99999 not in PageLinkHandlerWithCache.cache
+    assert 99999 not in PageLinkHandlerWithCache.absolute_cache

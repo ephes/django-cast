@@ -35,18 +35,21 @@ def _serialize_chaptermarks(audio: "Audio") -> list[dict[str, str]]:
     ]
 
 
-def cache_page_url(post_id: int, url: str) -> None:
-    """Store a page URL in the rich-text link cache to avoid DB lookups during rendering."""
+def cache_page_url(post_id: int, url: str, absolute_url: str | None = None) -> None:
+    """Store a page URL in the rich-text link cache to avoid DB lookups during rendering.
+
+    ``absolute_url`` is used for links rendered for feeds.
+    """
     from ...wagtail_hooks import PageLinkHandlerWithCache
 
-    PageLinkHandlerWithCache.cache_url(post_id, url)
+    PageLinkHandlerWithCache.cache_url(post_id, url, absolute_url)
 
 
 def clear_cached_page_urls() -> None:
     """Clear rich-text link cache before building request-scoped repositories."""
     from ...wagtail_hooks import PageLinkHandlerWithCache
 
-    PageLinkHandlerWithCache.cache.clear()
+    PageLinkHandlerWithCache.clear_cache()
 
 
 class PostQuerySnapshot:

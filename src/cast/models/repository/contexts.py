@@ -91,7 +91,7 @@ class PostDetailContext:
         self.renditions_for_posts = renditions_for_posts
         self.episode_contributors = episode_contributors
 
-        cache_page_url(post_id, page_url)
+        cache_page_url(post_id, page_url, absolute_page_url)
 
     @classmethod
     def create_from_django_models(
@@ -227,7 +227,7 @@ class FeedContext:
         self.post_queryset = queryset_data.queryset
 
         for post_id, page_url in self.page_url_by_id.items():
-            cache_page_url(post_id, page_url)
+            cache_page_url(post_id, page_url, self.absolute_page_url_by_id.get(post_id))
 
     @classmethod
     def create_from_django_models(
@@ -485,7 +485,7 @@ class BlogIndexContext:
         self.absolute_page_url_by_id = queryset_data.absolute_page_url_by_id
 
         for post_id, page_url in self.page_url_by_id.items():
-            cache_page_url(post_id, page_url)
+            cache_page_url(post_id, page_url, self.absolute_page_url_by_id.get(post_id))
 
     @staticmethod
     def data_for_blog_index_cachable(

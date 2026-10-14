@@ -204,7 +204,9 @@ Host and Site Configuration
 Feed self URLs and relative channel links use the request host validated by
 Django's ``ALLOWED_HOSTS``, which supports sites served from more than one
 configured hostname. Cached feed responses are scoped to that host. Item URLs
-continue to follow Wagtail site routing. Feed rendering does not replace
+continue to follow Wagtail site routing. Internal page links in rich text
+inside item descriptions are written as absolute URLs (the page's full Wagtail
+URL), so they resolve in feed readers; HTML pages keep relative links. Feed rendering does not replace
 Django's process-wide current ``Site`` with request data. When
 ``django.contrib.sites`` is installed, ``SITE_ID`` must identify an existing
 ``django_site`` row (or, without ``SITE_ID``, the request host must match one);
