@@ -310,7 +310,24 @@ Options:
     Delete the stale files under managed media prefixes instead of only listing
     them.
 
-The command prints matching stale paths and a final total stale size in MB.
+Only files at least ``CAST_MEDIA_STALE_MIN_AGE_DAYS`` old (default: 7 days)
+are candidates. The command uses the newest available storage modification or
+creation timestamp; a backend without either timestamp leaves the file untouched
+and reports its age as unknown. Naive timestamps use the Django default timezone.
+The setting must be a non-negative integer; ``0`` removes the age delay.
+The age boundary is inclusive. Configure the setting in your project settings::
+
+    CAST_MEDIA_STALE_MIN_AGE_DAYS = 7
+
+Listing remains the default dry run. Before each deletion, the command checks
+age again and runs fresh database queries for that exact file name. Files that
+became referenced are skipped. No database rows are deleted. This reduces the
+race window but cannot make a storage deletion atomic with a concurrent upload
+or database write; schedule cleanup when uploads are quiet and retain backups.
+
+The command prints candidate paths, their total size in MB, and counts for
+``candidates``, ``deleted``, ``skipped-too-young`` (including unknown ages), and
+``skipped-newly-referenced``. The last count applies when using ``--delete``.
 
 Reference Site
 ==============

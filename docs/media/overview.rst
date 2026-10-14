@@ -331,6 +331,12 @@ Find orphaned media files::
     python manage.py media_stale
     python manage.py media_stale --delete  # Remove orphaned managed media files
 
+``media_stale`` only considers files at least 7 days old by default
+(``CAST_MEDIA_STALE_MIN_AGE_DAYS``). Unknown storage ages are skipped.
+Deletion re-checks age and database references for each file and reports skipped
+counts; omit ``--delete`` for the default dry run. See
+:doc:`/reference/management-commands` for details.
+
 Backup and Restore
 ~~~~~~~~~~~~~~~~~~
 

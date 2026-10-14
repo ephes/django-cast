@@ -112,6 +112,12 @@ To also delete them:
 
     python manage.py media_stale --delete
 
+``media_stale`` only considers files at least 7 days old by default
+(``CAST_MEDIA_STALE_MIN_AGE_DAYS``). Unknown storage ages are skipped.
+Deletion re-checks age and database references for each file and reports skipped
+counts; omit ``--delete`` for the default dry run. See
+:doc:`/reference/management-commands` for details.
+
 The command ignores objects outside known django-cast/Wagtail media prefixes by
 default, even when they live in the same storage backend.
 
