@@ -96,7 +96,26 @@ Three sources, merged per episode at correction time:
 2. **Episode** (derived, no new field). Link texts of the episode's show
    notes (rich text in `body`) and "by <Author>" phrases, the same sources the
    pilot used. These are canonical spellings without variants, so they feed
-   proposals only (see "Matching"), never unattended replacement.
+   proposals only (see "Matching"), never unattended replacement. Derived
+   from them (`episode_terms` in `cast.transcripts.glossary`):
+   - **Full spellings, listed first:** link texts with bracket notes removed
+     (the notes' parts are kept) and a leading article dropped ("The
+     Go-Giver" -> "Go-Giver"), title parts split on ":" or " - ", and
+     "by <Author>" names, several joined by "and".
+   - **Derived forms:** a trailing year or number after a name ("DjangoCon
+     Europe 2027" -> "DjangoCon Europe"), CamelCase, acronym and hyphenated
+     tokens of a link text ("EuroPython", "DEPs"), author surnames, and an
+     "owner/repo" link text split into the repo and the CamelCase-split owner
+     ("FarhanAliRaza/prongs" -> "prongs", "Farhan Ali Raza").
+   - **URL host:** a link text that is a URL yields its host
+     ("sixfeetup.com").
+   - **Product prefix:** a lowercase repo, owner, host label or one-word link
+     text that starts with "get", "use" or "try" also yields the rest when
+     it has at least four letters ("getscaf" -> "scaf").
+
+   Handles ("@show") are skipped. Terms with the same letters are kept once,
+   full spellings before derived forms, so "SixFeetUp" and "Six Feet Up"
+   form one group.
 3. **Show** (new snippet `TranscriptGlossaryTerm`, foreign key to `Podcast`,
    registered as a Wagtail snippet viewset filterable by podcast): `term`
    (canonical spelling), `variants` (one per line), `notes` (internal). A
@@ -133,7 +152,15 @@ Two kinds of results:
   fuzzy matches of glossary terms against word n-grams (similarity >= 0.8
   on letters and digits, at least two words for multi-word terms, never a
   plain dictionary word alone) and, from slice 2 on, the LLM pass. Matches
-  never span two segments. A
+  never span two segments. Targets are the contributors' display names and
+  their name parts, show terms and episode terms. Also never proposed:
+  - a phrase that already spells the target;
+  - a part of the target ("Django" for DjangoCon);
+  - a lowercase identifier read aloud ("spec kit" for spec-kit);
+  - a word split into a piece of fewer than three letters;
+  - a different number ("DEP 10" for DEP 19).
+
+  On overlap, the match with more matching letters wins. A
   proposal carries segment position, start ms, original text, replacement,
   source and score, and changes nothing until an editor approves it.
 - **Decisions apply transcript-wide**: proposals with the same replacement
@@ -300,6 +327,45 @@ decide; 95 in the gold). Gates:
 - Then on staging: re-apply on the pilot episodes, check that Podlove, DOTe
   and WebVTT show the same corrected text, that the player's transcript
   search finds "Jon Gould", and that approved speaker names are still shown.
+
+### Slice 1 measurement (matching engine, 2026-10-15)
+
+Measured on the six pilot episodes with an empty show list. Contributors are
+the two hosts plus the guest named in the title, with variants only for the
+credited guests. Results for the 92 contributor and show-note occurrences:
+
+- **Coverage:** 72 (78 %); 26 fixed automatically and 46 proposed.
+- **Without the product-prefix rule:** 58 (63 %), short of the gate.
+- **The rule's gain flatters:** all 14 extra occurrences are one term, "scaf"
+  from the link text "getscaf", in a single episode. Without that term,
+  slice 1 would miss the gate.
+- **Wrong automatic replacements:** none.
+- **Decisions:** exactly one group per (episode, correct spelling); 19 keys.
+- **Proposals:** 89 in 39 groups. 46 match a gold occurrence, a precision of
+  52 %. Many of the others look like real errors the gold does not list
+  ("button down", "Django in the med").
+- **Run time:** about 5 s for all six episodes.
+- **Gaps:** the misses are terms the notes do not spell as spoken ("DEP 20",
+  "DEPs" for "dips"/"depths", "technical governance", a misspelt author
+  name), or originals below 0.8 similarity ("six speed up", "EuroPi",
+  "Herbert Woolworths").
+- **Ecosystem and other names:** none covered (K 0/71, O 0/16). That is
+  expected, since those terms are not in the show notes.
+
+Leave-one-episode-out show list (term = correct spelling; variants are the
+other five episodes' originals, common words excluded):
+
+- **Coverage:** 72 of the 92 contributor and show-note occurrences (30
+  automatic, 42 proposed), 9 of 71 ecosystem terms proposed, and 30 of 179
+  occurrences fixed automatically overall. Only "Six Feed Up" recurs as a
+  non-common misspelling; the recurring "rough" (Ruff) is refused as a
+  common word.
+- **Automatic replacements not in the gold:** 6. Four look correct: "Jango"
+  or "Jang" -> Django three times, and "learnjango.com" -> learndjango.com.
+  Two are questionable: "Jang" -> Django where "jang" was a false start
+  (once before another word, once directly before "Django"). Both come
+  from the variant "Jang" learned in another episode, and the review lists
+  them so they can be rejected.
 
 ## Risks
 
