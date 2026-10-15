@@ -11,8 +11,11 @@
   application and approved speaker mappings are unaffected. Audio used by
   several episodes gets no corrections until an editor picks the episode. The
   new ``apply_transcript_glossary`` command re-applies the glossary after
-  edits. Service functions for the coming review UI live in
-  ``cast.transcripts.corrections``; see :ref:`transcript_glossary_corrections`.
+  edits. A *Glossary corrections* section on the transcript edit view shows
+  the replacements and the proposals grouped by correct spelling with their
+  context, and lets editors approve or reject a group or single occurrences,
+  add an original to the glossary, reject replacements, re-apply the glossary
+  and pick the episode for shared audio; see :ref:`transcript_glossary_review`.
 - Add the data for a transcript glossary that will correct misheard names and
   terms in transcripts. Contributors get a private ``transcript_variants``
   field (one ``variant => replacement`` per line, scoped to episodes that

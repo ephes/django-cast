@@ -1,0 +1,131 @@
+{% load i18n l10n %}
+<section class="cast-glossary-review" id="glossary-review">
+  <h2>{% trans "Glossary corrections" %}</h2>
+  {% url 'cast-transcript:edit' transcript.id as edit_url %}
+
+  {% if glossary_review.needs_episode %}
+    {% if glossary_review.stale_episode %}
+      <p>{% trans "The episode that supplied the glossary context no longer uses this audio. Choose the episode whose contributors and podcast form the glossary." %}</p>
+    {% else %}
+      <p>{% trans "This audio is used by several episodes (or none). Choose the episode whose contributors and podcast form the glossary before it is applied." %}</p>
+    {% endif %}
+    {% if glossary_review.episode_form.fields.episode.queryset.exists %}
+      <form action="{{ edit_url }}" method="POST" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="glossary-episode" />
+        <ul class="fields">
+          <li>{% include "wagtailadmin/shared/field.html" with field=glossary_review.episode_form.episode %}</li>
+          <li><input class="button" type="submit" value="{% trans 'Use this episode and apply the glossary' %}" /></li>
+        </ul>
+      </form>
+    {% else %}
+      <p>{% trans "No episode uses this transcript's audio, so there is no glossary to apply." %}</p>
+    {% endif %}
+  {% else %}
+    {% if glossary_review.current %}
+      <p>
+        {{ glossary_review.summary }}
+        {% if glossary_review.rejected %}
+          {% blocktrans count counter=glossary_review.rejected|length %}{{ counter }} occurrence was rejected.{% plural %}{{ counter }} occurrences were rejected.{% endblocktrans %}
+        {% endif %}
+      </p>
+    {% else %}
+      <p>{% trans "The glossary has not been applied to this transcript yet." %}</p>
+    {% endif %}
+    {% if glossary_review.episode %}
+      <p class="cast-glossary-review__meta">{% blocktrans with title=glossary_review.episode.title %}Glossary context: episode “{{ title }}”.{% endblocktrans %}</p>
+    {% endif %}
+    <form action="{{ edit_url }}" method="POST" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="glossary-refresh" />
+      <ul class="fields">
+        <li><input class="button button-secondary" type="submit" value="{% trans 'Re-apply glossary' %}" /></li>
+      </ul>
+    </form>
+  {% endif %}
+
+  {% if glossary_review.current and not glossary_review.needs_episode %}
+    {% if transcript_audio_sources and glossary_review.groups or transcript_audio_sources and glossary_review.replacements or transcript_audio_sources and glossary_review.rejected %}
+      <div class="cast-speaker-audio">
+        <audio controls preload="metadata" data-cast-glossary-audio>
+          {% for source in transcript_audio_sources %}
+            <source src="{{ source.url }}" type="{{ source.mimeType }}" />
+          {% endfor %}
+        </audio>
+      </div>
+    {% endif %}
+
+    {% if glossary_review.groups %}
+      <h3>{% trans "Proposals" %}</h3>
+      <ul class="cast-glossary-groups">
+        {% for group in glossary_review.groups %}
+          <li class="cast-glossary-group">
+            <div class="cast-glossary-group__head">
+              <p class="cast-glossary-group__to"><strong>{{ group.to }}</strong></p>
+              <div class="cast-glossary-group__actions">
+                <form action="{{ edit_url }}" method="POST" novalidate>
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="glossary-group" />
+                  <input type="hidden" name="to" value="{{ group.to }}" />
+                  <button class="button button-small" type="submit" name="decision" value="approved">{% trans "Approve all" %}</button>
+                  <button class="button button-small button-secondary" type="submit" name="decision" value="rejected">{% trans "Reject all" %}</button>
+                </form>
+              </div>
+            </div>
+            <ul class="cast-glossary-originals">
+              {% for item in group.originals %}
+                <li>
+                  “{{ item.original }}” × {{ item.count }}
+                  {% if glossary_review.can_add_to_glossary %}
+                    <form class="cast-glossary-inline-form" action="{{ edit_url }}" method="POST" novalidate>
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="glossary-add" />
+                      <input type="hidden" name="original" value="{{ item.original }}" />
+                      <input type="hidden" name="to" value="{{ group.to }}" />
+                      <button class="button button-small button-secondary" type="submit">{% trans "Approve and add to glossary" %}</button>
+                    </form>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+            <ol class="cast-speaker-samples">
+              {% for occurrence in group.samples %}
+                {% include "cast/transcript/_glossary_occurrence.html" %}
+              {% endfor %}
+            </ol>
+            <details class="cast-glossary-group__details">
+              <summary>{% blocktrans count counter=group.occurrences|length %}Decide one by one ({{ counter }} occurrence){% plural %}Decide one by one ({{ counter }} occurrences){% endblocktrans %}</summary>
+              <ol class="cast-speaker-samples">
+                {% for occurrence in group.occurrences %}
+                  {% include "cast/transcript/_glossary_occurrence.html" with decide=True %}
+                {% endfor %}
+              </ol>
+            </details>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if glossary_review.replacements %}
+      <details class="cast-glossary-replacements">
+        <summary>{% blocktrans count counter=glossary_review.replacements|length %}{{ counter }} replacement in effect{% plural %}{{ counter }} replacements in effect{% endblocktrans %}</summary>
+        <ol class="cast-speaker-samples">
+          {% for occurrence in glossary_review.replacements %}
+            {% include "cast/transcript/_glossary_occurrence.html" with reject_replacement=True %}
+          {% endfor %}
+        </ol>
+      </details>
+    {% endif %}
+
+    {% if glossary_review.rejected %}
+      <details class="cast-glossary-replacements">
+        <summary>{% blocktrans count counter=glossary_review.rejected|length %}{{ counter }} rejected occurrence{% plural %}{{ counter }} rejected occurrences{% endblocktrans %}</summary>
+        <ol class="cast-speaker-samples">
+          {% for occurrence in glossary_review.rejected %}
+            {% include "cast/transcript/_glossary_occurrence.html" with restore=True %}
+          {% endfor %}
+        </ol>
+      </details>
+    {% endif %}
+  {% endif %}
+</section>

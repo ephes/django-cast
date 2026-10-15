@@ -708,6 +708,44 @@ After editing the glossary, re-apply it:
    python manage.py apply_transcript_glossary --transcript 12 --transcript 13
    python manage.py apply_transcript_glossary --all
 
+.. _transcript_glossary_review:
+
+Reviewing corrections
+~~~~~~~~~~~~~~~~~~~~~
+
+The transcript edit view (*Media → Transcripts → Edit*) has a *Glossary
+corrections* section next to the known-speaker review. Anyone who may edit the
+transcript can use it:
+
+- A summary counts the automatic and approved replacements, the open proposal
+  groups and the occurrences left to decide, and names the episode that
+  supplies the glossary. *Re-apply glossary* recomputes the corrections with
+  the current glossary (as ``apply_transcript_glossary`` does).
+- When the audio is used by several episodes, or the stored episode no longer
+  uses it, the section asks for the episode instead and applies the glossary
+  once one is chosen.
+- Proposals are grouped by correct spelling. Each group lists its originals
+  with their counts and the first occurrences in context, with the matched
+  phrase highlighted. *Approve all* and *Reject all* decide every original of
+  the group for the whole transcript; occurrences already decided one by one
+  keep their decision. *Approve and add to glossary* approves
+  one original and adds it as a variant of the podcast's show term with that
+  spelling, else of the credited contributor whose name it is, else of a new
+  show term; it is refused with the validation message when the variant is not
+  allowed (for example a common word as show-term variant), and it needs the
+  permissions to add and change transcript glossary terms and to change
+  contributors. *Decide one by one* opens every occurrence with its own
+  *Approve* and *Reject*.
+- The replacements in effect (automatic and approved) are listed with their
+  context and can be rejected one by one; rejected ones stay rejected when the
+  glossary is re-applied.
+- Rejected occurrences (rejected replacements and rejected proposals) are
+  counted in the summary and listed apart, each with *Approve* to undo the
+  rejection.
+
+Each occurrence's time stamp plays the audio from the start of its segment to
+the start of the next one, when the audio has a playable file.
+
 Common-word lists
 ~~~~~~~~~~~~~~~~~
 

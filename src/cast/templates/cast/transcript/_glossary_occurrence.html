@@ -1,0 +1,46 @@
+{% load i18n l10n %}
+<li class="cast-speaker-sample">
+  {% if transcript_audio_sources %}
+    <button
+      class="cast-speaker-sample__time"
+      type="button"
+      data-cast-glossary-seek="{{ occurrence.start_seconds|unlocalize }}"
+      {% if occurrence.end_seconds is not None %}data-cast-glossary-end="{{ occurrence.end_seconds|unlocalize }}"{% endif %}
+    >
+      {{ occurrence.timestamp_label }}
+    </button>
+  {% else %}
+    <span class="cast-speaker-sample__time-label">{{ occurrence.timestamp_label }}</span>
+  {% endif %}
+  <div>
+    <p class="cast-speaker-sample__text">{{ occurrence.context }}</p>
+    {% if decide or reject_replacement or restore %}
+      <p class="cast-glossary-review__meta">
+        “{{ occurrence.original }}” → “{{ occurrence.to }}”
+        {% if reject_replacement %}
+          · {% if occurrence.state == "auto" %}{% trans "automatic" %}{% else %}{% trans "approved" %}{% endif %}
+        {% elif restore %}
+          · {% trans "rejected" %}
+        {% endif %}
+      </p>
+      <form class="cast-glossary-inline-form" action="{{ edit_url }}" method="POST" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="start_ms" value="{{ occurrence.start_ms|unlocalize }}" />
+        <input type="hidden" name="start" value="{{ occurrence.start|unlocalize }}" />
+        <input type="hidden" name="end" value="{{ occurrence.end|unlocalize }}" />
+        {% if reject_replacement %}
+          <input type="hidden" name="action" value="glossary-reject-replacement" />
+          <input type="hidden" name="to" value="{{ occurrence.to }}" />
+          <button class="button button-small button-secondary" type="submit">{% trans "Reject" %}</button>
+        {% else %}
+          <input type="hidden" name="action" value="glossary-occurrence" />
+          <input type="hidden" name="to" value="{{ occurrence.to }}" />
+          <button class="button button-small" type="submit" name="decision" value="approved">{% trans "Approve" %}</button>
+          {% if not restore %}
+            <button class="button button-small button-secondary" type="submit" name="decision" value="rejected">{% trans "Reject" %}</button>
+          {% endif %}
+        {% endif %}
+      </form>
+    {% endif %}
+  </div>
+</li>

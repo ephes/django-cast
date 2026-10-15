@@ -18,8 +18,10 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      var audio = document.querySelector('[data-cast-speaker-audio]');
-      if (audio) {
+      var bindSeekButtons = function(audio, buttons, seekAttribute, endAttribute) {
+        if (!audio) {
+          return;
+        }
         var boundedEnd = null;
         audio.addEventListener('timeupdate', function() {
           if (boundedEnd !== null && audio.currentTime >= boundedEnd) {
@@ -27,14 +29,14 @@
             boundedEnd = null;
           }
         });
-        document.querySelectorAll('[data-cast-speaker-seek]').forEach(function(button) {
+        buttons.forEach(function(button) {
           button.addEventListener('click', function() {
-            var seconds = Number(button.getAttribute('data-cast-speaker-seek'));
-            var endSeconds = Number(button.getAttribute('data-cast-speaker-end'));
+            var seconds = Number(button.getAttribute(seekAttribute));
+            var endSeconds = Number(button.getAttribute(endAttribute));
             if (Number.isNaN(seconds)) {
               return;
             }
-            boundedEnd = Number.isNaN(endSeconds) ? null : endSeconds;
+            boundedEnd = Number.isNaN(endSeconds) || !button.hasAttribute(endAttribute) ? null : endSeconds;
             audio.currentTime = seconds;
             var playPromise = audio.play();
             if (playPromise && typeof playPromise.catch === 'function') {
@@ -42,7 +44,19 @@
             }
           });
         });
-      }
+      };
+      bindSeekButtons(
+        document.querySelector('[data-cast-speaker-audio]'),
+        document.querySelectorAll('[data-cast-speaker-seek]'),
+        'data-cast-speaker-seek',
+        'data-cast-speaker-end'
+      );
+      bindSeekButtons(
+        document.querySelector('[data-cast-glossary-audio]'),
+        document.querySelectorAll('[data-cast-glossary-seek]'),
+        'data-cast-glossary-seek',
+        'data-cast-glossary-end'
+      );
       document.querySelectorAll('[data-cast-voice-reference-form]').forEach(function(form) {
         var checkbox = form.querySelector('[data-cast-voice-reference-consent]');
         var approveButton = form.querySelector('[data-cast-voice-reference-approve]');
@@ -177,6 +191,70 @@
 
     .cast-known-speaker-segments__field select {
       max-width: 100%;
+    }
+
+    .cast-glossary-review__meta {
+      color: var(--w-color-text-label, inherit);
+      font-size: 0.875rem;
+      margin: 0.25rem 0;
+    }
+
+    .cast-glossary-groups {
+      list-style: none;
+      margin: 1rem 0 1.5rem;
+      padding: 0;
+    }
+
+    .cast-glossary-group {
+      border-top: 1px solid var(--w-color-border-furniture, #4c4c4c);
+      padding: 1rem 0;
+    }
+
+    .cast-glossary-group:last-child {
+      border-bottom: 1px solid var(--w-color-border-furniture, #4c4c4c);
+    }
+
+    .cast-glossary-group__head {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      justify-content: space-between;
+    }
+
+    .cast-glossary-group__to {
+      margin: 0;
+    }
+
+    .cast-glossary-originals {
+      list-style: none;
+      margin: 0.5rem 0 0.75rem;
+      padding: 0;
+    }
+
+    .cast-glossary-originals li {
+      margin-bottom: 0.4rem;
+    }
+
+    .cast-glossary-inline-form {
+      display: inline-block;
+      margin: 0 0 0 0.5rem;
+    }
+
+    .cast-glossary-group__details,
+    .cast-glossary-replacements {
+      margin-top: 0.75rem;
+    }
+
+    .cast-glossary-group__details summary,
+    .cast-glossary-replacements summary {
+      cursor: pointer;
+      display: list-item;
+      margin-bottom: 0.75rem;
+    }
+
+    .cast-glossary-review mark {
+      padding: 0 0.1em;
     }
 
     .cast-voice-reference-group {
@@ -388,6 +466,11 @@
             </ul>
           </form>
 
+          <hr />
+        {% endif %}
+
+        {% if glossary_review.available %}
+          {% include "cast/transcript/_glossary_review.html" %}
           <hr />
         {% endif %}
 

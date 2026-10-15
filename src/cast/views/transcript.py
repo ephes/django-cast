@@ -17,6 +17,12 @@ from wagtail.search.backends import get_search_backends
 
 from ..audio_access import authorize_transcript_access, prevent_private_media_caching, request_may_view_page
 from ..forms import (
+    GLOSSARY_ADD_ACTION,
+    GLOSSARY_EPISODE_ACTION,
+    GLOSSARY_GROUP_ACTION,
+    GLOSSARY_OCCURRENCE_ACTION,
+    GLOSSARY_REFRESH_ACTION,
+    GLOSSARY_REJECT_REPLACEMENT_ACTION,
     KNOWN_SPEAKER_APPLY_ACTION,
     KNOWN_SPEAKER_REVIEW_ACTION,
     SPEAKER_MAPPING_ACTION,
@@ -53,7 +59,7 @@ from ..transcript_sanitization import (
 )
 from ..transcripts import editing, parsing
 from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
-from . import AuthenticatedHttpRequest, HtmxHttpRequest
+from . import AuthenticatedHttpRequest, HtmxHttpRequest, transcript_glossary
 from .media import MediaAdminConfig, MediaAdminViews
 
 TRANSCRIPT_FALLBACK_THEME = "plain"
@@ -443,6 +449,12 @@ EDIT_ACTION_HANDLERS: dict[str, EditActionHandler] = {
     KNOWN_SPEAKER_REVIEW_ACTION: _handle_known_speaker_review,
     VOICE_REFERENCE_CREATE_ACTION: _handle_voice_reference_create,
     SPEAKER_MAPPING_ACTION: _handle_speaker_mapping_save,
+    GLOSSARY_REFRESH_ACTION: transcript_glossary.handle_refresh,
+    GLOSSARY_EPISODE_ACTION: transcript_glossary.handle_episode,
+    GLOSSARY_GROUP_ACTION: transcript_glossary.handle_group,
+    GLOSSARY_OCCURRENCE_ACTION: transcript_glossary.handle_occurrence,
+    GLOSSARY_ADD_ACTION: transcript_glossary.handle_add,
+    GLOSSARY_REJECT_REPLACEMENT_ACTION: transcript_glossary.handle_reject_replacement,
 }
 
 
@@ -495,6 +507,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
             "known_speaker_review": transcript.known_speaker_review_summary(),
             "known_speaker_review_form": known_speaker_review_form,
             "known_speaker_review_rows": known_speaker_review_rows,
+            "glossary_review": transcript_glossary.get_glossary_review(transcript, request.user),
             "user_can_delete": transcript_permission_policy.user_has_permission_for_instance(
                 request.user, "delete", transcript
             ),

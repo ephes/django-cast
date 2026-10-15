@@ -34,6 +34,7 @@ from .models import (
     Audio,
     ChapterMark,
     Contributor,
+    Episode,
     EpisodeContributor,
     Transcript,
     TranscriptSpeakerMapping,
@@ -42,6 +43,7 @@ from .models import (
 )
 from .models.contributors import ContributorVoiceReference
 from .transcripts import known_speakers, parsing
+from .transcripts.corrections import STATE_APPROVED, STATE_REJECTED
 from .transcripts.dote import dote_timestamp_to_ms
 from .transcripts.known_speakers import (
     KNOWN_SPEAKER_DECISION_APPROVE,
@@ -57,6 +59,12 @@ SPEAKER_MAPPING_ACTION = "map-speakers"
 KNOWN_SPEAKER_APPLY_ACTION = "apply-known-speakers"
 KNOWN_SPEAKER_REVIEW_ACTION = "review-known-speakers"
 VOICE_REFERENCE_CREATE_ACTION = "create-voice-reference"
+GLOSSARY_REFRESH_ACTION = "glossary-refresh"
+GLOSSARY_EPISODE_ACTION = "glossary-episode"
+GLOSSARY_GROUP_ACTION = "glossary-group"
+GLOSSARY_OCCURRENCE_ACTION = "glossary-occurrence"
+GLOSSARY_ADD_ACTION = "glossary-add"
+GLOSSARY_REJECT_REPLACEMENT_ACTION = "glossary-reject-replacement"
 DRAFT_SPEAKER_ASSIGNMENT_PREFIX = "draft:"
 KNOWN_SPEAKER_REVIEW_BULK_VALUE = "__bulk__"
 KNOWN_SPEAKER_REVIEW_BLANK_VALUE = "__blank__"
@@ -676,6 +684,55 @@ class VoiceReferenceCandidateCreateForm(forms.Form):
         if status == ContributorVoiceReference.Status.APPROVED and not consent_confirmed:
             raise ValidationError(_("Creating an approved voice reference requires confirmed contributor consent."))
         return cleaned_data
+
+
+GLOSSARY_DECISION_CHOICES = ((STATE_APPROVED, _("Approve")), (STATE_REJECTED, _("Reject")))
+
+
+class GlossaryEpisodeForm(forms.Form):
+    """Choose the episode whose contributors and podcast form a transcript's glossary."""
+
+    episode = forms.ModelChoiceField(queryset=Episode.objects.none(), label=_("Episode"))
+
+    def __init__(self, *args: Any, transcript: Transcript, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        field = cast(forms.ModelChoiceField, self.fields["episode"])
+        field.queryset = Episode.objects.filter(podcast_audio_id=transcript.audio_id).order_by("pk")
+
+
+class GlossaryGroupDecisionForm(forms.Form):
+    """Approve or reject every proposal for one replacement."""
+
+    to = forms.CharField()
+    decision = forms.ChoiceField(choices=GLOSSARY_DECISION_CHOICES)
+
+
+class GlossaryAddForm(forms.Form):
+    """Approve one original of a proposal group and add it to the glossary."""
+
+    original = forms.CharField()
+    to = forms.CharField()
+
+
+class GlossarySpanForm(forms.Form):
+    """Position of one replacement in the raw text of a segment."""
+
+    start_ms = forms.IntegerField(min_value=0)
+    start = forms.IntegerField(min_value=0)
+    end = forms.IntegerField(min_value=0)
+
+
+class GlossaryReplacementRejectForm(GlossarySpanForm):
+    """Reject one replacement in effect, identified by position and target."""
+
+    to = forms.CharField()
+
+
+class GlossaryOccurrenceDecisionForm(GlossarySpanForm):
+    """Approve or reject one proposal occurrence."""
+
+    to = forms.CharField()
+    decision = forms.ChoiceField(choices=GLOSSARY_DECISION_CHOICES)
 
 
 class NonEmptySearchForm(SearchForm):
