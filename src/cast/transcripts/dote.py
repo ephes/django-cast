@@ -106,3 +106,20 @@ def convert_dote_to_podcastindex_transcript(transcript: Mapping[str, list[DoteSe
         "version": "1.0",
         "segments": convert_segments(transcript["lines"]),
     }
+
+
+def set_texts(data: dict, texts_by_start_ms: Mapping[int, str]) -> int:
+    """Set the ``text`` of lines matched by start time; return how many changed."""
+    lines = data.get("lines")
+    if not isinstance(lines, list):
+        return 0
+    changed = 0
+    for line in lines:
+        if not isinstance(line, dict):
+            continue
+        start_ms = dote_timestamp_to_ms(line.get("startTime"))
+        text = texts_by_start_ms.get(start_ms) if start_ms is not None else None
+        if text is not None and line.get("text") != text:
+            line["text"] = text
+            changed += 1
+    return changed

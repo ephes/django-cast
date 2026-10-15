@@ -12,7 +12,7 @@ from django.db import transaction
 
 from cast.media_derivation import normalize_model_save_arguments
 
-COMPOUND_SUFFIXES = (".podlove.json", ".dote.json", ".speakers.json")
+COMPOUND_SUFFIXES = (".podlove.json", ".dote.json", ".speakers.json", ".corrections.json")
 GENERATED_SUFFIX_RE = re.compile(r"(?:-[0-9a-f]{12})+$")
 
 

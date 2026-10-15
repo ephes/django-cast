@@ -1,5 +1,6 @@
 """Pure WebVTT transcript transforms."""
 
+import html
 import re
 from collections.abc import Mapping
 
@@ -9,6 +10,7 @@ TIMING_SEPARATOR = "-->"
 VOICE_OPENING_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>")
 VOICE_CLOSING_RE = re.compile(r"</v>")
 GENERIC_SPEAKER_PREFIX_RE = re.compile(r"^(?P<label>Speaker\s+\d+)\s*:\s*(?P<text>.*)$", re.IGNORECASE)
+CUE_TAG_RE = re.compile(r"<[^>]*>")
 
 
 def webvtt_timestamp_to_ms(value: object) -> int | None:
@@ -220,3 +222,76 @@ def rewrite_payload_line(line: str, mapping: Mapping[str, str]) -> tuple[str, bo
 
 def voice_opening(label: str, *, classes: str = "") -> str:
     return f"<v{classes} {label}>"
+
+
+def escape_cue_text(text: str) -> str:
+    """One WebVTT payload line for ``text``, escaped the way Voxhelm writes cues."""
+    single_line = " ".join(text.split()).replace("-->", "->")
+    return single_line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def set_cue_text(lines: list[str], text: str) -> list[str] | None:
+    """Replace the text of one cue payload, keeping its voice tag and ``Speaker N:`` prefix.
+
+    The payload becomes one line. Returns ``None`` for a payload with other markup
+    (several voices, styling tags), which is left alone, and the lines unchanged when
+    they already show ``text``.
+    """
+    if not lines:
+        return None
+    ending = lines[-1][len(lines[-1].rstrip("\r\n")) :]
+    body = " ".join(line.strip() for line in lines)
+    prefix = suffix = ""
+    voice_match = VOICE_OPENING_RE.match(body)
+    if voice_match is not None:
+        prefix = voice_match.group(0)
+        if body.endswith("</v>"):
+            suffix = "</v>"
+    # A "Speaker N:" prefix may also follow the voice tag that speaker application adds.
+    generic_match = GENERIC_SPEAKER_PREFIX_RE.match(body[len(prefix) : len(body) - len(suffix)])
+    if generic_match is not None:
+        prefix += generic_match.string[: generic_match.start("text")]
+    inner = body[len(prefix) : len(body) - len(suffix)]
+    if CUE_TAG_RE.search(inner):
+        return None
+    if " ".join(html.unescape(inner).split()) == " ".join(text.split()):
+        return lines
+    return [f"{prefix}{escape_cue_text(text)}{suffix}{ending}"]
+
+
+def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> tuple[str, int]:
+    """Set the text of cues matched by start time; return the content and how many cues changed."""
+    rewritten_lines: list[str] = []
+    payload_lines: list[str] | None = None
+    text: str | None = None
+    changed = 0
+
+    def flush_payload() -> None:
+        nonlocal changed, payload_lines
+        if payload_lines is None:
+            return
+        lines = payload_lines
+        if text is not None:
+            new_lines = set_cue_text(lines, text)
+            if new_lines is not None and new_lines != lines:
+                lines = new_lines
+                changed += 1
+        rewritten_lines.extend(lines)
+        payload_lines = None
+
+    for line in content.splitlines(keepends=True):
+        if payload_lines is not None:
+            if not line.strip():
+                flush_payload()
+                rewritten_lines.append(line)
+            else:
+                payload_lines.append(line)
+            continue
+        if TIMING_SEPARATOR in line:
+            start_ms = timing_line_start_ms(line)
+            text = texts_by_start_ms.get(start_ms) if start_ms is not None else None
+            payload_lines = []
+        rewritten_lines.append(line)
+
+    flush_payload()
+    return "".join(rewritten_lines), changed

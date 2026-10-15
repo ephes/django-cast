@@ -1,6 +1,18 @@
 0.2.68 (unreleased)
 -------------------
 
+- Apply the transcript glossary to transcripts. After every Voxhelm import,
+  contributor and show-term variants are replaced automatically in the
+  Podlove, DOTe and WebVTT text, and fuzzy matches of contributor names, show
+  terms and show-note spellings are stored as proposals. The raw text, the
+  replacements, proposals and editor decisions live in the new private
+  ``Transcript.corrections`` sidecar (migration ``0086``), which is never
+  served publicly. Corrections change only segment text, so known-speaker
+  application and approved speaker mappings are unaffected. Audio used by
+  several episodes gets no corrections until an editor picks the episode. The
+  new ``apply_transcript_glossary`` command re-applies the glossary after
+  edits. Service functions for the coming review UI live in
+  ``cast.transcripts.corrections``; see :ref:`transcript_glossary_corrections`.
 - Add the data for a transcript glossary that will correct misheard names and
   terms in transcripts. Contributors get a private ``transcript_variants``
   field (one ``variant => replacement`` per line, scoped to episodes that
@@ -10,9 +22,8 @@
   variants that are common words in the podcast's transcript language are
   refused, using built-in English and German lists derived from Tatoeba
   (CC BY 2.0 FR). ``import_transcript_glossary <podcast> <file.json>`` (with
-  ``--dry-run``) loads a list for one podcast. Transcripts are not changed
-  yet; see :ref:`transcript_glossary`. Migration ``0085`` adds the field and
-  the table.
+  ``--dry-run``) loads a list for one podcast; see :ref:`transcript_glossary`.
+  Migration ``0085`` adds the field and the table.
 - Keep approved transcript speaker mappings current when the public files
   are rewritten from the received ones. Mappings used to be compared with a
   hash of the current Podlove, DOTe and WebVTT bytes, so applying

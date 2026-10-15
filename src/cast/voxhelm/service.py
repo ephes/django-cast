@@ -12,6 +12,7 @@ from wagtail.models import Site
 from cast.models.contributors import ContributorVoiceReference
 from cast.models.transcript import Transcript
 from cast.models.transcript_generation import TranscriptGeneration
+from cast.transcripts.corrections import refresh_transcript_corrections
 from cast.transcripts.generation_status import get_transcript_generation
 
 from ..file_replacement import StagedFileReplacementGroup, stage_file_replacement
@@ -363,6 +364,7 @@ class VoxhelmTranscriptService:
         job_id: str,
         source_url: str,
         initial_job_payload: dict[str, Any] | None = None,
+        episode: Any | None = None,
     ) -> TranscriptGenerationResult:
         job_payload = initial_job_payload or {}
         if str(job_payload.get("id", "")) != job_id:
@@ -382,6 +384,7 @@ class VoxhelmTranscriptService:
         self._save_artifacts(
             transcript=transcript, audio=audio, podlove=podlove, dote=dote, vtt=vtt, speakers=speakers
         )
+        self._apply_glossary(transcript=transcript, episode=episode)
         return TranscriptGenerationResult(
             transcript=transcript,
             created=created,
@@ -403,6 +406,7 @@ class VoxhelmTranscriptService:
                 job_id=submission.job_id,
                 source_url=submission.source_url,
                 initial_job_payload=submission.job_payload,
+                episode=episode,
             )
         except VoxhelmError as exc:
             # The job keeps running in Voxhelm; name it so its result can be
@@ -423,6 +427,19 @@ class VoxhelmTranscriptService:
     def _update_collection(*, transcript: Transcript, audio: Audio) -> None:
         if audio.collection_id is not None and transcript.collection_id != audio.collection_id:
             transcript.collection = audio.collection
+
+    @staticmethod
+    def _apply_glossary(*, transcript: Transcript, episode: Any | None) -> None:
+        """Correct the imported transcript with the episode's glossary.
+
+        Runs after every import, so the corrections sidecar records the text as
+        received before anything is replaced. A failure is logged and leaves the
+        imported transcript in place.
+        """
+        try:
+            refresh_transcript_corrections(transcript, episode=episode)
+        except Exception:
+            logger.exception("Transcript glossary corrections failed for transcript %s; import kept.", transcript.pk)
 
     @staticmethod
     def _save_artifacts(
@@ -535,7 +552,9 @@ def enqueue_audio_transcript_generation(
             requested_by=requested_by,
         )
     try:
-        task_result = complete_transcript_generation.enqueue(generation.pk)
+        # The episode is task metadata, not stored on the generation: the import uses it as
+        # the transcript glossary's episode context when the audio is shared.
+        task_result = complete_transcript_generation.enqueue(generation.pk, episode_id=getattr(episode, "pk", None))
     except Exception as exc:
         generation.mark_failed(str(exc))
         raise

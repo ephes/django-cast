@@ -549,9 +549,10 @@ Speech recognition cannot spell names and technical terms it has never seen
 ("John" for Jon, "Gunacorn" for Gunicorn). The transcript glossary holds the
 correct spellings and the misspellings to replace. It has three sources:
 contributor variants, show terms per podcast, and terms derived from each
-episode's show notes. This release adds the glossary data and its admin;
-applying it to transcripts and the review of proposed corrections follow in
-later releases, so saving glossary entries does not change any transcript yet.
+episode's show notes. Listed misspellings are replaced automatically after
+each Voxhelm import (see :ref:`transcript_glossary_corrections`); everything
+else becomes a proposal for an editor. The review of proposals in the
+transcript admin follows in a later release.
 
 Contributor variants
 ~~~~~~~~~~~~~~~~~~~~
@@ -634,6 +635,78 @@ counts ``created``, ``updated``, ``unchanged`` and ``skipped`` entries, and
 the command exits successfully even when entries were skipped. ``--dry-run``
 validates and reports without saving. A slug used by several podcasts is
 refused; pass the page id instead.
+
+.. _transcript_glossary_corrections:
+
+Applying corrections
+~~~~~~~~~~~~~~~~~~~~
+
+Corrections use the glossary of one episode: the variants of the contributors
+assigned to it (hidden contributors included, since variants are never
+published), the show terms of its podcast, and correct spellings derived from
+its title and show notes (link texts and "by <Author>" phrases in the rich
+text of ``body``, latest revision, so draft notes count). The podcast's
+transcript language picks the common-word list.
+
+- **Automatic replacements**: a contributor variant, or a show-term variant
+  that is not a single common word, is replaced wherever it occurs as a whole
+  phrase (case-insensitive, possessives kept: "John's" becomes "Jon's").
+- **Proposals**: fuzzy matches of contributor names, show terms and
+  show-note spellings change nothing until an editor approves them. An
+  approved original applies to every occurrence in that transcript, also to
+  occurrences found later; a rejected one is no longer proposed. Occurrences
+  decided one by one keep their decision: approving a group leaves occurrences
+  rejected individually as they are, and rejecting it keeps those approved
+  individually.
+
+Editor decisions are stored as such and do not depend on what the current
+glossary still finds. A decision on one occurrence (position, original and
+replacement) wins over a decision for the original in the whole transcript,
+which wins over the glossary; the latest action on an occurrence or original
+counts. So an approved occurrence or original stays replaced when its glossary
+entry is removed, and a rejected one stays unchanged also when the glossary
+later lists it as a variant. Rejected replacements are listed but never
+applied. Approved replacements are applied before automatic ones; an automatic
+replacement that overlaps an approved one is dropped.
+
+After every Voxhelm import (admin request, queued completion or
+``generate_transcripts``), the glossary runs automatically. A failure in this
+step is logged on ``cast.voxhelm.service`` and keeps the imported transcript.
+
+The episode is the one the import was requested for (the episode page's
+*Generate transcript* action, also when the completion runs in the task
+queue, or ``generate_transcripts`` for an episode), or else the only episode
+using the audio. When the audio is used by several episodes, nothing is
+replaced until an editor picks one of them; the choice is stored. If the
+stored episode no longer uses the audio, re-applying changes nothing and the
+editor is asked again.
+
+The state lives in a private sidecar, ``Transcript.corrections``
+(``cast_transcript_corrections/``, the same protected storage as the
+known-speaker sidecar). It holds each Podlove segment's raw text as received,
+the replacements with their state (``auto``, ``approved``, ``rejected``), the
+proposals and the editor's decisions. It is never served: APIs, feeds, the
+player and theme templates read only the Podlove, DOTe and WebVTT files. For a
+transcript that has no sidecar yet, the first run takes the current Podlove
+text as raw text.
+
+Applying is a function of the raw text and the replacements that are not
+rejected: it rewrites the text of the corrected segments in Podlove, DOTe
+(``text``) and WebVTT (the cue text; voice tags and ``Speaker N:`` prefixes
+are kept), matched by start time, and running it again changes nothing. Only
+segment text is changed, so known-speaker application can run before or after
+it, and approved speaker mappings stay current (the files' source fingerprint
+is kept). A new Voxhelm import or upload starts a fresh sidecar from the new
+text; earlier approvals and decisions are not carried over, so add misspellings
+that should always be fixed to the glossary.
+
+After editing the glossary, re-apply it:
+
+.. code-block:: bash
+
+   python manage.py apply_transcript_glossary --podcast <podcast-id-or-slug> --dry-run
+   python manage.py apply_transcript_glossary --transcript 12 --transcript 13
+   python manage.py apply_transcript_glossary --all
 
 Common-word lists
 ~~~~~~~~~~~~~~~~~

@@ -86,7 +86,7 @@ def test_enqueue_audio_transcript_generation_creates_local_state(mocker, audio, 
         task_ref=build_audio_task_ref(audio.pk),
         episode=None,
     )
-    enqueue_mock.assert_called_once_with(generation.pk)
+    enqueue_mock.assert_called_once_with(generation.pk, episode_id=None)
 
 
 @pytest.mark.django_db
@@ -407,6 +407,7 @@ def test_complete_transcript_generation_marks_success_and_calls_service(mocker, 
         audio,
         job_id="job-42",
         source_url="https://media.example.com/audio.m4a",
+        episode=None,
     )
 
 

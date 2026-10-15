@@ -99,6 +99,41 @@ Options:
 The command prints a summary in the form
 ``<podcast>: created=<n> updated=<n> unchanged=<n> skipped=<n>``.
 
+apply_transcript_glossary
+-------------------------
+
+Re-apply the transcript glossary to stored transcripts: recompute automatic
+replacements and proposals from the raw text in each transcript's private
+corrections sidecar with the current glossary, keep editor decisions, and
+rewrite the Podlove, DOTe and WebVTT text. Run it after editing glossary terms
+or contributor variants. See :ref:`transcript_glossary_corrections`.
+
+.. code-block:: bash
+
+    python manage.py apply_transcript_glossary --podcast my-podcast --dry-run
+
+Options (one of the first three is required):
+
+``--transcript ID``
+    A transcript id; repeat for several.
+
+``--podcast ID_OR_SLUG``
+    The transcripts of the podcast's episodes.
+
+``--all``
+    All transcripts.
+
+``--dry-run``
+    Compute and report without writing.
+
+Each transcript prints a line
+``transcript <id>: <status> automatic=<n> approved=<n> proposals=<n> changed=<n>``,
+where ``status`` is ``applied``, ``needs_episode`` (the audio is used by several
+episodes, or the stored episode no longer uses it; an editor must choose) or
+``no_segments``, and ``changed`` counts Podlove segments whose text changed.
+Failures are reported on stderr, the remaining transcripts are still processed,
+and the command then exits with an error.
+
 Image Renditions
 ================
 

@@ -3,12 +3,13 @@ from __future__ import annotations
 from django.shortcuts import get_object_or_404
 from django_tasks import task
 
-from .models import TranscriptGeneration
+from .models import Episode, TranscriptGeneration
 from .voxhelm import VoxhelmTranscriptService
 
 
 @task(backend="cast_transcripts")
-def complete_transcript_generation(generation_id: int) -> None:
+def complete_transcript_generation(generation_id: int, episode_id: int | None = None) -> None:
+    """Import the Voxhelm job's transcript; ``episode_id`` is the episode it was requested for."""
     generation = get_object_or_404(
         TranscriptGeneration.objects.select_related("audio", "site"),
         pk=generation_id,
@@ -23,6 +24,7 @@ def complete_transcript_generation(generation_id: int) -> None:
             generation.audio,
             job_id=generation.voxhelm_job_id,
             source_url=generation.source_url,
+            episode=Episode.objects.filter(pk=episode_id).first(),
         )
     except Exception as exc:
         generation.mark_failed(str(exc))

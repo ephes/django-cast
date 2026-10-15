@@ -55,3 +55,37 @@ def rewrite_speakers(data: dict[str, Any], mapping: Mapping[str, str]) -> bool:
                 segment[field_name] = mapping[label]
                 changed = True
     return changed
+
+
+def get_texts(data: dict) -> list[tuple[int, str]]:
+    """``(start_ms, text)`` of each segment, in order; start times used twice are left out."""
+    segments = data.get("transcripts")
+    if not isinstance(segments, list):
+        return []
+    texts: list[tuple[int, str]] = []
+    counts: dict[int, int] = {}
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        start_ms, text = segment.get("start_ms"), segment.get("text")
+        if isinstance(start_ms, int) and isinstance(text, str):
+            texts.append((start_ms, text))
+            counts[start_ms] = counts.get(start_ms, 0) + 1
+    return [(start_ms, text) for start_ms, text in texts if counts[start_ms] == 1]
+
+
+def set_texts(data: dict, texts_by_start_ms: Mapping[int, str]) -> int:
+    """Set the ``text`` of segments matched by ``start_ms``; return how many changed."""
+    segments = data.get("transcripts")
+    if not isinstance(segments, list):
+        return 0
+    changed = 0
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        start_ms = segment.get("start_ms")
+        text = texts_by_start_ms.get(start_ms) if isinstance(start_ms, int) else None
+        if text is not None and segment.get("text") != text:
+            segment["text"] = text
+            changed += 1
+    return changed

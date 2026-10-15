@@ -434,6 +434,13 @@ def _phrase_pattern(phrase: str) -> re.Pattern[str]:
     return re.compile(_PHRASE_START + body + _PHRASE_END, re.IGNORECASE)
 
 
+def phrase_spans(text: str, phrase: str) -> list[tuple[int, int]]:
+    """Whole-phrase occurrences of ``phrase`` in ``text``, matched like listed variants."""
+    if not letters_key(phrase):
+        return []
+    return [match.span() for match in _phrase_pattern(phrase).finditer(text)]
+
+
 class EffectiveGlossary:
     """The glossary of one episode: contributor and show variants plus proposal targets.
 

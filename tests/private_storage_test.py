@@ -95,6 +95,7 @@ def test_private_model_field_storage_uses_the_session_private_media_root(isolate
     assert [f"{field.model._meta.label}.{field.name}" for field in fields] == [
         "cast.ContributorVoiceReference.clip",
         "cast.Transcript.speakers",
+        "cast.Transcript.corrections",
     ]
     session_private_root = Path(isolated_media_files["CAST_PRIVATE_MEDIA_ROOT"])
     for field in fields:

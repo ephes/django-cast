@@ -424,7 +424,7 @@ that to get a stable directory of its own under ``.tox``, and such a directory i
 at the start and end of the session because the next run reuses it.
 
 Private ``FileField`` columns - the contributor voice-reference clip and the transcript
-speakers sidecar - resolve their storage once, while the model class is created, so they
+speakers and corrections sidecars - resolve their storage once, while the model class is created, so they
 cannot follow a settings override. The fixture rebinds them to the session's private root
 and restores them afterwards.
 

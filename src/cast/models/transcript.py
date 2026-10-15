@@ -75,6 +75,17 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             "labels. Reviewable editorial state, never public transcript output."
         ),
     )
+    corrections = models.FileField(
+        upload_to="cast_transcript_corrections/",
+        storage=get_voice_reference_storage,
+        null=True,
+        blank=True,
+        verbose_name="Glossary corrections",
+        help_text=(
+            "Private transcript glossary state: the raw segment text as received, automatic "
+            "replacements, proposals and editor decisions. Never public transcript output."
+        ),
+    )
 
     source_fingerprint = models.CharField(
         max_length=64,
@@ -232,6 +243,22 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 data = {}
         return data if isinstance(data, dict) else {}
 
+    @property
+    def corrections_data(self) -> dict:
+        """Parsed glossary corrections sidecar, or an empty dict.
+
+        Private editorial state like ``speakers_data``: it must never be
+        serialized into public transcript output, feeds, theme context, or APIs.
+        """
+        data: dict = {}
+        if self.corrections:
+            try:
+                with self.corrections.open("r") as file:
+                    data = json.load(file)
+            except (FileNotFoundError, OSError, ValueError):
+                data = {}
+        return data if isinstance(data, dict) else {}
+
     def transcript_artifact_fingerprint(self) -> str:
         """Return a stable hash for the current raw public transcript artifacts."""
         digest = hashlib.sha256()
@@ -357,6 +384,13 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
     ) -> None:
         content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         self._save_file_content("speakers", content, replacements=replacements)
+
+    def _write_corrections_data(
+        self, data: dict[str, Any], *, replacements: StagedFileReplacementGroup | None = None
+    ) -> None:
+        content = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        filename = None if self.corrections else f"audio-{self.audio_id}.corrections.json"
+        self._save_file_content("corrections", content, filename=filename, replacements=replacements)
 
     def _apply_suggestions_to_podlove(
         self, names_by_start_ms: dict[int, str], *, replacements: StagedFileReplacementGroup | None = None

@@ -125,7 +125,7 @@ def test_stale_generation_resumes_its_existing_voxhelm_job(mocker, audio, site, 
     assert result.enqueued is True
     # Diarization is now disabled, but the interrupted job is resumed, not resubmitted.
     service.submit_for_audio.assert_not_called()
-    enqueue_mock.assert_called_once_with(generation.pk)
+    enqueue_mock.assert_called_once_with(generation.pk, episode_id=None)
     generation.refresh_from_db()
     assert generation.status == TranscriptGeneration.Status.QUEUED
     assert generation.task_ref == stored_ref
@@ -146,7 +146,7 @@ def test_stale_generation_without_job_id_is_resubmitted(mocker, audio, site):
 
     assert result.enqueued is True
     service.submit_for_audio.assert_called_once_with(audio, task_ref=build_audio_task_ref(audio.pk), episode=None)
-    enqueue_mock.assert_called_once_with(generation.pk)
+    enqueue_mock.assert_called_once_with(generation.pk, episode_id=None)
     generation.refresh_from_db()
     assert generation.voxhelm_job_id == "job-new"
     assert generation.status == TranscriptGeneration.Status.QUEUED

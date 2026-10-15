@@ -711,8 +711,9 @@ the original public-media behavior.
 media. If omitted, django-cast falls back to ``CAST_PRIVATE_MEDIA_ROOT`` or a
 local ``cast-private-media`` directory next to ``MEDIA_ROOT``.
 
-Uploaded contributor voice-reference clips and the private
-``Transcript.speakers`` known-speaker sidecar use ``STORAGES["cast_voice_references"]``
+Uploaded contributor voice-reference clips, the private
+``Transcript.speakers`` known-speaker sidecar and the private
+``Transcript.corrections`` glossary sidecar use ``STORAGES["cast_voice_references"]``
 when configured. If that dedicated alias is omitted, they fall back to
 ``cast_private_media`` or the same non-public local private-media fallback.
 

@@ -18,6 +18,7 @@ MANAGED_MEDIA_PREFIXES = (
     "cast_files/",
     "cast_images/",
     "cast_transcript/",
+    "cast_transcript_corrections/",
     "cast_transcript_speakers/",
     "cast_videos/",
     "cast_voice_references/",

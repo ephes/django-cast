@@ -183,8 +183,8 @@ Configure separate storage backends through Django's ``STORAGES`` setting:
 
 The ``cast_public_transcripts`` storage is used for public Podlove, WebVTT, and DOTe
 transcript artifacts. The ``cast_private_media`` storage is reserved for
-private django-cast artifacts; known-speaker sidecars and contributor voice
-references use ``cast_voice_references`` when configured, falling back to
+private django-cast artifacts; known-speaker and glossary-corrections sidecars
+and contributor voice references use ``cast_voice_references`` when configured, falling back to
 ``cast_private_media``.
 
 Image Renditions

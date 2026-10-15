@@ -130,6 +130,9 @@ cyclic dependencies.
     acyclic.
   - ``editing.py`` holds view-facing editor orchestration and is imported only
     by views, so it may import models freely.
+  - ``corrections.py`` applies the transcript glossary (``glossary.py`` is the
+    pure matching engine) and imports models freely; ``models/transcript.py``
+    never imports it, the Voxhelm import and the management command do.
 
   ``Transcript`` keeps its full public API as thin delegates; the model class
   and its migrations stay in ``cast.models.transcript``.
