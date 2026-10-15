@@ -1,6 +1,7 @@
 # Transcript glossary: correct names and technical terms after transcription
 
-Status: 2026-10-15, proposed. Related to
+Status: 2026-10-15, proposed; slice 1 implemented on `develop` 2026-10-16,
+staging verification and slice 2 open. Related to
 [2026-05-18-speaker-diarization.md](2026-05-18-speaker-diarization.md) (same
 sidecar and review pattern) and Voxhelm's
 `specs/2026-10-15_parakeet_asr_backend.md` (the ASR that produces the text).
