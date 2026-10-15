@@ -9,37 +9,66 @@ sidecar and review pattern) and Voxhelm's
 
 Speech recognition cannot spell names it has never seen, and no ASR setting
 fixes that: Parakeet takes no prompt, and whisper.cpp's prompt was never sent
-for batch jobs. A count on six Django Chat pilot episodes (55,202 words,
-Parakeet TDT 0.6B v3 with the deployed settings, judged from text context
-without listening, so approximate and recall-limited) found about 180 wrong
-names and terms, roughly 3 per 1,000 words or 30 per episode:
+for batch jobs. A pilot on one show (six Django Chat episodes, 55,202 words,
+Parakeet TDT 0.6B v3 with the deployed settings) found 179 wrong names and
+terms, about 3 per 1,000 words or 30 per episode. Candidates came from a
+fuzzy match against the show notes and from a local LLM; each was judged in
+context, and the 34 that context could not settle were listened to (8 kept
+as errors, 17 were no error, 9 stayed unclear and were dropped). The count is
+recall-limited: errors neither method flagged are missing.
 
 | class | count | examples |
 | --- | --- | --- |
-| in the episode's contributors or show notes | 92 | "John" for Jon Gould (22x in episode 219), "Foxy Talent" (Foxley), "Scaff" (scaf, 10x), "debt 19" (DEP 19, 9x), "Button Down" (Buttondown), "Turnstyle", "EuroParton", "Hendricks Parker" |
-| recurring ecosystem terms | 70 | "rough" (Ruff, 8x), "Gunacorn" (Gunicorn, 6x), "Ginger" (Jinja, 3x), "Janganaut", "JengaCon", "PySharm", "Roku" (Heroku), "DirInf" (direnv) |
-| other people and places | 18 | "Simon Sherette" (Charette), "Hinnick" (Hynek), "Bukas Langa", "Charlie Marshall" (Marsh) |
+| in the episode's contributors or show notes | 92 | "John" for Jon Gould (22x in one episode), "Scaff" (scaf, 14x), "debt 19" (DEP 19), "Button Down" (Buttondown), "Turnstyle", "EuroParton", "Hendricks Parker" |
+| ecosystem terms | 71 | "rough" (Ruff, 8x), "Gunacorn"/"GunnarCorn" (Gunicorn), "Ginger" (Jinja), "Janganaut", "JengaCon", "PySharm", "Roku" (Heroku), "DirInf" (direnv) |
+| other people and places | 16 | "Simon Sherette" (Charette), "Hinnick" (Hynek), "Bukas Langa", "Charlie Marshall" (Marsh), "Crack" (Kraków) |
 
-The biggest single source is homophones of contributor names ("John"/"Jon"),
-which only a glossary can fix. The recurring terms repeat across episodes,
-so a per-show list pays off quickly. whisper.cpp is no better overall (it
-spells Buttondown, Turnstile and Ryle right, DjangoCon and PyCon wrong).
+How the errors repeat decides where a fix pays off:
 
-A local LLM (Qwen3.6-27B 4-bit, 735 s for the six episodes) asked to flag
-misrecognised names found many of these but also proposed wrong fixes
-("Tim Schilling" -> "Tim Graham", "Calvin" -> "Carlton", "Django on the Med"
--> "Django on the main", "Le Monde Diplomatique" -> "London Review of Books")
-and missed 12 of the 22 "John" and all four "Foxy". It is usable for
-proposals an editor approves, not for unattended rewriting. An earlier pilot
-that restricted the LLM to glossary targets and similar spellings kept 26
-fixes on episode 219, 24 of them right.
+| occurrence | count |
+| --- | --- |
+| a variant of a credited contributor's name | 26 |
+| otherwise: the same misspelling recurs in another episode | 12 |
+| otherwise: the correct term recurs in another episode, misheard differently | 18 |
+| otherwise: the correct term occurs in only this episode | 123 |
+
+(Rows are checked in this order; misspellings compared case-insensitively.)
+
+So a show-wide list of known misspellings would have fixed about 12 of 179
+in an episode it was not built from, 38 with the contributor variants. The
+lever is inside one transcript: the same error repeats ("Scaff" 14x, "John"
+22x), so the 179 occurrences need only 95 decisions when one decision per
+correct spelling applies to the whole transcript (121 if every distinct
+misspelling needed its own decision). The correct spellings are mostly
+already in the episode's show notes and contributor names.
+
+whisper.cpp is no better overall (it spells Buttondown, Turnstile and Ryle
+right, DjangoCon and PyCon wrong). A local LLM (Qwen3.6-27B 4-bit, 735 s for
+the six episodes) asked to flag misrecognised names found many errors but
+also proposed wrong fixes ("Tim Schilling" -> "Tim Graham", "Calvin" ->
+"Carlton", "Django on the Med" -> "Django on the main", "Le Monde
+Diplomatique" -> "London Review of Books") and missed 12 of the 22 "John" and
+all four "Foxy". It is usable for proposals an editor approves, not for
+unattended rewriting.
+
+The pilot data belongs to the show, not to django-cast: the occurrence-level
+gold lives in the Django Chat site project (`django-chat`,
+`data/transcript-glossary/`), with each occurrence's own transcript segment
+only (sentence-level segments of at most 30 s; none of the 179 holds more
+than one sentence); the full raw transcripts are kept private and are not
+committed anywhere.
 
 ## Goals
 
-- Editors maintain the spellings once, in Wagtail, and every new or
-  regenerated transcript of that show gets them.
-- Unattended corrections are deterministic and introduce no wrong text on the
-  pilot set; anything uncertain is a proposal an editor approves.
+- Editors fix a misheard term once per transcript: one decision per correct
+  spelling applies to every occurrence proposed for it in that transcript,
+  whatever the misspellings.
+- Correct spellings come mostly from data the episode already has (show-note
+  link texts, contributor names), so the common case needs no list upkeep.
+- A per-show glossary in Wagtail holds recurring terms and grows from review
+  decisions ("add to glossary"), not from a seeding effort.
+- Unattended corrections are deterministic and introduce no wrong text;
+  anything uncertain is a proposal an editor approves.
 - Corrections reach all public formats (Podlove, DOTe, WebVTT) and survive a
   re-application from the raw Voxhelm text. Transcript text is not part of
   the site search today (`Transcript` indexes no text field); the corrected
@@ -52,8 +81,7 @@ correcting the audio-level ASR (no prompt or hotword support), translating.
 
 ## Where the glossary lives
 
-Three sources, merged per episode at correction time. Only the third needs
-manual upkeep.
+Three sources, merged per episode at correction time:
 
 1. **Contributors** (existing `Contributor` snippet). `display_name` is the
    canonical full spelling. New optional field `transcript_variants`, one
@@ -63,26 +91,26 @@ manual upkeep.
    variant must not expand to the full name ("John's" -> "Jon's", not "Jon
    Gould's"). Variants of a contributor apply only in episodes that credit
    that contributor, so "John" -> "Jon" never fires in an episode without
-   Jon.
-2. **Episode** (derived, no new field in slice 1). Link texts of the
-   episode's show notes (rich text in `body`) and "by <Author>" phrases, the
-   same sources the pilot glossary came from. These are canonical spellings
-   without variants, so they feed proposals only (see "Matching"), never
-   unattended replacement.
+   Jon. Without variants, the contributor's name parts are still proposal
+   targets.
+2. **Episode** (derived, no new field). Link texts of the episode's show
+   notes (rich text in `body`) and "by <Author>" phrases, the same sources the
+   pilot used. These are canonical spellings without variants, so they feed
+   proposals only (see "Matching"), never unattended replacement.
 3. **Show** (new snippet `TranscriptGlossaryTerm`, foreign key to `Podcast`,
    registered as a Wagtail snippet viewset filterable by podcast): `term`
    (canonical spelling), `variants` (one per line), `notes` (internal). A
    snippet, not an inline on the podcast page, so editing it needs no page
    publish and the transcript review can add entries directly. Per show
-   because Django Chat and the German Python Podcast need different terms.
+   because shows differ (an English Django show, a German Python show).
    Unique per podcast and case-insensitive `term`; a variant may belong to
-   only one term of the same podcast (form validation).
+   only one term of the same podcast (form validation). Terms without
+   variants are proposal targets; variants enable unattended replacement.
 
-Seeding: the first Django Chat list comes from the pilot count (about 40
-entries: Ruff, Gunicorn, Jinja, DEP, Djangonaut Space, DjangoCon, PyCharm,
-Heroku, DSF, PyLadies, Simon Charette, Hynek, Jacob Walls, Jeff Triplett,
-Paul Everitt, Łukasz Langa, ...), loaded by a data-only management command,
-not a migration.
+The show list starts empty and grows from the review ("add to glossary").
+A site that already has a list can load it with a management command that
+reads a JSON file (`term`, `variants`, `notes` per entry) for one podcast;
+the data stays in the site project.
 
 ## Matching
 
@@ -104,17 +132,26 @@ Two kinds of results:
 - **Proposal**: everything that is not an exact listed variant. Sources:
   fuzzy matches of glossary terms against word n-grams (similarity >= 0.8
   on letters and digits, at least two words for multi-word terms, never a
-  plain dictionary word alone) and, from slice 3 on, the LLM pass. Matches
+  plain dictionary word alone) and, from slice 2 on, the LLM pass. Matches
   never span two segments. A
   proposal carries segment position, start ms, original text, replacement,
   source and score, and changes nothing until an editor approves it.
+- **Decisions apply transcript-wide**: proposals with the same replacement
+  (correct spelling) are grouped, whatever their originals ("Gunacorn",
+  "Gunna Corn" -> "Gunicorn"), and the review decides the group once
+  (approve, reject, or open it to decide originals or occurrences one by
+  one). Each approved original becomes a transcript-scoped variant, so later
+  re-applications and newly found occurrences of that misspelling in the
+  same transcript are replaced without asking again.
 
 Variants are the editor's statement that a phrase is always wrong in this
 show. Common words are therefore not allowed as show-term variants: the
 form rejects a variant that is in the built-in common-word list for the
 transcript language (for example "rough", "kind", "tilt", "copier"); such
-errors are left to the LLM proposals of slice 3; until then they have no
-proposal path, since fuzzy matching also skips single dictionary words.
+errors are left to the LLM proposals of slice 2; until then they have no
+proposal path, since fuzzy matching also skips single dictionary words. A
+transcript-scoped variant from an approved group may be a common word (the
+editor saw the context, as with "rough" -> "Ruff" in a tooling discussion).
 Contributor first names ("John") are allowed because they are scoped to
 episodes that credit the contributor. The common-word lists exist for
 English and German, the two transcript languages in use; a transcript in
@@ -144,7 +181,8 @@ the public files and are applied by start time:
   `{"source_fingerprint", "episode_id", "glossary_fingerprint",
   "segments": [{"start_ms",
   "raw_text", "replacements": [{"start", "end", "from", "to", "source",
-  "state"}]}], "proposals": [...]}`.
+  "state"}]}], "proposals": [...], "decisions": [{"original", "to",
+  "state"}]}`.
   `raw_text` is the Voxhelm text as imported; `state` is `auto`, `approved` or
   `rejected`. The sidecar is written at import, before anything is applied,
   so `raw_text` never contains corrections. For a transcript imported before
@@ -168,7 +206,7 @@ the public files and are applied by start time:
   `transcript_artifact_fingerprint()`.
 - The sidecar's `source_fingerprint` is that same value. A regenerated
   transcript (new Voxhelm job or upload) gets a fresh sidecar;
-  approved proposals are not carried over by position, but an editor who
+  approved proposals and decisions are not carried over, but an editor who
   wants them permanent adds them as variants ("add to glossary" in the review).
 - Corrections run automatically after a Voxhelm import completes and on an
   explicit "re-apply glossary" action (after glossary edits). Rejected
@@ -182,15 +220,18 @@ the public files and are applied by start time:
 
 On the transcript edit view next to the known-speaker review:
 
-- Summary: automatic replacements and open proposals per term.
-- A table of proposals with context (the sentence, with the span marked),
-  "approve", "reject", "approve and add to glossary" (adds the original as a
-  variant of the show term or contributor; refused for common words).
+- Summary: automatic replacements and open proposal groups per term, and
+  how many decisions are left.
+- One row per proposal group (same replacement) with its originals, their
+  counts and the first sentences as context (span marked), and "approve all",
+  "reject all", "decide one by one", "approve and add to glossary" (adds the
+  original as a variant of the show term or contributor; refused for common
+  words).
 - Automatic replacements are listed too and can be rejected one by one.
 - Optional audio play of the segment (the speaker review already plays
   samples).
 
-## Voxhelm's part (slice 3)
+## Voxhelm's part (slice 2)
 
 The LLM needs the GPU workers, so it runs in Voxhelm as a text job, not
 inside django-cast:
@@ -215,41 +256,47 @@ inside django-cast:
   stored like other job inputs and expires with them.
 
 Whether the model fits next to Parakeet and pyannote on `studio` and `atlas`
-is measured before slice 3 starts; the Parakeet spec recorded 20.5 to 25.5 GB
+is measured before slice 2 starts; the Parakeet spec recorded 20.5 to 25.5 GB
 for two consecutive 2:17 h jobs on atlas (64 GB).
 
 ## Slices
 
-1. **Glossary and automatic replacement**: `transcript_variants` on
-   `Contributor`, `TranscriptGlossaryTerm` snippet, corrections sidecar,
-   apply/re-apply, seeding command, docs and release notes. No proposals yet.
-2. **Proposals and review**: fuzzy proposals from contributors, show terms and
-   show-note terms; review UI with approve/reject/add to glossary.
-3. **LLM proposals via Voxhelm**: the `transcript_terms` job in Voxhelm
-   (separate Voxhelm spec), submission and import in django-cast.
+1. **Proposals from the episode and transcript-wide decisions**:
+   `transcript_variants` on `Contributor`, `TranscriptGlossaryTerm` snippet
+   and its import command, corrections sidecar with `source_fingerprint`,
+   fuzzy proposals from contributors, show notes and show terms, grouped
+   review with approve/reject/add to glossary, unattended replacement of
+   listed variants, apply/re-apply, docs and release notes.
+2. **LLM proposals via Voxhelm**: the `transcript_terms` job in Voxhelm
+   (separate Voxhelm spec), submission and import in django-cast as further
+   proposal groups.
 
 Each slice ships only if its measurement passes (next section).
 
 ## Verification
 
-Gold: before slice 1 the tally above is frozen as an occurrence-level
-dataset in the repository's test data: per occurrence the episode (feed guid
-and title), the segment `start_ms` in the frozen raw pilot artifacts (the
-Parakeet output used for the count, stored alongside), the original text,
-the correct spelling and the class. Cases judged uncertain from text are
-settled by listening before the freeze. Each slice is scored against that
-file per occurrence: fixed, missed, or wrongly changed (any replacement not
-in the gold, or with a different target). Gates:
+Gold: the pilot's 179 occurrences, frozen before slice 1 in the show's site
+project (for Django Chat: `django-chat`, `data/transcript-glossary/`). Per
+occurrence: the episode (feed guid and title), the segment `start_ms` in the
+raw pilot transcripts, the segment text (identical to the raw segment, one
+sentence), the span as character offsets into that text, the original, the
+correct spelling, the class and whether context or listening settled it. The raw
+pilot transcripts are kept privately next to it and are not committed. Each
+slice is scored per occurrence (fixed, missed, or wrongly changed: any
+replacement not in the gold or with a different target) and per decision
+(how many groups, keyed by episode and correct spelling, an editor has to
+decide; 95 in the gold). Gates:
 
-- Slice 1 with the seeded Django Chat list and contributor variants: no
-  introduced wrong text in the six episodes (every automatic replacement is
-  right), and at least half of the 180 occurrences fixed.
-- Slice 2: proposals cover at least 80 % of the remaining occurrences in the
-  contributor/show-note class; precision of proposals is reported, not gated.
-- Slice 3: LLM proposals add coverage on the recurring-term and other-people
-  classes beyond slice 2; report precision and added coverage, and adopt it
-  only if it finds at least 20 % of the occurrences the earlier slices miss
-  at a precision of at least 70 %.
+- Slice 1, run with an empty show list plus contributor variants for the
+  credited guests: no wrong unattended replacement; proposals cover at least
+  70 % of the 92 contributor and show-note occurrences; the editor needs at
+  most one decision per (episode, correct spelling) for them. Proposal
+  precision is reported, not gated.
+- Slice 1, show list: measured leave-one-episode-out (a list built from the
+  other five episodes' decisions), so its effect is not inflated by building
+  and scoring on the same episode.
+- Slice 2: LLM proposals are adopted only if they find at least 20 % of the
+  occurrences slice 1 misses, at a precision of at least 70 %.
 - Then on staging: re-apply on the pilot episodes, check that Podlove, DOTe
   and WebVTT show the same corrected text, that the player's transcript
   search finds "Jon Gould", and that approved speaker names are still shown.
@@ -257,12 +304,16 @@ in the gold, or with a different target). Gates:
 ## Risks
 
 - A wrong variant corrupts every episode of the show. Mitigations: variants
-  are explicit, common words are refused, contributor variants are scoped to
-  credited episodes, every automatic replacement is listed and can be
+  are explicit, common words are refused for show terms, contributor
+  variants are scoped to credited episodes, transcript-scoped decisions stay
+  in their transcript, every automatic replacement is listed and can be
   rejected, and raw text is kept for re-application.
+- "Approve all" on a group can hide a single wrong occurrence (a real
+  "John" among 22 for Jon). The group shows every sentence on request, and
+  each replacement can be rejected afterwards.
 - Homophones that are right elsewhere ("John" for another John in a Jon
   episode). Accepted for contributor variants; the review lists each
   replacement with context.
 - Format drift: applying text by `start_ms` relies on the three formats
   sharing segment starts, as the speaker application already does.
-- LLM memory and run time on the shared workers (slice 3, measured first).
+- LLM memory and run time on the shared workers (slice 2, measured first).

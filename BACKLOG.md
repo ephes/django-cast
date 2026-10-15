@@ -25,11 +25,12 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Transcript glossary for names and technical terms
   - Spec: [backlog/2026-10-15-transcript-glossary.md](backlog/2026-10-15-transcript-glossary.md)
   - Related to: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
-  - Scope: per-show glossary snippet and contributor spelling variants in Wagtail, deterministic replacement in a
-    private corrections sidecar applied to Podlove, DOTe and WebVTT, then reviewed proposals (fuzzy, later a Voxhelm
-    LLM job).
-  - Done when: each slice passes its measurement on the six Django Chat pilot episodes (slice 1: no introduced
-    wrong text, at least half of the 180 counted errors fixed).
+  - Scope: proposals from show notes, contributors and a per-show glossary snippet, decided once per term for the
+    whole transcript, kept in a private corrections sidecar applied to Podlove, DOTe and WebVTT; later LLM proposals
+    from a Voxhelm job.
+  - Done when: each slice passes its measurement against the pilot gold (179 occurrences in six Django Chat
+    episodes, kept in the django-chat project; slice 1: no wrong unattended replacement, proposals cover at least
+    70 % of the contributor and show-note occurrences).
 
 ## Later
 
