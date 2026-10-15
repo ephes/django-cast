@@ -149,18 +149,39 @@ def save_video_with_derivations(
     return result
 
 
-def should_sync_transcript_speaker_mappings(update_fields: Any) -> bool:
-    """Return whether a Transcript write changes mapping source artifacts."""
+def writes_transcript_artifacts(update_fields: Any) -> bool:
+    """Return whether a Transcript write may store public transcript artifacts."""
     if update_fields is None:
         return True
-    return bool(set(update_fields).intersection((*TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS, "audio")))
+    return bool(set(update_fields).intersection(TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS))
 
 
-def save_transcript_with_derivations(transcript: Transcript, *args: Any, **kwargs: Any) -> None:
-    """Persist a Transcript and synchronize its durable speaker mappings."""
+def should_sync_transcript_speaker_mappings(update_fields: Any) -> bool:
+    """Return whether a Transcript write changes mapping source artifacts."""
+    return writes_transcript_artifacts(update_fields) or "audio" in update_fields
+
+
+def save_transcript_with_derivations(
+    transcript: Transcript,
+    *args: Any,
+    preserve_source_fingerprint: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Persist a Transcript and synchronize its durable speaker mappings.
+
+    Pass ``preserve_source_fingerprint=True`` for writes that derive the public
+    artifacts from the received ones (speaker application, label rewrites), so
+    approved speaker mappings stay current; see ``Transcript.save``.
+    """
     save_kwargs, using = normalize_model_save_arguments(transcript, args, kwargs)
     update_fields = save_kwargs.get("update_fields")
+    if update_fields is not None:
+        update_fields = save_kwargs["update_fields"] = tuple(update_fields)
     with transaction.atomic(using=using):
-        transcript.save(sync_speaker_mappings=False, **save_kwargs)
+        transcript.save(
+            sync_speaker_mappings=False,
+            preserve_source_fingerprint=preserve_source_fingerprint,
+            **save_kwargs,
+        )
         if should_sync_transcript_speaker_mappings(update_fields):
             transcript.sync_speaker_mappings()

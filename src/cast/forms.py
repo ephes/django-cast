@@ -524,9 +524,7 @@ class SpeakerContributorMappingForm(forms.Form):
                 review_state = TranscriptSpeakerMapping.ReviewState.UNMAPPED
                 reviewed_at = None
             if mapping.transcript_id not in fingerprints_by_transcript_id:
-                fingerprints_by_transcript_id[mapping.transcript_id] = (
-                    mapping.transcript.transcript_artifact_fingerprint()
-                )
+                fingerprints_by_transcript_id[mapping.transcript_id] = mapping.transcript.mapping_fingerprint()
             source_artifact_fingerprint = fingerprints_by_transcript_id[mapping.transcript_id]
             next_values = {
                 "contributor": contributor,

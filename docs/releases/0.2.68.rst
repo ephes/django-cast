@@ -1,6 +1,15 @@
 0.2.68 (unreleased)
 -------------------
 
+- Keep approved transcript speaker mappings current when the public files
+  are rewritten from the received ones. Mappings used to be compared with a
+  hash of the current Podlove, DOTe and WebVTT bytes, so applying
+  known-speaker suggestions turned every approval stale and hid the names.
+  The new ``Transcript.source_fingerprint`` holds the hash of the artifacts as
+  received from Voxhelm or uploaded in the admin; speaker application and
+  ``rewrite_speaker_labels`` leave it unchanged, a new import or upload still
+  marks approvals stale. A migration sets it for existing transcripts from
+  their current files (it reads every stored transcript once).
 - Write internal page links in feed item descriptions as absolute URLs.
   Rich-text links to other pages used to be root-relative in RSS/Atom output
   and broke in feed readers. Post, blog index and other HTML pages keep

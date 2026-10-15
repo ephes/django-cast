@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 from decimal import Decimal
+from functools import partial
 from typing import TYPE_CHECKING
 
 from django.utils import timezone
@@ -17,14 +18,23 @@ if TYPE_CHECKING:
     from cast.models.transcript import Transcript
 
 
+_save_derived_artifacts = partial(save_transcript_with_derivations, preserve_source_fingerprint=True)
+"""Save rewritten public artifacts without treating them as newly received."""
+
+
 def sync_speaker_mappings(transcript: Transcript) -> None:
-    """Synchronize durable anonymous-speaker mapping rows with raw artifacts."""
+    """Synchronize durable anonymous-speaker mapping rows with raw artifacts.
+
+    Approved rows stay current while their fingerprint equals
+    ``transcript.mapping_fingerprint()``, the hash of the artifacts as received;
+    speaker application and label rewrites do not change it.
+    """
     ReviewState = transcript.speaker_mappings.model.ReviewState
     if transcript.pk is None:
         return
     speaker_labels = transcript.get_speaker_labels()
     seen_labels = set(speaker_labels)
-    fingerprint = transcript.transcript_artifact_fingerprint()
+    fingerprint = transcript.mapping_fingerprint()
     now = timezone.now()
     existing_mappings = {mapping.speaker_label: mapping for mapping in transcript.speaker_mappings.all()}
 
@@ -182,9 +192,9 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
                 applied += transcript._apply_suggestions_to_webvtt(names_by_start_ms, replacements=replacements)
         if applied:
             if replacements.replacements:
-                replacements.save_model(transcript, save=save_transcript_with_derivations)
+                replacements.save_model(transcript, save=_save_derived_artifacts)
             else:
-                save_transcript_with_derivations(transcript)
+                _save_derived_artifacts(transcript)
     except Exception:
         replacements.rollback()
         raise
@@ -283,7 +293,7 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
         replacements.save_model(
             transcript,
             update_fields=changed_fields,
-            save=save_transcript_with_derivations,
+            save=_save_derived_artifacts,
         )
     except Exception:
         replacements.rollback()

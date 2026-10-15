@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, router, transaction
 from wagtail.models import CollectionMember
 from wagtail.search import index
 
@@ -76,6 +76,16 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         ),
     )
 
+    source_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text=(
+            "Hash of the public Podlove, DOTe and WebVTT artifacts as received from "
+            "Voxhelm or uploaded. Approved speaker mappings stay current while it is "
+            "unchanged; speaker application does not change it."
+        ),
+    )
+
     admin_form_fields: tuple[str, ...] = ("audio", "podlove", "vtt", "dote")
 
     class Meta:
@@ -83,13 +93,92 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         permissions = (("choose_transcript", "Can choose transcript"),)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
+        """Save the transcript and record newly received public artifacts.
+
+        A save that replaces, adds or clears a Podlove, DOTe or WebVTT file
+        (its stored name differs from the database row, or the row is new)
+        counts as receiving new artifacts: ``source_fingerprint`` is set to the
+        hash of the files the database row references after the save, in the
+        same transaction (see ``mark_artifacts_received``).
+        This happens here rather than at each import or upload entry point
+        because every way of storing new artifacts (Voxhelm import, admin
+        upload, development fixtures, direct ``FieldFile.save`` calls by
+        sites) ends in this save; a missed entry point would keep approved
+        speaker mappings current for artifacts nobody reviewed them against.
+
+        Writes that derive the public files from the received ones, such as
+        applying known-speaker suggestions or rewriting speaker labels, pass
+        ``preserve_source_fingerprint=True`` so approved mappings stay
+        current. Saves that do not change file names (metadata only) never
+        touch the fingerprint.
+        """
         sync_speaker_mappings = kwargs.pop("sync_speaker_mappings", False)
+        preserve_source_fingerprint = kwargs.pop("preserve_source_fingerprint", False)
         if sync_speaker_mappings:
             from cast.media_derivation import save_transcript_with_derivations
 
-            save_transcript_with_derivations(self, *args, **kwargs)
+            save_transcript_with_derivations(
+                self, *args, preserve_source_fingerprint=preserve_source_fingerprint, **kwargs
+            )
             return
-        super().save(*args, **kwargs)
+        from cast.media_derivation import _normalize_positional_model_save_arguments, writes_transcript_artifacts
+
+        if args:
+            kwargs = _normalize_positional_model_save_arguments(args, kwargs)
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = tuple(kwargs["update_fields"])
+        if preserve_source_fingerprint or not writes_transcript_artifacts(kwargs.get("update_fields")):
+            super().save(**kwargs)
+            return
+        # Resolve the alias the way Model.save does, so tracking reads and writes the saved row.
+        alias = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        kwargs["using"] = alias
+        with transaction.atomic(using=alias):
+            stored_names = self._stored_artifact_names(alias)
+            super().save(**kwargs)
+            stored = type(self)._default_manager.using(alias).get(pk=self.pk)
+            if stored._artifact_names() != stored_names:
+                stored.mark_artifacts_received()
+                self.source_fingerprint = stored.source_fingerprint
+                type(self)._default_manager.using(alias).filter(pk=self.pk).update(
+                    source_fingerprint=self.source_fingerprint
+                )
+
+    def _artifact_names(self) -> tuple[str, ...]:
+        return tuple(getattr(self, field_name).name or "" for field_name in TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS)
+
+    def _stored_artifact_names(self, using: str) -> tuple[str, ...] | None:
+        """Artifact file names of the database row, or ``None`` for a new row."""
+        if self._state.adding or self.pk is None:
+            return None
+        row = (
+            type(self)
+            ._default_manager.using(using)
+            .filter(pk=self.pk)
+            .values_list(*TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS)
+            .first()
+        )
+        if row is None:
+            return None
+        return tuple(name or "" for name in row)
+
+    def mark_artifacts_received(self) -> None:
+        """Record the stored public artifacts as the newly received source.
+
+        Sets ``source_fingerprint`` in memory to the hash of the Podlove, DOTe
+        and WebVTT files as they are stored now. ``save()`` calls this when it
+        stores new artifact files; call it before saving only when artifact
+        bytes were replaced in place under an unchanged file name.
+        """
+        self.source_fingerprint = self.transcript_artifact_fingerprint()
+
+    def mapping_fingerprint(self) -> str:
+        """Fingerprint speaker mappings are reviewed against.
+
+        This is ``source_fingerprint``; rows without one (stored by code that
+        bypassed ``save()``) fall back to the hash of the current files.
+        """
+        return self.source_fingerprint or self.transcript_artifact_fingerprint()
 
     @staticmethod
     def _should_sync_speaker_mappings(update_fields: Any) -> bool:

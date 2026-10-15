@@ -112,9 +112,9 @@ class TestTranscriptSpeakerMapping:
             },
             **get_speaker_mapping_context(transcript),
         )
-        fingerprint = transcript.transcript_artifact_fingerprint()
+        fingerprint = transcript.mapping_fingerprint()
         fingerprint_mock = mocker.patch(
-            "cast.models.transcript.Transcript.transcript_artifact_fingerprint",
+            "cast.models.transcript.Transcript.mapping_fingerprint",
             autospec=True,
             return_value=fingerprint,
         )

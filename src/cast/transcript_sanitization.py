@@ -175,7 +175,7 @@ def _public_episode_contexts_for_transcript(transcript: Any, *, episode: Any | N
 
 def _current_mapping_rows(transcript: Any) -> list[Any]:
     try:
-        fingerprint = transcript.transcript_artifact_fingerprint()
+        fingerprint = transcript.mapping_fingerprint()
         rows = transcript.speaker_mappings.select_related("contributor").filter(
             active=True,
             review_state="approved",

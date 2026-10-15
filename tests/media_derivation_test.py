@@ -286,7 +286,7 @@ def test_transcript_save_compatibility_flag_is_explicit_opt_in(audio, mocker):
 
     transcript.save(sync_speaker_mappings=True)
 
-    save_with_derivations.assert_called_once_with(transcript)
+    save_with_derivations.assert_called_once_with(transcript, preserve_source_fingerprint=False)
 
 
 @pytest.mark.django_db()
@@ -297,7 +297,12 @@ def test_transcript_derivation_service_skips_sync_for_unrelated_update(mocker):
 
     save_transcript_with_derivations(transcript, update_fields=["speakers"])
 
-    save.assert_called_once_with(update_fields=["speakers"], sync_speaker_mappings=False, using="default")
+    save.assert_called_once_with(
+        update_fields=("speakers",),
+        sync_speaker_mappings=False,
+        preserve_source_fingerprint=False,
+        using="default",
+    )
     sync_speaker_mappings.assert_not_called()
 
 
@@ -315,10 +320,11 @@ def test_transcript_derivation_service_normalizes_positional_update_fields(audio
     atomic.assert_called_once_with(using="archive")
     save.assert_called_once_with(
         sync_speaker_mappings=False,
+        preserve_source_fingerprint=False,
         force_insert=False,
         force_update=False,
         using="archive",
-        update_fields=["speakers"],
+        update_fields=("speakers",),
     )
     sync_speaker_mappings.assert_not_called()
 

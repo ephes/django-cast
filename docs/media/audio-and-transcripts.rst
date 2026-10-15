@@ -364,10 +364,19 @@ or one-off display names. The mapping form shows short transcript samples for
 each speaker and, when the audio file is playable from the admin, timestamp
 controls that seek the audio preview to the sample position. Saving a mapping
 stores reviewable mapping rows on the transcript; the stored Podlove, DOTe, and
-WebVTT artifacts remain unchanged. If a transcript is regenerated or manually
-re-uploaded, old approvals are kept for review but are marked as needing review
-when the raw artifacts change, labels that disappeared become inactive history,
-and new labels start unmapped.
+WebVTT artifacts remain unchanged. Mappings are reviewed against the transcript
+artifacts as received: ``Transcript.source_fingerprint`` holds the hash of the
+Podlove, DOTe, and WebVTT files stored by a Voxhelm import or an admin upload
+(any save that stores new artifact files). Applying known-speaker suggestions
+and ``Transcript.rewrite_speaker_labels`` change the files but not this
+fingerprint, so approved mappings stay current. If a transcript is regenerated
+or manually re-uploaded, old approvals are kept for review but are marked as
+needing review, labels that disappeared become inactive history, and new labels
+start unmapped. Code that rewrites the public files from the received ones
+saves with ``save_transcript_with_derivations(transcript,
+preserve_source_fingerprint=True)`` to keep approvals; code that replaces file
+bytes in place under the same file name calls
+``Transcript.mark_artifacts_received()`` before saving.
 
 Generated transcript text is stored with the shared audio file and can appear
 on already published episodes as soon as generation completes. Public speaker
