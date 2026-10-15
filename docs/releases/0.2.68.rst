@@ -75,6 +75,13 @@
   contributor's name. Ambiguous cases still stay blank. The label map comes
   from Voxhelm's ``raw_diarization_labels`` summary or, for older sidecars,
   from the same confident-segment vote.
+- Stop sending the speaker-count hint (``num_speakers``) with known-speaker
+  Voxhelm jobs. With a fixed count, pyannote merged a guest and a host whose
+  voices were similar into one label and spent the freed label on noise, so
+  many lines of such episodes stayed blank or got the wrong name. Jobs with
+  voice references now let pyannote find the number of speakers itself.
+  Diarized jobs without voice references still send the episode's
+  contributor count. The task reference keeps its ``-<n>-speakers`` suffix.
 - Keep waiting for a Voxhelm job when a status poll loses the connection.
   ``generate_transcripts`` and the admin completion task used to abort on the
   first refused or dropped connection, and some of them

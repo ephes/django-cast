@@ -93,7 +93,22 @@ def test_client_submit_job_includes_known_speakers(mocker):
     diarization = request_json.call_args.kwargs["payload"]["diarization"]
     assert diarization["strategy"] == "pyannote_known_speaker"
     assert diarization["known_speakers"] == known_speakers
-    assert diarization["num_speakers"] == 4
+    assert "num_speakers" not in diarization
+
+
+def test_client_submit_job_sends_speaker_count_without_known_speakers(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", diarization_enabled=True)
+    request_json = mocker.patch.object(client, "request_json", return_value={"id": "job-1"})
+
+    client.submit_transcription_job(
+        source_url="https://media.example.com/episode.mp3",
+        task_ref="cast-audio-1-diarized",
+        context={"audio_id": 1},
+        speaker_count=4,
+        known_speakers=[],
+    )
+
+    assert request_json.call_args.kwargs["payload"]["diarization"] == {"enabled": True, "num_speakers": 4}
 
 
 def test_client_submit_job_omits_known_speakers_when_diarization_disabled(mocker):
