@@ -78,6 +78,27 @@ Options:
 The command prints per-audio status lines and a final summary in the form
 ``processed=<n> created=<n> updated=<n> skipped=<n> errors=<n>``.
 
+import_transcript_glossary
+--------------------------
+
+Load transcript glossary terms for one podcast from a JSON file, a list of
+``{"term", "variants", "notes"}`` objects (``variants`` as a list or a
+newline-separated string). Existing terms are matched ignoring case and
+updated; entries that fail validation are skipped and reported on stderr. See
+:ref:`transcript_glossary` for the format and the validation rules.
+
+.. code-block:: bash
+
+    python manage.py import_transcript_glossary my-podcast glossary.json --dry-run
+
+Options:
+
+``--dry-run``
+    Validate and report without saving.
+
+The command prints a summary in the form
+``<podcast>: created=<n> updated=<n> unchanged=<n> skipped=<n>``.
+
 Image Renditions
 ================
 

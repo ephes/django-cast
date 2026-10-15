@@ -539,3 +539,107 @@ result, and blank decisions clear matching Podlove, DOTe, and WebVTT speaker
 labels for that start time. Public transcript sanitization is unchanged:
 corrected names are still exposed only when they match live public contributor
 assignments.
+
+.. _transcript_glossary:
+
+Transcript glossary
+-------------------
+
+Speech recognition cannot spell names and technical terms it has never seen
+("John" for Jon, "Gunacorn" for Gunicorn). The transcript glossary holds the
+correct spellings and the misspellings to replace. It has three sources:
+contributor variants, show terms per podcast, and terms derived from each
+episode's show notes. This release adds the glossary data and its admin;
+applying it to transcripts and the review of proposed corrections follow in
+later releases, so saving glossary entries does not change any transcript yet.
+
+Contributor variants
+~~~~~~~~~~~~~~~~~~~~
+
+The contributor snippet has a private *Transcript glossary* field,
+``transcript_variants``, with one ``variant => replacement`` pair per line:
+
+.. code-block:: text
+
+   John Gould => Jon Gould
+   John => Jon
+   Jon Goold
+
+A line without ``=>`` is replaced by the contributor's display name. Give an
+explicit replacement for a first name, so that "John's" becomes "Jon's" rather
+than "Jon Gould's". Variants of a contributor apply only to transcripts of
+episodes that credit that contributor, so they may be common words such as
+"John". Saving refuses lines with more than one ``=>``, an empty side, a
+variant that equals its replacement (ignoring case and spacing), or a variant
+listed twice with different replacements. The field is internal: public
+APIs, feeds and the cached contributor data leave it out. Theme templates
+receive the contributor objects themselves, so a template could still read
+it; themes should not render it.
+
+Show terms
+~~~~~~~~~~
+
+*Snippets → Transcript glossary terms* holds the terms of each podcast,
+filterable by podcast and searchable by term and variant. A term is the
+correct spelling (``term``), optionally with misspellings (``variants``, one
+per line) and internal ``notes``. A term without variants is a known correct
+spelling; each variant is meant to be replaced by the term in every transcript
+of that podcast, so list only phrases that are always wrong. Saving refuses:
+
+- a second term of the same podcast that differs only in case or spacing;
+- a variant equal to its own term or to another term of the podcast;
+- a variant that already belongs to another term of the podcast, and a term
+  that is another term's variant;
+- a single-word variant that is a common word in the podcast's transcript
+  language ("rough" for Ruff, "kind", "copier"). Such errors need a decision
+  in context, not a show-wide replacement.
+
+The transcript language is the Voxhelm language hint
+(``CAST_VOXHELM_LANGUAGE`` or the site's Voxhelm settings, resolved as for
+Voxhelm jobs). Without a hint, or with ``auto``, the language of the podcast
+page's locale is used, which Wagtail derives from ``LANGUAGE_CODE``. Built-in
+common-word lists exist for English and German (``en``, ``de``, also with
+region suffixes such as ``de-DE``). For any other language, variants are saved
+without the common-word check, the admin shows a warning after saving, and
+variants of that podcast will not be replaced automatically; the term is still
+used as a correct spelling.
+
+Importing a glossary
+~~~~~~~~~~~~~~~~~~~~
+
+A site that already keeps a list can load it for one podcast:
+
+.. code-block:: bash
+
+   python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json --dry-run
+   python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json
+
+The file is a JSON list of entries:
+
+.. code-block:: json
+
+   [
+     {"term": "Gunicorn", "variants": ["Gunacorn", "Gunna Corn"], "notes": "WSGI server"},
+     {"term": "Heroku"}
+   ]
+
+``variants`` may also be a newline-separated string; ``variants`` and
+``notes`` are optional. Entries are matched to existing terms of the podcast
+ignoring case and spacing: a match is updated (its spelling, and its variants
+and notes where the entry has them), otherwise a term is created. Every entry
+is validated like the admin form, including against the entries before it;
+invalid or duplicate entries are skipped and reported on stderr with the
+reason, and the valid ones are saved in one transaction. The summary line
+counts ``created``, ``updated``, ``unchanged`` and ``skipped`` entries, and
+the command exits successfully even when entries were skipped. ``--dry-run``
+validates and reports without saving. A slug used by several podcasts is
+refused; pass the page id instead.
+
+Common-word lists
+~~~~~~~~~~~~~~~~~
+
+The common-word lists in ``cast/transcripts/common_words/`` hold the 10,000
+most frequent word forms of the English and German sentence collections of
+`Tatoeba <https://tatoeba.org>`_, licensed `CC BY 2.0 FR
+<https://tatoeba.org/en/terms_of_use>`_; attribution: Tatoeba and its
+contributors. The files contain word forms only, no sentences.

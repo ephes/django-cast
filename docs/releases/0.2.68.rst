@@ -1,6 +1,18 @@
 0.2.68 (unreleased)
 -------------------
 
+- Add the data for a transcript glossary that will correct misheard names and
+  terms in transcripts. Contributors get a private ``transcript_variants``
+  field (one ``variant => replacement`` per line, scoped to episodes that
+  credit the contributor). The new ``TranscriptGlossaryTerm`` snippet holds a
+  podcast's correct spellings and their misspellings: a term is unique per
+  podcast ignoring case, a variant belongs to one term, and single-word
+  variants that are common words in the podcast's transcript language are
+  refused, using built-in English and German lists derived from Tatoeba
+  (CC BY 2.0 FR). ``import_transcript_glossary <podcast> <file.json>`` (with
+  ``--dry-run``) loads a list for one podcast. Transcripts are not changed
+  yet; see :ref:`transcript_glossary`. Migration ``0085`` adds the field and
+  the table.
 - Keep approved transcript speaker mappings current when the public files
   are rewritten from the received ones. Mappings used to be compared with a
   hash of the current Podlove, DOTe and WebVTT bytes, so applying

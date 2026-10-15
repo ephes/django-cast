@@ -258,6 +258,13 @@ class TestTranscriptSourceFingerprint:
         assert stored.source_fingerprint == stored.transcript_artifact_fingerprint()
         assert stored.source_fingerprint != received_transcript.source_fingerprint
 
+    @pytest.mark.skipif(DJANGO_VERSION < (6, 0), reason="Django < 6 accepts positional save arguments")
+    def test_positional_save_arguments_are_rejected_on_django_6(self, received_transcript):
+        transcript = Transcript.objects.get(pk=received_transcript.pk)
+
+        with pytest.raises(TypeError, match="takes 1 positional argument"):
+            transcript.save(False, False, "default", ["podlove"])
+
     def test_saving_a_deleted_row_records_artifacts_again(self, received_transcript):
         Transcript.objects.filter(pk=received_transcript.pk).update(source_fingerprint="")
         Transcript.objects.filter(pk=received_transcript.pk).delete()

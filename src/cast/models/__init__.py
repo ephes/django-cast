@@ -22,6 +22,7 @@ from .transcript import (
     TranscriptVoiceReferenceCandidate,
 )
 from .transcript_generation import TranscriptGeneration
+from .transcript_glossary import TranscriptGlossaryTerm, get_podcast_transcript_language
 from .video import Video, get_video_dimensions
 from .voxhelm_settings import VoxhelmSettings
 
@@ -50,6 +51,8 @@ __all__ = [
     "sync_media_ids",
     "SpamFilter",
     "TranscriptGeneration",
+    "TranscriptGlossaryTerm",
+    "get_podcast_transcript_language",
     "Transcript",
     "TranscriptSpeakerMapping",
     "TranscriptSpeakerSample",

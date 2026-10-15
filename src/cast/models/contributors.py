@@ -14,6 +14,7 @@ from wagtail.models import Orderable
 from wagtail.snippets.models import register_snippet
 
 from ..form_widgets import PrivateClearableFileInput
+from ..transcripts.glossary import letters_key, normalize_phrase
 
 CONTRIBUTOR_ROLE_HOST = "host"
 CONTRIBUTOR_ROLE_GUEST = "guest"
@@ -50,6 +51,15 @@ class Contributor(ClusterableModel):
         help_text=_("Optional public contributor avatar."),
     )
     short_bio = models.TextField(blank=True, help_text=_("Optional short public biography."))
+    transcript_variants = models.TextField(
+        blank=True,
+        help_text=_(
+            "Private. Misspellings speech recognition produces for this name, one per line as "
+            '"variant => replacement", for example "John Gould => Jon Gould" or "John => Jon". '
+            'A line without "=>" is replaced by the display name. Variants apply only to transcripts of '
+            "episodes that credit this contributor."
+        ),
+    )
 
     panels = [
         FieldPanel("display_name"),
@@ -66,6 +76,10 @@ class Contributor(ClusterableModel):
             [InlinePanel("voice_references", label=_("Voice reference"))],
             heading=_("Voice references (private)"),
         ),
+        MultiFieldPanel(
+            [FieldPanel("transcript_variants")],
+            heading=_("Transcript glossary (private)"),
+        ),
     ]
 
     class Meta:
@@ -73,6 +87,12 @@ class Contributor(ClusterableModel):
 
     def __str__(self) -> str:
         return self.display_name
+
+    def clean(self) -> None:
+        super().clean()
+        errors = validate_contributor_variants(self.display_name, self.transcript_variants)
+        if errors:
+            raise ValidationError({"transcript_variants": errors})
 
     def get_avatar_url(self, request: HttpRequest | None = None) -> str:
         if self.avatar is None:
@@ -95,6 +115,45 @@ class Contributor(ClusterableModel):
         if self.avatar is None:
             return ""
         return self.avatar.get_rendition(self.AVATAR_RENDITION_FILTER).url
+
+
+def validate_contributor_variants(display_name: str, text: str) -> list[str]:
+    """Return one error message per invalid ``variant => replacement`` line.
+
+    The parser (``parse_contributor_variants``) skips lines it cannot use; this
+    reports them instead, so an editor's typo does not silently disable a variant.
+    Contributor variants may be common words: they apply only in episodes that
+    credit the contributor.
+    """
+    errors: list[str] = []
+    seen: dict[str, str] = {}
+    for number, raw_line in enumerate(text.splitlines(), start=1):
+        line = " ".join(raw_line.split())
+        if not line:
+            continue
+        if "=>" in line:
+            variant, replacement = (" ".join(part.split()) for part in line.split("=>", 1))
+        else:
+            variant, replacement = line, " ".join(display_name.split())
+        if "=>" in replacement:
+            errors.append(_('Line %(number)s: use "=>" only once.') % {"number": number})
+        elif not letters_key(variant):
+            errors.append(_("Line %(number)s: the variant needs letters or digits.") % {"number": number})
+        elif not letters_key(replacement):
+            errors.append(_("Line %(number)s: the replacement needs letters or digits.") % {"number": number})
+        elif normalize_phrase(variant) == normalize_phrase(replacement):
+            errors.append(
+                _('Line %(number)s: "%(variant)s" is the same as its replacement.')
+                % {"number": number, "variant": variant}
+            )
+        elif seen.get(normalize_phrase(variant), replacement) != replacement:
+            errors.append(
+                _('Line %(number)s: "%(variant)s" is already listed with another replacement.')
+                % {"number": number, "variant": variant}
+            )
+        else:
+            seen[normalize_phrase(variant)] = replacement
+    return errors
 
 
 def get_voice_reference_storage() -> Storage:

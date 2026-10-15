@@ -12,6 +12,8 @@ from contextvars import ContextVar
 from typing import Any, TypeVar, overload
 from urllib.parse import urlencode
 
+from django.contrib import messages
+from django.db.models import Model
 from django.http import HttpRequest
 from django.urls import include, path, reverse
 from django.utils.html import escape, format_html
@@ -25,12 +27,25 @@ from wagtail.permission_policies.collections import CollectionOwnershipPermissio
 from wagtail.rich_text.pages import PageLinkHandler
 from wagtail.snippets.models import register_snippet
 from wagtail.snippets.permissions import user_can_access_snippets
-from wagtail.snippets.views.snippets import SnippetViewSet
+from wagtail.snippets.views.snippets import (
+    CreateView as SnippetCreateView,
+    EditView as SnippetEditView,
+    SnippetViewSet,
+)
 
 from .admin_urls import audio, contributors, transcript, video, voxhelm
 from .image_operations import TransformColorspaceToSrgbOperation
-from .models import Audio, Contributor, Episode, Transcript, Video
+from .models import (
+    Audio,
+    Contributor,
+    Episode,
+    Transcript,
+    TranscriptGlossaryTerm,
+    Video,
+    get_podcast_transcript_language,
+)
 from .transcripts.generation_status import get_transcript_generation_status_context
+from .transcripts.glossary import has_common_words
 from .views.voxhelm import user_can_generate_transcript_for_episode
 from .voxhelm import voxhelm_configured
 
@@ -169,6 +184,52 @@ class TagsSnippetViewSet(SnippetViewSet):
 
 
 register_snippet(TagsSnippetViewSet)
+
+
+class GlossaryLanguageWarningMixin:
+    """Warn after saving a glossary term whose podcast language has no common-word list."""
+
+    request: HttpRequest
+
+    def save_instance(self) -> Model:
+        instance = super().save_instance()  # type: ignore[misc]
+        assert isinstance(instance, TranscriptGlossaryTerm)
+        language = get_podcast_transcript_language(instance.podcast)
+        if instance.variant_list and not has_common_words(language):
+            messages.warning(
+                self.request,
+                _(
+                    "There is no common-word list for this podcast's transcript language (%(language)s), "
+                    "so variants are not replaced automatically; the term still serves as a correct spelling."
+                )
+                % {"language": language},
+            )
+        return instance
+
+
+class TranscriptGlossaryTermCreateView(GlossaryLanguageWarningMixin, SnippetCreateView):
+    pass
+
+
+class TranscriptGlossaryTermEditView(GlossaryLanguageWarningMixin, SnippetEditView):
+    pass
+
+
+class TranscriptGlossaryTermViewSet(SnippetViewSet):
+    """Show-wide transcript glossary: correct spellings and misheard variants per podcast."""
+
+    model = TranscriptGlossaryTerm
+    icon = "openquote"
+    menu_label = _("Transcript glossary")
+    add_view_class = TranscriptGlossaryTermCreateView
+    edit_view_class = TranscriptGlossaryTermEditView
+    list_display = ["term", "podcast", "variant_count"]
+    list_filter = ["podcast"]
+    search_fields = ["term", "variants"]
+    panels = [FieldPanel("podcast"), FieldPanel("term"), FieldPanel("variants"), FieldPanel("notes")]
+
+
+register_snippet(TranscriptGlossaryTermViewSet)
 
 
 class ContributorMenuItem(MenuItem):
