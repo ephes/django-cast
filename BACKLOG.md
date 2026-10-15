@@ -22,6 +22,15 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - The completed Django 6.1 advisory-floor CI repair is recorded in
   [backlog/2026-10-03-dependency-floor-ci-repair.md](backlog/2026-10-03-dependency-floor-ci-repair.md).
 
+- [ ] Transcript glossary for names and technical terms
+  - Spec: [backlog/2026-10-15-transcript-glossary.md](backlog/2026-10-15-transcript-glossary.md)
+  - Related to: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
+  - Scope: per-show glossary snippet and contributor spelling variants in Wagtail, deterministic replacement in a
+    private corrections sidecar applied to Podlove, DOTe and WebVTT, then reviewed proposals (fuzzy, later a Voxhelm
+    LLM job).
+  - Done when: each slice passes its measurement on the six Django Chat pilot episodes (slice 1: no introduced
+    wrong text, at least half of the 180 counted errors fixed).
+
 ## Later
 
 - [ ] Local authoring and sync workflow
