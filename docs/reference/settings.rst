@@ -364,7 +364,10 @@ boolean strings as ``CAST_VOXHELM_DIARIZATION_ENABLED``. The Wagtail admin
 ``Settings -> Voxhelm settings`` screen also exposes a site-level value.
 
 Known-speaker recognition requires diarization for the job and applies to
-episode-level generation. Voxhelm-returned results are stored as private,
+episode-level generation. A job that sends voice references omits the
+speaker-count hint: a fixed count made pyannote merge two similar voices, such
+as a guest and a host, into one label. Diarized jobs without voice references
+still send the episode's contributor count. Voxhelm-returned results are stored as private,
 reviewable per-segment suggestions and are not shown publicly until an editor
 reviews and approves them.
 

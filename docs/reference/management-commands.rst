@@ -49,7 +49,8 @@ environment setting above, ``enabled`` requests diarization for that audio, and
 ``disabled`` omits the diarization payload, speaker-count hint, and diarized
 task-reference variant. When targeting an episode, the command keeps the
 episode context so enabled diarization can use that episode's contributor count
-as the speaker-count hint.
+as the speaker-count hint. Jobs that send known-speaker voice references omit
+the hint.
 
 .. code-block:: bash
 

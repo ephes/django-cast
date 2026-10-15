@@ -194,7 +194,11 @@ class VoxhelmClient:
             payload["language"] = self.language
         if send_diarization:
             diarization: dict[str, Any] = {"enabled": True}
-            if speaker_count is not None:
+            # A fixed speaker count makes pyannote merge two similar voices and
+            # spend the freed label on noise. Known-speaker jobs name speakers by
+            # their voice references instead, so the count is only a hint for
+            # plain diarization.
+            if speaker_count is not None and not known_speakers:
                 diarization["num_speakers"] = speaker_count
             if known_speakers:
                 diarization["strategy"] = KNOWN_SPEAKER_STRATEGY
