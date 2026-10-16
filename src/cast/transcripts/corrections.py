@@ -35,8 +35,9 @@ from functools import partial
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from wagtail.blocks import StreamValue
+from wagtail.blocks import Block, CharBlock, StreamValue, StructValue, URLBlock
 from wagtail.rich_text import RichText
 
 from cast.file_replacement import StagedFileReplacementGroup
@@ -173,19 +174,40 @@ def _initial_episode(transcript: Transcript, episode: Episode | None) -> Episode
 # --- effective glossary ----------------------------------------------------------------------
 
 
-def _rich_text_sources(value: Any) -> Iterator[str]:
-    """Raw HTML of every rich-text value in a StreamField value, in order."""
+def _struct_links(value: StructValue) -> Iterator[str]:
+    """A paragraph with a link for each URL field of a struct block whose preceding field is a text field.
+
+    Site blocks keep show-note links as plain fields ("title" and "url" of a link item,
+    "sponsor_name" and "sponsor_url"); the text field declared right before the URL field
+    is taken as the link text.
+    """
+    previous: tuple[str, Block] | None = None
+    for name, block in value.block.child_blocks.items():
+        if isinstance(block, URLBlock) and previous is not None and isinstance(previous[1], CharBlock):
+            text, url = value.get(previous[0]), value.get(name)
+            if isinstance(text, str) and text and isinstance(url, str) and url:
+                yield format_html('<p><a href="{}">{}</a></p>', url, text)  # own block: no phrase spans two links
+        previous = (name, block)
+
+
+def _show_note_sources(value: Any) -> Iterator[str]:
+    """HTML of the show notes in a StreamField value, in order: rich text and struct-block links."""
     if isinstance(value, RichText):
-        yield value.source
+        if value.source:
+            yield value.source
     elif isinstance(value, StreamValue):
         for child in value:
-            yield from _rich_text_sources(child.value)
+            yield from _show_note_sources(child.value)
+    elif isinstance(value, StructValue):
+        yield from _struct_links(value)
+        for item in value.values():
+            yield from _show_note_sources(item)
     elif isinstance(value, dict):
         for item in value.values():
-            yield from _rich_text_sources(item)
+            yield from _show_note_sources(item)
     elif isinstance(value, Sequence) and not isinstance(value, str):
         for item in value:
-            yield from _rich_text_sources(item)
+            yield from _show_note_sources(item)
 
 
 def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
@@ -193,8 +215,9 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
 
     Contributors are all contributors assigned to the episode, hidden ones
     included: their variants are private input and never published. Episode terms
-    come from the show notes (rich text in ``body``) and the title. Like the
-    speaker review, the latest revision is used, so draft show notes count.
+    come from the show notes (rich text and struct-block links in ``body``) and the
+    title. Like the speaker review, the latest revision is used, so draft show notes
+    count.
     """
     revision = cast(Episode, episode.get_latest_revision_as_object())
     contributors: list[ContributorGlossary] = []
@@ -210,7 +233,7 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
         ShowTerm(term.term, term.variants)
         for term in TranscriptGlossaryTerm.objects.filter(podcast_id=podcast.pk).order_by("pk")
     ]
-    terms = episode_terms("\n".join(_rich_text_sources(revision.body)), revision.title)
+    terms = episode_terms("\n".join(_show_note_sources(revision.body)), revision.title)
     language = get_podcast_transcript_language(podcast)
     payload = {
         "contributors": [[item.display_name, item.transcript_variants] for item in contributors],

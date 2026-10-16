@@ -17,7 +17,9 @@
   add an original to the glossary, reject replacements, re-apply the glossary
   and pick the episode for shared audio; see :ref:`transcript_glossary_review`.
   Each occurrence is shown in its segment as published, with the segment's
-  other replacements applied.
+  other replacements applied. Show-note spellings include links that a site
+  keeps as struct-block fields (a URL field after a text field), not only
+  links in rich text.
 - Add the data for a transcript glossary that will correct misheard names and
   terms in transcripts. Contributors get a private ``transcript_variants``
   field (one ``variant => replacement`` per line, scoped to episodes that

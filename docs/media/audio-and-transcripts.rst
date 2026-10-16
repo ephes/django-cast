@@ -645,8 +645,11 @@ Corrections use the glossary of one episode: the variants of the contributors
 assigned to it (hidden contributors included, since variants are never
 published), the show terms of its podcast, and correct spellings derived from
 its title and show notes (link texts and "by <Author>" phrases in the rich
-text of ``body``, latest revision, so draft notes count). The podcast's
-transcript language picks the common-word list.
+text of ``body``, latest revision, so draft notes count). Links kept as plain
+fields of a site's own struct blocks count too: a URL field whose preceding
+field is a text field, such as ``title`` and ``url`` of a link-list item,
+is read as a link with that text. The podcast's transcript language picks the
+common-word list.
 
 - **Automatic replacements**: a contributor variant, or a show-term variant
   that is not a single common word, is replaced wherever it occurs as a whole

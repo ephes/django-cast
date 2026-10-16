@@ -9,6 +9,7 @@ from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.urls import reverse
+from wagtail import blocks
 from wagtail.blocks import StreamValue
 from wagtail.rich_text import RichText
 
@@ -38,7 +39,7 @@ from cast.transcripts.corrections import (
     reject_automatic_replacement,
     set_corrections_episode,
 )
-from cast.transcripts.glossary import phrase_spans
+from cast.transcripts.glossary import episode_terms, phrase_spans
 from cast.voxhelm import VoxhelmTranscriptService
 from tests.factories import EpisodeFactory
 
@@ -544,9 +545,93 @@ def test_new_source_starts_a_fresh_sidecar(transcript):
     assert public_texts(transcript)[0] == {20000: "Jon is back."}
 
 
-def test_rich_text_sources_walks_nested_values():
+def test_show_note_sources_walks_nested_values():
     value = {"a": [RichText("<p>one</p>"), "plain"], "b": RichText("<p>two</p>")}
-    assert list(corrections._rich_text_sources(value)) == ["<p>one</p>", "<p>two</p>"]
+    assert list(corrections._show_note_sources(value)) == ["<p>one</p>", "<p>two</p>"]
+
+
+class ExtraLinkBlock(blocks.StructBlock):
+    title = blocks.CharBlock()
+    url = blocks.URLBlock()
+
+
+class LinkItemBlock(blocks.StructBlock):
+    title = blocks.CharBlock()
+    url = blocks.URLBlock()
+    description = blocks.RichTextBlock(required=False)
+    extra_links = blocks.ListBlock(ExtraLinkBlock(), required=False)
+
+
+class SponsorBlock(blocks.StructBlock):
+    heading = blocks.CharBlock()
+    show_heading = blocks.BooleanBlock(required=False)
+    sponsor_name = blocks.CharBlock()
+    sponsor_url = blocks.URLBlock()
+
+
+class UnlabelledLinkBlock(blocks.StructBlock):
+    url = blocks.URLBlock()
+    enabled = blocks.BooleanBlock(required=False)
+    other_url = blocks.URLBlock(required=False)
+
+
+SHOW_NOTES = blocks.StreamBlock(
+    [
+        ("links", blocks.ListBlock(LinkItemBlock())),
+        ("sponsor", SponsorBlock()),
+        ("unlabelled", UnlabelledLinkBlock()),
+    ]
+)
+
+
+def test_show_note_sources_reads_links_kept_as_struct_block_fields():
+    value = SHOW_NOTES.to_python(
+        [
+            {
+                "type": "links",
+                "value": [
+                    {
+                        "title": "getscaf",
+                        "url": "https://github.com/getscaf",
+                        "description": "<p>by Calvin</p>",
+                        "extra_links": [
+                            {"title": "copier & <b>co</b>", "url": "https://github.com/copier-org/copier"}
+                        ],
+                    },
+                    {"title": "", "url": "https://example.com/untitled"},
+                ],
+            },
+            {
+                "type": "sponsor",
+                "value": {"heading": "Sponsor", "sponsor_name": "Six Feet Up", "sponsor_url": "https://sixfeetup.com"},
+            },
+            {"type": "unlabelled", "value": {"url": "https://example.com/a", "other_url": "https://example.com/b"}},
+        ]
+    )
+
+    sources = list(corrections._show_note_sources(value))
+
+    assert sources == [
+        '<p><a href="https://github.com/getscaf">getscaf</a></p>',
+        "<p>by Calvin</p>",
+        '<p><a href="https://github.com/copier-org/copier">copier &amp; &lt;b&gt;co&lt;/b&gt;</a></p>',
+        '<p><a href="https://sixfeetup.com">Six Feet Up</a></p>',
+    ]
+    terms = episode_terms("\n".join(sources))
+    assert {"getscaf", "scaf", "copier & <b>co</b>", "Six Feet Up", "Calvin"} <= set(terms)
+
+
+def test_struct_block_links_keep_author_phrases_apart():
+    items = [
+        {"title": "A book by Daniel Green", "url": "https://example.com/book"},
+        {"title": "Django", "url": "https://djangoproject.com"},
+    ]
+    value = SHOW_NOTES.to_python([{"type": "links", "value": items}])
+
+    terms = episode_terms("\n".join(corrections._show_note_sources(value)))
+
+    assert {"Daniel Green", "Green", "Django"} <= set(terms)
+    assert "Daniel Green Django" not in terms
 
 
 @pytest.mark.django_db

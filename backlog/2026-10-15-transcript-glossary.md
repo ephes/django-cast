@@ -95,7 +95,8 @@ Three sources, merged per episode at correction time:
    Jon. Without variants, the contributor's name parts are still proposal
    targets.
 2. **Episode** (derived, no new field). Link texts of the episode's show
-   notes (rich text in `body`) and "by <Author>" phrases, the same sources the
+   notes (rich text in `body` and links kept as struct-block fields, such as
+   Django Chat's `show_note_link_list`) and "by <Author>" phrases, the same sources the
    pilot used. These are canonical spellings without variants, so they feed
    proposals only (see "Matching"), never unattended replacement. Derived
    from them (`episode_terms` in `cast.transcripts.glossary`):
@@ -391,6 +392,13 @@ were measured, so the counts differ from the measurement.
   replacements and the open proposal groups. The sentences in a proposal
   show the raw text, so "John Gould" still appears there next to an
   unrelated proposal.
+- **Show-note source:** the deployed code read only rich text in `body`, but
+  Django Chat keeps its link lists in a `show_note_link_list` struct block.
+  Scored against the gold on the Parakeet transcripts, that reached only 52
+  of the 92 contributor and show-note occurrences (57 %, short of the gate).
+  Reading struct-block links (a URL field after a text field) gives the same
+  episode terms as the rendered show notes and 70 of 92 (76 %; 26 automatic,
+  44 proposed), 0 wrong automatic replacements, 89 proposals.
 - **Proposals left for review:** some are wrong and should be rejected:
   "Django in the" (before "Alps") -> Django on the Med, "match the" ->
   Matthes, "was ill" -> Will, "Carlton is" -> Carlton Gibson.
