@@ -1,7 +1,8 @@
 # Transcript glossary: correct names and technical terms after transcription
 
 Status: 2026-10-15, proposed; slice 1 implemented on `develop` and verified
-on Django Chat staging 2026-10-16; slice 2 open. Related to
+on Django Chat staging 2026-10-16; slice 2 on hold since 2026-10-16 (its
+offline gate failed, see "Slice 2 offline gate"). Related to
 [2026-05-18-speaker-diarization.md](2026-05-18-speaker-diarization.md) (same
 sidecar and review pattern) and Voxhelm's
 `specs/2026-10-15_parakeet_asr_backend.md` (the ASR that produces the text).
@@ -402,6 +403,33 @@ were measured, so the counts differ from the measurement.
 - **Proposals left for review:** some are wrong and should be rejected:
   "Django in the" (before "Alps") -> Django on the Med, "match the" ->
   Matthes, "was ill" -> Will, "Carlton is" -> Carlton Gibson.
+
+### Slice 2 offline gate (2026-10-16, on hold)
+
+Measured in the Voxhelm session before any Voxhelm code, with the existing
+LLM sweep over the six pilot episodes, against the 109 occurrences slice 1
+misses (`slice1_ids.json`, kept privately with the pilot transcripts). The
+spec's filters were applied, plus two that cost no recall on the misses:
+no pure respelling (case, spaces or hyphens only) and no expansion that only
+adds words. Proposals not in the gold were judged by hand.
+
+- **Original prompt:** Qwen3.6-27B found 64 of 109 (59 %) at a strict
+  precision of 62 % (lenient 65 %), in 735 s for six episodes on atlas.
+  Qwen3.8-27B found 67 (61 %) at 63 % in 1060 s. Recall passes the gate
+  (>= 20 %), precision does not (>= 70 %). Without the two extra filters,
+  strict precision is 49 to 51 %.
+- **Error sources:** long link texts instead of the spoken short form
+  ("Scaff" -> "getscaf" 11 times, gold "scaf"), invented or swapped names
+  ("Mark Smith" -> "Mark Shannon"), and "corrected" disfluencies.
+- **One prompt iteration**, split fixed before any result (tuned on ep205,
+  ep219 and guest2, held out ep206, eric and guest1): 84 % precision at
+  34 % recall on the tuning episodes, but 58 % at 22 % on the held-out
+  ones ("DEP 10" -> "DEP 11", "Krakow" -> "Prague"; one proposal for eric).
+  The gain does not carry over.
+
+Slice 2 is on hold: no Voxhelm spec and no `transcript_terms` job. The same
+offline setup can be re-measured when something changes, such as a new
+model or re-checking candidate spans against the audio.
 
 ## Risks
 

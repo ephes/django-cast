@@ -22,23 +22,16 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - The completed Django 6.1 advisory-floor CI repair is recorded in
   [backlog/2026-10-03-dependency-floor-ci-repair.md](backlog/2026-10-03-dependency-floor-ci-repair.md).
 
-- [ ] Transcript glossary for names and technical terms
-  - Spec: [backlog/2026-10-15-transcript-glossary.md](backlog/2026-10-15-transcript-glossary.md)
-  - Related to: [backlog/2026-05-18-speaker-diarization.md](backlog/2026-05-18-speaker-diarization.md)
-  - Scope: proposals from show notes, contributors and a per-show glossary snippet, decided once per term for the
-    whole transcript, kept in a private corrections sidecar applied to Podlove, DOTe and WebVTT; later LLM proposals
-    from a Voxhelm job.
-  - Done when: each slice passes its measurement against the pilot gold (179 occurrences in six Django Chat
-    episodes, kept in the django-chat project; slice 1: no wrong unattended replacement, proposals cover at least
-    70 % of the contributor and show-note occurrences).
-  - Slice 1 implemented on `develop` (2026-10-16): source fingerprint for speaker mappings, matching engine,
-    contributor variants and show glossary snippet, corrections sidecar with apply/re-apply, review UI. Measured
-    78 % coverage with 0 wrong automatic replacements (see the spec's "Slice 1 measurement").
-  - Slice 1 verified on Django Chat staging (2026-10-16): Podlove/DOTe/WebVTT agree, player search finds
-    "Jon Gould", speaker names still shown (see the spec's "Slice 1 staging verification").
-  - Open: slice 2 (LLM proposals via Voxhelm, needs its own Voxhelm spec and a memory measurement first).
-
 ## Later
+
+- [ ] Transcript glossary, slice 2: LLM proposals via Voxhelm (on hold)
+  - Spec: [backlog/2026-10-15-transcript-glossary.md](backlog/2026-10-15-transcript-glossary.md)
+  - Slice 1 is implemented and verified on Django Chat staging (2026-10-16): contributor variants, show glossary
+    snippet, show-note proposals (including struct-block link lists), corrections sidecar applied to
+    Podlove/DOTe/WebVTT, review UI; 70 of 92 contributor and show-note occurrences, 0 wrong automatic replacements.
+  - Slice 2 failed its offline gate (precision 58 to 63 % against >= 70 %, also after one prompt iteration on
+    held-out episodes; see the spec's "Slice 2 offline gate"). Re-measure with the same setup when a new model or
+    an audio-based re-check of candidate spans is available.
 
 - [ ] Local authoring and sync workflow
   - Design record:
