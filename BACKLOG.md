@@ -34,9 +34,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Slice 1 implemented on `develop` (2026-10-16): source fingerprint for speaker mappings, matching engine,
     contributor variants and show glossary snippet, corrections sidecar with apply/re-apply, review UI. Measured
     78 % coverage with 0 wrong automatic replacements (see the spec's "Slice 1 measurement").
-  - Open: staging verification of slice 1 (re-apply on the pilot episodes, compare Podlove/DOTe/WebVTT, player
-    search for "Jon Gould", speaker names still shown); slice 2 (LLM proposals via Voxhelm, needs its own Voxhelm
-    spec and a memory measurement first).
+  - Slice 1 verified on Django Chat staging (2026-10-16): Podlove/DOTe/WebVTT agree, player search finds
+    "Jon Gould", speaker names still shown (see the spec's "Slice 1 staging verification").
+  - Open: slice 2 (LLM proposals via Voxhelm, needs its own Voxhelm spec and a memory measurement first).
 
 ## Later
 

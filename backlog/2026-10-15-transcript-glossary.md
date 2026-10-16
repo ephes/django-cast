@@ -1,7 +1,7 @@
 # Transcript glossary: correct names and technical terms after transcription
 
-Status: 2026-10-15, proposed; slice 1 implemented on `develop` 2026-10-16,
-staging verification and slice 2 open. Related to
+Status: 2026-10-15, proposed; slice 1 implemented on `develop` and verified
+on Django Chat staging 2026-10-16; slice 2 open. Related to
 [2026-05-18-speaker-diarization.md](2026-05-18-speaker-diarization.md) (same
 sidecar and review pattern) and Voxhelm's
 `specs/2026-10-15_parakeet_asr_backend.md` (the ASR that produces the text).
@@ -367,6 +367,33 @@ other five episodes' originals, common words excluded):
   (once before another word, once directly before "Django"). Both come
   from the variant "Jang" learned in another episode, and the review lists
   them so they can be rejected.
+
+### Slice 1 staging verification (2026-10-16)
+
+Django Chat staging, django-cast `92e1face`, on the six pilot transcripts.
+Contributor variants were set for the four credited guests, with no show
+list. Staging holds older Voxhelm transcripts, not the Parakeet ones that
+were measured, so the counts differ from the measurement.
+
+- **Automatic replacements:** 24, all correct. 22 in "Hiring in 2026"
+  ("John Gould" -> Jon Gould once, "John" -> Jon 21 times, every one
+  addressing the guest) and 2 in Eric Matthes' episode ("Mathis",
+  "Ereb"). The variants for Mia Bajić and Calvin Hendryx-Parker found
+  nothing in the staging text. "Calvin Hendricks-Parker" (hyphenated) is
+  only proposed.
+- **Formats:** for every corrected term, Podlove, DOTe and WebVTT have the
+  same count. Source fingerprints are unchanged, no approved speaker mapping
+  went stale, and speaker names are identical in all three formats.
+- **Player:** the transcript search on the episode page finds "Jon Gould"
+  (1 match) and no "John". Speaker names (Will Vincent, Carlton Gibson,
+  Jon Gould) are shown.
+- **Review UI:** the transcript edit view lists the 22 automatic
+  replacements and the open proposal groups. The sentences in a proposal
+  show the raw text, so "John Gould" still appears there next to an
+  unrelated proposal.
+- **Proposals left for review:** some are wrong and should be rejected:
+  "Django in the" (before "Alps") -> Django on the Med, "match the" ->
+  Matthes, "was ill" -> Will, "Carlton is" -> Carlton Gibson.
 
 ## Risks
 
