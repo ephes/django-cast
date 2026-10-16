@@ -36,6 +36,11 @@
   ``rewrite_speaker_labels`` leave it unchanged, a new import or upload still
   marks approvals stale. A migration sets it for existing transcripts from
   their current files (it reads every stored transcript once).
+- Fix editing a transcript in the admin when only some of its files are
+  uploaded, for example a new Podlove file while the DOTe and WebVTT files are
+  kept. Saving failed with ``ValueError: seek of closed file`` because the form
+  read the kept files again after the edit view had closed them. Only new
+  uploads are validated now.
 - Write internal page links in feed item descriptions as absolute URLs.
   Rich-text links to other pages used to be root-relative in RSS/Atom output
   and broke in feed readers. Post, blog index and other HTML pages keep

@@ -170,8 +170,6 @@ class TestTranscriptSourceFingerprint:
         source_fingerprint = received_transcript.source_fingerprint
         podlove = json.loads(json.dumps(PODLOVE))
         podlove["transcripts"][0]["text"] = "uploaded"
-        # All three files are uploaded: editing with an existing DOTe/WebVTT file kept fails today
-        # because the edit view closes those field files before the form validates them.
         uploads = {
             "podlove": SimpleUploadedFile("upload.json", json.dumps(podlove).encode()),
             "dote": SimpleUploadedFile("upload.dote.json", json.dumps(DOTE).encode()),
@@ -187,6 +185,28 @@ class TestTranscriptSourceFingerprint:
         transcript = Transcript.objects.get(pk=received_transcript.pk)
         assert transcript.podlove_data["transcripts"][0]["text"] == "uploaded"
         assert transcript.source_fingerprint != source_fingerprint
+        assert transcript.source_fingerprint == transcript.transcript_artifact_fingerprint()
+        assert_stale(transcript, mapping)
+
+    def test_admin_upload_of_podlove_only_keeps_the_stored_dote_and_webvtt(self, admin_client, received_transcript):
+        mapping = approve(received_transcript, "Speaker 1", "Alice")
+        dote_name, vtt_name = received_transcript.dote.name, received_transcript.vtt.name
+        podlove = json.loads(json.dumps(PODLOVE))
+        podlove["transcripts"][0]["text"] = "uploaded"
+
+        response = admin_client.post(
+            reverse("cast-transcript:edit", args=(received_transcript.pk,)),
+            {
+                "audio": received_transcript.audio_id,
+                "podlove": SimpleUploadedFile("upload.json", json.dumps(podlove).encode()),
+            },
+        )
+
+        assert response.status_code == 302
+        transcript = Transcript.objects.get(pk=received_transcript.pk)
+        assert transcript.podlove_data["transcripts"][0]["text"] == "uploaded"
+        assert (transcript.dote.name, transcript.vtt.name) == (dote_name, vtt_name)
+        assert transcript.dote_data == DOTE
         assert transcript.source_fingerprint == transcript.transcript_artifact_fingerprint()
         assert_stale(transcript, mapping)
 

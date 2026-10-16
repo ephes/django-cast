@@ -299,7 +299,8 @@ class TranscriptForm(BaseCollectionMemberForm):
 
     Validates uploaded transcript files: Podlove JSON must contain a
     ``transcripts`` key, DOTe JSON must contain ``lines`` with required
-    fields, and WebVTT files must start with the ``WEBVTT`` header.
+    fields, and WebVTT files must start with the ``WEBVTT`` header. Stored
+    files kept on edit are not read again; they were validated on upload.
     """
 
     permission_policy = transcript_permission_policy
@@ -321,8 +322,8 @@ class TranscriptForm(BaseCollectionMemberForm):
 
     def clean_podlove(self) -> Any:
         podlove = self.cleaned_data.get("podlove")
-        if not podlove:
-            return podlove
+        if not isinstance(podlove, UploadedFile):
+            return podlove  # empty, cleared or the stored file kept: only new uploads are validated
         max_bytes = int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
         data = self._load_json(podlove, field_label="Podlove", max_bytes=max_bytes)
         if not isinstance(data, dict) or "transcripts" not in data:
@@ -333,8 +334,8 @@ class TranscriptForm(BaseCollectionMemberForm):
 
     def clean_dote(self) -> Any:
         dote = self.cleaned_data.get("dote")
-        if not dote:
-            return dote
+        if not isinstance(dote, UploadedFile):
+            return dote  # empty, cleared or the stored file kept: only new uploads are validated
         max_bytes = int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
         data = self._load_json(dote, field_label="DOTe", max_bytes=max_bytes)
         if not isinstance(data, dict) or "lines" not in data:
@@ -363,8 +364,8 @@ class TranscriptForm(BaseCollectionMemberForm):
 
     def clean_vtt(self) -> Any:
         vtt = self.cleaned_data.get("vtt")
-        if not vtt:
-            return vtt
+        if not isinstance(vtt, UploadedFile):
+            return vtt  # empty, cleared or the stored file kept: only new uploads are validated
         validate_transcript_upload(vtt, max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES))
         header = self._read_header(vtt)
         if not header.startswith("WEBVTT"):
