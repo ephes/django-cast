@@ -743,8 +743,10 @@ transcript can use it:
   counted in the summary and listed apart, each with *Approve* to undo the
   rejection.
 
-Each occurrence's time stamp plays the audio from the start of its segment to
-the start of the next one, when the audio has a playable file.
+Each occurrence's context shows its segment as published, with the segment's
+other replacements applied; the highlighted phrase is the original. Its time
+stamp plays the audio from the start of its segment to the start of the next
+one, when the audio has a playable file.
 
 Common-word lists
 ~~~~~~~~~~~~~~~~~

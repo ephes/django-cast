@@ -10,7 +10,7 @@ from cast.transcripts.corrections import (
     STATE_REJECTED,
     refresh_transcript_corrections,
 )
-from cast.views.transcript_glossary import marked_context
+from cast.views.transcript_glossary import corrected_context, marked_context
 from tests.factories import EpisodeFactory, UserFactory
 from tests.transcripts.corrections_test import BODY, make_transcript, public_texts
 
@@ -87,6 +87,40 @@ def test_marked_context_clips_long_text_at_word_boundaries():
     assert marked_context("x" * 30 + "ab" + "y" * 30, 30, 32, chars=5) == "…xxxxx<mark>ab</mark>yyyyy…"
 
 
+def test_corrected_context_applies_the_other_replacements_that_are_not_rejected():
+    raw = "Jon met John and Mathis at Gunacorn."
+
+    def item(original, to, state="auto"):
+        start = raw.index(original)
+        return {
+            "start": start,
+            "end": start + len(original),
+            "from": original,
+            "to": to,
+            "source": "x",
+            "state": state,
+        }
+
+    segment = {
+        "start_ms": 0,
+        "raw_text": raw,
+        "replacements": [
+            item("John", "Jon"),
+            item("Mathis", "Matthes", state="rejected"),
+            item("Gunacorn", "Gunicorn"),
+        ],
+    }
+
+    def context(original):
+        start = raw.index(original)
+        return corrected_context(segment, start, start + len(original))
+
+    assert context("Mathis") == "Jon met Jon and <mark>Mathis</mark> at Gunicorn."
+    # the marked replacement itself stays the original
+    assert context("John") == "Jon met <mark>John</mark> and Mathis at Gunicorn."
+    assert context("Gunacorn") == "Jon met Jon and Mathis at <mark>Gunacorn</mark>."
+
+
 @pytest.mark.django_db
 def test_edit_view_without_podlove_has_no_glossary_section(admin_client, audio):
     from cast.models import Transcript
@@ -122,7 +156,9 @@ def test_groups_and_replacements_render_with_context(admin_client, applied, epis
     )
     assert f"Glossary context: episode “{episode.title}”" in content
     assert "We use <mark>Button Down</mark> for mail." in content
-    assert "<mark>John</mark> said Gunacorn is fast." in content
+    # each context shows the segment's other replacements applied
+    assert "<mark>John</mark> said Gunicorn is fast." in content
+    assert "Jon said <mark>Gunacorn</mark> is fast." in content
     assert 'value="glossary-add"' in content
     assert "data-cast-glossary-seek" in content
     assert 'data-cast-glossary-end="12.5"' in content  # bounded by the next segment

@@ -16,6 +16,8 @@
   context, and lets editors approve or reject a group or single occurrences,
   add an original to the glossary, reject replacements, re-apply the glossary
   and pick the episode for shared audio; see :ref:`transcript_glossary_review`.
+  Each occurrence is shown in its segment as published, with the segment's
+  other replacements applied.
 - Add the data for a transcript glossary that will correct misheard names and
   terms in transcripts. Contributors get a private ``transcript_variants``
   field (one ``variant => replacement`` per line, scoped to episodes that

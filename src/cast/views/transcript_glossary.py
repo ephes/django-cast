@@ -6,7 +6,7 @@ the review actions posted from it. Every action redirects back to the edit view.
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, TypedDict
 
 from django import forms
@@ -28,7 +28,7 @@ from ..forms import (
 from ..models import Episode, Transcript
 from ..transcripts import corrections, editing, parsing
 from ..transcripts.corrections import STATE_APPROVED, STATE_AUTO, STATE_OPEN, STATE_REJECTED, CorrectionsResult
-from ..transcripts.glossary import normalize_phrase
+from ..transcripts.glossary import Replacement, apply_replacements, normalize_phrase
 
 CONTEXT_CHARS = 80
 GROUP_SAMPLES = 3
@@ -128,6 +128,27 @@ def marked_context(text: str, start: int, end: int, *, chars: int = CONTEXT_CHAR
     return format_html("{}<mark>{}</mark>{}", before, text[start:end], after)
 
 
+def corrected_context(segment: dict[str, Any], start: int, end: int) -> SafeString:
+    """``marked_context`` of the segment's corrected text, with ``raw_text[start:end]`` marked.
+
+    The segment's other replacements that are not rejected are applied around the
+    span, so the sentence reads as it is published; the span itself stays the original.
+    """
+    raw = segment["raw_text"]
+    edits = [
+        Replacement(segment["start_ms"], item["start"], item["end"], item["from"], item["to"], item["source"])
+        for item in segment["replacements"]
+        if item["state"] != STATE_REJECTED and (item["end"] <= start or end <= item["start"])
+    ]
+    before = apply_replacements(raw[:start], [edit for edit in edits if edit.end <= start])
+    after = apply_replacements(
+        raw[end:],
+        [replace(edit, start=edit.start - end, end=edit.end - end) for edit in edits if edit.start >= end],
+    )
+    text = before + raw[start:end] + after
+    return marked_context(text, len(before), len(before) + end - start)
+
+
 def user_can_edit_glossary(user: Any) -> bool:
     """Adding to the glossary edits show terms or contributors, so it needs their snippet permissions."""
     return all(user.has_perm(permission) for permission in GLOSSARY_EDIT_PERMISSIONS)
@@ -138,7 +159,7 @@ def _occurrence(
 ) -> GlossaryOccurrence:
     start_seconds = segment["start_ms"] / 1000
     return {
-        "context": marked_context(segment["raw_text"], item["start"], item["end"]),
+        "context": corrected_context(segment, item["start"], item["end"]),
         "end": item["end"],
         "end_seconds": next_start_ms / 1000 if next_start_ms is not None else None,
         "original": original,
