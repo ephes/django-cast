@@ -101,6 +101,19 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: focused tests cover oversized responses, private/non-global destinations, redirect handling, and the
     explicit local-source policy, and the settings/development documentation describes the limits.
 
+- [ ] Reconcile shared proxy security headers for production consumers
+  - Review record:
+    [backlog/2026-10-17-production-deployment-review.md](backlog/2026-10-17-production-deployment-review.md)
+  - Status: cross-repository operational hardening for `../ops-library`, `../homepage`, and `../python-podcast`; no
+    critical or high-severity deployment issue was found.
+  - Scope: make the shared Traefik and Django HSTS policies agree by either removing the ineffective `preload` token
+    at the current 180-day lifetime or deliberately moving both layers to the one-year preload policy after checking
+    every subdomain. Confirm and document whether Traefik's `SAMEORIGIN` frame policy is required for Wagtail preview
+    before retaining its override of the applications' `DENY` setting.
+  - Done when: the ops-library template, both consumer configurations and deployment docs, and the headers observed on
+    both live sites express the same reviewed policy; their production `check --deploy` results contain no unintended
+    warnings.
+
 - [ ] Require publish revision binding in the next editor API version
   - Decision record: [backlog/2026-09-08-wagtail-v3-editor-api.md](backlog/2026-09-08-wagtail-v3-editor-api.md)
     (follow-up 5); deferral recorded in [backlog/2026-09-07-security-review.md](backlog/2026-09-07-security-review.md)
