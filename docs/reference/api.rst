@@ -1068,6 +1068,9 @@ exactly as documented for posts above. The endpoints are::
     PATCH /api/editor/episodes/{id}/
     POST  /api/editor/episodes/{id}/publish/
     GET   /api/editor/episodes/{id}/preview/
+    GET   /api/editor/episodes/{id}/transcript/
+    POST  /api/editor/episodes/{id}/transcript/
+    GET   /api/editor/contributors/
 
 The parent must be a ``cast.Podcast``; a ``cast.Blog`` or any other parent is
 rejected with a ``validation_error`` on ``parent``. These endpoints serve
@@ -1095,6 +1098,29 @@ episode-specific fields:
 - ``explicit`` (optional): one of ``1`` (yes), ``2`` (no), ``3`` (clean);
   defaults to ``1``.
 - ``block`` (optional): boolean; blocks the episode from iTunes.
+- ``contributors`` (optional): the ordered list of episode contributor
+  assignments, replacing the whole list when sent (``[]`` clears it). Each item
+  references a ``cast.Contributor`` by exactly one of ``id`` or ``slug`` and may
+  set ``role`` to ``host`` or ``guest``; an omitted role uses the contributor's
+  ``default_role``. Unknown contributors return ``not_found`` at
+  ``contributors.<index>.id`` or ``contributors.<index>.slug``; the same
+  contributor twice with the same role returns ``duplicate`` at
+  ``contributors.<index>``. A Wagtail-chosen per-episode contributor link is kept
+  for a contributor/role pair that stays in the list. Like every other field,
+  the assignments are saved on the draft revision; the live episode, its public
+  page, and its feed keep their published contributors until the episode is
+  published. The draft assignments drive the diarization speaker count, the
+  known-speaker references, and the speaker names shown in editor previews.
+
+Every episode response includes ``contributors`` as a list (empty when none are
+assigned), so clients can feature-detect support by the presence of the key:
+
+.. code-block:: json
+
+    "contributors": [
+      {"id": 3, "slug": "jochen", "display_name": "Jochen", "role": "host", "visible": true},
+      {"id": 5, "slug": "dominik", "display_name": "Dominik", "role": "host", "visible": true}
+    ]
 
 Example create request:
 
@@ -1153,6 +1179,163 @@ editor JSON error envelopes on failure, requires edit permission, and requires
 no token scope. Passing a plain post id to the episode preview endpoint returns
 the standard ``not_found`` envelope.
 
+**Speaker names in editor previews.** Public transcript output only shows
+speaker labels anchored to a live episode, so an unpublished episode's approved
+speaker names were invisible while editing. Requests for an unpublished
+episode's transcript data that are authorized through edit permission now use
+the episode's latest draft (its draft contributor assignments and approved
+speaker mappings) as the speaker-label anchor. This covers the Podlove player
+endpoint (``/api/audios/podlove/{audio}/post/{episode}/`` and
+``?episode_id=``), the custom player transcript endpoint
+(``/api/audios/{audio}/player-transcript/?post_id=``), and the Podlove,
+podcastindex, and WebVTT transcript endpoints with ``?episode_id=``. Those
+responses are already ``Cache-Control: private, no-store`` because the episode
+is not public. For an unpublished episode, editors may also reach audio that
+only its latest draft references, such as a ``podcast_audio`` changed through
+``PATCH`` after creation; this never applies to live pages, whose draft-only
+audio stays unreachable until publication. Anonymous visitors cannot read draft
+transcripts at all, and
+live episodes keep their public labels for everyone, including editors. The
+API preview HTML itself renders as an anonymous visitor and loads transcripts
+lazily, so a script reading ``/preview/`` should use the transcript status
+endpoint below (``transcript.preview_speaker_labels``) to check speaker names.
+
+**Episode transcript generation**::
+
+    GET  /api/editor/episodes/{id}/transcript/
+    POST /api/editor/episodes/{id}/transcript/
+
+``POST`` requests Voxhelm transcript generation for the podcast audio of the
+episode's latest draft revision, exactly like the Wagtail **Generate
+transcript** action: it uses the draft's contributor assignments for the
+diarization speaker count and known-speaker references, and resolves Voxhelm
+configuration for the episode's site. It requires Wagtail admin access, edit
+permission for the episode, ``change`` permission for its podcast audio, and the
+``write`` scope for scoped tokens. It takes no request body and returns
+``202 Accepted`` with the status document below plus ``enqueued``:
+``true`` when a new generation was queued, ``false`` when a generation for the
+audio is already queued or running (the request is idempotent while one is
+active). After a succeeded or failed generation, ``POST`` submits a new Voxhelm
+job built from the current draft, as in the admin. An ``interrupted``
+generation (see below) whose Voxhelm job id is known is resumed instead: the
+existing job is completed again without a new submission, so it keeps the
+configuration it was submitted with (diarization, speaker count, known
+speakers) even if the draft contributors or settings changed since. Its
+``generation.task_ref`` still describes the original job. To transcribe with
+the new configuration, wait for the resumed generation to finish and ``POST``
+again.
+
+``GET`` returns the same status document without ``enqueued``. It requires edit
+permission for the episode and no token scope.
+
+Errors:
+
+- ``400 validation_error`` with ``required`` at ``podcast_audio`` when the
+  draft has no podcast audio.
+- ``403 permission_denied`` without edit permission for the episode or change
+  permission for its audio.
+- ``404 not_found`` for a missing page or a page that is not an episode.
+- ``409 voxhelm_not_configured`` when transcript generation cannot be
+  configured: no Voxhelm API base/key pair resolves for the site, a Voxhelm
+  boolean setting is invalid, or the ``cast_transcripts`` task backend is
+  missing. ``detail`` names the problem.
+- ``502 voxhelm_error`` when Voxhelm rejects or fails the submission; the
+  generation is recorded as ``failed`` with the same message.
+
+Status document:
+
+.. code-block:: json
+
+    {
+      "enqueued": true,
+      "episode": {"id": 141},
+      "audio": {"id": 83},
+      "configuration": {
+        "voxhelm_configured": true,
+        "diarization": {"enabled": true, "source": "environment"},
+        "known_speaker": {"enabled": true, "source": "environment"},
+        "transcript_diarization_mode": "enabled",
+        "diarize": true,
+        "expected_speaker_count": 3,
+        "known_speaker_count": 3
+      },
+      "generation": {
+        "status": "queued",
+        "active": true,
+        "error": "",
+        "task_ref": "cast-audio-83-diarized-3-speakers",
+        "voxhelm_job_id": "job-123",
+        "created_at": "2026-10-16T09:00:00Z",
+        "updated_at": "2026-10-16T09:00:01Z",
+        "started_at": null,
+        "completed_at": null
+      },
+      "transcript": {
+        "id": 77,
+        "complete": true,
+        "edit_url": "/admin/transcript/transcript/edit/77/",
+        "speaker_labels": ["Dominik", "Jochen", "Speaker 3"],
+        "preview_speaker_labels": ["Dominik", "Jochen"],
+        "speaker_mappings": [
+          {
+            "speaker_label": "Speaker 3",
+            "review_state": "unmapped",
+            "contributor": null,
+            "display_name": ""
+          }
+        ],
+        "known_speaker_suggestions": {
+          "total": 412,
+          "confident": 380,
+          "uncertain": 32,
+          "by_speaker": {"Dominik": 170, "Jochen": 210}
+        }
+      }
+    }
+
+Fields:
+
+- ``audio`` is ``null`` when the draft has no podcast audio; ``generation``
+  and ``transcript`` are then ``null`` as well.
+- ``configuration`` describes what a generation requested now would send.
+  ``diarization``/``known_speaker`` report each effective site setting and the
+  level it came from: ``site`` (the Wagtail Voxhelm settings), ``django``,
+  ``environment``, ``default``, or ``invalid`` (with ``enabled: null`` and an
+  ``error`` message). ``diarize`` applies the audio's
+  ``transcript_diarization_mode`` on top. ``expected_speaker_count`` is the
+  number of distinct draft contributors sent as the diarization speaker-count
+  hint (``null`` when diarization is off or fewer than two contributors are
+  assigned). ``known_speaker_count`` is the number of draft contributors with
+  usable approved voice references that would be sent as known speakers.
+- ``generation`` is ``null`` before the first request. ``status`` is one of
+  ``queued``, ``running``, ``succeeded``, ``failed``, or ``interrupted`` (a
+  queued/running generation older than ``CAST_VOXHELM_STALE_AFTER``);
+  ``active`` is true only for a queued or running generation that is not
+  interrupted. ``error`` carries the failure message. Poll ``GET`` until
+  ``active`` is false.
+- ``transcript`` is ``null`` until a transcript exists. ``speaker_labels`` are
+  the labels stored in the transcript files. ``preview_speaker_labels`` are the
+  names an editor sees in the preview after approved speaker mappings and the
+  episode's contributor assignments are applied (the public labels for a live
+  episode). ``speaker_mappings`` lists the active raw-label mappings with their
+  review state. ``known_speaker_suggestions`` summarizes Voxhelm's private
+  known-speaker suggestions (``null`` without a suggestions file); applying
+  suggestions to the transcript remains an editor review step in the Wagtail
+  transcript admin.
+
+**Contributors**::
+
+    GET /api/editor/contributors/?q=jo&slug=jochen&slug=dominik
+
+Lists the ``cast.Contributor`` snippets that can be assigned to episodes, ordered
+by display name, in the shared pagination envelope. ``q`` filters display name
+or slug with ``icontains``; repeatable ``slug`` filters exact slugs. Other query
+parameters return ``unsupported_parameter``. Items carry ``id``, ``slug``,
+``display_name``, ``default_role``, and ``visible``; private voice-reference data
+is never included. Like the contributor select in the Wagtail episode form, the
+list is available to every user with Wagtail admin access and requires no token
+scope.
+
 **Error envelopes**
 
 Validation errors (``400 Bad Request``):
@@ -1194,7 +1377,8 @@ Missing posts (``404 Not Found``):
 Whole-request editor media failures use flat error bodies. Current media
 upload codes include ``no_upload_collection`` (403), ``post_save_permission_denied``
 (403), ``probe_timeout`` (422), ``probe_failed`` (422), ``rate_limited`` (429), and
-``cleanup_failed`` (500). Form and field problems use the validation envelope;
+``cleanup_failed`` (500). Episode transcript generation adds
+``voxhelm_not_configured`` (409) and ``voxhelm_error`` (502). Form and field problems use the validation envelope;
 ``non_field_errors`` is the reserved key for request-wide validation errors.
 
 **Editor media endpoints**
@@ -1279,11 +1463,62 @@ Upload media::
     Content-Type: multipart/form-data
 
 Image uploads accept ``title``, ``file``, ``tags``, and optional ``collection``.
-Audio uploads accept ``title``, ``subtitle``, ``transcript_diarization_mode``,
-one of ``m4a``/``mp3``/``oga``/``opus``, ``tags``, ``chaptermarks``, and
-optional ``collection``. ``transcript_diarization_mode=enabled`` is rejected in
-this slice; use ``inherit`` or ``disabled``. Video uploads accept ``title``,
-``original``, optional ``poster``, ``tags``, and optional ``collection``.
+Audio uploads accept ``title``, ``subtitle``, ``transcript_diarization_mode``
+(``inherit``, ``enabled``, or ``disabled``; default ``inherit``), one of
+``m4a``/``mp3``/``oga``/``opus``, ``tags``, ``chaptermarks``, and optional
+``collection``. Video uploads accept ``title``, ``original``, optional
+``poster``, ``tags``, and optional ``collection``.
+
+``transcript_diarization_mode`` is validated before the file requirement, so a
+client can feature-detect ``enabled`` support without uploading: a file-less
+``POST`` with ``transcript_diarization_mode=enabled`` (plus ``collection`` when
+several are available) returns ``400`` with ``non_field_errors`` ``required``
+and no ``transcript_diarization_mode`` error. An unknown mode returns
+``invalid_choice`` at that field. Older versions rejected ``enabled`` with code
+``unsupported`` at ``transcript_diarization_mode``.
+
+Read or update one audio::
+
+    GET   /api/editor/media/audios/{id}/
+    PATCH /api/editor/media/audios/{id}/
+
+``GET`` returns the audio result shape for an audio the caller may choose;
+missing and unselectable audio both return ``404 not_found``. ``PATCH`` updates
+the same audio and additionally requires ``change`` permission for it
+(``403 permission_denied`` otherwise) and the ``write`` scope for scoped tokens.
+``OPTIONS`` lists ``PATCH`` in ``Allow``. It accepts
+``multipart/form-data``, ``application/x-www-form-urlencoded``, or JSON with any
+of these fields:
+
+- ``title``, ``subtitle``, ``tags`` (comma-separated string, replaces the tags),
+  ``transcript_diarization_mode`` (``inherit``, ``enabled``, ``disabled``).
+- At most one audio file in ``m4a``, ``mp3``, ``oga``, or ``opus``
+  (multipart). It adds that format or replaces the stored file of that format;
+  other formats are kept. Send one request per format.
+- ``chaptermarks`` (newline-delimited ``HH:MM:SS Title`` text). Only when this
+  field is sent are chapter marks synchronized, with the admin form's rules (an
+  empty value extracts marks from the uploaded file, if any, or clears them).
+  Without it, existing chapter marks are left untouched, so adding a format
+  never replaces or wipes them.
+
+Fields not stored on the object are kept. Unknown fields (including
+``collection`` and file-clear fields) return ``unsupported_field``, an empty
+request returns ``non_field_errors`` ``required``, more than one audio file
+returns ``too_many_files``, and non-string field values return ``invalid``.
+File uploads use the same validation, size limit, cumulative probe budget, and
+per-user upload lock as ``POST`` (``rate_limited``, ``probe_timeout``,
+``probe_failed``, ``cleanup_failed``); a changed file resets and re-probes the
+duration. A failed upload keeps the previously stored files. Metadata-only
+requests do not take the upload lock. The response is the updated audio result
+shape with ``200 OK``.
+
+Example: add an Ogg Vorbis file to audio 83, then enable diarization::
+
+    curl -X PATCH -H "Authorization: Token …" -F oga=@episode.oga \
+        https://example.com/api/editor/media/audios/83/
+    curl -X PATCH -H "Authorization: Token …" \
+        -d transcript_diarization_mode=enabled \
+        https://example.com/api/editor/media/audios/83/
 
 If ``collection`` is omitted and exactly one usable upload collection exists,
 that collection is selected. If none exists, upload returns
@@ -1355,6 +1590,13 @@ Authorization uses standard Wagtail page permissions:
   episode.
 - ``POST /api/editor/episodes/{id}/publish/`` — requires edit and publish
   permission for the episode, and a non-null ``podcast_audio``.
+- ``GET /api/editor/episodes/{id}/transcript/`` — requires edit permission for
+  the episode.
+- ``POST /api/editor/episodes/{id}/transcript/`` — requires edit permission for
+  the episode and change permission for its draft podcast audio.
+- ``GET /api/editor/contributors/`` — requires Wagtail admin access.
+- ``GET /api/editor/media/audios/{id}/`` — requires choose permission for the
+  audio; ``PATCH`` additionally requires change permission.
 
 Scoped-token authorization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1365,7 +1607,9 @@ editor API additionally enforces a per-action scope on top of the Wagtail permis
 checks above:
 
 - Read endpoints (all ``GET``) require no scope.
-- Create, update, and media-upload endpoints require the ``write`` scope.
+- Create, update, media-upload, audio ``PATCH``, and transcript-generation
+  (``POST /api/editor/episodes/{id}/transcript/``) endpoints require the
+  ``write`` scope.
 - The publish actions require the ``publish`` scope.
 
 Scope is necessary but not sufficient — the Wagtail permission check still applies. A

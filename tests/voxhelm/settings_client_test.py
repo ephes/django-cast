@@ -835,3 +835,33 @@ def test_incomplete_django_credentials_never_inherit(settings, monkeypatch, base
     assert not voxhelm_configured()
     with pytest.raises(ImproperlyConfigured):
         VoxhelmClient.from_settings()
+
+
+@pytest.mark.django_db
+def test_resolve_setting_reports_the_level_each_value_came_from(site, settings, monkeypatch):
+    from cast.voxhelm import resolve_bool_setting, resolve_setting
+
+    for name in ("CAST_VOXHELM_API_BASE", "CAST_VOXHELM_API_KEY", "CAST_VOXHELM_DIARIZATION_ENABLED"):
+        if hasattr(settings, name):
+            delattr(settings, name)
+        monkeypatch.delenv(name, raising=False)
+    VoxhelmSettings.objects.update_or_create(site=site, defaults={"diarization_enabled": None})
+
+    assert resolve_bool_setting("CAST_VOXHELM_DIARIZATION_ENABLED", False, request_or_site=site) == (False, "default")
+    monkeypatch.setenv("CAST_VOXHELM_DIARIZATION_ENABLED", "true")
+    assert resolve_bool_setting("CAST_VOXHELM_DIARIZATION_ENABLED", False, request_or_site=site) == (
+        True,
+        "environment",
+    )
+    monkeypatch.setenv("CAST_VOXHELM_DIARIZATION_ENABLED", " ")
+    assert resolve_bool_setting("CAST_VOXHELM_DIARIZATION_ENABLED", False, request_or_site=site) == (False, "default")
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = 1
+    assert resolve_bool_setting("CAST_VOXHELM_DIARIZATION_ENABLED", False, request_or_site=site) == (True, "django")
+    VoxhelmSettings.objects.filter(site=site).update(diarization_enabled=False)
+    assert resolve_bool_setting("CAST_VOXHELM_DIARIZATION_ENABLED", True, request_or_site=site) == (False, "site")
+
+    # Credentials keep the pair rule: empty Wagtail credentials fall through to the environment pair.
+    monkeypatch.setenv("CAST_VOXHELM_API_BASE", "https://env.example")
+    monkeypatch.setenv("CAST_VOXHELM_API_KEY", "env-secret")
+    assert resolve_setting("CAST_VOXHELM_API_KEY", request_or_site=site) == ("env-secret", "environment")
+    assert resolve_setting("CAST_VOXHELM_API_BASE", "fallback") == ("https://env.example", "environment")

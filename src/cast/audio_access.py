@@ -70,10 +70,20 @@ def request_may_view_page(page: Any, request: Any) -> bool:
 
 
 def page_grants_audio_access(page: Any, audio: Any, request: Any) -> bool:
-    """A page grants access if it references the audio and is viewable or editable."""
-    if not _page_references_audio(page, audio):
+    """A page grants access if it references the audio and is viewable or editable.
+
+    An editor may also reach audio that only the latest draft of an unpublished page
+    references (for example ``podcast_audio`` changed through the editor API after
+    creation), so its preview player works before publication. This is limited to
+    pages that are not live: a non-live granting page always yields private,
+    uncacheable responses, so draft-only audio never reaches shared caches.
+    """
+    if _page_references_audio(page, audio):
+        return request_may_view_page(page, request)
+    specific = getattr(page, "specific", page)
+    if getattr(specific, "live", True) or not user_can_edit_page(specific, _request_user(request)):
         return False
-    return request_may_view_page(page, request)
+    return _page_references_audio(specific.get_latest_revision_as_object(), audio)
 
 
 def _resolve_page(anchor_id: Any) -> Any | None:

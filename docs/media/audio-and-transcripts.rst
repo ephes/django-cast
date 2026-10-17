@@ -290,6 +290,13 @@ level selects that level; an incomplete pair is not configured and never
 inherits the missing credential. Existing installations that mix levels must
 move both credentials to one level before upgrading.
 
+The site-level diarization and known-speaker choices have three states. "Not
+set here" leaves the stored value empty so ``CAST_VOXHELM_DIARIZATION_ENABLED``
+and ``CAST_VOXHELM_KNOWN_SPEAKER_ENABLED`` from Django settings or the
+environment apply; "Enabled for this site" and "Disabled for this site"
+override them. Each field's help text shows its current effective value and
+where it comes from.
+
 Each audio object also has a transcript diarization mode. The default
 ``inherit`` mode keeps using the site/global Voxhelm diarization setting for
 future transcript generation. Editors can set an individual audio to
@@ -384,6 +391,17 @@ speaker labels. The stored transcript files are not rewritten by this mapping
 or sanitization step. One-off display names cannot duplicate a raw transcript
 speaker label; this keeps an approved one-off name from accidentally allowing an
 unmapped anonymous label with the same text.
+
+Editors previewing an unpublished episode are the exception: when a transcript
+request for that episode is authorized by the editor's edit permission (the
+Wagtail preview's player, or the transcript endpoints with ``episode_id`` /
+``post_id`` pointing at the draft), the episode's latest draft — its draft
+contributor assignments and approved mappings — anchors the speaker labels, so
+the preview shows the approved names before publication. These responses are
+private and uncacheable; anonymous visitors still get no draft transcript, and
+live episodes keep their public labels for everyone. For an unpublished
+episode, editors can also reach audio that only its latest draft references
+(for example a podcast audio changed after the episode was created).
 
 Private contributor voice references
 ------------------------------------
