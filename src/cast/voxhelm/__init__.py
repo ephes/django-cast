@@ -16,6 +16,7 @@ from cast.transcripts.generation_status import (
     transcript_complete,
 )
 
+from ..setting_resolution import FALSE_SETTING_VALUES, SETTING_SOURCES, TRUE_SETTING_VALUES
 from .client import (
     KNOWN_SPEAKER_STRATEGY,
     MAX_VOXHELM_API_RESPONSE_BYTES,
@@ -53,14 +54,14 @@ from .service import (
     validate_vtt_artifact,
 )
 from .settings import (
-    FALSE_SETTING_VALUES,
     SITE_SETTING_FIELD_MAP,
-    TRUE_SETTING_VALUES,
     get_bool_setting,
     get_float_setting,
     get_setting,
     get_site_setting_value,
     require_setting,
+    resolve_bool_setting,
+    resolve_setting,
     voxhelm_configured,
 )
 from .task_refs import (
@@ -87,6 +88,7 @@ __all__ = [
     "MAX_VOXHELM_API_RESPONSE_BYTES",
     "MAX_VOXHELM_ARTIFACT_BYTES",
     "MAX_VOXHELM_ERROR_BYTES",
+    "SETTING_SOURCES",
     "SITE_SETTING_FIELD_MAP",
     "TERMINAL_JOB_STATES",
     "TRUE_SETTING_VALUES",
@@ -127,7 +129,9 @@ __all__ = [
     "resolve_audio_diarization_enabled",
     "resolve_audio_source_url",
     "resolve_audio_task_ref",
+    "resolve_bool_setting",
     "resolve_diarization_speaker_count",
+    "resolve_setting",
     "strip_diarized_task_ref",
     "transcript_complete",
     "validate_dote_artifact",

@@ -304,9 +304,16 @@ This can be set as a Django setting or environment variable. Common boolean
 strings such as ``1``, ``true``, ``yes``, and ``on`` enable diarization;
 ``0``, ``false``, ``no``, and ``off`` disable it. The Wagtail admin
 ``Settings -> Voxhelm settings`` screen also exposes a site-level value with
-three states: inherit the Django/environment configuration, explicitly enabled,
-or explicitly disabled. An explicit site-level disabled value overrides a
-global enabled value.
+three states: "Not set here" (the stored value is empty and the
+Django/environment configuration applies), "Enabled for this site", or
+"Disabled for this site". Only the two explicit choices override the
+Django/environment value; an explicit site-level disabled value overrides a
+global enabled value. The field's help text shows the value it currently
+resolves to and where it comes from (this site setting, the Django setting,
+the environment variable, or the built-in default), and the editor API
+transcript status (``GET /api/editor/episodes/{id}/transcript/``) reports the
+same ``source``. If diarization is unexpectedly off while the environment says
+``true``, check for an explicit "Disabled for this site" value there.
 
 The Voxhelm deployment must have its diarization backend configured before this
 setting is enabled. Diarization can make full-episode transcription slower, so
@@ -333,7 +340,8 @@ excluded unless a reference explicitly opts in.
 
 This can be set as a Django setting or environment variable, using the same
 boolean strings as ``CAST_VOXHELM_DIARIZATION_ENABLED``. The Wagtail admin
-``Settings -> Voxhelm settings`` screen also exposes a site-level value.
+``Settings -> Voxhelm settings`` screen also exposes the same three-state
+site-level value as diarization, with the same effective-value help text.
 
 Known-speaker recognition requires diarization for the job and applies to
 episode-level generation. Voxhelm-returned results are stored as private,
@@ -385,8 +393,8 @@ django-cast also exposes a site-scoped ``Voxhelm settings`` model in Wagtail
 admin for the API base URL, API token, optional model/language preferences,
 and optional diarization override. These values take precedence over Django
 settings and environment variables for Wagtail-admin-triggered transcript
-generation on that site; the diarization field can also be left unset to inherit
-the Django/environment value.
+generation on that site; the diarization and known-speaker fields can also be
+left at "Not set here" to inherit the Django/environment value.
 
 Wagtail-admin-triggered transcript completion is queued through Django Tasks.
 Production sites that need a database-backed transcript worker should install

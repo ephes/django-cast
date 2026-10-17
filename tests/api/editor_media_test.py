@@ -230,12 +230,14 @@ class TestEditorMediaEndpoints:
         assert explicit.status_code == 201, explicit.content
         assert explicit.json()["collection"]["id"] == child.id
 
-    def test_audio_upload_uses_probe_budget_and_rejects_enabled_diarization(
+    def test_audio_upload_uses_probe_budget_and_accepts_enabled_diarization(
         self, api_client, superuser, m4a_audio, mp3_audio, mocker
     ):
         run_probe = mocker.patch(
             "cast.models.audio.run_media_probe",
             side_effect=[
+                subprocess.CompletedProcess([], 0, stdout=b"1.000000\n"),
+                subprocess.CompletedProcess([], 0, stdout=b'{"chapters": []}'),
                 subprocess.CompletedProcess([], 0, stdout=b"1.000000\n"),
                 subprocess.CompletedProcess([], 0, stdout=b'{"chapters": []}'),
             ],
@@ -247,11 +249,12 @@ class TestEditorMediaEndpoints:
         data = response.json()
         assert data["title"] == "Uploaded audio"
         assert data["m4a"].startswith("/media/")
+        assert data["transcript_diarization_mode"] == "inherit"
         audio = Audio.objects.get(pk=data["id"])
         assert re.fullmatch(r"cast_audio/.+-[0-9a-f]{12}\.m4a", audio.m4a.name)
         assert run_probe.call_count == 2
 
-        blocked = api_client.post(
+        enabled = api_client.post(
             url,
             {
                 "title": "Diarization",
@@ -260,8 +263,25 @@ class TestEditorMediaEndpoints:
             },
             format="multipart",
         )
-        assert blocked.status_code == 400
-        assert blocked.json()["errors"]["transcript_diarization_mode"][0]["code"] == "unsupported"
+        assert enabled.status_code == 201, enabled.content
+        assert enabled.json()["transcript_diarization_mode"] == "enabled"
+        assert Audio.objects.get(pk=enabled.json()["id"]).transcript_diarization_mode == "enabled"
+
+    def test_audio_upload_validates_diarization_mode_before_requiring_a_file(self, api_client, superuser):
+        api_client.force_authenticate(user=superuser)
+        url = reverse("cast:api:editor_media_audios")
+        audio_count = Audio.objects.count()
+
+        # The documented feature probe: a supported mode is never reported at its field path.
+        probe = api_client.post(url, {"transcript_diarization_mode": "enabled"}, format="multipart")
+        assert probe.status_code == 400
+        assert "transcript_diarization_mode" not in probe.json()["errors"]
+        assert probe.json()["errors"]["non_field_errors"][0]["code"] == "required"
+
+        invalid = api_client.post(url, {"transcript_diarization_mode": "sometimes"}, format="multipart")
+        assert invalid.status_code == 400
+        assert invalid.json()["errors"]["transcript_diarization_mode"][0]["code"] == "invalid_choice"
+        assert Audio.objects.count() == audio_count
 
     def test_audio_upload_rejects_multiple_files_and_form_errors(self, api_client, superuser, m4a_audio, mp3_audio):
         api_client.force_authenticate(user=superuser)

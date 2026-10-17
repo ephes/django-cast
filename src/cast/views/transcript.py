@@ -45,6 +45,7 @@ from ..transcript_sanitization import (
     apply_public_speaker_mapping_to_dote_data,
     apply_public_speaker_mapping_to_podlove_data,
     apply_public_speaker_mapping_to_webvtt_content,
+    editor_speaker_preview_episode,
     public_episode_from_request,
     sanitize_dote_data,
     sanitize_podlove_data,
@@ -571,6 +572,13 @@ def _read_transcript_artifact(field: FieldFile) -> str | None:
         return None
 
 
+def _speaker_episode_for_request(request: HttpRequest, *, transcript: Transcript, granting_page: Any) -> Any | None:
+    """Return the live ``episode_id`` anchor, or an editor's unpublished preview anchor."""
+    return public_episode_from_request(request, transcript=transcript) or editor_speaker_preview_episode(
+        granting_page, getattr(request, "user", None)
+    )
+
+
 def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return the podlove transcript content as JSON because of CORS restrictions."""
     transcript = get_object_or_404(Transcript, pk=pk)
@@ -585,7 +593,7 @@ def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
             data = json.loads(content)  # assumes the file content is JSON
         except json.JSONDecodeError:
             return HttpResponse("Invalid JSON format in podlove file", status=400)
-        episode = public_episode_from_request(request, transcript=transcript)
+        episode = _speaker_episode_for_request(request, transcript=transcript, granting_page=granting_page)
         data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
         data = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))
         return prevent_private_media_caching(JsonResponse(data), granting_page=granting_page)
@@ -603,7 +611,7 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     content = _read_transcript_artifact(transcript.dote)
     if content is None:
         return HttpResponse("podcastindex JSON file missing", status=404)
-    episode = public_episode_from_request(request, transcript=transcript)
+    episode = _speaker_episode_for_request(request, transcript=transcript, granting_page=granting_page)
     try:
         dote_data = json.loads(content)
     except json.JSONDecodeError:
@@ -632,7 +640,7 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
         content = _read_transcript_artifact(transcript.vtt)
         if content is None:
             return HttpResponse("WebVTT file missing", status=404)
-        episode = public_episode_from_request(request, transcript=transcript)
+        episode = _speaker_episode_for_request(request, transcript=transcript, granting_page=granting_page)
         content = apply_public_speaker_mapping_to_webvtt_content(content, transcript, episode=episode)
         content = sanitize_webvtt_content(
             content,

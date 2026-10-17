@@ -49,6 +49,7 @@ from ..models import (
 from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
 from ..search_suggestions import get_search_suggestions
+from ..transcript_sanitization import editor_speaker_preview_episode
 from ..views.theme import set_template_base_dir
 from .editor.scopes import HasEditorScope
 from .serializers import (
@@ -171,6 +172,12 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
             granting_pages = [authorize_audio_access(request, audio=instance)]
         if episode_id is not None:
             instance.set_episode_id(int(episode_id))
+        # An editor previewing an unpublished episode sees its approved speaker names;
+        # such a granting page is never unrestricted public, so the response below is
+        # always marked private/no-store.
+        speaker_episode = None
+        if anchors:
+            speaker_episode = editor_speaker_preview_episode(granting_pages[0], request.user)
 
         # Retrieve post_id from kwargs and add it to context
         if not hasattr(self, "request"):
@@ -182,6 +189,8 @@ class AudioPodloveDetailView(generics.RetrieveAPIView):
         if post_id:
             post = get_object_or_404(Post, pk=post_id)
             context["post"] = post
+        if speaker_episode is not None:
+            context["speaker_episode"] = speaker_episode
 
         serializer = self.get_serializer(instance, context=context)
         response = Response(serializer.data)
@@ -211,7 +220,8 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
         if post is None:
             # Do not leak unsanitized data for a missing/mismatched context.
             raise Http404("No transcript available for this audio in the given context.")
-        payload = build_player_payload(audio, post=post, request=request, inline_transcript=False)
+        speaker_post = editor_speaker_preview_episode(post, request.user) or post
+        payload = build_player_payload(audio, post=speaker_post, request=request, inline_transcript=False)
         cues = payload["transcript"]["cues"]
 
         # A strong ETag over the *sanitized* cues stays correct across transcript

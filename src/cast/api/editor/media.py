@@ -6,13 +6,15 @@ from copy import copy
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
-from django.db.models import Q, QuerySet
+from django.db import transaction
+from django.db.models import F, Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
 from rest_framework import status
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
+from taggit.utils import edit_string_for_tags
 from wagtail.images import get_image_model
 from wagtail.images.forms import get_image_form
 from wagtail.images.permissions import permission_policy as image_permission_policy
@@ -24,6 +26,7 @@ from ...forms import AudioForm, get_video_form
 from ...media_ingest import (
     AUDIO_FILE_FIELDS,
     MediaIngestCleanupFailed,
+    MediaIngestError,
     MediaProbeFailed,
     MediaProbeTimeout,
     MediaUploadInProgress,
@@ -34,7 +37,7 @@ from ...media_ingest import (
 )
 from ...models import Audio, Video
 from ..views import StandardResultsSetPagination
-from .errors import EditorFlatError, EditorValidationError
+from .errors import EditorFlatError, EditorNotFound, EditorPermissionDenied, EditorValidationError
 from .views import EditorAPIView
 
 logger = logging.getLogger(__name__)
@@ -318,6 +321,61 @@ class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
         return Response(serialize_image(image, user=request.user), status=status.HTTP_201_CREATED)
 
 
+AUDIO_UPDATE_FIELDS = ("title", "subtitle", "transcript_diarization_mode", "tags", "chaptermarks")
+
+
+def _validate_diarization_mode(request: Request) -> None:
+    """Validate ``transcript_diarization_mode`` before any file requirement is checked.
+
+    Clients feature-detect diarization support with a file-less request, so a valid
+    mode must never be reported at this field path.
+    """
+    mode = request.data.get("transcript_diarization_mode")
+    if mode in (None, "") or mode in Audio.TranscriptDiarizationMode.values:
+        return
+    choices = ", ".join(Audio.TranscriptDiarizationMode.values)
+    raise EditorValidationError(
+        {"transcript_diarization_mode": [{"code": "invalid_choice", "message": f"Choose one of: {choices}."}]}
+    )
+
+
+def _submitted_audio_files(request: Request) -> list[str]:
+    submitted_files = [field for field in AUDIO_FILE_FIELDS if field in request.FILES]
+    if len(submitted_files) > 1:
+        raise EditorValidationError(
+            {"non_field_errors": [{"code": "too_many_files", "message": "Submit only one audio file."}]}
+        )
+    return submitted_files
+
+
+def _audio_ingest_error_response(exc: MediaIngestError, audio: Audio) -> Response:
+    if isinstance(exc, MediaIngestCleanupFailed):
+        return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
+    if isinstance(exc, MediaProbeTimeout):
+        return _flat_error("probe_timeout", "Audio probing exceeded the editor upload budget.", http_status=422)
+    if isinstance(exc, MediaProbeFailed):
+        logger.exception("Editor audio probing failed for upload title=%r", audio.title)
+        return _flat_error("probe_failed", "Audio probing failed.", http_status=422)
+    raise exc
+
+
+class EditorAudioUpdateForm(AudioForm):
+    """``AudioForm`` for API PATCH requests that leaves chapter marks alone unless they were sent.
+
+    The admin edit form always submits the current chapter marks, so its "empty field
+    means extract from the changed file" rule is safe there. An API client adding a
+    format without sending ``chaptermarks`` must not replace or wipe existing marks.
+    """
+
+    def __init__(self, *args: Any, sync_chaptermarks: bool, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.sync_chaptermarks = sync_chaptermarks
+
+    def save_chaptermarks(self, audio: Audio) -> None:
+        if self.sync_chaptermarks:
+            super().save_chaptermarks(audio)
+
+
 class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
     required_scopes = {"GET": None, "POST": "write"}
     parser_classes = (MultiPartParser, FormParser)
@@ -341,22 +399,10 @@ class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
         collection = _resolve_collection(
             request, _usable_owned_media_collections(request.user, policy=audio_permission_policy)
         )
-        if request.data.get("transcript_diarization_mode") == Audio.TranscriptDiarizationMode.ENABLED:
-            raise EditorValidationError(
-                {
-                    "transcript_diarization_mode": [
-                        {"code": "unsupported", "message": "Enabled diarization is not supported here."}
-                    ]
-                }
-            )
-        submitted_files = [field for field in AUDIO_FILE_FIELDS if field in request.FILES]
-        if not submitted_files:
+        _validate_diarization_mode(request)
+        if not _submitted_audio_files(request):
             raise EditorValidationError(
                 {"non_field_errors": [{"code": "required", "message": "Submit one audio file."}]}
-            )
-        if len(submitted_files) > 1:
-            raise EditorValidationError(
-                {"non_field_errors": [{"code": "too_many_files", "message": "Submit only one audio file."}]}
             )
         audio = Audio(user=request.user, collection=collection)
         form = AudioForm(request.data, request.FILES, instance=audio, user=request.user)
@@ -364,18 +410,98 @@ class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
             raise EditorValidationError(_form_errors(form))
         try:
             audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS))
-        except MediaIngestCleanupFailed:
-            return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
-        except MediaProbeTimeout:
-            return _flat_error("probe_timeout", "Audio probing exceeded the editor upload budget.", http_status=422)
-        except MediaProbeFailed:
-            logger.exception("Editor audio probing failed for upload title=%r", audio.title)
-            return _flat_error("probe_failed", "Audio probing failed.", http_status=422)
+        except MediaIngestError as exc:
+            return _audio_ingest_error_response(exc, audio)
         if not audio_permission_policy.user_has_permission_for_instance(request.user, "choose", audio):
             if not _cleanup_media_object(audio, AUDIO_FILE_FIELDS):
                 return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
             return _flat_error("post_save_permission_denied", "Uploaded audio is not selectable.", http_status=403)
         return Response(serialize_audio(audio, user=request.user), status=status.HTTP_201_CREATED)
+
+
+class EditorAudioDetailView(EditorAPIView):
+    """Read one selectable audio, or update its metadata and add/replace one audio file."""
+
+    required_scopes = {"GET": None, "PATCH": "write"}
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def _get_audio(self, request: Request, pk: int) -> Audio:
+        audio = (
+            audio_permission_policy.instances_user_has_permission_for(request.user, "choose")
+            .select_related("collection", "user")
+            .filter(pk=pk)
+            .first()
+        )
+        if audio is None:
+            # Missing and not-selectable audio share one response so ids do not leak.
+            raise EditorNotFound("Audio not found.")
+        return audio
+
+    def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
+        return Response(serialize_audio(self._get_audio(request, pk), user=request.user))
+
+    def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
+        audio = self._get_audio(request, pk)
+        if not audio_permission_policy.user_has_permission_for_instance(request.user, "change", audio):
+            raise EditorPermissionDenied("You cannot change this audio.")
+        unsupported = sorted(set(request.data) - set(AUDIO_UPDATE_FIELDS) - set(AUDIO_FILE_FIELDS))
+        if unsupported:
+            raise EditorValidationError(
+                {
+                    name: [{"code": "unsupported_field", "message": f"Field {name!r} cannot be updated here."}]
+                    for name in unsupported
+                }
+            )
+        _validate_diarization_mode(request)
+        submitted_files = _submitted_audio_files(request)
+        if not submitted_files and not any(field in request.data for field in AUDIO_UPDATE_FIELDS):
+            raise EditorValidationError(
+                {"non_field_errors": [{"code": "required", "message": "Provide at least one field to update."}]}
+            )
+        if submitted_files:
+            return _with_upload_lock(request.user, lambda: self._patch(request, audio))
+        return self._patch(request, audio)
+
+    @transaction.atomic
+    def _patch(self, request: Request, audio: Audio) -> Response:
+        # Serialize writers of this audio before reading the state the form saves: a no-op
+        # update takes the PostgreSQL row lock or the SQLite write lock. Saving an instance
+        # read earlier could restore a file name another request just replaced, and the
+        # replacement guard would then delete that newer file.
+        if not Audio.objects.filter(pk=audio.pk).update(transcript_diarization_mode=F("transcript_diarization_mode")):
+            raise EditorNotFound("Audio not found.")
+        audio = Audio.objects.select_related("collection", "user").get(pk=audio.pk)
+        # A bound ModelForm treats absent fields as cleared, so start from the stored
+        # values and overlay only what the request sent.
+        form_data: dict[str, Any] = {
+            "title": audio.title or "",
+            "subtitle": audio.subtitle or "",
+            "transcript_diarization_mode": audio.transcript_diarization_mode,
+            "tags": edit_string_for_tags(list(audio.tags.all())),
+            "collection": str(audio.collection_id),
+        }
+        for field in AUDIO_UPDATE_FIELDS:
+            if field in request.data:
+                form_data[field] = request.data.get(field)
+        non_strings = sorted(field for field in AUDIO_UPDATE_FIELDS if not isinstance(form_data.get(field, ""), str))
+        if non_strings:
+            raise EditorValidationError(
+                {field: [{"code": "invalid", "message": "Send this field as a string."}] for field in non_strings}
+            )
+        form = EditorAudioUpdateForm(
+            form_data,
+            request.FILES,
+            instance=audio,
+            user=request.user,
+            sync_chaptermarks="chaptermarks" in request.data,
+        )
+        if not form.is_valid():
+            raise EditorValidationError(_form_errors(form))
+        try:
+            audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS))
+        except MediaIngestError as exc:
+            return _audio_ingest_error_response(exc, audio)
+        return Response(serialize_audio(audio, user=request.user))
 
 
 class EditorVideoListCreateView(EditorMediaListMixin, EditorAPIView):

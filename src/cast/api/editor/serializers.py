@@ -5,6 +5,8 @@ from typing import Any
 from rest_framework import serializers
 from rest_framework.exceptions import ErrorDetail
 
+from ...models.contributors import CONTRIBUTOR_ROLE_CHOICES
+
 BODY_SECTIONS = ("overview", "detail")
 
 
@@ -97,6 +99,21 @@ class MediaRefSerializer(serializers.Serializer):
     id = serializers.IntegerField()
 
 
+class EpisodeContributorRefSerializer(serializers.Serializer):
+    """One ordered episode contributor assignment, referencing a ``Contributor`` by ``id`` or ``slug``."""
+
+    id = serializers.IntegerField(required=False, min_value=1)
+    slug = serializers.SlugField(required=False)
+    role = serializers.ChoiceField(choices=CONTRIBUTOR_ROLE_CHOICES, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if ("id" in attrs) == ("slug" in attrs):
+            raise serializers.ValidationError(
+                ErrorDetail("Reference a contributor by exactly one of 'id' or 'slug'.", code="required")
+            )
+        return attrs
+
+
 def episode_metadata_fields() -> dict:
     """The episode-specific serializer fields, sourced from the model to avoid choice drift."""
     from ...models import Episode
@@ -109,6 +126,7 @@ def episode_metadata_fields() -> dict:
         "keywords": serializers.CharField(required=False, allow_blank=True),
         "explicit": serializers.ChoiceField(choices=Episode.EXPLICIT_CHOICES, required=False),
         "block": serializers.BooleanField(required=False),
+        "contributors": serializers.ListField(child=EpisodeContributorRefSerializer(), required=False),
     }
 
 

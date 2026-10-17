@@ -23,6 +23,39 @@ def audio_transcript_diarization_disabled(audio: Any | None) -> bool:
     return getattr(audio, "transcript_diarization_mode", "") == "disabled"
 
 
+EDITOR_SPEAKER_PREVIEW_ATTR = "_cast_editor_speaker_preview"
+
+
+def _episode_shows_speaker_labels(episode: Any) -> bool:
+    """True for a live episode, or for a draft marked by ``editor_speaker_preview_episode``."""
+    return bool(episode.live) or getattr(episode, EDITOR_SPEAKER_PREVIEW_ATTR, False) is True
+
+
+def editor_speaker_preview_episode(page: Any, user: Any) -> Any | None:
+    """Return the latest draft of an unpublished episode for an editor's speaker preview.
+
+    Public speaker labels are limited to live episodes. An authenticated user who may
+    edit an unpublished episode should still see the approved speaker names in its
+    preview, so this returns the episode's latest revision (with its draft contributor
+    assignments) marked to count as a speaker-label anchor. The marker lives only on
+    this in-memory revision object; public, anonymous, and live-episode output is
+    unchanged. Returns ``None`` for live pages, non-episodes, and users without edit
+    permission. Callers must keep such responses out of shared caches.
+    """
+    from .models import Episode
+
+    specific = getattr(page, "specific", page)
+    if not isinstance(specific, Episode) or specific.live:
+        return None
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None
+    if not specific.permissions_for_user(user).can_edit():
+        return None
+    draft = specific.get_latest_revision_as_object()
+    setattr(draft, EDITOR_SPEAKER_PREVIEW_ATTR, True)
+    return draft
+
+
 def _episode_is_publicly_visible(episode: Any) -> bool:
     """True when a live episode carries no Wagtail view restrictions.
 
@@ -50,7 +83,7 @@ def public_speaker_labels_for_episode(episode: Any | None, *, audio: Any | None 
         return None
     if audio is not None and episode.podcast_audio_id != getattr(audio, "pk", None):
         return set()
-    if not episode.live:
+    if not _episode_shows_speaker_labels(episode):
         return set()
     return {
         label
@@ -156,7 +189,7 @@ def _public_episode_contexts_for_transcript(transcript: Any, *, episode: Any | N
             return []
         if getattr(episode, "podcast_audio_id", None) != getattr(audio, "pk", None):
             return []
-        return [episode] if episode.live else []
+        return [episode] if _episode_shows_speaker_labels(episode) else []
 
     episodes = getattr(audio, "episodes", None)
     if episodes is None:
