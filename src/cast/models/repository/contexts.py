@@ -131,12 +131,17 @@ class PostDetailContext:
         if hasattr(post, "get_transcript_or_none"):
             # Prime the podcast audio/transcript cache for no-query repository rendering.
             post.get_transcript_or_none()
+        # Like the other builders, navigate from the root page of the request's site.
+        site = Site.find_for_request(request) or blog.get_site()
+        root_nav_links: LinkTuples = []
+        if site is not None:
+            root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live().public()]
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
             blog=blog,
             comments_are_enabled=post.get_comments_are_enabled(blog),
-            root_nav_links=[(p.get_url(), p.title) for p in blog.get_root().get_children().live().public()],
+            root_nav_links=root_nav_links,
             has_audio=has_audio,
             page_url=post.get_url(request=request),
             absolute_page_url=cast(str, post.get_full_url(request=request)),

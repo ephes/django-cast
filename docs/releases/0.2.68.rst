@@ -1,6 +1,14 @@
 0.2.68 (unreleased)
 -------------------
 
+- Post detail pages build ``root_nav_links`` from the root page of the
+  current site, like blog index pages, feeds and cached blog data. They used
+  the children of the page tree root instead. On the usual tree, where the
+  site's root page is a home page below the tree root, the post detail
+  navbar showed only that home page; it now shows the same links as the blog
+  index. On multi-site installs, post detail pages no longer name the root
+  pages of other sites. Sites whose root page is the tree root itself see no
+  change.
 - Apply the transcript glossary to transcripts. After every Voxhelm import,
   contributor and show-term variants are replaced automatically in the
   Podlove, DOTe and WebVTT text, and fuzzy matches of contributor names, show
