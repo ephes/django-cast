@@ -293,7 +293,13 @@ def test_create_draft_commits_before_cast_response_serialization_fails(
         assert draft.podcast_audio_id is None
 
 
-def test_partial_update_is_built_from_live_row_not_latest_draft(client, admin_user, post) -> None:
+# Wagtail 8.0.0's stock update route built the form from the live row, so an
+# omitted field fell back to its live value and discarded a newer draft's value.
+# Wagtail 8.0.1 builds it from ``page.get_latest_revision_as_object()`` instead.
+STOCK_PARTIAL_UPDATE_STARTS_FROM_LATEST_DRAFT = WAGTAIL_VERSION[:3] >= (8, 0, 1)
+
+
+def test_stock_partial_update_base_depends_on_wagtail_version(client, admin_user, post) -> None:
     post.cover_alt_text = "Live cover text"
     post.save(update_fields=["cover_alt_text"])
     live_row = Post.objects.get(pk=post.pk)
@@ -315,7 +321,10 @@ def test_partial_update_is_built_from_live_row_not_latest_draft(client, admin_us
     assert post.cover_alt_text == "Live cover text"
     assert post.latest_revision_id != newer_revision.id
     assert latest_draft.visible_date == new_visible_date
-    assert latest_draft.cover_alt_text == "Live cover text"
+    expected_cover_alt_text = (
+        "Newer draft cover text" if STOCK_PARTIAL_UPDATE_STARTS_FROM_LATEST_DRAFT else "Live cover text"
+    )
+    assert latest_draft.cover_alt_text == expected_cover_alt_text
 
 
 @pytest.mark.parametrize(

@@ -311,7 +311,15 @@ class PageLinkHandlerWithCache(PageLinkHandler):
         return super().expand_db_attributes_many(attrs_list)
 
 
-@hooks.register("register_rich_text_features")
+# Wagtail's own ``register_rich_text_features`` hook registers the default
+# ``PageLinkHandler`` with the default order 0. Hooks with the same order run in
+# registration order, which depends on when ``cast.wagtail_hooks`` is first
+# imported relative to Wagtail's lazy hook search. A higher order makes the
+# override independent of import order.
+PAGE_LINK_HOOK_ORDER = 1
+
+
+@hooks.register("register_rich_text_features", order=PAGE_LINK_HOOK_ORDER)
 def register_page_link(features: Any) -> None:
     """Replace Wagtail's default page link handler with the cache-aware variant."""
     features.register_link_type(PageLinkHandlerWithCache)

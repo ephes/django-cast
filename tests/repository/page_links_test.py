@@ -8,13 +8,15 @@ import pytest
 from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
 from django.db import connection, reset_queries
+from wagtail import hooks
+from wagtail.rich_text.feature_registry import FeatureRegistry
 
 import cast.models.repository as repository_module
 from cast.feeds import LatestEntriesFeed
 from cast.models import (
     Blog,
 )
-from cast.wagtail_hooks import PageLinkHandlerWithCache
+from cast.wagtail_hooks import PageLinkHandlerWithCache, register_page_link
 from tests.repository.helpers import (
     blog_index_repository,
     feed_repository,
@@ -42,6 +44,23 @@ def test_repository_removed_legacy_exports_are_absent():
     ]
     for name in removed_names:
         assert not hasattr(repository_module, name)
+
+
+def test_page_link_handler_override_does_not_depend_on_hook_registration_order(monkeypatch):
+    """
+    Wagtail searches for hooks lazily. When ``cast.wagtail_hooks`` is imported
+    first, its hook is registered before Wagtail's core rich text features, which
+    must not restore Wagtail's default page link handler.
+    """
+    hook_name = "register_rich_text_features"
+    hooks.get_hooks(hook_name)  # make sure Wagtail has searched for hooks
+    registered = hooks._hooks[hook_name]
+    cast_first = [entry for entry in registered if entry[0] is register_page_link] + [
+        entry for entry in registered if entry[0] is not register_page_link
+    ]
+    monkeypatch.setitem(hooks._hooks, hook_name, cast_first)
+
+    assert FeatureRegistry().get_link_types()["page"] is PageLinkHandlerWithCache
 
 
 @pytest.mark.django_db
