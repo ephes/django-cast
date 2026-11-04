@@ -19,6 +19,13 @@ from packaging.requirements import Requirement
         ("django", "6.1.1", True),
         ("django", "6.1.2", True),
         ("django", "7.0", False),
+        ("djangorestframework", "3.17.2", False),  # CVE-2026-114136/114137/114138.
+        ("djangorestframework", "3.18.1", False),
+        ("djangorestframework", "3.18.2", True),
+        ("djangorestframework", "3.18.3", True),
+        ("pillow", "12.3.0", False),  # 39 advisories in the floor audit, fixed in 13.0.0.
+        ("pillow", "13.0.0", True),
+        ("pillow", "13.1.0", True),
         ("urllib3", "2.7.0", False),
         ("urllib3", "2.8.0", True),
         ("urllib3", "2.9.0", True),
