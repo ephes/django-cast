@@ -53,3 +53,8 @@ Unreleased
   when ``cast.wagtail_hooks`` was imported before Wagtail searched for hooks
   (seen with Wagtail 8.1), so repository-rendered pages and feeds queried the
   database for internal page links.
+- Raise the Django REST Framework security floor to 3.18.2 for
+  CVE-2026-114136, CVE-2026-114137 and CVE-2026-114138, and the Pillow floor
+  to 13.0.0 for the 39 advisories the strict floor audit reports against
+  12.3.0. Pillow 13 is a major release; refresh application locks that retain
+  earlier DRF or Pillow versions. Both strict dependency audit jobs are kept.

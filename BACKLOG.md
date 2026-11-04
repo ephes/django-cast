@@ -21,6 +21,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - The completed Django 6.1 advisory-floor CI repair is recorded in
   [backlog/2026-10-03-dependency-floor-ci-repair.md](backlog/2026-10-03-dependency-floor-ci-repair.md).
+  The follow-up DRF/Pillow floor repair is recorded in
+  [backlog/2026-11-04-advisory-floor-repair.md](backlog/2026-11-04-advisory-floor-repair.md).
 
 ## Later
 
