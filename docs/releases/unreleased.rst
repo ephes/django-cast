@@ -47,3 +47,9 @@ Unreleased
   overriding an environment ``true`` until it is set back to "Not set here".
   ``cast.voxhelm`` gains ``resolve_setting()`` and ``resolve_bool_setting()``,
   which also return the configuration level.
+- Keep Cast's cache-aware rich text page link handler active regardless of
+  import order. The ``register_rich_text_features`` hook now runs after
+  Wagtail's core features. Before, Wagtail's default handler could replace it
+  when ``cast.wagtail_hooks`` was imported before Wagtail searched for hooks
+  (seen with Wagtail 8.1), so repository-rendered pages and feeds queried the
+  database for internal page links.
