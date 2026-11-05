@@ -392,6 +392,19 @@ or sanitization step. One-off display names cannot duplicate a raw transcript
 speaker label; this keeps an approved one-off name from accidentally allowing an
 unmapped anonymous label with the same text.
 
+WebVTT speaker labels come from cue voice spans (``<v Speaker 1>``) and from
+generic ``Speaker N:`` cue prefixes. Read-time mapping, sanitization, and the
+destructive ``Transcript.rewrite_speaker_labels()`` treat both forms the same
+way. Renaming a label rewrites a stored ``Speaker 1: text`` prefix to a voice
+span that repeats the name (``<v Alice>Alice: text</v>``) along with the
+Podlove and DOTe labels. The repeated name keeps the speaker visible in players
+that do not show voice names; the voice span keeps it renamable and
+sanitizable. Renaming ``Alice`` again replaces both, and sanitizing a hidden
+label removes the repeated ``Alice:`` with the voice tags. Applying or clearing
+known-speaker suggestions on such a cue replaces or drops the repeated name in
+the same way. Public WebVTT output
+shows mapped prefixes the same way.
+
 Editors previewing an unpublished episode are the exception: when a transcript
 request for that episode is authorized by the editor's edit permission (the
 Wagtail preview's player, or the transcript endpoints with ``episode_id`` /

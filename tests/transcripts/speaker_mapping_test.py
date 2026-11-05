@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from cast.devdata import create_transcript
 from cast.media_derivation import save_transcript_with_derivations
 from cast.models import Contributor, Transcript, TranscriptSpeakerMapping
+from cast.transcript_sanitization import sanitize_webvtt_content
 from cast.transcripts import parsing, speaker_samples, webvtt
 
 
@@ -450,6 +451,147 @@ class TestTranscriptSpeakerMapping:
             "<v Speaker 3>Unmapped voice</v>\n"
             "Speaker 1 remains cue text\n"
         )
+
+    def test_rewrite_speaker_labels_updates_vtt_generic_speaker_prefixes(self, audio):
+        vtt = (
+            "WEBVTT\r\n\r\n"
+            "00:00:00.000 --> 00:00:01.000\r\n"
+            "Speaker 1: Hello from the prefix\r\n\r\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "  speaker 2 :  Indented, lower-case prefix\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "Speaker 3: Unmapped prefix\n"
+            "Not a prefix: Speaker 1: stays\n\n"
+            "NOTE Speaker 1: outside a cue payload\n"
+        )
+        transcript = create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "text": "Hello"}]},
+            vtt=vtt,
+        )
+        assert transcript.get_speaker_labels() == ["Speaker 1", "Speaker 3", "speaker 2"]
+
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice", "speaker 2": "Bob"})
+
+        with transcript.vtt.open("rb") as vtt_file:
+            vtt_content = vtt_file.read().decode("utf-8")
+        assert vtt_content == (
+            "WEBVTT\r\n\r\n"
+            "00:00:00.000 --> 00:00:01.000\r\n"
+            "<v Alice>Alice: Hello from the prefix</v>\r\n\r\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "  <v Bob>Bob: Indented, lower-case prefix</v>\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "Speaker 3: Unmapped prefix\n"
+            "Not a prefix: Speaker 1: stays\n\n"
+            "NOTE Speaker 1: outside a cue payload\n"
+        )
+        assert transcript.get_speaker_labels() == ["Alice", "Bob", "Speaker 3"]
+
+        assert transcript.rewrite_speaker_labels({"Alice": "Carol"})
+
+        with transcript.vtt.open("rb") as vtt_file:
+            vtt_content = vtt_file.read().decode("utf-8")
+        assert "<v Carol>Carol: Hello from the prefix</v>\r\n" in vtt_content
+        assert "Alice" not in vtt_content
+        assert transcript.get_speaker_labels() == ["Bob", "Carol", "Speaker 3"]
+        sanitized = sanitize_webvtt_content(vtt_content, {"Bob"})
+        assert "00:00:00.000 --> 00:00:01.000\r\nHello from the prefix\r\n" in sanitized
+        assert "Carol" not in sanitized
+        assert "  <v Bob>Bob: Indented, lower-case prefix</v>\n" in sanitized
+
+    def test_webvtt_rewrite_closes_renamed_prefixes_per_line(self):
+        cue = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n"
+        content = f"{cue}Speaker 1: first\nSpeaker 2: second\nSpeaker 1: third\n"
+
+        rewritten, changed = webvtt.rewrite_speakers(content, {"Speaker 1": "Alice", "Speaker 2": "Bob"})
+
+        assert changed
+        assert rewritten == (f"{cue}<v Alice>Alice: first</v>\n<v Bob>Bob: second</v>\n<v Alice>Alice: third</v>\n")
+        assert webvtt.get_speaker_labels(rewritten) == {"Alice", "Bob"}
+
+        renamed_again, changed = webvtt.rewrite_speakers(rewritten, {"Alice": "Carol"})
+
+        assert changed
+        assert renamed_again == (
+            f"{cue}<v Carol>Carol: first</v>\n<v Bob>Bob: second</v>\n<v Carol>Carol: third</v>\n"
+        )
+        assert sanitize_webvtt_content(renamed_again, {"Bob"}) == f"{cue}first\n<v Bob>Bob: second</v>\nthird\n"
+        assert sanitize_webvtt_content(renamed_again, {"Carol"}) == (
+            f"{cue}<v Carol>Carol: first</v>\nsecond\n<v Carol>Carol: third</v>\n"
+        )
+
+    def test_webvtt_suggestions_replace_or_drop_echoed_prefix_labels(self):
+        cue = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n"
+        renamed, _changed = webvtt.rewrite_speakers(f"{cue}Speaker 1: hello\nSpeaker 1:\n", {"Speaker 1": "Alice"})
+        assert renamed == f"{cue}<v Alice>Alice: hello</v>\n<v Alice>Alice: </v>\n"
+
+        applied, applied_count, changed = webvtt.apply_suggestions_to_content(renamed, {1000: "Bob"})
+
+        assert (applied_count, changed) == (1, True)
+        assert applied == f"{cue}<v Bob>Bob: hello</v>\n<v Bob>Bob: </v>\n"
+        assert webvtt.get_speaker_labels(applied) == {"Bob"}
+        assert sanitize_webvtt_content(applied, set()) == f"{cue}hello\n\n"
+
+        cleared, cleared_count, changed = webvtt.clear_suggestions_from_content(renamed, {1000})
+
+        assert (cleared_count, changed) == (1, True)
+        assert cleared == f"{cue}hello\n\n"
+        assert webvtt.get_speaker_labels(cleared) == set()
+
+    def test_webvtt_echoed_label_rewrite_edge_cases(self):
+        cue = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n"
+        content = (
+            f"{cue}<v.loud Dr: Who>Dr: Who :  opening only\n"
+            "<v Bob>Alice: not an echo</v>\n"
+            "<v Alice>Alice no separator</v>\n"
+            "<v Alice>Alice: inner <v Speaker 2>voice</v>\n"
+            "<v>no label\n"
+            "Speaker 9: unmapped <v Speaker 2>inner</v>\n"
+            "Speaker 1: mapped <v Speaker 2>inner</v>\n"
+        )
+
+        rewritten, changed = webvtt.rewrite_speakers(
+            content, {"Dr: Who": "Eve", "Alice": "Carol", "Speaker 1": "Ann", "Speaker 2": "Zed"}
+        )
+
+        assert changed
+        assert rewritten == (
+            f"{cue}<v.loud Eve>Eve: opening only\n"
+            "<v Bob>Alice: not an echo</v>\n"
+            "<v Carol>Alice no separator</v>\n"
+            "<v Carol>Carol: inner <v Zed>voice</v>\n"
+            "<v>no label\n"
+            "Speaker 9: unmapped <v Zed>inner</v>\n"
+            "<v Ann>Ann: mapped <v Zed>inner</v></v>\n"
+        )
+        assert sanitize_webvtt_content(f"{cue}<v Alice>Alice: hidden</v>\n<v Bob>Bob: kept\n", {"Bob"}) == (
+            f"{cue}hidden\n<v Bob>Bob: kept\n"
+        )
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "<v Speaker 1>Voice span</v>",
+            "<v.loud Speaker 1>Classed voice span</v>",
+            "<v Speaker 1>Opening-only voice",
+            "Speaker 1: Generic prefix",
+            "   speaker 1:Indented lower-case prefix",
+            "Speaker 1 : <v Speaker 2>Prefix and voice</v>",
+        ],
+    )
+    def test_webvtt_speaker_labels_match_what_rewrite_can_rename(self, payload):
+        content = f"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n{payload}\n"
+        labels = webvtt.get_speaker_labels(content)
+        assert labels
+
+        renamed = {label: f"Renamed {index}" for index, label in enumerate(sorted(labels))}
+        rewritten, changed = webvtt.rewrite_speakers(content, renamed)
+
+        assert changed
+        for label in labels:
+            assert webvtt.rewrite_speakers(content, {label: "Renamed"})[1], label
+        assert webvtt.get_speaker_labels(rewritten).isdisjoint(labels)
 
     def test_rewrite_speaker_labels_saves_when_only_vtt_changes(self, audio, django_capture_on_commit_callbacks):
         transcript = create_transcript(

@@ -189,7 +189,9 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
 
     The mapping is destructive: matching Podlove ``speaker``/``voice``,
     DOTe ``speakerDesignation``, and WebVTT voice-label values are replaced
-    in-place.
+    in-place. A renamed WebVTT ``Speaker N:`` cue prefix becomes a
+    closed ``<v Name>Name: ...</v>`` voice span; renaming it again
+    replaces the repeated ``Name:`` as well.
     """
     cleaned_mapping: dict[str, str] = {}
     for source, target in mapping.items():

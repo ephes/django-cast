@@ -352,6 +352,12 @@ documented in tiers that match the code. The remaining problems are concentrated
   `cast/transcripts/` (upstreaming the prefix handling so both paths agree) and the Episode-visibility policy into
   `audio_access.py` or a `transcripts/visibility.py`. The claim that its `from .models import Episode` reintroduces
   the models cycle is wrong — nothing under `cast/models` or `cast/transcripts` imports this module.
+  Fix note (2026-11-05, partly fixed): `transcript_sanitization.py` now imports `clean_speaker_label` from
+  `cast.transcripts.parsing` and the WebVTT patterns (`VOICE_SPAN_RE`, `VOICE_OPENING_RE`, the generic-prefix
+  matcher) from `cast.transcripts.webvtt`. Its `apply_speaker_mapping_to_webvtt_content` delegates to
+  `webvtt.rewrite_speakers`, and the Podlove/DOTe mapping helpers delegate to `podlove`/`dote.rewrite_speakers` on a
+  copy, so the stored rewrite and the read-time mapping can no longer drift. Not done: the sanitising functions and the
+  Episode-visibility policy still live in `transcript_sanitization.py`.
 - **X4. The theme contract is enforced only by `DeprecationWarning`s emitted during discovery** (medium,
   architecture) — `models/theme.py:109`. The soft-required tier is the staged-enforcement mechanism the docs
   promise, but the warning is hidden by Python's default filters, by pytest's
@@ -413,6 +419,11 @@ documented in tiers that match the code. The remaining problems are concentrated
   `services.get_speaker_labels` surfaces to the editor, but `rewrite_payload_line` (193-202) rewrites only `<v>`
   spans, so the editor offers labels `services.rewrite_speaker_labels` cannot rename in the VTT artifact. X3's
   fix must correct `webvtt.py`'s own extraction/rewrite pair, not just the duplicate.
+  Fix note (2026-11-05, fixed): `webvtt.rewrite_payload_line` now also renames a leading `Speaker N:` prefix by turning
+  it into a closed `<v Name>Name: text</v>` voice span (owner decision: the voice span keeps the name
+  detectable, renamable and sanitisable, the repeated `Name:` keeps it visible in native players; a second rename
+  replaces the repeated name and the sanitizer strips it), detection and rewriting share `match_generic_speaker_prefix`, and a
+  parity test in `tests/transcripts/speaker_mapping_test.py` checks that every reported label can be renamed.
 
 Strengths: `CAST_SETTING_REGISTRY` plus module `__getattr__` (copy-on-read, `TYPE_CHECKING` stubs) is a clean single
 source of truth that `check_cast_setting_types` and `comments/appsettings.py` derive from, and every `CAST_*` name in

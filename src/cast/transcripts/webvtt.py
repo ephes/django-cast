@@ -6,9 +6,11 @@ from collections.abc import Mapping
 from . import parsing
 
 TIMING_SEPARATOR = "-->"
+VOICE_SPAN_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>(?P<body>.*?)</v>")
 VOICE_OPENING_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>")
 VOICE_CLOSING_RE = re.compile(r"</v>")
 GENERIC_SPEAKER_PREFIX_RE = re.compile(r"^(?P<label>Speaker\s+\d+)\s*:\s*(?P<text>.*)$", re.IGNORECASE)
+LABEL_ECHO_SEPARATOR_RE = re.compile(r"\s*:\s*")
 
 
 def webvtt_timestamp_to_ms(value: object) -> int | None:
@@ -25,6 +27,52 @@ def webvtt_timestamp_to_ms(value: object) -> int | None:
 def timing_line_start_ms(line: str) -> int | None:
     start_timestamp = line.split(TIMING_SEPARATOR, 1)[0].strip()
     return webvtt_timestamp_to_ms(start_timestamp)
+
+
+def split_line_ending(line: str) -> tuple[str, str]:
+    """Split ``line`` into its body and its CRLF or LF ending (empty when there is none)."""
+    if line.endswith("\r\n"):
+        return line[:-2], "\r\n"
+    if line.endswith("\n"):
+        return line[:-1], "\n"
+    return line, ""
+
+
+def match_generic_speaker_prefix(body: str) -> tuple[str, re.Match[str]] | None:
+    """Match a ``Speaker N:`` prefix after optional leading whitespace.
+
+    Returns the leading whitespace and the match against the rest of ``body``,
+    or ``None``. Detection, renaming and sanitising all use this helper so they
+    agree on which payload lines carry a generic speaker prefix.
+    """
+    rest = body.lstrip()
+    match = GENERIC_SPEAKER_PREFIX_RE.match(rest)
+    if match is None:
+        return None
+    return body[: len(body) - len(rest)], match
+
+
+def match_echoed_voice_label(body: str) -> tuple[str, re.Match[str], str, str] | None:
+    """Match a leading voice opening whose label is repeated as a ``Label:`` text prefix.
+
+    ``<v Alice>Alice: text`` is the form a renamed ``Speaker N:`` prefix takes:
+    the voice span carries the label for renaming and sanitising, the visible
+    prefix keeps the name readable in players that do not show voice names.
+    Returns the leading whitespace, the voice-opening match, the cleaned label
+    and the cue text after the echoed prefix, or ``None``.
+    """
+    rest = body.lstrip()
+    match = VOICE_OPENING_RE.match(rest)
+    if match is None:
+        return None
+    label = parsing.clean_speaker_label(match.group("label"))
+    after_opening = rest[match.end() :]
+    if not label or not after_opening.startswith(label):
+        return None
+    separator = LABEL_ECHO_SEPARATOR_RE.match(after_opening, len(label))
+    if separator is None:
+        return None
+    return body[: len(body) - len(rest)], match, label, after_opening[separator.end() :]
 
 
 def get_speaker_labels(content: str) -> set[str]:
@@ -44,10 +92,9 @@ def get_speaker_labels(content: str) -> set[str]:
             label = parsing.clean_speaker_label(match.group("label"))
             if label:
                 labels.add(label)
-        generic_prefix_match = GENERIC_SPEAKER_PREFIX_RE.match(stripped)
-        if generic_prefix_match is not None:
-            label = parsing.clean_speaker_label(generic_prefix_match.group("label"))
-            labels.add(label)
+        generic_prefix = match_generic_speaker_prefix(stripped)
+        if generic_prefix is not None:
+            labels.add(parsing.clean_speaker_label(generic_prefix[1].group("label")))
     return labels
 
 
@@ -97,7 +144,7 @@ def clear_cue_voice(lines: list[str]) -> tuple[list[str], bool, bool]:
     rewritten_lines = []
     changed = False
     for line in lines:
-        rewritten_line = VOICE_OPENING_RE.sub("", line)
+        rewritten_line = VOICE_OPENING_RE.sub("", replace_echoed_voice_label(line, None))
         rewritten_line = VOICE_CLOSING_RE.sub("", rewritten_line)
         changed = changed or rewritten_line != line
         rewritten_lines.append(rewritten_line)
@@ -161,10 +208,26 @@ def set_cue_voice(lines: list[str], name: str) -> tuple[list[str], bool, bool]:
     return rewritten_lines, True, True
 
 
+def replace_echoed_voice_label(line: str, name: str | None) -> str:
+    """Replace the echoed ``Label:`` of a ``<v Label>Label: text`` line with ``name``, or drop it for ``None``.
+
+    The voice opening itself is left unchanged; callers rewrite or remove it.
+    Lines without an echoed label are returned unchanged.
+    """
+    body, newline = split_line_ending(line)
+    echoed_label = match_echoed_voice_label(body)
+    if echoed_label is None:
+        return line
+    leading, match, _label, text = echoed_label
+    echo = f"{name}: " if name is not None else ""
+    return f"{leading}{match.group(0)}{echo}{text}{newline}"
+
+
 def set_payload_line_voice(line: str, name: str) -> tuple[str, bool, bool]:
+    line_with_echo = replace_echoed_voice_label(line, name)
     rewritten_line, replacements = VOICE_OPENING_RE.subn(
         lambda _match: voice_opening(name),
-        line,
+        line_with_echo,
     )
     return rewritten_line, rewritten_line != line, replacements > 0
 
@@ -191,6 +254,18 @@ def rewrite_speakers(content: str, mapping: Mapping[str, str]) -> tuple[str, boo
 
 
 def rewrite_payload_line(line: str, mapping: Mapping[str, str]) -> tuple[str, bool]:
+    """Rename ``<v label>`` voice openings and a leading ``Speaker N:`` prefix.
+
+    A renamed voice opening keeps its classes. A renamed ``Speaker N:`` prefix
+    becomes ``<v Name>Name: text</v>``: the voice span, closed on the same line
+    so several prefixed lines in one cue do not nest, keeps the label
+    detectable, renamable and sanitisable, and the echoed ``Name:`` keeps it
+    visible in players that do not show voice names. Renaming such a line again
+    replaces the echoed prefix together with the voice label instead of adding
+    a second one. The line ending is kept.
+    """
+    body, newline = split_line_ending(line)
+
     def replace_voice_opening(match: re.Match[str]) -> str:
         label = parsing.clean_speaker_label(match.group("label"))
         target_label = mapping.get(label)
@@ -198,7 +273,25 @@ def rewrite_payload_line(line: str, mapping: Mapping[str, str]) -> tuple[str, bo
             return match.group(0)
         return voice_opening(target_label, classes=match.group("classes"))
 
-    rewritten_line = VOICE_OPENING_RE.sub(replace_voice_opening, line)
+    generic_prefix = match_generic_speaker_prefix(body)
+    echoed_label = match_echoed_voice_label(body)
+    if generic_prefix is not None:
+        leading, match = generic_prefix
+        target_label = mapping.get(parsing.clean_speaker_label(match.group("label")))
+        if target_label is not None:
+            text = VOICE_OPENING_RE.sub(replace_voice_opening, match.group("text"))
+            body = f"{leading}{voice_opening(target_label)}{target_label}: {text}</v>"
+        else:
+            body = VOICE_OPENING_RE.sub(replace_voice_opening, body)
+    elif echoed_label is not None and echoed_label[2] in mapping:
+        leading, match, label, text = echoed_label
+        target_label = mapping[label]
+        text = VOICE_OPENING_RE.sub(replace_voice_opening, text)
+        body = f"{leading}{voice_opening(target_label, classes=match.group('classes'))}{target_label}: {text}"
+    else:
+        body = VOICE_OPENING_RE.sub(replace_voice_opening, body)
+
+    rewritten_line = f"{body}{newline}"
     return rewritten_line, rewritten_line != line
 
 

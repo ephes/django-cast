@@ -6,17 +6,10 @@ from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist
 
+from .transcripts import dote, podlove, webvtt
+from .transcripts.parsing import clean_speaker_label
+
 PODLOVE_SPEAKER_FIELDS = ("speaker", "voice")
-WEBVTT_TIMING_SEPARATOR = "-->"
-WEBVTT_VOICE_SPAN_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>(?P<body>.*?)</v>")
-WEBVTT_VOICE_OPENING_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>")
-WEBVTT_GENERIC_SPEAKER_PREFIX_RE = re.compile(r"^(?P<label>Speaker\s+\d+)\s*:\s*(?P<text>.*)$", re.IGNORECASE)
-
-
-def clean_speaker_label(value: Any) -> str:
-    if not isinstance(value, str):
-        return ""
-    return value.strip()
 
 
 def audio_transcript_diarization_disabled(audio: Any | None) -> bool:
@@ -280,16 +273,8 @@ def apply_speaker_mapping_to_podlove_data(data: dict[str, Any], mapping: dict[st
     if not mapping:
         return data
     mapped = copy.deepcopy(data)
-    transcripts = mapped.get("transcripts", [])
-    if not isinstance(transcripts, list):
-        return mapped
-    for segment in transcripts:
-        if not isinstance(segment, dict):
-            continue
-        for field_name in PODLOVE_SPEAKER_FIELDS:
-            label = clean_speaker_label(segment.get(field_name))
-            if label in mapping:
-                segment[field_name] = mapping[label]
+    if isinstance(mapped.get("transcripts", []), list):
+        podlove.rewrite_speakers(mapped, mapping)
     return mapped
 
 
@@ -305,15 +290,8 @@ def apply_speaker_mapping_to_dote_data(data: dict[str, Any], mapping: dict[str, 
     if not mapping:
         return data
     mapped = copy.deepcopy(data)
-    lines = mapped.get("lines", [])
-    if not isinstance(lines, list):
-        return mapped
-    for line in lines:
-        if not isinstance(line, dict):
-            continue
-        label = clean_speaker_label(line.get("speakerDesignation"))
-        if label in mapping:
-            line["speakerDesignation"] = mapping[label]
+    if isinstance(mapped.get("lines", []), list):
+        dote.rewrite_speakers(mapped, mapping)
     return mapped
 
 
@@ -326,22 +304,8 @@ def apply_public_speaker_mapping_to_dote_data(
 def apply_speaker_mapping_to_webvtt_content(content: str, mapping: dict[str, str]) -> str:
     if not mapping:
         return content
-    mapped_lines = []
-    in_cue_payload = False
-    for line in content.splitlines(keepends=True):
-        stripped = line.strip()
-        if not stripped:
-            in_cue_payload = False
-            mapped_lines.append(line)
-            continue
-        if WEBVTT_TIMING_SEPARATOR in line:
-            in_cue_payload = True
-            mapped_lines.append(line)
-            continue
-        if in_cue_payload:
-            line = _map_webvtt_payload_line(line, mapping)
-        mapped_lines.append(line)
-    return "".join(mapped_lines)
+    mapped_content, _changed = webvtt.rewrite_speakers(content, mapping)
+    return mapped_content
 
 
 def apply_public_speaker_mapping_to_webvtt_content(
@@ -351,32 +315,6 @@ def apply_public_speaker_mapping_to_webvtt_content(
         content,
         public_speaker_mapping_for_transcript(transcript, episode=episode),
     )
-
-
-def _map_webvtt_payload_line(line: str, mapping: dict[str, str]) -> str:
-    body = line.removesuffix("\r\n")
-    newline = "\r\n" if body != line else ""
-    if not newline:
-        body = line.removesuffix("\n")
-        newline = "\n" if body != line else ""
-
-    def replace_voice_opening(match: re.Match[str]) -> str:
-        label = clean_speaker_label(match.group("label"))
-        target_label = mapping.get(label)
-        if target_label is None:
-            return match.group(0)
-        return f"<v{match.group('classes')} {target_label}>"
-
-    body = WEBVTT_VOICE_OPENING_RE.sub(replace_voice_opening, body)
-
-    generic_prefix_match = WEBVTT_GENERIC_SPEAKER_PREFIX_RE.match(body)
-    if generic_prefix_match is not None:
-        label = clean_speaker_label(generic_prefix_match.group("label"))
-        target_label = mapping.get(label)
-        if target_label:
-            body = f"{target_label}: {generic_prefix_match.group('text')}"
-
-    return f"{body}{newline}"
 
 
 def sanitize_podlove_data(data: dict[str, Any], allowed_speaker_labels: set[str] | None) -> dict[str, Any]:
@@ -472,7 +410,7 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
             in_cue_payload = False
             sanitized_lines.append(line)
             continue
-        if WEBVTT_TIMING_SEPARATOR in line:
+        if webvtt.TIMING_SEPARATOR in line:
             in_cue_payload = True
             sanitized_lines.append(line)
             continue
@@ -483,11 +421,14 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
 
 
 def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str]) -> str:
-    body = line.removesuffix("\r\n")
-    newline = "\r\n" if body != line else ""
-    if not newline:
-        body = line.removesuffix("\n")
-        newline = "\n" if body != line else ""
+    body, newline = webvtt.split_line_ending(line)
+
+    echoed_label = webvtt.match_echoed_voice_label(body)
+    if echoed_label is not None:
+        leading, match, label, text = echoed_label
+        if label not in allowed_speaker_labels:
+            # Drop the visible ``Name:`` echo; the voice tags are removed below.
+            body = f"{leading}{match.group(0)}{text}"
 
     def replace_voice_span(match: re.Match[str]) -> str:
         label = clean_speaker_label(match.group("label"))
@@ -495,7 +436,7 @@ def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str]) -
             return match.group("body")
         return match.group(0)
 
-    body = WEBVTT_VOICE_SPAN_RE.sub(replace_voice_span, body)
+    body = webvtt.VOICE_SPAN_RE.sub(replace_voice_span, body)
 
     def replace_voice_opening(match: re.Match[str]) -> str:
         label = clean_speaker_label(match.group("label"))
@@ -503,12 +444,13 @@ def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str]) -
             return ""
         return match.group(0)
 
-    body = WEBVTT_VOICE_OPENING_RE.sub(replace_voice_opening, body)
+    body = webvtt.VOICE_OPENING_RE.sub(replace_voice_opening, body)
 
-    generic_prefix_match = WEBVTT_GENERIC_SPEAKER_PREFIX_RE.match(body)
-    if generic_prefix_match is not None:
-        label = clean_speaker_label(generic_prefix_match.group("label"))
+    generic_prefix = webvtt.match_generic_speaker_prefix(body)
+    if generic_prefix is not None:
+        leading, match = generic_prefix
+        label = clean_speaker_label(match.group("label"))
         if label and label not in allowed_speaker_labels:
-            body = generic_prefix_match.group("text")
+            body = f"{leading}{match.group('text')}"
 
     return f"{body}{newline}"

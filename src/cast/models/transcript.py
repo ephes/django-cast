@@ -385,7 +385,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
 
         The mapping is destructive: matching Podlove ``speaker``/``voice``,
         DOTe ``speakerDesignation``, and WebVTT voice-label values are replaced
-        in-place.
+        in-place. A renamed WebVTT ``Speaker N:`` cue prefix becomes a
+        closed ``<v Name>Name: ...</v>`` voice span; renaming it again
+        replaces the repeated ``Name:`` as well.
         """
         return services.rewrite_speaker_labels(self, mapping)
 
