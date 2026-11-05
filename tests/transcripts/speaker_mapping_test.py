@@ -9,6 +9,7 @@ from django.db import IntegrityError, transaction
 from cast.devdata import create_transcript
 from cast.media_derivation import save_transcript_with_derivations
 from cast.models import Contributor, Transcript, TranscriptSpeakerMapping
+from cast.transcript_sanitization import sanitize_webvtt_content
 from cast.transcripts import parsing, speaker_samples, webvtt
 
 
@@ -450,6 +451,85 @@ class TestTranscriptSpeakerMapping:
             "<v Speaker 3>Unmapped voice</v>\n"
             "Speaker 1 remains cue text\n"
         )
+
+    def test_rewrite_speaker_labels_updates_vtt_generic_speaker_prefixes(self, audio):
+        vtt = (
+            "WEBVTT\r\n\r\n"
+            "00:00:00.000 --> 00:00:01.000\r\n"
+            "Speaker 1: Hello from the prefix\r\n\r\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "  speaker 2 :  Indented, lower-case prefix\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "Speaker 3: Unmapped prefix\n"
+            "Not a prefix: Speaker 1: stays\n\n"
+            "NOTE Speaker 1: outside a cue payload\n"
+        )
+        transcript = create_transcript(
+            audio=audio,
+            podlove={"transcripts": [{"speaker": "Speaker 1", "text": "Hello"}]},
+            vtt=vtt,
+        )
+        assert transcript.get_speaker_labels() == ["Speaker 1", "Speaker 3", "speaker 2"]
+
+        assert transcript.rewrite_speaker_labels({"Speaker 1": "Alice", "speaker 2": "Bob"})
+
+        with transcript.vtt.open("rb") as vtt_file:
+            vtt_content = vtt_file.read().decode("utf-8")
+        assert vtt_content == (
+            "WEBVTT\r\n\r\n"
+            "00:00:00.000 --> 00:00:01.000\r\n"
+            "<v Alice>Hello from the prefix</v>\r\n\r\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "  <v Bob>Indented, lower-case prefix</v>\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "Speaker 3: Unmapped prefix\n"
+            "Not a prefix: Speaker 1: stays\n\n"
+            "NOTE Speaker 1: outside a cue payload\n"
+        )
+        assert transcript.get_speaker_labels() == ["Alice", "Bob", "Speaker 3"]
+
+        assert transcript.rewrite_speaker_labels({"Alice": "Carol"})
+
+        with transcript.vtt.open("rb") as vtt_file:
+            vtt_content = vtt_file.read().decode("utf-8")
+        assert "<v Carol>Hello from the prefix</v>\r\n" in vtt_content
+        assert transcript.get_speaker_labels() == ["Bob", "Carol", "Speaker 3"]
+        assert sanitize_webvtt_content(vtt_content, {"Bob"}).count("<v ") == 1
+
+    def test_webvtt_rewrite_closes_renamed_prefixes_per_line(self):
+        content = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nSpeaker 1: first\nSpeaker 2: second\n"
+
+        rewritten, changed = webvtt.rewrite_speakers(content, {"Speaker 1": "Alice", "Speaker 2": "Bob"})
+
+        assert changed
+        assert rewritten == "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Alice>first</v>\n<v Bob>second</v>\n"
+        assert sanitize_webvtt_content(rewritten, {"Bob"}) == (
+            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nfirst\n<v Bob>second</v>\n"
+        )
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            "<v Speaker 1>Voice span</v>",
+            "<v.loud Speaker 1>Classed voice span</v>",
+            "<v Speaker 1>Opening-only voice",
+            "Speaker 1: Generic prefix",
+            "   speaker 1:Indented lower-case prefix",
+            "Speaker 1 : <v Speaker 2>Prefix and voice</v>",
+        ],
+    )
+    def test_webvtt_speaker_labels_match_what_rewrite_can_rename(self, payload):
+        content = f"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n{payload}\n"
+        labels = webvtt.get_speaker_labels(content)
+        assert labels
+
+        renamed = {label: f"Renamed {index}" for index, label in enumerate(sorted(labels))}
+        rewritten, changed = webvtt.rewrite_speakers(content, renamed)
+
+        assert changed
+        for label in labels:
+            assert webvtt.rewrite_speakers(content, {label: "Renamed"})[1], label
+        assert webvtt.get_speaker_labels(rewritten).isdisjoint(labels)
 
     def test_rewrite_speaker_labels_saves_when_only_vtt_changes(self, audio, django_capture_on_commit_callbacks):
         transcript = create_transcript(

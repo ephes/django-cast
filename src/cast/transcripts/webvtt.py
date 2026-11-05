@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from . import parsing
 
 TIMING_SEPARATOR = "-->"
+VOICE_SPAN_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>(?P<body>.*?)</v>")
 VOICE_OPENING_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>")
 VOICE_CLOSING_RE = re.compile(r"</v>")
 GENERIC_SPEAKER_PREFIX_RE = re.compile(r"^(?P<label>Speaker\s+\d+)\s*:\s*(?P<text>.*)$", re.IGNORECASE)
@@ -27,6 +28,29 @@ def timing_line_start_ms(line: str) -> int | None:
     return webvtt_timestamp_to_ms(start_timestamp)
 
 
+def split_line_ending(line: str) -> tuple[str, str]:
+    """Split ``line`` into its body and its CRLF or LF ending (empty when there is none)."""
+    if line.endswith("\r\n"):
+        return line[:-2], "\r\n"
+    if line.endswith("\n"):
+        return line[:-1], "\n"
+    return line, ""
+
+
+def match_generic_speaker_prefix(body: str) -> tuple[str, re.Match[str]] | None:
+    """Match a ``Speaker N:`` prefix after optional leading whitespace.
+
+    Returns the leading whitespace and the match against the rest of ``body``,
+    or ``None``. Detection, renaming and sanitising all use this helper so they
+    agree on which payload lines carry a generic speaker prefix.
+    """
+    rest = body.lstrip()
+    match = GENERIC_SPEAKER_PREFIX_RE.match(rest)
+    if match is None:
+        return None
+    return body[: len(body) - len(rest)], match
+
+
 def get_speaker_labels(content: str) -> set[str]:
     labels: set[str] = set()
     in_cue_payload = False
@@ -44,10 +68,9 @@ def get_speaker_labels(content: str) -> set[str]:
             label = parsing.clean_speaker_label(match.group("label"))
             if label:
                 labels.add(label)
-        generic_prefix_match = GENERIC_SPEAKER_PREFIX_RE.match(stripped)
-        if generic_prefix_match is not None:
-            label = parsing.clean_speaker_label(generic_prefix_match.group("label"))
-            labels.add(label)
+        generic_prefix = match_generic_speaker_prefix(stripped)
+        if generic_prefix is not None:
+            labels.add(parsing.clean_speaker_label(generic_prefix[1].group("label")))
     return labels
 
 
@@ -191,6 +214,16 @@ def rewrite_speakers(content: str, mapping: Mapping[str, str]) -> tuple[str, boo
 
 
 def rewrite_payload_line(line: str, mapping: Mapping[str, str]) -> tuple[str, bool]:
+    """Rename ``<v label>`` voice openings and a leading ``Speaker N:`` prefix.
+
+    A renamed voice opening keeps its classes. A renamed ``Speaker N:`` prefix
+    becomes a ``<v label>...</v>`` voice span closed on the same line, so
+    several prefixed lines in one cue do not nest, and so the new label stays detectable,
+    renamable and sanitisable; plain ``Name:`` cue text would be none of these.
+    The line ending is kept.
+    """
+    body, newline = split_line_ending(line)
+
     def replace_voice_opening(match: re.Match[str]) -> str:
         label = parsing.clean_speaker_label(match.group("label"))
         target_label = mapping.get(label)
@@ -198,7 +231,16 @@ def rewrite_payload_line(line: str, mapping: Mapping[str, str]) -> tuple[str, bo
             return match.group(0)
         return voice_opening(target_label, classes=match.group("classes"))
 
-    rewritten_line = VOICE_OPENING_RE.sub(replace_voice_opening, line)
+    body = VOICE_OPENING_RE.sub(replace_voice_opening, body)
+
+    generic_prefix = match_generic_speaker_prefix(body)
+    if generic_prefix is not None:
+        leading, match = generic_prefix
+        target_label = mapping.get(parsing.clean_speaker_label(match.group("label")))
+        if target_label is not None:
+            body = f"{leading}{voice_opening(target_label)}{match.group('text')}</v>"
+
+    rewritten_line = f"{body}{newline}"
     return rewritten_line, rewritten_line != line
 
 

@@ -64,3 +64,17 @@ Unreleased
   to 13.0.0 for the 39 advisories the strict floor audit reports against
   12.3.0. Pillow 13 is a major release; refresh application locks that retain
   earlier DRF or Pillow versions. Both strict dependency audit jobs are kept.
+- ``Transcript.rewrite_speaker_labels()`` now also renames generic
+  ``Speaker N:`` cue prefixes in the stored WebVTT file. Before, the editor
+  offered these labels for renaming, but only ``<v ...>`` voice spans were
+  rewritten, so the stored WebVTT kept the old prefix while Podlove and DOTe
+  showed the new name. A renamed prefix becomes a closed WebVTT voice span
+  (``Speaker 1: text`` becomes ``<v Alice>text</v>``), so the new name can be
+  renamed again and is hidden by public sanitization like any other voice
+  label. Read-time public mapping and sanitization now share the WebVTT
+  speaker patterns and rewriting with ``cast.transcripts``: public WebVTT
+  output shows a mapped prefix as ``<v Alice>text</v>`` instead of
+  ``Alice: text``, and an indented ``Speaker N:`` prefix is now mapped or
+  stripped, as detection already did. Most native caption renderers do not
+  show voice-span names, so a mapped speaker name may no longer be visible in
+  such players, while unmapped ``Speaker N:`` prefixes still are.
