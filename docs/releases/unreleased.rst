@@ -69,12 +69,16 @@ Unreleased
   offered these labels for renaming, but only ``<v ...>`` voice spans were
   rewritten, so the stored WebVTT kept the old prefix while Podlove and DOTe
   showed the new name. A renamed prefix becomes a closed WebVTT voice span
-  (``Speaker 1: text`` becomes ``<v Alice>text</v>``), so the new name can be
-  renamed again and is hidden by public sanitization like any other voice
-  label. Read-time public mapping and sanitization now share the WebVTT
-  speaker patterns and rewriting with ``cast.transcripts``: public WebVTT
-  output shows a mapped prefix as ``<v Alice>text</v>`` instead of
-  ``Alice: text``, and an indented ``Speaker N:`` prefix is now mapped or
-  stripped, as detection already did. Most native caption renderers do not
-  show voice-span names, so a mapped speaker name may no longer be visible in
-  such players, while unmapped ``Speaker N:`` prefixes still are.
+  that repeats the name in the cue text (``Speaker 1: text`` becomes
+  ``<v Alice>Alice: text</v>``), so the name stays visible in players that do
+  not show voice names and can still be renamed and sanitized. Renaming again
+  replaces the repeated ``Alice:`` together with the voice label instead of
+  adding a second prefix, and public sanitization of a hidden label removes
+  the repeated name from the cue text as well as the voice tags. Applying or
+  clearing known-speaker suggestions on such a cue replaces or drops the
+  repeated name together with the voice label. Read-time
+  public mapping and sanitization now share the WebVTT speaker patterns and
+  rewriting with ``cast.transcripts``: public WebVTT output shows a mapped
+  prefix as ``<v Alice>Alice: text</v>`` instead of ``Alice: text``, and an
+  indented ``Speaker N:`` prefix is now mapped or stripped, as detection
+  already did.

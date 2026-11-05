@@ -423,6 +423,13 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
 def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str]) -> str:
     body, newline = webvtt.split_line_ending(line)
 
+    echoed_label = webvtt.match_echoed_voice_label(body)
+    if echoed_label is not None:
+        leading, match, label, text = echoed_label
+        if label not in allowed_speaker_labels:
+            # Drop the visible ``Name:`` echo; the voice tags are removed below.
+            body = f"{leading}{match.group(0)}{text}"
+
     def replace_voice_span(match: re.Match[str]) -> str:
         label = clean_speaker_label(match.group("label"))
         if label and label not in allowed_speaker_labels:

@@ -420,7 +420,9 @@ documented in tiers that match the code. The remaining problems are concentrated
   spans, so the editor offers labels `services.rewrite_speaker_labels` cannot rename in the VTT artifact. X3's
   fix must correct `webvtt.py`'s own extraction/rewrite pair, not just the duplicate.
   Fix note (2026-11-05, fixed): `webvtt.rewrite_payload_line` now also renames a leading `Speaker N:` prefix by turning
-  it into a closed `<v Name>...</v>` voice span (so the new name stays detectable, renamable and sanitisable), detection and rewriting share `match_generic_speaker_prefix`, and a
+  it into a closed `<v Name>Name: text</v>` voice span (owner decision: the voice span keeps the name
+  detectable, renamable and sanitisable, the repeated `Name:` keeps it visible in native players; a second rename
+  replaces the repeated name and the sanitizer strips it), detection and rewriting share `match_generic_speaker_prefix`, and a
   parity test in `tests/transcripts/speaker_mapping_test.py` checks that every reported label can be renamed.
 
 Strengths: `CAST_SETTING_REGISTRY` plus module `__getattr__` (copy-on-read, `TYPE_CHECKING` stubs) is a clean single

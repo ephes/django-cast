@@ -283,7 +283,7 @@ def test_apply_speaker_mapping_to_webvtt_content_edge_cases():
 
     assert "<v Alice>Mapped voice</v>" in mapped
     assert "<v Speaker 2>Unmapped voice</v>" in mapped
-    assert "<v Alice>Mapped prefix</v>" in mapped
+    assert "<v Alice>Alice: Mapped prefix</v>" in mapped
     assert "Speaker 2: Unmapped prefix" in mapped
     assert "<v.loud Alice>Mapped classed voice</v>" in mapped
     assert apply_speaker_mapping_to_webvtt_content("WEBVTT\n", {}) == "WEBVTT\n"
@@ -303,6 +303,6 @@ def test_webvtt_generic_prefix_detection_matches_sanitizing_and_mapping():
         "00:00:01.000 --> 00:00:02.000\nSpeaker 2 :  Spaced prefix\n"
     )
     assert apply_speaker_mapping_to_webvtt_content(content, {"Speaker 1": "Alice", "Speaker 2": "Bob"}) == (
-        "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n  <v Alice>Indented prefix</v>\n\n"
-        "00:00:01.000 --> 00:00:02.000\n<v Bob>Spaced prefix</v>\n"
+        "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n  <v Alice>Alice: Indented prefix</v>\n\n"
+        "00:00:01.000 --> 00:00:02.000\n<v Bob>Bob: Spaced prefix</v>\n"
     )
