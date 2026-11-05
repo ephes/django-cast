@@ -828,9 +828,11 @@ Repository
 CAST_REPOSITORY
 ===============
 
-How to fetch data from the database. Defaults to ``"default"``, which uses
-optimized SQL. If you want to fetch data using the Django ORM, set
-``CAST_REPOSITORY`` to ``"django"``.
+How the blog index and feeds fetch their data. Both values use the Django ORM.
+Defaults to ``"default"``, which collects the query results into a
+JSON-serializable dictionary and rebuilds the page context from it in the same
+request. No cache sits between the two steps. Set ``CAST_REPOSITORY`` to
+``"django"`` to build the context from Django models directly.
 
 .. code-block:: python
 

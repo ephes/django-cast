@@ -58,11 +58,16 @@ Cast uses Wagtail's page tree to organize content:
 Repository Pattern
 ------------------
 
-The repository pattern sits between the database and Django models. It provides an abstraction layer that returns dictionaries (not model instances) that are JSON-serializable. This enables caching between the database queries and model instantiation.
+The repository pattern sits between the database and Django models. It provides an abstraction layer that returns dictionaries (not model instances) that are JSON-serializable, so query results could be cached between the database queries and model instantiation.
 
-Flow::
+No cache is wired in today. With ``CAST_REPOSITORY = "default"`` the blog
+index and feeds build these dictionaries and immediately rebuild models from
+them within the same request; ``"django"`` builds the contexts from Django
+models directly.
 
-    Database → Django ORM/Raw SQL → Repository → Dict → JSON Cache → Dict → Django Models → Template
+Flow (``"default"``)::
+
+    Database → Django ORM (+ one raw SQL site lookup fallback) → Repository → Dict → Django Models → Template
 
 Key Repository Classes
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -81,36 +86,53 @@ Key Repository Classes
 
 The repositories:
 
-- Execute optimized queries (ORM or raw SQL)
-- Return dictionary structures
-- Enable JSON caching of query results
-- Allow dynamic model reconstruction from cached data
+- Execute prefetching ORM queries (raw SQL only for a site lookup fallback)
+- Return JSON-serializable dictionary structures
+- Allow model reconstruction from those dictionaries
 
 Models Architecture
 -------------------
 
 Cast models are organized into:
 
-1. **Page Models** (``models/pages.py``):
+1. **Page Models**:
 
-   - ``HomePage``: Site root
-   - ``Blog``: Container for posts
-   - ``Post``: Blog entries with StreamField content
-   - ``Podcast``: Blog subclass with iTunes metadata, categories, etc.
-   - ``Episode``: Post subclass with audio fields for RSS enclosures
+   - ``HomePage`` (``models/pages.py``): Site root
+   - ``Blog`` (``models/index_pages.py``): Container for posts
+   - ``Post`` (``models/pages.py``): Blog entries with StreamField content
+   - ``Podcast`` (``models/index_pages.py``): Blog subclass with iTunes
+     metadata, categories, etc.
+   - ``Episode`` (``models/pages.py``): Post subclass with audio fields for RSS
+     enclosures
+
+   ``models/index_pages.py`` also holds ``Season``, which groups a podcast's
+   episodes.
 
 2. **Media Models**:
 
    - Wagtail ``Image``: Images with collection/uploader ownership semantics
-   - ``Audio``: Audio files with duration and metadata
-   - ``Video``: Video files with poster frames
-   - ``Gallery``: Collection of images
-   - ``ChapterMark``: Timestamps for podcast chapters
-   - ``Transcript``: Text for audio/video
+   - ``Audio`` (``models/audio.py``): Audio files with duration and metadata
+   - ``Video`` (``models/video.py``): Video files with poster frames
+   - ``Gallery`` (``models/gallery.py``): Collection of images
+   - ``ChapterMark`` (``models/audio.py``): Timestamps for podcast chapters
+   - ``Transcript`` (``models/transcript.py``): Text for audio/video
+   - ``File`` (``models/file.py``): Generic uploaded files
 
 3. **Moderation** (``models/moderation.py``):
 
    - ``SpamFilter``: Naive Bayes spam detection
+
+4. **Other Models**:
+
+   - ``Contributor`` and its links (``models/contributors.py``)
+   - ``PostCategory`` snippet (``models/snippets.py``)
+   - ``ItunesArtWork`` (``models/itunes.py``)
+   - ``TemplateBaseDirectory`` site setting and theme helpers
+     (``models/theme.py``)
+   - ``VoxhelmSettings`` site setting (``models/voxhelm_settings.py``)
+   - ``TranscriptGeneration`` (``models/transcript_generation.py``)
+   - Repository read models (``models/repository/``, see
+     `Repository Pattern`_)
 
 Domain Packages and Import Boundaries
 -------------------------------------
@@ -313,17 +335,93 @@ Code Organization
 .. code-block:: text
 
     src/cast/
-    ├── api/              # REST API
-    ├── blocks.py         # StreamField blocks
-    ├── content/          # Transport-neutral author/StreamField conversion
-    ├── feeds.py          # RSS/podcast feeds
-    ├── management/       # Django commands
-    ├── migrations/       # Database migrations
-    ├── models/           # Model definitions
-    ├── static/           # Built assets
-    ├── templates/        # Django templates
-    ├── views/            # Django views
-    └── wagtail_hooks.py  # Admin customizations
+    ├── __init__.py                 # Version, CAST_APPS, CAST_MIDDLEWARE
+    ├── apps.py                     # AppConfig; ready() wires receivers and checks
+    ├── appsettings.py              # CAST_* settings with defaults
+    ├── checks.py                   # Django system checks
+    ├── dev_tools.py                # CAST_ENABLE_DEV_TOOLS resolution
+    ├── setting_resolution.py       # Layered site/deployment setting resolution
+    │
+    │   # Models and read models
+    ├── models/
+    │   ├── pages.py                # Post, Episode, HomePage
+    │   ├── index_pages.py          # Blog, Podcast, Season
+    │   ├── audio.py, video.py, gallery.py, file.py, transcript.py
+    │   ├── contributors.py, snippets.py, itunes.py, moderation.py
+    │   ├── theme.py, voxhelm_settings.py, transcript_generation.py
+    │   ├── image_renditions.py     # Missing/obsolete post renditions
+    │   └── repository/             # Read models: snapshot, contexts, builders
+    ├── blog_index.py               # Blog index querysets and filtersets
+    ├── filters.py                  # django-filter facets for the blog index
+    ├── modal_facet_counts.py       # Facet counts for the filter modal
+    ├── search_suggestions.py       # Search suggestion endpoint data
+    ├── search_utils.py             # Safe full-text search helpers
+    ├── presenters.py               # Post description rendering
+    ├── site_lookup.py              # Site-specific page lookups
+    ├── migrations/                 # Database migrations
+    │
+    │   # Content and publishing
+    ├── blocks.py                   # StreamField blocks
+    ├── post_body_blocks.py         # Configurable post body block sets
+    ├── content/                    # Transport-neutral author/StreamField conversion
+    ├── post_media.py               # Sync media referenced by a post body
+    ├── publication.py              # Wagtail publication boundary
+    ├── podcast_numbering.py        # Automatic episode numbers
+    ├── preview.py, preview_media.py  # Editor API previews
+    ├── receivers.py                # Signal receivers
+    │
+    │   # Media handling
+    ├── media_ingest.py, media_validation.py, media_probe.py
+    ├── media_derivation.py         # Persisted derived media metadata
+    ├── media_permissions.py        # Collection permissions for media
+    ├── file_replacement.py         # Guarded file replacement
+    ├── image_metadata.py           # GPS removal on image upload
+    ├── image_operations.py         # Custom Wagtail rendition operations
+    ├── renditions.py               # Responsive image slots and widths
+    ├── gallery_tokens.py           # Signed gallery image lists
+    ├── private_storage.py          # Private media storage
+    ├── audio_access.py             # Access control for audio/transcripts
+    ├── safe_fetch.py               # Bounded HTTP fetches
+    ├── utils.py                    # Storage helpers
+    │
+    │   # Transcripts and Voxhelm
+    ├── transcripts/                # Transcript formats and services
+    ├── transcript_sanitization.py  # Speaker label sanitization
+    ├── voxhelm/                    # Voxhelm transcription integration
+    ├── voxhelm_tasks.py            # django-tasks task (path is stable)
+    │
+    │   # Feeds, players and HTTP
+    ├── feeds.py                    # RSS/podcast feeds
+    ├── follow_links.py             # Subscription link data
+    ├── player.py                   # Custom audio player payload
+    ├── podlove.py                  # Podlove Web Player config
+    ├── api/                        # REST API (including editor/)
+    ├── views/                      # Django views
+    ├── urls.py, cast_and_wagtail_urls.py
+    ├── http_types.py               # Typed HTMX request
+    ├── context_processors.py       # Template base dir context
+    ├── templates/, templatetags/   # Django templates and tags
+    ├── static/                     # Built assets
+    ├── locale/                     # Translations
+    │
+    │   # Admin and moderation
+    ├── wagtail_hooks.py            # Admin customizations
+    ├── wagtail_panels.py           # Custom edit panels
+    ├── admin.py                    # Django admin registrations
+    ├── admin_urls/                 # Wagtail admin URL configs
+    ├── forms.py, form_widgets.py, widgets.py
+    ├── comments/                   # Comment app integration
+    ├── moderation.py               # Comment spam moderator
+    │
+    │   # Commands, quickstart and development
+    ├── management/                 # Django commands
+    ├── quickstart.py               # django-cast-quickstart command
+    ├── quickstart_templates/       # Project templates for quickstart
+    ├── devdata.py                  # Test and styleguide data builders
+    └── runner.py                   # pytest runner for manage.py test
+
+``tests/docs_paths_test.py`` fails when this tree misses a top-level module or
+a ``models/`` module, or when a module path mentioned in the docs does not exist.
 
 The ``cast.content`` package owns conversion, rich-text normalization, media
 reference resolution, validation, and body section selection and merging without
