@@ -100,6 +100,10 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   wire a real cache keyed on version+blog+params with one shared `_normalize_cachable_data()` and publish-signal
   invalidation, or drop the round trip and build contexts from `PostQuerySnapshot` directly. Either way remove the
   FIXME, fix the settings doc, and add a default-vs-django parity test (D1 and D-extra are symptoms of its absence).
+  Fix note (2026-11-05, docs only, D5 itself still open): `docs/reference/settings.rst` no longer says the
+  `"default"` repository uses "optimized SQL"; it describes the ORM queries plus the in-request
+  serialize/deserialize round trip with no cache. The "Repository Pattern" section of `docs/architecture.rst`
+  no longer shows a JSON cache in the flow. The cache-or-drop decision, the FIXME and the parity test remain.
 - **D6. `has_audio` and the cover fallback are computed in several places** (medium, duplication) —
   `repository/snapshot.py:176`. `Post.has_audio` (`pages.py:320-333`) recomputes it with two extra queries and a
   different exception set; cover resolution exists five times (`pages.py:517-527`, `529-548`, `550-561`,
@@ -514,6 +518,11 @@ The coverage gate produces real tests, not pragma sprawl: 37 `pragma: no cover` 
   fixed with this note), and the "Code Organization" tree (277-287) lists 9 entries for a package with ~50 top-level
   modules plus `transcripts/`, `voxhelm/`, `comments/`, `admin_urls/` and `models/repository/`. Direction:
   regenerate the tree from the real layout; consider a docs test asserting every ``path.py`` it mentions exists.
+  Fix note (2026-11-05, fixed): `docs/architecture.rst` now names the module of each page model (`Blog`,
+  `Podcast` and `Season` in `models/index_pages.py`), adds the remaining model modules, and replaces the
+  9-entry tree with a grouped tree of every top-level module and every `models/` module.
+  `tests/docs_paths_test.py` fails when the tree misses a module or lists one that does not exist, and when a
+  `src/cast/...`, `cast/...` or `models/...` path in any docs page does not exist.
 - **T10. Vite manifest post-processing is hand-duplicated in the justfile and CI** (low, duplication) —
   `justfile:149`. The six-step move/strip-newline/copy dance exists twice with different shell semantics, and a third
   mechanism (`scripts/check_asset_freshness.py`, X10) is documented in `development.rst:262` but used by neither, so

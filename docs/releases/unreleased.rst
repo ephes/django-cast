@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Bring the architecture and settings docs in line with the code: ``Blog``,
+  ``Podcast`` and ``Season`` live in ``models/index_pages.py``, the "Code
+  Organization" tree lists every module, and ``CAST_REPOSITORY = "default"`` is
+  described as the ORM plus an in-request serialize/deserialize round trip (no
+  cache, no hand-optimized SQL). A new docs test checks that module paths in the
+  docs exist and that the tree stays complete.
 - Resolve Voxhelm API base and token as a pair from one configuration level.
   Incomplete pairs no longer inherit deployment credentials. Move mixed-level
   credentials to one level before upgrading; changing the Wagtail API base
