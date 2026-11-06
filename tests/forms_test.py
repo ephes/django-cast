@@ -420,3 +420,58 @@ class TestTranscriptForm:
         file_obj = FlakySeek("WEBVTT\n")
         header = TranscriptForm._read_header(file_obj)
         assert header.startswith("WEBVTT")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("title", ["Intro", "Changed"])
+@pytest.mark.parametrize("source", ["text", "ffprobe"])
+def test_title_only_chapter_sources_preserve_urls(audio, m4a_audio, mocker, title, source):
+    old = ChapterMark.objects.create(
+        audio=audio,
+        start="00:00:00",
+        title="Intro",
+        link="https://example.test/link",
+        image="https://example.test/image",
+    )
+    data = {"chaptermarks": f"00:00:00 {title}"} if source == "text" else {}
+    files = {} if source == "text" else {"m4a": m4a_audio}
+    mocker.patch.object(audio, "get_chaptermark_data_from_file", return_value=[{"start": "0", "title": title}])
+    form = AudioForm(data, files=files, instance=audio)
+    form.is_valid()
+    if source == "ffprobe":
+        audio.m4a = "cast_audio/previous.m4a"
+    form.save_chaptermarks(audio)
+    old.refresh_from_db()
+    assert old.title == title
+    assert old.link == "https://example.test/link"
+    assert old.image == "https://example.test/image"
+    assert audio.chaptermarks.count() == 1
+
+
+@pytest.mark.django_db
+def test_duplicate_chapter_starts_are_form_errors():
+    form = AudioForm({"chaptermarks": "00:00:00 Intro\n0:0 Other"})
+    form.is_valid()
+    assert form.errors["chaptermarks"] == ["Duplicate chapter start"]
+
+
+@pytest.mark.django_db
+def test_chapter_text_admin_round_trip_twice(audio):
+    from cast.views.audio import _audio_edit_form_initial
+
+    old = ChapterMark.objects.create(
+        audio=audio,
+        start="00:00:00",
+        title="Intro",
+        link="https://example.test/link",
+        image="https://example.test/image",
+    )
+    for _ in range(2):
+        form = AudioForm(_audio_edit_form_initial(audio), instance=audio)
+        assert form.is_valid(), form.errors
+        form.save()
+        old.refresh_from_db()
+        assert old.title == "Intro"
+        assert old.link == "https://example.test/link"
+        assert old.image == "https://example.test/image"
+        assert audio.chaptermarks.count() == 1

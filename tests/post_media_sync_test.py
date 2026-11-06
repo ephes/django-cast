@@ -125,6 +125,7 @@ def test_published_media_handler_ignores_non_posts():
     prepare_published_post_media(sender=object, instance=object())
 
 
+@pytest.mark.django_db
 def test_post_sync_media_ids_compatibility_adapter(mocker):
     from cast.models import Post
 

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
-from django.db import models
+from django.db import models, router, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
@@ -241,7 +241,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     def chapters_as_text(self) -> str:
         chaptermarks = []
         for mark in self.chaptermarks.order_by("start"):
-            chaptermarks.append(mark.original_line)
+            chaptermarks.append(f"{mark.start} {mark.title}")
         return "\n".join(chaptermarks)
 
     @staticmethod
@@ -389,13 +389,32 @@ def sync_chapter_marks(
 
 class ChapterMarkManager(models.Manager):
     @staticmethod
-    def sync_chaptermarks(audio: Audio, from_cms: list["ChapterMark"]) -> None:
-        from_db: list["ChapterMark"] = list(audio.chaptermarks.all())
-        to_add, to_update, to_remove = sync_chapter_marks(from_db, from_cms)
-        for cm in to_add + to_update:
-            cm.save()
-        for cm in to_remove:
-            cm.delete()
+    def sync_chaptermarks(audio: Audio, from_cms: list["ChapterMark"], *, update_urls: bool = True) -> None:
+        starts = set()
+        for cm in from_cms:
+            if cm.audio_id != audio.pk:
+                raise ValueError("Chapter marks must belong to the synchronized audio")
+            cm.start = ChapterMark._meta.get_field("start").to_python(cm.start)
+            if cm.start in starts:
+                raise ValueError("Duplicate chapter start")
+            starts.add(cm.start)
+        using = router.db_for_write(Audio, instance=audio)
+        with transaction.atomic(using=using):
+            # A no-op UPDATE takes a row lock on PostgreSQL and a write lock on
+            # SQLite *before* reading chapters, avoiding a deferred lock upgrade.
+            if not Audio.objects.using(using).filter(pk=audio.pk).update(title=models.F("title")):
+                raise Audio.DoesNotExist
+            from_db = list(ChapterMark.objects.using(using).filter(audio_id=audio.pk))
+            if not update_urls:
+                by_start = {cm.start: cm for cm in from_db}
+                for cm in from_cms:
+                    if cm.start in by_start:
+                        cm.link, cm.image = by_start[cm.start].link, by_start[cm.start].image
+            to_add, to_update, to_remove = sync_chapter_marks(from_db, from_cms)
+            for cm in to_add + to_update:
+                cm.save(using=using)
+            for cm in to_remove:
+                cm.delete(using=using)
 
 
 class ChapterMark(models.Model):
@@ -420,7 +439,9 @@ class ChapterMark(models.Model):
         return f"{self.pk} {self.start} {self.title}"
 
     def has_changed(self, other: "ChapterMark") -> bool:
-        return self.title != other.title
+        return any(
+            (getattr(self, field) or "") != (getattr(other, field) or "") for field in ("title", "link", "image")
+        )
 
     @property
     def original_line(self) -> str:

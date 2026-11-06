@@ -91,7 +91,7 @@ def test_render_post_detail_with_django_models_repository(rf, post_in_blog):
     assert post.title in html
     assert repository.page_url in html
     assert repository.owner_username.capitalize() in html
-    assert "audio_1" in html
+    assert f"audio_{next(iter(repository.audio_by_id))}" in html
     assert "<video" in html
     assert '<section class="block-image">' in html
     assert '<section class="block-gallery">' in html
@@ -122,7 +122,7 @@ def test_render_blog_index_with_django_models_repository(rf, post_in_blog):
     # Then the media should be rendered
     assert "web-player/embed.5.js" in html  # audio player because has_audio is True
     assert post.title in html
-    assert "audio_1" in html
+    assert f"audio_{next(iter(repository.audio_by_id))}" in html
     assert "<video" in html
     assert '<section class="block-image">' in html
     assert '<section class="block-gallery">' in html
