@@ -12,6 +12,7 @@
     {% if glossary_review.episode_form.fields.episode.queryset.exists %}
       <form action="{{ edit_url }}" method="POST" novalidate>
         {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
         <input type="hidden" name="action" value="glossary-episode" />
         <ul class="fields">
           <li>{% include "wagtailadmin/shared/field.html" with field=glossary_review.episode_form.episode %}</li>
@@ -37,6 +38,7 @@
     {% endif %}
     <form action="{{ edit_url }}" method="POST" novalidate>
       {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
       <input type="hidden" name="action" value="glossary-refresh" />
       <ul class="fields">
         <li><input class="button button-secondary" type="submit" value="{% trans 'Re-apply glossary' %}" /></li>
@@ -65,6 +67,7 @@
               <div class="cast-glossary-group__actions">
                 <form action="{{ edit_url }}" method="POST" novalidate>
                   {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
                   <input type="hidden" name="action" value="glossary-group" />
                   <input type="hidden" name="to" value="{{ group.to }}" />
                   <button class="button button-small" type="submit" name="decision" value="approved">{% trans "Approve all" %}</button>
@@ -79,6 +82,7 @@
                   {% if glossary_review.can_add_to_glossary %}
                     <form class="cast-glossary-inline-form" action="{{ edit_url }}" method="POST" novalidate>
                       {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
                       <input type="hidden" name="action" value="glossary-add" />
                       <input type="hidden" name="original" value="{{ item.original }}" />
                       <input type="hidden" name="to" value="{{ group.to }}" />
