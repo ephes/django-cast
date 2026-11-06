@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Serialize shared glossary variant additions using current term/contributor
+  state, including first-term creation and contributors shared between shows.
+  Invalid UTF-8 or excessive JSON nesting now yields a bounded transcript
+  artifact error and HTTP 400 in the editor, before editorial writes; corrupt
+  originals and public artifacts remain intact for replacement.
+
 - Reject stale speaker/glossary editor forms with HTTP 409 and a reload message.
   Conditional artifact replacement protects concurrent service edits and cleans
   up conflicted staged files without overwriting unrelated artifacts. Speaker

@@ -1172,3 +1172,24 @@ def test_stale_correction_service_does_not_replace_winning_sidecar(transcript):
     with pytest.raises(ValueError, match="Reload"):
         decide_correction_group(stale, "Gunicorn", STATE_REJECTED, originals=["Gunacorn"])
     assert Transcript.objects.filter(pk=transcript.pk).values().get() == before
+
+
+@pytest.mark.django_db
+def test_glossary_append_reloads_a_stale_contributor(transcript, jon, monkeypatch):
+    original_resolve = corrections._contributor_for
+    injected = []
+
+    def stale(episode, to):
+        contributor = original_resolve(episode, to)
+        assert contributor is not None
+        Contributor.objects.filter(pk=contributor.pk).update(
+            transcript_variants=contributor.transcript_variants + "\nConcurrent Synthetic"
+        )
+        injected.append(True)
+        return contributor
+
+    monkeypatch.setattr(corrections, "_contributor_for", stale)
+    add_original_to_glossary(transcript, "Second Synthetic", "Jon Gould")
+    jon.refresh_from_db()
+    assert injected
+    assert {"Concurrent Synthetic", "Second Synthetic"} <= set(jon.transcript_variants.splitlines())

@@ -35,9 +35,11 @@ from functools import partial
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError
+from django.db import models, router, transaction
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from wagtail.blocks import Block, CharBlock, StreamValue, StructValue, URLBlock
+from wagtail.models import Page
 from wagtail.rich_text import RichText
 
 from cast.file_replacement import StagedFileReplacementGroup
@@ -291,6 +293,7 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     A sidecar written for other artifacts (new Voxhelm import or upload) is
     replaced; its decisions are not carried over.
     """
+    services.validate_editor_artifacts(transcript)
     if not transcript.source_fingerprint:
         # Rows stored without ``save()``: record the current files as received, so the
         # corrections written below do not count as new artifacts on the next run.
@@ -442,6 +445,7 @@ def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | No
 
 def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) -> int:
     """Store the sidecar and the corrected public files in one staged replacement."""
+    services.validate_editor_artifacts(transcript)
     expected = services.artifact_state(transcript)
     changed_fields: list[str] = []
     changed = 0
@@ -663,23 +667,36 @@ def add_original_to_glossary(transcript: Transcript, original: str, to: str) -> 
         raise GlossaryAddError(_("Choose the episode for this transcript's glossary first."))
     episode = state.episode
     podcast = episode.get_parent().specific
-    term = TranscriptGlossaryTerm.objects.filter(podcast_id=podcast.pk, term__iexact=to).first()
-    contributor = None if term is not None else _contributor_for(episode, to)
-    if contributor is not None:
-        line = (
-            original if normalize_phrase(to) == normalize_phrase(contributor.display_name) else f"{original} => {to}"
-        )
-        contributor.transcript_variants = "\n".join(filter(None, [contributor.transcript_variants.rstrip(), line]))
-        _validated(contributor.clean)
-        contributor.save(update_fields=["transcript_variants"])
-    else:
-        if term is None:
-            term = TranscriptGlossaryTerm(podcast=podcast, term=to)
-        term.variants = "\n".join(filter(None, [term.variants.rstrip(), original]))
-        _validated(term.full_clean)
-        term.save()
-    _set_decision(state.data, original, to, STATE_APPROVED)
-    return _commit(transcript, state)
+    using = router.db_for_write(TranscriptGlossaryTerm, instance=podcast)
+    with transaction.atomic(using=using):
+        # Lock the concrete parent row before any glossary reads. UPDATE also
+        # obtains SQLite's write lock without a deferred read-to-write upgrade.
+        Page.objects.using(using).filter(pk=podcast.pk).update(title=models.F("title"))
+        term = TranscriptGlossaryTerm.objects.using(using).filter(podcast_id=podcast.pk, term__iexact=to).first()
+        contributor = None if term is not None else _contributor_for(episode, to)
+        if contributor is not None:
+            Contributor.objects.using(using).filter(pk=contributor.pk).update(
+                transcript_variants=models.F("transcript_variants")
+            )
+            contributor.refresh_from_db(using=using)
+            line = (
+                original
+                if normalize_phrase(to) == normalize_phrase(contributor.display_name)
+                else f"{original} => {to}"
+            )
+            contributor.transcript_variants = "\n".join(filter(None, [contributor.transcript_variants.rstrip(), line]))
+            _validated(contributor.clean)
+            contributor.save(using=using, update_fields=["transcript_variants"])
+        else:
+            if term is None:
+                term, _created = TranscriptGlossaryTerm.objects.using(using).get_or_create(
+                    podcast=podcast, term__iexact=to, defaults={"term": to}
+                )
+            term.variants = "\n".join(filter(None, [term.variants.rstrip(), original]))
+            _validated(term.full_clean)
+            term.save(using=using)
+        _set_decision(state.data, original, to, STATE_APPROVED)
+        return _commit(transcript, state)
 
 
 def _validated(clean: Callable[[], None]) -> None:

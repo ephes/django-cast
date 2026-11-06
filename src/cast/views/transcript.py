@@ -479,29 +479,93 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         transcript_permission_policy.instances_user_has_permission_for(request.user, "change"),
         id=transcript_id,
     )
-    if (
-        request.method == "POST"
-        and request.POST.get("action") in EDIT_ACTION_HANDLERS
-        and request.POST.get("action") not in {SPEAKER_MAPPING_ACTION, VOICE_REFERENCE_CREATE_ACTION}
-    ):
-        if request.POST.get("artifact_revision") != services.artifact_revision(transcript):
-            return HttpResponse(_("Reload the transcript; its artifacts changed while you were editing."), status=409)
-    speaker_mapping_context = editing.get_speaker_mapping_context(transcript)
+    try:
+        return _edit(request, transcript)
+    except parsing.TranscriptArtifactError:
+        invalid_sidecars = []
+        for field in ("speakers", "corrections"):
+            try:
+                services.validate_json_artifact(transcript, field)
+            except parsing.TranscriptArtifactError:
+                invalid_sidecars.append(field)
+        return render(
+            request,
+            "cast/transcript/invalid_artifact.html",
+            {
+                "transcript": transcript,
+                "form": TranscriptForm(instance=transcript, user=request.user),
+                "artifact_revision": services.artifact_revision(transcript),
+                "invalid_sidecars": invalid_sidecars,
+                "artifact_error": _("Invalid transcript JSON encoding or nesting. Replace the artifact and reload."),
+            },
+            status=400,
+        )
 
-    if request.method == "POST":
-        handler = EDIT_ACTION_HANDLERS.get(cast(str, request.POST.get("action")), _handle_transcript_form_save)
-        try:
-            result = handler(request, transcript, speaker_mapping_context)
-        except services.TranscriptEditConflict:
+
+def _detach_invalid_sidecar(request: HttpRequest, transcript: Transcript) -> HttpResponse:
+    field = request.POST.get("field")
+    if field not in {"speakers", "corrections"}:
+        return HttpResponse(_("Invalid sidecar field."), status=400)
+    if request.POST.get("artifact_revision") != services.artifact_revision(transcript):
+        return HttpResponse(_("Reload the transcript; its artifacts changed while you were editing."), status=409)
+    try:
+        services.validate_json_artifact(transcript, field)
+    except parsing.TranscriptArtifactError:
+        old_name = getattr(transcript, field).name
+        updated = Transcript.objects.filter(pk=transcript.pk, **{field: old_name}).update(**{field: ""})
+        if not updated:
             return HttpResponse(_("Reload the transcript; its artifacts changed while you were editing."), status=409)
+        # Retain the corrupt storage object for diagnosis or later replacement.
+        return redirect("cast-transcript:edit", transcript_id=transcript.pk)
+    return HttpResponse(_("This sidecar is no longer invalid. Reload the transcript."), status=400)
+
+
+def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
+    action = request.POST.get("action")
+    if request.method == "POST" and action == "detach-invalid-sidecar":
+        return _detach_invalid_sidecar(request, transcript)
+    if request.method == "POST" and action not in EDIT_ACTION_HANDLERS:
+        # Replacement uploads must remain usable when the stored artifact is corrupt.
+        speaker_mapping_context: editing.SpeakerMappingContext
+        try:
+            services.validate_editor_artifacts(transcript)
+            speaker_mapping_context = editing.get_speaker_mapping_context(transcript)
+        except parsing.TranscriptArtifactError:
+            speaker_mapping_context = {
+                "speaker_labels": [],
+                "speaker_mappings": [],
+                "contributor_assignments": [],
+                "multiple_episodes": False,
+                "source_episode": None,
+            }
+        result = _handle_transcript_form_save(request, transcript, speaker_mapping_context)
         if isinstance(result, HttpResponse):
             return result
         form_state = result
     else:
-        form_state = EditFormState(
-            form=TranscriptForm(instance=transcript, user=request.user),
-            speaker_mapping_form=SpeakerContributorMappingForm(**speaker_mapping_context),
-        )
+        services.validate_editor_artifacts(transcript)
+        if request.method == "POST" and action not in {SPEAKER_MAPPING_ACTION, VOICE_REFERENCE_CREATE_ACTION}:
+            if request.POST.get("artifact_revision") != services.artifact_revision(transcript):
+                return HttpResponse(
+                    _("Reload the transcript; its artifacts changed while you were editing."), status=409
+                )
+        speaker_mapping_context = editing.get_speaker_mapping_context(transcript)
+        if request.method == "POST":
+            handler = EDIT_ACTION_HANDLERS[cast(str, action)]
+            try:
+                result = handler(request, transcript, speaker_mapping_context)
+            except services.TranscriptEditConflict:
+                return HttpResponse(
+                    _("Reload the transcript; its artifacts changed while you were editing."), status=409
+                )
+            if isinstance(result, HttpResponse):
+                return result
+            form_state = result
+        else:
+            form_state = EditFormState(
+                form=TranscriptForm(instance=transcript, user=request.user),
+                speaker_mapping_form=SpeakerContributorMappingForm(**speaker_mapping_context),
+            )
     form = form_state.form
     speaker_mapping_form = form_state.speaker_mapping_form
     known_speaker_review_form = form_state.known_speaker_review_form

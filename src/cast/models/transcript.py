@@ -212,7 +212,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             try:
                 with self.podlove.open("r") as file:
                     data = json.load(file)
-            except (FileNotFoundError, OSError):
+            except (FileNotFoundError, OSError, UnicodeDecodeError, RecursionError):
                 data = {}
         return data
 
@@ -223,7 +223,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             try:
                 with self.dote.open("r") as file:
                     data = json.load(file)
-            except (FileNotFoundError, OSError):
+            except (FileNotFoundError, OSError, UnicodeDecodeError, RecursionError):
                 data = {}
         return data
 
@@ -239,7 +239,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             try:
                 with self.speakers.open("r") as file:
                     data = json.load(file)
-            except (FileNotFoundError, OSError, ValueError):
+            except (FileNotFoundError, OSError, ValueError, RecursionError):
                 data = {}
         return data if isinstance(data, dict) else {}
 
@@ -255,7 +255,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             try:
                 with self.corrections.open("r") as file:
                     data = json.load(file)
-            except (FileNotFoundError, OSError, ValueError):
+            except (FileNotFoundError, OSError, ValueError, RecursionError):
                 data = {}
         return data if isinstance(data, dict) else {}
 
@@ -281,7 +281,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         try:
             with file_field.storage.open(file_field.name, "rb") as file:
                 return file.read()
-        except (FileNotFoundError, OSError, ValueError):
+        except (FileNotFoundError, OSError, ValueError, RecursionError):
             return None
 
     def sync_speaker_mappings(self) -> None:
@@ -529,7 +529,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         try:
             with file_field.open("r") as file:
                 data = json.load(file)
-        except (FileNotFoundError, OSError, json.JSONDecodeError):
+        except (FileNotFoundError, OSError, json.JSONDecodeError, UnicodeDecodeError, RecursionError):
             return {}
         if not isinstance(data, dict):
             return {}

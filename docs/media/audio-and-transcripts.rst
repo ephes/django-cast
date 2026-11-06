@@ -809,3 +809,29 @@ Speaker discovery is serialized per transcript, reads current artifacts and
 mapping rows, and uses the unique transcript/label identity for idempotent
 creation. Repeating discovery from an older model instance does not invalidate
 an approval for the current source.
+
+Shared glossary additions and corrupt JSON
+------------------------------------------
+
+Adding an original spelling to the glossary appends to current database state
+inside a transaction. Show-term discovery/creation is serialized per podcast;
+contributor variants also lock and reload the shared contributor across shows.
+Concurrent additions from different transcripts preserve both variants. Normal
+model validation still applies, and a failed correction commit rolls back the
+glossary addition.
+
+In editorial preflight, invalid UTF-8, a decoder recursion failure, or JSON deeper
+than 64 levels raises ``cast.transcripts.parsing.TranscriptArtifactError``.
+Transcript editor reads and review actions return HTTP 400 with replacement
+guidance and an upload form. All JSON sources and sidecars are decoded before
+editorial file writes, so corruption in another format cannot allow a partial
+rewrite. The original bytes and public artifact references remain intact when
+an edit is rejected.
+
+The recovery page accepts a replacement public file through the normal upload
+form. For an invalid private speaker/corrections sidecar it offers an explicit
+detach action: only the invalid reference is cleared, its stored file is kept,
+and a stale or concurrently replaced sidecar is protected. Existing non-editor
+readers retain their permissive fallbacks; empty, missing, malformed-syntax and
+non-object handling is unchanged. Decoder encoding/recursion failures use empty
+fallbacks outside strict editorial preflight.
