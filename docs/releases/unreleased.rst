@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Move transcript sanitization and copy-on-write speaker transforms into the
+  Podlove, DOTe and WebVTT format modules, and episode speaker visibility policy
+  into ``cast.transcripts.visibility``. Historical imports from
+  ``cast.transcript_sanitization`` remain available as re-exports; public and
+  editor-preview behavior is unchanged.
+
 - Integrate release-branch fixes into the develop trunk, preserving the editor
   API episode automation, paired Voxhelm credentials, dependency security floors,
   and combined WebVTT voice spans with visible speaker names. Glossary corrections

@@ -47,19 +47,26 @@ from ..models import (
 )
 from ..models.contributors import ContributorVoiceReference
 from ..site_lookup import get_site_specific_page_or_404
-from ..transcript_sanitization import (
+from ..transcripts import editing, parsing
+from ..transcripts.dote import (
+    convert_dote_to_podcastindex_transcript,
+    dote_timestamp_to_ms,
+    sanitize_dote_data,
+)
+from ..transcripts.podlove import (
+    sanitize_podlove_data,
+)
+from ..transcripts.visibility import (
     apply_public_speaker_mapping_to_dote_data,
     apply_public_speaker_mapping_to_podlove_data,
     apply_public_speaker_mapping_to_webvtt_content,
     editor_speaker_preview_episode,
     public_episode_from_request,
-    sanitize_dote_data,
-    sanitize_podlove_data,
-    sanitize_webvtt_content,
     strict_public_speaker_labels_for_transcript,
 )
-from ..transcripts import editing, parsing
-from ..transcripts.dote import convert_dote_to_podcastindex_transcript, dote_timestamp_to_ms
+from ..transcripts.webvtt import (
+    sanitize_webvtt_content,
+)
 from . import AuthenticatedHttpRequest, HtmxHttpRequest, transcript_glossary
 from .media import MediaAdminConfig, MediaAdminViews
 

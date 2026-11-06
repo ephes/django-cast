@@ -37,10 +37,14 @@ from typing import Any
 from django.urls import reverse
 
 from . import appsettings
-from .transcript_sanitization import (
-    apply_public_speaker_mapping_to_podlove_data,
+from .transcripts.parsing import (
     clean_speaker_label,
+)
+from .transcripts.podlove import (
     sanitize_podlove_data,
+)
+from .transcripts.visibility import (
+    apply_public_speaker_mapping_to_podlove_data,
     strict_public_speaker_labels_for_audio,
 )
 

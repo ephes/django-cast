@@ -1,5 +1,6 @@
 """Pure DOTe transcript transforms."""
 
+import copy
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -123,3 +124,42 @@ def set_texts(data: dict, texts_by_start_ms: Mapping[int, str]) -> int:
             line["text"] = text
             changed += 1
     return changed
+
+
+def apply_speaker_mapping_to_dote_data(data: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:
+    if not mapping:
+        return data
+    mapped = copy.deepcopy(data)
+    if isinstance(mapped.get("lines", []), list):
+        rewrite_speakers(mapped, mapping)
+    return mapped
+
+
+def sanitize_dote_data(data: dict[str, Any], allowed_speaker_labels: set[str] | None) -> dict[str, Any]:
+    if allowed_speaker_labels is None:
+        return data
+
+    lines = data.get("lines", [])
+    if not isinstance(lines, list):
+        return data
+
+    needs_sanitization = False
+    for line in lines:
+        if not isinstance(line, dict):
+            continue
+        label = parsing.clean_speaker_label(line.get("speakerDesignation"))
+        if label and label not in allowed_speaker_labels:
+            needs_sanitization = True
+            break
+    if not needs_sanitization:
+        return data
+
+    sanitized = copy.deepcopy(data)
+    sanitized_lines = sanitized.get("lines", [])
+    for line in sanitized_lines:
+        if not isinstance(line, dict):
+            continue
+        label = parsing.clean_speaker_label(line.get("speakerDesignation"))
+        if label and label not in allowed_speaker_labels:
+            line["speakerDesignation"] = ""
+    return sanitized

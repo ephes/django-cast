@@ -1,5 +1,6 @@
 """Pure Podlove transcript transforms."""
 
+import copy
 from collections.abc import Mapping
 from typing import Any
 
@@ -89,3 +90,66 @@ def set_texts(data: dict, texts_by_start_ms: Mapping[int, str]) -> int:
             segment["text"] = text
             changed += 1
     return changed
+
+
+PODLOVE_SPEAKER_FIELDS = ("speaker", "voice")
+
+
+def apply_speaker_mapping_to_podlove_data(data: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:
+    if not mapping:
+        return data
+    mapped = copy.deepcopy(data)
+    if isinstance(mapped.get("transcripts", []), list):
+        rewrite_speakers(mapped, mapping)
+    return mapped
+
+
+def sanitize_podlove_data(data: dict[str, Any], allowed_speaker_labels: set[str] | None) -> dict[str, Any]:
+    if allowed_speaker_labels is None:
+        return data
+
+    transcripts = data.get("transcripts", [])
+    if not isinstance(transcripts, list):
+        return data
+
+    needs_sanitization = False
+    for segment in transcripts:
+        if not isinstance(segment, dict):
+            continue
+        for field_name in PODLOVE_SPEAKER_FIELDS:
+            label = parsing.clean_speaker_label(segment.get(field_name))
+            if label and label not in allowed_speaker_labels:
+                needs_sanitization = True
+                break
+        if needs_sanitization:
+            break
+    if not needs_sanitization:
+        return data
+
+    sanitized = copy.deepcopy(data)
+    sanitized_transcripts = sanitized.get("transcripts", [])
+    for segment in sanitized_transcripts:
+        if not isinstance(segment, dict):
+            continue
+        for field_name in PODLOVE_SPEAKER_FIELDS:
+            label = parsing.clean_speaker_label(segment.get(field_name))
+            if label and label not in allowed_speaker_labels:
+                segment.pop(field_name, None)
+    return sanitized
+
+
+def podlove_contributors_from_data(data: dict[str, Any]) -> list[dict[str, str]]:
+    contributors: list[dict[str, str]] = []
+    seen: set[str] = set()
+    transcripts = data.get("transcripts", [])
+    if not isinstance(transcripts, list):
+        return contributors
+    for segment in transcripts:
+        if not isinstance(segment, dict):
+            continue
+        for field_name in PODLOVE_SPEAKER_FIELDS:
+            label = segment.get(field_name)
+            if isinstance(label, str) and label.strip() and label not in seen:
+                seen.add(label)
+                contributors.append({"id": label, "name": label})
+    return contributors
