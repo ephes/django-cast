@@ -25,6 +25,7 @@
       </p>
       <form class="cast-glossary-inline-form" action="{{ edit_url }}" method="POST" novalidate>
         {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
         <input type="hidden" name="start_ms" value="{{ occurrence.start_ms|unlocalize }}" />
         <input type="hidden" name="start" value="{{ occurrence.start|unlocalize }}" />
         <input type="hidden" name="end" value="{{ occurrence.end|unlocalize }}" />

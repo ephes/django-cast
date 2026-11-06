@@ -53,6 +53,7 @@ def edit_url(transcript):
 
 
 def post(client, transcript, **data):
+    data.setdefault("artifact_revision", client.get(edit_url(transcript)).context["artifact_revision"])
     return client.post(edit_url(transcript), data, follow=True)
 
 
@@ -461,3 +462,18 @@ def test_actions_need_transcript_change_permission(client, applied, data):
     assert client.get(edit_url(applied)).status_code == 404
     assert client.post(edit_url(applied), data).status_code == 404
     assert public_texts(applied) == before
+
+
+def test_stale_glossary_editor_preserves_first_decision(admin_client, applied):
+    url = edit_url(applied)
+    revision = admin_client.get(url).context.get("artifact_revision", "old-baseline")
+    first = admin_client.post(
+        url, {"action": "glossary-group", "to": "Buttondown", "decision": "approved", "artifact_revision": revision}
+    )
+    assert first.status_code == 302
+    before = type(applied).objects.filter(pk=applied.pk).values().get()
+    second = admin_client.post(
+        url, {"action": "glossary-group", "to": "Gunicorn", "decision": "rejected", "artifact_revision": revision}
+    )
+    assert second.status_code == 409
+    assert type(applied).objects.filter(pk=applied.pk).values().get() == before

@@ -788,3 +788,21 @@ most frequent word forms of the English and German sentence collections of
 `Tatoeba <https://tatoeba.org>`_, licensed `CC BY 2.0 FR
 <https://tatoeba.org/en/terms_of_use>`_; attribution: Tatoeba and its
 contributors. The files contain word forms only, no sentences.
+
+Concurrent transcript editing
+-----------------------------
+
+Speaker and glossary review forms carry an artifact revision. If a sidecar or
+source transcript changes after the form was loaded, the submission returns
+HTTP 409 with a reload message. Reload and review the current segments before
+submitting again. Missing revisions are rejected for review actions too.
+Artifact file references and the source fingerprint are compared again under
+the database write lock before replacing files, including for direct service
+calls. A conflict removes the edit's staged files and preserves the winning
+edit and unrelated artifact fields. Artifact replacements use new storage
+names; overwriting existing storage objects in place bypasses this contract.
+
+Speaker discovery is serialized per transcript, reads current artifacts and
+mapping rows, and uses the unique transcript/label identity for idempotent
+creation. Repeating discovery from an older model instance does not invalidate
+an approval for the current source.

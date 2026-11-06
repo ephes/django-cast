@@ -8,6 +8,7 @@ from django.utils import translation
 from cast.devdata import create_transcript
 from cast.forms import DRAFT_SPEAKER_ASSIGNMENT_PREFIX, SpeakerContributorMappingForm
 from cast.models import Contributor, EpisodeContributor, TranscriptSpeakerMapping
+from cast.transcripts import services
 from cast.views.transcript import (
     get_speaker_mapping_context,
     get_transcript_audio_sources,
@@ -25,7 +26,10 @@ class TestTranscriptSpeakerMapping:
             role=EpisodeContributor.ROLE_HOST,
         )
         form = SpeakerContributorMappingForm(
-            {"action": "map-speakers", "speaker_0": str(assignment.pk)},
+            {
+                "action": "map-speakers",
+                "speaker_0": str(assignment.pk),
+            },
             speaker_labels=["Speaker 1"],
             contributor_assignments=[assignment],
         )
@@ -40,7 +44,11 @@ class TestTranscriptSpeakerMapping:
             podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
         )
         form = SpeakerContributorMappingForm(
-            {"action": "map-speakers", "speaker_0": "", "speaker_display_name_0": "Guest Voice"},
+            {
+                "action": "map-speakers",
+                "speaker_0": "",
+                "speaker_display_name_0": "Guest Voice",
+            },
             **get_speaker_mapping_context(transcript),
         )
 
@@ -64,7 +72,11 @@ class TestTranscriptSpeakerMapping:
             podlove={"transcripts": [{"speaker": "Speaker 1", "voice": "Speaker 1", "text": "Hello"}]},
         )
         form = SpeakerContributorMappingForm(
-            {"action": "map-speakers", "speaker_0": str(assignment.pk), "speaker_display_name_0": "Guest Voice"},
+            {
+                "action": "map-speakers",
+                "speaker_0": str(assignment.pk),
+                "speaker_display_name_0": "Guest Voice",
+            },
             **get_speaker_mapping_context(transcript),
         )
 
@@ -82,7 +94,11 @@ class TestTranscriptSpeakerMapping:
             },
         )
         form = SpeakerContributorMappingForm(
-            {"action": "map-speakers", "speaker_0": "", "speaker_display_name_0": "Speaker 2"},
+            {
+                "action": "map-speakers",
+                "speaker_0": "",
+                "speaker_display_name_0": "Speaker 2",
+            },
             **get_speaker_mapping_context(transcript),
         )
 
@@ -197,7 +213,10 @@ class TestTranscriptSpeakerMapping:
             role=EpisodeContributor.ROLE_HOST,
         )
         form = SpeakerContributorMappingForm(
-            {"action": "map-speakers", "speaker_0": str(assignment.pk)},
+            {
+                "action": "map-speakers",
+                "speaker_0": str(assignment.pk),
+            },
             speaker_labels=["Speaker 1"],
             contributor_assignments=[assignment],
         )
@@ -318,7 +337,14 @@ class TestTranscriptSpeakerMapping:
 
         draft_value = f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{episode.pk}:{contributor.pk}:{EpisodeContributor.ROLE_HOST}"
 
-        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": draft_value})
+        response = admin_client.post(
+            edit_url,
+            {
+                "artifact_revision": services.artifact_revision(transcript),
+                "action": "map-speakers",
+                "speaker_0": draft_value,
+            },
+        )
 
         assert response.status_code == 302
         mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
@@ -341,7 +367,14 @@ class TestTranscriptSpeakerMapping:
         )
         edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
 
-        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": str(assignment.pk)})
+        response = admin_client.post(
+            edit_url,
+            {
+                "artifact_revision": services.artifact_revision(transcript),
+                "action": "map-speakers",
+                "speaker_0": str(assignment.pk),
+            },
+        )
 
         assert response.status_code == 302
         assert response.url == edit_url
@@ -365,7 +398,10 @@ class TestTranscriptSpeakerMapping:
         )
         edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
 
-        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": ""})
+        response = admin_client.post(
+            edit_url,
+            {"artifact_revision": services.artifact_revision(transcript), "action": "map-speakers", "speaker_0": ""},
+        )
 
         assert response.status_code == 302
         mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
@@ -384,7 +420,14 @@ class TestTranscriptSpeakerMapping:
         )
         edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
 
-        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": "99999"})
+        response = admin_client.post(
+            edit_url,
+            {
+                "artifact_revision": services.artifact_revision(transcript),
+                "action": "map-speakers",
+                "speaker_0": "99999",
+            },
+        )
 
         assert response.status_code == 200
         assert response.context["message"] == "The speaker labels could not be updated due to errors."
@@ -396,7 +439,14 @@ class TestTranscriptSpeakerMapping:
         )
         edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
 
-        response = admin_client.post(edit_url, {"action": "map-speakers", "speaker_0": "99999"})
+        response = admin_client.post(
+            edit_url,
+            {
+                "artifact_revision": services.artifact_revision(transcript),
+                "action": "map-speakers",
+                "speaker_0": "99999",
+            },
+        )
 
         assert response.status_code == 200
         assert response.context["message"] == "The speaker labels could not be updated due to errors."

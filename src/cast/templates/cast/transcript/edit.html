@@ -351,6 +351,7 @@
       <div class="col10 divider-after">
         <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" enctype="multipart/form-data" novalidate>
           {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
           <ul class="fields">
             {% for field in form %}
               {% if field.name == 'file' %}
@@ -389,6 +390,7 @@
           <p>{% trans "The bulk action applies confident known-speaker names to public Podlove, DOTe, and WebVTT output by start time and leaves uncertain segments unchanged, except that the one guest without a voice reference is named on their own diarization label when that is unambiguous. Use the segment review table to resolve or clear an uncertain segment." %}</p>
           <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
             {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
             <input type="hidden" name="action" value="apply-known-speakers" />
             <ul class="fields">
               <li>
@@ -399,6 +401,7 @@
 
           <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
             {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
             {% for hidden_field in known_speaker_review_form.hidden_fields %}
               {{ hidden_field }}
             {% endfor %}
@@ -491,6 +494,7 @@
           {% endif %}
           <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
             {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
             {% for hidden_field in speaker_mapping_form.hidden_fields %}
               {{ hidden_field }}
             {% endfor %}
@@ -604,6 +608,7 @@
                               data-cast-voice-reference-form
                             >
                               {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
                               <input type="hidden" name="action" value="create-voice-reference" />
                               <input type="hidden" name="speaker_label" value="{{ row.candidate.speaker_label }}" />
                               <input type="hidden" name="candidate_rank" value="{{ row.candidate.rank }}" />
