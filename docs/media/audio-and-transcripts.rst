@@ -402,7 +402,10 @@ that do not show voice names; the voice span keeps it renamable and
 sanitizable. Renaming ``Alice`` again replaces both, and sanitizing a hidden
 label removes the repeated ``Alice:`` with the voice tags. Applying or clearing
 known-speaker suggestions on such a cue replaces or drops the repeated name in
-the same way. Public WebVTT output
+the same way. A cue that still carries a generic ``Speaker 1: text`` prefix is
+treated like a rename when a suggestion is applied (``<v Bob>Bob: text</v>``),
+so the old prefix does not stay visible, and clearing a suggestion removes the
+prefix like a voice label. Public WebVTT output
 shows mapped prefixes the same way.
 
 Editors previewing an unpublished episode are the exception: when a transcript

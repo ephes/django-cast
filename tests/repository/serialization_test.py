@@ -497,46 +497,16 @@ def test_feed_context_deserializes_episode_discriminator(blog_data):
     assert isinstance(repository.post_by_id[1], Episode)
 
 
-def test_feed_context_deserializes_legacy_post_without_type(blog_data):
+@pytest.mark.parametrize("context_class", [FeedContext, BlogIndexContext])
+def test_cachable_post_data_without_type_is_rejected(blog_data, context_class):
+    # Cachable data is built and consumed within one request, and serialize_post /
+    # serialize_episode always write the discriminator, so there is no legacy form to sniff.
     data = deepcopy(blog_data)
-    data.update(
-        {
-            "site": {"id": 1},
-            "blog_url": "/some-blog/",
-        }
-    )
+    data.update({"site": {"id": 1}, "blog_url": "/some-blog/"})
     data["post_by_id"][1].pop("type")
 
-    repository = FeedContext.create_from_cachable_data(data=data)
-
-    assert isinstance(repository.post_by_id[1], Post)
-    assert not isinstance(repository.post_by_id[1], Episode)
-
-
-def test_feed_context_deserializes_legacy_episode_without_type(blog_data):
-    data = deepcopy(blog_data)
-    data.update(
-        {
-            "site": {"id": 1},
-            "blog_url": "/some-blog/",
-        }
-    )
-    data["post_by_id"][1].pop("type")
-    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
-
-    repository = FeedContext.create_from_cachable_data(data=data)
-
-    assert isinstance(repository.post_by_id[1], Episode)
-
-
-def test_blog_index_context_deserializes_legacy_episode_without_type(blog_data):
-    data = deepcopy(blog_data)
-    data["post_by_id"][1].pop("type")
-    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
-
-    repository = BlogIndexContext.create_from_cachable_data(data=data)
-
-    assert isinstance(repository.post_by_id[1], Episode)
+    with pytest.raises(KeyError, match="type"):
+        context_class.create_from_cachable_data(data=data)
 
 
 @pytest.mark.django_db
@@ -544,7 +514,7 @@ def test_create_from_cachable_data_use_audio_player_false():
     data = {
         "template_base_dir": "bootstrap4",
         "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
-        "post_by_id": {1: {"pk": 1}},
+        "post_by_id": {1: {"type": "post", "pk": 1}},
         "posts": [1],
         "page_url_by_id": {1: "/foo-bar-baz/"},
         "absolute_page_url_by_id": {1: "http://testserver/foo-bar-baz/"},

@@ -316,16 +316,9 @@ class FeedContext:
             blog._last_build_date = last_build_date
         template_base_dir = data["template_base_dir"]
         post_by_id = {}
-        podcast_fields = ["podcast_audio", "block", "keywords", "explicit", "episode_number", "episode_type", "season"]
         for raw_post_pk, post_data in data["post_by_id"].items():
             post_pk = int(raw_post_pk)
-            if "type" in post_data:
-                is_podcast = post_data["type"] == "episode"
-            else:
-                # Legacy cache entries without the explicit discriminator fall back to key-sniffing.
-                # This fallback can be removed after one release.
-                is_podcast = any(field in post_data for field in podcast_fields)
-            if is_podcast:
+            if post_data["type"] == "episode":
                 post_by_id[post_pk] = deserialize_episode(post_data)
             else:
                 post_by_id[post_pk] = deserialize_post(post_data)
@@ -512,13 +505,7 @@ class BlogIndexContext:
         blog_cover_image_url = data.get("blog_cover_image_url", "")
         blog_cover_alt_text = data.get("blog_cover_alt_text", "")
         for post_pk, post_data in data["post_by_id"].items():
-            if "type" in post_data:
-                is_episode = post_data["type"] == "episode"
-            else:
-                # Legacy cache entries without the explicit discriminator fall back to key-sniffing.
-                # This fallback can be removed after one release.
-                is_episode = "podcast_audio" in post_data
-            if is_episode:
+            if post_data["type"] == "episode":
                 post_by_id[post_pk] = deserialize_episode(post_data)
             else:
                 post_by_id[post_pk] = deserialize_post(post_data)

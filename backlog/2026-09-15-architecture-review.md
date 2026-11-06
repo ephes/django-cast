@@ -92,6 +92,11 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   field. Direction: delete the branches, raise on a missing discriminator, delete
   `serialization_test.py:252,290,513,529,545` in the same change to hold 100%, centralize the repeated
   `collection_id`/`"collection": None` handling.
+  Fix note (2026-11-06, partly fixed): the two post branches in `repository/contexts.py` are gone and a post without
+  `type` now raises `KeyError`; the three legacy post tests became one parametrized rejection test. Unreachability:
+  the only producers of `post_by_id` are `serialize_post`/`serialize_episode`, which always write `type`, and the
+  deserializers work on copies. Not done: the `deserialize_blog` fallback in `serialization.py` and its two tests,
+  and the `collection_id` centralization.
 - **D5. The cachable boundary serializes and immediately deserializes per request with no cache** (medium,
   architecture) — `models/index_pages.py:286`, `feeds.py:95-98`, plus a FIXME `refresh_from_db` (`contexts.py:253`).
   The deserializers also disagree on key normalization (`FeedContext._int_keyed` vs `BlogIndexContext` indexing
@@ -152,6 +157,9 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   `Site.objects.filter(is_default_site=True)...first()`, raising `ImproperlyConfigured` on an empty table instead of
   omitting `data["site"]`; this rewrites `test_add_site_raw_falls_back_to_sql_when_no_context` and
   `test_add_site_raw_handles_empty_site_table` and needs one new test for the raise.
+  Fix note (2026-11-06, fixed): the fallback is `Site.objects.order_by("-is_default_site", "pk").first()` (default
+  site, then lowest pk) and raises `ImproperlyConfigured` on an empty table; the package has no raw SQL left in
+  `builders.py`, and `docs/architecture.rst` no longer mentions a raw SQL site lookup.
 - **D-extra. `serialize_episode` crashes on a live `Episode` with NULL `podcast_audio`** (medium, bug) —
   `serialize_episode` (`serialization.py:283`) calls `serialize_audio(post.podcast_audio)` unconditionally at line
   295, and `serialize_audio:26` reads `audio.pk` on `None`, so the podcast index 500s under `"default"` and renders
@@ -424,6 +432,10 @@ documented in tiers that match the code. The remaining problems are concentrated
   detectable, renamable and sanitisable, the repeated `Name:` keeps it visible in native players; a second rename
   replaces the repeated name and the sanitizer strips it), detection and rewriting share `match_generic_speaker_prefix`, and a
   parity test in `tests/transcripts/speaker_mapping_test.py` checks that every reported label can be renamed.
+  Follow-up (2026-11-06, fixed): the known-speaker suggestion path now reaches the same parity. Applying a suggestion
+  to a never-renamed `Speaker 1: hi` wrote `<v Bob>Speaker 1: hi`, keeping the old prefix public; it now writes
+  `<v Bob>Bob: hi</v>` via `webvtt.replace_generic_speaker_prefix`, and clearing a suggestion drops the prefix like
+  the cleared Podlove/DOTe speakers.
 
 Strengths: `CAST_SETTING_REGISTRY` plus module `__getattr__` (copy-on-read, `TYPE_CHECKING` stubs) is a clean single
 source of truth that `check_cast_setting_types` and `comments/appsettings.py` derive from, and every `CAST_*` name in
