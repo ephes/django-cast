@@ -1530,6 +1530,15 @@ canonical decimal strings (for example ``1`` or ``"1"``). Floats (including
 ``1.0``), booleans, null, empty strings, signs, leading zeros, and whitespace
 are rejected before collection lookup.
 
+Image uploads allocate short, generated storage names, retaining the file
+extension, so long upload names cannot lose their unique suffix during Wagtail
+filename truncation or overwrite an existing image. The image row and tags are registered in one
+transaction. If registration fails, the row and tags roll back and the newly
+written image file is deleted. If storage cleanup itself fails, the failure is
+logged with the original save failure retained as the cleanup exception's cause.
+The API returns HTTP 500 with flat code ``cleanup_failed``; operator cleanup of
+that orphan may be required.
+
 Audio and video uploads share a one-in-flight lock per authenticated user; a
 second concurrent audio/video upload returns ``rate_limited``. The lock uses
 the default Django cache and requires a shared cache backend, such as Redis or

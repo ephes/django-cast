@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Editor image uploads now use short generated storage names and transactional row/tag
+  registration through the shared media ingestion service. Failed saves remove
+  the request-owned image file; existing same-named images are preserved. Cleanup
+  failures are logged, retain the original save error as their cause, and return
+  the standard ``cleanup_failed`` JSON error. Long filenames cannot truncate away
+  the unique suffix.
+
 - Editor media collection IDs now require positive integers or canonical decimal
   strings. Fractional/nonfinite numbers, booleans, null, and noncanonical strings
   return validation errors instead of being coerced to another collection.

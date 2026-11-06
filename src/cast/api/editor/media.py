@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from copy import copy
+from pathlib import PurePosixPath
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
@@ -25,6 +26,7 @@ from ... import appsettings
 from ...forms import AudioForm, get_video_form
 from ...media_ingest import (
     AUDIO_FILE_FIELDS,
+    IngestPolicy,
     MediaIngestCleanupFailed,
     MediaIngestError,
     MediaProbeFailed,
@@ -318,8 +320,12 @@ class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
         image = form.save(commit=False)
         image.uploaded_by_user = request.user
         image.collection = collection
-        image.save()
-        form.save_m2m()
+        # Wagtail truncates long stems in upload_to; keep the ingest UUID intact.
+        image.file.name = f"image{PurePosixPath(image.file.name).suffix}"
+        try:
+            image = ingest_upload(form, policy=IngestPolicy(probe_seconds=None, file_fields=("file",)))
+        except MediaIngestCleanupFailed:
+            return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
         return Response(serialize_image(image, user=request.user), status=status.HTTP_201_CREATED)
 
 

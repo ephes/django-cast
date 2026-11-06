@@ -5,9 +5,13 @@ from types import SimpleNamespace
 import pytest
 from django.contrib.auth.models import Group, Permission
 from django.core.cache import cache
+from django.core.files.base import ContentFile
+from django.core.files.storage import InMemoryStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError
 from django.urls import reverse
 from rest_framework.response import Response
+from taggit.models import Tag
 from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Page
 
 from cast import media_ingest, media_probe
@@ -731,3 +735,119 @@ class TestMediaProbeBudget:
         run = mocker.patch("cast.media_probe.subprocess.run")
         media_probe.run_media_probe(["ffprobe"], check=True, timeout=7)
         assert run.call_args.kwargs["timeout"] == 7
+
+
+@pytest.fixture(params=["test.png", "long" * 23 + ".png"])
+def image_upload_storage(db, mocker, image_1px, request):
+    """Overwrite-capable, in-memory storage with an unrelated existing image."""
+    image_model = editor_media.get_image_model()
+    storage = InMemoryStorage()
+    mocker.patch.object(image_model._meta.get_field("file"), "storage", storage)
+    mocker.patch.object(storage, "get_available_name", side_effect=lambda name, max_length=None: name)
+    original_bytes = image_1px.read() + b"existing image bytes"
+    image_1px.seek(0)
+    image_1px.name = request.param
+    old_name = image_model().get_upload_to(request.param)
+    old_name = storage.save(old_name, ContentFile(original_bytes))
+    existing = image_model.objects.create(
+        title="Existing image", file=old_name, width=1, height=1, collection=Collection.get_first_root_node()
+    )
+    return storage, existing, original_bytes
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("stage", ["insert", "m2m", "storage"])
+def test_image_upload_save_failure_compensates_only_new_files(
+    api_client, superuser, image_1px, image_upload_storage, mocker, stage
+):
+    storage, existing, original_bytes = image_upload_storage
+    image_model = type(existing)
+    failure = IntegrityError("synthetic registration failure")
+    tag_count = Tag.objects.count()
+    if stage == "insert":
+        fault = mocker.patch.object(image_model, "_do_insert", side_effect=failure)
+    elif stage == "m2m":
+        form_class = editor_media.get_image_form(image_model)
+        save_m2m = form_class._save_m2m
+
+        def fail_after_tags(form):
+            save_m2m(form)
+            assert form.instance.tags.filter(name="synthetic").exists()
+            raise failure
+
+        fault = mocker.patch.object(form_class, "_save_m2m", autospec=True, side_effect=fail_after_tags)
+        mocker.patch.object(editor_media, "get_image_form", return_value=form_class)
+    else:
+        fault = mocker.patch.object(storage, "save", side_effect=failure)
+    writes = mocker.spy(storage, "_save")
+    deletes = mocker.spy(storage, "delete")
+    api_client.force_authenticate(user=superuser)
+    with pytest.raises(IntegrityError) as exc:
+        api_client.post(
+            reverse("cast:api:editor_media_images"),
+            {"title": "Failed upload", "file": image_1px, "tags": "synthetic"},
+            format="multipart",
+        )
+    assert exc.value is failure
+    fault.assert_called_once()
+    assert writes.call_count == (0 if stage == "storage" else 1)
+    if stage != "storage":
+        new_name = writes.call_args.args[0]
+        assert new_name != existing.file.name
+        deletes.assert_any_call(new_name)
+        assert not storage.exists(new_name)
+    assert image_model.objects.count() == 1
+    assert Tag.objects.count() == tag_count
+    existing.refresh_from_db()
+    assert existing.title == "Existing image"
+    assert storage.open(existing.file.name).read() == original_bytes
+    assert not existing.tags.exists()
+
+
+@pytest.mark.django_db
+def test_image_upload_cleanup_failure_preserves_cause_and_logs(
+    api_client, superuser, image_1px, image_upload_storage, mocker, caplog
+):
+    storage, existing, original_bytes = image_upload_storage
+    failure = IntegrityError("synthetic insert failure")
+    fault = mocker.patch.object(type(existing), "_do_insert", side_effect=failure)
+    writes = mocker.spy(storage, "_save")
+    mocker.patch.object(storage, "delete", side_effect=OSError("synthetic cleanup failure"))
+    api_client.force_authenticate(user=superuser)
+    ingest = mocker.spy(editor_media, "ingest_upload")
+    response = api_client.post(
+        reverse("cast:api:editor_media_images"),
+        {"title": "Failed cleanup", "file": image_1px},
+        format="multipart",
+    )
+    assert response.status_code == 500
+    assert response.json() == {"code": "cleanup_failed", "detail": "Upload cleanup failed."}
+    assert isinstance(ingest.spy_exception, media_ingest.MediaIngestCleanupFailed)
+    assert ingest.spy_exception.__cause__ is failure
+    fault.assert_called_once()
+    assert writes.call_count == 1
+    assert storage.exists(writes.call_args.args[0])
+    assert storage.open(existing.file.name).read() == original_bytes
+    assert type(existing).objects.count() == 1
+    assert "Media ingest cleanup failed" in caplog.text
+
+
+@pytest.mark.django_db
+def test_image_upload_success_uses_fresh_name_and_saves_tags(api_client, superuser, image_1px, image_upload_storage):
+    storage, existing, original_bytes = image_upload_storage
+    api_client.force_authenticate(user=superuser)
+    response = api_client.post(
+        reverse("cast:api:editor_media_images"),
+        {"title": "New image", "file": image_1px, "tags": "synthetic"},
+        format="multipart",
+    )
+    assert response.status_code == 201, response.content
+    data = response.json()
+    uploaded = type(existing).objects.get(pk=data["id"])
+    assert uploaded.uploaded_by_user == superuser
+    assert uploaded.collection == existing.collection
+    assert uploaded.file.name != existing.file.name
+    assert storage.exists(uploaded.file.name)
+    assert data["tags"] == ["synthetic"]
+    assert data["width"] == data["height"] == 1
+    assert storage.open(existing.file.name).read() == original_bytes
