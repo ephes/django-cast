@@ -24,6 +24,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   The follow-up DRF/Pillow floor repair is recorded in
   [backlog/2026-11-04-advisory-floor-repair.md](backlog/2026-11-04-advisory-floor-repair.md).
 
+- The completed private API response-cache hardening and synthetic regression
+  evidence are recorded in
+  [backlog/2026-11-06-private-api-cache.md](backlog/2026-11-06-private-api-cache.md).
+
 ## Later
 
 - [ ] Transcript glossary, slice 2: LLM proposals via Voxhelm (on hold)

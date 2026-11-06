@@ -54,6 +54,7 @@ from ..transcripts.visibility import (
 )
 from ..views.theme import set_template_base_dir
 from .editor.scopes import HasEditorScope
+from .private import PrivateAPIView
 from .serializers import (
     AudioPodloveSerializer,
     AudioSerializer,
@@ -91,7 +92,7 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 200
 
 
-class VideoListView(generics.ListAPIView):
+class VideoListView(PrivateAPIView, generics.ListAPIView):
     serializer_class = VideoSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
@@ -102,7 +103,7 @@ class VideoListView(generics.ListAPIView):
         return qs.order_by("-created")
 
 
-class VideoDetailView(generics.RetrieveDestroyAPIView):
+class VideoDetailView(PrivateAPIView, generics.RetrieveDestroyAPIView):
     serializer_class = VideoSerializer
     permission_classes = (IsAuthenticated, HasEditorScope)
     required_scopes = {"GET": None, "DELETE": "delete"}
@@ -121,7 +122,7 @@ class VideoDetailView(generics.RetrieveDestroyAPIView):
         instance.delete()
 
 
-class AudioListView(generics.ListAPIView):
+class AudioListView(PrivateAPIView, generics.ListAPIView):
     serializer_class = AudioSerializer
     pagination_class = StandardResultsSetPagination
     permission_classes = (IsAuthenticated,)
@@ -132,7 +133,7 @@ class AudioListView(generics.ListAPIView):
         return qs.order_by("-created")
 
 
-class AudioDetailView(generics.RetrieveDestroyAPIView):
+class AudioDetailView(PrivateAPIView, generics.RetrieveDestroyAPIView):
     serializer_class = AudioSerializer
     permission_classes = (IsAuthenticated, HasEditorScope)
     required_scopes = {"GET": None, "DELETE": "delete"}
@@ -320,7 +321,7 @@ class SearchSuggestionsView(APIView):
         return response
 
 
-class CommentTrainingDataView(APIView):
+class CommentTrainingDataView(PrivateAPIView):
     permission_classes = (IsAdminUser,)
 
     @staticmethod

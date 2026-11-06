@@ -20,6 +20,7 @@ from ...models import Audio, Blog, Contributor, Episode, EpisodeContributor, Pod
 from ...models.snippets import PostCategory
 from ...preview import render_editor_preview
 from ...publication import PublicationRejected, check_publishable
+from ..private import PrivateAPIView
 from .body import (
     author_blocks_to_section,
     get_choosable_audio,
@@ -56,7 +57,7 @@ class HasWagtailAdminAccess(BasePermission):
         raise EditorPermissionDenied(self.message, parent_id=None)
 
 
-class EditorAPIView(APIView):
+class EditorAPIView(PrivateAPIView):
     """Base view for the content editing API; renders structured error envelopes."""
 
     permission_classes = (IsAuthenticated, HasWagtailAdminAccess, HasEditorScope)
