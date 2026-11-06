@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Prevent caching of owner audio/video list/detail responses, all editor API
+  responses (including previews and structured errors), and the staff-only
+  comment training corpus. They now use ``Cache-Control: private, no-store``
+  and vary on ``Cookie`` and ``Authorization`` so revoked credentials or
+  permissions are checked again. Public media cache policies are unchanged.
+  Consumer sites must adopt the updated package for this to take effect.
+
 - Add behavioral tests for quickstart management subprocesses, both superuser
   modes, CLI setup/refusal/cleanup ordering, and read-only media-size reporting
   using temporary projects and synthetic storage. Document these contracts and

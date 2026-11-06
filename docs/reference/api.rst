@@ -20,6 +20,13 @@ Authentication
 Authenticated endpoints use Django session authentication (for example ``/api/videos/``,
 ``/api/audios/``, and ``/api/comment_training_data/``).
 
+Owner-filtered audio/video list and detail responses, all editor API responses
+(including preview HTML), and the staff-only comment training corpus use
+``Cache-Control: private, no-store`` and ``Vary: Cookie, Authorization``.
+This includes their handled error responses: clients and caches must fetch again
+so authentication and permissions are checked on every request. These headers do
+not change the public Podlove/transcript routes' separate cache policies.
+
 Browsable-API login/logout routes are project-specific. In the example project they are:
 
 - ``/api-auth/login/``
@@ -412,7 +419,9 @@ content without direct database access. It is authentication-mechanism
 agnostic: any DRF authentication class that populates ``request.user`` works.
 Django-cast ships session authentication by default. Editor endpoints require
 an authenticated user with Wagtail admin access and then apply Wagtail page or
-collection permissions for the requested object.
+collection permissions for the requested object. All responses, including
+structured errors and rendered previews, are private and must not be stored;
+repeat requests recheck current credentials, scopes and Wagtail permissions.
 
 **List editable parents**::
 

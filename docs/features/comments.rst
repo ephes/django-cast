@@ -525,6 +525,12 @@ Training data is derived directly from existing comments:
   ``is_removed = False``.
 - All other comments are labeled **spam**.
 
+The staff-only ``/api/comment_training_data/`` export contains moderation
+training data, including comments' identifying fields. Success and handled
+error responses use ``Cache-Control: private, no-store`` and vary on ``Cookie``
+and ``Authorization``, so repeat requests recheck staff access. This policy does
+not change public comment display.
+
 Each comment is converted to a message string by concatenating its ``name``,
 ``email``, ``title``, and ``comment`` fields. The classifier tokenizes this
 string into lowercase words (using the regex pattern ``\b\w\w+\b``) and
