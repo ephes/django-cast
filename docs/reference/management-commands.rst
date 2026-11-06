@@ -329,7 +329,7 @@ media_sizes
 -----------
 
 Print the sizes of all media files on the production storage backend,
-categorized by type (video, image, misc) with totals in MB. Requires configured
+categorized by type (video, image, misc) with totals in MiB (bytes / 2**20). Requires configured
 ``production`` and ``backup`` storage backends.
 
 .. code-block:: bash
@@ -341,6 +341,12 @@ The built-in categories are extension-based:
 - video: ``.mov``, ``.mp4``
 - image: ``.jpg``, ``.jpeg``, ``.png``
 - misc: everything else
+
+Extensions are matched case-insensitively. Nested production directories are
+included; the backup store is not traversed. The command reads directory listings
+and byte sizes only, without opening, saving or deleting objects. Storage failures
+propagate instead of producing a successful partial report. An empty store reports
+zero for all categories and the total.
 
 media_stale
 -----------

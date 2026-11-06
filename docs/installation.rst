@@ -127,6 +127,12 @@ The quickstart command supports several options:
     # Skip superuser creation
     uv run django-cast-quickstart mysite --no-superuser
 
+The interactive and no-superuser options cannot be combined. An existing project
+directory is refused before setup begins. If setup fails after quickstart creates
+the project, its generated directory is removed; unrelated sibling files remain.
+Setup runs migrations, collects static files and optionally creates a superuser
+before changing into the new project and starting its development server.
+
 After Quickstart
 ================
 
