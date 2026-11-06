@@ -1,5 +1,6 @@
 import re
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth.models import Group, Permission
@@ -16,6 +17,53 @@ from cast.api.editor.errors import (
 )
 from cast.models import Audio, Video
 from tests.factories import UserFactory
+
+
+@pytest.mark.parametrize("value", [1, "1", 123, "123"])
+def test_collection_id_accepts_exact_positive_integers(value):
+    assert editor_media._parse_collection_id(value) == int(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        1.9,
+        1.0,
+        float("inf"),
+        float("-inf"),
+        float("nan"),
+        True,
+        False,
+        None,
+        [],
+        {},
+        0,
+        -1,
+        "",
+        "01",
+        "+1",
+        " 1",
+        "1 ",
+        "1.0",
+        "1e0",
+        "١",
+        "1_0",
+    ],
+)
+def test_collection_id_rejects_noncanonical_values(value):
+    with pytest.raises(EditorValidationError) as exc:
+        editor_media._parse_collection_id(value)
+    assert exc.value.error_map["collection"][0]["code"] == "invalid"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("value", [1.9, True, None, []])
+def test_collection_resolution_rejects_malformed_values_before_lookup(value, mocker):
+    usable = Collection.objects.all()
+    lookup = mocker.patch.object(usable, "filter")
+    with pytest.raises(EditorValidationError):
+        editor_media._resolve_collection(SimpleNamespace(data={"collection": value}), usable)
+    lookup.assert_not_called()
 
 
 def grant_wagtail_admin_access(user) -> None:
@@ -193,6 +241,22 @@ class TestEditorMediaEndpoints:
         form_error = api_client.post(url, {"title": "Missing file"}, format="multipart")
         assert form_error.status_code == 400
         assert form_error.json()["errors"]["file"][0]["code"] == "required"
+
+    @pytest.mark.parametrize("value", ["01", "+1", " 1", "1.0", "", "1_0"])
+    def test_image_upload_rejects_noncanonical_collection_without_writes(
+        self, api_client, superuser, image_1px, value
+    ):
+        image_model = editor_media.get_image_model()
+        count = image_model.objects.count()
+        api_client.force_authenticate(user=superuser)
+        response = api_client.post(
+            reverse("cast:api:editor_media_images"),
+            {"title": "Invalid collection", "file": image_1px, "collection": value},
+            format="multipart",
+        )
+        assert response.status_code == 400
+        assert response.json()["errors"]["collection"][0]["code"] == "invalid"
+        assert image_model.objects.count() == count
 
     def test_image_upload_ambiguous_collection(self, api_client, image_1px):
         image_bytes = image_1px.read()

@@ -196,12 +196,14 @@ def _reject_unsupported_query_params(request: Request, allowed: set[str]) -> Non
 
 def _parse_collection_id(value: Any) -> int:
     try:
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise TypeError
         collection_id = int(value)
     except (TypeError, ValueError):
         raise EditorValidationError(
             {"collection": [{"code": "invalid", "message": "Collection must be an integer ID."}]}
         )
-    if isinstance(value, bool) or collection_id < 1:
+    if collection_id < 1 or str(value) != str(collection_id):
         raise EditorValidationError(
             {"collection": [{"code": "invalid", "message": "Collection must be an integer ID."}]}
         )
@@ -220,7 +222,7 @@ def _usable_owned_media_collections(user: Any, *, policy: CollectionMediaPermiss
 
 def _resolve_collection(request: Request, usable: QuerySet[Collection]) -> Collection:
     supplied = request.data.get("collection")
-    if supplied not in (None, ""):
+    if "collection" in request.data:
         collection_id = _parse_collection_id(supplied)
         collection = usable.filter(pk=collection_id).first()
         if collection is None:

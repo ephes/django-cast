@@ -1525,7 +1525,10 @@ that collection is selected. If none exists, upload returns
 ``no_upload_collection``. If more than one exists, upload returns a validation
 error on ``collection`` with code ``ambiguous``. A supplied missing or unusable
 collection returns ``collection_permission_denied`` on ``collection``; malformed
-collection values return ``invalid``.
+collection values return ``invalid``. IDs must be positive integers or their
+canonical decimal strings (for example ``1`` or ``"1"``). Floats (including
+``1.0``), booleans, null, empty strings, signs, leading zeros, and whitespace
+are rejected before collection lookup.
 
 Audio and video uploads share a one-in-flight lock per authenticated user; a
 second concurrent audio/video upload returns ``rate_limited``. The lock uses

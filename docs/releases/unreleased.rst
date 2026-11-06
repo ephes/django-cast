@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Editor media collection IDs now require positive integers or canonical decimal
+  strings. Fractional/nonfinite numbers, booleans, null, and noncanonical strings
+  return validation errors instead of being coerced to another collection.
+
 - Move transcript sanitization and copy-on-write speaker transforms into the
   Podlove, DOTe and WebVTT format modules, and episode speaker visibility policy
   into ``cast.transcripts.visibility``. Historical imports from

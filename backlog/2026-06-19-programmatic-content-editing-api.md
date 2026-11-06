@@ -1026,7 +1026,8 @@ Markdown input, and rendered-preview endpoints out of scope; publishing landed l
    Upload collection errors use the split defined above: no usable collection is whole-request
    `no_upload_collection`/HTTP 403, supplied unusable or missing `collection` is field-level
    `collection_permission_denied`/HTTP 400, and omitted `collection` with multiple usable targets is
-   `ambiguous`/HTTP 400.
+   `ambiguous`/HTTP 400. Supplied IDs must be exact positive integers or canonical decimal strings;
+   malformed types (including floats, booleans, and null) return `collection`/`invalid` before lookup.
 4. Add the default one-in-flight audio/video upload throttle per authenticated user, returning HTTP 429 with flat code
    `rate_limited` for a second concurrent audio/video upload by the same user. Prefer a cache-backed lock with a timeout
    long enough to cover expected request body transfer plus the request-path probe budget, not just the 10-second probe
