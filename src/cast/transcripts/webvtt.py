@@ -6,9 +6,9 @@ from collections.abc import Mapping
 from . import parsing
 
 TIMING_SEPARATOR = "-->"
-VOICE_SPAN_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>(?P<body>.*?)</v>")
 VOICE_OPENING_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>")
 VOICE_CLOSING_RE = re.compile(r"</v>")
+VOICE_TAG_RE = re.compile(rf"(?P<opening>{VOICE_OPENING_RE.pattern})|(?P<closing>{VOICE_CLOSING_RE.pattern})")
 GENERIC_SPEAKER_PREFIX_RE = re.compile(r"^(?P<label>Speaker\s+\d+)\s*:\s*(?P<text>.*)$", re.IGNORECASE)
 LABEL_ECHO_SEPARATOR_RE = re.compile(r"\s*:\s*")
 

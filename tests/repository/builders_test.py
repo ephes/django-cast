@@ -333,7 +333,7 @@ def test_blog_index_context_create_from_cachable_data_clears_page_link_cache(moc
     clear_cached_page_urls = mocker.patch("cast.models.repository.contexts.clear_cached_page_urls")
     data = {
         "template_base_dir": "bootstrap4",
-        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
+        "blog": {"type": "blog", "id": 1, "title": "Some blog", "slug": "some-blog"},
         "post_by_id": {1: {"type": "post", "pk": 1}},
         "posts": [1],
         "page_url_by_id": {1: "/foo-bar-baz/"},

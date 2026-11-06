@@ -579,6 +579,9 @@ class TestTranscriptSpeakerMapping:
             f"{cue}<v Bob>Bob: inner <v Bob>voice</v></v>\n"
         )
         assert webvtt.clear_suggestions_from_content(nested, {1000})[0] == f"{cue}inner voice\n"
+        assert sanitize_webvtt_content(webvtt.apply_suggestions_to_content(nested, {1000: "Bob"})[0], set()) == (
+            f"{cue}inner voice\n"
+        )
 
     def test_webvtt_suggestions_only_touch_matching_cues_with_generic_prefixes(self):
         content = (

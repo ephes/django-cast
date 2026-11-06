@@ -18,9 +18,17 @@ Unreleased
   data (which failed later with a ``KeyError``). Create a Wagtail ``Site``
   before serving blog indexes or feeds.
 - Blog index and feed repositories no longer fall back to key-sniffing for
-  posts without a ``type`` discriminator. The cachable data is built and
-  consumed within one request and always carries the discriminator, so the
-  legacy branches were unreachable.
+  posts or blogs without a ``type`` discriminator; ``deserialize_blog`` now
+  raises ``KeyError`` for such data, as the post deserialization already did.
+  The cachable data is built and consumed within one request and always
+  carries the discriminator, so the legacy branches were unreachable.
+- Public WebVTT sanitization now matches voice tags with a stack per cue.
+  Before, a hidden speaker's voice span that contained another voice span
+  (``<v Ann>Ann: x <v Zed>y</v></v>``, as renaming or applying a suggestion to
+  ``Speaker 1: x <v Speaker 2>y</v>`` produces) left a stray ``</v>`` in the
+  public output, and an allowed inner speaker could lose its closing tag.
+  Hiding an opening-only voice now also removes its ``</v>`` on a later line of
+  the same cue.
 
 - Bring the architecture and settings docs in line with the code: ``Blog``,
   ``Podcast`` and ``Season`` live in ``models/index_pages.py``, the "Code
