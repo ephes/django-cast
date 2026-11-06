@@ -5,9 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from wagtail.images import get_image_model
-from wagtail.images.permissions import permission_policy as image_permission_policy
 
-from cast.media_permissions import audio_permission_policy, video_permission_policy
+from cast.media_permissions import audio_permission_policy, get_image_permission_policy, video_permission_policy
 from cast.models import Audio, Video
 
 
@@ -23,7 +22,9 @@ def get_choosable_object(obj_id: Any, user: Any, *, queryset: Any, policy: Any) 
 
 def get_choosable_image(image_id: Any, user: Any) -> Any | None:
     """Return the image when it exists and the caller may choose it."""
-    return get_choosable_object(image_id, user, queryset=get_image_model().objects, policy=image_permission_policy)
+    return get_choosable_object(
+        image_id, user, queryset=get_image_model().objects, policy=get_image_permission_policy()
+    )
 
 
 def image_choosable_by(image_id: Any, user: Any) -> bool:

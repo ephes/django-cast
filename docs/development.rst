@@ -383,7 +383,7 @@ not need PostgreSQL or Docker installed. Seven concurrency cases require real
 PostgreSQL row locks and skip on SQLite.
 
 CI runs those cases plus the publication-policy and editor publication-lock
-modules in one dedicated ``postgres-locks`` job on a standard Ubuntu runner. GitHub Actions starts and
+modules in the dedicated ``postgres-locks`` matrix job on a standard Ubuntu runner. GitHub Actions starts and
 discards a PostgreSQL 17 service container for that job. It uses Python 3.12,
 Django 6.1 and Wagtail 8, has a ten-minute timeout, and runs on pushes and pull
 requests, not the weekly dependency-audit schedule. It does not repeat the full
@@ -396,7 +396,7 @@ To run the same checks locally, optionally start a disposable PostgreSQL server
 
 .. code-block:: bash
 
-   $ uv run tox -e postgres
+   $ uv run tox -e postgres,postgres-wagtail81
 
 This opt-in environment installs its own PostgreSQL driver. Defaults are host
 ``127.0.0.1``, port ``5432``, user/password ``postgres`` and database
@@ -404,7 +404,7 @@ This opt-in environment installs its own PostgreSQL driver. Defaults are host
 ``CAST_TEST_DB_PORT``, ``CAST_TEST_DB_USER``, ``CAST_TEST_DB_PASSWORD`` and
 ``CAST_TEST_DB``. Use only a disposable test database: each pytest command
 recreates it, and the role must be able to create databases. Public/private
-test media remain isolated under ``.tox/postgres``.
+test media remain isolated under ``.tox`` for each environment.
 
 The first command runs the editor schedule-approval race together with the
 publication-policy tests (including their database-access regressions); the
@@ -500,7 +500,7 @@ environments concurrently without one test session deleting another's uploaded f
 checks that the migration graph applies to an empty database at both ends of the supported dependency
 range, and ``uv run tox -e cleanup`` removes every test database and media root.
 
-The ``django61`` and ``wagtail80`` environments also make deprecation warnings visible: they run
+The ``django61``, ``wagtail80``, and ``wagtail81`` environments also make deprecation warnings visible: they run
 pytest with ``-W default::DeprecationWarning -W default::PendingDeprecationWarning`` (through
 ``PYTEST_ADDOPTS``) and set a matching ``PYTHONWARNINGS``. The newest supported Django and Wagtail
 releases are where the next round of removals shows up first, and Django's
@@ -509,8 +509,15 @@ warnings summary that the rest of the matrix - and a plain ``pytest`` run - supp
 ``filterwarnings`` list in ``pyproject.toml``. The warnings do not fail the run. Treat a new one
 coming from ``src/cast`` as work to schedule before the framework release that removes the API, and
 ignore third-party noise until the whole matrix is quiet enough to turn deprecations into errors.
-CI runs ``py314-django61-wagtail80`` and ``py315-django61-wagtail80`` in its tox matrix job, so the
-same summary shows up there.
+Wagtail 8.1 is the newest explicitly tested branch. CI runs
+``py311-django52-wagtail81`` and ``py314-django61-wagtail81`` alongside the retained
+``py314-django61-wagtail80`` and ``py315-django61-wagtail80`` environments, so the
+same summary shows up there. Both Wagtail 8 factors run the isolated v3 experiment
+in a separate process after the regular suite. The Python quality job pins
+Wagtail 8.0.1 and 8.1 exactly and enforces 100% coverage on each; tox factors
+resolve the latest patch within their respective branches. PostgreSQL publication and row-lock
+checks also run on both branches via ``postgres`` (8.0) and ``postgres-wagtail81``;
+these opt-in tox environments require a running PostgreSQL server.
 
 Code Quality
 ============

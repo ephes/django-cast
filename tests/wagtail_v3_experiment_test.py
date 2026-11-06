@@ -1123,7 +1123,18 @@ def test_stock_v3_page_routes_have_no_rendered_preview() -> None:
     adapter_names = {"cast_revision_update", "cast_revision_publish", "cast_draft_preview"}
 
     # The complete stock page-route inventory; none of these renders HTML.
-    assert page_routes - adapter_names == STOCK_V3_PAGE_ROUTE_NAMES
+    expected = STOCK_V3_PAGE_ROUTE_NAMES
+    if WAGTAIL_VERSION >= (8, 1):
+        expected = expected | {
+            "get_page_workflow",
+            "list_page_workflow_history",
+            "pages_actions_workflow_submit",
+            "pages_actions_workflow_approve",
+            "pages_actions_workflow_reject",
+            "pages_actions_workflow_resume",
+            "pages_actions_workflow_cancel",
+        }
+    assert page_routes - adapter_names == expected
 
 
 @pytest.mark.parametrize("fixture_name", ["post", "episode"])
@@ -1232,10 +1243,38 @@ def _section_types(page: Post) -> list[str]:
     return [section["type"] for section in page.get_latest_revision_as_object().body.raw_data]
 
 
-def test_stock_body_schema_has_no_block_guidance(client, admin_user) -> None:
+def test_stock_body_schema_guidance_depends_on_wagtail_version(client, admin_user) -> None:
     schema = _schema(client, _bearer_token(admin_user), Post)
 
-    assert schema["patch"]["properties"]["body"] == {"default": [], "items": {}, "title": "Body", "type": "array"}
+    patch = schema["patch"]
+    items = {}
+    if WAGTAIL_VERSION >= (8, 1):
+        sections = {name: f"#/$defs/PostBody{name.title()}ItemInput" for name in ("overview", "detail")}
+        items = {
+            "discriminator": {"mapping": sections, "propertyName": "type"},
+            "oneOf": [{"$ref": ref} for ref in sections.values()],
+        }
+        blocks = {
+            name: f"#/$defs/ContentBlock{name.title()}ItemInput"
+            for name in ("paragraph", "code", "image", "gallery", "embed", "video", "audio")
+        }
+        for name, ref in sections.items():
+            section = patch["$defs"][ref.removeprefix("#/$defs/")]
+            assert section["required"] == ["type", "value"]
+            assert section["properties"]["type"]["const"] == name
+            assert section["properties"]["value"] == {
+                "type": "array",
+                "title": "Value",
+                "items": {
+                    "discriminator": {"mapping": blocks, "propertyName": "type"},
+                    "oneOf": [{"$ref": block_ref} for block_ref in blocks.values()],
+                },
+            }
+        for name, ref in blocks.items():
+            block = patch["$defs"][ref.removeprefix("#/$defs/")]
+            assert block["properties"]["type"]["const"] == name
+            assert "value" in block["properties"]
+    assert patch["properties"]["body"] == {"default": [], "items": items, "title": "Body", "type": "array"}
 
 
 def test_stock_body_write_replaces_whole_field_and_sanitizes_rich_text(client, admin_user, post) -> None:
