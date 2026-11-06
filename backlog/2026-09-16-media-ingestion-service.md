@@ -3,7 +3,16 @@
 Date: 2026-09-16   Status: Implemented in commits ``f1162cf5``, ``7e98f13f``, ``db38dba8``, ``72ddd2dd``,
 ``52f9b9f3``, ``8c5928e3``, ``1cf0e857``, ``4f700564``, and this note's closing private-address-policy commit.
 
-## Problem
+## Implemented follow-up (2026-11-06)
+
+Editor image uploads also use `ingest_upload` with `IngestPolicy(None, ("file",))`: fresh storage names, atomic
+image/tag registration, and compensating cleanup of a failed upload. No media probe budget or upload lock is
+needed for this path. Synthetic in-memory overwrite storage tests cover INSERT, m2m, storage-save and cleanup
+failures, preservation of an existing same-named image (including long filenames), and successful
+owner/collection/tag serialization. The editor supplies a short stem before ingest naming so Wagtail
+`upload_to` cannot truncate away the UUID suffix; cleanup failures use the standard `cleanup_failed` JSON response.
+
+## Problem (historical evidence)
 
 Upload safety is a property of one transport, not of the media layer. The editor API is the only entry point that
 serialises uploads per user and bounds ffprobe/ffmpeg time: `EditorAudioListCreateView.post` and

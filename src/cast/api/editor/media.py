@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from copy import copy
+from pathlib import PurePosixPath
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
@@ -25,6 +26,7 @@ from ... import appsettings
 from ...forms import AudioForm, get_video_form
 from ...media_ingest import (
     AUDIO_FILE_FIELDS,
+    IngestPolicy,
     MediaIngestCleanupFailed,
     MediaIngestError,
     MediaProbeFailed,
@@ -196,12 +198,14 @@ def _reject_unsupported_query_params(request: Request, allowed: set[str]) -> Non
 
 def _parse_collection_id(value: Any) -> int:
     try:
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise TypeError
         collection_id = int(value)
     except (TypeError, ValueError):
         raise EditorValidationError(
             {"collection": [{"code": "invalid", "message": "Collection must be an integer ID."}]}
         )
-    if isinstance(value, bool) or collection_id < 1:
+    if collection_id < 1 or str(value) != str(collection_id):
         raise EditorValidationError(
             {"collection": [{"code": "invalid", "message": "Collection must be an integer ID."}]}
         )
@@ -220,7 +224,7 @@ def _usable_owned_media_collections(user: Any, *, policy: CollectionMediaPermiss
 
 def _resolve_collection(request: Request, usable: QuerySet[Collection]) -> Collection:
     supplied = request.data.get("collection")
-    if supplied not in (None, ""):
+    if "collection" in request.data:
         collection_id = _parse_collection_id(supplied)
         collection = usable.filter(pk=collection_id).first()
         if collection is None:
@@ -316,8 +320,12 @@ class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
         image = form.save(commit=False)
         image.uploaded_by_user = request.user
         image.collection = collection
-        image.save()
-        form.save_m2m()
+        # Wagtail truncates long stems in upload_to; keep the ingest UUID intact.
+        image.file.name = f"image{PurePosixPath(image.file.name).suffix}"
+        try:
+            image = ingest_upload(form, policy=IngestPolicy(probe_seconds=None, file_fields=("file",)))
+        except MediaIngestCleanupFailed:
+            return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
         return Response(serialize_image(image, user=request.user), status=status.HTTP_201_CREATED)
 
 
