@@ -393,18 +393,25 @@ def restore_site_root_paths_cache(isolated_cache, baseline_site_root_paths_cache
     )
 
 
-@pytest.fixture(autouse=True)
-def _drop_appsettings_module_overrides():
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item, nextitem):
     """Keep cast.appsettings reading Django settings across tests.
 
-    ``monkeypatch.setattr(appsettings, NAME, ...)`` restores the previous value
-    as a real module attribute, which then shadows ``appsettings.__getattr__``
-    and hides later ``settings.NAME`` changes. Autouse fixtures tear down after
-    ``monkeypatch``, so removing the leftovers here isolates every test.
+    Tests override settings by assigning to ``cast.appsettings`` directly or
+    through ``monkeypatch.setattr``. Depending on the pytest version, undoing
+    such a patch either restores the previous value as a real module attribute
+    (pytest < 9.2), which then shadows ``appsettings.__getattr__`` and hides
+    later ``settings.NAME`` changes, or deletes the module attribute (pytest >=
+    9.2). An autouse fixture cannot clean this up reliably: pytest-django's
+    autouse fixtures request ``monkeypatch`` first, so ``monkeypatch`` is torn
+    down after every project fixture. Dropping the leftovers once all fixtures
+    of the test are torn down works for both behaviors.
     """
-    yield
-    for name in appsettings.CAST_SETTING_REGISTRY:
-        vars(appsettings).pop(name, None)
+    try:
+        return (yield)
+    finally:
+        for name in appsettings.CAST_SETTING_REGISTRY:
+            vars(appsettings).pop(name, None)
 
 
 @pytest.fixture(autouse=True)

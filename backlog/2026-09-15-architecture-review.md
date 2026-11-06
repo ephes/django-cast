@@ -92,6 +92,12 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   field. Direction: delete the branches, raise on a missing discriminator, delete
   `serialization_test.py:252,290,513,529,545` in the same change to hold 100%, centralize the repeated
   `collection_id`/`"collection": None` handling.
+  Fix note (2026-11-06, fixed): the two post branches in `repository/contexts.py` are gone and a post without
+  `type` now raises `KeyError`; the three legacy post tests became one parametrized rejection test. Unreachability:
+  the only producers of `post_by_id` are `serialize_post`/`serialize_episode`, which always write `type`, and the
+  deserializers work on copies. Follow-up the same day: the `deserialize_blog` fallback is gone too (only
+  `serialize_blog` produces blog data and always writes `type`; its two legacy tests became one rejection test), and
+  the four `collection_id`/`"collection": None` blocks share `serialization._collection_fields`.
 - **D5. The cachable boundary serializes and immediately deserializes per request with no cache** (medium,
   architecture) — `models/index_pages.py:286`, `feeds.py:95-98`, plus a FIXME `refresh_from_db` (`contexts.py:253`).
   The deserializers also disagree on key normalization (`FeedContext._int_keyed` vs `BlogIndexContext` indexing
@@ -100,6 +106,10 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   wire a real cache keyed on version+blog+params with one shared `_normalize_cachable_data()` and publish-signal
   invalidation, or drop the round trip and build contexts from `PostQuerySnapshot` directly. Either way remove the
   FIXME, fix the settings doc, and add a default-vs-django parity test (D1 and D-extra are symptoms of its absence).
+  Fix note (2026-11-05, docs only, D5 itself still open): `docs/reference/settings.rst` no longer says the
+  `"default"` repository uses "optimized SQL"; it describes the ORM queries plus the in-request
+  serialize/deserialize round trip with no cache. The "Repository Pattern" section of `docs/architecture.rst`
+  no longer shows a JSON cache in the flow. The cache-or-drop decision, the FIXME and the parity test remain.
 - **D6. `has_audio` and the cover fallback are computed in several places** (medium, duplication) —
   `repository/snapshot.py:176`. `Post.has_audio` (`pages.py:320-333`) recomputes it with two extra queries and a
   different exception set; cover resolution exists five times (`pages.py:517-527`, `529-548`, `550-561`,
@@ -148,6 +158,9 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   `Site.objects.filter(is_default_site=True)...first()`, raising `ImproperlyConfigured` on an empty table instead of
   omitting `data["site"]`; this rewrites `test_add_site_raw_falls_back_to_sql_when_no_context` and
   `test_add_site_raw_handles_empty_site_table` and needs one new test for the raise.
+  Fix note (2026-11-06, fixed): the fallback is `Site.objects.order_by("-is_default_site", "pk").first()` (default
+  site, then lowest pk) and raises `ImproperlyConfigured` on an empty table; the package has no raw SQL left in
+  `builders.py`, and `docs/architecture.rst` no longer mentions a raw SQL site lookup.
 - **D-extra. `serialize_episode` crashes on a live `Episode` with NULL `podcast_audio`** (medium, bug) —
   `serialize_episode` (`serialization.py:283`) calls `serialize_audio(post.podcast_audio)` unconditionally at line
   295, and `serialize_audio:26` reads `audio.pk` on `None`, so the podcast index 500s under `"default"` and renders
@@ -348,10 +361,12 @@ documented in tiers that match the code. The remaining problems are concentrated
   `cast/transcripts/` (upstreaming the prefix handling so both paths agree) and the Episode-visibility policy into
   `audio_access.py` or a `transcripts/visibility.py`. The claim that its `from .models import Episode` reintroduces
   the models cycle is wrong — nothing under `cast/models` or `cast/transcripts` imports this module.
-  Fix note (partial, 2026-10-13): stored WebVTT generic prefixes now become
-  closed voice spans per payload line, keeping labels discoverable and sanitizable.
-  Read-time public mapping still uses named text prefixes; reconciling that
-  representation and the broader deduplication remain open.
+  Fix note (2026-11-05, partly fixed): `transcript_sanitization.py` now imports `clean_speaker_label` from
+  `cast.transcripts.parsing` and the WebVTT patterns (`VOICE_TAG_RE`, `VOICE_OPENING_RE`, the generic-prefix
+  matcher) from `cast.transcripts.webvtt`. Its `apply_speaker_mapping_to_webvtt_content` delegates to
+  `webvtt.rewrite_speakers`, and the Podlove/DOTe mapping helpers delegate to `podlove`/`dote.rewrite_speakers` on a
+  copy, so the stored rewrite and the read-time mapping can no longer drift. Not done: the sanitising functions and the
+  Episode-visibility policy still live in `transcript_sanitization.py`.
 - **X4. The theme contract is enforced only by `DeprecationWarning`s emitted during discovery** (medium,
   architecture) — `models/theme.py:109`. The soft-required tier is the staged-enforcement mechanism the docs
   promise, but the warning is hidden by Python's default filters, by pytest's
@@ -420,10 +435,20 @@ documented in tiers that match the code. The remaining problems are concentrated
   `services.get_speaker_labels` surfaces to the editor, but `rewrite_payload_line` (193-202) rewrites only `<v>`
   spans, so the editor offers labels `services.rewrite_speaker_labels` cannot rename in the VTT artifact. X3's
   fix must correct `webvtt.py`'s own extraction/rewrite pair, not just the duplicate.
+  Fix note (2026-11-05, fixed): `webvtt.rewrite_payload_line` now also renames a leading `Speaker N:` prefix by turning
+  it into a closed `<v Name>Name: text</v>` voice span (owner decision: the voice span keeps the name
+  detectable, renamable and sanitisable, the repeated `Name:` keeps it visible in native players; a second rename
+  replaces the repeated name and the sanitizer strips it), detection and rewriting share `match_generic_speaker_prefix`, and a
+  parity test in `tests/transcripts/speaker_mapping_test.py` checks that every reported label can be renamed.
+  Follow-up (2026-11-06, fixed): the known-speaker suggestion path now reaches the same parity. Applying a suggestion
+  to a never-renamed `Speaker 1: hi` wrote `<v Bob>Speaker 1: hi`, keeping the old prefix public; it now writes
+  `<v Bob>Bob: hi</v>` via `webvtt.replace_generic_speaker_prefix`, and clearing a suggestion drops the prefix like
+  the cleared Podlove/DOTe speakers.
+  Follow-up (2026-11-06, fixed): `_sanitize_webvtt_payload_line` matched `<v>...</v>` with a non-greedy span regex,
+  so a hidden outer voice around an inner one (`<v Ann>Ann: x <v Zed>y</v></v>`, from renaming
+  `Speaker 1: x <v Speaker 2>y</v>`) left a stray `</v>`. It now walks voice tags with a per-cue stack
+  (`webvtt.VOICE_TAG_RE`); the unused `VOICE_SPAN_RE` is gone.
 
-  Fix note (2026-10-13, fixed): the transcript rewrite API now converts generic cue
-  prefixes to closed voice spans and renames existing voice tags. Regression
-  coverage checks follow-up renames, sanitization and unchanged non-cue bytes.
 
 Strengths: `CAST_SETTING_REGISTRY` plus module `__getattr__` (copy-on-read, `TYPE_CHECKING` stubs) is a clean single
 source of truth that `check_cast_setting_types` and `comments/appsettings.py` derive from, and every `CAST_*` name in
@@ -529,6 +554,11 @@ The coverage gate produces real tests, not pragma sprawl: 37 `pragma: no cover` 
   fixed with this note), and the "Code Organization" tree (277-287) lists 9 entries for a package with ~50 top-level
   modules plus `transcripts/`, `voxhelm/`, `comments/`, `admin_urls/` and `models/repository/`. Direction:
   regenerate the tree from the real layout; consider a docs test asserting every ``path.py`` it mentions exists.
+  Fix note (2026-11-05, fixed): `docs/architecture.rst` now names the module of each page model (`Blog`,
+  `Podcast` and `Season` in `models/index_pages.py`), adds the remaining model modules, and replaces the
+  9-entry tree with a grouped tree of every top-level module and every `models/` module.
+  `tests/docs_paths_test.py` fails when the tree misses a module or lists one that does not exist, and when a
+  `src/cast/...`, `cast/...` or `models/...` path in any docs page does not exist.
 - **T10. Vite manifest post-processing is hand-duplicated in the justfile and CI** (low, duplication) —
   `justfile:149`. The six-step move/strip-newline/copy dance exists twice with different shell semantics, and a third
   mechanism (`scripts/check_asset_freshness.py`, X10) is documented in `development.rst:262` but used by neither, so

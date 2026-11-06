@@ -963,7 +963,7 @@ def test_speaker_prefix_cues_give_the_same_files_in_both_orders(audio, glossary_
         results.append(file_bytes(transcript)["vtt"])
         transcript.delete()
     assert results[0] == results[1]
-    assert "<v Jon Gould>Speaker 1: Jon said.\n" in results[0].decode()
+    assert "<v Jon Gould>Jon Gould: Jon said.</v>\n" in results[0].decode()
 
 
 @pytest.mark.django_db
@@ -1153,3 +1153,11 @@ def test_rejected_occurrence_can_be_approved_again_after_it_became_automatic(tra
     assert public_texts(transcript)[0][12500] == "We use Buttondown for mail."
     replacements = transcript.corrections_data["segments"][1]["replacements"]
     assert [(item["to"], item["state"]) for item in replacements] == [("Buttondown", STATE_APPROVED)]
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n", ""])
+def test_set_cue_text_preserves_echoed_speaker_and_is_idempotent(ending):
+    lines = [f"<v.loud Jon Gould>Jon Gould: John said.</v>{ending}"]
+    corrected = [f"<v.loud Jon Gould>Jon Gould: Jon said.</v>{ending}"]
+    assert webvtt.set_cue_text(lines, "Jon said.") == corrected
+    assert webvtt.set_cue_text(corrected, "Jon said.") is corrected

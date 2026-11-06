@@ -10,10 +10,11 @@ from copy import deepcopy
 from datetime import time, timedelta
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, reset_queries
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
-from wagtail.models import Site as WagtailSite
+from wagtail.models import Page, Site as WagtailSite
 
 from cast.devdata import create_post, create_transcript
 from cast.models import (
@@ -179,39 +180,39 @@ def test_add_site_raw_uses_blog_site_if_request_has_no_site(rf, blog, mocker):
 
 
 @pytest.mark.django_db
-def test_add_site_raw_falls_back_to_sql_when_no_context():
+def test_add_site_raw_falls_back_to_orm_when_no_context():
     data = add_site_raw({})
     assert "site" in data
     assert "id" in data["site"]
 
 
-def test_add_site_raw_handles_empty_site_table(mocker):
-    class EmptySiteCursor:
-        description = [
-            ("id",),
-            ("hostname",),
-            ("port",),
-            ("site_name",),
-            ("root_page_id",),
-            ("is_default_site",),
-        ]
+@pytest.mark.django_db
+def test_add_site_raw_fallback_prefers_default_site_then_lowest_pk():
+    WagtailSite.objects.all().delete()
+    root_page = Page.get_first_root_node()
+    first = WagtailSite.objects.create(hostname="first.local", root_page=root_page)
+    WagtailSite.objects.create(hostname="second.local", root_page=root_page)
 
-        def execute(self, *_args, **_kwargs):
-            return None
+    assert add_site_raw({})["site"]["id"] == first.id
 
-        def fetchone(self):
-            return None
+    default = WagtailSite.objects.create(hostname="default.local", root_page=root_page, is_default_site=True)
 
-        def __enter__(self):
-            return self
+    assert add_site_raw({})["site"] == {
+        "id": default.id,
+        "hostname": "default.local",
+        "port": 80,
+        "site_name": "",
+        "root_page_id": root_page.id,
+        "is_default_site": True,
+    }
 
-        def __exit__(self, *_exc):
-            return False
 
-    mocker.patch("cast.models.repository.builders.Site.find_for_request", return_value=None)
-    mocker.patch("cast.models.repository.builders.connection.cursor", return_value=EmptySiteCursor())
-    data = add_site_raw({})
-    assert "site" not in data
+@pytest.mark.django_db
+def test_add_site_raw_raises_improperly_configured_on_empty_site_table():
+    WagtailSite.objects.all().delete()
+
+    with pytest.raises(ImproperlyConfigured, match="Site table is empty"):
+        add_site_raw({})
 
 
 def test_page_link_handler_expand_db_attributes_single():
@@ -332,8 +333,8 @@ def test_blog_index_context_create_from_cachable_data_clears_page_link_cache(moc
     clear_cached_page_urls = mocker.patch("cast.models.repository.contexts.clear_cached_page_urls")
     data = {
         "template_base_dir": "bootstrap4",
-        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
-        "post_by_id": {1: {"pk": 1}},
+        "blog": {"type": "blog", "id": 1, "title": "Some blog", "slug": "some-blog"},
+        "post_by_id": {1: {"type": "post", "pk": 1}},
         "posts": [1],
         "page_url_by_id": {1: "/foo-bar-baz/"},
         "absolute_page_url_by_id": {1: "http://testserver/foo-bar-baz/"},

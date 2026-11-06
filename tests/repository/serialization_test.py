@@ -214,13 +214,13 @@ def test_deserialize_blog_returns_blog(blog):
 
 
 @pytest.mark.django_db
-def test_deserialize_legacy_blog_without_type_returns_blog(blog):
+def test_deserialize_blog_without_type_is_rejected(blog):
+    # Cachable blog data comes only from serialize_blog, which always writes the discriminator.
     data = serialize_blog(blog)
     data.pop("type")
-    rebuilt = deserialize_blog(data)
-    assert isinstance(rebuilt, Blog)
-    assert not isinstance(rebuilt, Podcast)
-    assert rebuilt.title == blog.title
+
+    with pytest.raises(KeyError, match="type"):
+        deserialize_blog(data)
 
 
 @pytest.mark.django_db
@@ -249,21 +249,6 @@ def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
     # no choices found
     choices = get_facet_choices({}, "foobar")
     assert choices == []
-
-
-@pytest.mark.django_db
-def test_deserialize_legacy_podcast_without_type_returns_podcast(podcast_with_artwork):
-    podcast_with_artwork.itunes_categories = "Technology"
-    podcast_with_artwork.keywords = "foo,bar"
-    podcast_with_artwork.explicit = 2
-    podcast_with_artwork.save(update_fields=["itunes_categories", "keywords", "explicit"])
-
-    data = serialize_blog(podcast_with_artwork)
-    data.pop("type")
-    rebuilt = deserialize_blog(data)
-
-    assert isinstance(rebuilt, Podcast)
-    assert rebuilt.keywords == podcast_with_artwork.keywords
 
 
 @pytest.mark.django_db
@@ -497,54 +482,24 @@ def test_feed_context_deserializes_episode_discriminator(blog_data):
     assert isinstance(repository.post_by_id[1], Episode)
 
 
-def test_feed_context_deserializes_legacy_post_without_type(blog_data):
+@pytest.mark.parametrize("context_class", [FeedContext, BlogIndexContext])
+def test_cachable_post_data_without_type_is_rejected(blog_data, context_class):
+    # Cachable data is built and consumed within one request, and serialize_post /
+    # serialize_episode always write the discriminator, so there is no legacy form to sniff.
     data = deepcopy(blog_data)
-    data.update(
-        {
-            "site": {"id": 1},
-            "blog_url": "/some-blog/",
-        }
-    )
+    data.update({"site": {"id": 1}, "blog_url": "/some-blog/"})
     data["post_by_id"][1].pop("type")
 
-    repository = FeedContext.create_from_cachable_data(data=data)
-
-    assert isinstance(repository.post_by_id[1], Post)
-    assert not isinstance(repository.post_by_id[1], Episode)
-
-
-def test_feed_context_deserializes_legacy_episode_without_type(blog_data):
-    data = deepcopy(blog_data)
-    data.update(
-        {
-            "site": {"id": 1},
-            "blog_url": "/some-blog/",
-        }
-    )
-    data["post_by_id"][1].pop("type")
-    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
-
-    repository = FeedContext.create_from_cachable_data(data=data)
-
-    assert isinstance(repository.post_by_id[1], Episode)
-
-
-def test_blog_index_context_deserializes_legacy_episode_without_type(blog_data):
-    data = deepcopy(blog_data)
-    data["post_by_id"][1].pop("type")
-    data["post_by_id"][1]["podcast_audio"] = data["audios"][1]
-
-    repository = BlogIndexContext.create_from_cachable_data(data=data)
-
-    assert isinstance(repository.post_by_id[1], Episode)
+    with pytest.raises(KeyError, match="type"):
+        context_class.create_from_cachable_data(data=data)
 
 
 @pytest.mark.django_db
 def test_create_from_cachable_data_use_audio_player_false():
     data = {
         "template_base_dir": "bootstrap4",
-        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
-        "post_by_id": {1: {"pk": 1}},
+        "blog": {"type": "blog", "id": 1, "title": "Some blog", "slug": "some-blog"},
+        "post_by_id": {1: {"type": "post", "pk": 1}},
         "posts": [1],
         "page_url_by_id": {1: "/foo-bar-baz/"},
         "absolute_page_url_by_id": {1: "http://testserver/foo-bar-baz/"},

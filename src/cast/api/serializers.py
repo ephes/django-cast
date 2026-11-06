@@ -75,8 +75,7 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
     def to_representation(self, instance: Audio) -> dict:
         # Load the Podlove transcript JSON once so the transcripts and
         # contributors fields share a single file read per response.
-        post = self.context.get("post")
-        episode = getattr(post, "specific", post)
+        episode = self._speaker_episode()
         raw_podlove_data = self._load_podlove_data(instance, episode=episode)
         allowed_speaker_labels = strict_public_speaker_labels_for_audio(instance, episode=episode)
         self._podlove_data = sanitize_podlove_data(raw_podlove_data, allowed_speaker_labels)
@@ -130,9 +129,15 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         cached = getattr(self, "_podlove_data", None)
         if cached is not None:
             return cached
+        return self._load_podlove_data(instance, episode=self._speaker_episode())
+
+    def _speaker_episode(self) -> Any | None:
+        """Return the speaker-label context: an editor's draft preview episode, else the post."""
+        speaker_episode = self.context.get("speaker_episode")
+        if speaker_episode is not None:
+            return speaker_episode
         post = self.context.get("post")
-        episode = getattr(post, "specific", post)
-        return self._load_podlove_data(instance, episode=episode)
+        return getattr(post, "specific", post)
 
     def get_transcripts(self, instance: Audio) -> list[dict]:
         """Return the Podlove transcript segments for the Podlove Web Player."""

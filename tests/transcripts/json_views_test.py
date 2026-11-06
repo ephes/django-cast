@@ -337,7 +337,7 @@ class TestGetTranscriptAsJson:
         assert vtt_response.status_code == 200
         vtt_content = vtt_response.content.decode("utf-8")
         assert "<v Alice>Alice line</v>" in vtt_content
-        assert "Guest Voice: Guest line" in vtt_content
+        assert "<v Guest Voice>Guest Voice: Guest line</v>" in vtt_content
         assert "Speaker 3" not in vtt_content
         assert html_response.status_code == 200
         html_content = html_response.content.decode("utf-8")

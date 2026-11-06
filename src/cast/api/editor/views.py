@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ...content.sections import body_sections_with_replacements, section_value
-from ...models import Audio, Blog, Episode, Podcast, Post, Season
+from ...models import Audio, Blog, Contributor, Episode, EpisodeContributor, Podcast, Post, Season
 from ...models.snippets import PostCategory
 from ...preview import render_editor_preview
 from ...publication import PublicationRejected, check_publishable
@@ -718,6 +718,73 @@ class EpisodeEditorMixin(PostEditorMixin):
             episode.explicit = data["explicit"]
         if "block" in data:
             episode.block = data["block"]
+        if "contributors" in data:
+            episode.contributor_assignments = self._resolve_contributor_assignments(episode, data["contributors"])
+
+    def _resolve_contributor_assignments(
+        self, episode: Episode, refs: list[dict[str, Any]]
+    ) -> list[EpisodeContributor]:
+        """Build the ordered replacement assignment list for ``episode``.
+
+        An omitted ``role`` uses the contributor's ``default_role``. The per-episode
+        link chosen in Wagtail is kept for a contributor/role pair that stays assigned,
+        so replacing the list from the API does not silently drop admin-only data.
+        """
+        ids = {ref["id"] for ref in refs if "id" in ref}
+        slugs = {ref["slug"] for ref in refs if "slug" in ref}
+        contributors = list(Contributor.objects.filter(Q(pk__in=ids) | Q(slug__in=slugs)))
+        by_id = {contributor.pk: contributor for contributor in contributors}
+        by_slug = {contributor.slug: contributor for contributor in contributors}
+        existing_links = {
+            (assignment.contributor_id, assignment.role): assignment.link_id
+            for assignment in episode.contributor_assignments.all()
+        }
+        errors: dict[str, list[dict[str, str]]] = {}
+        assignments: list[EpisodeContributor] = []
+        seen: set[tuple[int, str]] = set()
+        for index, ref in enumerate(refs):
+            key = "id" if "id" in ref else "slug"
+            contributor = by_id.get(ref["id"]) if key == "id" else by_slug.get(ref["slug"])
+            if contributor is None:
+                errors[f"contributors.{index}.{key}"] = [
+                    {"code": "not_found", "message": f"Contributor {ref[key]!r} does not exist."}
+                ]
+                continue
+            role = ref.get("role") or contributor.default_role
+            if (contributor.pk, role) in seen:
+                errors[f"contributors.{index}"] = [
+                    {"code": "duplicate", "message": f"Contributor {contributor.slug!r} is already listed as {role}."}
+                ]
+                continue
+            seen.add((contributor.pk, role))
+            assignments.append(
+                EpisodeContributor(
+                    contributor=contributor,
+                    role=role,
+                    link_id=existing_links.get((contributor.pk, role)),
+                    sort_order=len(assignments),
+                )
+            )
+        if errors:
+            raise EditorValidationError(errors)
+        return assignments
+
+    @staticmethod
+    def _serialize_contributors(content_post: Episode) -> list[dict[str, Any]]:
+        assignments = sorted(
+            content_post.contributor_assignments.select_related("contributor").all(),
+            key=lambda assignment: assignment.sort_order if assignment.sort_order is not None else 0,
+        )
+        return [
+            {
+                "id": assignment.contributor_id,
+                "slug": assignment.contributor.slug,
+                "display_name": assignment.contributor.display_name,
+                "role": assignment.role,
+                "visible": assignment.contributor.visible,
+            }
+            for assignment in assignments
+        ]
 
     def _extra_serialized_fields(self, content_post: Episode, *, user: Any) -> dict:
         podcast_audio = None
@@ -734,6 +801,7 @@ class EpisodeEditorMixin(PostEditorMixin):
             "keywords": content_post.keywords,
             "explicit": content_post.explicit,
             "block": content_post.block,
+            "contributors": self._serialize_contributors(content_post),
         }
 
 

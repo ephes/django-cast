@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-import os
-
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from wagtail.models import Site
 
 from cast.models.voxhelm_settings import VoxhelmSettings
+
+from ..setting_resolution import (
+    SETTING_SOURCE_DJANGO,
+    SETTING_SOURCE_SITE,
+    environment_setting,
+    parse_bool_setting,
+    resolve_layered_setting,
+)
 
 SITE_SETTING_FIELD_MAP = {
     "CAST_VOXHELM_API_BASE": "api_base",
@@ -17,8 +23,6 @@ SITE_SETTING_FIELD_MAP = {
     "CAST_VOXHELM_DIARIZATION_ENABLED": "diarization_enabled",
     "CAST_VOXHELM_KNOWN_SPEAKER_ENABLED": "known_speaker_enabled",
 }
-TRUE_SETTING_VALUES = {"1", "true", "yes", "on"}
-FALSE_SETTING_VALUES = {"0", "false", "no", "off"}
 
 
 def get_site_setting_value(name: str, request_or_site: HttpRequest | Site | None) -> object:
@@ -36,24 +40,31 @@ def get_site_setting_value(name: str, request_or_site: HttpRequest | Site | None
     return value
 
 
-def get_setting(name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None) -> object:
+def resolve_setting(
+    name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None
+) -> tuple[object, str]:
+    """Return ``(value, source)`` for a Voxhelm setting.
+
+    ``source`` is one of ``SETTING_SOURCES``: the Wagtail site setting, a Django
+    setting, an environment variable, or the caller's default. Empty values
+    (``None``/``""``) at a level fall through to the next level, so a nullable
+    site boolean left unset inherits the Django setting or environment variable.
+    """
     credential_names = ("CAST_VOXHELM_API_BASE", "CAST_VOXHELM_API_KEY")
     if name in credential_names:
         # Any credential at a level selects the entire pair, even if incomplete.
         site_pair = {key: get_site_setting_value(key, request_or_site) for key in credential_names}
         if any(value not in {None, ""} for value in site_pair.values()):
-            return site_pair[name]
+            return site_pair[name], SETTING_SOURCE_SITE
         django_pair = {key: getattr(settings, key, None) for key in credential_names}
         if any(value not in {None, ""} for value in django_pair.values()):
-            return django_pair[name]
-        return os.getenv(name, default)
-    site_value = get_site_setting_value(name, request_or_site)
-    if site_value not in {None, ""}:
-        return site_value
-    value = getattr(settings, name, None)
-    if value not in {None, ""}:
-        return value
-    return os.getenv(name, default)
+            return django_pair[name], SETTING_SOURCE_DJANGO
+        return environment_setting(name, default)
+    return resolve_layered_setting(name, get_site_setting_value(name, request_or_site), default)
+
+
+def get_setting(name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None) -> object:
+    return resolve_setting(name, default, request_or_site=request_or_site)[0]
 
 
 def voxhelm_configured(*, request_or_site: HttpRequest | Site | None = None) -> bool:
@@ -82,20 +93,13 @@ def get_float_setting(name: str, default: float, *, request_or_site: HttpRequest
         ) from exc
 
 
+def resolve_bool_setting(
+    name: str, default: bool = False, *, request_or_site: HttpRequest | Site | None = None
+) -> tuple[bool, str]:
+    """Return the parsed boolean value of a Voxhelm setting and the level it came from."""
+    value, source = resolve_setting(name, default, request_or_site=request_or_site)
+    return parse_bool_setting(name, value, source, default)
+
+
 def get_bool_setting(name: str, default: bool = False, *, request_or_site: HttpRequest | Site | None = None) -> bool:
-    value = get_setting(name, default, request_or_site=request_or_site)
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int) and value in {0, 1}:
-        return bool(value)
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if not normalized:
-            return default
-        if normalized in TRUE_SETTING_VALUES:
-            return True
-        if normalized in FALSE_SETTING_VALUES:
-            return False
-    raise ImproperlyConfigured(
-        f"{name} must be configured as a boolean value: one of 1, true, yes, on, 0, false, no, or off."
-    )
+    return resolve_bool_setting(name, default, request_or_site=request_or_site)[0]

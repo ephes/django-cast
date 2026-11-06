@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse
 
-from django.db import connection
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from wagtail.images.models import Image
@@ -110,35 +110,20 @@ def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, bl
         site = Site.find_for_request(request)
     if site is None and blog is not None:
         site = blog.get_site()
-    if site is not None:
-        data["site"] = {
-            "id": site.id,
-            "hostname": site.hostname,
-            "port": site.port,
-            "site_name": site.site_name,
-            "root_page_id": site.root_page_id,
-            "is_default_site": site.is_default_site,
-        }
-        return data
-
-    # Fallback for contexts where request/blog site resolution is not available.
-    site_statement = """
-        select
-            id,
-            hostname,
-            port,
-            site_name,
-            root_page_id,
-            is_default_site
-        from
-            wagtailcore_site
-    """
-    with connection.cursor() as cursor:
-        cursor.execute(site_statement)
-        columns = [col[0] for col in cursor.description]
-        row_tuple = cursor.fetchone()
-        if row_tuple is not None:
-            data["site"] = dict(zip(columns, row_tuple))
+    if site is None:
+        # Fallback for contexts where request/blog site resolution is not available:
+        # prefer the default site, then the lowest primary key, so the choice is stable.
+        site = Site.objects.order_by("-is_default_site", "pk").first()
+    if site is None:
+        raise ImproperlyConfigured("django-cast needs at least one Wagtail Site, but the Site table is empty.")
+    data["site"] = {
+        "id": site.id,
+        "hostname": site.hostname,
+        "port": site.port,
+        "site_name": site.site_name,
+        "root_page_id": site.root_page_id,
+        "is_default_site": site.is_default_site,
+    }
     return data
 
 

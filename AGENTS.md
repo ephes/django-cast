@@ -43,7 +43,7 @@
 - Before committing, verify whether documentation and release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 - Update docs when adding features or changing behavior.
 - When preparing a release, add a new file under `docs/releases/` and link it in `docs/releases/index.rst`.
-- For ongoing changes, update `docs/releases/<current-version>.rst`, where `<current-version>` matches `pyproject.toml` and is the first entry in `docs/releases/index.rst`; do not create a new release notes file until the version is bumped.
+- For ongoing changes, update `docs/releases/<current-version>.rst` when it is unreleased. If the current version is already tagged and no version bump is requested, record pending notes in `docs/releases/unreleased.rst` and link it first in `docs/releases/index.rst`. At the next bump, move those notes into `<next-version>.rst` and remove the standalone page and index entry.
 
 ## Releasing
 - See `docs/release.rst` for the full release process (checks, JS build, tox, merge, GitHub release, PyPI publish).

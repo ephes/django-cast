@@ -105,7 +105,7 @@ def blog_data(post, renditions_for_post):
     serialized_renditions = serialize_renditions(renditions_for_post)
     data = {
         "template_base_dir": "bootstrap4",
-        "blog": {"id": 1, "title": "Some blog", "slug": "some-blog"},
+        "blog": {"type": "blog", "id": 1, "title": "Some blog", "slug": "some-blog"},
         "blog_cover_image_url": "",
         "blog_cover_alt_text": "",
         "post_by_id": {1: serialize_post(post)},

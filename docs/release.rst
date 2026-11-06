@@ -130,6 +130,10 @@ Update the version number in:
 Create a new release notes file ``docs/releases/<next-version>.rst`` with
 "(unreleased)" as the date, and add it to ``docs/releases/index.rst``.
 
+If pending changes are recorded in ``docs/releases/unreleased.rst``, move
+them into the new version notes and remove the standalone page and its
+``docs/releases/index.rst`` entry.
+
 Commit the version bump to develop.
 
 .. important::

@@ -748,3 +748,48 @@ def test_voxhelm_site_credentials_can_be_cleared(admin_client, site, stored_base
     setting.refresh_from_db()
     assert setting.api_base == ""
     assert setting.api_token == ""
+
+
+@pytest.mark.django_db
+def test_voxhelm_settings_boolean_choices_and_effective_values(admin_client, site, settings, monkeypatch):
+    for name in ("CAST_VOXHELM_DIARIZATION_ENABLED", "CAST_VOXHELM_KNOWN_SPEAKER_ENABLED"):
+        if hasattr(settings, name):
+            delattr(settings, name)
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CAST_VOXHELM_DIARIZATION_ENABLED", "true")
+    VoxhelmSettings.objects.update_or_create(
+        site=site, defaults={"diarization_enabled": None, "known_speaker_enabled": None}
+    )
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+
+    content = admin_client.get(edit_url).content.decode("utf-8")
+
+    assert "Not set here: use the Django setting or environment variable" in content
+    assert "Enabled for this site (overrides Django settings and environment)" in content
+    assert "Disabled for this site (overrides Django settings and environment)" in content
+    assert "Currently enabled by the environment variable CAST_VOXHELM_DIARIZATION_ENABLED." in content
+    assert "Currently disabled by the built-in default CAST_VOXHELM_KNOWN_SPEAKER_ENABLED." in content
+
+    VoxhelmSettings.objects.filter(site=site).update(diarization_enabled=False)
+    settings.CAST_VOXHELM_KNOWN_SPEAKER_ENABLED = True
+    content = admin_client.get(edit_url).content.decode("utf-8")
+    assert "Currently disabled by this site setting." in content
+    assert "Currently enabled by the Django setting CAST_VOXHELM_KNOWN_SPEAKER_ENABLED." in content
+
+    settings.CAST_VOXHELM_KNOWN_SPEAKER_ENABLED = "sometimes"
+    content = admin_client.get(edit_url).content.decode("utf-8")
+    assert "Currently invalid: CAST_VOXHELM_KNOWN_SPEAKER_ENABLED must be configured as a boolean value" in content
+
+
+@pytest.mark.django_db
+def test_voxhelm_settings_form_subclass_without_boolean_fields():
+    from cast.models.voxhelm_settings import VoxhelmSettingsForm
+
+    form_class = type(
+        "TokenOnlyVoxhelmSettingsForm",
+        (VoxhelmSettingsForm,),
+        {"Meta": type("Meta", (), {"model": VoxhelmSettings, "fields": ["api_base", "api_token"]})},
+    )
+    form = form_class(instance=VoxhelmSettings())
+
+    assert set(form.fields) == {"api_base", "api_token"}

@@ -3,7 +3,12 @@ from typing import Any
 from django.urls import include, path, re_path
 
 from . import views
-from .editor import media as editor_media, views as editor_views
+from .editor import (
+    contributors as editor_contributors,
+    media as editor_media,
+    transcripts as editor_transcripts,
+    views as editor_views,
+)
 
 app_name = "api"
 
@@ -26,9 +31,24 @@ urlpatterns: list[Any] = [
         editor_views.EpisodePreviewView.as_view(),
         name="editor_episode_preview",
     ),
+    path(
+        "editor/episodes/<int:pk>/transcript/",
+        editor_transcripts.EpisodeTranscriptView.as_view(),
+        name="editor_episode_transcript",
+    ),
     path("editor/episodes/<int:pk>/", editor_views.EpisodeDetailView.as_view(), name="editor_episode_detail"),
+    path(
+        "editor/contributors/",
+        editor_contributors.ContributorListView.as_view(),
+        name="editor_contributors",
+    ),
     path("editor/media/images/", editor_media.EditorImageListCreateView.as_view(), name="editor_media_images"),
     path("editor/media/audios/", editor_media.EditorAudioListCreateView.as_view(), name="editor_media_audios"),
+    path(
+        "editor/media/audios/<int:pk>/",
+        editor_media.EditorAudioDetailView.as_view(),
+        name="editor_media_audio_detail",
+    ),
     path("editor/media/videos/", editor_media.EditorVideoListCreateView.as_view(), name="editor_media_videos"),
     path(
         "editor/media/collections/", editor_media.EditorMediaCollectionsView.as_view(), name="editor_media_collections"

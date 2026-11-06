@@ -102,7 +102,9 @@ stack are published in django-cast's metadata deliberately: this makes an
 upgrade replace vulnerable versions retained in an otherwise compatible
 application lock. The oldest supported Wagtail branch is tested with these
 floors. urllib3 requires 2.8.0 or later for the streaming and HTTPS-proxy
-advisories identified by the floor audit. Applications should review any conflicting pins rather than bypass the
+advisories identified by the floor audit. Pillow requires 13.0.0 or later and
+Django REST Framework 3.18.2 or later for the advisories reported against their
+previous minima. Applications should review any conflicting pins rather than bypass the
 security constraints.
 
 .. warning::
