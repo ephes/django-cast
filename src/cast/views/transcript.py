@@ -47,7 +47,7 @@ from ..models import (
 )
 from ..models.contributors import ContributorVoiceReference
 from ..site_lookup import get_site_specific_page_or_404
-from ..transcripts import editing, parsing
+from ..transcripts import editing, parsing, services
 from ..transcripts.dote import (
     convert_dote_to_podcastindex_transcript,
     dote_timestamp_to_ms,
@@ -341,7 +341,15 @@ def _handle_known_speaker_review(
     )
     if known_speaker_review_form.is_valid():
         changed = transcript.save_known_speaker_editor_decisions(known_speaker_review_form.segment_decisions)
-        applied = transcript.apply_known_speaker_suggestions(smooth=False)
+        try:
+            applied = transcript.apply_known_speaker_suggestions(smooth=False)
+        except services.TranscriptEditConflict:
+            if not changed:
+                raise
+            return HttpResponse(
+                _("Speaker decisions were saved, but artifacts changed before applying them. Reload the transcript."),
+                status=409,
+            )
         if changed or applied:
             messages.success(
                 request,
@@ -471,11 +479,21 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         transcript_permission_policy.instances_user_has_permission_for(request.user, "change"),
         id=transcript_id,
     )
+    if (
+        request.method == "POST"
+        and request.POST.get("action") in EDIT_ACTION_HANDLERS
+        and request.POST.get("action") not in {SPEAKER_MAPPING_ACTION, VOICE_REFERENCE_CREATE_ACTION}
+    ):
+        if request.POST.get("artifact_revision") != services.artifact_revision(transcript):
+            return HttpResponse(_("Reload the transcript; its artifacts changed while you were editing."), status=409)
     speaker_mapping_context = editing.get_speaker_mapping_context(transcript)
 
     if request.method == "POST":
         handler = EDIT_ACTION_HANDLERS.get(cast(str, request.POST.get("action")), _handle_transcript_form_save)
-        result = handler(request, transcript, speaker_mapping_context)
+        try:
+            result = handler(request, transcript, speaker_mapping_context)
+        except services.TranscriptEditConflict:
+            return HttpResponse(_("Reload the transcript; its artifacts changed while you were editing."), status=409)
         if isinstance(result, HttpResponse):
             return result
         form_state = result
@@ -505,6 +523,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
         "cast/transcript/edit.html",
         {
             "transcript": transcript,
+            "artifact_revision": services.artifact_revision(transcript),
             "form": form,
             "speaker_mapping_rows": speaker_mapping_rows,
             "speaker_mapping_form": speaker_mapping_form,

@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from cast.forms import KnownSpeakerSegmentReviewForm
 from cast.models import Transcript
-from cast.transcripts import known_speakers, webvtt
+from cast.transcripts import known_speakers, services, webvtt
 from cast.transcripts.dote import dote_timestamp_to_ms
 from cast.transcripts.known_speakers import (
     KNOWN_SPEAKER_DECISION_CORRECT,
@@ -785,7 +785,7 @@ class TestKnownSpeakerReviewView:
         transcript = make_transcript(audio, podlove=podlove, dote=dote, vtt=vtt, speakers=speakers)
         response = admin_client.post(
             reverse("cast-transcript:edit", args=(transcript.id,)),
-            {"action": "apply-known-speakers"},
+            {"artifact_revision": services.artifact_revision(transcript), "action": "apply-known-speakers"},
         )
         assert response.status_code == 302
         feedback = [str(message).strip() for message in get_messages(response.wsgi_request)]
@@ -832,6 +832,7 @@ class TestKnownSpeakerReviewView:
             reverse("cast-transcript:edit", args=(transcript.id,)),
             {
                 "action": "review-known-speakers",
+                "artifact_revision": services.artifact_revision(transcript),
                 "known_speaker_segment_1": form.speaker_value_by_name["Ronny"],
             },
         )
@@ -865,6 +866,7 @@ class TestKnownSpeakerReviewView:
             reverse("cast-transcript:edit", args=(transcript.id,)),
             {
                 "action": "review-known-speakers",
+                "artifact_revision": services.artifact_revision(transcript),
                 "known_speaker_segment_1": "__blank__",
             },
         )
@@ -881,7 +883,7 @@ class TestKnownSpeakerReviewView:
 
         response = admin_client.post(
             reverse("cast-transcript:edit", args=(transcript.id,)),
-            {"action": "review-known-speakers"},
+            {"artifact_revision": services.artifact_revision(transcript), "action": "review-known-speakers"},
         )
 
         assert response.status_code == 302
@@ -896,6 +898,7 @@ class TestKnownSpeakerReviewView:
             reverse("cast-transcript:edit", args=(transcript.id,)),
             {
                 "action": "review-known-speakers",
+                "artifact_revision": services.artifact_revision(transcript),
                 "known_speaker_segment_0": "not-a-choice",
             },
         )
@@ -909,6 +912,110 @@ class TestKnownSpeakerReviewView:
         transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE)
         response = admin_client.post(
             reverse("cast-transcript:edit", args=(transcript.id,)),
-            {"action": "apply-known-speakers"},
+            {"artifact_revision": services.artifact_revision(transcript), "action": "apply-known-speakers"},
         )
         assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_stale_speaker_decision_preserves_winning_edit_and_cleans_staging(audio, mocker):
+    transcript = make_transcript(audio, podlove=PODLOVE, speakers=SPEAKERS)
+    stale = Transcript.objects.get(pk=transcript.pk)
+    transcript.save_known_speaker_editor_decisions({0: {"action": "reject", "speaker": ""}})
+    storage = stale.speakers.storage
+    saved = []
+    original_save = storage.save
+
+    def record(name, content, *args, **kwargs):
+        result = original_save(name, content, *args, **kwargs)
+        saved.append(result)
+        return result
+
+    mocker.patch.object(storage, "save", side_effect=record)
+    with pytest.raises(ValueError, match="[Rr]eload"):
+        stale.save_known_speaker_editor_decisions({1: {"action": "reject", "speaker": ""}})
+    assert saved and all(not storage.exists(name) for name in saved)
+    current = Transcript.objects.get(pk=transcript.pk)
+    assert set(current.get_known_speaker_editor_decisions()) == {0}
+    assert current.podlove.name == transcript.podlove.name
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("change", ["decision", "source"])
+def test_stale_speaker_form_requires_reload(admin_client, audio, change):
+    transcript = make_transcript(audio, podlove=PODLOVE, speakers=SPEAKERS)
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    response = admin_client.get(url)
+    revision = response.context.get("artifact_revision", "old-baseline")
+    if change == "decision":
+        transcript.save_known_speaker_editor_decisions({0: {"action": "reject", "speaker": ""}})
+    else:
+        transcript.podlove.save("new-source.json", ContentFile(json.dumps(PODLOVE)))
+    before = Transcript.objects.filter(pk=transcript.pk).values().get()
+    response = admin_client.post(
+        url,
+        {"action": "review-known-speakers", "artifact_revision": revision, "known_speaker_segment_1": "blank"},
+    )
+    assert response.status_code == 409
+    assert b"Reload" in response.content
+    assert Transcript.objects.filter(pk=transcript.pk).values().get() == before
+
+
+@pytest.mark.django_db
+def test_review_without_revision_is_rejected(admin_client, audio):
+    transcript = make_transcript(audio, speakers=SPEAKERS)
+    before = transcript.speakers.name
+    response = admin_client.post(
+        reverse("cast-transcript:edit", args=(transcript.pk,)), {"action": "review-known-speakers"}
+    )
+    assert response.status_code == 409
+    transcript.refresh_from_db()
+    assert transcript.speakers.name == before
+
+
+@pytest.mark.django_db
+def test_editor_detects_source_change_after_revision_check(admin_client, audio, monkeypatch):
+    transcript = make_transcript(audio, speakers=SPEAKERS)
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    revision = admin_client.get(url).context["artifact_revision"]
+    original_write = Transcript._write_speakers_data
+    staged = []
+
+    def change_source(self, *args, **kwargs):
+        original_write(self, *args, **kwargs)
+        staged.append((self.speakers.storage, self.speakers.name))
+        Transcript.objects.filter(pk=self.pk).update(source_fingerprint="a-new-source")
+
+    monkeypatch.setattr(Transcript, "_write_speakers_data", change_source)
+    response = admin_client.post(
+        url, {"action": "review-known-speakers", "artifact_revision": revision, "known_speaker_segment_0": "__blank__"}
+    )
+    assert response.status_code == 409
+    assert staged and all(not storage.exists(name) for storage, name in staged)
+    transcript.refresh_from_db()
+    assert transcript.source_fingerprint == "a-new-source"
+    assert transcript.get_known_speaker_editor_decisions() == {}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("changed_decisions", [False, True])
+def test_apply_conflict_reports_whether_decisions_were_saved(admin_client, audio, monkeypatch, changed_decisions):
+    transcript = make_transcript(audio, podlove=PODLOVE, speakers=SPEAKERS)
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    revision = admin_client.get(url).context["artifact_revision"]
+    original_apply = Transcript.apply_known_speaker_suggestions
+
+    def conflict(self, **kwargs):
+        Transcript.objects.filter(pk=self.pk).update(source_fingerprint="changed-before-apply")
+        return original_apply(self, **kwargs)
+
+    monkeypatch.setattr(Transcript, "apply_known_speaker_suggestions", conflict)
+    data = {"action": "review-known-speakers", "artifact_revision": revision}
+    if changed_decisions:
+        data["known_speaker_segment_0"] = "__blank__"
+    response = admin_client.post(url, data)
+    assert response.status_code == 409
+    assert (b"Speaker decisions were saved" in response.content) == changed_decisions
+    transcript.refresh_from_db()
+    assert bool(transcript.get_known_speaker_editor_decisions()) == changed_decisions
+    assert transcript.source_fingerprint == "changed-before-apply"

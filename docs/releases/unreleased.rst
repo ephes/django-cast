@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Reject stale speaker/glossary editor forms with HTTP 409 and a reload message.
+  Conditional artifact replacement protects concurrent service edits and cleans
+  up conflicted staged files without overwriting unrelated artifacts. Speaker
+  mapping discovery now serializes per transcript and reads current source and
+  approval state, with idempotent unique-label creation.
+
 - Synchronize chapter link/image edits and explicit clears as well as titles.
   Chapter replacements now validate unique starts and audio ownership and apply
   atomically, with serialized writers on SQLite and PostgreSQL. Failed saves

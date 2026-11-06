@@ -2,7 +2,7 @@
 
 Shows the corrections sidecar (``cast.transcripts.corrections``) as a summary,
 one row per proposal group and a list of the replacements in effect, and handles
-the review actions posted from it. Every action redirects back to the edit view.
+the review actions posted from it. Successful actions redirect back to the edit view; artifact conflicts return HTTP 409.
 """
 
 from collections.abc import Callable
@@ -26,7 +26,7 @@ from ..forms import (
     GlossaryReplacementRejectForm,
 )
 from ..models import Episode, Transcript
-from ..transcripts import corrections, editing, parsing
+from ..transcripts import corrections, editing, parsing, services
 from ..transcripts.corrections import STATE_APPROVED, STATE_AUTO, STATE_OPEN, STATE_REJECTED, CorrectionsResult
 from ..transcripts.glossary import Replacement, apply_replacements, normalize_phrase
 
@@ -266,6 +266,8 @@ def _run(
     else:
         try:
             result = operation(form.cleaned_data if form is not None else {})
+        except services.TranscriptEditConflict:
+            raise
         except ValidationError as error:
             messages.error(request, editing.validation_error_message(error))
         except LookupError:

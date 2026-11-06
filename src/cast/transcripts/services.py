@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+import hashlib
+import json
+from collections.abc import Callable, Collection, Mapping
 from decimal import Decimal
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from django.db import models, router, transaction
 from django.utils import timezone
 
 from cast.file_replacement import StagedFileReplacementGroup
@@ -22,6 +25,66 @@ _save_derived_artifacts = partial(save_transcript_with_derivations, preserve_sou
 """Save rewritten public artifacts without treating them as newly received."""
 
 
+EDITOR_ARTIFACT_FIELDS = ("podlove", "dote", "vtt", "speakers", "corrections")
+
+
+class TranscriptEditConflict(ValueError):
+    """The artifacts changed after an editor read them."""
+
+
+def artifact_state(transcript: Transcript) -> dict[str, Any]:
+    return {
+        "audio_id": transcript.audio_id,
+        "source_fingerprint": transcript.source_fingerprint,
+        **{name: getattr(transcript, name).name or "" for name in EDITOR_ARTIFACT_FIELDS},
+    }
+
+
+def artifact_revision(transcript: Transcript) -> str:
+    return hashlib.sha256(json.dumps(artifact_state(transcript), sort_keys=True).encode()).hexdigest()
+
+
+def save_editor_artifacts(
+    transcript: Transcript,
+    replacements: StagedFileReplacementGroup,
+    expected: dict[str, Any],
+    *,
+    save: Callable[..., None] = _save_derived_artifacts,
+) -> None:
+    """Condition the final transition on the reviewed immutable file references.
+
+    UPDATE performs the comparison while obtaining the database write lock, so
+    even SQLite never has to upgrade a read transaction to a write transaction.
+    Only files actually staged by this edit are saved.
+    """
+    using = router.db_for_write(type(transcript), instance=transcript)
+    condition = models.Q(pk=transcript.pk)
+    for field, value in expected.items():
+        match = models.Q(**{field: value})
+        if field in EDITOR_ARTIFACT_FIELDS and not value:
+            match |= models.Q(**{f"{field}__isnull": True})
+        condition &= match
+    try:
+        with transaction.atomic(using=using):
+            matched = (
+                type(transcript)
+                .objects.using(using)
+                .filter(condition)
+                .update(source_fingerprint=models.F("source_fingerprint"))
+            )
+            if not matched:
+                raise TranscriptEditConflict("Reload the transcript; its artifacts changed while you were editing.")
+            replacements.save_model(
+                transcript,
+                using=using,
+                update_fields=list({replacement.field.field.name for replacement in replacements.replacements}),
+                save=save,
+            )
+    except Exception:
+        replacements.rollback()
+        raise
+
+
 def sync_speaker_mappings(transcript: Transcript) -> None:
     """Synchronize durable anonymous-speaker mapping rows with raw artifacts.
 
@@ -29,24 +92,35 @@ def sync_speaker_mappings(transcript: Transcript) -> None:
     ``transcript.mapping_fingerprint()``, the hash of the artifacts as received;
     speaker application and label rewrites do not change it.
     """
-    ReviewState = transcript.speaker_mappings.model.ReviewState
     if transcript.pk is None:
         return
+    using = router.db_for_write(type(transcript), instance=transcript)
+    with transaction.atomic(using=using):
+        # Serialize discovery before taking any snapshot, including on SQLite.
+        type(transcript).objects.using(using).filter(pk=transcript.pk).update(
+            source_fingerprint=models.F("source_fingerprint")
+        )
+        current = type(transcript).objects.using(using).get(pk=transcript.pk)
+        _sync_speaker_mappings(current)
+
+
+def _sync_speaker_mappings(transcript: Transcript) -> None:
+    ReviewState = transcript.speaker_mappings.model.ReviewState
     speaker_labels = transcript.get_speaker_labels()
     seen_labels = set(speaker_labels)
     fingerprint = transcript.mapping_fingerprint()
     now = timezone.now()
-    existing_mappings = {mapping.speaker_label: mapping for mapping in transcript.speaker_mappings.all()}
+    existing_mappings = {
+        mapping.speaker_label: mapping for mapping in transcript.speaker_mappings.select_for_update().all()
+    }
 
     for speaker_label in speaker_labels:
         mapping = existing_mappings.get(speaker_label)
         if mapping is None:
-            transcript.speaker_mappings.create(
+            mapping, _ = transcript.speaker_mappings.get_or_create(
                 speaker_label=speaker_label,
-                source_artifact_fingerprint=fingerprint,
-                last_seen=now,
+                defaults={"source_artifact_fingerprint": fingerprint, "last_seen": now},
             )
-            continue
         update_fields = []
         if not mapping.active:
             mapping.active = True
@@ -161,6 +235,7 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
     available for audit and re-application. Returns the number of public
     transcript entries matched across stored formats.
     """
+    expected = artifact_state(transcript)
     suggestions = sorted(transcript.get_speaker_suggestions(), key=parsing.segment_sort_key)
     display_names = known_speakers.resolve_display_names(
         suggestions, smooth=smooth, label_names=resolve_unreferenced_label_names(transcript, suggestions)
@@ -191,10 +266,7 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
             if transcript.vtt:
                 applied += transcript._apply_suggestions_to_webvtt(names_by_start_ms, replacements=replacements)
         if applied:
-            if replacements.replacements:
-                replacements.save_model(transcript, save=_save_derived_artifacts)
-            else:
-                _save_derived_artifacts(transcript)
+            save_editor_artifacts(transcript, replacements, expected)
     except Exception:
         replacements.rollback()
         raise
@@ -211,6 +283,7 @@ def save_known_speaker_editor_decisions(
     such as ``speaker``, ``speaker_uncertain``, candidate lists, confidence,
     margin, and raw diarization labels are never overwritten.
     """
+    expected = artifact_state(transcript)
     data = transcript.speakers_data
     segments = data.get("segments")
     if not isinstance(segments, list):
@@ -241,11 +314,7 @@ def save_known_speaker_editor_decisions(
     replacements = StagedFileReplacementGroup()
     try:
         transcript._write_speakers_data(data, replacements=replacements)
-        replacements.save_model(
-            transcript,
-            update_fields=["speakers"],
-            save=save_transcript_with_derivations,
-        )
+        save_editor_artifacts(transcript, replacements, expected, save=save_transcript_with_derivations)
     except Exception:
         replacements.rollback()
         raise
@@ -261,6 +330,7 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
     closed ``<v Name>Name: ...</v>`` voice span; renaming it again
     replaces the repeated ``Name:`` as well.
     """
+    expected = artifact_state(transcript)
     cleaned_mapping: dict[str, str] = {}
     for source, target in mapping.items():
         source_label = parsing.clean_speaker_label(source)
@@ -292,11 +362,7 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
 
         if not changed_fields:
             return False
-        replacements.save_model(
-            transcript,
-            update_fields=changed_fields,
-            save=_save_derived_artifacts,
-        )
+        save_editor_artifacts(transcript, replacements, expected)
     except Exception:
         replacements.rollback()
         raise

@@ -1161,3 +1161,14 @@ def test_set_cue_text_preserves_echoed_speaker_and_is_idempotent(ending):
     corrected = [f"<v.loud Jon Gould>Jon Gould: Jon said.</v>{ending}"]
     assert webvtt.set_cue_text(lines, "Jon said.") == corrected
     assert webvtt.set_cue_text(corrected, "Jon said.") is corrected
+
+
+@pytest.mark.django_db
+def test_stale_correction_service_does_not_replace_winning_sidecar(transcript):
+    refresh_transcript_corrections(transcript)
+    stale = Transcript.objects.get(pk=transcript.pk)
+    decide_correction_group(transcript, "Buttondown", STATE_APPROVED)
+    before = Transcript.objects.filter(pk=transcript.pk).values().get()
+    with pytest.raises(ValueError, match="Reload"):
+        decide_correction_group(stale, "Gunicorn", STATE_REJECTED, originals=["Gunacorn"])
+    assert Transcript.objects.filter(pk=transcript.pk).values().get() == before

@@ -44,7 +44,7 @@ from cast.file_replacement import StagedFileReplacementGroup
 from cast.media_derivation import save_transcript_with_derivations
 
 from ..models import Contributor, Episode, Transcript, TranscriptGlossaryTerm, get_podcast_transcript_language
-from . import dote, podlove, webvtt
+from . import dote, podlove, services, webvtt
 from .glossary import (
     ContributorGlossary,
     EffectiveGlossary,
@@ -442,6 +442,7 @@ def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | No
 
 def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) -> int:
     """Store the sidecar and the corrected public files in one staged replacement."""
+    expected = services.artifact_state(transcript)
     changed_fields: list[str] = []
     changed = 0
     replacements = StagedFileReplacementGroup()
@@ -464,7 +465,7 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
                 transcript._save_text_file("vtt", content, replacements=replacements)
                 changed_fields.append("vtt")
         if changed_fields:
-            replacements.save_model(transcript, update_fields=changed_fields, save=_save_derived_artifacts)
+            services.save_editor_artifacts(transcript, replacements, expected, save=_save_derived_artifacts)
     except Exception:
         replacements.rollback()
         raise
