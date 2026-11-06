@@ -49,7 +49,9 @@ from ..models import (
 from ..player import build_player_payload
 from ..podlove import build_podlove_player_config
 from ..search_suggestions import get_search_suggestions
-from ..transcript_sanitization import editor_speaker_preview_episode
+from ..transcripts.visibility import (
+    editor_speaker_preview_episode,
+)
 from ..views.theme import set_template_base_dir
 from .editor.scopes import HasEditorScope
 from .serializers import (

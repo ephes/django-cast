@@ -409,3 +409,74 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
 
     flush_payload()
     return "".join(rewritten_lines), changed
+
+
+def apply_speaker_mapping_to_webvtt_content(content: str, mapping: dict[str, str]) -> str:
+    if not mapping:
+        return content
+    mapped_content, _changed = rewrite_speakers(content, mapping)
+    return mapped_content
+
+
+def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | None) -> str:
+    if allowed_speaker_labels is None:
+        return content
+
+    sanitized_lines = []
+    in_cue_payload = False
+    # One entry per voice opening still open in the current cue: whether it was kept.
+    open_voices: list[bool] = []
+    for line in content.splitlines(keepends=True):
+        stripped = line.strip()
+        if not stripped:
+            in_cue_payload = False
+            sanitized_lines.append(line)
+            continue
+        if TIMING_SEPARATOR in line:
+            in_cue_payload = True
+            open_voices = []
+            sanitized_lines.append(line)
+            continue
+        if in_cue_payload:
+            line = _sanitize_webvtt_payload_line(line, allowed_speaker_labels, open_voices)
+        sanitized_lines.append(line)
+    return "".join(sanitized_lines)
+
+
+def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str], open_voices: list[bool]) -> str:
+    """Drop hidden voice labels from one cue payload line.
+
+    Voice tags are matched with a stack shared by the lines of one cue, so a
+    hidden voice's ``</v>`` is removed with its opening even when voice spans
+    nest (``<v Ann>Ann: x <v Zed>y</v></v>``) or an opening-only voice is
+    closed on a later line. A closing tag with no opening in the cue is kept.
+    """
+    body, newline = split_line_ending(line)
+
+    echoed_label = match_echoed_voice_label(body)
+    if echoed_label is not None:
+        leading, match, label, text = echoed_label
+        if label not in allowed_speaker_labels:
+            # Drop the visible ``Name:`` echo; the voice tags are removed below.
+            body = f"{leading}{match.group(0)}{text}"
+
+    def replace_voice_tag(match: re.Match[str]) -> str:
+        if match.group("opening") is not None:
+            label = parsing.clean_speaker_label(match.group("label"))
+            kept = not label or label in allowed_speaker_labels
+            open_voices.append(kept)
+            return match.group(0) if kept else ""
+        if not open_voices or open_voices.pop():
+            return match.group(0)
+        return ""
+
+    body = VOICE_TAG_RE.sub(replace_voice_tag, body)
+
+    generic_prefix = match_generic_speaker_prefix(body)
+    if generic_prefix is not None:
+        leading, match = generic_prefix
+        label = parsing.clean_speaker_label(match.group("label"))
+        if label and label not in allowed_speaker_labels:
+            body = f"{leading}{match.group('text')}"
+
+    return f"{body}{newline}"

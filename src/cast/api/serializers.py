@@ -8,10 +8,12 @@ from cast.blog_index import create_blog_filterset
 from cast.media_derivation import save_audio_with_derivations, save_video_with_derivations
 
 from ..models import Audio, Blog, Video
-from ..transcript_sanitization import (
-    apply_public_speaker_mapping_to_podlove_data,
+from ..transcripts.podlove import (
     podlove_contributors_from_data,
     sanitize_podlove_data,
+)
+from ..transcripts.visibility import (
+    apply_public_speaker_mapping_to_podlove_data,
     strict_public_speaker_labels_for_audio,
 )
 

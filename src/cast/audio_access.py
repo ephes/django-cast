@@ -7,9 +7,9 @@ public path), or when the requester may edit a referencing page (the
 editor/preview path). Anything else raises ``Http404`` so object existence is
 never leaked.
 
-The decision helpers live here (rather than in ``transcript_sanitization``) to
-keep access control separate from the speaker-label sanitization that runs once
-access has been granted.
+These access decisions are separate from the speaker visibility policy in
+``cast.transcripts.visibility`` and the speaker-label sanitization in the pure
+transcript format modules, which run once access has been granted.
 """
 
 from __future__ import annotations

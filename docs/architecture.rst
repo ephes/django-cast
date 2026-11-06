@@ -150,6 +150,12 @@ cyclic dependencies.
     ``cast.models`` import (type hints are ``TYPE_CHECKING``-only, and it works
     through related managers), so ``models/transcript.py`` → ``services`` stays
     acyclic.
+  - ``visibility.py`` owns episode visibility, editor-preview anchors and approved
+    speaker mappings. Its model imports remain local to policy calls; the pure
+    format modules never import it. Copy-on-write mapping and sanitization live
+    beside the corresponding format's ``rewrite_speakers`` functions.
+    ``cast.transcript_sanitization`` re-exports the historical callables for
+    compatibility; internal callers import their domain modules directly.
   - ``editing.py`` holds view-facing editor orchestration and is imported only
     by views, so it may import models freely.
   - ``corrections.py`` applies the transcript glossary (``glossary.py`` is the
@@ -390,7 +396,7 @@ Code Organization
     │
     │   # Transcripts and Voxhelm
     ├── transcripts/                # Transcript formats and services
-    ├── transcript_sanitization.py  # Speaker label sanitization
+    ├── transcript_sanitization.py  # Compatibility re-exports
     ├── voxhelm/                    # Voxhelm transcription integration
     ├── voxhelm_tasks.py            # django-tasks task (path is stable)
     │

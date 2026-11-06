@@ -12,13 +12,13 @@ from rest_framework.response import Response
 from wagtail.models import Site
 
 from ...models import Audio, Episode, Transcript, TranscriptGeneration
-from ...transcript_sanitization import (
+from ...transcripts.editing import episode_from_latest_revision
+from ...transcripts.generation_status import get_transcript_generation, transcript_complete
+from ...transcripts.visibility import (
     editor_speaker_preview_episode,
     public_speaker_mapping_for_transcript,
     strict_public_speaker_labels_for_transcript,
 )
-from ...transcripts.editing import episode_from_latest_revision
-from ...transcripts.generation_status import get_transcript_generation, transcript_complete
 from ...voxhelm import (
     VoxhelmError,
     build_known_speaker_references,

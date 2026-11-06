@@ -361,12 +361,12 @@ documented in tiers that match the code. The remaining problems are concentrated
   `cast/transcripts/` (upstreaming the prefix handling so both paths agree) and the Episode-visibility policy into
   `audio_access.py` or a `transcripts/visibility.py`. The claim that its `from .models import Episode` reintroduces
   the models cycle is wrong — nothing under `cast/models` or `cast/transcripts` imports this module.
-  Fix note (2026-11-05, partly fixed): `transcript_sanitization.py` now imports `clean_speaker_label` from
-  `cast.transcripts.parsing` and the WebVTT patterns (`VOICE_TAG_RE`, `VOICE_OPENING_RE`, the generic-prefix
-  matcher) from `cast.transcripts.webvtt`. Its `apply_speaker_mapping_to_webvtt_content` delegates to
-  `webvtt.rewrite_speakers`, and the Podlove/DOTe mapping helpers delegate to `podlove`/`dote.rewrite_speakers` on a
-  copy, so the stored rewrite and the read-time mapping can no longer drift. Not done: the sanitising functions and the
-  Episode-visibility policy still live in `transcript_sanitization.py`.
+  Fix note (2026-11-06, fixed): pure copy-on-write mapping and sanitizer functions now live alongside
+  `rewrite_speakers` in `cast.transcripts.podlove`, `dote`, and `webvtt`; Podlove contributor extraction lives with
+  its format too. `cast.transcripts.visibility` owns the episode/public-label policy, editor draft preview and
+  approved read-time mapping orchestration, with local Episode imports. `transcript_sanitization.py` only
+  re-exports the historical callables and constants; internal consumers use the domain modules. Ownership and
+  callable-identity regressions pin this split, and a fresh-process test keeps the format transforms Django-free.
 - **X4. The theme contract is enforced only by `DeprecationWarning`s emitted during discovery** (medium,
   architecture) — `models/theme.py:109`. The soft-required tier is the staged-enforcement mechanism the docs
   promise, but the warning is hidden by Python's default filters, by pytest's
