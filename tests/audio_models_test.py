@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import time, timedelta
 from uuid import uuid4
 
 import pytest
@@ -32,7 +32,7 @@ class TestAudioModel:
 
     def test_audio_str(self, audio):
         audio.title = None  # make sure name is provided by file
-        assert "1 - test" == str(audio)
+        assert f"{audio.pk} - test" == str(audio)
 
     def test_audio_get_all_paths(self, audio):
         assert "cast_audio/test.m4a" in audio.get_all_paths()
@@ -207,19 +207,15 @@ class TestAudioModel:
             {"start": "617.117000", "title": "Django Async"},
         ]
 
-    def test_chapters_as_text_chaptermarks_not_empty(self, audio, mocker):
-        class Mark:
-            original_line = "original line"
-
-        mark = Mark()
-
-        class ChapterMarks:
-            @staticmethod
-            def order_by(_order):
-                return [mark]
-
-        mocker.patch("cast.models.audio.Audio.chaptermarks", ChapterMarks())
-        assert mark.original_line in audio.chapters_as_text
+    def test_chapters_as_text_chaptermarks_not_empty(self, audio):
+        ChapterMark.objects.create(
+            audio=audio,
+            start="00:00:00",
+            title="Intro",
+            link="https://example.test/link",
+            image="https://example.test/image",
+        )
+        assert audio.chapters_as_text == "00:00:00 Intro"
 
     def test_write_audio_file_size_to_cache(self, audio):
         expected_size = audio.m4a.size
@@ -394,3 +390,138 @@ def test_sync_chapter_marks_update_changed_chaptermarks(audio):
     cm2.full_clean()
     actual_to_add, actual_to_update, actual_to_remove = sync_chapter_marks([cm1], [cm2])
     assert len(actual_to_update) == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("field", ["link", "image"])
+@pytest.mark.parametrize("value", ["https://example.test/edited", "", None])
+def test_chapter_sync_editorial_fields(audio, field, value):
+    old = ChapterMark.objects.create(audio=audio, start=time(0), title="Intro", **{field: "https://example.test/old"})
+    incoming = ChapterMark(audio=audio, start=old.start, title=old.title, **{field: value})
+    ChapterMark.objects.sync_chaptermarks(audio, [incoming])
+    old.refresh_from_db()
+    assert getattr(old, field) == value
+    assert audio.chaptermarks.count() == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("blank", ["", None])
+def test_chapter_sync_unchanged_marker_is_not_saved(audio, mocker, blank):
+    old = ChapterMark.objects.create(audio=audio, start=time(0), title="Intro", link=None, image="")
+    incoming = ChapterMark(audio=audio, start=old.start, title=old.title, link=blank, image=blank)
+    save = mocker.spy(ChapterMark, "save")
+    ChapterMark.objects.sync_chaptermarks(audio, [incoming])
+    save.assert_not_called()
+    assert audio.chaptermarks.get().pk == old.pk
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chapter_sync_rolls_back_second_save(chapter_audio, monkeypatch):
+    audio = chapter_audio
+    old = ChapterMark.objects.create(audio=audio, start="00:00:00", title="Original")
+    ChapterMark.objects.create(audio=audio, start="00:02:00", title="Keep on failure")
+    before = list(audio.chaptermarks.order_by("start").values())
+    incoming = [
+        ChapterMark(audio=audio, start="00:00:00", title="Edit"),
+        ChapterMark(audio=audio, start="00:01:00", title="New"),
+    ]
+    original_save = ChapterMark.save
+    calls = []
+
+    def fail_second(self, *args, **kwargs):
+        calls.append(self.title)
+        if len(calls) == 2:
+            raise RuntimeError("synthetic second-save failure")
+        original_save(self, *args, **kwargs)
+
+    monkeypatch.setattr(ChapterMark, "save", fail_second)
+    with pytest.raises(RuntimeError, match="second-save"):
+        ChapterMark.objects.sync_chaptermarks(audio, incoming)
+    assert len(calls) == 2
+    assert list(audio.chaptermarks.order_by("start").values()) == before
+    assert audio.chaptermarks.get(pk=old.pk).title == "Original"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chapter_sync_rejects_duplicate_normalized_starts(chapter_audio):
+    audio = chapter_audio
+    ChapterMark.objects.create(audio=audio, start="00:02:00", title="Keep")
+    before = list(audio.chaptermarks.values())
+    with pytest.raises(ValueError, match="Duplicate chapter start"):
+        ChapterMark.objects.sync_chaptermarks(
+            audio,
+            [ChapterMark(audio=audio, start=start, title=str(i)) for i, start in enumerate(["0:0", time(0)])],
+        )
+    assert list(audio.chaptermarks.values()) == before
+
+
+@pytest.mark.django_db
+def test_chapter_sync_rejects_other_audio(audio):
+    other = Audio.objects.create(user=audio.user, title="Other")
+    with pytest.raises(ValueError, match="belong"):
+        ChapterMark.objects.sync_chaptermarks(audio, [ChapterMark(audio=other, start="00:00", title="Wrong")])
+    assert not other.chaptermarks.exists()
+
+
+@pytest.mark.django_db
+def test_chapter_sync_requires_existing_audio(audio):
+    audio.pk = 999999
+    with pytest.raises(Audio.DoesNotExist):
+        ChapterMark.objects.sync_chaptermarks(audio, [])
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chapter_sync_serializes_replacements(chapter_audio, monkeypatch):
+    audio = chapter_audio
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import close_old_connections
+
+    from cast.models import audio as audio_module
+
+    first_read = threading.Event()
+    release = threading.Event()
+    second_started = threading.Event()
+    second_read = threading.Event()
+    original_sync = audio_module.sync_chapter_marks
+
+    def pause_sync(existing, incoming):
+        if incoming[0].title == "First":
+            first_read.set()
+            assert release.wait(10)
+        else:
+            second_read.set()
+        return original_sync(existing, incoming)
+
+    monkeypatch.setattr(audio_module, "sync_chapter_marks", pause_sync)
+
+    def replace(title, start):
+        close_old_connections()
+        try:
+            if title == "Second":
+                second_started.set()
+            ChapterMark.objects.sync_chaptermarks(audio, [ChapterMark(audio=audio, start=start, title=title)])
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(replace, "First", "00:00:00")
+        try:
+            assert first_read.wait(10)
+            second = pool.submit(replace, "Second", "00:01:00")
+            assert second_started.wait(10)
+            assert not second_read.wait(0.2), "Second replacement read an uncommitted chapter set"
+        finally:
+            release.set()
+        first.result(timeout=20)
+        second.result(timeout=20)
+    assert list(audio.chaptermarks.values_list("title", flat=True)) == ["Second"]
+
+
+@pytest.fixture
+def chapter_audio(transactional_db, user):
+    from wagtail.models import Collection
+
+    collection = Collection.get_first_root_node() or Collection.add_root(instance=Collection(name="Root"))
+    return Audio.objects.create(user=user, collection=collection, title="Synthetic chapters")

@@ -189,12 +189,15 @@ class ChapterMarksField(forms.CharField):
     def to_python(self, value: str | None) -> list[ChapterMark]:  # type: ignore[override]
         if value is None:
             return []
-        chaptermarks = []
+        chaptermarks: list[ChapterMark] = []
         for line in value.split("\n"):
             if len(line) == 0:
                 # skip empty lines
                 continue
-            chaptermarks.append(parse_chaptermark_line(line))
+            mark = parse_chaptermark_line(line)
+            if any(existing.start == mark.start for existing in chaptermarks):
+                raise ValidationError(_("Duplicate chapter start"), code="invalid")
+            chaptermarks.append(mark)
         return chaptermarks
 
 
@@ -279,7 +282,7 @@ class AudioForm(BaseCollectionMemberForm):
         chaptermarks = self.get_chaptermarks_from_field_or_files(audio)
         for cm in chaptermarks:
             cm.audio = audio
-        ChapterMark.objects.sync_chaptermarks(audio, chaptermarks)
+        ChapterMark.objects.sync_chaptermarks(audio, chaptermarks, update_urls=False)
 
     def save(self, commit: bool = True) -> Audio:
         audio = super().save(commit=False)

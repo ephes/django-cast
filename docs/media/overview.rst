@@ -239,6 +239,17 @@ Audio Features
 Chapter Marks
 ~~~~~~~~~~~~~
 
+Chapter synchronization treats start times as identity and updates the title,
+link, and image, including clearing optional URLs. Empty and null URLs are
+equivalent when deciding whether a mark needs saving. Replacements validate
+unique starts and audio ownership before writing, and serialize the complete
+replacement in one transaction. A failed replacement leaves the old set intact.
+Unchanged marks retain their identities and are not saved again. Title-only
+sources (the audio form, editor API chapter text, and ffprobe extraction) preserve
+existing link/image URLs; direct model synchronization can update or clear them.
+The admin textarea and ``chapters_as_text`` contain only start times and titles,
+so existing URLs never become part of the title during an edit round trip.
+
 Add navigable chapters to audio:
 
 .. code-block:: python

@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Synchronize chapter link/image edits and explicit clears as well as titles.
+  Chapter replacements now validate unique starts and audio ownership and apply
+  atomically, with serialized writers on SQLite and PostgreSQL. Failed saves
+  preserve the previous complete chapter set; unchanged markers are not saved.
+  Title-only form/API/probe sources retain stored URLs. Duplicate starts in chapter
+  text produce a field validation error.
+
 - Make editor image upload failure tests portable across supported Django
   versions by injecting INSERT failures through the SQL execution wrapper,
   after the uploaded file has been written.
