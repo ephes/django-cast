@@ -32,6 +32,24 @@ class TranscriptEditConflict(ValueError):
     """The artifacts changed after an editor read them."""
 
 
+def validate_json_artifact(transcript: Transcript, field_name: str) -> None:
+    field = getattr(transcript, field_name)
+    if not field:
+        return
+    try:
+        with field.storage.open(field.name, "r") as file:
+            parsing.load_json_artifact(file)
+    except (OSError, json.JSONDecodeError):
+        # Preserve the established missing/malformed-syntax behavior.
+        return
+
+
+def validate_editor_artifacts(transcript: Transcript) -> None:
+    """Strictly decode every JSON source/sidecar before editorial mutations."""
+    for field in ("podlove", "dote", "speakers", "corrections"):
+        validate_json_artifact(transcript, field)
+
+
 def artifact_state(transcript: Transcript) -> dict[str, Any]:
     return {
         "audio_id": transcript.audio_id,
@@ -235,6 +253,7 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
     available for audit and re-application. Returns the number of public
     transcript entries matched across stored formats.
     """
+    validate_editor_artifacts(transcript)
     expected = artifact_state(transcript)
     suggestions = sorted(transcript.get_speaker_suggestions(), key=parsing.segment_sort_key)
     display_names = known_speakers.resolve_display_names(
@@ -283,6 +302,7 @@ def save_known_speaker_editor_decisions(
     such as ``speaker``, ``speaker_uncertain``, candidate lists, confidence,
     margin, and raw diarization labels are never overwritten.
     """
+    validate_editor_artifacts(transcript)
     expected = artifact_state(transcript)
     data = transcript.speakers_data
     segments = data.get("segments")
@@ -330,6 +350,7 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
     closed ``<v Name>Name: ...</v>`` voice span; renaming it again
     replaces the repeated ``Name:`` as well.
     """
+    validate_editor_artifacts(transcript)
     expected = artifact_state(transcript)
     cleaned_mapping: dict[str, str] = {}
     for source, target in mapping.items():

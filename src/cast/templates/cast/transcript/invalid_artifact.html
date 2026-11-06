@@ -1,0 +1,24 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n %}
+{% block titletag %}{% trans "Invalid transcript JSON" %}{% endblock %}
+{% block content %}
+  {% include "wagtailadmin/shared/header.html" with title=artifact_error icon="doc-full" %}
+  <div class="nice-padding">
+    <p>{{ artifact_error }}</p>
+    <form action="{% url 'cast-transcript:edit' transcript.pk %}" method="POST" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="button">{% trans "Save replacement" %}</button>
+    </form>
+    {% for field in invalid_sidecars %}
+      <form action="{% url 'cast-transcript:edit' transcript.pk %}" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="detach-invalid-sidecar">
+        <input type="hidden" name="field" value="{{ field }}">
+        <input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
+        <p>{% trans "Detach this invalid private sidecar to resume editing. Its stored file is kept." %}</p>
+        <button type="submit" class="button">{% trans "Detach invalid sidecar" %}: {{ field }}</button>
+      </form>
+    {% endfor %}
+  </div>
+{% endblock %}

@@ -1,9 +1,37 @@
 """Pure transcript parsing and formatting helpers."""
 
+import json
 import re
 import unicodedata
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
+
+
+class TranscriptArtifactError(Exception):
+    """A stored JSON artifact cannot be decoded safely for editorial work."""
+
+
+MAX_TRANSCRIPT_JSON_DEPTH = 64
+
+
+def load_json_artifact(file: Any) -> Any:
+    try:
+        data = json.load(file)
+    except (UnicodeDecodeError, RecursionError) as error:
+        raise TranscriptArtifactError(
+            "Invalid transcript JSON encoding or nesting. Replace the artifact and reload."
+        ) from error
+    pending = [(data, 0)]
+    while pending:
+        value, depth = pending.pop()
+        if depth > MAX_TRANSCRIPT_JSON_DEPTH:
+            raise TranscriptArtifactError("Invalid transcript JSON nesting. Replace the artifact and reload.")
+        if isinstance(value, dict):
+            pending.extend((child, depth + 1) for child in value.values())
+        elif isinstance(value, list):
+            pending.extend((child, depth + 1) for child in value)
+    return data
+
 
 VOICE_REFERENCE_CANDIDATE_QUANTUM = Decimal("0.001")
 LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
