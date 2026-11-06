@@ -1,5 +1,6 @@
 import re
 import subprocess
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +9,7 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import InMemoryStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.urls import reverse
 from rest_framework.response import Response
 from taggit.models import Tag
@@ -755,17 +756,36 @@ def image_upload_storage(db, mocker, image_1px, request):
     return storage, existing, original_bytes
 
 
+@pytest.fixture
+def image_insert_failure(mocker):
+    """Inject after FileField pre_save, independently of Django's insert internals."""
+
+    def install(failure):
+        fault = mocker.Mock(side_effect=failure)
+        table = connection.ops.quote_name(editor_media.get_image_model()._meta.db_table)
+
+        def fail_insert(execute, sql, params, many, context):
+            if sql.startswith(f"INSERT INTO {table} "):
+                fault()
+            return execute(sql, params, many, context)
+
+        return connection.execute_wrapper(fail_insert), fault
+
+    return install
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize("stage", ["insert", "m2m", "storage"])
 def test_image_upload_save_failure_compensates_only_new_files(
-    api_client, superuser, image_1px, image_upload_storage, mocker, stage
+    api_client, superuser, image_1px, image_upload_storage, image_insert_failure, mocker, stage
 ):
     storage, existing, original_bytes = image_upload_storage
     image_model = type(existing)
     failure = IntegrityError("synthetic registration failure")
     tag_count = Tag.objects.count()
+    insert_context = nullcontext()
     if stage == "insert":
-        fault = mocker.patch.object(image_model, "_do_insert", side_effect=failure)
+        insert_context, fault = image_insert_failure(failure)
     elif stage == "m2m":
         form_class = editor_media.get_image_form(image_model)
         save_m2m = form_class._save_m2m
@@ -782,7 +802,7 @@ def test_image_upload_save_failure_compensates_only_new_files(
     writes = mocker.spy(storage, "_save")
     deletes = mocker.spy(storage, "delete")
     api_client.force_authenticate(user=superuser)
-    with pytest.raises(IntegrityError) as exc:
+    with insert_context, pytest.raises(IntegrityError) as exc:
         api_client.post(
             reverse("cast:api:editor_media_images"),
             {"title": "Failed upload", "file": image_1px, "tags": "synthetic"},
@@ -806,20 +826,21 @@ def test_image_upload_save_failure_compensates_only_new_files(
 
 @pytest.mark.django_db
 def test_image_upload_cleanup_failure_preserves_cause_and_logs(
-    api_client, superuser, image_1px, image_upload_storage, mocker, caplog
+    api_client, superuser, image_1px, image_upload_storage, image_insert_failure, mocker, caplog
 ):
     storage, existing, original_bytes = image_upload_storage
     failure = IntegrityError("synthetic insert failure")
-    fault = mocker.patch.object(type(existing), "_do_insert", side_effect=failure)
+    insert_context, fault = image_insert_failure(failure)
     writes = mocker.spy(storage, "_save")
     mocker.patch.object(storage, "delete", side_effect=OSError("synthetic cleanup failure"))
     api_client.force_authenticate(user=superuser)
     ingest = mocker.spy(editor_media, "ingest_upload")
-    response = api_client.post(
-        reverse("cast:api:editor_media_images"),
-        {"title": "Failed cleanup", "file": image_1px},
-        format="multipart",
-    )
+    with insert_context:
+        response = api_client.post(
+            reverse("cast:api:editor_media_images"),
+            {"title": "Failed cleanup", "file": image_1px},
+            format="multipart",
+        )
     assert response.status_code == 500
     assert response.json() == {"code": "cleanup_failed", "detail": "Upload cleanup failed."}
     assert isinstance(ingest.spy_exception, media_ingest.MediaIngestCleanupFailed)

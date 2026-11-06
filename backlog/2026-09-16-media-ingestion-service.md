@@ -11,6 +11,8 @@ needed for this path. Synthetic in-memory overwrite storage tests cover INSERT, 
 failures, preservation of an existing same-named image (including long filenames), and successful
 owner/collection/tag serialization. The editor supplies a short stem before ingest naming so Wagtail
 `upload_to` cannot truncate away the UUID suffix; cleanup failures use the standard `cleanup_failed` JSON response.
+INSERT fault injection uses Django's public SQL execution wrapper, after file pre-save work on all supported
+Django versions, rather than patching version-dependent model internals.
 
 ## Problem (historical evidence)
 
