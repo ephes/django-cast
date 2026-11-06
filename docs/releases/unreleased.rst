@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Make editor image upload failure tests portable across supported Django
+  versions by injecting INSERT failures through the SQL execution wrapper,
+  after the uploaded file has been written.
+
 - Editor image uploads now use short generated storage names and transactional row/tag
   registration through the shared media ingestion service. Failed saves remove
   the request-owned image file; existing same-named images are preserved. Cleanup
