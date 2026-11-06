@@ -92,6 +92,21 @@ Ready to contribute? Here's how to set up `django-cast` for local development.
 
 7. Submit a pull request through the GitHub website.
 
+The entrypoint regressions can be run with::
+
+    uv run pytest tests/quickstart_test.py tests/media_sizes_command_test.py
+
+Quickstart tests execute the real CLI orchestration in temporary working
+directories, with setup subprocesses, user creation, server startup and browser
+launch replaced at their boundaries. They cover checked management commands,
+automatic/interactive credential dispatch, option refusal, setup ordering and
+cleanup of the generated project. The automatic user snippet is parsed without
+executing it. Quickstart retains its existing coverage omission; these behavioral
+tests are required independently of the configured 100% coverage report.
+Media-size tests use synthetic storage and verify production-only traversal,
+category totals, read-only access and error propagation.
+
+
 Pull Request Guidelines
 -----------------------
 

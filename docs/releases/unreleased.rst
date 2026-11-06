@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Add behavioral tests for quickstart management subprocesses, both superuser
+  modes, CLI setup/refusal/cleanup ordering, and read-only media-size reporting
+  using temporary projects and synthetic storage. Document these contracts and
+  the quickstart tests' independence from its existing coverage omission.
+
 - Serialize shared glossary variant additions using current term/contributor
   state, including first-term creation and contributors shared between shows.
   Invalid UTF-8 or excessive JSON nesting now yields a bounded transcript
