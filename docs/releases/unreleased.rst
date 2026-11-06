@@ -5,6 +5,13 @@ Unreleased
   versions by injecting INSERT failures through the SQL execution wrapper,
   after the uploaded file has been written.
 
+- Test Wagtail 8.1 explicitly alongside 8.0, including the v3 experiment,
+  PostgreSQL publication locks, and 100% coverage on 8.0.1 and 8.1. The experiment
+  now checks 8.1's discriminated block schemas and workflow route inventory.
+- Resolve image permissions lazily through Wagtail's public policy registry,
+  avoiding the deprecated image permission import on Wagtail 8 while retaining
+  the Wagtail 7 fallback.
+
 - Editor image uploads now use short generated storage names and transactional row/tag
   registration through the shared media ingestion service. Failed saves remove
   the request-owned image file; existing same-named images are preserved. Cleanup

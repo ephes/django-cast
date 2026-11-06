@@ -58,6 +58,10 @@ jobs:
         run: git diff --exit-code -- src/cast/static/cast/vite src/cast/static/fluent_comments/js/ajaxcomments.js
 
   python-quality:
+    strategy:
+      fail-fast: false
+      matrix:
+        wagtail-version: ["8.0.1", "8.1"]
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
@@ -77,23 +81,25 @@ jobs:
         uses: FedericoCarboni/setup-ffmpeg@v2
 
       - name: Install Python dependencies
-        run: uv sync
+        run: |
+          uv sync
+          uv pip install "wagtail==${{ matrix.wagtail-version }}"
 
       - name: Run Ruff gate (check-only)
         run: |
-          uv run ruff format --check .
-          uv run ruff check .
+          uv run --no-sync ruff format --check .
+          uv run --no-sync ruff check .
 
       - name: Run mypy
         # django-stubs imports the settings module (tests.settings, kept out of the
         # shipped package) at runtime, so the repo root must be on PYTHONPATH.
-        run: PYTHONPATH="$(pwd)" uv run mypy
+        run: PYTHONPATH="$(pwd)" uv run --no-sync mypy
 
       - name: Run test suite with coverage enforcement
         run: |
-          uv run coverage run -m pytest
-          uv run coverage report
-          uv run coverage xml
+          uv run --no-sync coverage run -m pytest
+          uv run --no-sync coverage report
+          uv run --no-sync coverage xml
 
       - name: Upload coverage to Codecov
         if: github.event_name == 'push'
@@ -102,11 +108,15 @@ jobs:
           files: ./coverage.xml
           fail_ci_if_error: true
           flags: unittests
-          name: python-quality
+          name: python-quality-wagtail-${{ matrix.wagtail-version }}
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
   postgres-locks:
+    strategy:
+      fail-fast: false
+      matrix:
+        tox-env: [postgres, postgres-wagtail81]
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -137,7 +147,7 @@ jobs:
           python-version: "3.12"
 
       - name: Test PostgreSQL row locks and publication policy
-        run: uvx --from tox==4.61.2 --with tox-uv==1.36.0 tox -e postgres
+        run: uvx --from tox==4.61.2 --with tox-uv==1.36.0 tox -e ${{ matrix.tox-env }}
 
   dependency-audit-resolved:
     runs-on: ubuntu-latest
@@ -275,6 +285,10 @@ jobs:
             python-version: "3.14"
           - tox-env: py315-django61-wagtail80
             python-version: "3.15"
+          - tox-env: py311-django52-wagtail81
+            python-version: "3.11"
+          - tox-env: py314-django61-wagtail81
+            python-version: "3.14"
     steps:
       - uses: actions/checkout@v4
 

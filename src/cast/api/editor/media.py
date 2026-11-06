@@ -18,7 +18,6 @@ from rest_framework.response import Response
 from taggit.utils import edit_string_for_tags
 from wagtail.images import get_image_model
 from wagtail.images.forms import get_image_form
-from wagtail.images.permissions import permission_policy as image_permission_policy
 from wagtail.models import Collection
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
@@ -37,6 +36,7 @@ from ...media_ingest import (
     ingest_upload,
     upload_lock,
 )
+from ...media_permissions import get_image_permission_policy
 from ...models import Audio, Video
 from ..views import StandardResultsSetPagination
 from .errors import EditorFlatError, EditorNotFound, EditorPermissionDenied, EditorValidationError
@@ -122,7 +122,7 @@ def serialize_image(image: Any, *, user: Any) -> dict[str, Any]:
         "height": image.height,
         "collection": _collection_ref(image),
         "tags": _tag_names(image),
-        "edit_url": _edit_url(user, image, policy=image_permission_policy, route_name="wagtailimages:edit"),
+        "edit_url": _edit_url(user, image, policy=get_image_permission_policy(), route_name="wagtailimages:edit"),
     }
 
 
@@ -213,6 +213,7 @@ def _parse_collection_id(value: Any) -> int:
 
 
 def _usable_image_collections(user: Any) -> QuerySet[Collection]:
+    image_permission_policy = get_image_permission_policy()
     addable = image_permission_policy.collections_user_has_permission_for(user, "add")
     choosable = image_permission_policy.collections_user_has_permission_for(user, "choose")
     return addable.filter(pk__in=choosable.values("pk")).order_by("path", "id")
@@ -297,8 +298,10 @@ class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         _reject_unsupported_query_params(request, self.allowed_query_params)
-        queryset = image_permission_policy.instances_user_has_permission_for(request.user, "choose").select_related(
-            "collection", "uploaded_by_user"
+        queryset = (
+            get_image_permission_policy()
+            .instances_user_has_permission_for(request.user, "choose")
+            .select_related("collection", "uploaded_by_user")
         )
         q = request.query_params.get("q")
         if q:

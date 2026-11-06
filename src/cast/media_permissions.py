@@ -4,12 +4,24 @@ from collections.abc import Iterable
 from typing import Any
 
 from django.db.models import QuerySet
+from wagtail.images import get_image_model
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 
 from .models import Audio, Transcript, Video
 
 audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
 video_permission_policy = CollectionOwnershipPermissionPolicy(Video, auth_model=Video, owner_field_name="user")
+
+
+def get_image_permission_policy() -> Any:
+    """Resolve the configured image policy after Wagtail's app registration."""
+    try:
+        from wagtail.permissions import policy_registry
+    except ImportError:  # Wagtail 7 has no public policy registry.
+        from wagtail.images.permissions import permission_policy
+
+        return permission_policy
+    return policy_registry.get_by_type(get_image_model())
 
 
 class TranscriptPermissionPolicy(CollectionPermissionPolicy):

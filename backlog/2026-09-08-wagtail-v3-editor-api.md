@@ -16,6 +16,14 @@ The experiment test asserts the behavior of the installed Wagtail version. The
 other adapter findings (revision precondition, draft-only guard, response
 serialization) are unchanged. The evaluation decision is not reopened here.
 
+Addendum (2026-11-06): Wagtail 8.1 now supplies discriminated StreamField
+schemas for Cast's overview/detail sections and their nested content blocks.
+The version-aware experiment asserts that inventory and the seven new page
+workflow routes (get, history, submit, approve, reject, resume, cancel). There is still
+no stock rendered-preview route. The 8.0 branch retains the empty block schema
+expectation; both 8.0 and 8.1 run in tox and CI. These discovery improvements do
+not reopen the decision or resolve the other Cast adapter requirements.
+
 Evaluate whether Wagtail 8's writable v3 REST API can replace parts of Cast's
 editor API. Prefer upstream functionality where it reduces maintenance, while
 preserving the workflow safeguards that authoring clients need. Daybook is
@@ -27,8 +35,8 @@ deliverable is a compatibility experiment and decision, not a rewrite.
 ## Current state
 
 - django-cast 0.2.66 allows patched Wagtail 7 releases and Wagtail 8. The
-  default ``.venv`` resolves to Wagtail 7.4.3; the exact Wagtail 8 experiment
-  runs in the ``py312-django61-wagtail80`` tox environment.
+  original evaluation used a ``.venv`` resolving to Wagtail 7.4.3. The
+  experiment now runs in both ``wagtail80`` and ``wagtail81`` tox environments.
   The inspected homepage and python-podcast lockfiles also resolve to 8.0;
   this is not evidence of production deployment or v3 enablement.
 - Cast currently mounts its own `/api/editor/` endpoints and the Wagtail v2
@@ -154,7 +162,7 @@ the preview row below records the old behavior, not the current contract.
 | Common page fields | upstream equivalent | **Test:** Post and Episode create/patch schemas include ``title``, ``slug``, ``seo_title``, ``search_description``, and ``show_in_menus``; draft create requests reach Wagtail's action layer. | A successful API response still requires the response-schema incompatibility below to be resolved. |
 | Post field inventory | Cast extension required | **Test:** the disposable configuration makes ``visible_date``, ``cover_alt_text``, and (since the body slice) ``body`` writable; read schemas also expose ``cover_image``. ``cover_image``, ``tags``, and ``categories`` remain absent from writes. Once ``body`` is writable, stock create-and-publish requires a valid body before Cast's publication policy runs. **Source:** the read fields originate in existing v2 ``APIField`` declarations. | Evaluate relation fields only if v3 writes are selected. |
 | Episode field inventory | Cast extension required | **Test:** Episode inherits the two Post write fields and additionally exposes ``episode_number``, ``episode_type``, ``keywords``, ``explicit``, and ``block``. A draft Episode without audio is persisted. ``podcast_audio`` and ``season`` remain absent from read/create/patch schemas. | Evaluate FK representation, same-podcast season policy, and media permissions separately. |
-| StreamField schema | incompatible for self-describing agent input | **Test:** the opted-in Post patch schema describes ``body`` only as an array with an empty ``items`` schema. **Source:** v3 reads ``body`` as ``list[Any]``, so discovery cannot describe Cast's author block contract. | Publish Cast block guidance separately if an agent-facing v3 route is chosen. |
+| StreamField schema | version-dependent upstream guidance | **Test:** Wagtail 8.0 describes the opted-in Post ``body`` as an array with empty ``items``; 8.1 describes discriminated ``overview``/``detail`` sections and nested paragraph, code, image, gallery, embed, video, and audio blocks. | Evaluate the generated 8.1 schemas against Cast authoring requirements if v3 is selected; 8.0 still needs separate block guidance. |
 | Revision conflict guard | Cast extension required | **Test:** the disposable adapter accepts a quoted base revision and returns 409 for a sequential stale request without creating a revision. On PostgreSQL, a second adapter update from the same base waits while the first holds the page-row lock, then returns 409 with the first writer's revision id; only the first value is stored. Removing the adapter's page-row lock makes that test fail. **Source:** the stock v3 update route has no revision precondition; the adapter uses a transaction and ``select_for_update``. SQLite ignores that lock. | Run the PostgreSQL-only tests in CI before relying on them; a production adapter needs the same lock. |
 | Draft-only live-page guard | Cast extension required | **Test:** after the same latest Post or Episode revision becomes live, stock v3 accepts another draft edit and creates a revision. The test adapter's optional precondition instead returns ``409 published_post`` without writing, while still allowing an unpublished page. On PostgreSQL, approving the base revision for scheduling waits while a ``require_unpublished`` adapter update holds the page and revision-row locks, and completes only after the update commits. Removing the revision-row lock makes that test fail. **Source:** the stock update route and edit action have no live-page equivalent to Cast's ``require_unpublished`` check. | Preserve the client-selectable precondition in any v3 adapter and explicitly decide its default; the revision id alone does not detect publication of that same revision. The PostgreSQL proof covers schedule approval of an existing revision; a concurrent live publication of the same revision was not threaded separately. |
 | Scheduled-state guard | upstream equivalent | **Test:** stock v3 returns 403 and creates no revision after the same latest Post or Episode revision is scheduled. The adapter can map that state to Cast's explicit ``409 scheduled_post`` contract before invoking the action. **Source:** Wagtail's ``ScheduledForPublishLock`` applies to every user, and the edit action checks it. | Reuse the upstream lock unless a stable machine-readable conflict code is required. The stock lock itself was not tested under concurrency; the adapter's own revision-row lock was (see above). |
@@ -186,9 +194,9 @@ schema) so this experiment cannot become an untested publication path. The
 fourth slice shows that stock v3 publication reaches the shared Cast policy;
 it does not require policy duplication. Successful publication still inherits
 the stock response-serialization failure, while rejected publication returns a
-truthful but less structured validation response. The StreamField limitation
-remains a separate schema incompatibility for the intended self-describing
-agent workflow. The sixth slice shows that Wagtail's scheduled-publication lock
+truthful but less structured validation response. The StreamField discovery
+limitation applies to 8.0; 8.1 supplies discriminated block schemas, as recorded
+in the addendum. The sixth slice shows that Wagtail's scheduled-publication lock
 already blocks scheduled edits, but a live-page draft-only precondition still
 requires a Cast adapter. Sequential checks in that test adapter preserve Cast's
 explicit conflict codes without adding production behavior; the locking design
@@ -498,7 +506,7 @@ Each is independent unless a dependency is listed.
   - the serializer shim passes no request context;
   - standalone publish has no revision selector;
   - partial updates start from the live row (fixed upstream in Wagtail 8.0.1);
-  - ``body`` is described only as ``list[Any]``;
+  - ``body`` is described only as ``list[Any]`` in 8.0 (8.1 adds discriminated block schemas);
   - silent image-collection substitution;
   - chooser blocks skip ``choose``;
   - partial schedule input skips the go-live/expiry cross-check.
@@ -551,7 +559,7 @@ in any release until stabilized. Enabling it requires separate app/URL setup.
 | Page operations | Strong overlap; v3 also offers unpublish, copy, move, and revert. | Prove Cast create/update/publish and revision behavior through supported extension points. |
 | Authentication | Wagtail manages native tokens with the owning user's permissions. | Decide how service accounts and existing per-token scopes coexist; do not silently grant a drafting token publish rights. |
 | Body format | v3 uses native StreamField structures and replaces the whole supplied field. Cast exposes separate overview/detail authoring lists. | The body-conversion experiment above shows a thin ``cast.content`` adapter preserving the other section; custom and unsupported block round trips remain covered only by existing editor tests. |
-| Agent discovery | v3 provides generated OpenAPI, but its StreamField schema is currently `list[Any]`. | Supply enough Cast block guidance for an agent to produce valid payloads; do not assume OpenAPI describes every block. |
+| Agent discovery | v3 provides generated OpenAPI; StreamField schemas are empty in 8.0 and discriminated by block type in 8.1. | Evaluate the 8.1 generated block schemas against Cast payload requirements; supply separate guidance for 8.0. |
 | Concurrent editing | Installed v3 code has no revision token or live-page `require_unpublished` equivalent; its scheduled-publication lock does reject scheduled edits. | The adapter's page and revision-row locks were proved on PostgreSQL; any production route must keep them and gain PostgreSQL CI coverage. |
 | Podcast/media behavior | Generic Wagtail endpoints do not automatically implement Cast audio/video processing or episode rules. | Verify permissions, upload/probe budgets, audio requirements, seasons, and numbering on every proposed path. |
 | Rich text | Wagtail has reusable conversion/sanitization code, including nested rich-text handling in the installed v3 implementation. | Run Cast's sanitization and feature-preservation cases; retain explicit raw-HTML/inline-media policy. |
@@ -709,5 +717,5 @@ can advance; recheck them against the experiment's exact version.
 - [v3 setup, scope, and limitations](https://docs.wagtail.org/en/stable/advanced_topics/api/v3/index.html)
 - [Pages and writable fields](https://docs.wagtail.org/en/stable/advanced_topics/api/v3/pages.html)
 - [Token authentication and permissions](https://docs.wagtail.org/en/stable/advanced_topics/api/v3/authentication.html)
-- [StreamField replacement and schema limitations](https://docs.wagtail.org/en/stable/advanced_topics/api/v3/streamfield.html)
+- [StreamField replacement and block schemas](https://docs.wagtail.org/en/stable/advanced_topics/api/v3/streamfield.html)
 - [Rich-text formats](https://docs.wagtail.org/en/stable/advanced_topics/api/v3/rich_text.html)
