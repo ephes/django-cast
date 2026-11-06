@@ -266,6 +266,64 @@ def test_sanitize_webvtt_content_edge_cases():
     assert "Disallowed classed voice" in sanitized
 
 
+@pytest.mark.parametrize(
+    ("payload", "allowed", "expected"),
+    [
+        # A renamed prefix line with an inner voice span nests two balanced spans.
+        ("<v Ann>Ann: x <v Zed>y</v></v>", set(), "x y"),
+        ("<v Ann>Ann: x <v Zed>y</v></v>", {"Ann"}, "<v Ann>Ann: x y</v>"),
+        ("<v Ann>Ann: x <v Zed>y</v></v>", {"Zed"}, "x <v Zed>y</v>"),
+        ("<v Ann>Ann: x <v Zed>y</v></v>", {"Ann", "Zed"}, "<v Ann>Ann: x <v Zed>y</v></v>"),
+        # An opening-only outer voice must not take the allowed inner voice's closing tag.
+        ("<v Ann>Ann: x <v Zed>y</v>", {"Zed"}, "x <v Zed>y</v>"),
+        ("<v Ann>Ann: x <v Zed>y</v>", {"Ann"}, "<v Ann>Ann: x y"),
+        ("<v A>a <v B>b</v></v>", set(), "a b"),
+        # A closing tag without an opening in the cue is not ours to drop.
+        ("stray</v>", set(), "stray</v>"),
+    ],
+)
+def test_sanitize_webvtt_content_matches_nested_voice_tags(payload, allowed, expected):
+    cue = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n"
+
+    assert sanitize_webvtt_content(f"{cue}{payload}\n", allowed) == f"{cue}{expected}\n"
+
+
+def test_sanitize_webvtt_content_closes_hidden_voices_across_cue_lines():
+    content = (
+        "WEBVTT\n\n"
+        "00:00:00.000 --> 00:00:01.000\n"
+        "<v Speaker 1>first line\n"
+        "second line</v>\n\n"
+        "00:00:01.000 --> 00:00:02.000\n"
+        "<v Speaker 2>unclosed\n\n"
+        "00:00:02.000 --> 00:00:03.000\n"
+        "next cue</v>\n"
+    )
+
+    assert sanitize_webvtt_content(content, set()) == (
+        "WEBVTT\n\n"
+        "00:00:00.000 --> 00:00:01.000\n"
+        "first line\n"
+        "second line\n\n"
+        "00:00:01.000 --> 00:00:02.000\n"
+        "unclosed\n\n"
+        "00:00:02.000 --> 00:00:03.000\n"
+        "next cue</v>\n"
+    )
+
+
+def test_public_webvtt_mapping_of_prefix_with_inner_voice_leaves_no_stray_closing_tag():
+    cue = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n"
+    content = f"{cue}Speaker 1: x <v Speaker 2>y</v>\n"
+
+    mapped = apply_speaker_mapping_to_webvtt_content(content, {"Speaker 1": "Ann", "Speaker 2": "Zed"})
+
+    assert mapped == f"{cue}<v Ann>Ann: x <v Zed>y</v></v>\n"
+    assert sanitize_webvtt_content(mapped, {"Ann"}) == f"{cue}<v Ann>Ann: x y</v>\n"
+    assert sanitize_webvtt_content(mapped, {"Zed"}) == f"{cue}x <v Zed>y</v>\n"
+    assert sanitize_webvtt_content(content, {"Speaker 1"}) == f"{cue}Speaker 1: x y\n"
+
+
 def test_apply_speaker_mapping_to_webvtt_content_edge_cases():
     content = (
         "WEBVTT\r\n\r\n"

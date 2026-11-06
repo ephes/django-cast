@@ -404,6 +404,8 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
 
     sanitized_lines = []
     in_cue_payload = False
+    # One entry per voice opening still open in the current cue: whether it was kept.
+    open_voices: list[bool] = []
     for line in content.splitlines(keepends=True):
         stripped = line.strip()
         if not stripped:
@@ -412,15 +414,23 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
             continue
         if webvtt.TIMING_SEPARATOR in line:
             in_cue_payload = True
+            open_voices = []
             sanitized_lines.append(line)
             continue
         if in_cue_payload:
-            line = _sanitize_webvtt_payload_line(line, allowed_speaker_labels)
+            line = _sanitize_webvtt_payload_line(line, allowed_speaker_labels, open_voices)
         sanitized_lines.append(line)
     return "".join(sanitized_lines)
 
 
-def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str]) -> str:
+def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str], open_voices: list[bool]) -> str:
+    """Drop hidden voice labels from one cue payload line.
+
+    Voice tags are matched with a stack shared by the lines of one cue, so a
+    hidden voice's ``</v>`` is removed with its opening even when voice spans
+    nest (``<v Ann>Ann: x <v Zed>y</v></v>``) or an opening-only voice is
+    closed on a later line. A closing tag with no opening in the cue is kept.
+    """
     body, newline = webvtt.split_line_ending(line)
 
     echoed_label = webvtt.match_echoed_voice_label(body)
@@ -430,21 +440,17 @@ def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str]) -
             # Drop the visible ``Name:`` echo; the voice tags are removed below.
             body = f"{leading}{match.group(0)}{text}"
 
-    def replace_voice_span(match: re.Match[str]) -> str:
-        label = clean_speaker_label(match.group("label"))
-        if label and label not in allowed_speaker_labels:
-            return match.group("body")
-        return match.group(0)
+    def replace_voice_tag(match: re.Match[str]) -> str:
+        if match.group("opening") is not None:
+            label = clean_speaker_label(match.group("label"))
+            kept = not label or label in allowed_speaker_labels
+            open_voices.append(kept)
+            return match.group(0) if kept else ""
+        if not open_voices or open_voices.pop():
+            return match.group(0)
+        return ""
 
-    body = webvtt.VOICE_SPAN_RE.sub(replace_voice_span, body)
-
-    def replace_voice_opening(match: re.Match[str]) -> str:
-        label = clean_speaker_label(match.group("label"))
-        if label and label not in allowed_speaker_labels:
-            return ""
-        return match.group(0)
-
-    body = webvtt.VOICE_OPENING_RE.sub(replace_voice_opening, body)
+    body = webvtt.VOICE_TAG_RE.sub(replace_voice_tag, body)
 
     generic_prefix = webvtt.match_generic_speaker_prefix(body)
     if generic_prefix is not None:

@@ -400,7 +400,9 @@ span that repeats the name (``<v Alice>Alice: text</v>``) along with the
 Podlove and DOTe labels. The repeated name keeps the speaker visible in players
 that do not show voice names; the voice span keeps it renamable and
 sanitizable. Renaming ``Alice`` again replaces both, and sanitizing a hidden
-label removes the repeated ``Alice:`` with the voice tags. Applying or clearing
+label removes the repeated ``Alice:`` with the voice tags. Sanitization pairs
+each ``</v>`` with its opening across the lines of a cue, so a hidden voice
+span that contains another speaker's voice span is removed cleanly. Applying or clearing
 known-speaker suggestions on such a cue replaces or drops the repeated name in
 the same way. A cue that still carries a generic ``Speaker 1: text`` prefix is
 treated like a rename when a suggestion is applied (``<v Bob>Bob: text</v>``),

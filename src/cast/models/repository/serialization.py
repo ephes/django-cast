@@ -20,6 +20,17 @@ if TYPE_CHECKING:
     )
 
 
+def _collection_fields(collection_id: int | None) -> dict[str, Any]:
+    """Serialize a nullable collection foreign key.
+
+    A set key is kept as ``collection_id``; an unset one becomes ``collection=None``
+    so the rebuilt instance does not look up a collection.
+    """
+    if collection_id is not None:
+        return {"collection_id": collection_id}
+    return {"collection": None}
+
+
 def serialize_audio(audio: "Audio") -> dict[str, Any]:
     """Serialize an Audio model instance to a plain dict for caching."""
     data = {
@@ -33,10 +44,7 @@ def serialize_audio(audio: "Audio") -> dict[str, Any]:
         "oga": audio.oga.name,
         "opus": audio.opus.name,
     }
-    if audio.collection_id is not None:
-        data["collection_id"] = audio.collection_id
-    else:
-        data["collection"] = None
+    data.update(_collection_fields(audio.collection_id))
     return data
 
 
@@ -56,10 +64,7 @@ def serialize_transcript(transcript: "Transcript") -> dict[str, Any]:
         "vtt": transcript.vtt.name,
         "dote": transcript.dote.name,
     }
-    if transcript.collection_id is not None:
-        data["collection_id"] = transcript.collection_id
-    else:
-        data["collection"] = None
+    data.update(_collection_fields(transcript.collection_id))
     return data
 
 
@@ -179,10 +184,7 @@ def serialize_video(video: "Video") -> dict[str, Any]:
         "poster": video.poster.name,
         "poster_seconds": video.poster_seconds,
     }
-    if video.collection_id is not None:
-        data["collection_id"] = video.collection_id
-    else:
-        data["collection"] = None
+    data.update(_collection_fields(video.collection_id))
     return data
 
 
@@ -237,18 +239,10 @@ def deserialize_blog(data: dict[str, Any]) -> "Blog":
     from ..itunes import ItunesArtWork
 
     blog_data = data.copy()
-    blog_type = blog_data.pop("type", None)
+    # serialize_blog always writes the discriminator; the cachable data never outlives the request.
+    blog_type = blog_data.pop("type")
     itunes_artwork_data = blog_data.pop("itunes_artwork", None)
-    if blog_type is not None:
-        is_podcast = blog_type == "podcast"
-    else:
-        # Legacy cache entries written before the explicit discriminator fall back to key-sniffing.
-        # This fallback can be removed after one release.
-        is_podcast = (
-            any(field in blog_data for field in ("itunes_categories", "keywords", "explicit"))
-            or itunes_artwork_data is not None
-        )
-    blog_class = Podcast if is_podcast else Blog
+    blog_class = Podcast if blog_type == "podcast" else Blog
     blog = blog_class(**blog_data)
     if itunes_artwork_data is not None:
         blog.itunes_artwork = ItunesArtWork(**itunes_artwork_data)
@@ -338,10 +332,7 @@ def serialize_image(image: Image) -> dict[str, Any]:
         "width": image.width,
         "height": image.height,
     }
-    if image.collection_id is not None:
-        data["collection_id"] = image.collection_id
-    else:
-        data["collection"] = None
+    data.update(_collection_fields(image.collection_id))
     return data
 
 

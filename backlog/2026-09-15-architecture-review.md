@@ -92,11 +92,12 @@ callable, the M8 prefetch is intact and the M7 discriminator is written everywhe
   field. Direction: delete the branches, raise on a missing discriminator, delete
   `serialization_test.py:252,290,513,529,545` in the same change to hold 100%, centralize the repeated
   `collection_id`/`"collection": None` handling.
-  Fix note (2026-11-06, partly fixed): the two post branches in `repository/contexts.py` are gone and a post without
+  Fix note (2026-11-06, fixed): the two post branches in `repository/contexts.py` are gone and a post without
   `type` now raises `KeyError`; the three legacy post tests became one parametrized rejection test. Unreachability:
   the only producers of `post_by_id` are `serialize_post`/`serialize_episode`, which always write `type`, and the
-  deserializers work on copies. Not done: the `deserialize_blog` fallback in `serialization.py` and its two tests,
-  and the `collection_id` centralization.
+  deserializers work on copies. Follow-up the same day: the `deserialize_blog` fallback is gone too (only
+  `serialize_blog` produces blog data and always writes `type`; its two legacy tests became one rejection test), and
+  the four `collection_id`/`"collection": None` blocks share `serialization._collection_fields`.
 - **D5. The cachable boundary serializes and immediately deserializes per request with no cache** (medium,
   architecture) — `models/index_pages.py:286`, `feeds.py:95-98`, plus a FIXME `refresh_from_db` (`contexts.py:253`).
   The deserializers also disagree on key normalization (`FeedContext._int_keyed` vs `BlogIndexContext` indexing
@@ -436,6 +437,10 @@ documented in tiers that match the code. The remaining problems are concentrated
   to a never-renamed `Speaker 1: hi` wrote `<v Bob>Speaker 1: hi`, keeping the old prefix public; it now writes
   `<v Bob>Bob: hi</v>` via `webvtt.replace_generic_speaker_prefix`, and clearing a suggestion drops the prefix like
   the cleared Podlove/DOTe speakers.
+  Follow-up (2026-11-06, fixed): `_sanitize_webvtt_payload_line` matched `<v>...</v>` with a non-greedy span regex,
+  so a hidden outer voice around an inner one (`<v Ann>Ann: x <v Zed>y</v></v>`, from renaming
+  `Speaker 1: x <v Speaker 2>y</v>`) left a stray `</v>`. It now walks voice tags with a per-cue stack
+  (`webvtt.VOICE_TAG_RE`); the unused `VOICE_SPAN_RE` is gone.
 
 Strengths: `CAST_SETTING_REGISTRY` plus module `__getattr__` (copy-on-read, `TYPE_CHECKING` stubs) is a clean single
 source of truth that `check_cast_setting_types` and `comments/appsettings.py` derive from, and every `CAST_*` name in
