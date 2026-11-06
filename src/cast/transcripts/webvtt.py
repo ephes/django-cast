@@ -144,9 +144,13 @@ def clear_cue_voice(lines: list[str]) -> tuple[list[str], bool, bool]:
     rewritten_lines = []
     changed = False
     for line in lines:
-        rewritten_line = VOICE_OPENING_RE.sub("", replace_echoed_voice_label(line, None))
+        rewritten_line = replace_generic_speaker_prefix(line, None)
+        rewritten_line = VOICE_OPENING_RE.sub("", replace_echoed_voice_label(rewritten_line, None))
         rewritten_line = VOICE_CLOSING_RE.sub("", rewritten_line)
         changed = changed or rewritten_line != line
+        if not rewritten_line.strip():
+            # A line that only held the speaker label is dropped: a blank line would end the cue.
+            continue
         rewritten_lines.append(rewritten_line)
     return rewritten_lines, changed, True
 
@@ -195,12 +199,19 @@ def set_cue_voice(lines: list[str], name: str) -> tuple[list[str], bool, bool]:
     rewritten_lines = []
     changed = False
     has_voice_opening = False
-    for line in lines:
+    first_line_prefixed = False
+    for index, line in enumerate(lines):
+        prefixed_line = replace_generic_speaker_prefix(line, name)
+        if prefixed_line != line:
+            rewritten_lines.append(prefixed_line)
+            changed = True
+            first_line_prefixed = first_line_prefixed or index == 0
+            continue
         rewritten_line, line_changed, line_has_voice_opening = set_payload_line_voice(line, name)
         rewritten_lines.append(rewritten_line)
         changed = changed or line_changed
         has_voice_opening = has_voice_opening or line_has_voice_opening
-    if has_voice_opening:
+    if has_voice_opening or first_line_prefixed:
         return rewritten_lines, changed, True
     if not rewritten_lines:
         return rewritten_lines, False, False
@@ -221,6 +232,27 @@ def replace_echoed_voice_label(line: str, name: str | None) -> str:
     leading, match, _label, text = echoed_label
     echo = f"{name}: " if name is not None else ""
     return f"{leading}{match.group(0)}{echo}{text}{newline}"
+
+
+def replace_generic_speaker_prefix(line: str, name: str | None) -> str:
+    """Turn a leading ``Speaker N: text`` into ``<v Name>Name: text</v>``, or into ``text`` for ``None``.
+
+    This treats a generic prefix in the suggestion path like a rename, so the
+    old ``Speaker N:`` never stays visible next to an applied name and
+    clearing a suggestion removes it like the voice label. Voice openings
+    inside the text are set to ``name`` or dropped. Lines without a generic
+    prefix are returned unchanged.
+    """
+    body, newline = split_line_ending(line)
+    generic_prefix = match_generic_speaker_prefix(body)
+    if generic_prefix is None:
+        return line
+    leading, match = generic_prefix
+    text = match.group("text")
+    if name is None:
+        return f"{leading}{text}{newline}"
+    text = VOICE_OPENING_RE.sub(lambda _match: voice_opening(name), text)
+    return f"{leading}{voice_opening(name)}{name}: {text}</v>{newline}"
 
 
 def set_payload_line_voice(line: str, name: str) -> tuple[str, bool, bool]:

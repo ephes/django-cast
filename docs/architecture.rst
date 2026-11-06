@@ -67,7 +67,7 @@ models directly.
 
 Flow (``"default"``)::
 
-    Database → Django ORM (+ one raw SQL site lookup fallback) → Repository → Dict → Django Models → Template
+    Database → Django ORM → Repository → Dict → Django Models → Template
 
 Key Repository Classes
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -86,7 +86,7 @@ Key Repository Classes
 
 The repositories:
 
-- Execute prefetching ORM queries (raw SQL only for a site lookup fallback)
+- Execute prefetching ORM queries
 - Return JSON-serializable dictionary structures
 - Allow model reconstruction from those dictionaries
 

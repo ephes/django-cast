@@ -1,6 +1,27 @@
 Unreleased
 ==========
 
+- Applying a known-speaker suggestion to a WebVTT cue that still has a generic
+  ``Speaker N:`` prefix now treats the prefix like a rename:
+  ``Speaker 1: hi`` becomes ``<v Bob>Bob: hi</v>`` instead of
+  ``<v Bob>Speaker 1: hi``, so the old label no longer stays in the public
+  cue text, and public sanitization of a hidden name strips the repeated
+  ``Bob:``. Clearing a suggestion on such a cue removes the ``Speaker N:``
+  prefix, matching the cleared Podlove and DOTe speakers; a payload line that
+  only held the speaker label is removed instead of left blank, which would
+  have ended the cue.
+- Behaviour change: when neither the request nor the blog resolves a Wagtail
+  site, the repository's site fallback now uses the ORM and picks the default
+  site, then the lowest primary key, instead of an unordered raw SQL query that
+  returned an arbitrary row. An empty ``wagtailcore_site`` table now raises
+  ``ImproperlyConfigured`` instead of leaving the site out of the repository
+  data (which failed later with a ``KeyError``). Create a Wagtail ``Site``
+  before serving blog indexes or feeds.
+- Blog index and feed repositories no longer fall back to key-sniffing for
+  posts without a ``type`` discriminator. The cachable data is built and
+  consumed within one request and always carries the discriminator, so the
+  legacy branches were unreachable.
+
 - Bring the architecture and settings docs in line with the code: ``Blog``,
   ``Podcast`` and ``Season`` live in ``models/index_pages.py``, the "Code
   Organization" tree lists every module, and ``CAST_REPOSITORY = "default"`` is

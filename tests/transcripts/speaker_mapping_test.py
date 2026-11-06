@@ -536,8 +536,80 @@ class TestTranscriptSpeakerMapping:
         cleared, cleared_count, changed = webvtt.clear_suggestions_from_content(renamed, {1000})
 
         assert (cleared_count, changed) == (1, True)
-        assert cleared == f"{cue}hello\n\n"
+        assert cleared == f"{cue}hello\n"
         assert webvtt.get_speaker_labels(cleared) == set()
+
+    def test_webvtt_suggestions_treat_unrenamed_generic_prefixes_like_a_rename(self):
+        cue = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n"
+        content = f"{cue}Speaker 1: hi\r\n  speaker 2 :  indented\nplain continuation\n"
+
+        applied, applied_count, changed = webvtt.apply_suggestions_to_content(content, {1000: "Bob"})
+
+        assert (applied_count, changed) == (1, True)
+        assert applied == (f"{cue}<v Bob>Bob: hi</v>\r\n  <v Bob>Bob: indented</v>\nplain continuation\n")
+        assert "Speaker" not in applied
+        assert webvtt.get_speaker_labels(applied) == {"Bob"}
+        assert sanitize_webvtt_content(applied, set()) == f"{cue}hi\r\n  indented\nplain continuation\n"
+        assert sanitize_webvtt_content(applied, {"Bob"}) == applied
+
+        reapplied, _count, changed = webvtt.apply_suggestions_to_content(applied, {1000: "Carol"})
+
+        assert changed
+        assert reapplied == applied.replace("Bob", "Carol")
+
+        cleared, cleared_count, changed = webvtt.clear_suggestions_from_content(content, {1000})
+
+        assert (cleared_count, changed) == (1, True)
+        assert cleared == f"{cue}hi\r\n  indented\nplain continuation\n"
+        assert webvtt.get_speaker_labels(cleared) == set()
+        assert webvtt.clear_suggestions_from_content(applied, {1000})[0] == cleared
+
+        label_only = f"{cue}Speaker 1:\nmore text\n\n00:00:02.000 --> 00:00:03.000\nSpeaker 2:\n"
+        cleared, cleared_count, changed = webvtt.clear_suggestions_from_content(label_only, {1000, 2000})
+        assert (cleared_count, changed) == (2, True)
+        assert cleared == f"{cue}more text\n\n00:00:02.000 --> 00:00:03.000\n"
+
+        later_prefix = f"{cue}plain first\nSpeaker 1: second\n"
+        assert webvtt.apply_suggestions_to_content(later_prefix, {1000: "Bob"})[0] == (
+            f"{cue}<v Bob>plain first\n<v Bob>Bob: second</v>\n"
+        )
+
+        nested = f"{cue}Speaker 3: inner <v Speaker 4>voice</v>\n"
+        assert webvtt.apply_suggestions_to_content(nested, {1000: "Bob"})[0] == (
+            f"{cue}<v Bob>Bob: inner <v Bob>voice</v></v>\n"
+        )
+        assert webvtt.clear_suggestions_from_content(nested, {1000})[0] == f"{cue}inner voice\n"
+
+    def test_webvtt_suggestions_only_touch_matching_cues_with_generic_prefixes(self):
+        content = (
+            "WEBVTT\n\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "Speaker 1: matched\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "Speaker 1: other cue\n\n"
+            "00:00:03.000 --> 00:00:04.000\n"
+            "Not a prefix: Speaker 1: stays\n"
+        )
+
+        applied, applied_count, _changed = webvtt.apply_suggestions_to_content(content, {1000: "Bob", 3000: "Eve"})
+
+        assert applied_count == 2
+        assert applied == (
+            "WEBVTT\n\n"
+            "00:00:01.000 --> 00:00:02.000\n"
+            "<v Bob>Bob: matched</v>\n\n"
+            "00:00:02.000 --> 00:00:03.000\n"
+            "Speaker 1: other cue\n\n"
+            "00:00:03.000 --> 00:00:04.000\n"
+            "<v Eve>Not a prefix: Speaker 1: stays\n"
+        )
+
+        cleared, cleared_count, _changed = webvtt.clear_suggestions_from_content(content, {1000, 3000})
+
+        assert cleared_count == 2
+        assert "00:00:01.000 --> 00:00:02.000\nmatched\n" in cleared
+        assert "Speaker 1: other cue\n" in cleared
+        assert "Not a prefix: Speaker 1: stays\n" in cleared
 
     def test_webvtt_echoed_label_rewrite_edge_cases(self):
         cue = "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n"
