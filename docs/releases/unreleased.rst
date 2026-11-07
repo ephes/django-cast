@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+- Require complete explicit asset-check pairs and verify Vite output inventories,
+  contained paths and chunk references before reporting a build as fresh.
+
 - Exclude reserved refresh UUID staging keys from backup and restore, reporting
   skipped leftovers without deleting source objects.
 - Intersect combined rendition blog/post selectors, validate the blog first,

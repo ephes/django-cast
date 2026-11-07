@@ -271,6 +271,18 @@ Detect stale built assets compared to source files:
 
    $ just verify-assets
 
+Without explicit options the CLI detects known repository layouts. Supplying
+either ``--source-dir`` or ``--manifest`` selects explicit mode: supply both
+options in equal numbers (repeat them for multiple pairs). Exit codes are 0
+for all fresh pairs, 1 for failed verification, and 2 for configuration errors.
+
+JSON manifests must contain valid Vite entries: every file, CSS sidecar and
+asset must exist inside the build directory, and imports/dynamic imports must
+reference existing entries. Symlinks escaping the build directory are rejected.
+For manifests inside ``.vite/``, outputs are relative to its parent directory.
+Explicit CSS outputs retain timestamp-only checking. Freshness compares mtimes;
+it does not prove content equivalence or detect all configuration changes.
+
 In ``DEBUG`` mode, django-cast also emits system check warning ``cast.W001``
 when local Vite source files are newer than the built manifest. Equal mtimes
 are considered fresh. Regression fixtures use fixed whole-second mtimes rather
