@@ -138,3 +138,123 @@ def test_import_diagnostics_keep_location_and_safe_read_reason(tmp_path, mocker)
     mocker.patch("pathlib.Path.open", side_effect=OSError(13, "Synthetic read refusal"))
     with pytest.raises(CommandError, match="Synthetic read refusal"):
         Command.load_entries("synthetic.json")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("count", [1, 20])
+def test_import_builds_one_identity_index(podcast, tmp_path, count, django_assert_num_queries):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from cast.models.transcript_glossary import get_podcast_transcript_language
+
+    get_podcast_transcript_language(podcast)  # control site/settings caches
+    path = write_json(tmp_path, [{"term": f"SyntheticTerm{index}"} for index in range(count)])
+    with CaptureQueriesContext(connection) as captured:
+        stdout, stderr = run(podcast.slug, path)
+    identity_queries = [
+        q["sql"]
+        for q in captured
+        if q["sql"].startswith("SELECT")
+        and '"cast_transcriptglossaryterm"."notes"' in q["sql"]
+        and 'WHERE "cast_transcriptglossaryterm"."podcast_id" =' in q["sql"]
+    ]
+    assert len(identity_queries) == 1
+    assert f"created={count}" in stdout
+    assert not stderr
+    assert TranscriptGlossaryTerm.objects.count() == count
+    from cast.management.commands.import_transcript_glossary import Command
+
+    with django_assert_num_queries(1):
+        assert len(Command.existing_terms(podcast)) == count
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("field", ["notes", "variants", "term"])
+def test_import_preserves_omitted_edits_and_reports_owned_field_conflicts(podcast, tmp_path, monkeypatch, field):
+    term = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", notes="old", variants="Frob Old")
+    original_clean = TranscriptGlossaryTerm.full_clean
+    edited = []
+
+    def edit_during_validation(instance, *args, **kwargs):
+        original_clean(instance, *args, **kwargs)
+        if instance.pk == term.pk and not edited:
+            edited.append(True)
+            TranscriptGlossaryTerm.objects.filter(pk=term.pk).update(**{field: "Concurrent Edit"})
+
+    monkeypatch.setattr(TranscriptGlossaryTerm, "full_clean", edit_during_validation)
+    path = write_json(tmp_path, [{"term": "Frobnicator", "variants": ["Frob New"]}])
+    stdout, stderr = run(podcast.slug, path)
+    assert edited
+    term.refresh_from_db()
+    assert getattr(term, field) == "Concurrent Edit"
+    if field == "notes":
+        assert term.variants == "Frob New"
+        assert "updated=1" in stdout
+        assert not stderr
+    else:
+        assert "skipped=1" in stdout
+        assert "concurrent edit" in stderr
+        assert term.notes == "old"
+
+
+@pytest.mark.django_db
+def test_failed_import_validation_does_not_poison_identity_index(podcast, tmp_path):
+    term = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", variants="Frob Old")
+    path = write_json(tmp_path, [{"term": "Frobnicator", "variants": ["the"]}])
+    stdout, _ = run(podcast.slug, path)
+    assert "skipped=1" in stdout
+    term.refresh_from_db()
+    assert term.variants == "Frob Old"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("stage", ["validation", "insert"])
+def test_import_reports_stale_create_conflicts_and_continues(podcast, tmp_path, monkeypatch, stage):
+    original_clean = TranscriptGlossaryTerm.full_clean
+    original_save = TranscriptGlossaryTerm.save
+    raced = []
+
+    def clean(instance, *args, **kwargs):
+        if stage == "validation" and instance.term == "Frobnicator" and not raced:
+            TranscriptGlossaryTerm.objects.create(podcast=podcast, term=instance.term, notes="concurrent")
+            raced.append(True)
+        original_clean(instance, *args, **kwargs)
+
+    def save(instance, *args, **kwargs):
+        if stage == "insert" and instance.term == "Frobnicator" and not raced:
+            raced.append(True)
+            original_save(TranscriptGlossaryTerm(podcast=podcast, term=instance.term, notes="competing insert"))
+        return original_save(instance, *args, **kwargs)
+
+    monkeypatch.setattr(TranscriptGlossaryTerm, "full_clean", clean)
+    monkeypatch.setattr(TranscriptGlossaryTerm, "save", save)
+    stdout, stderr = run(podcast.slug, write_json(tmp_path, [{"term": "Frobnicator"}, {"term": "Synthetica"}]))
+    assert raced
+    assert "created=1" in stdout and "skipped=1" in stdout
+    assert "concurrent edit" in stderr
+    assert TranscriptGlossaryTerm.objects.filter(term="Synthetica").exists()
+
+
+@pytest.mark.django_db
+def test_invalid_entry_leaves_index_instance_unchanged(podcast):
+    from cast.management.commands.import_transcript_glossary import Command
+
+    TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", variants="Frob Old")
+    existing = Command.existing_terms(podcast)
+    outcome, _ = Command.import_entry(podcast, {"term": "Frobnicator", "variants": ["the"]}, 1, {}, existing)
+    assert outcome == "skipped"
+    assert existing["frobnicator"].variants == "Frob Old"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_notes_only_import_preserves_variants_and_dry_run(podcast, tmp_path, dry_run):
+    term = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", variants="Frob Old", notes="old")
+    stdout, stderr = run(
+        podcast.slug, write_json(tmp_path, [{"term": "Frobnicator", "notes": "new"}]), dry_run=dry_run
+    )
+    assert "updated=1" in stdout and not stderr
+    term.refresh_from_db()
+    assert term.notes == ("old" if dry_run else "new")
+    assert term.variants == "Frob Old"

@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Build the glossary import identity index once, retaining per-entry validation.
+  Publish only supplied fields, comparing their lookup values atomically and
+  reporting concurrent edits as skipped conflicts. Omitted fields keep edits.
+
 - Interpret ffprobe decimal seconds by place value, rounding to microseconds
   with ties to even; reject invalid or oversized durations through the existing
   probe error contract, using portable signed 64-bit microsecond storage bounds.
