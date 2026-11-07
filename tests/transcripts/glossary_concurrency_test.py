@@ -4,7 +4,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from django.db import close_old_connections
+from django.db import close_old_connections, connection
 from wagtail.models import Collection
 
 from cast.models import Audio, Contributor, EpisodeContributor, TranscriptGlossaryTerm
@@ -94,3 +94,81 @@ def test_two_glossary_additions_preserve_both_variants(shared_glossary, monkeypa
     assert {"Synthetic Variant One", "Synthetic Variant Two"} <= set(getattr(row, field).splitlines())
     if not target.startswith("contributor"):
         assert TranscriptGlossaryTerm.objects.filter(podcast=podcast, term=canonical).count() == 1
+
+
+@pytest.mark.skipif(
+    connection.vendor != "postgresql", reason="Requires independent PostgreSQL read/write transactions"
+)
+@pytest.mark.parametrize("field", ["notes", "variants"])
+def test_import_detects_concurrent_owned_edits_and_preserves_omitted_notes(
+    pg_editor_actors, tmp_path, monkeypatch, field
+):
+    from tests.import_transcript_glossary_command_test import run, write_json
+
+    user, blog = pg_editor_actors
+    podcast = PodcastFactory(parent=blog.get_parent(), owner=user, title="Synthetic import", slug="synthetic-import")
+    term = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", variants="Frob Old", notes="old")
+    original_clean = TranscriptGlossaryTerm.full_clean
+    edited = []
+
+    def edit():
+        close_old_connections()
+        try:
+            TranscriptGlossaryTerm.objects.filter(pk=term.pk).update(**{field: "Concurrent Edit"})
+        finally:
+            close_old_connections()
+
+    def clean(instance, *args, **kwargs):
+        original_clean(instance, *args, **kwargs)
+        if instance.pk == term.pk and not edited:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(edit).result(timeout=10)
+            edited.append(True)
+
+    monkeypatch.setattr(TranscriptGlossaryTerm, "full_clean", clean)
+    stdout, stderr = run(podcast.slug, write_json(tmp_path, [{"term": "Frobnicator", "variants": ["Frob New"]}]))
+    assert edited
+    term.refresh_from_db()
+    assert getattr(term, field) == "Concurrent Edit"
+    if field == "notes":
+        assert "updated=1" in stdout
+        assert term.variants == "Frob New"
+        assert not stderr
+    else:
+        assert "skipped=1" in stdout
+        assert "concurrent edit" in stderr
+
+
+@pytest.mark.skipif(
+    connection.vendor != "postgresql", reason="Requires independent PostgreSQL read/write transactions"
+)
+def test_import_concurrent_insert_keeps_outer_transaction_usable(pg_editor_actors, tmp_path, monkeypatch):
+    from tests.import_transcript_glossary_command_test import run, write_json
+
+    user, blog = pg_editor_actors
+    podcast = PodcastFactory(parent=blog.get_parent(), owner=user, title="Synthetic insert", slug="synthetic-insert")
+    original_clean = TranscriptGlossaryTerm.full_clean
+    raced = []
+
+    def insert():
+        close_old_connections()
+        try:
+            TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", notes="concurrent")
+        finally:
+            close_old_connections()
+
+    def clean(instance, *args, **kwargs):
+        original_clean(instance, *args, **kwargs)
+        if instance.term == "Frobnicator" and not raced:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(insert).result(timeout=10)
+            raced.append(True)
+
+    monkeypatch.setattr(TranscriptGlossaryTerm, "full_clean", clean)
+    path = write_json(tmp_path, [{"term": "Frobnicator"}, {"term": "Synthetica"}])
+    stdout, stderr = run(podcast.slug, path)
+    assert raced
+    assert "created=1" in stdout and "skipped=1" in stdout
+    assert "concurrent edit" in stderr
+    assert TranscriptGlossaryTerm.objects.get(term="Frobnicator").notes == "concurrent"
+    assert TranscriptGlossaryTerm.objects.filter(term="Synthetica").exists()

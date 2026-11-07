@@ -668,6 +668,14 @@ the command exits successfully even when entries were skipped. ``--dry-run``
 validates and reports without saving. A slug used by several podcasts is
 refused; pass the page id instead.
 
+The command builds its normalized term identity index once per import and
+updates it after successful saves. Model validation still checks the other terms
+for each entry. Updates publish only the spelling and explicitly supplied fields.
+If one of those fields changed since the import's lookup, the entry is skipped
+as a concurrent-edit conflict; reload and retry it. Concurrent edits to omitted
+notes or variants survive. This optimistic comparison does not serialize all
+cross-term validation or protect an editor who later saves a stale full form.
+
 .. _transcript_glossary_corrections:
 
 Applying corrections

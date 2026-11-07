@@ -1,10 +1,12 @@
 import json
+from copy import copy
 from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError, CommandParser
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from cast.models import Podcast, TranscriptGlossaryTerm
 from cast.transcripts.glossary import normalize_phrase
@@ -80,8 +82,9 @@ class Command(BaseCommand):
         counts = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0}
         seen: dict[str, int] = {}
         with transaction.atomic():
+            existing = self.existing_terms(podcast)
             for number, entry in enumerate(entries, start=1):
-                outcome, reason = self.import_entry(podcast, entry, number, seen)
+                outcome, reason = self.import_entry(podcast, entry, number, seen, existing)
                 counts[outcome] += 1
                 if reason:
                     self.stderr.write(f"skipped entry {number}: {reason}")
@@ -92,7 +95,17 @@ class Command(BaseCommand):
         self.stdout.write(f"{podcast.title}: {summary}{suffix}")
 
     @staticmethod
-    def import_entry(podcast: Podcast, entry: Any, number: int, seen: dict[str, int]) -> tuple[str, str]:
+    def existing_terms(podcast: Podcast) -> dict[str, TranscriptGlossaryTerm]:
+        return {normalize_phrase(term.term): term for term in TranscriptGlossaryTerm.objects.filter(podcast=podcast)}
+
+    @staticmethod
+    def import_entry(
+        podcast: Podcast,
+        entry: Any,
+        number: int,
+        seen: dict[str, int],
+        existing: dict[str, TranscriptGlossaryTerm],
+    ) -> tuple[str, str]:
         """Create or update one term; return the outcome and, for skipped entries, the reason."""
         if not isinstance(entry, dict):
             return "skipped", "an entry must be an object"
@@ -112,11 +125,7 @@ class Command(BaseCommand):
             return "skipped", f"{label}: duplicate of entry {seen[key]}"
         seen[key] = number
 
-        existing = {
-            normalize_phrase(glossary_term.term): glossary_term
-            for glossary_term in TranscriptGlossaryTerm.objects.filter(podcast=podcast)
-        }
-        instance = existing.get(key)
+        instance = copy(existing[key]) if key in existing else None
         created = instance is None
         if instance is None:
             instance = TranscriptGlossaryTerm(podcast=podcast)
@@ -128,11 +137,37 @@ class Command(BaseCommand):
             instance.variants = variants
         if notes is not None:
             instance.notes = notes
+        conflict = f"{label}: concurrent edit; reload and retry this entry"
         try:
             instance.full_clean()
         except ValidationError as exc:
+            if created and any(
+                normalize_phrase(other.term) == key
+                for other in TranscriptGlossaryTerm.objects.filter(podcast=podcast).only("term")
+            ):
+                return "skipped", conflict
             return "skipped", f"{label}: {_validation_message(exc)}"
         if before == (instance.term, instance.variants, instance.notes):
             return "unchanged", ""
-        instance.save()
+        if created:
+            try:
+                with transaction.atomic():
+                    instance.save()
+            except IntegrityError:
+                return "skipped", conflict
+        else:
+            fields = ["term"]
+            if variants is not None:
+                fields.append("variants")
+            if notes is not None:
+                fields.append("notes")
+            expected = {field: getattr(existing[key], field) for field in fields}
+            updates = {field: getattr(instance, field) for field in fields}
+            # Compare and publish in one statement. Omitted fields never enter the
+            # UPDATE, and an edit to an owned field since lookup is a conflict.
+            if not TranscriptGlossaryTerm.objects.filter(pk=instance.pk, **expected).update(
+                **updates, modified=timezone.now()
+            ):
+                return "skipped", conflict
+        existing[key] = instance
         return ("created" if created else "updated"), ""
