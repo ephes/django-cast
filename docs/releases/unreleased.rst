@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Reject nonfinite and unrepresentable editor timestamps safely in speaker
+  samples and voice-reference ranges, preserving source artifacts and valid
+  fractions. Strip unsupported structured speaker/voice values from filtered
+  public Podlove output while retaining approved labels and transcript text.
+
 - Preserve chapter milliseconds through audio, player and chapters JSON, with
   fractional seeking and unchanged integer values for whole seconds. Treat
   oversized transcript numbers and clock arithmetic overflow as unusable times
