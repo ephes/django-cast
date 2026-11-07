@@ -13,15 +13,26 @@ class TranscriptArtifactError(Exception):
 
 
 MAX_TRANSCRIPT_JSON_DEPTH = 64
+MAX_STORED_TRANSCRIPT_JSON_BYTES = 10 * 1024 * 1024
 
 
-def load_json_artifact(file: Any) -> Any:
+def read_json_artifact(file: Any) -> Any:
+    """Read binary stored JSON with a fixed byte ceiling, including short reads."""
+    content = bytearray()
+    while chunk := file.read(min(64 * 1024, MAX_STORED_TRANSCRIPT_JSON_BYTES + 1 - len(content))):
+        content.extend(chunk)
+        if len(content) > MAX_STORED_TRANSCRIPT_JSON_BYTES:
+            raise TranscriptArtifactError("Stored transcript JSON exceeds 10 MiB. Replace the artifact and reload.")
     try:
-        data = json.load(file)
+        return json.loads(content.decode("utf-8"))
     except (UnicodeDecodeError, RecursionError) as error:
         raise TranscriptArtifactError(
             "Invalid transcript JSON encoding or nesting. Replace the artifact and reload."
         ) from error
+
+
+def load_json_artifact(file: Any) -> Any:
+    data = read_json_artifact(file)
     pending = [(data, 0)]
     while pending:
         value, depth = pending.pop()

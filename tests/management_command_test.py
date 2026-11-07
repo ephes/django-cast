@@ -1603,3 +1603,27 @@ def test_media_stale_backend_metadata_error(mocker):
     storage = StubWalkStorage({})
     mocker.patch.object(storage, "get_modified_time", side_effect=RuntimeError("backend metadata unavailable"))
     assert not MediaStaleCommand.is_old_enough(storage, "cast_audio/file.mp3", timezone.now())
+
+
+def test_media_replace_removes_partial_requested_stage(mocker):
+    production = StubProductionStorage()
+    production.add("foo.jpg", b"original")
+    local = StubLocalStorage({"foo.jpg": b"replacement"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage", return_value=(production, object())
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    stage = "foo.jpg.django-cast-replace-" + "a" * 32 + ".tmp"
+    mocker.patch("cast.management.commands.media_replace.temporary_replacement_path", return_value=stage)
+
+    def fail_save(name, content):
+        production.add(name, content.read(3))
+        raise OSError("partial staging failure")
+
+    mocker.patch.object(production, "save", side_effect=fail_save)
+    errors = StringIO()
+    with pytest.raises(CommandError):
+        call_command("media_replace", "foo.jpg", yes=True, stderr=errors, stdout=StringIO())
+    assert "partial staging failure" in errors.getvalue()
+    assert production._files == {"foo.jpg": b"original"}
+    assert production.deleted == [stage]

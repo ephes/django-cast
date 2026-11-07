@@ -210,9 +210,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         data = {}
         if self.podlove:
             try:
-                with self.podlove.open("r") as file:
-                    data = json.load(file)
-            except (FileNotFoundError, OSError, UnicodeDecodeError, RecursionError):
+                with self.podlove.storage.open(self.podlove.name or "", "rb") as file:
+                    data = parsing.read_json_artifact(file)
+            except (FileNotFoundError, OSError, UnicodeDecodeError, RecursionError, parsing.TranscriptArtifactError):
                 data = {}
         return data
 
@@ -221,9 +221,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         data = {}
         if self.dote:
             try:
-                with self.dote.open("r") as file:
-                    data = json.load(file)
-            except (FileNotFoundError, OSError, UnicodeDecodeError, RecursionError):
+                with self.dote.storage.open(self.dote.name or "", "rb") as file:
+                    data = parsing.read_json_artifact(file)
+            except (FileNotFoundError, OSError, UnicodeDecodeError, RecursionError, parsing.TranscriptArtifactError):
                 data = {}
         return data
 
@@ -237,9 +237,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         data: dict = {}
         if self.speakers:
             try:
-                with self.speakers.open("r") as file:
-                    data = json.load(file)
-            except (FileNotFoundError, OSError, ValueError, RecursionError):
+                with self.speakers.storage.open(self.speakers.name or "", "rb") as file:
+                    data = parsing.read_json_artifact(file)
+            except (FileNotFoundError, OSError, ValueError, RecursionError, parsing.TranscriptArtifactError):
                 data = {}
         return data if isinstance(data, dict) else {}
 
@@ -253,9 +253,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         data: dict = {}
         if self.corrections:
             try:
-                with self.corrections.open("r") as file:
-                    data = json.load(file)
-            except (FileNotFoundError, OSError, ValueError, RecursionError):
+                with self.corrections.storage.open(self.corrections.name or "", "rb") as file:
+                    data = parsing.read_json_artifact(file)
+            except (FileNotFoundError, OSError, ValueError, RecursionError, parsing.TranscriptArtifactError):
                 data = {}
         return data if isinstance(data, dict) else {}
 
@@ -534,9 +534,16 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         if not file_field:
             return {}
         try:
-            with file_field.open("r") as file:
-                data = json.load(file)
-        except (FileNotFoundError, OSError, json.JSONDecodeError, UnicodeDecodeError, RecursionError):
+            with file_field.storage.open(file_field.name, "rb") as file:
+                data = parsing.read_json_artifact(file)
+        except (
+            FileNotFoundError,
+            OSError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            RecursionError,
+            parsing.TranscriptArtifactError,
+        ):
             return {}
         if not isinstance(data, dict):
             return {}

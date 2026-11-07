@@ -320,7 +320,9 @@ file is removed, the original path is left untouched, and the path is reported
 as an error.
 
 A failed replacement does not stop the run: the remaining paths are still
-attempted and staged objects are cleaned up. After printing the summary, the
+attempted and every requested/returned temporary staging key is cleaned up,
+including a partial write whose save failed before returning a name. Cleanup
+failures are reported separately without hiding the replacement failure. After printing the summary, the
 command exits with ``CommandError`` (a non-zero exit status) when at least one
 replacement failed, even if others succeeded, so automation can detect a
 partial run. Skipped paths and ``--dry-run`` do not affect the exit status.

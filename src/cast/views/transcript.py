@@ -496,7 +496,9 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
                 "form": TranscriptForm(instance=transcript, user=request.user),
                 "artifact_revision": services.artifact_revision(transcript),
                 "invalid_sidecars": invalid_sidecars,
-                "artifact_error": _("Invalid transcript JSON encoding or nesting. Replace the artifact and reload."),
+                "artifact_error": _(
+                    "Invalid transcript JSON encoding, nesting or size (maximum 10 MiB). Replace the artifact and reload."
+                ),
             },
             status=400,
         )
@@ -689,12 +691,12 @@ def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
         request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id")
     )
     if transcript.podlove:
-        content = _read_transcript_artifact(transcript.podlove)
-        if content is None:
-            return HttpResponse("Podlove file missing", status=404)
         try:
-            data = json.loads(content)  # assumes the file content is JSON
-        except json.JSONDecodeError:
+            with transcript.podlove.storage.open(transcript.podlove.name or "", "rb") as file:
+                data = parsing.read_json_artifact(file)
+        except OSError:
+            return HttpResponse("Podlove file missing", status=404)
+        except (json.JSONDecodeError, parsing.TranscriptArtifactError):
             return HttpResponse("Invalid JSON format in podlove file", status=400)
         episode = _speaker_episode_for_request(request, transcript=transcript, granting_page=granting_page)
         data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
@@ -711,14 +713,14 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     )
     if not transcript.dote:
         return HttpResponse("podcastindex JSON file not available", status=404)
-    content = _read_transcript_artifact(transcript.dote)
-    if content is None:
-        return HttpResponse("podcastindex JSON file missing", status=404)
-    episode = _speaker_episode_for_request(request, transcript=transcript, granting_page=granting_page)
     try:
-        dote_data = json.loads(content)
-    except json.JSONDecodeError:
+        with transcript.dote.storage.open(transcript.dote.name or "", "rb") as file:
+            dote_data = parsing.read_json_artifact(file)
+    except OSError:
+        return HttpResponse("podcastindex JSON file missing", status=404)
+    except (json.JSONDecodeError, parsing.TranscriptArtifactError):
         return HttpResponse("Invalid JSON format in dote file", status=400)
+    episode = _speaker_episode_for_request(request, transcript=transcript, granting_page=granting_page)
     if not dote_data:
         return prevent_private_media_caching(JsonResponse(dote_data), granting_page=granting_page)
     dote_data = apply_public_speaker_mapping_to_dote_data(dote_data, transcript, episode=episode)

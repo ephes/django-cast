@@ -37,7 +37,7 @@ def validate_json_artifact(transcript: Transcript, field_name: str) -> None:
     if not field:
         return
     try:
-        with field.storage.open(field.name, "r") as file:
+        with field.storage.open(field.name, "rb") as file:
             parsing.load_json_artifact(file)
     except (OSError, json.JSONDecodeError):
         # Preserve the established missing/malformed-syntax behavior.
