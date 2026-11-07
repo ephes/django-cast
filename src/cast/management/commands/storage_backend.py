@@ -1,4 +1,5 @@
 import hashlib
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import uuid4
@@ -7,6 +8,8 @@ from django.core.files.storage import InvalidStorageError, Storage, storages
 from django.core.management.base import CommandError
 
 from ...utils import storage_walk_paths
+
+logger = logging.getLogger(__name__)
 
 CONTENT_CHUNK_SIZE = 1024 * 1024
 
@@ -52,15 +55,24 @@ def content_differs(source_storage: Storage, target_storage: Storage, path: str)
 
 
 def remove_staged_copies(storage: Storage, staged_names: set[str]) -> None:
+    failures = []
     for staged_name in sorted(staged_names):
         try:
             if storage.exists(staged_name):
                 storage.delete(staged_name)
         except Exception as exc:
-            raise RuntimeError(f"could not remove staged copy {staged_name}: {exc}") from exc
+            failures.append(f"could not remove staged copy {staged_name}: {exc}")
+    if failures:
+        raise RuntimeError("; ".join(failures))
 
 
-def refresh_existing_file(source_storage: Storage, target_storage: Storage, path: str) -> None:
+def refresh_existing_file(
+    source_storage: Storage,
+    target_storage: Storage,
+    path: str,
+    *,
+    report_error: Callable[[str], None] | None = None,
+) -> None:
     """
     Overwrite ``path`` in the target with the bytes from the source.
 
@@ -88,14 +100,44 @@ def refresh_existing_file(source_storage: Storage, target_storage: Storage, path
         if saved_name != path:
             # The backend kept the existing object and stored the new bytes
             # under a generated name. Remove that stray copy, keep the old one.
-            if target_storage.exists(saved_name):
-                target_storage.delete(saved_name)
-            raise RuntimeError(
+            message = (
                 f"storage saved the refreshed copy as {saved_name} instead of overwriting {path}; "
                 "the existing copy was kept (the target storage must overwrite existing names)"
             )
-    finally:
+            try:
+                if target_storage.exists(saved_name):
+                    target_storage.delete(saved_name)
+            except Exception as cleanup_error:
+                raise RuntimeError(
+                    f"{message}; could not remove generated copy {saved_name}: {cleanup_error}"
+                ) from cleanup_error
+            raise RuntimeError(message)
+    except BaseException as primary_error:
+        try:
+            remove_staged_copies(target_storage, staged_names)
+        except RuntimeError as cleanup_error:
+            primary_error.add_note(str(cleanup_error))
+            logger.warning("Refresh staging cleanup failed: %s", cleanup_error)
+            if report_error is not None:
+                report_error(f"warning: refresh staging cleanup failed: {cleanup_error}")
+        raise
+    else:
         remove_staged_copies(target_storage, staged_names)
+
+
+def copy_missing_file(source_storage: Storage, target_storage: Storage, path: str) -> None:
+    with source_storage.open(path, "rb") as in_f:
+        saved_name = target_storage.save(path, in_f)
+    if saved_name != path:
+        message = f"storage saved copy as {saved_name} instead of requested {path}"
+        try:
+            if target_storage.exists(saved_name):
+                target_storage.delete(saved_name)
+        except Exception as cleanup_error:
+            raise RuntimeError(
+                f"{message}; could not remove generated copy {saved_name}: {cleanup_error}"
+            ) from cleanup_error
+        raise RuntimeError(message)
 
 
 def sync_media_files(
@@ -119,11 +161,10 @@ def sync_media_files(
         if refresh_changed:
             try:
                 if not target_storage.exists(path):
-                    with source_storage.open(path, "rb") as in_f:
-                        target_storage.save(path, in_f)
+                    copy_missing_file(source_storage, target_storage, path)
                     result.copied += 1
                 elif content_differs(source_storage, target_storage, path):
-                    refresh_existing_file(source_storage, target_storage, path)
+                    refresh_existing_file(source_storage, target_storage, path, report_error=report_error)
                     result.refreshed += 1
                 else:
                     result.unchanged += 1
@@ -132,8 +173,7 @@ def sync_media_files(
                 if report_error is not None:
                     report_error(f"error backing up {path}: {exc}")
         elif not target_storage.exists(path):
-            with source_storage.open(path, "rb") as in_f:
-                target_storage.save(path, in_f)
+            copy_missing_file(source_storage, target_storage, path)
             result.copied += 1
         if num % 100 == 0:  # pragma: no cover
             print(".", end="", flush=True)

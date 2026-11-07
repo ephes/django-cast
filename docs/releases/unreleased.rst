@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Require exact requested storage names for missing backup/restore copies;
+  reject and remove generated alternates without deleting concurrent targets.
+- Attempt cleanup of every refresh staging key, report all leftover names, and
+  preserve the original publication error when cleanup also fails.
+
 - Cap stored transcript JSON reads at 10 MiB before decoding, retaining oversized
   originals for replacement and refusing editorial mutations safely.
 - Clean partial requested staging keys after failed ``media_replace`` saves, as

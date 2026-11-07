@@ -65,9 +65,10 @@ class StubStorage:
     def was_not_added_by_backup(self, name: str) -> bool:
         return name not in self._added
 
-    def save(self, name: str, content: BytesIO) -> None:
+    def save(self, name: str, content: BytesIO) -> str:
         self.save_without_adding(name, content)
         self._added.add(name)
+        return name
 
     def save_without_adding(self, name: str, content: BytesIO) -> None:
         self._files[name] = content
