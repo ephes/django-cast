@@ -288,6 +288,19 @@ when local Vite source files are newer than the built manifest. Equal mtimes
 are considered fresh. Regression fixtures use fixed whole-second mtimes rather
 than sleeps or filesystem creation order.
 
+Bundle size reports
+-------------------
+
+Run ``just js-bundles --plain --include-static-js`` for a text inventory of
+shipped Vite entry JS, each entry's CSS sidecars, the separate comments build,
+and optional additional static JS. Non-entry dependency chunks are intentionally
+excluded: this is an entry inventory, not a page dependency graph.
+
+Rows retain per-entry attribution, including shared stylesheets. Clearly labeled
+unique-file totals count each normalized output path once. Missing files remain
+visible as rows but contribute no measured bytes; zero-byte files still have a
+gzip header. Gzip uses fixed-mtime local compression, not measured transfer size.
+
 Podlove Performance Data
 ------------------------
 

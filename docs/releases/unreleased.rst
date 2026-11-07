@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+- Preserve entry attribution in bundle reports while counting shared output files
+  once in labeled unique-file totals; test inventories and missing-file rows.
+
 - Require complete explicit asset-check pairs and verify Vite output inventories,
   contained paths and chunk references before reporting a build as fresh.
 
