@@ -7,6 +7,14 @@ offline gate failed, see "Slice 2 offline gate"). Related to
 sidecar and review pattern) and Voxhelm's
 `specs/2026-10-15_parakeet_asr_backend.md` (the ASR that produces the text).
 
+## Integrity follow-up (implemented)
+
+Imports, snippet saves and transcript-review additions share the podcast parent
+page row lock for cross-term variant validation and publication. Snippet saves
+revalidate under the lock; imports retain per-entry diagnostics and row conflict
+checks. Direct ORM/bulk writers must follow that lock/validation protocol.
+Synthetic PostgreSQL regressions cover competing terms and independent podcasts.
+
 ## Why
 
 Speech recognition cannot spell names it has never seen, and no ASR setting

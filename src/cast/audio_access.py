@@ -20,6 +20,8 @@ from django.db.models import prefetch_related_objects
 from django.http import Http404, HttpResponse
 from django.utils.cache import patch_vary_headers
 
+_AUTHORIZATION_BATCH_SIZE = 500
+
 
 def _view_restrictions(page: Any) -> Any:
     loaded = getattr(page, "_cast_audio_view_restrictions", None)
@@ -30,15 +32,32 @@ def _prime_candidate_restrictions(episodes: list[Any]) -> None:
     """Load candidate ancestors, alias sources and restrictions in batches."""
     from wagtail.models import Page, PageViewRestriction
 
-    ancestors = Page.objects.none()
-    for episode in episodes:
-        ancestors |= Page.objects.ancestor_of(episode, inclusive=True)
-    ancestor_pages = list(ancestors.only("path", "alias_of"))
+    # Wagtail tree paths have fixed-width steps. One OR expression per episode
+    # exceeds SQLite's expression-depth limit for heavily reused audio.
+    paths = sorted(
+        {
+            episode.path[:length]
+            for episode in episodes
+            for length in range(Page.steplen, len(episode.path) + 1, Page.steplen)
+        }
+    )
+    ancestor_pages = []
+    for offset in range(0, len(paths), _AUTHORIZATION_BATCH_SIZE):
+        ancestor_pages.extend(
+            Page.objects.filter(path__in=paths[offset : offset + _AUTHORIZATION_BATCH_SIZE]).only("path", "alias_of")
+        )
     pages_by_id = {page.pk: page for page in ancestor_pages}
     pending = {page.alias_of_id for page in ancestor_pages if page.alias_of_id not in pages_by_id}
     pending.discard(None)
     while pending:
-        sources = list(Page.objects.filter(pk__in=pending).only("alias_of"))
+        alias_source_ids = sorted(pending)
+        sources = []
+        for offset in range(0, len(alias_source_ids), _AUTHORIZATION_BATCH_SIZE):
+            sources.extend(
+                Page.objects.filter(pk__in=alias_source_ids[offset : offset + _AUTHORIZATION_BATCH_SIZE]).only(
+                    "alias_of"
+                )
+            )
         pages_by_id.update((page.pk, page) for page in sources)
         pending = {page.alias_of_id for page in sources if page.alias_of_id not in pages_by_id}
         pending.discard(None)
@@ -48,9 +67,14 @@ def _prime_candidate_restrictions(episodes: list[Any]) -> None:
         while source.alias_of_id is not None:
             source = pages_by_id[source.alias_of_id]
         source_id_by_ancestor_id[ancestor.pk] = source.pk
-    restrictions = list(
-        PageViewRestriction.objects.filter(page_id__in=source_id_by_ancestor_id.values()).prefetch_related("groups")
-    )
+    restriction_page_ids = sorted(set(source_id_by_ancestor_id.values()))
+    restrictions = []
+    for offset in range(0, len(restriction_page_ids), _AUTHORIZATION_BATCH_SIZE):
+        restrictions.extend(
+            PageViewRestriction.objects.filter(
+                page_id__in=restriction_page_ids[offset : offset + _AUTHORIZATION_BATCH_SIZE]
+            ).prefetch_related("groups")
+        )
     for episode in episodes:
         source_ids = {
             source_id_by_ancestor_id[ancestor.pk]

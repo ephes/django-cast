@@ -13,7 +13,9 @@ from typing import Any, TypeVar, overload
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.db.models import Model
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models import F, Model
 from django.http import HttpRequest
 from django.urls import include, path, reverse
 from django.utils.html import escape, format_html
@@ -23,6 +25,7 @@ from wagtail import hooks
 from wagtail.admin.action_menu import ActionMenuItem
 from wagtail.admin.menu import MenuItem
 from wagtail.admin.panels import FieldPanel
+from wagtail.models import Page
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy, CollectionPermissionPolicy
 from wagtail.rich_text.pages import PageLinkHandler
 from wagtail.snippets.models import register_snippet
@@ -190,6 +193,23 @@ class GlossaryLanguageWarningMixin:
     """Warn after saving a glossary term whose podcast language has no common-word list."""
 
     request: HttpRequest
+
+    def form_valid(self, form: Any) -> Any:
+        with transaction.atomic():
+            # Form validation ran before this lock. Revalidate the cross-term
+            # namespace under the same parent-row lock as imports and review.
+            Page.objects.filter(pk=form.instance.podcast_id).update(title=F("title"))
+            try:
+                form.instance.full_clean()
+            except ValidationError as exc:
+                for field, errors in exc.message_dict.items():
+                    form.add_error(field, errors)
+                # Wagtail 8's invalid-form response needs this metadata;
+                # Wagtail 7 renders the same errors without consulting it.
+                self.produced_error_code = "validation_error"
+                self.produced_error_message = self.get_error_message()  # type: ignore[attr-defined]
+                return self.form_invalid(form)  # type: ignore[attr-defined]
+            return super().form_valid(form)  # type: ignore[misc]
 
     def save_instance(self) -> Model:
         instance = super().save_instance()  # type: ignore[misc]

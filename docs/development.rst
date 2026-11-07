@@ -389,8 +389,10 @@ PostgreSQL Lock Tests (Optional Locally)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Normal ``just check`` and default tox environments use SQLite. Contributors do
-not need PostgreSQL or Docker installed. Seven concurrency cases require real
-PostgreSQL row locks and skip on SQLite.
+not need PostgreSQL or Docker installed. Concurrency cases requiring real
+PostgreSQL row locks skip on SQLite. These include glossary imports competing
+for one cross-term variant: the later import reports a validation conflict,
+while imports for other podcasts can proceed independently.
 
 CI runs those cases plus the publication-policy and editor publication-lock
 modules in the dedicated ``postgres-locks`` matrix job on a standard Ubuntu runner. GitHub Actions starts and

@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Bound audio authorization and anonymous speaker ancestor, alias-source and
+  restriction lookups to deduplicated batches of 500 paths/IDs. Audio reused by
+  over 1,000 episodes retains full restriction checks and candidate ordering.
+- Serialize glossary import validation and publication using the same podcast
+  parent-row lock as transcript review and admin saves. Revalidate admin forms
+  under that lock, reporting cross-term variant conflicts as validation errors.
+
 - Update Vitest, coverage and mocker peers to 4.1.12, fixing the development
   mock-server advisories GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp. The full
   npm lock audit now reports zero vulnerabilities (previously three moderate

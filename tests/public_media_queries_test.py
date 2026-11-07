@@ -198,3 +198,46 @@ def test_visibility_helpers_tolerate_missing_optional_mapping_data():
         visible_contributor_assignments=[SimpleNamespace(contributor_id=None), SimpleNamespace(contributor_id=23)]
     )
     assert _public_contributor_ids([episode]) == {23}
+
+
+@pytest.mark.django_db
+def test_over_one_thousand_audio_anchors_preserve_authorization_and_speaker_privacy(podcast, rf, user):
+    """Exercise real ORM queries beyond SQLite's expression-depth limit."""
+    audio = Audio.objects.create(user=podcast.owner, title="Synthetic shared audio")
+    transcript = create_transcript(audio=audio, podlove={"transcripts": [{"speaker": "Speaker 1", "text": "hi"}]})
+    source = PodcastFactory(parent=podcast.get_parent(), owner=podcast.owner, title="Source", slug="source")
+    restriction = PageViewRestriction.objects.create(page=source, restriction_type=PageViewRestriction.GROUPS)
+    group = Group.objects.create(name="Synthetic listeners")
+    restriction.groups.add(group)
+    user.groups.add(group)
+    alias = PodcastFactory(
+        parent=podcast.get_parent(), owner=podcast.owner, title="Alias", slug="alias", alias_of=source
+    )
+    alias = PodcastFactory(
+        parent=podcast.get_parent(), owner=podcast.owner, title="Alias chain", slug="alias-chain", alias_of=alias
+    )
+    episodes = [episode_for(alias, audio, number) for number in range(1100)]
+    hidden = Contributor.objects.create(display_name="Private Person", slug="private-person")
+    EpisodeContributor.objects.create(episode=episodes[0], contributor=hidden)
+    public = episode_for(podcast, audio, "last-public")
+    visible = Contributor.objects.create(display_name="Public Person", slug="public-person")
+    EpisodeContributor.objects.create(episode=public, contributor=visible)
+
+    request = anonymous(rf)
+    assert not all(row.accept_request(request) for row in episodes[0].get_view_restrictions())
+    assert authorize_audio_access(request, audio=audio).pk == public.pk
+    assert public_speaker_labels_for_transcript(transcript) == {"Public Person"}
+
+    public.live = False
+    public.save()
+    with pytest.raises(Http404):
+        authorize_audio_access(request, audio=audio)
+    assert public_speaker_labels_for_transcript(transcript) is None
+
+    request.user = user
+    assert all(row.accept_request(request) for row in episodes[0].get_view_restrictions())
+    granting = authorize_audio_access(request, audio=audio)
+    assert granting.pk == episodes[0].pk
+    assert (
+        prevent_private_media_caching(HttpResponse(), granting_page=granting)["Cache-Control"] == "private, no-store"
+    )

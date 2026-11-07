@@ -99,3 +99,29 @@ class TestContributorTranscriptVariantsAdmin:
         assert response.status_code == 302
         contributor.refresh_from_db()
         assert contributor.transcript_variants == "John Gould\nJohn => Jon"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("creating", [False, True])
+def test_glossary_admin_revalidates_cross_term_namespace_before_saving(admin_client, podcast, monkeypatch, creating):
+    """A competing term may change after the form's first validation."""
+    other = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator")
+    target = None if creating else TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Synthetica")
+    original_clean = TranscriptGlossaryTerm.full_clean
+    changed = []
+
+    def clean(instance, *args, **kwargs):
+        original_clean(instance, *args, **kwargs)
+        if instance.term == "Synthetica" and not changed:
+            TranscriptGlossaryTerm.objects.filter(pk=other.pk).update(variants="Synthetic Variant")
+            changed.append(True)
+
+    monkeypatch.setattr(TranscriptGlossaryTerm, "full_clean", clean)
+    url = reverse(ADD_URL) if creating else reverse(EDIT_URL, args=(target.pk,))
+    response = admin_client.post(url, {"podcast": podcast.pk, "term": "Synthetica", "variants": "Synthetic Variant"})
+    assert changed
+    assert response.status_code == 200
+    assert "already a variant" in response.content.decode()
+    assert list(TranscriptGlossaryTerm.objects.exclude(pk=other.pk).values_list("variants", flat=True)) == (
+        [] if creating else [""]
+    )
