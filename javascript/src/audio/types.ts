@@ -32,3 +32,14 @@ export function isInlineTranscript(t: TranscriptPayload): t is InlineTranscript 
 export function isFallbackTranscript(t: TranscriptPayload): t is FallbackTranscript {
   return !!t && typeof (t as FallbackTranscript).url === "string";
 }
+
+// Treat fetched JSON as untrusted until the whole cue array satisfies the contract.
+export function isCueArray(value: unknown): value is Cue[] {
+  return Array.isArray(value) && value.every((item: unknown) => {
+    if (!item || typeof item !== "object") return false;
+    const cue = item as Partial<Cue>;
+    return typeof cue.text === "string" && typeof cue.speaker === "string" &&
+      typeof cue.start === "number" && Number.isFinite(cue.start) && cue.start >= 0 &&
+      typeof cue.end === "number" && Number.isFinite(cue.end) && cue.end > cue.start;
+  });
+}

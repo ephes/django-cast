@@ -486,3 +486,136 @@ describe("cast-audio-player ?t= deep link", () => {
     window.history.replaceState({}, "", "/");
   });
 });
+
+describe("transcript request ownership and validation", () => {
+  const cue = (text = "new") => ({start: 0.25, end: 0.75, speaker: "Synthetic", text});
+  const answer = (text = "new") => ({ok: true, json: async () => ({cues: [cue(text)]})}) as Response;
+  const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+
+  it.each([false, true])("isolates reconnect from an old completion, rejection=%s", async (rejectOld) => {
+    let oldResolve!: (response: Response) => void;
+    let oldReject!: (reason: Error) => void;
+    let newResolve!: (response: Response) => void;
+    const oldResponse = new Promise<Response>((resolve, reject) => {oldResolve = resolve; oldReject = reject;});
+    const newResponse = new Promise<Response>((resolve) => {newResolve = resolve;});
+    const fetchMock = vi.fn().mockReturnValueOnce(oldResponse).mockReturnValueOnce(newResponse);
+    vi.stubGlobal("fetch", fetchMock);
+    const player = mountPlayer(makePayload({transcript: {url: "/old"}}));
+    const old = player.controller!;
+    old.requestTranscript();
+    player.remove();
+    document.getElementById("cast-player-data-7")!.textContent = JSON.stringify(makePayload({transcript: {url: "/new"}}));
+    document.body.appendChild(player);
+    const current = player.controller!;
+    expect(current).not.toBe(old);
+    current.requestTranscript();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+    if (rejectOld) oldReject(new Error("old failure")); else oldResolve(answer("old"));
+    await settle();
+    expect(current.getCues()).toEqual([]);
+    expect(current.transcriptLoading).toBe(true);
+    current.requestTranscript();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    newResolve(answer()); await settle();
+    expect(current.getCues()).toEqual([cue()]);
+    expect(current.transcriptLoaded).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it.each([null, 7, {}, {start: 0, end: 1, text: "missing speaker"},
+    {start: 0, end: 1, speaker: 3, text: "bad speaker"}, {start: 0, end: 1, speaker: "", text: null},
+    {start: NaN, end: 1, speaker: "", text: "nan"}, {start: 0, end: Infinity, speaker: "", text: "infinite"},
+    {start: -1, end: 1, speaker: "", text: "negative"}, {start: 2, end: 1, speaker: "", text: "reversed"},
+    {start: 1, end: 1, speaker: "", text: "empty range"}])("rejects malformed cues atomically: %j", async (invalid) => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({ok: true, json: async () => ({cues: [cue(), invalid]})})
+      .mockResolvedValue(answer());
+    vi.stubGlobal("fetch", fetchMock);
+    const player = mountPlayer(makePayload({transcript: {url: "/synthetic"}}));
+    const errors = vi.fn(); player.controller!.addEventListener("transcripterror", errors);
+    player.controller!.requestTranscript(); await settle();
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(player.controller!.transcriptLoading).toBe(false);
+    expect(player.controller!.transcriptLoaded).toBe(false);
+    expect(player.controller!.getCues()).toEqual([]);
+    player.controller!.requestTranscript(); await settle();
+    expect(player.controller!.getCues()).toEqual([cue()]);
+    player.controller!.seekToCue(0);
+    expect(audioOf(player).currentTime).toBe(0.26);
+    vi.unstubAllGlobals();
+  });
+
+  it.each(["headers", "body"])("bounds transcript %s, then retries without an old timer failing the new request", async (phase) => {
+    vi.useFakeTimers();
+    try {
+      const never = new Promise<Response>(() => {});
+      const fetchMock = vi.fn().mockReturnValueOnce(phase === "headers" ? never : Promise.resolve({ok: true, json: () => never}))
+        .mockResolvedValue(answer());
+      vi.stubGlobal("fetch", fetchMock);
+      const player = mountPlayer(makePayload({transcript: {url: "/synthetic"}}));
+      const errors = vi.fn(); player.controller!.addEventListener("transcripterror", errors);
+      player.controller!.requestTranscript(); await vi.advanceTimersByTimeAsync(15000);
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(player.controller!.transcriptLoading).toBe(false);
+      expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true);
+      player.controller!.requestTranscript(); await vi.advanceTimersByTimeAsync(0);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(player.controller!.getCues()).toEqual([cue()]);
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(errors).toHaveBeenCalledTimes(1);
+    } finally { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); }
+  });
+});
+
+describe("accessible playback recovery", () => {
+  it.each(["button", "controller"])("announces a rejected %s play and clears it on successful retry", async (trigger) => {
+    const player = mountPlayer(makePayload());
+    const audio = audioOf(player);
+    vi.spyOn(audio, "play").mockRejectedValueOnce(new DOMException("synthetic private details", "NotAllowedError"));
+    const button = player.querySelector<HTMLButtonElement>(".cast-player__play")!;
+    if (trigger === "button") button.click(); else await player.controller!.play();
+    await Promise.resolve(); await Promise.resolve();
+    const status = player.querySelector('[role="status"]')!;
+    expect(status.textContent).toContain("Playback failed");
+    expect(status.textContent).not.toContain("synthetic private details");
+    expect(button.disabled).toBe(false);
+    expect(button.getAttribute("aria-label")).toBe("Play");
+    button.click(); await Promise.resolve();
+    expect(status.textContent).toBe("Playing");
+  });
+
+  it("announces media errors but keeps an interrupted play silent", async () => {
+    const player = mountPlayer(makePayload()); const audio = audioOf(player);
+    vi.spyOn(audio, "play").mockRejectedValueOnce(new DOMException("interrupted", "AbortError"));
+    await player.controller!.play();
+    const status = player.querySelector('[role="status"]')!;
+    expect(status.textContent).toBe("");
+    audio.dispatchEvent(new Event("error"));
+    expect(status.textContent).toContain("Playback failed");
+    audio.dispatchEvent(new Event("playing"));
+    expect(status.textContent).toBe("Playing");
+  });
+});
+
+it("retains playback failure through a queued native pause until playback resumes", async () => {
+  const player = mountPlayer(makePayload());
+  const audio = audioOf(player);
+  await player.controller!.play();
+  expect(audio.paused).toBe(false);
+  vi.spyOn(audio, "pause").mockImplementation(() => {
+    queueMicrotask(() => audio.dispatchEvent(new Event("pause")));
+  });
+  audio.dispatchEvent(new Event("error"));
+  const status = player.querySelector('[role="status"]')!;
+  expect(status.textContent).toContain("Playback failed");
+  await Promise.resolve();
+  expect(status.textContent).toContain("Playback failed");
+  audio.dispatchEvent(new Event("waiting"));
+  expect(status.textContent).toContain("Playback failed");
+  audio.dispatchEvent(new Event("playing"));
+  expect(status.textContent).toBe("Playing");
+  audio.dispatchEvent(new Event("pause"));
+  expect(status.textContent).toBe("Paused");
+  player.remove();
+  await Promise.resolve();
+});

@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Bind lazy transcript hydration to its connection/controller, abort on
+  disconnect, enforce a 15-second whole-request deadline, and validate all cues
+  before installation. Failures allow a deliberate retry. Announce retryable
+  playback failures accessibly while keeping AbortError silent. Adopt the rebuilt
+  player assets with the package.
+
 - Preserve newer comment drafts and reply targets while POST/save requests are
   pending. Serialize inline saves, ignore cancelled editors' late responses,
   and scope threaded Reply/Cancel by object. Edit/Delete now show accessible
