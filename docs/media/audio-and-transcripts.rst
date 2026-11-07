@@ -835,3 +835,30 @@ and a stale or concurrently replaced sidecar is protected. Existing non-editor
 readers retain their permissive fallbacks; empty, missing, malformed-syntax and
 non-object handling is unchanged. Decoder encoding/recursion failures use empty
 fallbacks outside strict editorial preflight.
+
+Historical private-storage migration recovery
+---------------------------------------------
+
+For fresh installations running migration 0078, each public voice-reference clip
+and speaker sidecar is copied to a unique private key within the file field
+length limit and its bytes are verified
+before the selected database reference changes. Originals are released only
+after commit, when no file field in that database references the old key and
+both copies still match. Cleanup failures are logged and retain sources without
+stopping later commit hooks. A failed later row rolls back database names while
+leaving every original readable. Existing destination objects are never reused
+or overwritten, including a public/private backend sharing one namespace.
+
+When multiple database aliases are configured, originals are retained because
+they may be shared by another database. Failed migrations can leave unreferenced
+private copies under ``cast_private_migration/``; after retrying, audit references
+across all databases before removing such orphans or retained public sources.
+Keep a storage backup. These changes affect future runs only: do not rerun 0078
+automatically against an already-migrated deployment. Reversing it remains a
+no-op for storage and does not restore public copies; any deployed-data repair
+requires a separate, verified storage/reference inventory.
+
+Transcript artifact fingerprints use fixed 64 KiB reads, both at runtime and
+in migration 0084. Hash delimiters, empty-file identity and missing-file behavior
+are unchanged, with constant hashing memory regardless of artifact size. This
+does not change the separate memory requirements of parsing transcript content.

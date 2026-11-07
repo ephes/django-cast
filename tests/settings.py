@@ -193,3 +193,10 @@ TASKS = {
         "ENQUEUE_ON_COMMIT": False,
     },
 }
+
+# Independent synthetic alias for migration isolation regressions.
+DATABASES["migration_other"] = {
+    "ENGINE": "django.db.backends.sqlite3",
+    "NAME": ":memory:",
+    "TEST": {"NAME": ":memory:"},
+}

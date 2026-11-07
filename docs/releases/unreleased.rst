@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Make future runs of private-storage migration 0078 verify unique copies on the
+  selected database and defer reference-checked source cleanup until commit.
+  Retain sources with multiple aliases and document rollback/orphan recovery;
+  do not automatically rerun the migration on deployed databases. Stream runtime
+  and migration 0084 transcript fingerprints in 64 KiB chunks without changing
+  their identity.
+
 - Fence queued Voxhelm completions by an immutable attempt identity and recheck
   ownership under the publication lock after downloads. Queue handoff now runs
   after commit on the generation database; rollback queues no work, and enqueue
