@@ -272,7 +272,9 @@ Detect stale built assets compared to source files:
    $ just verify-assets
 
 In ``DEBUG`` mode, django-cast also emits system check warning ``cast.W001``
-when local Vite source files are newer than the built manifest.
+when local Vite source files are newer than the built manifest. Equal mtimes
+are considered fresh. Regression fixtures use fixed whole-second mtimes rather
+than sleeps or filesystem creation order.
 
 Podlove Performance Data
 ------------------------
@@ -418,11 +420,15 @@ This opt-in environment installs its own PostgreSQL driver. Defaults are host
 recreates it, and the role must be able to create databases. Public/private
 test media remain isolated under ``.tox`` for each environment.
 
-The first command runs the editor schedule-approval race together with the
-publication-policy tests (including their database-access regressions); the
-second runs the three v3 adapter races under their isolated settings.
-Both commands load a pytest guard that fails before collection if the selected
-backend is not PostgreSQL, so a SQLite fallback cannot silently skip the lock tests.
+Each environment runs the editor schedule-approval race, publication-policy,
+editor publication-lock and episode-numbering tests, chapter synchronization,
+transcript/glossary races, and the isolated v3 adapter races.
+Numbering tests use two committed connections: the second first-publication
+waits on the podcast counter lock, while another podcast can publish before the
+first transaction is released. They check revision/live numbers and counter
+preservation on republish. Every command loads a pytest guard that fails before
+collection if the selected backend is not PostgreSQL, so a SQLite fallback
+cannot silently skip the lock tests.
 
 Test Media Files
 ~~~~~~~~~~~~~~~~

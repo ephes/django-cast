@@ -1,7 +1,6 @@
 """Tests for cast.checks — asset freshness system check."""
 
 import os
-import time
 from pathlib import Path
 
 import pytest
@@ -42,6 +41,9 @@ def asset_tree(tmp_path):
     # pyproject.toml so _find_stale_assets recognizes it as a repo
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
 
+    # Ignore creation order and the filesystem clock, even on coarse filesystems.
+    os.utime(ts_file, (1, 1))
+    os.utime(manifest, (1, 1))
     return tmp_path, ts_file, manifest
 
 
@@ -58,12 +60,12 @@ class TestNewestSourceMtime:
     def test_finds_newest_ts_file(self, tmp_path):
         old = tmp_path / "old.ts"
         old.write_text("old")
-        time.sleep(0.05)
         new = tmp_path / "new.ts"
         new.write_text("new")
+        os.utime(old, (1, 1))
+        os.utime(new, (3, 3))
         result = _newest_source_mtime(tmp_path)
-        assert result is not None
-        assert result >= new.stat().st_mtime
+        assert result == 3.0
 
     def test_returns_newest_among_multiple(self, tmp_path):
         """Ensure the newest mtime is returned regardless of iteration order."""
@@ -82,15 +84,18 @@ class TestFindStaleAssets:
     def test_fresh_assets(self, asset_tree):
         repo, ts_file, manifest = asset_tree
         # Make manifest newer than source
-        time.sleep(0.05)
-        manifest.write_text("{}")
+        os.utime(manifest, (3, 3))
+        assert _find_stale_assets(repo) == []
+
+    def test_equal_mtimes_are_fresh(self, asset_tree):
+        repo, ts_file, manifest = asset_tree
+        assert ts_file.stat().st_mtime == manifest.stat().st_mtime == 1.0
         assert _find_stale_assets(repo) == []
 
     def test_stale_assets(self, asset_tree):
         repo, ts_file, manifest = asset_tree
         # Make source newer than manifest
-        time.sleep(0.05)
-        ts_file.write_text("export const x = 2;")
+        os.utime(ts_file, (2, 2))
         result = _find_stale_assets(repo)
         assert len(result) == 1
         assert "js-build-vite" in result[0]
@@ -137,8 +142,7 @@ class TestCheckAssetFreshness:
         fake_file = _fake_checks_file(repo)
         mocker.patch("cast.checks.__file__", str(fake_file))
         # Make source newer
-        time.sleep(0.05)
-        ts_file.write_text("export const x = 2;")
+        os.utime(ts_file, (2, 2))
         warnings = check_asset_freshness(None)
         assert len(warnings) == 1
         assert isinstance(warnings[0], Warning)
@@ -150,8 +154,7 @@ class TestCheckAssetFreshness:
         fake_file = _fake_checks_file(repo)
         mocker.patch("cast.checks.__file__", str(fake_file))
         # Make manifest newer
-        time.sleep(0.05)
-        manifest.write_text("{}")
+        os.utime(manifest, (3, 3))
         warnings = check_asset_freshness(None)
         assert warnings == []
 

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import threading
+import time
 from datetime import timedelta
 from types import SimpleNamespace
 from xml.etree import ElementTree
 
 import pytest
 from django.core.management import call_command
+from django.db import close_old_connections, connection
 from django.urls import reverse
 from django.utils import timezone
 
-from cast.models import Blog, Episode, Podcast
+from cast.models import Audio, Blog, Episode, Podcast
 from cast.podcast_numbering import (
     _current_publish_state,
     _get_episode_podcast,
@@ -350,17 +353,6 @@ def test_service_without_revision_assigns_object_and_counter(podcast, audio, bod
 
 
 @pytest.mark.django_db
-def test_assignment_locks_podcast_counter_row(podcast, audio, body, mocker):
-    enable_numbering(podcast)
-    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="locks-counter")
-    select_for_update = mocker.spy(Podcast.objects, "select_for_update")
-
-    assign_episode_number_for_publish(episode)
-
-    select_for_update.assert_called_once()
-
-
-@pytest.mark.django_db
 def test_service_returns_none_for_parentless_episode():
     episode = Episode(title="Parentless", slug="parentless", live=False)
 
@@ -537,3 +529,108 @@ def test_serialized_stale_publish_attempts_do_not_assign_duplicate_numbers(podca
     assert sorted(numbers) == [1, 2]
     podcast.refresh_from_db()
     assert podcast.next_episode_number == 3
+
+
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL row-lock semantics")
+@pytest.mark.parametrize("independent_podcasts", [False, True])
+def test_postgres_first_publications_serialize_per_podcast(pg_editor_actors, monkeypatch, independent_podcasts):
+    """Hold a real allocation mid-transaction and observe the competing backend."""
+    from wagtail.models import Revision
+
+    from cast import podcast_numbering
+    from tests.factories import PodcastFactory
+
+    user, blog = pg_editor_actors
+    first_podcast = PodcastFactory(parent=blog.get_parent(), owner=user, slug="first-show")
+    enable_numbering(first_podcast, next_number=7)
+    second_podcast = first_podcast
+    if independent_podcasts:
+        second_podcast = PodcastFactory(parent=blog.get_parent(), owner=user, slug="second-show")
+        enable_numbering(second_podcast, next_number=7)
+    audio = Audio.objects.create(user=user, title="Synthetic audio")
+    episodes = [
+        make_draft_episode(podcast=show, audio=audio, body=[], slug=f"allocation-{index}")
+        for index, show in enumerate((first_podcast, second_podcast))
+    ]
+    revisions = [episode.save_revision() for episode in episodes]
+    first_allocating = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+    second_finished = threading.Event()
+    errors = []
+    backend_pids = {}
+    original_next_number = podcast_numbering._next_available_episode_number
+
+    def pause_first(locked_podcast, episode):
+        number = original_next_number(locked_podcast, episode)
+        if episode.pk == episodes[0].pk:
+            first_allocating.set()
+            assert release_first.wait(10), "First allocation was never released"
+        return number
+
+    monkeypatch.setattr(podcast_numbering, "_next_available_episode_number", pause_first)
+
+    def publish(index):
+        close_old_connections()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '15s'")
+                cursor.execute("SELECT pg_backend_pid()")
+                backend_pids[index] = cursor.fetchone()[0]
+            if index == 1:
+                second_started.set()
+            Revision.objects.get(pk=revisions[index].pk).publish()
+            if index == 1:
+                second_finished.set()
+        except Exception as error:
+            errors.append(error)
+        finally:
+            connection.close()
+
+    threads = [threading.Thread(target=publish, args=(index,)) for index in range(2)]
+    threads[0].start()
+    try:
+        assert first_allocating.wait(10), errors
+        threads[1].start()
+        assert second_started.wait(10), errors
+        assert len(set(backend_pids.values())) == 2
+        if independent_podcasts:
+            assert second_finished.wait(10), errors
+        else:
+            deadline = time.monotonic() + 5
+            with connection.cursor() as cursor:
+                while time.monotonic() < deadline:
+                    cursor.execute("SELECT pg_blocking_pids(%s)", [backend_pids[1]])
+                    if backend_pids[0] in cursor.fetchone()[0]:
+                        break
+                    assert not second_finished.is_set(), "Second publication bypassed the podcast counter lock"
+                    assert not errors, errors
+                    time.sleep(0.01)
+                else:
+                    pytest.fail("Second publication never waited for the first allocation")
+    finally:
+        release_first.set()
+        for thread in threads:
+            if thread.ident is not None:
+                thread.join(timeout=20)
+        assert all(not thread.is_alive() for thread in threads)
+    assert errors == []
+    assert second_finished.is_set()
+    for episode, revision, expected in zip(episodes, revisions, (7, 7 if independent_podcasts else 8), strict=True):
+        episode.refresh_from_db()
+        revision.refresh_from_db()
+        assert episode.live
+        assert episode.live_revision_id == revision.pk
+        assert episode.episode_number == revision.content["episode_number"] == expected
+    for show in (first_podcast, second_podcast):
+        show.refresh_from_db()
+        assert show.next_episode_number == (8 if independent_podcasts else 9)
+    # Republishing either revision must preserve its number and the counter.
+    for episode, revision, expected in zip(episodes, revisions, (7, 7 if independent_podcasts else 8), strict=True):
+        revision.publish()
+        episode.refresh_from_db()
+        revision.refresh_from_db()
+        assert episode.episode_number == revision.content["episode_number"] == expected
+    for show in (first_podcast, second_podcast):
+        show.refresh_from_db()
+        assert show.next_episode_number == (8 if independent_podcasts else 9)

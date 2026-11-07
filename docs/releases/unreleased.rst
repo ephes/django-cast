@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Make asset-freshness tests deterministic with explicit timestamps, including
+  equal source/manifest times. Exercise first-publication number allocation on
+  separate PostgreSQL connections, including independent podcasts and republish;
+  include the numbering module in the existing opt-in PostgreSQL tox checks.
+
 - Bound audio authorization and anonymous speaker ancestor, alias-source and
   restriction lookups to deduplicated batches of 500 paths/IDs. Audio reused by
   over 1,000 episodes retains full restriction checks and candidate ordering.
