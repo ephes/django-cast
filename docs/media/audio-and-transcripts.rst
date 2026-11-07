@@ -907,3 +907,20 @@ The lazy public transcript endpoint treats numeric-conversion or clock-arithmeti
 overflow as an unusable timing value. Invalid starts are skipped; invalid ends
 use the existing finite boundary inference. A legal but oversized JSON integer
 therefore cannot fail the whole endpoint or prevent valid cues from rendering.
+
+Editorial timestamp and speaker-field validation
+------------------------------------------------
+
+Speaker samples and voice-reference candidates reject nonfinite or
+unrepresentable numeric/clock times before conversion, decimal quantization or
+formatting. Seconds and millisecond fields follow the same validity policy for
+their numeric representation: finite and nonnegative, with decimal candidate
+times representable at millisecond precision. Invalid starts use the existing
+unknown-time sample behavior and are unavailable as voice-reference ranges;
+source artifacts remain untouched. Valid fractional clocks continue to work.
+
+When public speaker filtering is active, Podlove speaker/voice fields must be
+strings with permitted nonblank labels. Unsupported object/list/number/null
+values and disallowed labels are removed from the public copy, preserving
+transcript text, approved labels and existing blank anonymous placeholders.
+The explicit unfiltered mode remains unchanged.

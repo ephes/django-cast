@@ -1,6 +1,7 @@
 """Pure transcript parsing and formatting helpers."""
 
 import json
+import math
 import re
 import unicodedata
 from decimal import ROUND_HALF_UP, Decimal
@@ -65,7 +66,26 @@ def quantize_seconds(value: Decimal) -> Decimal:
     return value.quantize(VOICE_REFERENCE_CANDIDATE_QUANTUM, rounding=ROUND_HALF_UP)
 
 
+def _quantized_timestamp(value: Decimal) -> Decimal | None:
+    if not value.is_finite() or value < 0:
+        return None
+    try:
+        return quantize_seconds(value)
+    except ArithmeticError:
+        return None
+
+
+def _finite_nonnegative(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
 def format_decimal_timestamp(value: Decimal) -> str:
+    if _quantized_timestamp(value) is None:
+        return ""
     total_milliseconds = int((value * 1000).to_integral_value(rounding=ROUND_HALF_UP))
     total_seconds, milliseconds = divmod(total_milliseconds, 1000)
     hours = total_seconds // 3600
@@ -118,7 +138,9 @@ def truncate_sample_text(text: str, *, max_chars: int) -> str:
 def parse_record_start_seconds(record: dict[str, Any], *, timestamp_fields: tuple[str, ...]) -> float | None:
     start_ms = record.get("start_ms")
     if not isinstance(start_ms, bool) and isinstance(start_ms, int | float) and start_ms >= 0:
-        return float(start_ms) / 1000
+        milliseconds = _finite_nonnegative(start_ms)
+        if milliseconds is not None:
+            return milliseconds / 1000
     for field_name in timestamp_fields:
         start_seconds = parse_timestamp_seconds(record.get(field_name))
         if start_seconds is not None:
@@ -134,7 +156,12 @@ def parse_record_decimal_seconds(
 ) -> Decimal | None:
     milliseconds = record.get(millisecond_field)
     if not isinstance(milliseconds, bool) and isinstance(milliseconds, int | float) and milliseconds >= 0:
-        return quantize_seconds(Decimal(str(milliseconds)) / Decimal("1000"))
+        try:
+            seconds = _quantized_timestamp(Decimal(str(milliseconds)) / Decimal("1000"))
+        except (ValueError, ArithmeticError):
+            seconds = None
+        if seconds is not None:
+            return seconds
     for field_name in timestamp_fields:
         seconds = parse_timestamp_decimal_seconds(record.get(field_name))
         if seconds is not None:
@@ -146,7 +173,10 @@ def parse_timestamp_decimal_seconds(value: Any) -> Decimal | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int | float):
-        return quantize_seconds(Decimal(str(value))) if value >= 0 else None
+        try:
+            return _quantized_timestamp(Decimal(str(value)))
+        except (ValueError, ArithmeticError):
+            return None
     if not isinstance(value, str):
         return None
     timestamp = value.strip().replace(",", ".")
@@ -164,20 +194,20 @@ def parse_timestamp_decimal_seconds(value: Any) -> Decimal | None:
             seconds = Decimal(parts[1])
         elif len(parts) == 1:
             seconds = Decimal(timestamp)
-            return quantize_seconds(seconds) if seconds >= 0 else None
+            return _quantized_timestamp(seconds)
         else:
             return None
+        total_seconds = (Decimal(hours) * Decimal("3600")) + (Decimal(minutes) * Decimal("60")) + seconds
+        return _quantized_timestamp(total_seconds)
     except (ValueError, ArithmeticError):
         return None
-    total_seconds = (Decimal(hours) * Decimal("3600")) + (Decimal(minutes) * Decimal("60")) + seconds
-    return quantize_seconds(total_seconds) if total_seconds >= 0 else None
 
 
 def parse_timestamp_seconds(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int | float):
-        return float(value) if value >= 0 else None
+        return _finite_nonnegative(value)
     if not isinstance(value, str):
         return None
     timestamp = value.strip().replace(",", ".")
@@ -194,16 +224,17 @@ def parse_timestamp_seconds(value: Any) -> float | None:
             minutes = int(parts[0])
             seconds = float(parts[1])
         elif len(parts) == 1:
-            return float(timestamp) if float(timestamp) >= 0 else None
+            return _finite_nonnegative(timestamp)
         else:
             return None
-    except ValueError:
+        start_seconds = (hours * 3600) + (minutes * 60) + seconds
+    except (ValueError, OverflowError):
         return None
-    start_seconds = (hours * 3600) + (minutes * 60) + seconds
-    return start_seconds if start_seconds >= 0 else None
+    return _finite_nonnegative(start_seconds)
 
 
 def format_sample_timestamp(start_seconds: float | None) -> str:
+    start_seconds = _finite_nonnegative(start_seconds)
     if start_seconds is None:
         return ""
     total_seconds = int(start_seconds)

@@ -118,7 +118,9 @@ def sanitize_podlove_data(data: dict[str, Any], allowed_speaker_labels: set[str]
             continue
         for field_name in PODLOVE_SPEAKER_FIELDS:
             label = parsing.clean_speaker_label(segment.get(field_name))
-            if label and label not in allowed_speaker_labels:
+            if field_name in segment and (
+                not isinstance(segment[field_name], str) or (label and label not in allowed_speaker_labels)
+            ):
                 needs_sanitization = True
                 break
         if needs_sanitization:
@@ -133,7 +135,9 @@ def sanitize_podlove_data(data: dict[str, Any], allowed_speaker_labels: set[str]
             continue
         for field_name in PODLOVE_SPEAKER_FIELDS:
             label = parsing.clean_speaker_label(segment.get(field_name))
-            if label and label not in allowed_speaker_labels:
+            if field_name in segment and (
+                not isinstance(segment[field_name], str) or (label and label not in allowed_speaker_labels)
+            ):
                 segment.pop(field_name, None)
     return sanitized
 

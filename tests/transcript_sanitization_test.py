@@ -364,3 +364,38 @@ def test_webvtt_generic_prefix_detection_matches_sanitizing_and_mapping():
         "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n  <v Alice>Alice: Indented prefix</v>\n\n"
         "00:00:01.000 --> 00:00:02.000\n<v Bob>Bob: Spaced prefix</v>\n"
     )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("unsupported", [{"name": "SYNTHETIC_PRIVATE"}, ["SYNTHETIC_PRIVATE"], 42, None, True])
+def test_public_serializer_removes_unsupported_speaker_shapes_without_mutating_source(
+    audio, episode, rf_request, unsupported
+):
+    import json
+
+    from cast.api.serializers import AudioPodloveSerializer
+
+    contributor = Contributor.objects.create(display_name="Approved", slug="synthetic-approved")
+    EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+    episode.save_revision().publish()
+    data = {
+        "transcripts": [
+            {"speaker": unsupported, "voice": unsupported, "text": "kept", "start": "0", "end": "1"},
+            {"speaker": "Approved", "voice": "Approved", "text": "approved", "start": "1", "end": "2"},
+        ]
+    }
+    transcript = create_transcript(audio=audio, podlove=data)
+    original = transcript._read_file_bytes("podlove")
+    result = AudioPodloveSerializer(audio, context={"post": episode, "request": rf_request}).data
+    assert "speaker" not in result["transcripts"][0] and "voice" not in result["transcripts"][0]
+    assert result["transcripts"][0]["text"] == "kept"
+    assert result["transcripts"][1]["speaker"] == "Approved"
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(result)
+    assert transcript._read_file_bytes("podlove") == original
+    assert sanitize_podlove_data(data, None) is data
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_filtered_public_podlove_preserves_anonymous_string_placeholders(blank):
+    data = {"transcripts": [{"speaker": blank, "voice": blank, "text": "kept"}]}
+    assert sanitize_podlove_data(data, set()) is data
