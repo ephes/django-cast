@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any
 
 from django.core.files.storage import Storage
@@ -13,8 +14,13 @@ class Command(BaseCommand):
     )
 
     @staticmethod
-    def restore_media_files(production_storage: Storage, backup_storage: Storage) -> None:
-        sync_media_files(backup_storage, production_storage)
+    def restore_media_files(
+        production_storage: Storage,
+        backup_storage: Storage,
+        *,
+        report_error: Callable[[str], None] | None = None,
+    ) -> None:
+        sync_media_files(backup_storage, production_storage, report_error=report_error)
 
     def handle(self, *args: Any, **options: Any) -> None:
-        self.restore_media_files(*get_production_and_backup_storage())
+        self.restore_media_files(*get_production_and_backup_storage(), report_error=self.stderr.write)

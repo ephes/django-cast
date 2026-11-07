@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Exclude reserved refresh UUID staging keys from backup and restore, reporting
+  skipped leftovers without deleting source objects.
+- Intersect combined rendition blog/post selectors, validate the blog first,
+  and refuse explicitly empty selections before media changes.
+- Generate and verify missing rendition replacements before retiring obsolete
+  counterparts, retaining old files when generation or storage fails.
+
 - Require exact requested storage names for missing backup/restore copies;
   reject and remove generated alternates without deleting concurrent targets.
 - Attempt cleanup of every refresh staging key, report all leftover names, and
