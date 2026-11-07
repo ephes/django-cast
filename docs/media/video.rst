@@ -142,3 +142,20 @@ In the post model the block is declared as part of the body StreamField:
 
 The ``VideoChooserBlock`` integrates with the repository pattern so that
 video data is prefetched efficiently when rendering pages.
+
+Structured stream dimensions and rotation
+------------------------------------------
+
+Poster probing requests ffprobe JSON for the first video stream excluding attached cover art (``V:0``),
+using its structured positive integer width and height. Detection is independent
+of codec names and human-readable diagnostic columns. Missing/malformed
+dimensions leave the poster unavailable under the existing failure policy.
+
+Only the selected stream's numeric rotation affects orientation: quarter turns
+(including negative angles and 270 degrees) swap the axes; zero and half turns
+preserve them. Sample aspect ratio scales encoded width to square-pixel display
+width before rotation, so anamorphic portraits keep their shape; fractional
+display widths round to the nearest positive pixel. Display aspect does not
+itself trigger a rotation. Probe stderr remains separate from JSON stdout. The existing 30-second probe budget and temporary
+poster cleanup remain in force. Existing posters are not regenerated; any
+historical regeneration is a separate operator action after package adoption.
