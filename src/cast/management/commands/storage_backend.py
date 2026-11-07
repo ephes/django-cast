@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import uuid4
@@ -158,6 +159,13 @@ def sync_media_files(
     """
     result = SyncResult()
     for num, path in enumerate(storage_walk_paths(source_storage)):
+        if re.search(r"\.django-cast-refresh-[0-9a-f]{32}\.tmp\Z", path):
+            message = f"skipped reserved refresh staging key {path}; inspect and remove manually"
+            if report_error is not None:
+                report_error(message)
+            else:
+                logger.warning(message)
+            continue
         if refresh_changed:
             try:
                 if not target_storage.exists(path):

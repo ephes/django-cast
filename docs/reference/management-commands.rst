@@ -169,12 +169,21 @@ created the requested key.
 Options:
 
 ``--post-slug SLUG``
-    Only sync renditions for the post with this slug.
+    Only sync renditions for posts with this slug. When combined with
+    ``--blog-slug``, only matches in that blog's subtree are selected.
 
 ``--blog-slug SLUG``
     Only sync renditions for posts belonging to this blog. The slug must
     resolve to exactly one blog; missing or ambiguous slugs raise
-    ``CommandError`` instead of selecting an arbitrary match.
+    ``CommandError`` instead of selecting an arbitrary match. The blog is
+    validated first, including when ``--post-slug`` is also supplied. Any
+    explicitly empty selection raises ``CommandError`` before media changes.
+
+All planned missing replacements are generated and their saved rows/files
+verified before any obsolete counterpart is retired. A generation or storage
+failure fails the command and keeps old counterparts for a safe retry; newly
+generated replacements may remain and are reused on retry. Unrelated rendition
+specifications are preserved.
 
 Video Management
 ================
@@ -271,13 +280,22 @@ Options:
     (``FileSystemStorage`` with ``allow_overwrite``) can leave a partial file
     under the path if that last write fails; run the command again to repair
     it. A run that is killed can leave a staged ``.tmp`` key in the backup
-    storage; remove it before running ``media_restore``.
+    storage. Backup and restore skip the exact reserved refresh-key pattern
+    described below; inspect and remove abandoned objects manually.
 
     With this option the command prints
     ``copied=<n> refreshed=<n> unchanged=<n> errors=<n>``. A path that cannot be
     checked, copied, compared or refreshed does not stop the run, but the
     command then exits with ``CommandError`` (a non-zero exit status). Without
     the option the first storage error still aborts the command.
+
+Backup and restore reserve keys ending in
+``.django-cast-refresh-<32 lowercase hexadecimal characters>.tmp`` for temporary
+refresh data. Such source objects are skipped in every synchronization mode,
+with a diagnostic naming each skipped key, without deleting source objects or
+counting a successful copy. Similar names outside this precise pattern remain
+ordinary media. Inspect leftovers before removing them manually; arbitrary
+backend-renamed temporary keys require manual inspection too.
 
 media_restore
 -------------
