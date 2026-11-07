@@ -2,8 +2,9 @@
 """
 Check whether built assets are stale compared to their source files.
 
-Compares the newest source-file mtime against the Vite manifest mtime.
-If any source file is newer than the manifest, the build is stale.
+Verifies Vite JSON output inventories and compares source/build mtimes.
+Explicit non-JSON outputs use timestamp-only checking; either explicit option
+requires both options in equal numbers.
 
 Usage:
     # django-cast (auto-detected defaults)
@@ -21,14 +22,15 @@ Usage:
         --source-dir cast_bootstrap5/static/cast_bootstrap5/scss \
         --manifest cast_bootstrap5/static/cast_bootstrap5/css/bootstrap5/cast.css
 
-Exit code 0 = fresh, 1 = stale, 2 = configuration error (missing args or no detectable pairs).
+Exit code 0 = fresh, 1 = failed verification, 2 = configuration error.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 # Source extensions to consider
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".vue", ".css", ".scss", ".sass"}
@@ -47,6 +49,36 @@ def newest_source_mtime(source_dir: Path) -> float | None:
     return newest if found else None
 
 
+def validate_manifest(manifest: Path) -> None:
+    """Verify the Vite inventory and contained output paths (including chunks)."""
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("Vite manifest must be a JSON object")
+    root = (manifest.parent.parent if manifest.parent.name == ".vite" else manifest.parent).resolve()
+    for entry in data.values():
+        if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
+            raise ValueError("Vite manifest entries must contain a file")
+        outputs = [entry["file"]]
+        for field in ("css", "assets", "imports", "dynamicImports"):
+            values = entry.get(field, [])
+            if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+                raise ValueError(f"Vite manifest {field} must be a list of strings")
+            if field in ("imports", "dynamicImports"):
+                if any(value not in data for value in values):
+                    raise ValueError(f"Vite manifest {field} references an unknown entry")
+            else:
+                outputs.extend(values)
+        for name in outputs:
+            path = Path(name)
+            if not name or path.is_absolute() or PureWindowsPath(name).drive or "\\" in name:
+                raise ValueError(f"Invalid Vite output path: {name!r}")
+            output = (root / path).resolve()
+            if not output.is_relative_to(root):
+                raise ValueError(f"Vite output escapes build directory: {name!r}")
+            if not output.is_file():
+                raise ValueError(f"Vite output not found: {name!r}")
+
+
 def check_freshness(source_dir: Path, manifest: Path) -> tuple[bool, str]:
     """Check if built assets are fresh.
 
@@ -57,6 +89,12 @@ def check_freshness(source_dir: Path, manifest: Path) -> tuple[bool, str]:
 
     if not manifest.is_file():
         return False, f"Manifest/built file not found: {manifest}"
+
+    if manifest.suffix.lower() == ".json":
+        try:
+            validate_manifest(manifest)
+        except (OSError, ValueError) as exc:
+            return False, f"Invalid Vite build {manifest}: {exc}"
 
     src_mtime = newest_source_mtime(source_dir)
     if src_mtime is None:
@@ -124,8 +162,8 @@ def main() -> None:
     args = parser.parse_args()
 
     # Build pairs from explicit args or auto-detect
-    if args.source_dirs and args.manifests:
-        if len(args.source_dirs) != len(args.manifests):
+    if args.source_dirs is not None or args.manifests is not None:
+        if not args.source_dirs or not args.manifests or len(args.source_dirs) != len(args.manifests):
             print("Error: --source-dir and --manifest must be provided in equal numbers")
             sys.exit(2)
         pairs = [(Path(s), Path(m)) for s, m in zip(args.source_dirs, args.manifests)]
