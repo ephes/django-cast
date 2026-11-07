@@ -7,7 +7,7 @@ import pytest
 from django.db import close_old_connections, connection
 from wagtail.models import Collection
 
-from cast.models import Audio, Contributor, EpisodeContributor, TranscriptGlossaryTerm
+from cast.models import Audio, Contributor, EpisodeContributor, TranscriptGlossaryTerm, VoxhelmSettings
 from cast.transcripts import corrections
 from tests.factories import EpisodeFactory, PodcastFactory
 from tests.transcripts.corrections_test import make_transcript
@@ -182,6 +182,9 @@ def test_imports_serialize_cross_term_variants_per_podcast(pg_editor_actors, tmp
     user, blog = pg_editor_actors
     podcast = PodcastFactory(parent=blog.get_parent(), owner=user, title="Synthetic show", slug="synthetic-show")
     independent = PodcastFactory(parent=blog.get_parent(), owner=user, title="Other show", slug="other-show")
+    # Lazy creation of shared site settings must not introduce a separate
+    # unique-row lock inside the namespace concurrency experiment.
+    VoxhelmSettings.for_site(podcast.get_site())
     for name in ("Frobnicator", "Synthetica"):
         TranscriptGlossaryTerm.objects.create(podcast=podcast, term=name)
     paths = []
