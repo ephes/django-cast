@@ -430,6 +430,17 @@ preservation on republish. Every command loads a pytest guard that fails before
 collection if the selected backend is not PostgreSQL, so a SQLite fallback
 cannot silently skip the lock tests.
 
+Publication rollback tests
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``tests/publication_test.py`` injects database errors after the real numbered
+page save and after a scheduled rejection audit row is inserted. Transaction-aware
+tests verify persisted counter, revision content, live pointers and audit state
+roll back, then retry from freshly loaded rows. Scheduled failures retain their
+approval for retry and stop that command invocation; a healthy rerun logs one
+rejection and publishes the valid due sibling. These tests run on SQLite and in
+both PostgreSQL tox environments.
+
 Test Media Files
 ~~~~~~~~~~~~~~~~
 

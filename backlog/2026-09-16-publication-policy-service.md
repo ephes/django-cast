@@ -319,3 +319,13 @@ and an input to that evaluation's option 2/3 comparison. Slices 1-2b alone alrea
   a future `go_live_at` falls through with `object.live = False`. Wording corrected.
 - suggestion, accepted (round 2): the backstop wording read as if a deleted `Audio` row were out of scope. It now
   reads "never validated, or became invalid after approval", with the deleted-audio case named there.
+
+## Failure atomicity regression coverage (2026-11-07)
+
+Transaction-aware publication tests fail after the numbered page is really saved,
+then verify counter, revision JSON, live pointers and success diagnostics roll
+back before a healthy retry uses the original next number. A scheduled audit
+insert failure rolls back both the log row and approval clearing; the command
+reports the error, retains retry eligibility, and a healthy rerun records one
+rejection before publishing the valid due sibling. These synthetic tests execute
+on SQLite and both PostgreSQL tox environments.

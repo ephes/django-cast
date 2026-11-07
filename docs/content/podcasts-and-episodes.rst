@@ -38,6 +38,11 @@ Editors can still set episode numbers manually. Automatic assignment never
 rewrites a non-empty episode number, and it skips numbers that are already used
 by another episode under the same podcast. This can leave gaps in the sequence;
 avoiding duplicate public numbers is more important than strict contiguity.
+Number assignment, revision content and live publication are committed together.
+If publication persistence fails, the number and counter roll back. The failed
+attempt consumes no number; retrying the persisted revision uses the next
+available number.
+
 Episode numbers remain publishing metadata only. RSS GUIDs, slugs, and URLs are
 not derived from episode numbers.
 
@@ -80,6 +85,12 @@ episode remains a draft; an already-live episode remains live without applying
 the scheduled update. The approval is cleared so Wagtail does not retry it on
 every run, and the episode History records a rejected scheduled publication.
 Add audio and schedule the episode again to publish it.
+
+Clearing approval and writing the rejection History entry are atomic. If that
+audit write fails, ``publish_scheduled`` reports the error and stops the run; the
+approval remains due for a later retry. After fixing the persistence failure,
+rerun the command: it records the rejection once and continues to valid due
+episodes.
 
 Promote > Title
 ---------------

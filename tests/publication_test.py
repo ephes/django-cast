@@ -419,3 +419,169 @@ def test_scheduled_publish_rejects_synthetic_legacy_revision(podcast, audio, bod
     assert episode.live is False
     assert revision.approved_go_live_at is None
     assert PageLogEntry.objects.filter(page_id=episode.pk, action="cast.publish.rejected").exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_publish_persistence_failure_rolls_back_numbering_and_live_state(pg_editor_actors, monkeypatch):
+    """Fail after Wagtail saves the numbered page, before publication succeeds."""
+    from django.db import DatabaseError
+    from wagtail.signals import page_published
+
+    from cast.models import Podcast
+    from tests.factories import PodcastFactory
+
+    user, blog = pg_editor_actors
+    podcast = PodcastFactory(
+        parent=blog.get_parent(),
+        owner=user,
+        slug="rollback-show",
+        automatic_episode_numbering_enabled=True,
+        next_episode_number=7,
+    )
+    audio = Audio.objects.create(user=user, title="Synthetic audio")
+    episode = EpisodeFactory(
+        parent=podcast,
+        owner=user,
+        slug="rollback-episode",
+        title="Rollback episode",
+        live=False,
+        first_published_at=None,
+        episode_number=None,
+        podcast_audio=audio,
+        body=[],
+    )
+    revision = episode.save_revision()
+    before_episode = Episode.objects.filter(pk=episode.pk).values().get()
+    revision.refresh_from_db()
+    before_content = revision.content.copy()
+    before_logs = list(PageLogEntry.objects.filter(page_id=episode.pk).values())
+    observed = []
+    published = []
+    original_save = Episode.save
+
+    def fail_after_save(self, *args, **kwargs):
+        result = original_save(self, *args, **kwargs)
+        if self.pk == episode.pk and self.live:
+            persisted = Episode.objects.get(pk=self.pk)
+            observed.append(
+                (
+                    persisted.episode_number,
+                    Podcast.objects.get(pk=podcast.pk).next_episode_number,
+                    Revision.objects.get(pk=revision.pk).content["episode_number"],
+                    persisted.live_revision_id,
+                )
+            )
+            raise DatabaseError("Synthetic publish persistence failure")
+        return result
+
+    def record_publication(sender, **kwargs):
+        published.append(kwargs["revision"].pk)
+
+    page_published.connect(record_publication, sender=Episode, weak=False)
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(Episode, "save", fail_after_save)
+            with pytest.raises(DatabaseError, match="Synthetic publish persistence failure"):
+                revision.publish()
+        assert observed == [(7, 8, 7, revision.pk)]
+        assert published == []
+        assert Episode.objects.filter(pk=episode.pk).values().get() == before_episode
+        revision.refresh_from_db()
+        podcast.refresh_from_db()
+        assert revision.content == before_content
+        assert podcast.next_episode_number == 7
+        assert list(PageLogEntry.objects.filter(page_id=episode.pk).values()) == before_logs
+
+        # Reload after rollback: in-memory revision/page objects are not rolled back.
+        Revision.objects.get(pk=revision.pk).publish()
+        episode.refresh_from_db()
+        revision.refresh_from_db()
+        podcast.refresh_from_db()
+        assert episode.live
+        assert episode.live_revision_id == revision.pk
+        assert episode.episode_number == revision.content["episode_number"] == 7
+        assert podcast.next_episode_number == 8
+        assert published == [revision.pk]
+        assert PageLogEntry.objects.filter(page_id=episode.pk, action="wagtail.publish").count() == 1
+    finally:
+        page_published.disconnect(record_publication, sender=Episode)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_scheduled_rejection_log_failure_preserves_retry_and_valid_sibling(pg_editor_actors, monkeypatch, caplog):
+    from django.db import DatabaseError
+
+    from tests.factories import PodcastFactory
+
+    user, blog = pg_editor_actors
+    podcast = PodcastFactory(parent=blog.get_parent(), owner=user, slug="scheduled-retry-show")
+    due = timezone.now() - timedelta(minutes=2)
+    rejected = EpisodeFactory(
+        parent=podcast,
+        owner=user,
+        slug="rejected-retry",
+        title="Rejected retry",
+        live=False,
+        first_published_at=None,
+        podcast_audio=None,
+        go_live_at=due,
+        body=[],
+    )
+    rejected_revision = rejected.save_revision(approved_go_live_at=due)
+    audio = Audio.objects.create(user=user, title="Synthetic sibling audio")
+    valid = EpisodeFactory(
+        parent=podcast,
+        owner=user,
+        slug="valid-sibling",
+        title="Valid sibling",
+        live=False,
+        first_published_at=None,
+        podcast_audio=audio,
+        go_live_at=due + timedelta(minutes=1),
+        body=[],
+    )
+    valid_revision = valid.save_revision(approved_go_live_at=valid.go_live_at)
+    before_rejected = Episode.objects.filter(pk=rejected.pk).values().get()
+    rejected_revision.refresh_from_db()
+    before_content = rejected_revision.content.copy()
+    observed = []
+    original_save = PageLogEntry.save
+
+    def fail_rejection_log(self, *args, **kwargs):
+        result = original_save(self, *args, **kwargs)
+        if self.action == "cast.publish.rejected":
+            observed.append(
+                (
+                    Revision.objects.get(pk=rejected_revision.pk).approved_go_live_at,
+                    PageLogEntry.objects.filter(pk=self.pk).exists(),
+                )
+            )
+            raise DatabaseError("Synthetic rejection audit failure")
+        return result
+
+    caplog.set_level("INFO")
+    with monkeypatch.context() as patch:
+        patch.setattr(PageLogEntry, "save", fail_rejection_log)
+        with pytest.raises(DatabaseError, match="Synthetic rejection audit failure"):
+            call_command("publish_scheduled", verbosity=0)
+    assert observed == [(None, True)]
+    rejected_revision.refresh_from_db()
+    valid.refresh_from_db()
+    assert rejected_revision.approved_go_live_at == due
+    assert rejected_revision.content == before_content
+    assert Episode.objects.filter(pk=rejected.pk).values().get() == before_rejected
+    assert not PageLogEntry.objects.filter(page_id=rejected.pk, action="cast.publish.rejected").exists()
+    assert not valid.live
+    assert "Publication policy rejected scheduled publication" not in caplog.text
+
+    call_command("publish_scheduled", verbosity=0)
+    rejected_revision.refresh_from_db()
+    valid.refresh_from_db()
+    assert rejected_revision.approved_go_live_at is None
+    assert valid.live and valid.live_revision_id == valid_revision.pk
+    rejection_log = PageLogEntry.objects.get(page_id=rejected.pk, action="cast.publish.rejected")
+    assert rejection_log.revision_id == rejected_revision.pk
+    assert "Publication policy rejected scheduled publication" in caplog.text
+    call_command("publish_scheduled", verbosity=0)
+    assert PageLogEntry.objects.filter(page_id=rejected.pk, action="cast.publish.rejected").count() == 1
+    assert PageLogEntry.objects.filter(page_id=valid.pk, action="wagtail.publish.scheduled").count() == 1
