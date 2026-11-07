@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Any, cast
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import QuerySet
+from django.db.models import Prefetch, QuerySet
 from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
@@ -214,7 +214,7 @@ class PostQuerySnapshot:
                 episode_by_id[post.pk] = specific_post
 
         if episode_by_id:
-            from ..contributors import EpisodeContributor
+            from ..contributors import Contributor, EpisodeContributor
 
             assignments_by_episode_id: dict[int, list[EpisodeContributor]] = {
                 episode_id: [] for episode_id in episode_by_id
@@ -222,7 +222,13 @@ class PostQuerySnapshot:
             primed_contributors: dict[int, Any] = {}
             for assignment in (
                 EpisodeContributor.objects.filter(episode_id__in=episode_by_id, contributor__visible=True)
-                .select_related("contributor__avatar", "link")
+                .select_related("contributor", "link")
+                .prefetch_related(
+                    Prefetch(
+                        "contributor__avatar",
+                        queryset=Image.objects.prefetch_renditions(Contributor.AVATAR_RENDITION_FILTER),
+                    )
+                )
                 .order_by("episode_id", "sort_order", "pk")
             ):
                 if assignment.contributor_id in primed_contributors:

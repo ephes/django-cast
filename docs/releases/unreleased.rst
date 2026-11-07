@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Reuse prefetched chapter marks in both public audio chapter readers, keeping
+  chronological order and existing formatting. Batch contributor avatars and
+  existing avatar renditions in post snapshots; missing renditions still generate.
+
 - Build the glossary import identity index once, retaining per-entry validation.
   Publish only supplied fields, comparing their lookup values atomically and
   reporting concurrent edits as skipped conflicts. Omitted fields keep edits.
