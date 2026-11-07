@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+- Compare structured permission-error responses in the v3 publication regression
+  test, avoiding false revision-ID leak failures when an ID occurs in HTTP 403.
+
 - Exercise publication persistence failures after real numbering/page saves and
   scheduled-rejection audit insertion. Verify atomic rollback and healthy retries,
   including retained schedule approval and publication of a valid due sibling.
