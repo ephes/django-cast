@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Probe poster dimensions using ffprobe JSON for the first video stream,
+  excluding attached cover art and separating diagnostics from JSON. Apply
+  sample aspect ratio before rotation for anamorphic display geometry. Swap
+  dimensions only for quarter
+  turns of that stream; zero/half turns and encoded portraits retain their axes.
+  Existing posters are not automatically regenerated.
+
 - Respect native disclosure/media controls, prevented key events and composition
   before page-wide player shortcuts. Preserve exact Unicode cue text when
   highlighting lowercase-expanded matches, combining sequences and emoji.

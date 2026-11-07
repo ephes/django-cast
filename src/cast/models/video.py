@@ -1,7 +1,10 @@
+import json
 import logging
+import math
 import os
 import subprocess
 import tempfile
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Optional
 
@@ -25,35 +28,39 @@ class VideoQuerySet(SearchableQuerySetMixin, models.QuerySet):
 
 
 def get_video_dimensions(lines: list[str]) -> tuple[int | None, int | None]:
-    """Has its own function to be easier to test."""
-
-    def get_width_height(my_video_type: str, my_line: str) -> tuple[int, int]:
-        dim_col = my_line.split(", ")[3]
-        if my_video_type != "h264":
-            dim_col = dim_col.split(" ")[0]
-        dim_x, dim_y = tuple(map(int, dim_col.split("x")))
-        return dim_x, dim_y
-
-    width, height = None, None
-    video_types = ("SAR", "hevc", "h264")
-    for line in lines:
-        for video_type in video_types:
-            if video_type in line:
-                width, height = get_width_height(video_type, line)
+    """Read the first selected video stream from ffprobe JSON lines."""
+    try:
+        data = json.loads("\n".join(lines))
+    except ValueError:
+        return None, None
+    streams = data.get("streams") if isinstance(data, dict) else None
+    if not isinstance(streams, list):
+        return None, None
+    stream = next((item for item in streams if isinstance(item, dict) and item.get("codec_type") == "video"), None)
+    if stream is None:
+        return None, None
+    width, height = stream.get("width"), stream.get("height")
+    if type(width) is not int or type(height) is not int or width <= 0 or height <= 0:
+        return None, None
+    try:
+        sample_aspect = Fraction(str(stream.get("sample_aspect_ratio", "1:1")).replace(":", "/"))
+        if sample_aspect > 0:
+            width = max(1, round(width * sample_aspect))
+    except (ValueError, ZeroDivisionError):
+        pass
+    tags = stream.get("tags")
+    rotation = tags.get("rotate", 0) if isinstance(tags, dict) else 0
+    side_data = stream.get("side_data_list")
+    if isinstance(side_data, list):
+        for entry in side_data:
+            if isinstance(entry, dict) and "rotation" in entry:
+                rotation = entry["rotation"]
                 break
-        else:
-            # necessary to break out of nested loop
-            continue
-        break
-    portrait = False
-    portrait_triggers = ["rotation of", "DAR 9:16"]
-    for line in lines:
-        for portrait_trigger in portrait_triggers:
-            if portrait_trigger in line:
-                portrait = True
-    if portrait:
-        width, height = height, width
-    return width, height
+    try:
+        quarter_turn = math.isclose(float(rotation) % 180, 90, abs_tol=0.001)
+    except (TypeError, ValueError, OverflowError):
+        quarter_turn = False
+    return (height, width) if quarter_turn else (width, height)
 
 
 class Video(CollectionMember, index.Indexed, TimeStampedModel):
@@ -100,12 +107,24 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
 
     @staticmethod
     def _get_video_dimensions(video_url: str) -> tuple[int | None, int | None]:
-        ffprobe_cmd = ["ffprobe", "-i", str(video_url)]
+        ffprobe_cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "V:0",
+            "-show_entries",
+            "stream=codec_type,width,height,sample_aspect_ratio:stream_tags=rotate:stream_side_data=rotation",
+            "-of",
+            "json",
+            "-i",
+            str(video_url),
+        ]
         result = run_media_probe(
             ffprobe_cmd,
             check=True,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.PIPE,
             timeout=30,
         ).stdout
         lines = result.decode("utf8").split("\n")
