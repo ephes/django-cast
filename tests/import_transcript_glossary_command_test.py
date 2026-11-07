@@ -258,3 +258,25 @@ def test_notes_only_import_preserves_variants_and_dry_run(podcast, tmp_path, dry
     term.refresh_from_db()
     assert term.notes == ("old" if dry_run else "new")
     assert term.variants == "Frob Old"
+
+
+@pytest.mark.django_db
+def test_import_does_not_publish_into_a_concurrently_changed_podcast(podcast, tmp_path, monkeypatch):
+    other = PodcastFactory(parent=podcast.get_parent(), owner=podcast.owner, title="Other show", slug="other-show")
+    term = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", variants="Synthetic Old")
+    TranscriptGlossaryTerm.objects.create(podcast=other, term="Synthetica", variants="Synthetic New")
+    original_clean = TranscriptGlossaryTerm.full_clean
+    moved = []
+
+    def clean(instance, *args, **kwargs):
+        original_clean(instance, *args, **kwargs)
+        if instance.pk == term.pk and not moved:
+            TranscriptGlossaryTerm.objects.filter(pk=term.pk).update(podcast=other)
+            moved.append(True)
+
+    monkeypatch.setattr(TranscriptGlossaryTerm, "full_clean", clean)
+    stdout, stderr = run(podcast.slug, write_json(tmp_path, [{"term": "Frobnicator", "variants": ["Synthetic New"]}]))
+    assert moved
+    assert "skipped=1" in stdout and "concurrent edit" in stderr
+    term.refresh_from_db()
+    assert term.podcast_id == other.pk and term.variants == "Synthetic Old"

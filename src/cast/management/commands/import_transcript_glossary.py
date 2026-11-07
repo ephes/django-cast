@@ -6,7 +6,9 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
+from wagtail.models import Page
 
 from cast.models import Podcast, TranscriptGlossaryTerm
 from cast.transcripts.glossary import normalize_phrase
@@ -82,6 +84,9 @@ class Command(BaseCommand):
         counts = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0}
         seen: dict[str, int] = {}
         with transaction.atomic():
+            # Share the stable parent-row lock used by transcript review and
+            # snippet saves. Lock before reading any cross-term variant state.
+            Page.objects.filter(pk=podcast.pk).update(title=F("title"))
             existing = self.existing_terms(podcast)
             for number, entry in enumerate(entries, start=1):
                 outcome, reason = self.import_entry(podcast, entry, number, seen, existing)
@@ -165,7 +170,7 @@ class Command(BaseCommand):
             updates = {field: getattr(instance, field) for field in fields}
             # Compare and publish in one statement. Omitted fields never enter the
             # UPDATE, and an edit to an owned field since lookup is a conflict.
-            if not TranscriptGlossaryTerm.objects.filter(pk=instance.pk, **expected).update(
+            if not TranscriptGlossaryTerm.objects.filter(pk=instance.pk, podcast_id=podcast.pk, **expected).update(
                 **updates, modified=timezone.now()
             ):
                 return "skipped", conflict

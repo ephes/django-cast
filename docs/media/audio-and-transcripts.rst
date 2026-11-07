@@ -671,10 +671,18 @@ refused; pass the page id instead.
 The command builds its normalized term identity index once per import and
 updates it after successful saves. Model validation still checks the other terms
 for each entry. Updates publish only the spelling and explicitly supplied fields.
-If one of those fields changed since the import's lookup, the entry is skipped
+If one of those fields or the term's podcast changed since the import's lookup,
+the entry is skipped
 as a concurrent-edit conflict; reload and retry it. Concurrent edits to omitted
-notes or variants survive. This optimistic comparison does not serialize all
-cross-term validation or protect an editor who later saves a stale full form.
+notes or variants survive. Imports lock the podcast's parent page row before
+reading the glossary and hold that lock through validation and publication.
+Admin saves revalidate under the same lock, also shared by transcript review
+additions. Two terms cannot concurrently claim the same normalized variant
+through these paths: the later writer receives a validation diagnostic. Different
+podcasts remain independent. Direct ORM writes must take the same lock and
+validate before publication; bulk updates bypass this application invariant.
+The lock does not prevent an editor overwriting an older value of the same term
+with a stale full form.
 
 .. _transcript_glossary_corrections:
 
@@ -969,8 +977,10 @@ Wagtail's public-page queryset, then enforce alias-source restrictions using
 batched ancestor and restriction reads. Explicit,
 authorized editor previews still use their own episode context.
 
-Unanchored audio access loads candidate ancestors, alias sources and view
-restrictions in batches. It retains candidate order and checks each restriction
+Unanchored audio access deduplicates ancestor paths and loads ancestors, alias
+sources and view restrictions in batches of at most 500 paths/IDs. This avoids
+backend expression-depth and parameter limits for audio shared by thousands of
+episodes without truncating the candidate set. It retains candidate order and checks each restriction
 with Wagtail's request policy. Group memberships and active workflow states are
 prefetched for authenticated requests. Only this authorization call's loaded
 page objects reuse restriction data, including when setting private response
