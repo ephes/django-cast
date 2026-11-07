@@ -24,7 +24,15 @@ def rotate_feed_cache_on_view_restriction_change(sender: type, **kwargs: Any) ->
     transaction.on_commit(rotate_feed_cache_generation, using=kwargs.get("using"))
 
 
+def clear_page_link_cache(sender: Any, **kwargs: Any) -> None:
+    """Retire rich-text lookups at HTTP request boundaries, including WSGI threads."""
+    from .wagtail_hooks import PageLinkHandlerWithCache
+
+    PageLinkHandlerWithCache.clear_cache()
+
+
 def connect_receivers() -> None:
+    from django.core.signals import request_finished, request_started
     from django.db.models.signals import post_delete, post_save, pre_save
     from wagtail.images import get_image_model
     from wagtail.models import PageViewRestriction
@@ -37,5 +45,8 @@ def connect_receivers() -> None:
             sender=PageViewRestriction,
             dispatch_uid=f"cast_rotate_feed_cache_on_view_restriction_{name}",
         )
+
+    for request_signal, phase in ((request_started, "started"), (request_finished, "finished")):
+        request_signal.connect(clear_page_link_cache, dispatch_uid=f"cast_clear_page_link_cache_request_{phase}")
 
     pre_save.connect(strip_upload_gps, sender=get_image_model(), dispatch_uid="cast_strip_upload_gps")

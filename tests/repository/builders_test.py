@@ -230,10 +230,11 @@ def test_page_link_handler_expand_db_attributes_many(mocker):
     assert tags[0] == '<a href="/foo-bar/">'
     assert tags[1] == '<a href="/bar-foo/">'
 
-    # super is called - only happens in Wagtail >= 6.1
-    mocker.patch("wagtail.rich_text.pages.PageLinkHandler.expand_db_attributes_many", create=True)
+    # Only unresolved targets are fetched, retaining the cached hit.
+    lookup = mocker.patch.object(PageLinkHandlerWithCache, "get_many", return_value=[None])
     tags = PageLinkHandlerWithCache.expand_db_attributes_many([{"id": 1}, {"id": 3}])
-    assert tags.is_called_once()
+    lookup.assert_called_once_with([{"id": 3}])
+    assert tags == ['<a href="/foo-bar/">', "<a>"]
 
 
 def test_page_link_handler_cache_isolation_across_contexts():

@@ -24,5 +24,14 @@ and batched candidate restriction data. Synthetic tests freeze aggregate and
 anchor query budgets at 1/20 referencing episodes and retain inherited login,
 password/group restrictions, alias ancestry, draft editing and cache policy.
 
-Remaining bundle:
-- Round 57: reuse partial rich-text link cache misses.
+All requested bundles are implemented. The final round 57 rich-text change
+resolves only missing targets and caches localized relative/absolute results and
+broken links within the render context. Synthetic 1/20-target batches repeat
+without queries; language switches, separate contexts and absolute feed mode
+retain their contracts. Its duplicate duration slice was already covered by the
+round 55 input bundle. Round 56 supplied no django-cast slices.
+
+Validation uses isolated local database/media directories per concurrent test
+process. PostgreSQL could not initialize locally because the machine's SysV
+shared-memory IDs were exhausted; the glossary branch's PostgreSQL CI jobs
+exercised the separate-connection regressions successfully before integration.

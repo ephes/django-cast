@@ -191,3 +191,125 @@ def test_clear_cached_page_urls_clears_absolute_urls():
 
     assert 99999 not in PageLinkHandlerWithCache.cache
     assert 99999 not in PageLinkHandlerWithCache.absolute_cache
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("count", [1, 20])
+def test_mixed_link_misses_are_cached_without_refetching_hits(blog, count, django_assert_num_queries, mocker):
+    from django.core.cache import cache
+    from django.utils.html import escape
+
+    warm = PostFactory(owner=blog.owner, parent=blog, title="Warm", slug="warm")
+    cold = [PostFactory(owner=blog.owner, parent=blog, title=f"Cold {i}", slug=f"cold-{i}") for i in range(count)]
+    attrs = [{"id": warm.pk}] + [{"id": post.pk} for post in cold] + [{"id": 99999999}, {"id": cold[0].pk}]
+    cache.clear()
+    PageLinkHandlerWithCache.clear_cache()
+    PageLinkHandlerWithCache.cache_url(warm.pk, "/cached/?x=1&y=2", "https://example.com/cached/?x=1&y=2")
+    lookup = mocker.spy(PageLinkHandlerWithCache, "get_many")
+    relative = PageLinkHandlerWithCache.expand_db_attributes_many(attrs)
+    assert lookup.call_args.args[0] == attrs[1:]
+    assert relative == ['<a href="/cached/?x=1&amp;y=2">'] + [f'<a href="{escape(post.url)}">' for post in cold] + [
+        "<a>",
+        f'<a href="{escape(cold[0].url)}">',
+    ]
+    with django_assert_num_queries(0):
+        for _ in range(5):
+            assert PageLinkHandlerWithCache.expand_db_attributes_many(attrs) == relative
+        with PageLinkHandlerWithCache.absolute_urls():
+            absolute = PageLinkHandlerWithCache.expand_db_attributes_many(attrs)
+            assert absolute[0] == '<a href="https://example.com/cached/?x=1&amp;y=2">'
+            assert absolute[-2] == "<a>"
+    assert absolute[1] == f'<a href="{escape(cold[0].full_url)}">'
+
+
+@pytest.mark.django_db
+def test_missed_link_cache_stays_context_local(blog, django_assert_num_queries, mocker):
+    from contextvars import Context
+
+    post = PostFactory(owner=blog.owner, parent=blog, title="Context", slug="context")
+    attrs = [{"id": post.pk}, {"id": 99999999}]
+    one, two = Context(), Context()
+    lookup = mocker.spy(PageLinkHandlerWithCache, "get_many")
+    expected = one.run(PageLinkHandlerWithCache.expand_db_attributes_many, attrs)
+    assert two.run(PageLinkHandlerWithCache.expand_db_attributes_many, attrs) == expected
+    assert lookup.call_count == 2
+    with django_assert_num_queries(0):
+        assert one.run(PageLinkHandlerWithCache.expand_db_attributes_many, attrs) == expected
+        assert two.run(PageLinkHandlerWithCache.expand_db_attributes_many, attrs) == expected
+
+
+@pytest.mark.django_db
+def test_missed_links_keep_language_and_absolute_url_semantics(blog, settings, django_assert_num_queries):
+    from django.utils import translation
+    from django.utils.html import escape
+    from wagtail.models import Locale
+
+    settings.WAGTAIL_I18N_ENABLED = True
+    settings.LANGUAGES = [("en-us", "English"), ("de", "German")]
+    settings.WAGTAIL_CONTENT_LANGUAGES = settings.LANGUAGES
+    post = PostFactory(owner=blog.owner, parent=blog, title="Original", slug="original")
+    german, _ = Locale.objects.get_or_create(language_code="de")
+    translated = post.copy_for_translation(german, copy_parents=True)
+    translated.slug = "uebersetzt"
+    translated.live = True
+    translated.save()
+    attrs = [{"id": post.pk}, {"id": 99999999}]
+    PageLinkHandlerWithCache.clear_cache()
+    with translation.override("en-us"):
+        english = PageLinkHandlerWithCache.expand_db_attributes_many(attrs)
+        assert english[0] == f'<a href="{escape(post.url)}">'
+    with translation.override("de"):
+        localized = PageLinkHandlerWithCache.expand_db_attributes_many(attrs)
+        assert localized[0] == f'<a href="{escape(translated.url)}">'
+        assert localized != english
+        with django_assert_num_queries(0):
+            assert PageLinkHandlerWithCache.expand_db_attributes_many(attrs) == localized
+            with PageLinkHandlerWithCache.absolute_urls():
+                absolute = PageLinkHandlerWithCache.expand_db_attributes_many(attrs)
+        assert absolute == [f'<a href="{escape(translated.full_url)}">', "<a>"]
+
+
+@pytest.mark.django_db
+def test_link_misses_do_not_survive_wsgi_requests(blog, client, settings, django_assert_num_queries):
+    from types import ModuleType
+
+    from django.http import HttpResponse
+    from django.urls import include, path
+    from django.utils.html import escape
+
+    post = PostFactory(owner=blog.owner, parent=blog, title="Request scoped", slug="before")
+    target = post.pk
+
+    def render(request):
+        attrs = [{"id": target}]
+        result = PageLinkHandlerWithCache.expand_db_attributes_many(attrs)
+        with django_assert_num_queries(0):
+            assert PageLinkHandlerWithCache.expand_db_attributes_many(attrs) == result
+        return HttpResponse(result[0])
+
+    urls = ModuleType("link_cache_request_urls")
+    urls.urlpatterns = [path("render/", render), path("", include("tests.urls"))]
+    settings.ROOT_URLCONF = urls
+    first_url = post.url
+    assert first_url is not None
+    assert client.get("/render/").content.decode() == f'<a href="{escape(first_url)}">'
+    assert len(PageLinkHandlerWithCache.cache) == 0
+    post.slug = "after"
+    post.save()
+    assert post.url != first_url
+    assert client.get("/render/").content.decode() == f'<a href="{escape(post.url)}">'
+    post.delete()
+    assert client.get("/render/").content.decode() == "<a>"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_request_signals_clear_positive_and_negative_link_entries():
+    from django.core.signals import request_finished, request_started
+
+    for signal in (request_started, request_finished):
+        PageLinkHandlerWithCache.cache_url(123, "/stale/", "https://example.com/stale/")
+        PageLinkHandlerWithCache.cache[456] = None
+        PageLinkHandlerWithCache.absolute_cache[456] = None
+        signal.send(sender=object)
+        assert len(PageLinkHandlerWithCache.cache) == 0
+        assert len(PageLinkHandlerWithCache.absolute_cache) == 0

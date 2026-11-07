@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Resolve only uncached rich-text page links and retain localized relative and
+  absolute URLs, including missing targets, in the context-local cache. Mixed
+  batches reuse hits; language changes reset cached URLs and feeds stay absolute.
+  Clear entries on Django request boundaries, including WSGI worker threads.
+  Non-HTTP callers should clear the cache between independent renders.
+
 - Filter public speaker aggregates through Wagtail public querysets and batch
   audio-anchor ancestors, aliases and restriction data. Preserve the granting
   page, authenticated restrictions, draft-editor access and private-cache headers.
