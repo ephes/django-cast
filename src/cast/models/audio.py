@@ -4,6 +4,7 @@ import re
 import subprocess
 from collections.abc import Iterable
 from datetime import timedelta
+from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
 
@@ -183,10 +184,15 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             .stdout.decode()
             .strip()
         )
-        m = re.match(r"^(?P<seconds>\d+)\.(?P<microseconds>\d+)$", result)
-        if m is None:
+        if re.fullmatch(r"[0-9]+\.[0-9]+", result) is None:
             raise ValueError(f"Could not parse duration: {result}")
-        return timedelta(seconds=int(m["seconds"]), microseconds=int(m["microseconds"]))
+        seconds = Decimal(result)
+        if seconds > Decimal("9223372036854.775807"):
+            raise ValueError("Audio duration exceeds signed 64-bit microsecond storage")
+        with localcontext() as context:
+            context.prec = 30
+            rounded = seconds.quantize(Decimal("0.000001"), rounding=ROUND_HALF_EVEN)
+            return timedelta(microseconds=int(rounded * 1_000_000))
 
     def create_duration(self) -> None:
         for name, field in self.uploaded_audio_files:

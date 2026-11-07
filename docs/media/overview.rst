@@ -70,7 +70,10 @@ Comprehensive audio file management with podcast support.
 
 **Features**:
 
-- Automatic duration detection (requires FFprobe)
+- Automatic duration detection (requires FFprobe). Decimal seconds are rounded
+  to the nearest microsecond, with ties to even. Malformed, negative or nonfinite
+  probe values, and values beyond signed 64-bit microsecond storage, fail through
+  ``AudioDurationProbeError``. Stored durations are not automatically repaired.
 - Multiple format upload support
 - Chapter marks with timestamps
 - Transcript association

@@ -9,6 +9,9 @@ from django.db import transaction
 from cast.models import Podcast, TranscriptGlossaryTerm
 from cast.transcripts.glossary import normalize_phrase
 
+MAX_INPUT_BYTES = 8 * 1024 * 1024
+MAX_ENTRIES = 10_000
+
 
 def _variants_text(value: Any) -> str:
     if isinstance(value, str):
@@ -52,11 +55,22 @@ class Command(BaseCommand):
     @staticmethod
     def load_entries(path: str) -> list[Any]:
         try:
-            data = json.loads(Path(path).read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise CommandError(f"Cannot read {path}: {exc}") from exc
+            with Path(path).open("rb") as source:
+                raw = source.read(MAX_INPUT_BYTES + 1)
+        except OSError as exc:
+            raise CommandError(f"Cannot read {path}: {exc.strerror or 'unreadable file'}.") from exc
+        if len(raw) > MAX_INPUT_BYTES:
+            raise CommandError(f"Glossary input exceeds {MAX_INPUT_BYTES} bytes.")
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise CommandError(f"Cannot read {path}: invalid JSON at line {exc.lineno}, column {exc.colno}.") from exc
+        except (UnicodeDecodeError, RecursionError) as exc:
+            raise CommandError(f"Cannot read {path}: invalid UTF-8 JSON.") from exc
         if not isinstance(data, list):
             raise CommandError(f"{path} must contain a JSON list of glossary entries.")
+        if len(data) > MAX_ENTRIES:
+            raise CommandError(f"Glossary input exceeds {MAX_ENTRIES} entries.")
         return data
 
     def handle(self, *args: Any, **options: Any) -> None:

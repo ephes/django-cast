@@ -525,3 +525,43 @@ def chapter_audio(transactional_db, user):
 
     collection = Collection.get_first_root_node() or Collection.add_root(instance=Collection(name="Root"))
     return Audio.objects.create(user=user, collection=collection, title="Synthetic chapters")
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        (b"12.5", timedelta(seconds=12, microseconds=500000)),
+        (b"12.050", timedelta(seconds=12, microseconds=50000)),
+        (b"1.000005", timedelta(seconds=1, microseconds=5)),
+        (b"1.123456", timedelta(seconds=1, microseconds=123456)),
+        (b"1.1234565", timedelta(seconds=1, microseconds=123456)),
+        (b"1.1234575", timedelta(seconds=1, microseconds=123458)),
+        (b"0.9999999", timedelta(seconds=1)),
+        (b"9223372036854.775807", timedelta(microseconds=2**63 - 1)),
+    ],
+)
+def test_probe_decimal_duration(output, expected, mocker):
+    mocker.patch("cast.models.audio.run_media_probe", return_value=mocker.Mock(stdout=output))
+    assert Audio._get_audio_duration("synthetic.m4a") == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("output", [b"NaN", b"Infinity", b"-1.5", b"bad", b"999999999999999999.0", b"\xff"])
+def test_invalid_duration_uses_probe_error(output, audio, mocker):
+    from cast.models.audio import AudioDurationProbeError
+
+    mocker.patch("cast.models.audio.run_media_probe", return_value=mocker.Mock(stdout=output))
+    with pytest.raises(AudioDurationProbeError):
+        audio.create_duration()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("output", [b"1.5", b"9223372036854.775807"])
+def test_decimal_duration_saved_through_derivation(audio, mocker, output):
+    mocker.patch("cast.models.audio.run_media_probe", return_value=mocker.Mock(stdout=output))
+    audio.duration = None
+    save_audio_with_derivations(audio)
+    audio.refresh_from_db()
+    assert audio.duration == (
+        timedelta(seconds=1, microseconds=500000) if output == b"1.5" else timedelta(microseconds=2**63 - 1)
+    )

@@ -644,7 +644,10 @@ A site that already keeps a list can load it for one podcast:
    python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json --dry-run
    python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json
 
-The file is a JSON list of entries:
+The UTF-8 JSON file is limited to 8 MiB and 10,000 entries. Reads stop at
+the byte ceiling plus one; oversized, unreadable or malformed inputs are
+rejected before the mutation transaction, leaving the glossary unchanged.
+Split larger glossaries into smaller imports. The file is a list of entries:
 
 .. code-block:: json
 

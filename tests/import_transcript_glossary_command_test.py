@@ -86,3 +86,55 @@ class TestImportTranscriptGlossary:
             run(podcast.slug, write_json(tmp_path, content))
         with pytest.raises(CommandError, match="Cannot read"):
             run(podcast.slug, str(tmp_path / "missing.json"))
+
+
+@pytest.mark.django_db
+def test_import_source_read_is_bounded(podcast, monkeypatch, mocker):
+    from io import BytesIO
+
+    from cast.management.commands import import_transcript_glossary as command
+
+    monkeypatch.setattr(command, "MAX_INPUT_BYTES", 64, raising=False)
+    stream = BytesIO(b" " * 10000)
+    read = mocker.spy(stream, "read")
+    mocker.patch.object(command.Path, "open", return_value=stream)
+    term = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Synthetica")
+    with pytest.raises(CommandError, match="exceeds.*bytes"):
+        run(podcast.slug, "misleading.json")
+    read.assert_called_once_with(65)
+    term.refresh_from_db()
+    assert term.term == "Synthetica"
+    assert TranscriptGlossaryTerm.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_import_entry_budget(podcast, tmp_path, monkeypatch):
+    from cast.management.commands import import_transcript_glossary as command
+
+    monkeypatch.setattr(command, "MAX_ENTRIES", 1, raising=False)
+    path = write_json(tmp_path, [{"term": "Synthetica"}, {"term": "Frobnicator"}])
+    with pytest.raises(CommandError, match="exceeds.*entries"):
+        run(podcast.slug, path)
+    assert not TranscriptGlossaryTerm.objects.exists()
+
+
+@pytest.mark.parametrize("data", [b"\xff", b"[" * 2000])
+def test_import_decode_failures_are_concise(tmp_path, data):
+    from cast.management.commands.import_transcript_glossary import Command
+
+    path = tmp_path / "invalid.json"
+    path.write_bytes(data)
+    with pytest.raises(CommandError, match="Cannot read") as error:
+        Command.load_entries(str(path))
+    assert len(str(error.value)) < 250
+
+
+def test_import_diagnostics_keep_location_and_safe_read_reason(tmp_path, mocker):
+    from cast.management.commands.import_transcript_glossary import Command
+
+    with pytest.raises(CommandError, match="invalid JSON at line 1, column 2") as error:
+        Command.load_entries(write_json(tmp_path, "{private-source"))
+    assert "private-source" not in str(error.value)
+    mocker.patch("pathlib.Path.open", side_effect=OSError(13, "Synthetic read refusal"))
+    with pytest.raises(CommandError, match="Synthetic read refusal"):
+        Command.load_entries("synthetic.json")
