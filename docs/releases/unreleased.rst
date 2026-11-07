@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Validate Voxhelm polling/request/job durations as finite positive values up to
+  one day, including direct client construction. Bound whole polling exchanges
+  and sleeps by the elapsed job deadline, reject late success, and cap outstanding
+  exchanges at four per process. Consumers must adopt the package and use a
+  positive polling interval.
+
 - Prevent caching of owner audio/video list/detail responses, all editor API
   responses (including previews and structured errors), and the staff-only
   comment training corpus. They now use ``Cache-Control: private, no-store``

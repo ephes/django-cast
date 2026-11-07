@@ -568,7 +568,7 @@ def test_generate_audio_transcript_reports_invalid_numeric_setting(admin_client,
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
     assert any(
-        "Transcript generation failed: CAST_VOXHELM_POLL_TIMEOUT must be configured as a numeric value" in message
+        "Transcript generation failed: CAST_VOXHELM_POLL_TIMEOUT must be a finite duration" in message
         for message in messages
     )
 

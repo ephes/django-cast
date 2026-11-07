@@ -827,22 +827,23 @@ def test_client_wait_for_job_times_out(mocker):
     client = VoxhelmClient(
         api_base="https://voxhelm.example",
         api_key="secret",
-        poll_interval_seconds=0.0,
+        poll_interval_seconds=0.01,
         job_timeout_seconds=5.0,
     )
-    mocker.patch.object(client, "get_job", return_value={"id": "job-1", "state": "queued"})
-    mocker.patch("cast.voxhelm.client.monotonic", side_effect=[0.0, 5.1])
+    get_job = mocker.patch.object(client, "get_job", return_value={"id": "job-1", "state": "queued"})
+    mocker.patch("cast.voxhelm.client.monotonic", side_effect=[0.0, 0.0, 1.0, 1.0, 5.1])
     mocker.patch("cast.voxhelm.client.sleep")
 
     with pytest.raises(VoxhelmError, match="Timed out"):
         client.wait_for_job("job-1")
+    get_job.assert_called_once_with("job-1")
 
 
 def test_client_wait_for_job_polls_until_terminal_state(mocker):
     client = VoxhelmClient(
         api_base="https://voxhelm.example",
         api_key="secret",
-        poll_interval_seconds=0.0,
+        poll_interval_seconds=0.01,
         job_timeout_seconds=5.0,
     )
     get_job = mocker.patch.object(
@@ -854,7 +855,7 @@ def test_client_wait_for_job_polls_until_terminal_state(mocker):
 
     assert client.wait_for_job("job-1") == {"id": "job-1", "state": "succeeded"}
     assert get_job.call_count == 2
-    sleep_mock.assert_called_once_with(0.0)
+    sleep_mock.assert_called_once_with(0.01)
 
 
 @pytest.mark.django_db
@@ -920,7 +921,7 @@ def test_client_wait_for_job_gives_up_on_lost_connection_after_deadline(mocker):
     client = VoxhelmClient(
         api_base="https://voxhelm.example",
         api_key="secret",
-        poll_interval_seconds=0.0,
+        poll_interval_seconds=0.01,
         job_timeout_seconds=5.0,
     )
     mocker.patch.object(client, "get_job", side_effect=VoxhelmConnectionError("Voxhelm request failed: offline"))
@@ -930,11 +931,11 @@ def test_client_wait_for_job_gives_up_on_lost_connection_after_deadline(mocker):
     with pytest.raises(VoxhelmError, match="Timed out waiting for Voxhelm job job-1: Voxhelm request failed: offline"):
         client.wait_for_job("job-1")
 
-    sleep_mock.assert_called_once_with(0.0)
+    sleep_mock.assert_not_called()
 
 
 def test_client_wait_for_job_does_not_retry_http_status_errors(mocker):
-    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", poll_interval_seconds=0.0)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret", poll_interval_seconds=0.01)
     get_job = mocker.patch.object(
         client, "get_job", side_effect=VoxhelmError("Voxhelm request failed with status 404")
     )
@@ -1002,3 +1003,115 @@ def test_resolve_setting_reports_the_level_each_value_came_from(site, settings, 
     monkeypatch.setenv("CAST_VOXHELM_API_KEY", "env-secret")
     assert resolve_setting("CAST_VOXHELM_API_KEY", request_or_site=site) == ("env-secret", "environment")
     assert resolve_setting("CAST_VOXHELM_API_BASE", "fallback") == ("https://env.example", "environment")
+
+
+@pytest.mark.parametrize(
+    "value", [float("nan"), float("inf"), -float("inf"), True, False, -1, 0, 86401, 10**400, "bad"]
+)
+@pytest.mark.parametrize("field", ["poll_interval_seconds", "job_timeout_seconds", "request_timeout_seconds"])
+def test_client_rejects_invalid_durations(value, field):
+    with pytest.raises(ImproperlyConfigured, match="finite duration"):
+        VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic", **{field: value})
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", True, 0, -1, "1e400", 86401])
+def test_settings_reject_invalid_durations(settings, value):
+    settings.CAST_VOXHELM_POLL_TIMEOUT = value
+    with pytest.raises(ImproperlyConfigured, match="finite duration"):
+        get_float_setting("CAST_VOXHELM_POLL_TIMEOUT", 900)
+
+
+def test_wait_rejects_late_success(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic", job_timeout_seconds=1)
+    mocker.patch.object(client, "get_job", return_value={"state": "succeeded"})
+    mocker.patch("cast.voxhelm.client.monotonic", side_effect=[0, 0, 5])
+    with pytest.raises(VoxhelmError, match="Timed out"):
+        client.wait_for_job("synthetic")
+
+
+def test_wait_caps_final_sleep_and_starts_no_late_poll(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic", job_timeout_seconds=1)
+    poll = mocker.patch.object(client, "get_job", return_value={"state": "running"})
+    mocker.patch("cast.voxhelm.client.monotonic", side_effect=[0, 0, 0.8, 0.8, 1])
+    sleeping = mocker.patch("cast.voxhelm.client.sleep")
+    with pytest.raises(VoxhelmError, match="Timed out"):
+        client.wait_for_job("synthetic")
+    assert poll.call_count == 1
+    assert sleeping.call_args.args[0] == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize("phase", ["headers", "body"])
+def test_poll_elapsed_bound_includes_blocked_exchange(mocker, phase):
+    from threading import Event
+
+    from cast.voxhelm import client as module
+
+    release, finished = Event(), Event()
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic")
+
+    class BlockingResponse(FakeResponse):
+        def read(self, *args):
+            if phase == "body":
+                release.wait(2)
+            return super().read(*args)
+
+        def __exit__(self, *args):
+            finished.set()
+            return super().__exit__(*args)
+
+    def opening(*args, **kwargs):
+        if phase == "headers":
+            release.wait(2)
+        return BlockingResponse(b'{"state":"succeeded"}')
+
+    mocker.patch.object(module, "open_url", side_effect=opening)
+    try:
+        with pytest.raises(VoxhelmConnectionError, match="elapsed deadline"):
+            client._poll_with_timeout("synthetic", 0.01)
+    finally:
+        release.set()
+        assert finished.wait(2)
+
+
+def test_poll_capacity_and_thread_launch_failure(mocker):
+    from threading import BoundedSemaphore
+
+    from cast.voxhelm import client as module
+
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic")
+    slots = BoundedSemaphore(1)
+    mocker.patch.object(module, "_POLL_SLOTS", slots)
+    slots.acquire()
+    with pytest.raises(VoxhelmError, match="capacity"):
+        client._poll_with_timeout("synthetic", 1)
+    slots.release()
+    mocker.patch.object(module.Thread, "start", side_effect=RuntimeError("launch failed"))
+    with pytest.raises(RuntimeError, match="launch failed"):
+        client._poll_with_timeout("synthetic", 1)
+    assert slots.acquire(blocking=False)
+
+
+def test_wait_retries_capacity_until_slot_recovers(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic")
+    poll = mocker.patch.object(
+        client,
+        "_poll_with_timeout",
+        side_effect=[
+            VoxhelmConnectionError("Voxhelm polling capacity is exhausted; retry later."),
+            {"state": "succeeded"},
+        ],
+    )
+    sleeping = mocker.patch("cast.voxhelm.client.sleep")
+    assert client.wait_for_job("synthetic") == {"state": "succeeded"}
+    assert poll.call_count == 2
+    sleeping.assert_called_once()
+
+
+def test_wait_does_not_sleep_when_budget_expires_after_state_check(mocker):
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic", job_timeout_seconds=1)
+    mocker.patch.object(client, "get_job", return_value={"state": "running"})
+    mocker.patch("cast.voxhelm.client.monotonic", side_effect=[0, 0, 0.9, 1, 1])
+    sleeping = mocker.patch("cast.voxhelm.client.sleep")
+    with pytest.raises(VoxhelmError, match="Timed out"):
+        client.wait_for_job("synthetic")
+    sleeping.assert_not_called()

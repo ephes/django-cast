@@ -20,9 +20,8 @@ STALE_MARGIN_SECONDS = 15 * 60.0
 def _get_seconds_setting(name: str, default: float) -> float:
     """Resolve a numeric seconds setting from Django settings, then the environment.
 
-    Mirrors ``cast.voxhelm.settings.get_float_setting`` for the global (not
-    site-scoped) settings without importing ``cast.voxhelm``, which would create
-    an import cycle during ``cast.models`` initialisation.
+    Used only for stale-row recovery, independently of the client duration
+    validation. This avoids importing ``cast.voxhelm`` during model loading.
     """
     value = getattr(settings, name, None)
     if value in {None, ""}:
