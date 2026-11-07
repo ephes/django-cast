@@ -881,3 +881,16 @@ Playback rejection or a media error announces a generic retry message in the
 transport's accessible status region and leaves Play usable. An intentional
 AbortError remains silent; successful playback clears the failure status.
 Consumers adopt these changes through the package and rebuilt player assets.
+
+Keyboard ownership and Unicode search
+-------------------------------------
+
+Page-wide player shortcuts leave native controls (including disclosure summaries
+and media controls), already-prevented events and composition to their owners.
+Bare transport shortcuts on ordinary page content continue to route to the
+engaged player or the sole player.
+
+Transcript search maps lowercase match positions back to original code-point
+boundaries. Highlighting dotted capital I, combining text or emoji preserves the
+exact cue text and uses only text nodes and mark elements. Contextual lowercase
+matching, such as Greek final sigma, remains supported.

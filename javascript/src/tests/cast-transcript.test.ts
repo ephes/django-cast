@@ -658,3 +658,22 @@ describe("transcript DOM API", () => {
     expect(transcript.scrollIntoView).toBe(HTMLElement.prototype.scrollIntoView);
   });
 });
+
+it.each([
+  ["İx x", "x", ["x", "x"]],
+  ["before İx after", "İx", ["İx"]],
+  ["İx", "i", ["İ"]],
+  ["İx", "\u0307", ["İ"]],
+  ["İ😀e\u0301 x😀", "😀", ["😀", "😀"]],
+  ["İ e\u0301", "e\u0301", ["e\u0301"]],
+  ["ΟΣ", "ος", ["ΟΣ"]],
+])("preserves original Unicode while marking %s / %s", (text, query, expected) => {
+  const {transcript} = mount(makePayload({transcript: {cues: [{start: 0, end: 1, speaker: "", text: text as string}]}}));
+  openPanel(transcript);
+  const input = transcript.querySelector<HTMLInputElement>(".cast-transcript__search-input")!;
+  input.value = query as string; input.dispatchEvent(new Event("input"));
+  const span = transcript.querySelector(".cast-transcript__text")!;
+  expect(span.textContent).toBe(text);
+  expect(Array.from(span.querySelectorAll("mark"), (mark) => mark.textContent)).toEqual(expected);
+  expect(span.querySelector("script")).toBeNull();
+});

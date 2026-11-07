@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Respect native disclosure/media controls, prevented key events and composition
+  before page-wide player shortcuts. Preserve exact Unicode cue text when
+  highlighting lowercase-expanded matches, combining sequences and emoji.
+  Consumers must adopt the rebuilt player assets.
+
 - Bind lazy transcript hydration to its connection/controller, abort on
   disconnect, enforce a 15-second whole-request deadline, and validate all cues
   before installation. Failures allow a deliberate retry. Announce retryable
