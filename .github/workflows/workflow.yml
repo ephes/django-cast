@@ -10,7 +10,24 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'schedule' && 'schedule' || 'branch' }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  javascript-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Audit the full JavaScript lock including development dependencies
+        working-directory: javascript
+        run: npm audit --package-lock-only --include=dev
+
   javascript:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
