@@ -174,3 +174,10 @@ Implemented for django-cast 0.2.61:
   first real publish; trailer and bonus episodes do not consume numbers.
 - Documented acceptable gaps, manual-number authority, and UUID-based RSS GUID
   preservation.
+
+## Concurrency regression coverage (2026-11-07)
+
+The PostgreSQL tox lanes exercise simultaneous first publications on separate
+committed connections, counter-row blocking, independent podcasts, revision/live
+number agreement and counter preservation on republish. The sequential stale
+revision tests remain preservation coverage, not evidence of concurrency.
