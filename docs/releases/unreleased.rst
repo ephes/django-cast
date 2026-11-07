@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Preserve chapter milliseconds through audio, player and chapters JSON, with
+  fractional seeking and unchanged integer values for whole seconds. Treat
+  oversized transcript numbers and clock arithmetic overflow as unusable times
+  instead of failing the public transcript endpoint.
+
 - Probe poster dimensions using ffprobe JSON for the first video stream,
   excluding attached cover art and separating diagnostics from JSON. Apply
   sample aspect ratio before rotation for anamorphic display geometry. Swap

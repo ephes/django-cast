@@ -2,6 +2,7 @@
 // `PlayerPayload` produced by `src/cast/player.py::build_player_payload`.
 
 export type Cue = { start: number; end: number; speaker: string; text: string };
+// Chapter starts are seconds, including millisecond fractions.
 export type Chapter = { start: number; title: string };
 
 export type InlineTranscript = { cues: Cue[] };

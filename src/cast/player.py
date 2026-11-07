@@ -15,7 +15,7 @@ The returned ``PlayerPayload`` is a plain ``dict`` matching the TypeScript
       "duration": int | None,        # seconds; None until media metadata loads
       "poster": str,                 # "" if none
       "sources": [{"type": str, "src": str}, ...],
-      "chapters": [{"start": int, "title": str}, ...],
+      "chapters": [{"start": int | float, "title": str}, ...],
       "transcript": {"url": str} | None,  # inline page payload (lazy)
                                           # the endpoint returns {"cues": [...]}
     }
@@ -74,7 +74,11 @@ def _finite_number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value) if math.isfinite(value) else None
+        try:
+            number = float(value)
+        except (ValueError, OverflowError):
+            return None
+        return number if math.isfinite(number) else None
     if isinstance(value, str):
         stripped = value.strip()
         if not stripped:
@@ -101,9 +105,9 @@ def _clock_seconds(value: Any) -> float | None:
         seconds = float(parts[-1])
         minutes = int(parts[-2])
         hours = int(parts[-3]) if len(parts) == 3 else 0
-    except ValueError:
+        total = hours * 3600 + minutes * 60 + seconds
+    except (ValueError, OverflowError):
         return None
-    total = hours * 3600 + minutes * 60 + seconds
     return total if math.isfinite(total) else None
 
 
@@ -115,16 +119,16 @@ def _timestamp_seconds(value: Any) -> float | None:
     return _finite_number(value)
 
 
-def parse_chapter_start_seconds(value: Any) -> int | None:
-    """Parse a chapter ``start`` (``HH:MM:SS`` / ``MM:SS`` string) to int seconds."""
+def parse_chapter_start_seconds(value: Any) -> int | float | None:
+    """Parse chapter seconds, preserving fractional starts and ordinary integers."""
     seconds = _timestamp_seconds(value)
     if seconds is None or seconds < 0:
         return None
-    return int(seconds)
+    return int(seconds) if seconds.is_integer() else seconds
 
 
 def build_chapters(audio: Any) -> list[dict[str, Any]]:
-    """Return ``[{"start": int_seconds, "title": str}, ...]`` for ``audio``.
+    """Return ``[{"start": seconds, "title": str}, ...]`` for ``audio``.
 
     Rows with an unparseable ``start`` or an empty ``title`` are skipped and the
     skipped count is logged. ``href``/``image`` are intentionally omitted in v1.

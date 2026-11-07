@@ -641,3 +641,14 @@ it.each(["summary", "prevented", "composing", "media"])("retains %s keyboard own
   document.body.dispatchEvent(new KeyboardEvent("keydown", {key: " ", bubbles: true}));
   expect(audio.paused).toBe(false);
 });
+
+
+it("seeks distinct fractional chapter boundaries without rounding", () => {
+  const player = mountPlayer(makePayload({duration: 200, chapters: [{start: 60.1, title: "First"}, {start: 60.9, title: "Second"}]}));
+  player.controller!.seekToChapter(0);
+  expect(audioOf(player).currentTime).toBe(60.1);
+  expect(player.controller!.currentChapterIndex).toBe(0);
+  player.controller!.seekToChapter(1);
+  expect(audioOf(player).currentTime).toBe(60.9);
+  expect(player.controller!.currentChapterIndex).toBe(1);
+});

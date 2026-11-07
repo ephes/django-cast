@@ -147,11 +147,13 @@ It returns ``application/json+chapters`` with this body shape::
     {
       "version": "1.2.0",
       "chapters": [
-        {"startTime": 83, "title": "Intro"}
+        {"startTime": 83, "title": "Intro"},
+        {"startTime": 83.125, "title": "Next"}
       ]
     }
 
-``startTime`` values are integer seconds. Access to the endpoint uses the same
+``startTime`` values are seconds: integers for whole seconds, with millisecond
+fractions otherwise. Access to the endpoint uses the same
 audio-access checks as public audio and transcript endpoints: the supplied
 ``episode_id`` must reference the audio and be viewable by the requester.
 Denied requests raise ``Http404`` so object existence is not leaked. Authorized
