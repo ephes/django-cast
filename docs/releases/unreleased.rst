@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Exercise publication persistence failures after real numbering/page saves and
+  scheduled-rejection audit insertion. Verify atomic rollback and healthy retries,
+  including retained schedule approval and publication of a valid due sibling.
+
 - Make asset-freshness tests deterministic with explicit timestamps, including
   equal source/manifest times. Exercise first-publication number allocation on
   separate PostgreSQL connections, including independent podcasts and republish;
