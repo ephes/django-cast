@@ -256,6 +256,16 @@ Use Playwright helpers for screenshots and console-error checks:
    $ just check-page /styleguide-blog/ --theme bootstrap5
    $ just compare-page /styleguide-blog/
 
+Each capture owns a fresh context; contexts and browsers close on success and
+failure. Cleanup failures are attached as notes to the original error rather
+than replacing it. Health responses must contain a list of records with
+nonempty string slugs. Unavailable health endpoints use the fallback themes;
+malformed records or output names that collide after ASCII normalization
+(case-insensitive) stop the run. Screenshots use contained single-component
+filenames; metadata retains the original theme label. Theme query values are
+URL-encoded and replace any existing ``theme`` parameter, preserving other
+query values and the fragment.
+
 If this is your first Playwright run on a machine, install browser binaries:
 
 .. code-block:: bash

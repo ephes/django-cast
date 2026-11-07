@@ -20,10 +20,15 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from http.client import HTTPException
 from pathlib import Path
+from typing import Any, Iterator
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 try:
     from playwright.sync_api import Browser, Page, sync_playwright
@@ -79,9 +84,52 @@ def discover_themes(base_url: str) -> list[str]:
     try:
         with urllib.request.urlopen(f"{base_url}/cast/dev-health/", timeout=3) as resp:
             data = json.loads(resp.read())
-            return [t["slug"] for t in data.get("themes", [])]
-    except Exception:
+    except (OSError, HTTPException):
         return FALLBACK_THEMES
+    if not isinstance(data, dict) or not isinstance(data.get("themes"), list):
+        raise ValueError("Health response must contain a themes list")
+    themes = []
+    filenames = set()
+    for record in data["themes"]:
+        if not isinstance(record, dict) or not isinstance(record.get("slug"), str) or not record["slug"].strip():
+            raise ValueError("Theme records must contain a nonempty slug string")
+        theme = record["slug"]
+        filename = theme_filename(theme).casefold()
+        if filename in filenames:
+            raise ValueError("Theme output names collide after normalization")
+        filenames.add(filename)
+        themes.append(theme)
+    return themes
+
+
+def theme_filename(theme: str) -> str:
+    """Return a portable single-component filename; preserve the label elsewhere."""
+    if not theme.strip():
+        raise ValueError("Theme must be nonempty")
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", theme).strip("-") or "theme"
+
+
+def theme_url(url: str, theme: str) -> str:
+    """Set one literal theme query value, retaining the other query and fragment."""
+    parts = urlsplit(url)
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "theme"]
+    query.append(("theme", theme))
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+@contextmanager
+def owned_resource(resource: Any) -> Iterator[Any]:
+    """Close an owned Playwright resource without masking its primary failure."""
+    try:
+        yield resource
+    except BaseException as primary:
+        try:
+            resource.close()
+        except BaseException as cleanup:
+            primary.add_note(f"Resource cleanup also failed: {cleanup}")
+        raise
+    else:
+        resource.close()
 
 
 def _ensure_chromium(p) -> None:
@@ -109,47 +157,45 @@ def take_screenshot(
 ) -> PageResult:
     """Take a screenshot of a URL with a specific theme and viewport."""
     vp = VIEWPORTS.get(viewport, VIEWPORTS["desktop"])
-    context = browser.new_context(viewport=vp)  # type: ignore[arg-type]
-    page = context.new_page()
-    errors, failed = collect_browser_errors(page)
+    with owned_resource(browser.new_context(viewport=vp)) as context:
+        page = context.new_page()
+        errors, failed = collect_browser_errors(page)
 
-    # Append ?theme= to URL
-    separator = "&" if "?" in url else "?"
-    full_url = f"{url}{separator}theme={theme}"
+        full_url = theme_url(url, theme)
 
-    page.goto(full_url, wait_until="networkidle")
-    time.sleep(wait_ms / 1000)
+        page.goto(full_url, wait_until="networkidle")
+        time.sleep(wait_ms / 1000)
 
-    # Take screenshot
-    filename = f"{theme}-{viewport}.png"
-    screenshot_path = output_dir / filename
-    page.screenshot(path=str(screenshot_path), full_page=full_page)
+        # Take screenshot
+        filename = f"{theme_filename(theme)}-{theme_filename(viewport)}.png"
+        screenshot_path = output_dir / filename
+        meta_path = output_dir / f"{theme_filename(theme)}-{theme_filename(viewport)}.json"
+        root = output_dir.resolve()
+        if any(not path.resolve().is_relative_to(root) for path in (screenshot_path, meta_path)):
+            raise ValueError("Screenshot output escapes output directory")
+        page.screenshot(path=str(screenshot_path), full_page=full_page)
 
-    # Write metadata
-    meta_filename = f"{theme}-{viewport}.json"
-    meta_path = output_dir / meta_filename
-    meta = {
-        "theme": theme,
-        "viewport": viewport,
-        "viewport_size": vp,
-        "url": full_url,
-        "console_errors": list(errors),
-        "failed_requests": list(failed),
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
-    meta_path.write_text(json.dumps(meta, indent=2))
+        # Write metadata
+        meta = {
+            "theme": theme,
+            "viewport": viewport,
+            "viewport_size": vp,
+            "url": full_url,
+            "console_errors": list(errors),
+            "failed_requests": list(failed),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        meta_path.write_text(json.dumps(meta, indent=2))
 
-    context.close()
-
-    return PageResult(
-        theme=theme,
-        viewport=viewport,
-        url=full_url,
-        console_errors=list(errors),
-        failed_requests=list(failed),
-        screenshot_path=str(screenshot_path),
-        meta_path=str(meta_path),
-    )
+        return PageResult(
+            theme=theme,
+            viewport=viewport,
+            url=full_url,
+            console_errors=list(errors),
+            failed_requests=list(failed),
+            screenshot_path=str(screenshot_path),
+            meta_path=str(meta_path),
+        )
 
 
 def cmd_screenshot(args: argparse.Namespace) -> None:
@@ -161,9 +207,8 @@ def cmd_screenshot(args: argparse.Namespace) -> None:
 
     with sync_playwright() as p:
         _ensure_chromium(p)
-        browser = p.chromium.launch()
-        result = take_screenshot(browser, url, args.theme, args.viewport, output_dir)
-        browser.close()
+        with owned_resource(p.chromium.launch()) as browser:
+            result = take_screenshot(browser, url, args.theme, args.viewport, output_dir)
 
     print(f"Screenshot: {result.screenshot_path}")
     print(f"Metadata:   {result.meta_path}")
@@ -191,15 +236,14 @@ def cmd_screenshot_all(args: argparse.Namespace) -> None:
 
     with sync_playwright() as p:
         _ensure_chromium(p)
-        browser = p.chromium.launch()
-        results: list[PageResult] = []
-        for theme in themes:
-            for viewport in viewports:
-                result = take_screenshot(browser, url, theme, viewport, output_dir)
-                results.append(result)
-                status = "OK" if not result.console_errors else f"{len(result.console_errors)} errors"
-                print(f"  {theme}/{viewport}: {status}")
-        browser.close()
+        with owned_resource(p.chromium.launch()) as browser:
+            results: list[PageResult] = []
+            for theme in themes:
+                for viewport in viewports:
+                    result = take_screenshot(browser, url, theme, viewport, output_dir)
+                    results.append(result)
+                    status = "OK" if not result.console_errors else f"{len(result.console_errors)} errors"
+                    print(f"  {theme}/{viewport}: {status}")
 
     # Write summary
     summary_path = output_dir / "summary.json"
@@ -226,22 +270,18 @@ def cmd_check_page(args: argparse.Namespace) -> None:
     """Check a page for console errors and failed requests."""
     base_url = args.base_url.rstrip("/")
     url = f"{base_url}{args.path}"
-    separator = "&" if "?" in url else "?"
-    full_url = f"{url}{separator}theme={args.theme}"
+    full_url = theme_url(url, args.theme)
 
     with sync_playwright() as p:
         _ensure_chromium(p)
-        browser = p.chromium.launch()
-        vp = VIEWPORTS.get(args.viewport, VIEWPORTS["desktop"])
-        context = browser.new_context(viewport=vp)  # type: ignore[arg-type]
-        page = context.new_page()
-        errors, failed = collect_browser_errors(page)
+        with owned_resource(p.chromium.launch()) as browser:
+            vp = VIEWPORTS.get(args.viewport, VIEWPORTS["desktop"])
+            with owned_resource(browser.new_context(viewport=vp)) as context:
+                page = context.new_page()
+                errors, failed = collect_browser_errors(page)
 
-        page.goto(full_url, wait_until="networkidle")
-        time.sleep(1)
-
-        context.close()
-        browser.close()
+                page.goto(full_url, wait_until="networkidle")
+                time.sleep(1)
 
     has_issues = bool(errors or failed)
     if errors:
@@ -272,14 +312,13 @@ def cmd_compare_page(args: argparse.Namespace) -> None:
 
     with sync_playwright() as p:
         _ensure_chromium(p)
-        browser = p.chromium.launch()
-        results: list[PageResult] = []
-        for theme in themes:
-            for viewport in viewports:
-                result = take_screenshot(browser, url, theme, viewport, output_dir)
-                results.append(result)
-                print(f"  {theme}/{viewport}: captured")
-        browser.close()
+        with owned_resource(p.chromium.launch()) as browser:
+            results: list[PageResult] = []
+            for theme in themes:
+                for viewport in viewports:
+                    result = take_screenshot(browser, url, theme, viewport, output_dir)
+                    results.append(result)
+                    print(f"  {theme}/{viewport}: captured")
 
     # Build HTML report with inline base64 images
     html_parts = [

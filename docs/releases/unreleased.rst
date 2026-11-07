@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Close screenshot/browser resources on failures without hiding the primary
+  error. Validate discovered themes, reject filename collisions, contain output
+  paths and encode literal theme query values while retaining metadata labels.
+
 - Preserve entry attribution in bundle reports while counting shared output files
   once in labeled unique-file totals; test inventories and missing-file rows.
 
