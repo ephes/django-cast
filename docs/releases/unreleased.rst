@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Interpret ffprobe decimal seconds by place value, rounding to microseconds
+  with ties to even; reject invalid or oversized durations through the existing
+  probe error contract, using portable signed 64-bit microsecond storage bounds.
+  Existing stored durations need a separate repair.
+- Bound glossary JSON imports to 8 MiB and 10,000 entries before mutation,
+  with concise read/decode diagnostics. Split larger imports into smaller files.
+
 - Add an optional HTTP(S) playing-post permalink to shared player payloads.
   Share/copy links retain that source after navigation, with a connection-time
   fallback for legacy integrations. Apply URL start times only to a matching
