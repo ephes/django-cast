@@ -920,7 +920,13 @@ def test_revision_bound_publish_enforces_page_publish_permission(client, admin_u
 
     assert model_denied.status_code == 403
     assert tree_denied.status_code == 403
-    assert str(selected.pk) not in tree_denied.content.decode()
+    # Compare the error payload: a revision ID such as 4 can occur in status 403.
+    assert tree_denied.json() == {
+        "type": "about:blank",
+        "title": HTTPStatus.FORBIDDEN.phrase,
+        "status": 403,
+        "detail": "Permission denied",
+    }
     assert allowed.status_code == 200
     post.refresh_from_db()
     other_post.refresh_from_db()
