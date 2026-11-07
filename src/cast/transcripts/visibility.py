@@ -6,6 +6,7 @@ from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist
 
+from ..audio_access import _prime_candidate_restrictions, _view_restrictions
 from . import dote, podlove, webvtt
 from .parsing import clean_speaker_label
 
@@ -47,15 +48,7 @@ def editor_speaker_preview_episode(page: Any, user: Any) -> Any | None:
 
 
 def _episode_is_publicly_visible(episode: Any) -> bool:
-    """True when a live episode carries no Wagtail view restrictions.
-
-    A view restriction (login, password, or group) means the episode is not
-    public, so its speaker labels must never enter anonymous public output via
-    the all-live-episodes aggregate fallback. Restriction *existence* is
-    independent of the request, so this is a safe request-free filter; an
-    explicitly anchored episode still flows through the authorized per-episode
-    path elsewhere.
-    """
+    """Compatibility predicate; aggregate paths use the public queryset instead."""
     return not episode.get_view_restrictions().exists()
 
 
@@ -100,16 +93,7 @@ def public_speaker_labels_for_transcript(transcript: Any, *, episode: Any | None
     episodes = getattr(audio, "episodes", None)
     if episodes is None:
         return None
-    try:
-        live_episodes = [
-            episode
-            for episode in episodes.filter(live=True)
-            .prefetch_related("contributor_assignments__contributor", "contributor_assignments__link")
-            .all()
-            if _episode_is_publicly_visible(episode)
-        ]
-    except (AttributeError, TypeError, ValueError):
-        return None
+    live_episodes = _public_episode_contexts_for_transcript(transcript)
     if not live_episodes:
         return None
 
@@ -185,13 +169,13 @@ def _public_episode_contexts_for_transcript(transcript: Any, *, episode: Any | N
     if episodes is None:
         return None
     try:
-        return [
-            episode
-            for episode in episodes.filter(live=True)
+        candidates = list(
+            episodes.filter(live=True)
+            .public()
             .prefetch_related("contributor_assignments__contributor", "contributor_assignments__link")
-            .all()
-            if _episode_is_publicly_visible(episode)
-        ]
+        )
+        _prime_candidate_restrictions(candidates)
+        return [candidate for candidate in candidates if not _view_restrictions(candidate)]
     except (AttributeError, TypeError, ValueError):
         return None
 

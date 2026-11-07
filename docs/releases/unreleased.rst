@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Filter public speaker aggregates through Wagtail public querysets and batch
+  audio-anchor ancestors, aliases and restriction data. Preserve the granting
+  page, authenticated restrictions, draft-editor access and private-cache headers.
+
 - Reuse prefetched chapter marks in both public audio chapter readers, keeping
   chronological order and existing formatting. Batch contributor avatars and
   existing avatar renditions in post snapshots; missing renditions still generate.

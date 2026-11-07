@@ -960,3 +960,20 @@ The Python Podcast dock copies the raw payload, preserving this optional field.
 Adopt the package and rebuilt assets together; consumers that construct custom
 payloads can supply ``permalink`` to enable source-specific deep links. No new
 settings or theme selectors are required.
+
+Public media query boundaries
+-----------------------------
+
+Unanchored speaker-label and mapping aggregates filter live episodes through
+Wagtail's public-page queryset, then enforce alias-source restrictions using
+batched ancestor and restriction reads. Explicit,
+authorized editor previews still use their own episode context.
+
+Unanchored audio access loads candidate ancestors, alias sources and view
+restrictions in batches. It retains candidate order and checks each restriction
+with Wagtail's request policy. Group memberships and active workflow states are
+prefetched for authenticated requests. Only this authorization call's loaded
+page objects reuse restriction data, including when setting private response
+headers; a later request performs a fresh read. Live restricted pages remain
+request-specific, and draft access still requires edit permission. Explicit
+anchors continue to fail with 404 when absent, mismatched or unauthorized.

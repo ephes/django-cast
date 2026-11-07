@@ -16,8 +16,48 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db.models import prefetch_related_objects
 from django.http import Http404, HttpResponse
 from django.utils.cache import patch_vary_headers
+
+
+def _view_restrictions(page: Any) -> Any:
+    loaded = getattr(page, "_cast_audio_view_restrictions", None)
+    return page.get_view_restrictions() if loaded is None else loaded
+
+
+def _prime_candidate_restrictions(episodes: list[Any]) -> None:
+    """Load candidate ancestors, alias sources and restrictions in batches."""
+    from wagtail.models import Page, PageViewRestriction
+
+    ancestors = Page.objects.none()
+    for episode in episodes:
+        ancestors |= Page.objects.ancestor_of(episode, inclusive=True)
+    ancestor_pages = list(ancestors.only("path", "alias_of"))
+    pages_by_id = {page.pk: page for page in ancestor_pages}
+    pending = {page.alias_of_id for page in ancestor_pages if page.alias_of_id not in pages_by_id}
+    pending.discard(None)
+    while pending:
+        sources = list(Page.objects.filter(pk__in=pending).only("alias_of"))
+        pages_by_id.update((page.pk, page) for page in sources)
+        pending = {page.alias_of_id for page in sources if page.alias_of_id not in pages_by_id}
+        pending.discard(None)
+    source_id_by_ancestor_id = {}
+    for ancestor in ancestor_pages:
+        source = ancestor
+        while source.alias_of_id is not None:
+            source = pages_by_id[source.alias_of_id]
+        source_id_by_ancestor_id[ancestor.pk] = source.pk
+    restrictions = list(
+        PageViewRestriction.objects.filter(page_id__in=source_id_by_ancestor_id.values()).prefetch_related("groups")
+    )
+    for episode in episodes:
+        source_ids = {
+            source_id_by_ancestor_id[ancestor.pk]
+            for ancestor in ancestor_pages
+            if episode.path.startswith(ancestor.path)
+        }
+        episode._cast_audio_view_restrictions = [row for row in restrictions if row.page_id in source_ids]
 
 
 def page_is_publicly_viewable(page: Any, request: Any) -> bool:
@@ -28,7 +68,7 @@ def page_is_publicly_viewable(page: Any, request: Any) -> bool:
     """
     if page is None or not getattr(page, "live", False):
         return False
-    return all(restriction.accept_request(request) for restriction in page.get_view_restrictions())
+    return all(restriction.accept_request(request) for restriction in _view_restrictions(page))
 
 
 def page_is_unrestricted_public(page: Any) -> bool:
@@ -40,7 +80,7 @@ def page_is_unrestricted_public(page: Any) -> bool:
     """
     if page is None or not getattr(page, "live", False):
         return False
-    return not page.get_view_restrictions().exists()
+    return not bool(_view_restrictions(page))
 
 
 def user_can_edit_page(page: Any, user: Any) -> bool:
@@ -117,7 +157,15 @@ def authorize_audio_access(request: Any, *, audio: Any, explicit_anchor_id: Any 
             return page
         raise Http404("no authorized anchor for this audio")
 
-    for episode in audio.episodes.all():
+    candidates = audio.episodes.select_related("content_type")
+    user = _request_user(request)
+    if user is not None and getattr(user, "is_authenticated", False):
+        candidates = candidates.prefetch_workflow_states()
+        if not user.is_superuser:
+            prefetch_related_objects([user], "groups")
+    episodes = list(candidates)
+    _prime_candidate_restrictions(episodes)
+    for episode in episodes:
         if page_grants_audio_access(episode, audio, request):
             return episode
     raise Http404("no public episode references this audio")

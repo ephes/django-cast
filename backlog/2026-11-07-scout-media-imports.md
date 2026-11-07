@@ -19,6 +19,10 @@ and snapshots use Wagtail rendition prefetching for contributor avatars. Query
 regressions compare 1/20 audios/contributors with controlled caches and synthetic
 images; shared contributors, missing derivatives and avatarless people remain
 supported.
-Remaining bundles, in report order:
-- Round 57: filter public speaker aggregates; batch audio anchor restrictions.
+The round 57 authorization bundle is implemented with Wagtail public querysets
+and batched candidate restriction data. Synthetic tests freeze aggregate and
+anchor query budgets at 1/20 referencing episodes and retain inherited login,
+password/group restrictions, alias ancestry, draft editing and cache policy.
+
+Remaining bundle:
 - Round 57: reuse partial rich-text link cache misses.
