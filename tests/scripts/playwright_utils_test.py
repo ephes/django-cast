@@ -18,6 +18,7 @@ def browser_env(tmp_path, monkeypatch):
     context = browser.new_context.return_value
     page = context.new_page.return_value
     page.goto.return_value.status = 200
+    page.goto.return_value.url = "http://synthetic.test/final/"
     p = MagicMock()
     p.chromium.executable_path = str(tmp_path)
     p.chromium.launch.return_value = browser
@@ -75,6 +76,7 @@ def test_new_capture_uses_fresh_context(browser_env, tmp_path):
     with pytest.raises(RuntimeError):
         browser_tools.take_screenshot(browser, "http://synthetic.test/", "plain", "desktop", tmp_path)
     healthy_context = MagicMock()
+    healthy_context.new_page.return_value.goto.return_value = Namespace(status=200, url="http://synthetic.test/final/")
     browser.new_context.return_value = healthy_context
     result = browser_tools.take_screenshot(browser, "http://synthetic.test/", "plain", "desktop", tmp_path)
     assert result.console_errors == []
@@ -142,3 +144,104 @@ def test_discovery_transport_failures_use_fallback(monkeypatch, failure):
 
     monkeypatch.setattr(urllib.request, "urlopen", MagicMock(side_effect=failure))
     assert browser_tools.discover_themes("http://synthetic.test") == browser_tools.FALLBACK_THEMES
+
+
+@pytest.mark.parametrize("status,exit_code", [(200, 0), (204, 0), (404, 1), (500, 1), (302, 1), (None, 1)])
+def test_http_verdict(browser_env, status, exit_code, capsys):
+    _, context, page, args = browser_env
+    page.goto.return_value = None if status is None else Namespace(status=status, url="http://synthetic.test/final/")
+    with pytest.raises(SystemExit) as error:
+        browser_tools.cmd_check_page(args)
+    assert error.value.code == exit_code
+    assert ("HTTP" in capsys.readouterr().out) == bool(exit_code)
+    context.close.assert_called_once()
+
+
+@pytest.mark.parametrize("status", [200, 404, 500, None])
+def test_screenshot_records_final_response(browser_env, tmp_path, status):
+    browser, _, page, _ = browser_env
+    final_url = "http://synthetic.test/final/" if status is not None else None
+    page.goto.return_value = None if status is None else Namespace(status=status, url=final_url)
+    result = browser_tools.take_screenshot(browser, "http://synthetic.test/redirect/", "plain", "desktop", tmp_path)
+    meta = json.loads(Path(result.meta_path).read_text())
+    assert meta["http_status"] == result.http_status == status
+    assert meta["response_url"] == result.response_url == final_url
+
+
+def test_final_redirect_success(browser_env):
+    _, _, page, args = browser_env
+    page.goto.return_value = Namespace(status=200, url="http://synthetic.test/final/")
+    with pytest.raises(SystemExit) as error:
+        browser_tools.cmd_check_page(args)
+    assert error.value.code == 0
+
+
+@pytest.mark.parametrize("status", [404, None])
+def test_comparison_escapes_every_dynamic_field(browser_env, tmp_path, monkeypatch, status):
+    from bs4 import BeautifulSoup
+
+    hostile = "</code><script>alert('x')</script><img src=x onerror=bad>&\\\""
+    image = tmp_path / "image.png"
+    image.write_bytes(b"synthetic png")
+    result = browser_tools.PageResult(
+        theme=hostile,
+        viewport="desktop",
+        url=hostile,
+        http_status=status,
+        response_url=hostile,
+        console_errors=[hostile],
+        failed_requests=[hostile],
+        screenshot_path=str(image),
+    )
+    _, _, _, args = browser_env
+    args.path = hostile
+    args.all_viewports = True
+    monkeypatch.setattr(browser_tools, "VIEWPORTS", {"desktop": {"width": 1280, "height": 720}})
+    monkeypatch.setattr(browser_tools, "discover_themes", lambda _: ["plain"])
+    monkeypatch.setattr(browser_tools, "take_screenshot", lambda *a, **kw: result)
+    browser_tools.cmd_compare_page(args)
+    report = (tmp_path / "compare.html").read_text()
+    soup = BeautifulSoup(report, "html.parser")
+    assert not soup.find_all("script")
+    assert len(soup.find_all("img")) == 1
+    assert soup.img["src"].startswith("data:image/png;base64,")
+    assert soup.img["alt"] == hostile + " desktop"
+    assert soup.title.get_text() == "Theme Comparison: " + hostile
+    assert soup.h1.code.get_text() == hostile
+    assert soup.select_one(".card-header").get_text() == hostile
+    assert hostile in soup.select_one(".card-meta").get_text()
+    assert soup.get_text().count(hostile) >= 7
+    assert f"HTTP {status if status is not None else 'no response'}" in soup.select_one(".card-meta").get_text()
+    assert all(not key.startswith("on") for tag in soup.find_all() for key in tag.attrs)
+
+
+def test_successful_http_still_reports_browser_diagnostics(browser_env, capsys):
+    _, _, page, args = browser_env
+    callbacks = {}
+    page.on.side_effect = lambda event, callback: callbacks.setdefault(event, callback)
+
+    def navigate(*args, **kwargs):
+        callbacks["console"](Namespace(type="log", text="ignored"))
+        callbacks["console"](Namespace(type="error", text="synthetic console"))
+        callbacks["pageerror"](RuntimeError("synthetic page error"))
+        callbacks["requestfailed"](Namespace(method="GET", url="http://synthetic.test/asset", failure="failed"))
+        return Namespace(status=200, url="http://synthetic.test/final/")
+
+    page.goto.side_effect = navigate
+    with pytest.raises(SystemExit) as error:
+        browser_tools.cmd_check_page(args)
+    assert error.value.code == 1
+    text = capsys.readouterr().out
+    assert "synthetic console" in text and "synthetic page error" in text and "asset: failed" in text
+    assert "ignored" not in text
+
+
+@pytest.mark.parametrize("status", [404, None])
+def test_screenshot_summary_shows_http_failure(browser_env, capsys, status):
+    _, _, page, args = browser_env
+    page.goto.return_value = None if status is None else Namespace(status=status, url="http://synthetic.test/final/")
+    browser_tools.cmd_screenshot_all(args)
+    text = capsys.readouterr().out
+    label = f"HTTP {status}" if status is not None else "no HTTP response"
+    assert f"plain/desktop: {label}" in text
+    assert f"bootstrap5/desktop: {label}" in text

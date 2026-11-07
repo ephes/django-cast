@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import html
 import json
 import os
 import re
@@ -62,6 +63,8 @@ class PageResult:
     url: str
     console_errors: list[str] = field(default_factory=list)
     failed_requests: list[str] = field(default_factory=list)
+    http_status: int | None = None
+    response_url: str | None = None
     screenshot_path: str | None = None
     meta_path: str | None = None
 
@@ -163,7 +166,7 @@ def take_screenshot(
 
         full_url = theme_url(url, theme)
 
-        page.goto(full_url, wait_until="networkidle")
+        response = page.goto(full_url, wait_until="networkidle")
         time.sleep(wait_ms / 1000)
 
         # Take screenshot
@@ -179,6 +182,8 @@ def take_screenshot(
         meta = {
             "theme": theme,
             "viewport": viewport,
+            "http_status": response.status if response is not None else None,
+            "response_url": response.url if response is not None else None,
             "viewport_size": vp,
             "url": full_url,
             "console_errors": list(errors),
@@ -191,6 +196,8 @@ def take_screenshot(
             theme=theme,
             viewport=viewport,
             url=full_url,
+            http_status=response.status if response is not None else None,
+            response_url=response.url if response is not None else None,
             console_errors=list(errors),
             failed_requests=list(failed),
             screenshot_path=str(screenshot_path),
@@ -242,7 +249,16 @@ def cmd_screenshot_all(args: argparse.Namespace) -> None:
                 for viewport in viewports:
                     result = take_screenshot(browser, url, theme, viewport, output_dir)
                     results.append(result)
-                    status = "OK" if not result.console_errors else f"{len(result.console_errors)} errors"
+                    issues = []
+                    if result.http_status is None:
+                        issues.append("no HTTP response")
+                    elif not 200 <= result.http_status < 300:
+                        issues.append(f"HTTP {result.http_status}")
+                    if result.console_errors:
+                        issues.append(f"{len(result.console_errors)} console errors")
+                    if result.failed_requests:
+                        issues.append(f"{len(result.failed_requests)} failed requests")
+                    status = ", ".join(issues) or "OK"
                     print(f"  {theme}/{viewport}: {status}")
 
     # Write summary
@@ -254,6 +270,8 @@ def cmd_screenshot_all(args: argparse.Namespace) -> None:
         "results": [
             {
                 "theme": r.theme,
+                "http_status": r.http_status,
+                "response_url": r.response_url,
                 "viewport": r.viewport,
                 "console_errors": len(r.console_errors),
                 "failed_requests": len(r.failed_requests),
@@ -280,10 +298,14 @@ def cmd_check_page(args: argparse.Namespace) -> None:
                 page = context.new_page()
                 errors, failed = collect_browser_errors(page)
 
-                page.goto(full_url, wait_until="networkidle")
+                response = page.goto(full_url, wait_until="networkidle")
+                status = response.status if response is not None else None
                 time.sleep(1)
 
-    has_issues = bool(errors or failed)
+    http_failed = status is None or not 200 <= status < 300
+    has_issues = bool(errors or failed or http_failed)
+    if http_failed:
+        print(f"HTTP navigation failed: {status if status is not None else 'no response'} on {full_url}")
     if errors:
         print(f"Console errors ({len(errors)}):")
         for err in errors:
@@ -320,11 +342,18 @@ def cmd_compare_page(args: argparse.Namespace) -> None:
                     results.append(result)
                     print(f"  {theme}/{viewport}: captured")
 
-    # Build HTML report with inline base64 images
+    compare_path = output_dir / "compare.html"
+    compare_path.write_text(render_comparison(args.path, viewports, results), encoding="utf-8")
+    print(f"\nComparison report: {compare_path}")
+
+
+def render_comparison(path: str, viewports: list[str], results: list[PageResult]) -> str:
+    """Render comparison evidence, escaping all captured text and attributes."""
+    # Build fixed HTML structure; captured fields are always text.
     html_parts = [
         "<!DOCTYPE html>",
         "<html><head><meta charset='utf-8'>",
-        f"<title>Theme Comparison: {args.path}</title>",
+        f"<title>Theme Comparison: {html.escape(path)}</title>",
         "<style>",
         "body { font-family: system-ui, sans-serif; margin: 1rem; background: #f5f5f5; }",
         "h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }",
@@ -335,13 +364,13 @@ def cmd_compare_page(args: argparse.Namespace) -> None:
         ".card-meta { padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #666; }",
         ".error { color: #c00; }",
         "</style></head><body>",
-        f"<h1>Theme Comparison: <code>{args.path}</code></h1>",
+        f"<h1>Theme Comparison: <code>{html.escape(path)}</code></h1>",
         f"<p>Generated at {time.strftime('%Y-%m-%d %H:%M:%S')}</p>",
     ]
 
     for viewport in viewports:
         html_parts.append(
-            f"<h2>{viewport.title()} ({VIEWPORTS[viewport]['width']}×{VIEWPORTS[viewport]['height']})</h2>"
+            f"<h2>{html.escape(viewport.title())} ({VIEWPORTS[viewport]['width']}×{VIEWPORTS[viewport]['height']})</h2>"
         )
         html_parts.append("<div class='grid'>")
         for result in results:
@@ -355,18 +384,27 @@ def cmd_compare_page(args: argparse.Namespace) -> None:
             if result.console_errors:
                 errors_html = f"<span class='error'>{len(result.console_errors)} console errors</span>"
             html_parts.append("<div class='card'>")
-            html_parts.append(f"<div class='card-header'>{result.theme}</div>")
+            html_parts.append(f"<div class='card-header'>{html.escape(result.theme, quote=True)}</div>")
             if img_data:
-                html_parts.append(f"<img src='data:image/png;base64,{img_data}' alt='{result.theme} {viewport}'>")
-            html_parts.append(f"<div class='card-meta'>{result.url} {errors_html}</div>")
+                html_parts.append(
+                    f"<img src='data:image/png;base64,{img_data}' alt='{html.escape(result.theme, quote=True)} {html.escape(viewport, quote=True)}'>"
+                )
+            http_label = html.escape(str(result.http_status) if result.http_status is not None else "no response")
+            final_url = html.escape(result.response_url or "")
+            html_parts.append(
+                f"<div class='card-meta'>{html.escape(result.url)} {errors_html}<br>HTTP {http_label} {final_url}</div>"
+            )
+            diagnostics = [*result.console_errors, *result.failed_requests]
+            if diagnostics:
+                html_parts.append("<ul class='error'>")
+                html_parts.extend(f"<li>{html.escape(message)}</li>" for message in diagnostics)
+                html_parts.append("</ul>")
             html_parts.append("</div>")
         html_parts.append("</div>")
 
     html_parts.append("</body></html>")
 
-    compare_path = output_dir / "compare.html"
-    compare_path.write_text("\n".join(html_parts))
-    print(f"\nComparison report: {compare_path}")
+    return "\n".join(html_parts)
 
 
 def main() -> None:
