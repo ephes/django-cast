@@ -512,22 +512,35 @@ export class CastTranscriptElement extends CastPlayerView {
 
   private markMatches(textSpan: HTMLElement, text: string, needle: string): void {
     const haystack = text.toLowerCase();
+    // Lowercasing can expand a code point (e.g. İ -> i + combining dot).
+    // Map folded UTF-16 offsets back to complete original code points, while
+    // searching the whole-string fold so contextual casing (Greek sigma) stays intact.
+    const starts: number[] = [];
+    const ends: number[] = [];
+    let original = 0;
+    for (const character of text) {
+      for (let i = 0; i < character.toLowerCase().length; i++) {
+        starts.push(original);
+        ends.push(original + character.length);
+      }
+      original += character.length;
+    }
     textSpan.textContent = "";
     let cursor = 0;
-    let found = haystack.indexOf(needle, cursor);
+    let found = haystack.indexOf(needle);
     while (found !== -1) {
-      if (found > cursor) {
-        textSpan.appendChild(document.createTextNode(text.slice(cursor, found)));
+      const start = starts[found];
+      const end = ends[found + needle.length - 1];
+      if (start >= cursor) {
+        textSpan.appendChild(document.createTextNode(text.slice(cursor, start)));
+        const mark = document.createElement("mark");
+        mark.textContent = text.slice(start, end);
+        textSpan.appendChild(mark);
+        cursor = end;
       }
-      const mark = document.createElement("mark");
-      mark.textContent = text.slice(found, found + needle.length);
-      textSpan.appendChild(mark);
-      cursor = found + needle.length;
-      found = haystack.indexOf(needle, cursor);
+      found = haystack.indexOf(needle, found + needle.length);
     }
-    if (cursor < text.length) {
-      textSpan.appendChild(document.createTextNode(text.slice(cursor)));
-    }
+    textSpan.appendChild(document.createTextNode(text.slice(cursor)));
   }
 
   private announceMatches(needle: string): void {

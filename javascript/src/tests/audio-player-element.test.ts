@@ -619,3 +619,25 @@ it("retains playback failure through a queued native pause until playback resume
   player.remove();
   await Promise.resolve();
 });
+
+it.each(["summary", "prevented", "composing", "media"])("retains %s keyboard ownership before player routing", (owner) => {
+  const player = mountPlayer(makePayload()); const audio = audioOf(player);
+  audio.currentTime = 10;
+  let target: HTMLElement = document.body;
+  if (owner === "summary") {
+    const details = document.createElement("details"); details.innerHTML = "<summary><span>Disclosure</span></summary>";
+    document.body.appendChild(details); target = details.querySelector("span")!;
+  } else if (owner === "media") {
+    target = document.createElement("video"); target.setAttribute("controls", ""); document.body.appendChild(target);
+  }
+  for (const key of [" ", "ArrowRight"]) {
+    const event = new KeyboardEvent("keydown", {key, bubbles: true, cancelable: true, isComposing: owner === "composing"});
+    if (owner === "prevented") event.preventDefault();
+    target.dispatchEvent(event);
+  }
+  expect(audio.paused).toBe(true); expect(audio.currentTime).toBe(10);
+  document.body.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowRight", bubbles: true}));
+  expect(audio.currentTime).toBe(15);
+  document.body.dispatchEvent(new KeyboardEvent("keydown", {key: " ", bubbles: true}));
+  expect(audio.paused).toBe(false);
+});

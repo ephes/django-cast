@@ -86,13 +86,13 @@ function onDocumentKeydown(event: KeyboardEvent): void {
   // Never claim a modified keypress: Cmd/Ctrl/Alt/Shift + arrow/Home/End/Space are
   // browser and OS navigation shortcuts (back/forward, scroll, etc.). The bare
   // transport keys are the only ones the player owns page-wide.
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+  if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
     return;
   }
   const target = event.target as HTMLElement | null;
   // Let native controls keep their own keys: form fields, buttons, links, and
   // the transcript search must never have Space/arrows/Home/End hijacked.
-  if (target && target.closest("input, button, select, textarea, a[href], [contenteditable]")) {
+  if (target && target.closest("input, button, select, textarea, a[href], summary, audio[controls], video[controls], [contenteditable]")) {
     return;
   }
   resolveShortcutPlayer(target)?.handleShortcut(event);
