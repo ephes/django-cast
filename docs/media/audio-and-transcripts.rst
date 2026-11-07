@@ -862,3 +862,22 @@ Transcript artifact fingerprints use fixed 64 KiB reads, both at runtime and
 in migration 0084. Hash delimiters, empty-file identity and missing-file behavior
 are unchanged, with constant hashing memory regardless of artifact size. This
 does not change the separate memory requirements of parsing transcript content.
+
+Lazy transcript request lifetime
+--------------------------------
+
+The shared player owns each lazy transcript request for its current controller
+and connection generation. Disconnect aborts and invalidates that request; late
+responses or failures cannot hydrate a reconnected player or clear its loading
+state. Fetch headers and JSON body share a 15-second deadline. A current-request
+failure releases loading so closing and reopening the transcript can retry.
+
+Fetched cue arrays are installed only after every entry validates: text and
+speaker are strings, start/end are finite seconds, start is nonnegative, and
+end is greater than start. Malformed payloads are recoverable transcript errors
+and never install a partial array. Fractional seconds remain supported.
+
+Playback rejection or a media error announces a generic retry message in the
+transport's accessible status region and leaves Play usable. An intentional
+AbortError remains silent; successful playback clears the failure status.
+Consumers adopt these changes through the package and rebuilt player assets.

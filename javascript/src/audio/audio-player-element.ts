@@ -5,7 +5,7 @@
 import { AudioController } from "./audio-controller";
 import { formatTime, spokenTime } from "./format";
 import { registerController, unregisterController } from "./player-registry";
-import type { PlayerPayload } from "./types";
+import { isCueArray, type PlayerPayload } from "./types";
 
 const PUBLIC_EVENT_THROTTLE_MS = 250;
 const SEEK_STEP_SECONDS = 5;
@@ -123,7 +123,9 @@ export class CastAudioPlayerElement extends HTMLElement {
   private shareDialog?: HTMLDialogElement;
   private shareTimeInput?: HTMLInputElement;
   private shareBuildUrl?: () => void;
-  private fetchingTranscript = false;
+  private playbackFailure = false;
+  private connectionGeneration = 0;
+  private cancelHydration?: () => void;
 
   connectedCallback(): void {
     if (this.controller) {
@@ -133,6 +135,8 @@ export class CastAudioPlayerElement extends HTMLElement {
     if (!payload) {
       return;
     }
+    this.connectionGeneration++;
+    this.playbackFailure = false;
     this.playerId = this.id;
     this.disabled = payload.sources.length === 0;
 
@@ -194,6 +198,9 @@ export class CastAudioPlayerElement extends HTMLElement {
   }
 
   disconnectedCallback(): void {
+    this.connectionGeneration++;
+    this.cancelHydration?.();
+    this.cancelHydration = undefined;
     for (const [name, listener] of this.controllerListeners) {
       this.controller?.removeEventListener(name, listener);
     }
@@ -523,13 +530,23 @@ export class CastAudioPlayerElement extends HTMLElement {
     this.on("navseek", () => {
       activePlayer = this;
     });
+    this.on("error", () => {
+      this.playbackFailure = true;
+      controller.pause();
+      this.setStatus("Playback failed. Try again.");
+    });
     this.on("pause", () => this.onPlayState(false));
     this.on("timeupdate", () => this.onTimeUpdate());
     this.on("durationchange", () => this.onDurationChange());
 
     // Buffering state from the media element, kept minimal and layout-stable.
-    this.onAudio("waiting", () => this.setStatus("Loading…"));
-    this.onAudio("playing", () => this.setStatus("Playing"));
+    this.onAudio("waiting", () => {
+      if (!this.playbackFailure) this.setStatus("Loading…");
+    });
+    this.onAudio("playing", () => {
+      this.playbackFailure = false;
+      this.setStatus("Playing");
+    });
   }
 
   private on(type: string, listener: () => void): void {
@@ -543,11 +560,12 @@ export class CastAudioPlayerElement extends HTMLElement {
   }
 
   private onPlayState(playing: boolean): void {
+    if (playing) this.playbackFailure = false;
     if (this.playButton) {
       this.playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
       this.playButton.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
     }
-    this.setStatus(playing ? "Playing" : "Paused");
+    this.setStatus(this.playbackFailure ? "Playback failed. Try again." : playing ? "Playing" : "Paused");
   }
 
   private onTimeUpdate(): void {
@@ -698,28 +716,44 @@ export class CastAudioPlayerElement extends HTMLElement {
   // ---- fallback hydration ---------------------------------------------------
 
   private async hydrateFromUrl(url: string): Promise<void> {
-    if (this.fetchingTranscript) {
-      return; // at most one fetch in flight
-    }
-    this.fetchingTranscript = true;
+    const controller = this.controller;
+    if (!controller || this.cancelHydration) return;
+    const generation = this.connectionGeneration;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let rejectDeadline!: (reason: Error) => void;
+    const deadline = new Promise<never>((_, reject) => {
+      rejectDeadline = reject;
+      timer = setTimeout(() => {
+        abort.abort();
+        reject(new Error("Transcript request timed out."));
+      }, 15000);
+    });
+    const cancel = () => {
+      clearTimeout(timer);
+      abort.abort();
+      rejectDeadline(new Error("Transcript request cancelled."));
+    };
+    this.cancelHydration = cancel;
+    const current = () => this.controller === controller && this.connectionGeneration === generation &&
+      this.cancelHydration === cancel;
+    const request = async () => {
+      const response = await fetch(url, {signal: abort.signal});
+      if (!response.ok) throw new Error("Transcript request failed.");
+      const data: unknown = await response.json();
+      if (!data || typeof data !== "object" || !("cues" in data) || !isCueArray(data.cues)) {
+        throw new Error("Invalid transcript cues.");
+      }
+      return data.cues;
+    };
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        this.controller?.transcriptFailed();
-        return;
-      }
-      const data = (await response.json()) as { cues?: unknown };
-      if (this.controller && Array.isArray(data.cues)) {
-        this.controller.setCues(data.cues as never);
-      } else {
-        this.controller?.transcriptFailed();
-      }
+      const cues = await Promise.race([request(), deadline]);
+      if (current()) controller.setCues(cues);
     } catch {
-      // Network/parse failure: clear loading so a later open can retry. The page
-      // still has the no-JS transcript pages as a deeper fallback.
-      this.controller?.transcriptFailed();
+      if (current()) controller.transcriptFailed();
     } finally {
-      this.fetchingTranscript = false;
+      clearTimeout(timer);
+      if (current()) this.cancelHydration = undefined;
     }
   }
 }
