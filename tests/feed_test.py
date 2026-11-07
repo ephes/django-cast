@@ -476,7 +476,7 @@ class TestGeneratedFeeds:
         assert endpoint_response.status_code == 200
         assert endpoint_response.json()["chapters"] == [
             {"startTime": 60, "title": "Intro"},
-            {"startTime": 120, "title": "Middle"},
+            {"startTime": 120.123, "title": "Middle"},
         ]
 
     def test_podcast_feed_declares_podlove_namespace_once_per_chaptered_episode(

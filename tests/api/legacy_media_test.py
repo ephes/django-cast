@@ -358,10 +358,7 @@ class TestPodcastAudio:
         podlove_detail_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
         r = api_client.get(podlove_detail_url, format="json")
         chapters = r.json()["chapters"]
-        for chapter in chapters:
-            # assert microseconds are stripped away
-            assert "." not in chapter["start"]
-            assert ":" in chapter["start"]
+        assert [chapter["start"] for chapter in chapters] == ["00:01:01.234", "00:02:05.567", "00:03:05.567"]
         assert len(chapters) == 3
         # assert reordering
         assert chapters[-1]["title"] == "coughing"

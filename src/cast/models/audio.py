@@ -229,7 +229,9 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         for chapter in self.chaptermarks.order_by("start"):
             items.append(
                 {
-                    "start": str(chapter.start).split(".")[0],
+                    "start": chapter.start.isoformat(
+                        timespec="milliseconds" if chapter.start.microsecond else "seconds"
+                    ),
                     "title": chapter.title,
                     "href": chapter.link,  # could be None
                     "image": chapter.image,  # could be None

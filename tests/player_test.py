@@ -29,9 +29,9 @@ class TestParseChapterStartSeconds:
             ("00:01:01", 61),
             ("01:02:03", 3723),
             ("02:05", 125),
-            ("00:00:05.789", 5),
+            ("00:00:05.789", 5.789),
             (10, 10),
-            (10.9, 10),
+            (10.9, 10.9),
         ],
     )
     def test_valid(self, value, expected):
@@ -489,3 +489,53 @@ class TestCustomPlayerTag:
     def test_transport_share_false_opts_out(self, audio, episode, rf_request):
         html = self._render(audio, episode, rf_request, extra=" transport_share=False")
         assert 'data-share="none"' in html
+
+
+@pytest.mark.django_db
+def test_subsecond_chapters_survive_audio_player_and_chapters_endpoint(client, episode, rf_request):
+    from datetime import time
+
+    audio = episode.podcast_audio
+    ChapterMark.objects.create(audio=audio, start=time(0, 1, 0, 900000), title="Second")
+    ChapterMark.objects.create(audio=audio, start=time(0, 1, 0, 100000), title="First")
+    assert [chapter["start"] for chapter in audio.chapters] == ["00:01:00.100", "00:01:00.900"]
+    payload = build_player_payload(audio, post=episode, request=rf_request)
+    assert payload["chapters"] == [{"start": 60.1, "title": "First"}, {"start": 60.9, "title": "Second"}]
+    response = client.get(reverse("cast:chapters-json", kwargs={"pk": audio.pk}), {"episode_id": episode.pk})
+    assert response.status_code == 200
+    assert [chapter["startTime"] for chapter in response.json()["chapters"]] == [60.1, 60.9]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("start", 10**400),
+        ("start_ms", 10**400),
+        ("start", "9" * 400 + ":00:00"),
+        ("end", 10**400),
+        ("end_ms", 10**400),
+    ],
+)
+def test_public_transcript_endpoint_normalizes_oversized_times(client, episode, field, value):
+    import json
+
+    from django.core.files.base import ContentFile
+
+    from cast.models import Transcript
+
+    audio = episode.podcast_audio
+    transcript = create_transcript(audio=audio)
+    segments = [{"start": 0, "end": 1, "text": "extreme", field: value}, {"start": 2, "end": 3, "text": "valid"}]
+    # Existing stored JSON need not have passed the current derivation path.
+    transcript.podlove.save(
+        "synthetic-extreme.json", ContentFile(json.dumps({"transcripts": segments}).encode()), save=False
+    )
+    Transcript.objects.filter(pk=transcript.pk).update(podlove=transcript.podlove.name)
+    response = client.get(
+        reverse("cast:api:audio_player_transcript", kwargs={"pk": audio.pk}), {"post_id": episode.pk}
+    )
+    assert response.status_code == 200
+    cues = response.json()["cues"]
+    assert any(cue["text"] == "valid" and cue["start"] == 2 for cue in cues)
+    assert all(cue["end"] > cue["start"] for cue in cues)

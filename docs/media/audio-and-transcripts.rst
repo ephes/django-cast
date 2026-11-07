@@ -894,3 +894,16 @@ Transcript search maps lowercase match positions back to original code-point
 boundaries. Highlighting dotted capital I, combining text or emoji preserves the
 exact cue text and uses only text nodes and mark elements. Contextual lowercase
 matching, such as Greek final sigma, remains supported.
+
+Public timing precision
+-----------------------
+
+Chapter starts preserve milliseconds from stored marks through ``Audio.chapters``,
+the shared player payload and Podcasting 2.0 chapters JSON. Distinct marks within
+one second remain distinct and ordered. Whole-second JSON values remain integers;
+the TypeScript chapter ``number`` accepts both, and seeking keeps the fraction.
+
+The lazy public transcript endpoint treats numeric-conversion or clock-arithmetic
+overflow as an unusable timing value. Invalid starts are skipped; invalid ends
+use the existing finite boundary inference. A legal but oversized JSON integer
+therefore cannot fail the whole endpoint or prevent valid cues from rendering.
