@@ -5,7 +5,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.messages import get_messages
-from django.test import RequestFactory
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from cast.models import Audio, Contributor, EpisodeContributor, Transcript, TranscriptGeneration, VoxhelmSettings
@@ -50,17 +50,18 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     assert "A token is configured" in content
     assert "Leave blank to keep the existing token" in content
 
-    response = admin_client.post(
-        edit_url,
-        {
-            "api_base": "https://voxhelm.example",
-            "api_token": "",
-            "model": "whisper-1",
-            "language": "de",
-            "diarization_enabled": "false",
-        },
-        follow=True,
-    )
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            edit_url,
+            {
+                "api_base": "https://voxhelm.example",
+                "api_token": "",
+                "model": "whisper-1",
+                "language": "de",
+                "diarization_enabled": "false",
+            },
+            follow=True,
+        )
 
     assert response.status_code == 200
     setting = VoxhelmSettings.for_site(site)
@@ -70,17 +71,18 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     assert setting.language == "de"
     assert setting.diarization_enabled is False
 
-    response = admin_client.post(
-        edit_url,
-        {
-            "api_base": "https://voxhelm.internal",
-            "api_token": "replacement-token",
-            "model": "whisper-1",
-            "language": "de",
-            "diarization_enabled": "true",
-        },
-        follow=True,
-    )
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            edit_url,
+            {
+                "api_base": "https://voxhelm.internal",
+                "api_token": "replacement-token",
+                "model": "whisper-1",
+                "language": "de",
+                "diarization_enabled": "true",
+            },
+            follow=True,
+        )
 
     assert response.status_code == 200
     setting.refresh_from_db()
@@ -92,17 +94,18 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
 def test_voxhelm_settings_new_instance_allows_empty_token(admin_client, site):
     edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
 
-    response = admin_client.post(
-        edit_url,
-        {
-            "api_base": "",
-            "api_token": "",
-            "model": "",
-            "language": "",
-            "diarization_enabled": "unknown",
-        },
-        follow=True,
-    )
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            edit_url,
+            {
+                "api_base": "",
+                "api_token": "",
+                "model": "",
+                "language": "",
+                "diarization_enabled": "unknown",
+            },
+            follow=True,
+        )
 
     assert response.status_code == 200
     setting = VoxhelmSettings.for_site(site)
@@ -322,9 +325,10 @@ def test_generate_episode_transcript_from_wagtail_admin(admin_client, episode, m
     )
 
     edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
-    response = admin_client.post(
-        f"{reverse('cast-voxhelm:generate_episode', args=(episode.pk,))}?next={edit_url}", follow=True
-    )
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            f"{reverse('cast-voxhelm:generate_episode', args=(episode.pk,))}?next={edit_url}", follow=True
+        )
 
     assert response.status_code == 200
     assert response.redirect_chain[0][0] == edit_url
@@ -359,7 +363,8 @@ def test_generate_episode_transcript_uses_draft_contributor_assignments(admin_cl
         return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
     )
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
 
     assert response.status_code == 200
     draft_episode = enqueue.call_args.kwargs["episode"]
@@ -384,7 +389,8 @@ def test_generate_episode_transcript_authorizes_exact_draft_audio(admin_client, 
     mocker.patch("cast.views.voxhelm.user_can_generate_transcript_for_audio", side_effect=can_change_audio)
     enqueue = mocker.patch("cast.views.voxhelm.enqueue_audio_transcript_generation")
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)))
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)))
 
     assert response.status_code == 302
     assert response.url == reverse("wagtailadmin_home")
@@ -405,7 +411,8 @@ def test_generate_audio_transcript_from_wagtail_admin(admin_client, episode, moc
         return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
     )
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     enqueue.assert_called_once_with(audio=audio, request_or_site=episode.get_site(), requested_by=mocker.ANY)
@@ -439,7 +446,8 @@ def test_generate_audio_transcript_honors_disabled_audio_mode(admin_client, epis
     enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-disabled-admin"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     generation = TranscriptGeneration.objects.get(audio=audio)
@@ -476,7 +484,8 @@ def test_generate_episode_transcript_honors_enabled_audio_mode_and_draft_speaker
     enqueue_mock = mocker.Mock(return_value=SimpleNamespace(id="task-enabled-admin"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
 
     assert response.status_code == 200
     generation = TranscriptGeneration.objects.get(audio=audio)
@@ -492,7 +501,8 @@ def test_generate_audio_transcript_reports_errors(admin_client, episode, mocker)
     enqueue = mocker.patch("cast.views.voxhelm.enqueue_audio_transcript_generation")
     enqueue.side_effect = VoxhelmError("upstream broke")
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
@@ -515,7 +525,8 @@ def test_generate_episode_transcript_reports_missing_site_token(admin_client, ep
         },
     )
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
@@ -531,7 +542,8 @@ def test_generate_audio_transcript_reports_missing_api_base(admin_client, audio,
     settings.CAST_VOXHELM_API_KEY = "secret"
     monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
@@ -546,7 +558,8 @@ def test_generate_audio_transcript_reports_invalid_boolean_setting(admin_client,
     settings.CAST_VOXHELM_API_KEY = "secret"
     settings.CAST_VOXHELM_DIARIZATION_ENABLED = "sometimes"
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
@@ -563,7 +576,8 @@ def test_generate_audio_transcript_reports_invalid_numeric_setting(admin_client,
     settings.CAST_VOXHELM_API_KEY = "secret"
     settings.CAST_VOXHELM_POLL_TIMEOUT = "6h"
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
@@ -585,7 +599,8 @@ def test_generate_audio_transcript_falls_back_to_request_site(admin_client, audi
         return_value=type("Result", (), {"generation": generation, "enqueued": True})(),
     )
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     enqueue.assert_called_once_with(audio=audio, request_or_site=site, requested_by=mocker.ANY)
@@ -653,9 +668,10 @@ def test_generate_episode_transcript_denies_when_audio_is_missing(
 ):
     mocker.patch("cast.views.voxhelm.user_can_generate_transcript_for_episode", return_value=True)
 
-    response = admin_client.post(
-        reverse("cast-voxhelm:generate_episode", args=(unpublished_episode_without_audio.pk,))
-    )
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            reverse("cast-voxhelm:generate_episode", args=(unpublished_episode_without_audio.pk,))
+        )
 
     assert response.status_code == 302
     assert response.url == reverse("wagtailadmin_home")
@@ -668,7 +684,8 @@ def test_generate_episode_transcript_reports_errors(admin_client, episode, mocke
     enqueue = mocker.patch("cast.views.voxhelm.enqueue_audio_transcript_generation")
     enqueue.side_effect = VoxhelmError("episode broke")
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_episode", args=(episode.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
@@ -685,7 +702,8 @@ def test_generate_audio_transcript_duplicate_submission_reports_in_progress(admi
         task_result_id="task-running",
     )
 
-    response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
     messages = [message.message for message in get_messages(response.wsgi_request)]
@@ -718,10 +736,11 @@ def test_voxhelm_base_change_requires_fresh_token(admin_client, site, stored_tok
     setting, _ = VoxhelmSettings.objects.update_or_create(
         site=site, defaults={"api_base": "https://voxhelm.example", "api_token": stored_token}
     )
-    response = admin_client.post(
-        reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
-        {"api_base": "https://other.example", "api_token": "", "model": "", "language": ""},
-    )
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
+            {"api_base": "https://other.example", "api_token": "", "model": "", "language": ""},
+        )
     assert response.status_code == 200
     assert "Enter the API token when changing the API base URL" in response.content.decode()
     setting.refresh_from_db()
@@ -738,11 +757,12 @@ def test_voxhelm_site_credentials_can_be_cleared(admin_client, site, stored_base
     setting, _ = VoxhelmSettings.objects.update_or_create(
         site=site, defaults={"api_base": stored_base, "api_token": stored_token}
     )
-    response = admin_client.post(
-        reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
-        {"api_base": "", "api_token": "", "model": "", "language": ""},
-        follow=True,
-    )
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
+            {"api_base": "", "api_token": "", "model": "", "language": ""},
+            follow=True,
+        )
     assert response.status_code == 200
     assert "Enter the API token when changing" not in response.content.decode()
     setting.refresh_from_db()

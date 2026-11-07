@@ -6,7 +6,9 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ImproperlyConfigured
+from django.db import models, transaction
 from django.http import HttpRequest
+from django.utils import timezone
 from wagtail.models import Site
 
 from cast.models.contributors import ContributorVoiceReference
@@ -294,6 +296,10 @@ def resolve_audio_diarization_enabled(audio: Audio, client: object) -> bool:
     return client_diarization_enabled(client)
 
 
+class StaleTranscriptAttempt(VoxhelmError):
+    """Completion no longer owns the generation it was queued for."""
+
+
 class VoxhelmTranscriptService:
     def __init__(
         self,
@@ -365,6 +371,9 @@ class VoxhelmTranscriptService:
         source_url: str,
         initial_job_payload: dict[str, Any] | None = None,
         episode: Any | None = None,
+        generation_id: int | None = None,
+        attempt_id: str | None = None,
+        using: str = "default",
     ) -> TranscriptGenerationResult:
         job_payload = initial_job_payload or {}
         if str(job_payload.get("id", "")) != job_id:
@@ -379,18 +388,30 @@ class VoxhelmTranscriptService:
         vtt = self.client.download_artifact(require_artifact_path(job_payload, "vtt"))
         speakers_path = optional_artifact_path(job_payload, "speakers")
         speakers = self.client.download_artifact(speakers_path) if speakers_path else None
-        transcript, created = self._get_or_create_transcript(audio=audio)
-        self._update_collection(transcript=transcript, audio=audio)
-        self._save_artifacts(
-            transcript=transcript, audio=audio, podlove=podlove, dote=dote, vtt=vtt, speakers=speakers
-        )
-        self._apply_glossary(transcript=transcript, episode=episode)
-        return TranscriptGenerationResult(
-            transcript=transcript,
-            created=created,
-            job_id=job_id,
-            source_url=source_url,
-        )
+        with transaction.atomic(using=using):
+            if generation_id is not None:
+                if attempt_id is None:
+                    raise StaleTranscriptAttempt("Transcript completion requires an attempt identity.")
+                # A conditional write acquires the publication lock on SQLite too.
+                matched = (
+                    TranscriptGeneration.objects.using(using)
+                    .filter(pk=generation_id, attempt_id=attempt_id, status=TranscriptGeneration.Status.RUNNING)
+                    .update(updated_at=models.F("updated_at"))
+                )
+                if not matched:
+                    raise StaleTranscriptAttempt("Transcript completion attempt was replaced.")
+            transcript, created = self._get_or_create_transcript(audio=audio)
+            self._update_collection(transcript=transcript, audio=audio)
+            self._save_artifacts(
+                transcript=transcript, audio=audio, podlove=podlove, dote=dote, vtt=vtt, speakers=speakers
+            )
+            self._apply_glossary(transcript=transcript, episode=episode)
+            return TranscriptGenerationResult(
+                transcript=transcript,
+                created=created,
+                job_id=job_id,
+                source_url=source_url,
+            )
 
     def generate_for_audio(
         self,
@@ -421,7 +442,8 @@ class VoxhelmTranscriptService:
         defaults: dict[str, Any] = {}
         if audio.collection_id is not None:
             defaults["collection"] = audio.collection
-        return Transcript.objects.get_or_create(audio=audio, defaults=defaults)
+        manager = Transcript.objects.db_manager(getattr(getattr(audio, "_state", None), "db", None))
+        return manager.get_or_create(audio=audio, defaults=defaults)
 
     @staticmethod
     def _update_collection(*, transcript: Transcript, audio: Audio) -> None:
@@ -509,7 +531,7 @@ def enqueue_audio_transcript_generation(
         diarization_enabled=diarization_enabled,
         diarization_speaker_count=speaker_count,
     )
-    generation, created = TranscriptGeneration.objects.get_or_create(
+    generation, created = TranscriptGeneration.objects.db_manager(audio._state.db).get_or_create(
         audio=audio,
         defaults={"task_ref": task_ref},
     )
@@ -551,13 +573,30 @@ def enqueue_audio_transcript_generation(
             site=site,
             requested_by=requested_by,
         )
-    try:
-        # The episode is task metadata, not stored on the generation: the import uses it as
-        # the transcript glossary's episode context when the audio is shared.
-        task_result = complete_transcript_generation.enqueue(generation.pk, episode_id=getattr(episode, "pk", None))
-    except Exception as exc:
-        generation.mark_failed(str(exc))
-        raise
-    generation.task_result_id = str(task_result.id)
-    generation.save(update_fields=["task_result_id", "updated_at"])
+    using = generation._state.db or "default"
+    attempt_id = str(generation.attempt_id)
+    generation_id = generation.pk
+    episode_id = getattr(episode, "pk", None)
+
+    def enqueue_committed() -> None:
+        current = TranscriptGeneration.objects.using(using).filter(pk=generation_id, attempt_id=attempt_id)
+        if not current.exists():
+            return
+        try:
+            task_result = complete_transcript_generation.enqueue(
+                generation_id, episode_id=episode_id, attempt_id=attempt_id, using=using
+            )
+        except Exception as exc:
+            current.filter(status__in=TranscriptGeneration.ACTIVE_STATUSES).update(
+                status=TranscriptGeneration.Status.FAILED,
+                error_message=str(exc),
+                completed_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+            generation.refresh_from_db(using=using)
+            raise
+        current.update(task_result_id=str(task_result.id))
+        generation.task_result_id = str(task_result.id)
+
+    transaction.on_commit(enqueue_committed, using=using, robust=transaction.get_connection(using).in_atomic_block)
     return TranscriptEnqueueResult(generation=generation, enqueued=True)

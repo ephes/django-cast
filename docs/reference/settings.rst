@@ -955,3 +955,21 @@ to put in your production config which are not really obvious:
 
 Took me some time to figure out these settings. Those are additional settings,
 assumed you already used the django-cookiecutter template.
+
+Transcript completion handoff
+=============================
+
+Completion tasks are queued only after the requesting database transaction
+commits, using its database alias. A rolled-back request queues no completion.
+A queue failure after commit leaves a failed, retryable attempt. Deferred
+callback failures are logged without failing an already-committed request or
+preventing later commit hooks; outside a transaction enqueue failures propagate
+immediately. Each queue or
+retry gets an immutable attempt ID, even when resuming the same remote job.
+Workers condition state changes and artifact publication on that identity; old
+workers cannot overwrite a replacement attempt after downloading artifacts.
+
+Apply migration 0087 and update producers and completion workers together.
+Queued tasks from older package versions without an attempt ID are ignored;
+allow their generation to become stale and retry it through the normal UI.
+Package adoption requires no new settings.

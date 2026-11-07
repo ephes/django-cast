@@ -918,7 +918,9 @@ def test_queued_completion_uses_the_requested_episode(audio, glossary_episode, p
     service.client.wait_for_job = lambda job_id: JOB
     mocker.patch("cast.voxhelm_tasks.VoxhelmTranscriptService", return_value=service)
 
-    complete_transcript_generation.call(generation.pk, episode_id=glossary_episode.pk)
+    complete_transcript_generation.call(
+        generation.pk, episode_id=glossary_episode.pk, attempt_id=str(generation.attempt_id)
+    )
 
     transcript = Transcript.objects.get(audio=audio)
     assert transcript.corrections_data["episode_id"] == glossary_episode.pk
@@ -939,9 +941,14 @@ def test_enqueue_passes_the_episode_to_the_completion_task(audio, glossary_episo
     enqueue = mocker.Mock(return_value=SimpleNamespace(id="task-1"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue))
 
-    enqueue_audio_transcript_generation(audio=audio, request_or_site=site, episode=glossary_episode)
+    from django.test import TestCase
 
-    enqueue.assert_called_once_with(mocker.ANY, episode_id=glossary_episode.pk)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = enqueue_audio_transcript_generation(audio=audio, request_or_site=site, episode=glossary_episode)
+
+    enqueue.assert_called_once_with(
+        mocker.ANY, episode_id=glossary_episode.pk, attempt_id=str(result.generation.attempt_id), using="default"
+    )
 
 
 def test_set_cue_text_keeps_a_speaker_prefix_inside_a_voice_tag():
