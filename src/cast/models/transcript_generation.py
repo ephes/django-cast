@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -61,6 +62,7 @@ class TranscriptGeneration(models.Model):
     site = models.ForeignKey(Site, on_delete=models.SET_NULL, null=True, blank=True)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
+    attempt_id = models.UUIDField(default=uuid4, editable=False)
     task_ref = models.CharField(max_length=255)
     voxhelm_job_id = models.CharField(max_length=255, blank=True)
     task_result_id = models.CharField(max_length=255, blank=True)
@@ -84,6 +86,7 @@ class TranscriptGeneration(models.Model):
         site: Site | None,
         requested_by: Any | None,
     ) -> None:
+        self.attempt_id = uuid4()
         self.task_ref = task_ref
         self.voxhelm_job_id = voxhelm_job_id
         self.task_result_id = task_result_id
@@ -96,6 +99,7 @@ class TranscriptGeneration(models.Model):
         self.completed_at = None
         self.save(
             update_fields=[
+                "attempt_id",
                 "task_ref",
                 "voxhelm_job_id",
                 "task_result_id",

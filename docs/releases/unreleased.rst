@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Fence queued Voxhelm completions by an immutable attempt identity and recheck
+  ownership under the publication lock after downloads. Queue handoff now runs
+  after commit on the generation database; rollback queues no work, and enqueue
+  failures mark only the current attempt failed. Apply migration 0087 and update
+  workers together; legacy tasks without identity are ignored and can be recovered
+  through stale-generation retry.
+
 - Validate Voxhelm polling/request/job durations as finite positive values up to
   one day, including direct client construction. Bound whole polling exchanges
   and sleeps by the elapsed job deadline, reject late success, and cap outstanding

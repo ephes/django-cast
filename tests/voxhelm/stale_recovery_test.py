@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.test import TestCase
 from django.utils import timezone
 
 from cast.models import TranscriptGeneration
@@ -11,10 +12,16 @@ from cast.voxhelm import (
     TranscriptSubmission,
     VoxhelmError,
     build_audio_task_ref,
-    enqueue_audio_transcript_generation,
+    enqueue_audio_transcript_generation as _enqueue_audio_transcript_generation,
     get_transcript_generation_status_context,
 )
 from cast.voxhelm_tasks import complete_transcript_generation
+
+
+def enqueue_audio_transcript_generation(**kwargs):
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        return _enqueue_audio_transcript_generation(**kwargs)
+
 
 STALE_AGE = timedelta(seconds=900 + 15 * 60 + 60)
 FRESH_AGE = timedelta(minutes=5)
@@ -125,7 +132,9 @@ def test_stale_generation_resumes_its_existing_voxhelm_job(mocker, audio, site, 
     assert result.enqueued is True
     # Diarization is now disabled, but the interrupted job is resumed, not resubmitted.
     service.submit_for_audio.assert_not_called()
-    enqueue_mock.assert_called_once_with(generation.pk, episode_id=None)
+    enqueue_mock.assert_called_once_with(
+        generation.pk, episode_id=None, attempt_id=str(result.generation.attempt_id), using="default"
+    )
     generation.refresh_from_db()
     assert generation.status == TranscriptGeneration.Status.QUEUED
     assert generation.task_ref == stored_ref
@@ -146,7 +155,9 @@ def test_stale_generation_without_job_id_is_resubmitted(mocker, audio, site):
 
     assert result.enqueued is True
     service.submit_for_audio.assert_called_once_with(audio, task_ref=build_audio_task_ref(audio.pk), episode=None)
-    enqueue_mock.assert_called_once_with(generation.pk, episode_id=None)
+    enqueue_mock.assert_called_once_with(
+        generation.pk, episode_id=None, attempt_id=str(result.generation.attempt_id), using="default"
+    )
     generation.refresh_from_db()
     assert generation.voxhelm_job_id == "job-new"
     assert generation.status == TranscriptGeneration.Status.QUEUED
@@ -220,7 +231,7 @@ def test_task_marks_failed_when_service_construction_fails(mocker, audio):
     )
 
     with pytest.raises(ImproperlyConfigured):
-        complete_transcript_generation.call(generation.pk)
+        complete_transcript_generation.call(generation.pk, attempt_id=str(generation.attempt_id))
 
     generation.refresh_from_db()
     assert generation.status == TranscriptGeneration.Status.FAILED

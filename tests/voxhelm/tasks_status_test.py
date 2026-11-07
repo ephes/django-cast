@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.test import TestCase
 from django.urls import reverse
 
 from cast.devdata import create_transcript
@@ -13,11 +14,16 @@ from cast.voxhelm import (
     VoxhelmError,
     VoxhelmTranscriptService,
     build_audio_task_ref,
-    enqueue_audio_transcript_generation,
+    enqueue_audio_transcript_generation as _enqueue_audio_transcript_generation,
     get_transcript_generation,
     get_transcript_generation_status_context,
 )
 from cast.voxhelm_tasks import complete_transcript_generation
+
+
+def enqueue_audio_transcript_generation(**kwargs):
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        return _enqueue_audio_transcript_generation(**kwargs)
 
 
 class FakeResponse(io.BytesIO):
@@ -37,7 +43,9 @@ VALID_VTT_ARTIFACT = b"WEBVTT\n\n00:00:00.000 --> 00:00:00.100\ndone\n"
 
 
 def test_transcript_service_collection_helpers(mocker):
-    get_or_create = mocker.patch("cast.voxhelm.Transcript.objects.get_or_create", return_value=("transcript", True))
+    manager = mocker.patch("cast.voxhelm.Transcript.objects.db_manager").return_value
+    get_or_create = manager.get_or_create
+    get_or_create.return_value = ("transcript", True)
     audio = SimpleNamespace(collection_id=None)
 
     assert VoxhelmTranscriptService._get_or_create_transcript(audio=audio) == (
@@ -86,7 +94,9 @@ def test_enqueue_audio_transcript_generation_creates_local_state(mocker, audio, 
         task_ref=build_audio_task_ref(audio.pk),
         episode=None,
     )
-    enqueue_mock.assert_called_once_with(generation.pk, episode_id=None)
+    enqueue_mock.assert_called_once_with(
+        generation.pk, episode_id=None, attempt_id=str(generation.attempt_id), using="default"
+    )
 
 
 @pytest.mark.django_db
@@ -339,8 +349,7 @@ def test_enqueue_audio_transcript_generation_marks_failed_when_enqueue_fails(moc
     enqueue_mock = mocker.Mock(side_effect=RuntimeError("queue broke"))
     mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue_mock))
 
-    with pytest.raises(RuntimeError, match="queue broke"):
-        enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=audio.user)
+    enqueue_audio_transcript_generation(audio=audio, request_or_site=site, requested_by=audio.user)
 
     generation = get_transcript_generation(audio)
     assert generation is not None
@@ -399,7 +408,7 @@ def test_complete_transcript_generation_marks_success_and_calls_service(mocker, 
     service = mocker.Mock()
     mocker.patch("cast.voxhelm_tasks.VoxhelmTranscriptService", return_value=service)
 
-    complete_transcript_generation.call(generation.pk)
+    complete_transcript_generation.call(generation.pk, attempt_id=str(generation.attempt_id))
 
     generation.refresh_from_db()
     assert generation.status == TranscriptGeneration.Status.SUCCEEDED
@@ -408,6 +417,9 @@ def test_complete_transcript_generation_marks_success_and_calls_service(mocker, 
         job_id="job-42",
         source_url="https://media.example.com/audio.m4a",
         episode=None,
+        generation_id=generation.pk,
+        attempt_id=str(generation.attempt_id),
+        using="default",
     )
 
 
@@ -420,7 +432,7 @@ def test_complete_transcript_generation_returns_when_already_succeeded(mocker, a
     )
     service_cls = mocker.patch("cast.voxhelm_tasks.VoxhelmTranscriptService")
 
-    complete_transcript_generation.call(generation.pk)
+    complete_transcript_generation.call(generation.pk, attempt_id=str(generation.attempt_id))
 
     service_cls.assert_not_called()
 
@@ -439,7 +451,7 @@ def test_complete_transcript_generation_marks_failure_on_exception(mocker, audio
     mocker.patch("cast.voxhelm_tasks.VoxhelmTranscriptService", return_value=service)
 
     with pytest.raises(VoxhelmError, match="worker broke"):
-        complete_transcript_generation.call(generation.pk)
+        complete_transcript_generation.call(generation.pk, attempt_id=str(generation.attempt_id))
 
     generation.refresh_from_db()
     assert generation.status == TranscriptGeneration.Status.FAILED
@@ -475,3 +487,195 @@ def test_get_transcript_generation_status_context_links_succeeded_transcript(aud
 
     assert context["transcript_generation_status"] == "Succeeded"
     assert context["transcript_generation_transcript_url"] == reverse("cast-transcript:edit", args=(transcript.pk,))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("fail_old", [False, True])
+def test_replaced_attempt_cannot_publish_or_change_status(mocker, audio, fail_old):
+    from cast.voxhelm import VoxhelmClient
+
+    generation = TranscriptGeneration.objects.create(audio=audio, task_ref="synthetic", voxhelm_job_id="same-job")
+    old_attempt = str(generation.attempt_id)
+    transcript = create_transcript(audio=audio)
+    VoxhelmTranscriptService._save_artifacts(
+        transcript=transcript,
+        audio=audio,
+        podlove=VALID_PODLOVE_ARTIFACT,
+        dote=VALID_DOTE_ARTIFACT,
+        vtt=VALID_VTT_ARTIFACT,
+    )
+    names = (transcript.podlove.name, transcript.dote.name, transcript.vtt.name)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="synthetic")
+    mocker.patch.object(
+        client,
+        "wait_for_job",
+        return_value={"state": "succeeded", "result": {"artifacts": {"podlove": "p", "dote": "d", "vtt": "v"}}},
+    )
+    artifacts = {"p": VALID_PODLOVE_ARTIFACT, "d": VALID_DOTE_ARTIFACT, "v": VALID_VTT_ARTIFACT}
+
+    def download(path):
+        if path == "v":
+            generation.queue_submission(
+                task_ref="new",
+                voxhelm_job_id="same-job",
+                source_url="https://media.example/new",
+                task_result_id="new-task",
+                site=None,
+                requested_by=None,
+            )
+            if fail_old:
+                raise VoxhelmError("old attempt failed")
+        return artifacts[path]
+
+    mocker.patch.object(client, "download_artifact", side_effect=download)
+    service = VoxhelmTranscriptService(client=client)
+    mocker.patch("cast.voxhelm_tasks.VoxhelmTranscriptService", return_value=service)
+    complete_transcript_generation.call(generation.pk, attempt_id=old_attempt)
+    generation.refresh_from_db()
+    assert str(generation.attempt_id) != old_attempt
+    assert generation.status == TranscriptGeneration.Status.QUEUED
+    assert generation.task_result_id == "new-task"
+    assert not generation.error_message
+    transcript.refresh_from_db()
+    assert (transcript.podlove.name, transcript.dote.name, transcript.vtt.name) == names
+    # The replacement attempt can complete normally using the same remote job.
+    mocker.patch.object(client, "download_artifact", side_effect=lambda path: artifacts[path])
+    complete_transcript_generation.call(generation.pk, attempt_id=str(generation.attempt_id))
+    generation.refresh_from_db()
+    assert generation.status == TranscriptGeneration.Status.SUCCEEDED
+    transcript.refresh_from_db()
+    assert transcript.vtt.read() == VALID_VTT_ARTIFACT
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("identity", [None, "00000000-0000-0000-0000-000000000000"])
+def test_unowned_completion_is_inert(mocker, audio, identity):
+    generation = TranscriptGeneration.objects.create(audio=audio, task_ref="synthetic")
+    service = mocker.patch("cast.voxhelm_tasks.VoxhelmTranscriptService")
+    complete_transcript_generation.call(generation.pk, attempt_id=identity)
+    service.assert_not_called()
+    generation.refresh_from_db()
+    assert generation.status == TranscriptGeneration.Status.QUEUED
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("rollback", [False, True])
+def test_completion_handoff_waits_for_commit_and_rollback_cancels(mocker, audio, rollback):
+    from django.db import transaction
+
+    service = mocker.Mock()
+    service.client.diarization_enabled = False
+    service.submit_for_audio.return_value = TranscriptSubmission(
+        job_id="synthetic-job", source_url="https://media.example/synthetic", task_ref="synthetic", job_payload={}
+    )
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
+    seen = []
+
+    def enqueue(pk, **kwargs):
+        current = TranscriptGeneration.objects.get(pk=pk)
+        assert str(current.attempt_id) == kwargs["attempt_id"]
+        assert kwargs["using"] == "default"
+        seen.append(pk)
+        return SimpleNamespace(id="synthetic-task")
+
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue))
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        with transaction.atomic():
+            result = _enqueue_audio_transcript_generation(audio=audio)
+            assert seen == []
+            transaction.set_rollback(rollback)
+    assert seen == ([] if rollback else [result.generation.pk])
+    assert TranscriptGeneration.objects.filter(audio=audio).exists() is (not rollback)
+
+
+@pytest.mark.django_db
+def test_replaced_attempt_skips_deferred_handoff(mocker, audio):
+    service = mocker.Mock()
+    service.submit_for_audio.return_value = TranscriptSubmission(
+        job_id="synthetic-job", source_url="https://media.example/synthetic", task_ref="synthetic", job_payload={}
+    )
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
+    enqueue = mocker.Mock()
+    mocker.patch("cast.voxhelm_tasks.complete_transcript_generation", new=SimpleNamespace(enqueue=enqueue))
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _enqueue_audio_transcript_generation(audio=audio)
+        result.generation.queue_submission(
+            task_ref="new", voxhelm_job_id="new", source_url="", task_result_id="", site=None, requested_by=None
+        )
+    enqueue.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_completion_publication_requires_identity(mocker, audio):
+    from cast.voxhelm.service import StaleTranscriptAttempt
+
+    client = mocker.Mock()
+    client.download_artifact.side_effect = [VALID_PODLOVE_ARTIFACT, VALID_DOTE_ARTIFACT, VALID_VTT_ARTIFACT]
+    service = VoxhelmTranscriptService(client=client)
+    with pytest.raises(StaleTranscriptAttempt, match="requires an attempt"):
+        service.complete_audio_job(
+            audio,
+            job_id="synthetic",
+            source_url="",
+            generation_id=123,
+            initial_job_payload={
+                "id": "synthetic",
+                "state": "succeeded",
+                "result": {"artifacts": {"podlove": "p", "dote": "d", "vtt": "v"}},
+            },
+        )
+
+
+@pytest.mark.django_db
+def test_deferred_enqueue_failure_does_not_skip_later_commit_hooks(mocker, audio, caplog):
+    from django.db import transaction
+
+    service = mocker.Mock()
+    service.submit_for_audio.return_value = TranscriptSubmission(
+        job_id="synthetic", source_url="https://media.example/synthetic", task_ref="synthetic", job_payload={}
+    )
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
+    mocker.patch(
+        "cast.voxhelm_tasks.complete_transcript_generation",
+        new=SimpleNamespace(enqueue=mocker.Mock(side_effect=RuntimeError("synthetic queue failure"))),
+    )
+    later = mocker.Mock()
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _enqueue_audio_transcript_generation(audio=audio)
+        transaction.on_commit(later)
+    later.assert_called_once()
+    result.generation.refresh_from_db()
+    assert result.generation.status == TranscriptGeneration.Status.FAILED
+    assert "synthetic queue failure" in caplog.text
+
+
+@pytest.mark.django_db
+def test_generation_explicit_status_transitions_clear_previous_failure(audio):
+    generation = TranscriptGeneration.objects.create(audio=audio, task_ref="synthetic", error_message="old failure")
+    generation.mark_running()
+    generation.refresh_from_db()
+    assert generation.status == TranscriptGeneration.Status.RUNNING
+    assert generation.started_at is not None and generation.completed_at is None
+    assert generation.error_message == ""
+    generation.mark_succeeded()
+    generation.refresh_from_db()
+    assert generation.status == TranscriptGeneration.Status.SUCCEEDED
+    assert generation.completed_at >= generation.started_at
+    assert generation.error_message == ""
+
+
+@pytest.mark.django_db
+def test_committed_handoff_runs_the_configured_immediate_backend(mocker, audio):
+    service = mocker.Mock()
+    service.client.diarization_enabled = False
+    service.submit_for_audio.return_value = TranscriptSubmission(
+        job_id="synthetic", source_url="https://media.example/synthetic", task_ref="synthetic", job_payload={}
+    )
+    mocker.patch("cast.voxhelm.service.VoxhelmTranscriptService", return_value=service)
+    mocker.patch("cast.voxhelm_tasks.VoxhelmTranscriptService", return_value=service)
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = _enqueue_audio_transcript_generation(audio=audio)
+    result.generation.refresh_from_db()
+    assert result.generation.status == TranscriptGeneration.Status.SUCCEEDED
+    assert result.generation.task_result_id
+    assert service.complete_audio_job.call_args.kwargs["attempt_id"] == str(result.generation.attempt_id)
