@@ -16,16 +16,18 @@ def artifact_fingerprint(transcript) -> str:
         file_field = getattr(transcript, field_name)
         if not file_field or not file_field.name:
             continue
+        artifact_digest = digest.copy()
         try:
             with file_field.storage.open(file_field.name, "rb") as file:
-                content = file.read()
+                artifact_digest.update(field_name.encode("utf-8"))
+                artifact_digest.update(b"\0")
+                for chunk in iter(lambda: file.read(65536), b""):
+                    artifact_digest.update(chunk)
         except (FileNotFoundError, OSError, ValueError):
             continue
         saw_content = True
-        digest.update(field_name.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(content)
-        digest.update(b"\0")
+        artifact_digest.update(b"\0")
+        digest = artifact_digest
     return digest.hexdigest() if saw_content else ""
 
 

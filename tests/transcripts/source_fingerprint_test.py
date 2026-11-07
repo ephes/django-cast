@@ -308,3 +308,56 @@ class TestTranscriptSourceFingerprint:
         assert Transcript.objects.get(pk=received_transcript.pk).source_fingerprint == expected
         assert Transcript.objects.get(pk=empty.pk).source_fingerprint == ""
         assert Transcript.objects.get(pk=missing.pk).source_fingerprint == ""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("historical", [False, True])
+@pytest.mark.parametrize("content", [b"", b"synthetic" * 20000])
+def test_artifact_fingerprints_stream_bounded_reads_with_exact_identity(historical, content):
+    import hashlib
+    import io
+
+    class BoundedStream(io.BytesIO):
+        def read(self, size=-1):
+            assert 0 < size <= 65536
+            return super().read(size)
+
+    transcript = Transcript()
+    transcript.podlove.name = "synthetic"
+    transcript.podlove.storage = SimpleNamespace(open=lambda *args: BoundedStream(content))
+    expected = hashlib.sha256(b"podlove\0" + content + b"\0").hexdigest()
+    if historical:
+        module = importlib.import_module("cast.migrations.0084_transcript_source_fingerprint")
+        assert module.artifact_fingerprint(transcript) == expected
+    else:
+        assert transcript.transcript_artifact_fingerprint() == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("historical", [False, True])
+def test_fingerprint_discards_a_partial_unreadable_artifact(historical):
+    import io
+
+    class InterruptedStream(io.BytesIO):
+        def read(self, size=-1):
+            if self.tell():
+                raise OSError("synthetic interrupted read")
+            return super().read(1)
+
+    transcript = Transcript()
+    transcript.podlove.name = "synthetic"
+    transcript.podlove.storage = SimpleNamespace(open=lambda *args: InterruptedStream(b"two bytes"))
+    fingerprint = (
+        importlib.import_module("cast.migrations.0084_transcript_source_fingerprint").artifact_fingerprint
+        if historical
+        else lambda item: item.transcript_artifact_fingerprint()
+    )
+    assert fingerprint(transcript) == ""
+
+
+@pytest.mark.django_db
+def test_raw_artifact_reader_preserves_missing_file_behavior(mocker):
+    transcript = Transcript()
+    transcript.podlove.name = "synthetic-missing"
+    transcript.podlove.storage = SimpleNamespace(open=mocker.Mock(side_effect=FileNotFoundError("synthetic")))
+    assert transcript._read_file_bytes("podlove") is None

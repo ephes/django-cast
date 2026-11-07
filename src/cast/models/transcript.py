@@ -264,14 +264,21 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         digest = hashlib.sha256()
         saw_content = False
         for field_name in TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS:
-            content = self._read_file_bytes(field_name)
-            if content is None:
+            file_field = getattr(self, field_name)
+            if not file_field or not file_field.name:
+                continue
+            artifact_digest = digest.copy()
+            try:
+                with file_field.storage.open(file_field.name, "rb") as file:
+                    artifact_digest.update(field_name.encode("utf-8"))
+                    artifact_digest.update(b"\0")
+                    for chunk in iter(lambda: file.read(65536), b""):
+                        artifact_digest.update(chunk)
+            except (FileNotFoundError, OSError, ValueError, RecursionError):
                 continue
             saw_content = True
-            digest.update(field_name.encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(content)
-            digest.update(b"\0")
+            artifact_digest.update(b"\0")
+            digest = artifact_digest
         return digest.hexdigest() if saw_content else ""
 
     def _read_file_bytes(self, field_name: str) -> bytes | None:
