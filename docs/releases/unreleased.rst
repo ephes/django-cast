@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Add an optional HTTP(S) playing-post permalink to shared player payloads.
+  Share/copy links retain that source after navigation, with a connection-time
+  fallback for legacy integrations. Apply URL start times only to a matching
+  source; unrelated episode selection and overview cards no longer inherit them.
+  Adopt the package and rebuilt assets together.
+
 - Reject nonfinite and unrepresentable editor timestamps safely in speaker
   samples and voice-reference ranges, preserving source artifacts and valid
   fractions. Strip unsupported structured speaker/voice values from filtered

@@ -539,3 +539,51 @@ def test_public_transcript_endpoint_normalizes_oversized_times(client, episode, 
     cues = response.json()["cues"]
     assert any(cue["text"] == "valid" and cue["start"] == 2 for cue in cues)
     assert all(cue["end"] > cue["start"] for cue in cues)
+
+
+@pytest.mark.django_db
+def test_player_payload_carries_the_playing_post_permalink(audio, episode, rf_request):
+    assert build_player_payload(audio, post=episode, request=rf_request)["permalink"] == rf_request.build_absolute_uri(
+        episode.get_url(rf_request)
+    )
+    assert "permalink" not in build_player_payload(audio, post=None, request=rf_request)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "url",
+    [None, 42, "javascript:alert(1)", "data:text/html,test", "mailto:test@example.test", "https://", "https://["],
+)
+def test_player_payload_omits_unsupported_post_urls(audio, rf_request, url):
+    from types import SimpleNamespace
+
+    post = SimpleNamespace(get_url=lambda request: url)
+    assert "permalink" not in build_player_payload(audio, post=post, request=rf_request)
+
+
+@pytest.mark.django_db
+def test_rendered_detail_player_uses_request_origin_with_relative_page_context(
+    client, post_with_audio, audio, settings
+):
+    import json
+    from urllib.parse import urlsplit
+
+    from bs4 import BeautifulSoup
+
+    settings.CAST_AUDIO_PLAYER = "custom"
+    path = urlsplit(post_with_audio.get_url()).path
+    response = client.get(path + "?t=12", secure=True, HTTP_HOST="example.com")
+    assert response.status_code == 200
+    script = BeautifulSoup(response.content, "html.parser").find("script", id=f"cast-player-data-{audio.pk}")
+    assert script is not None
+    payload = json.loads(script.string)
+    assert payload["permalink"] == "https://example.com" + path
+
+
+@pytest.mark.django_db
+def test_relative_permalink_without_request_is_omitted(audio):
+    from types import SimpleNamespace
+
+    assert "permalink" not in build_player_payload(
+        audio, post=SimpleNamespace(get_url=lambda request: "/synthetic/"), request=None
+    )

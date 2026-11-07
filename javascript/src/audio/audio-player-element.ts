@@ -7,6 +7,16 @@ import { formatTime, spokenTime } from "./format";
 import { registerController, unregisterController } from "./player-registry";
 import { isCueArray, type PlayerPayload } from "./types";
 
+function httpUrl(value: unknown): URL | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value, window.location.href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 const PUBLIC_EVENT_THROTTLE_MS = 250;
 const SEEK_STEP_SECONDS = 5;
 
@@ -123,6 +133,9 @@ export class CastAudioPlayerElement extends HTMLElement {
   private shareDialog?: HTMLDialogElement;
   private shareTimeInput?: HTMLInputElement;
   private shareBuildUrl?: () => void;
+  private connectionUrl = "";
+  private sourcePermalink?: string;
+  private shareSourceUrl = "";
   private playbackFailure = false;
   private connectionGeneration = 0;
   private cancelHydration?: () => void;
@@ -136,6 +149,9 @@ export class CastAudioPlayerElement extends HTMLElement {
       return;
     }
     this.connectionGeneration++;
+    this.connectionUrl = window.location.href;
+    this.sourcePermalink = httpUrl(payload.permalink)?.href;
+    this.shareSourceUrl = this.sourcePermalink || this.connectionUrl;
     this.playbackFailure = false;
     this.playerId = this.id;
     this.disabled = payload.sources.length === 0;
@@ -389,7 +405,7 @@ export class CastAudioPlayerElement extends HTMLElement {
     closeRow.appendChild(closeButton);
 
     const buildUrl = () => {
-      const base = new URL(window.location.href);
+      const base = new URL(this.shareSourceUrl);
       base.searchParams.delete("t");
       if (startToggle.checked) {
         const seconds = parseTimecode(timeInput.value);
@@ -453,7 +469,18 @@ export class CastAudioPlayerElement extends HTMLElement {
 
   // Seek to the ?t=<seconds> deep-link once metadata is available.
   private applyStartAt(): void {
-    const raw = new URL(window.location.href).searchParams.get("t");
+    if (!this.sourcePermalink) return;
+    const documentUrl = new URL(this.connectionUrl);
+    const sourceUrl = new URL(this.sourcePermalink);
+    if (documentUrl.origin !== sourceUrl.origin || documentUrl.pathname !== sourceUrl.pathname) return;
+    // A permalink may identify a source through a query as well as its path.
+    for (const key of sourceUrl.searchParams.keys()) {
+      if (key === "t") continue;
+      const expected = sourceUrl.searchParams.getAll(key);
+      const actual = documentUrl.searchParams.getAll(key);
+      if (expected.length !== actual.length || expected.some((value, index) => value !== actual[index])) return;
+    }
+    const raw = documentUrl.searchParams.get("t");
     if (raw === null) {
       return;
     }
@@ -461,7 +488,8 @@ export class CastAudioPlayerElement extends HTMLElement {
     if (!Number.isFinite(seconds) || seconds <= 0) {
       return;
     }
-    const seekOnce = () => this.controller?.seek(seconds);
+    const controller = this.controller;
+    const seekOnce = () => controller?.seek(seconds);
     if (typeof this.controller?.duration === "number") {
       seekOnce();
     } else {

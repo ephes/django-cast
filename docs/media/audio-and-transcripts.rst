@@ -924,3 +924,28 @@ strings with permitted nonblank labels. Unsupported object/list/number/null
 values and disallowed labels are removed from the public copy, preserving
 transcript text, approved labels and existing blank anonymous placeholders.
 The explicit unfiltered mode remains unchanged.
+
+Playing-post URL identity
+-------------------------
+
+The shared player payload includes optional ``permalink`` for a playing post
+by resolving Wagtail's public post URL against the rendering request, with only
+HTTP(S) URLs accepted. This preserves relative detail-page context URLs and
+the actual request scheme/host when the configured Site uses an alias. Share builds its URL from
+that source identity, including optional playback time, even after browser
+history or a persistent dock moves to another page. Integrations without post
+context retain a connection-time document URL for sharing. Unsupported permalink
+schemes or malformed URLs fall back to that captured document URL.
+
+Automatic ``?t=`` seeks require a valid permalink matching the document origin
+and path; any identifying query parameters in the permalink must also match.
+A matching detail deep link seeks once when duration is available. Overview
+cards and an unrelated selected episode do not inherit the document timestamp.
+Payloads without a permalink do not apply implicit URL seeks; explicit chapter
+and controller seeks keep working. A new connection re-evaluates its source
+identity against its document URL.
+
+The Python Podcast dock copies the raw payload, preserving this optional field.
+Adopt the package and rebuilt assets together; consumers that construct custom
+payloads can supply ``permalink`` to enable source-specific deep links. No new
+settings or theme selectors are required.

@@ -481,7 +481,7 @@ describe("cast-audio-player transport-share opt-out", () => {
 describe("cast-audio-player ?t= deep link", () => {
   it("seeks to the ?t= seconds on load", () => {
     window.history.replaceState({}, "", "/?t=42");
-    const player = mountPlayer(makePayload({ duration: 600 }));
+    const player = mountPlayer(makePayload({ duration: 600, permalink: window.location.origin + "/" }));
     expect(audioOf(player).currentTime).toBe(42);
     window.history.replaceState({}, "", "/");
   });
@@ -651,4 +651,85 @@ it("seeks distinct fractional chapter boundaries without rounding", () => {
   player.controller!.seekToChapter(1);
   expect(audioOf(player).currentTime).toBe(60.9);
   expect(player.controller!.currentChapterIndex).toBe(1);
+});
+
+describe("playing-post URL identity", () => {
+  const sharedUrl = (player: HTMLElement) => {
+    (player.querySelector(".cast-player__share") as HTMLButtonElement).click();
+    return player.querySelector<HTMLInputElement>('.cast-share__url')!;
+  };
+  it("shares episode A after history navigates to B, with and without timestamp", () => {
+    const previousClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const copy = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {value: {writeText: copy}, configurable: true});
+    try {
+      window.history.replaceState({}, "", "/episode-a/");
+      const player = mountPlayer(makePayload({permalink: window.location.origin + "/episode-a/"}));
+      audioOf(player).currentTime = 12;
+      window.history.replaceState({}, "", "/episode-b/?t=99");
+      const input = sharedUrl(player);
+      expect(new URL(input.value).pathname).toBe("/episode-a/");
+      expect(new URL(input.value).searchParams.get("t")).toBe("12");
+      (player.querySelector(".cast-share__copy") as HTMLButtonElement).click();
+      expect(copy).toHaveBeenLastCalledWith(input.value);
+      const toggle = player.querySelector<HTMLInputElement>('.cast-share__start input') || player.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+      toggle.checked = false; toggle.dispatchEvent(new Event("change"));
+      expect(new URL(input.value).pathname).toBe("/episode-a/");
+      expect(new URL(input.value).searchParams.has("t")).toBe(false);
+      (player.querySelector(".cast-share__copy") as HTMLButtonElement).click();
+      expect(copy).toHaveBeenLastCalledWith(input.value);
+    } finally {
+      window.history.replaceState({}, "", "/");
+      if (previousClipboard) Object.defineProperty(navigator, "clipboard", previousClipboard);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it.each([undefined, "javascript:alert(1)", "data:text/html,test", "https://["])("captures a connection-time share fallback for %s", (permalink) => {
+    try {
+      window.history.replaceState({}, "", "/connection/");
+      const player = mountPlayer(makePayload({permalink}));
+      window.history.replaceState({}, "", "/later/");
+      expect(new URL(sharedUrl(player).value).pathname).toBe("/connection/");
+    } finally { window.history.replaceState({}, "", "/"); }
+  });
+
+  it("applies deep links only to the matching source across overview cards and reconnects", () => {
+    try {
+      const origin = window.location.origin;
+      window.history.replaceState({}, "", "/episode-a/?t=42");
+      const a = mountPlayer(makePayload({permalink: origin + "/episode-a/"}));
+      expect(audioOf(a).currentTime).toBe(42);
+      const b = mountPlayer(makePayload({audioId: 8, permalink: origin + "/episode-b/"}), "player-b");
+      expect(audioOf(b).currentTime).toBe(0);
+      b.controller!.seekToChapter(0); // no chapter means no implicit URL seek
+      b.remove();
+      window.history.replaceState({}, "", "/episode-b/?t=17");
+      document.body.appendChild(b);
+      expect(b.currentTime).toBe(17);
+      window.history.replaceState({}, "", "/overview/?t=120");
+      const overview = mountPlayer(makePayload({audioId: 9, permalink: origin + "/episode-b/"}), "overview-b");
+      expect(overview.currentTime).toBe(0);
+      const legacy = mountPlayer(makePayload({audioId: 10, permalink: undefined}), "legacy");
+      expect(legacy.currentTime).toBe(0);
+    } finally { window.history.replaceState({}, "", "/"); }
+  });
+
+  it("requires identifying permalink query parameters and seeks once after metadata", () => {
+    try {
+      const origin = window.location.origin;
+      window.history.replaceState({}, "", "/listen/?episode=b&t=11");
+      const wrong = mountPlayer(makePayload({permalink: origin + "/listen/?episode=a"}));
+      expect(wrong.currentTime).toBe(0);
+      const matching = mountPlayer(makePayload({audioId: 8, duration: null, permalink: origin + "/listen/?episode=b"}), "matching");
+      const audio = audioOf(matching);
+      expect(matching.currentTime).toBe(0);
+      Object.defineProperty(audio, "duration", {value: 100, configurable: true});
+      audio.dispatchEvent(new Event("durationchange"));
+      expect(matching.currentTime).toBe(11);
+      matching.controller!.seek(25);
+      audio.dispatchEvent(new Event("durationchange"));
+      expect(matching.currentTime).toBe(25);
+    } finally { window.history.replaceState({}, "", "/"); }
+  });
 });

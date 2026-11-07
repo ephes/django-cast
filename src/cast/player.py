@@ -13,6 +13,7 @@ The returned ``PlayerPayload`` is a plain ``dict`` matching the TypeScript
       "title": str,
       "subtitle": str,
       "duration": int | None,        # seconds; None until media metadata loads
+      "permalink": str,              # optional HTTP(S) playing-post identity
       "poster": str,                 # "" if none
       "sources": [{"type": str, "src": str}, ...],
       "chapters": [{"start": int | float, "title": str}, ...],
@@ -33,6 +34,7 @@ import json
 import logging
 import math
 from typing import Any
+from urllib.parse import urlsplit
 
 from django.urls import reverse
 
@@ -315,6 +317,22 @@ def audio_player_context_flags(*, enabled: bool) -> dict[str, bool]:
     }
 
 
+def _post_permalink(post: Any, request: Any) -> str:
+    getter = getattr(post, "get_url", None)
+    if not callable(getter):
+        return ""
+    url = getter(request)
+    if not isinstance(url, str):
+        return ""
+    try:
+        if request is not None and hasattr(request, "build_absolute_uri"):
+            url = request.build_absolute_uri(url)
+        parts = urlsplit(url)
+        return url if parts.scheme in {"http", "https"} and parts.hostname else ""
+    except ValueError:
+        return ""
+
+
 def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcript: bool = True) -> dict[str, Any]:
     """Return the normalized :class:`PlayerPayload` ``dict`` for ``audio``.
 
@@ -350,7 +368,7 @@ def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcri
     else:
         transcript = {"cues": build_cues(audio, episode=episode, duration=duration)}
 
-    return {
+    payload = {
         "audioId": audio.pk,
         "title": audio.title or audio.name or "",
         "subtitle": audio.subtitle or "",
@@ -360,3 +378,7 @@ def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcri
         "chapters": build_chapters(audio),
         "transcript": transcript,
     }
+    permalink = _post_permalink(episode, request)
+    if permalink:
+        payload["permalink"] = permalink
+    return payload
