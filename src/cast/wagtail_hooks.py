@@ -17,7 +17,7 @@ from django.db.models import Model
 from django.http import HttpRequest
 from django.urls import include, path, reverse
 from django.utils.html import escape, format_html
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import get_language, gettext_lazy as _
 from taggit.models import Tag
 from wagtail import hooks
 from wagtail.admin.action_menu import ActionMenuItem
@@ -300,25 +300,26 @@ class PageLinkHandlerWithCache(PageLinkHandler):
     they still resolve in feed readers; everywhere else they stay relative.
     """
 
-    class _ContextLocalCache(MutableMapping[int, str]):
+    class _ContextLocalCache(MutableMapping[int, str | None]):
         """Context-local cache storage to avoid leaking URLs between requests."""
 
         _missing = object()
 
         def __init__(self, name: str) -> None:
-            self._storage: ContextVar[dict[int, str] | None] = ContextVar(name, default=None)
+            self._storage: ContextVar[tuple[str | None, dict[int, str | None]] | None] = ContextVar(name, default=None)
 
-        def _get_cache(self) -> dict[int, str]:
-            cache = self._storage.get()
-            if cache is None:
-                cache = {}
-                self._storage.set(cache)
-            return cache
+        def _get_cache(self) -> dict[int, str | None]:
+            state = self._storage.get()
+            language = get_language()
+            if state is None or state[0] != language:
+                state = (language, {})
+                self._storage.set(state)
+            return state[1]
 
-        def __getitem__(self, key: int) -> str:
+        def __getitem__(self, key: int) -> str | None:
             return self._get_cache()[key]
 
-        def __setitem__(self, key: int, value: str) -> None:
+        def __setitem__(self, key: int, value: str | None) -> None:
             self._get_cache()[key] = value
 
         def __delitem__(self, key: int) -> None:
@@ -334,24 +335,24 @@ class PageLinkHandlerWithCache(PageLinkHandler):
             return key in self._get_cache()
 
         def clear(self) -> None:
-            self._storage.set({})
+            self._storage.set((get_language(), {}))
 
         @overload
-        def pop(self, key: int) -> str: ...  # pragma: no cover
+        def pop(self, key: int) -> str | None: ...  # pragma: no cover
 
         @overload
-        def pop(self, key: int, default: str) -> str: ...  # pragma: no cover
+        def pop(self, key: int, default: str | None) -> str | None: ...  # pragma: no cover
 
         @overload
-        def pop(self, key: int, default: _T) -> str | _T: ...  # pragma: no cover
+        def pop(self, key: int, default: _T) -> str | None | _T: ...  # pragma: no cover
 
         def pop(self, key: int, default: object = _missing) -> object:
             if default is self._missing:
                 return self._get_cache().pop(key)
             return self._get_cache().pop(key, default)
 
-    cache: MutableMapping[int, str] = _ContextLocalCache("page_link_handler_cache")
-    absolute_cache: MutableMapping[int, str] = _ContextLocalCache("page_link_handler_absolute_cache")
+    cache: MutableMapping[int, str | None] = _ContextLocalCache("page_link_handler_cache")
+    absolute_cache: MutableMapping[int, str | None] = _ContextLocalCache("page_link_handler_absolute_cache")
     _render_absolute_urls: ContextVar[bool] = ContextVar("page_link_handler_absolute_urls", default=False)
 
     @classmethod
@@ -384,20 +385,21 @@ class PageLinkHandlerWithCache(PageLinkHandler):
         """Required for Wagtail >= 6.1"""
         absolute = cls._render_absolute_urls.get()
         cache = cls.absolute_cache if absolute else cls.cache
-        cached_urls = [cache.get(int(attrs["id"])) for attrs in attrs_list]
-        if all(url is not None for url in cached_urls):
-            return [f'<a href="{escape(url)}">' for url in cached_urls]
-        # if not all cached, fall back to the database
-        if not absolute:
-            return super().expand_db_attributes_many(attrs_list)
-        links = []
-        for page in cls.get_many(attrs_list):
-            if page is None:
-                links.append("<a>")
-            else:
-                localized = page.localized
-                links.append(f'<a href="{escape(localized.full_url or localized.url)}">')
-        return links
+        missing_attrs = [attrs for attrs in attrs_list if int(attrs["id"]) not in cache]
+        if missing_attrs:
+            for attrs, page in zip(missing_attrs, cls.get_many(missing_attrs), strict=True):
+                page_id = int(attrs["id"])
+                if page is None:
+                    cls.cache.setdefault(page_id, None)
+                    cls.absolute_cache.setdefault(page_id, None)
+                else:
+                    localized = page.localized
+                    relative_url = localized.url
+                    cls.cache.setdefault(page_id, str(relative_url))
+                    cls.absolute_cache.setdefault(page_id, str(localized.full_url or relative_url))
+        return [
+            "<a>" if (url := cache[int(attrs["id"])]) is None else f'<a href="{escape(url)}">' for attrs in attrs_list
+        ]
 
 
 # Wagtail's own ``register_rich_text_features`` hook registers the default

@@ -215,6 +215,15 @@ Django's process-wide current ``Site`` with request data. When
 otherwise feed generation raises an explicit configuration error. Without the
 Sites app, Django's request-local ``RequestSite`` fallback is preserved.
 
+Rich-text batches resolve only page targets missing from the context-local URL
+cache. A lookup primes both localized relative and absolute forms, including
+missing targets (which still render as ``<a>``). Repeated mixed batches reuse
+those results. Cache state resets when the active language changes, and remains
+isolated between contexts. Django's request-started and request-finished signals
+clear entries on HTTP request boundaries, including reused WSGI threads.
+Outside HTTP requests, call ``PageLinkHandlerWithCache.clear_cache()`` between
+independent renders. Repository builders also clear the cache before priming it.
+
 API Access
 ==========
 

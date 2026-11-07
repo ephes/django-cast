@@ -1154,3 +1154,12 @@ def use_dummy_cache_backend(settings, mocker):
 @pytest.fixture()
 def rf_request():
     return RequestFactory().get("/")
+
+
+@pytest.fixture(autouse=True)
+def isolated_page_link_cache():
+    from cast.wagtail_hooks import PageLinkHandlerWithCache
+
+    PageLinkHandlerWithCache.clear_cache()
+    yield
+    PageLinkHandlerWithCache.clear_cache()

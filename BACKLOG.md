@@ -28,7 +28,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   evidence are recorded in
   [backlog/2026-11-06-private-api-cache.md](backlog/2026-11-06-private-api-cache.md).
 
-- Scout media/import follow-up and validation scope are tracked in
+- Implemented scout media/import safeguards and validation evidence are recorded in
   [backlog/2026-11-07-scout-media-imports.md](backlog/2026-11-07-scout-media-imports.md).
 
 ## Later
