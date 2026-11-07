@@ -385,11 +385,24 @@ CAST_VOXHELM_POLL_INTERVAL
 Polling interval in seconds for ``generate_transcripts`` while waiting for a
 Voxhelm batch job to finish. Defaults to ``2.0`` seconds.
 
+Polling, job and request durations (including direct ``VoxhelmClient`` arguments)
+must be finite numbers greater than zero and at most 86400 seconds. Fractional
+seconds are supported; booleans and invalid durations raise a configuration error
+before any network work. Existing consumers using zero to busy-poll must select
+a positive interval.
+
 CAST_VOXHELM_POLL_TIMEOUT
 =========================
 
 Maximum time in seconds to wait for a Voxhelm batch job before the command
 fails. Defaults to ``900.0`` seconds.
+
+One monotonic deadline covers each polling exchange, including DNS, headers and
+response reads. Late terminal results are refused and sleeps use only the
+remaining budget. At most four polling exchanges may remain in flight per
+process; a stalled exchange retains its slot until it exits. Capacity exhaustion
+is retried within the remaining job budget. Timed-out read-only exchanges may finish
+in the background but cannot publish results.
 
 A status poll that cannot reach Voxhelm or loses the connection before the
 answer (refused, reset or timed-out connections, an empty, cut-off or

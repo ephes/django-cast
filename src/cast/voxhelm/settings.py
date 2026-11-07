@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
@@ -83,14 +85,21 @@ def require_setting(name: str, *, request_or_site: HttpRequest | Site | None = N
     return value.strip()
 
 
-def get_float_setting(name: str, default: float, *, request_or_site: HttpRequest | Site | None = None) -> float:
-    value = get_setting(name, default, request_or_site=request_or_site)
+def validate_duration(name: str, value: object) -> float:
+    """Accept positive finite durations up to one day, including fractional seconds."""
     try:
-        return float(str(value))
-    except (TypeError, ValueError) as exc:
+        duration = float(str(value))
+        if isinstance(value, bool) or not math.isfinite(duration) or not 0 < duration <= 86400:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ImproperlyConfigured(
-            f"{name} must be configured as a numeric value in seconds through a Django setting or environment variable."
+            f"{name} must be a finite duration greater than 0 and at most 86400 seconds."
         ) from exc
+    return duration
+
+
+def get_float_setting(name: str, default: float, *, request_or_site: HttpRequest | Site | None = None) -> float:
+    return validate_duration(name, get_setting(name, default, request_or_site=request_or_site))
 
 
 def resolve_bool_setting(

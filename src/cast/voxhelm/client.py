@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import Future, TimeoutError as FutureTimeoutError
 from http.client import HTTPException
+from threading import BoundedSemaphore, Thread
 from time import monotonic, sleep
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -20,7 +22,7 @@ from cast.safe_fetch import (
 )
 
 from .exceptions import VoxhelmConnectionError, VoxhelmError
-from .settings import get_bool_setting, get_float_setting, get_setting, require_setting
+from .settings import get_bool_setting, get_float_setting, get_setting, require_setting, validate_duration
 
 TERMINAL_JOB_STATES = {"succeeded", "failed", "canceled", "expired"}
 KNOWN_SPEAKER_STRATEGY = "pyannote_known_speaker"
@@ -29,6 +31,9 @@ MAX_VOXHELM_API_RESPONSE_BYTES = 1024 * 1024
 MAX_VOXHELM_ERROR_BYTES = 16 * 1024
 
 logger = logging.getLogger(__name__)
+
+# Timed-out DNS/HTTP work retains its slot until the underlying call actually exits.
+_POLL_SLOTS = BoundedSemaphore(4)
 
 
 def normalize_api_base(api_base: str) -> tuple[str, str]:
@@ -62,9 +67,9 @@ class VoxhelmClient:
         self.language = language
         self.diarization_enabled = diarization_enabled
         self.known_speaker_enabled = known_speaker_enabled
-        self.poll_interval_seconds = poll_interval_seconds
-        self.job_timeout_seconds = job_timeout_seconds
-        self.request_timeout_seconds = request_timeout_seconds
+        self.poll_interval_seconds = validate_duration("poll_interval_seconds", poll_interval_seconds)
+        self.job_timeout_seconds = validate_duration("job_timeout_seconds", job_timeout_seconds)
+        self.request_timeout_seconds = validate_duration("request_timeout_seconds", request_timeout_seconds)
 
     @classmethod
     def from_settings(cls, *, request_or_site: HttpRequest | Site | None = None) -> VoxhelmClient:
@@ -209,25 +214,49 @@ class VoxhelmClient:
     def get_job(self, job_id: str) -> dict[str, Any]:
         return self.request_json(method="GET", path=f"jobs/{job_id}")
 
+    def _poll_with_timeout(self, job_id: str, timeout: float) -> dict[str, Any]:
+        if not _POLL_SLOTS.acquire(blocking=False):
+            raise VoxhelmConnectionError("Voxhelm polling capacity is exhausted; retry later.")
+        result: Future[dict[str, Any]] = Future()
+
+        def poll() -> None:
+            try:
+                result.set_result(self.get_job(job_id))
+            except BaseException as exc:
+                result.set_exception(exc)
+            finally:
+                _POLL_SLOTS.release()
+
+        try:
+            Thread(target=poll, daemon=True).start()
+        except BaseException:
+            _POLL_SLOTS.release()
+            raise
+        try:
+            return result.result(timeout=timeout)
+        except FutureTimeoutError as exc:
+            raise VoxhelmConnectionError("Voxhelm polling exchange exceeded its elapsed deadline.") from exc
+
     def wait_for_job(self, job_id: str) -> dict[str, Any]:
         deadline = monotonic() + self.job_timeout_seconds
         while True:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise VoxhelmError(f"Timed out waiting for Voxhelm job {job_id}.")
             try:
-                job_payload = self.get_job(job_id)
+                job_payload = self._poll_with_timeout(job_id, min(remaining, self.request_timeout_seconds))
             except VoxhelmConnectionError as exc:
-                # Polling is read-only, so a connection lost for a moment (for
-                # example a proxy restart) is retried until the job deadline.
                 if monotonic() >= deadline:
                     raise VoxhelmError(f"Timed out waiting for Voxhelm job {job_id}: {exc}") from exc
                 logger.warning("Polling Voxhelm job %s failed, retrying: %s", job_id, exc)
-                sleep(self.poll_interval_seconds)
-                continue
-            state = str(job_payload.get("state", ""))
-            if state in TERMINAL_JOB_STATES:
-                return job_payload
-            if monotonic() >= deadline:
-                raise VoxhelmError(f"Timed out waiting for Voxhelm job {job_id}.")
-            sleep(self.poll_interval_seconds)
+            else:
+                if monotonic() >= deadline:
+                    raise VoxhelmError(f"Timed out waiting for Voxhelm job {job_id}.")
+                if str(job_payload.get("state", "")) in TERMINAL_JOB_STATES:
+                    return job_payload
+            remaining = deadline - monotonic()
+            if remaining > 0:
+                sleep(min(self.poll_interval_seconds, remaining))
 
     def download_artifact(self, artifact_path: str) -> bytes:
         return self.request_bytes(
