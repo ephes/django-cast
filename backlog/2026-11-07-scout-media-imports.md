@@ -14,7 +14,11 @@ read and optimistic field comparisons. Model validation scans remain. Synthetic
 interleavings cover omitted notes and same-field conflicts, with independent
 PostgreSQL connections exercised by the existing postgres tox/CI gate.
 
+The round 57 metadata bundle is implemented: chapter readers reuse prefetches,
+and snapshots use Wagtail rendition prefetching for contributor avatars. Query
+regressions compare 1/20 audios/contributors with controlled caches and synthetic
+images; shared contributors, missing derivatives and avatarless people remain
+supported.
 Remaining bundles, in report order:
-- Round 57: reuse chapter prefetches; batch contributor avatar renditions.
 - Round 57: filter public speaker aggregates; batch audio anchor restrictions.
 - Round 57: reuse partial rich-text link cache misses.

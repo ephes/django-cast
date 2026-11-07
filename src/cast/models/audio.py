@@ -227,12 +227,15 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             )
         return items
 
+    def _ordered_chaptermarks(self) -> list["ChapterMark"]:
+        return sorted(self.chaptermarks.all(), key=lambda mark: mark.start)
+
     @property
     def chapters(self) -> list[dict[str, str | None]]:
         items = []
         # chapter marks have to be ordered by start for
         # podlove web player - dunno why, 2019-04-19 jochen
-        for chapter in self.chaptermarks.order_by("start"):
+        for chapter in self._ordered_chaptermarks():
             items.append(
                 {
                     "start": chapter.start.isoformat(
@@ -248,7 +251,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
     @property
     def chapters_as_text(self) -> str:
         chaptermarks = []
-        for mark in self.chaptermarks.order_by("start"):
+        for mark in self._ordered_chaptermarks():
             chaptermarks.append(f"{mark.start} {mark.title}")
         return "\n".join(chaptermarks)
 

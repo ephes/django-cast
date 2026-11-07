@@ -480,3 +480,11 @@ Security
 - **Spam filtering**: Naive Bayes for comments
 - **CSRF protection**: Django middleware
 - **XSS prevention**: Template auto-escaping
+
+Contributor avatar reads
+------------------------
+
+Post snapshots batch visible contributor avatars and their existing
+``fill-80x80|format-webp`` renditions using Wagtail's rendition prefetch API.
+A shared contributor is primed once per snapshot. Missing derivatives are
+still generated normally; avatarless contributors retain the empty URL.

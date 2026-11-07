@@ -253,6 +253,10 @@ existing link/image URLs; direct model synchronization can update or clear them.
 The admin textarea and ``chapters_as_text`` contain only start times and titles,
 so existing URLs never become part of the title during an edit round trip.
 
+Both ``chapters`` and ``chapters_as_text`` sort loaded chapter marks by start.
+A prefetched chapter relation needs no further queries; an unprefetched reader
+uses one query. JSON link/image and timestamp formatting remain unchanged.
+
 Add navigable chapters to audio:
 
 .. code-block:: python
