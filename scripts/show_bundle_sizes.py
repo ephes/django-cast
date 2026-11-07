@@ -116,8 +116,9 @@ def static_js_bundles(repo_root: Path, known_paths: set[Path]) -> list[Bundle]:
     """Return additional shipped static JS files that are not built by the main recipes."""
     static_root = repo_root / "src" / "cast" / "static"
     bundles: list[Bundle] = []
+    known_paths = {path.resolve() for path in known_paths}
     for path in sorted(static_root.rglob("*.js")):
-        if path in known_paths:
+        if path.resolve() in known_paths:
             continue
         if "/vite/" in path.as_posix():
             continue
@@ -142,12 +143,12 @@ def gzip_bar(gzip_bytes: int | None, max_gzip_bytes: int, width: int = 12) -> st
 
 
 def totals(bundles: list[MeasuredBundle], *, kind: str | None = None) -> tuple[int, int]:
-    """Return summed raw and gzip bytes for measured bundles of one kind."""
-    measured = [
-        bundle
+    """Sum each normalized output path once, omitting missing measurements."""
+    measured = {
+        bundle.path.resolve(): bundle
         for bundle in bundles
         if (kind is None or bundle.kind == kind) and bundle.raw_bytes is not None and bundle.gzip_bytes is not None
-    ]
+    }.values()
     raw_total = sum(bundle.raw_bytes or 0 for bundle in measured)
     gzip_total = sum(bundle.gzip_bytes or 0 for bundle in measured)
     return raw_total, gzip_total
@@ -296,21 +297,23 @@ def main() -> None:
 
     renderer.table("Vite entry bundles shipped from src/cast/static/cast/vite/", vite)
     renderer.table("Other built JS shipped by django-cast", comments)
-    renderer.summary("Vite entry JS total", vite, kind="js")
-    renderer.summary("Vite CSS sidecar total", vite, kind="css")
-    renderer.summary("Built JS total", [*vite, *comments], kind="js")
+    renderer.summary("Unique Vite entry JS total", vite, kind="js")
+    renderer.summary("Unique Vite CSS sidecar total", vite, kind="css")
+    renderer.summary("Unique built JS total", [*vite, *comments], kind="js")
 
     if args.include_static_js:
         known_paths = {bundle.path for bundle in built}
         static_js = [measure(bundle) for bundle in static_js_bundles(repo_root, known_paths)]
         renderer.blank()
         renderer.table("Additional shipped static JS (not built by js-build-all)", static_js)
-        renderer.summary("Additional static JS total", static_js, kind="js")
+        renderer.summary("Unique additional static JS total", static_js, kind="js")
 
     renderer.blank()
     renderer.note(
         "Note: gzip KiB is a local compression estimate; actual transfer depends on server/CDN settings and cache."
     )
+    renderer.note("Rows attribute files to entries; totals count each normalized file once and omit missing files.")
+    renderer.note("Entry-only inventory: non-entry dependency chunks are not included.")
     renderer.note("Page load depends on the template and settings, so add only the entries that page includes.")
 
 
