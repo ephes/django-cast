@@ -109,8 +109,8 @@
 				}
 			});
 		};
-		const removeThreadedPreview = () => {
-			const previewLi = document.querySelector("li.comment-preview");
+		const removeThreadedPreview = (root) => {
+			const previewLi = root === null || root === void 0 ? void 0 : root.querySelector("li.comment-preview");
 			if (!previewLi) return false;
 			const parent = previewLi.parentElement;
 			if (parent && parent.children.length === 1) parent.remove();
@@ -175,7 +175,7 @@
 		};
 		const removePreview = (data) => {
 			var _previewArea$classLis;
-			if (data.use_threadedcomments) return removeThreadedPreview();
+			if (data.use_threadedcomments) return removeThreadedPreview(getCommentsDiv(data.object_id));
 			const commentsDiv = getCommentsDiv(data.object_id);
 			if (!commentsDiv) return false;
 			const previewArea = commentsDiv.querySelector(".comment-preview-area");
@@ -243,7 +243,12 @@
 					if (data.success) {
 						if (preview) commentPreview(data);
 						else {
-							resetForm(form);
+							const current = new FormData(form);
+							if (["comment", "parent"].every((field) => current.get(field) === formData.get(field))) resetForm(form);
+							else if (current.get("comment") === formData.get("comment")) {
+								const comment = form.elements.namedItem("comment");
+								if (comment instanceof HTMLTextAreaElement) comment.value = "";
+							}
 							const hadPreview = removePreview(data);
 							const newComment = addComment(data);
 							if (hadPreview && newComment) newComment.style.display = "";
@@ -279,6 +284,15 @@
 			const preview = ((submitter === null || submitter === void 0 || (_submitter$getAttribu = submitter.getAttribute) === null || _submitter$getAttribu === void 0 ? void 0 : _submitter$getAttribu.call(submitter, "name")) || (submitter === null || submitter === void 0 ? void 0 : submitter.name) || "") === "preview";
 			ajaxComment(form, { preview });
 		};
+		const formForControl = (control) => {
+			var _Array$from$find;
+			const containing = control.closest("form.js-comments-form");
+			if (containing instanceof HTMLFormElement) return containing;
+			const root = control.closest(".comments");
+			const objectId = (root === null || root === void 0 ? void 0 : root.getAttribute("data-object-id")) || (root === null || root === void 0 ? void 0 : root.id.replace(/^comments-/, ""));
+			if (!objectId) return null;
+			return (_Array$from$find = Array.from(document.querySelectorAll("form.js-comments-form")).find((form) => getObjectIdFromForm(form) === objectId)) !== null && _Array$from$find !== void 0 ? _Array$from$find : null;
+		};
 		const showThreadedReplyForm = (event) => {
 			const target = event.target;
 			if (!(target instanceof Element)) return;
@@ -289,9 +303,9 @@
 			const commentId = a.getAttribute("data-comment-id");
 			const commentWrapper = a.closest("li.comment-wrapper");
 			if (!commentWrapper || !commentId) return;
-			removeThreadedPreview();
-			const form = document.querySelector("form.js-comments-form");
-			if (!(form instanceof HTMLFormElement)) return;
+			const form = formForControl(a);
+			if (!form) return;
+			removeThreadedPreview(a.closest(".comments"));
 			commentWrapper.appendChild(form);
 			const parentField = form.querySelector("#id_parent") || form.elements["parent"];
 			if (parentField) parentField.value = commentId;
@@ -299,13 +313,15 @@
 		const cancelThreadedReplyForm = (event) => {
 			const target = event.target;
 			if (!(target instanceof Element)) return;
-			if (!target.closest(".comment-cancel-reply-link")) return;
+			const a = target.closest(".comment-cancel-reply-link");
+			if (!a) return;
 			event.preventDefault();
 			wrapForms();
-			const form = document.querySelector("form.js-comments-form");
-			if (!(form instanceof HTMLFormElement)) return;
+			const form = formForControl(a);
+			if (!form) return;
+			const root = form.closest(".comments") || getCommentsDiv(getObjectIdFromForm(form));
 			resetForm(form);
-			removeThreadedPreview();
+			removeThreadedPreview(root);
 		};
 		const getCsrfToken = () => {
 			const input = document.querySelector("form.js-comments-form input[name=\"csrfmiddlewaretoken\"]");
@@ -314,33 +330,65 @@
 			return m ? decodeURIComponent(m[1]) : "";
 		};
 		const postAction = function() {
-			var _ref2 = _asyncToGenerator(function* (url, fields) {
+			var _ref3 = _asyncToGenerator(function* (url, fields) {
 				const formData = new FormData();
 				Object.entries(fields).forEach(([k, v]) => formData.append(k, v));
 				formData.append("csrfmiddlewaretoken", getCsrfToken());
-				const response = yield fetch(url, {
-					method: "POST",
-					body: formData,
-					credentials: "same-origin",
-					headers: {
-						"X-Requested-With": "XMLHttpRequest",
-						"X-CSRFToken": getCsrfToken()
-					}
+				const controller = new AbortController();
+				let timer;
+				const deadline = new Promise((_, reject) => {
+					timer = setTimeout(() => {
+						controller.abort();
+						reject(/* @__PURE__ */ new Error("Comment action timed out."));
+					}, 15e3);
 				});
-				if (!response.ok) return null;
-				return yield response.json();
+				const request = function() {
+					var _ref2 = _asyncToGenerator(function* () {
+						const response = yield fetch(url, {
+							method: "POST",
+							body: formData,
+							signal: controller.signal,
+							credentials: "same-origin",
+							headers: {
+								"X-Requested-With": "XMLHttpRequest",
+								"X-CSRFToken": getCsrfToken()
+							}
+						});
+						if (!response.ok) return null;
+						const data = yield response.json();
+						return data && typeof data === "object" && data.success === true ? data : null;
+					});
+					return function request() {
+						return _ref2.apply(this, arguments);
+					};
+				}();
+				try {
+					return yield Promise.race([request(), deadline]);
+				} finally {
+					clearTimeout(timer);
+				}
 			});
 			return function postAction(_x3, _x4) {
-				return _ref2.apply(this, arguments);
+				return _ref3.apply(this, arguments);
 			};
 		}();
+		const actionStatus = (root, message) => {
+			let status = root.querySelector(".comment-action-status");
+			if (!status) {
+				status = document.createElement("p");
+				status.className = "comment-action-status";
+				status.setAttribute("role", "status");
+				root.appendChild(status);
+			}
+			status.textContent = message;
+		};
 		const removeCommentNode = (commentId) => {
 			const node = document.getElementById(`c${commentId}`);
 			if (!node) return;
 			(node.closest("li.comment-wrapper") || node).remove();
 		};
 		const onDeleteClick = function() {
-			var _ref3 = _asyncToGenerator(function* (event) {
+			var _ref4 = _asyncToGenerator(function* (event) {
 				var _event$target, _event$target$closest;
 				const a = (_event$target = event.target) === null || _event$target === void 0 || (_event$target$closest = _event$target.closest) === null || _event$target$closest === void 0 ? void 0 : _event$target$closest.call(_event$target, ".comment-delete-link");
 				if (!a) return;
@@ -348,26 +396,38 @@
 				const commentId = a.getAttribute("data-comment-id");
 				const url = a.getAttribute("data-delete-action");
 				if (!commentId || !url) return;
+				if (!(a instanceof HTMLElement) || a.dataset.actionBusy === "1") return;
 				if (!window.confirm("Delete this comment?")) return;
-				const data = yield postAction(url, { comment_id: commentId });
-				if (data === null || data === void 0 ? void 0 : data.success) removeCommentNode(commentId);
+				a.dataset.actionBusy = "1";
+				a.setAttribute("aria-disabled", "true");
+				const item = document.getElementById(`c${commentId}`);
+				try {
+					const data = yield postAction(url, { comment_id: commentId });
+					if (!(data === null || data === void 0 ? void 0 : data.success)) throw new Error("Delete failed.");
+					if ((item === null || item === void 0 ? void 0 : item.isConnected) && document.getElementById(`c${commentId}`) === item) removeCommentNode(commentId);
+				} catch (_unused) {
+					if (item === null || item === void 0 ? void 0 : item.isConnected) actionStatus(item, "Could not delete this comment. Try again.");
+				} finally {
+					a.dataset.actionBusy = "0";
+					a.removeAttribute("aria-disabled");
+				}
 			});
 			return function onDeleteClick(_x5) {
-				return _ref3.apply(this, arguments);
+				return _ref4.apply(this, arguments);
 			};
 		}();
 		const openInlineEditor = (a) => {
-			var _ref4, _item$querySelector$v, _item$querySelector;
+			var _ref5, _item$querySelector$v, _item$querySelector;
 			const commentId = a.getAttribute("data-comment-id");
 			const url = a.getAttribute("data-edit-action");
 			const item = document.getElementById(`c${commentId}`);
 			if (!commentId || !url || !item) return;
 			if (item.querySelector(".comment-edit-form")) return;
 			const textEl = item.querySelector(".comment-text");
-			const raw = (_ref4 = (_item$querySelector$v = (_item$querySelector = item.querySelector(".comment-raw")) === null || _item$querySelector === void 0 ? void 0 : _item$querySelector.value) !== null && _item$querySelector$v !== void 0 ? _item$querySelector$v : textEl === null || textEl === void 0 ? void 0 : textEl.textContent) !== null && _ref4 !== void 0 ? _ref4 : "";
+			const raw = (_ref5 = (_item$querySelector$v = (_item$querySelector = item.querySelector(".comment-raw")) === null || _item$querySelector === void 0 ? void 0 : _item$querySelector.value) !== null && _item$querySelector$v !== void 0 ? _item$querySelector$v : textEl === null || textEl === void 0 ? void 0 : textEl.textContent) !== null && _ref5 !== void 0 ? _ref5 : "";
 			const form = document.createElement("div");
 			form.className = "comment-edit-form";
-			form.innerHTML = "<textarea class=\"comment-edit-textarea\"></textarea><p class=\"comment-edit-note\">Editable from this browser until someone replies or your session expires.</p><button type=\"button\" class=\"comment-edit-save\">Save</button><button type=\"button\" class=\"comment-edit-cancel\">Cancel</button><span class=\"comment-edit-status\" hidden></span>";
+			form.innerHTML = "<textarea class=\"comment-edit-textarea\"></textarea><p class=\"comment-edit-note\">Editable from this browser until someone replies or your session expires.</p><button type=\"button\" class=\"comment-edit-save\">Save</button><button type=\"button\" class=\"comment-edit-cancel\">Cancel</button><span class=\"comment-edit-status\" role=\"status\" hidden></span>";
 			form.querySelector(".comment-edit-textarea").value = raw;
 			if (textEl) textEl.style.display = "none";
 			item.insertBefore(form, textEl ? textEl.nextSibling : null);
@@ -375,25 +435,59 @@
 				if (textEl) textEl.style.display = "";
 				form.remove();
 			});
-			form.querySelector(".comment-edit-save").addEventListener("click", _asyncToGenerator(function* () {
-				const value = form.querySelector(".comment-edit-textarea").value;
-				const data = yield postAction(url, {
-					comment_id: commentId,
-					comment: value
-				});
-				if (!(data === null || data === void 0 ? void 0 : data.success) || !data.html) {
-					const status = form.querySelector(".comment-edit-status");
-					status.hidden = false;
-					status.textContent = "Could not save your edit.";
-					return;
-				}
-				const replacement = document.createElement("div");
-				replacement.innerHTML = data.html.trim();
-				const fresh = replacement.firstElementChild;
-				if (fresh) item.replaceWith(fresh);
-				if (data.is_public === false) {
-					const moderated = document.getElementById(`c${commentId}`) || fresh;
-					moderated === null || moderated === void 0 || moderated.insertAdjacentHTML("beforeend", `<p class="comment-edit-status">Your edit is awaiting moderation.</p>`);
+			const save = form.querySelector(".comment-edit-save");
+			const textarea = form.querySelector(".comment-edit-textarea");
+			const status = form.querySelector(".comment-edit-status");
+			let busy = false;
+			let blocked = false;
+			save.addEventListener("click", _asyncToGenerator(function* () {
+				if (busy || blocked || !form.isConnected) return;
+				busy = true;
+				save.disabled = true;
+				const value = textarea.value;
+				try {
+					const data = yield postAction(url, {
+						comment_id: commentId,
+						comment: value
+					});
+					if (!form.isConnected || item.querySelector(".comment-edit-form") !== form) return;
+					if (!(data === null || data === void 0 ? void 0 : data.success) || typeof data.html !== "string") throw new Error("Save failed.");
+					const replacement = document.createElement("div");
+					replacement.innerHTML = data.html.trim();
+					const fresh = replacement.firstElementChild;
+					if (!fresh) throw new Error("Save failed.");
+					if (data.is_public === false) {
+						actionStatus(fresh, "Your edit is awaiting moderation.");
+						if (textarea.value !== value) {
+							blocked = true;
+							status.hidden = false;
+							status.textContent = "Your newer draft is kept here to copy. Further saves are unavailable while moderation is pending.";
+							fresh.appendChild(form);
+						}
+						item.replaceWith(fresh);
+						return;
+					}
+					if (textarea.value !== value) {
+						const freshText = fresh.querySelector(".comment-text");
+						if (textEl) {
+							if (freshText) textEl.replaceChildren(...Array.from(freshText.childNodes));
+							else textEl.textContent = value;
+						}
+						const raw = item.querySelector(".comment-raw");
+						if (raw) raw.value = value;
+						status.hidden = false;
+						status.textContent = "Saved. Your newer changes are not saved yet.";
+						return;
+					}
+					item.replaceWith(fresh);
+				} catch (_unused2) {
+					if (form.isConnected) {
+						status.hidden = false;
+						status.textContent = "Could not save your edit. Try again.";
+					}
+				} finally {
+					busy = false;
+					save.disabled = blocked;
 				}
 			}));
 		};

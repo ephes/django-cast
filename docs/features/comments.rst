@@ -628,3 +628,23 @@ encoder/decoder classes:
 
 This allows the trained model to survive database migrations and
 backup/restore cycles without any external file dependencies.
+
+Asynchronous draft and action recovery
+--------------------------------------
+
+A successful comment POST clears the form only if its text and reply target
+still match the submitted draft. Text typed or a reply chosen while the request
+is pending remains available. When only the reply target changes, acknowledged
+text is cleared while the new target is retained. Reply and Cancel use the clicked object's form
+and preview, so several comment objects can coexist on a page.
+
+Inline editors own one save at a time. Newer text typed during a save remains
+in the editor until acknowledged by its own save. If the accepted edit requires
+moderation, newer text stays available to copy, with further saves disabled and
+a moderation notice. Cancel closes the editor;
+a late response cannot replace a newer editor. A request already accepted by
+the server can still take effect after Cancel. Edit/Delete actions have a
+15-second whole-request deadline, including response parsing. Transport, parse
+and HTTP failures show an accessible retry message, retain the comment/draft,
+and release pending controls. Theme integrations keep the existing object-ID
+and comment control selectors; adopt the rebuilt shared comments bundle.

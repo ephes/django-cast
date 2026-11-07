@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Preserve newer comment drafts and reply targets while POST/save requests are
+  pending. Serialize inline saves, ignore cancelled editors' late responses,
+  and scope threaded Reply/Cancel by object. Edit/Delete now show accessible
+  retry feedback for transport/parse/HTTP errors and a 15-second request deadline.
+  Consumers must adopt the rebuilt comments bundle.
+
 - Make future runs of private-storage migration 0078 verify unique copies on the
   selected database and defer reference-checked source cleanup until commit.
   Retain sources with multiple aliases and document rollback/orphan recovery;
