@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+- Update Vitest, coverage and mocker peers to 4.1.12, fixing the development
+  mock-server advisories GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp. The full
+  npm lock audit now reports zero vulnerabilities (previously three moderate
+  affected package nodes); shipped player code is unaffected.
+- Audit the full JavaScript lock, including development packages, in an
+  independent push/PR/scheduled CI job with read-only contents permissions.
+
 - Resolve only uncached rich-text page links and retain localized relative and
   absolute URLs, including missing targets, in the context-local cache. Mixed
   batches reuse hits; language changes reset cached URLs and feeds stay absolute.

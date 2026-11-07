@@ -73,7 +73,17 @@ Navigate to the JavaScript directory and install dependencies:
 .. code-block:: bash
 
    $ cd javascript
-   $ npm install
+   $ npm ci
+
+Audit the full committed JavaScript lock, including development packages, with:
+
+.. code-block:: console
+
+   $ npm audit --package-lock-only --include=dev
+
+CI runs this independent audit on pushes, pull requests and the weekly schedule.
+Do not expose the Vite/Vitest development servers to untrusted clients: development
+tooling is included in the audit even though it is not shipped player code.
 
 Bootstrap5 Theme (Required for Example App)
 -------------------------------------------

@@ -18,9 +18,9 @@
     "@testing-library/jest-dom": "^6",
     "@types/jsdom": "^27.0.0",
     "@types/node": "^22.20.3",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "jsdom": "^27",
     "typescript": "^7.0.2",
-    "vitest": "^4"
+    "vitest": "^4.1.12"
   }
 }
