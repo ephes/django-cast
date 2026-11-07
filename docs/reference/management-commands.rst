@@ -218,6 +218,13 @@ Copy all media files from production storage to backup storage. By default
 only files not already present in the backup are copied; a file that exists
 under the same path in both storages is never read or compared.
 
+Every missing-object copy must be saved under exactly the requested key.
+A backend returning a generated name makes the copy fail; only that newly saved
+alternate is removed. An object created concurrently at the requested path is
+kept. Inventory paths use forward-slash separators on every platform, preserving
+literal characters within storage keys.
+Use storage backends that preserve requested names for backup and restore.
+
 .. code-block:: bash
 
     # Copy files that are missing in the backup
@@ -251,7 +258,12 @@ Options:
     ``FileSystemStorage`` without ``allow_overwrite``, or S3 storage with
     ``file_overwrite = False``), the previous backup copy is kept, the generated
     copy is removed, and the path is reported as an error. A staged copy is
-    removed again whether the refresh succeeds or fails.
+    removed again whether the refresh succeeds or fails. Cleanup attempts every
+    requested and returned staging name even if another deletion fails. Leftover
+    names and deletion failures are logged and reported on command stderr when publication has
+    already failed, preserving the original publication exception; cleanup failure
+    after successful publication is itself an error. Inspect the reported keys
+    and remove recoverable leftovers manually.
 
     The final overwrite itself is only as safe as the backup storage backend
     makes it. Object storage replaces an object atomically, so a failed
