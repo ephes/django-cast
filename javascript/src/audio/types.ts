@@ -17,6 +17,7 @@ export type Source = { type: string; src: string };
 
 export type PlayerPayload = {
   audioId: number;
+  permalink?: string; // optional HTTP(S) playing-post identity
   title: string;
   subtitle: string;
   duration: number | null; // seconds; null until media metadata loads
