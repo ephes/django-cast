@@ -8,6 +8,7 @@ from cast.blog_index import create_blog_filterset
 from cast.media_derivation import save_audio_with_derivations, save_video_with_derivations
 
 from ..models import Audio, Blog, Video
+from ..transcripts.parsing import TranscriptArtifactError, read_json_artifact
 from ..transcripts.podlove import (
     podlove_contributors_from_data,
     sanitize_podlove_data,
@@ -118,9 +119,9 @@ class AudioPodloveSerializer(serializers.HyperlinkedModelSerializer):
         if not transcript.podlove:
             return {}
         try:
-            with transcript.podlove.open("r") as file:
-                data = json.load(file)  # assumes the file content is JSON
-        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            with transcript.podlove.storage.open(transcript.podlove.name or "", "rb") as file:
+                data = read_json_artifact(file)
+        except (FileNotFoundError, OSError, json.JSONDecodeError, TranscriptArtifactError):
             return {}
         if not isinstance(data, dict):
             return {}

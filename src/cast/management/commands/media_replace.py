@@ -55,11 +55,14 @@ class Command(BaseCommand):
                 if not confirmed:
                     self.stdout.write(f"planned replace: {path}")
                     continue
-                staged_name = ""
+                staged_names: set[str] = set()
                 saved_name = ""
                 try:
                     with fs_storage.open(path, "rb") as in_f:
-                        staged_name = production.save(temporary_replacement_path(path), in_f)
+                        requested_stage = temporary_replacement_path(path)
+                        staged_names.add(requested_stage)
+                        staged_name = production.save(requested_stage, in_f)
+                        staged_names.add(staged_name)
                     if not production.exists(staged_name):
                         raise RuntimeError(f"staged replacement {staged_name} was not saved")
                     target_exists = production.exists(path)
@@ -84,7 +87,7 @@ class Command(BaseCommand):
                     errors += 1
                     self.stderr.write(f"error replacing {path}: {exc}")
                 finally:
-                    if staged_name:
+                    for staged_name in sorted(staged_names):
                         try:
                             if production.exists(staged_name):
                                 production.delete(staged_name)

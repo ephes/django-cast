@@ -40,7 +40,9 @@ from django.urls import reverse
 
 from . import appsettings
 from .transcripts.parsing import (
+    TranscriptArtifactError,
     clean_speaker_label,
+    read_json_artifact,
 )
 from .transcripts.podlove import (
     sanitize_podlove_data,
@@ -183,9 +185,9 @@ def _load_sanitized_segments(audio: Any, *, episode: Any) -> list[dict[str, Any]
     if not transcript.podlove:
         return []
     try:
-        with transcript.podlove.open("r") as file:
-            data = json.load(file)
-    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+        with transcript.podlove.storage.open(transcript.podlove.name, "rb") as file:
+            data = read_json_artifact(file)
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError, TranscriptArtifactError):
         return []
     if not isinstance(data, dict):
         return []

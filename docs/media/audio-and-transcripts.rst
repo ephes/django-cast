@@ -839,6 +839,16 @@ Concurrent additions from different transcripts preserve both variants. Normal
 model validation still applies, and a failed correction commit rolls back the
 glossary addition.
 
+Stored JSON sources and sidecars have a fixed 10 MiB byte ceiling on reads,
+including generated, imported and historical artifacts. Binary reads stop after
+at most the limit plus one byte, without trusting storage size metadata.
+Oversized model/player/API reads use the existing empty-data fallback; raw
+JSON endpoints return HTTP 400; editorial preflight
+refuses mutations and offers replacement while retaining the original bytes.
+Uploads keep their separately configured upload limit; a higher upload limit
+does not raise the stored-read ceiling. Split or reduce unusually large legacy
+JSON before replacing it.
+
 In editorial preflight, invalid UTF-8, a decoder recursion failure, or JSON deeper
 than 64 levels raises ``cast.transcripts.parsing.TranscriptArtifactError``.
 Transcript editor reads and review actions return HTTP 400 with replacement

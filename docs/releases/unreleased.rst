@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Cap stored transcript JSON reads at 10 MiB before decoding, retaining oversized
+  originals for replacement and refusing editorial mutations safely.
+- Clean partial requested staging keys after failed ``media_replace`` saves, as
+  well as returned staging names, without hiding the replacement error.
+
 - Compare structured permission-error responses in the v3 publication regression
   test, avoiding false revision-ID leak failures when an ID occurs in HTTP 403.
 

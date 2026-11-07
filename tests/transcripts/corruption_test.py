@@ -89,11 +89,12 @@ def test_mutations_preflight_other_corrupt_artifacts(audio, corrupt_json, operat
 @pytest.mark.django_db
 def test_json_decoder_recursion_failure_is_an_editor_error(admin_client, audio, mocker):
     transcript = make_transcript(audio, podlove=PODLOVE)
-    decode = mocker.patch("cast.transcripts.parsing.json.load", side_effect=RecursionError("synthetic decoder limit"))
+    decoder = mocker.patch("cast.transcripts.parsing.json")
+    decoder.loads.side_effect = RecursionError("synthetic decoder limit")
     response = admin_client.get(reverse("cast-transcript:edit", args=(transcript.pk,)))
     assert response.status_code == 400
     assert b"Invalid transcript JSON" in response.content
-    decode.assert_called_once()
+    decoder.loads.assert_called_once()
 
 
 @pytest.mark.django_db

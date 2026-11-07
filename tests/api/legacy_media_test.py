@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+from io import BytesIO
 
 import pytest
 from django.contrib.auth.models import Permission
@@ -566,7 +567,7 @@ class TestPodcastAudio:
         mock_file.read.return_value = json.dumps({"transcripts": [{"text": "Hello"}]})
 
         mock_podlove = mocker.MagicMock()
-        mock_podlove.open.return_value = mock_file
+        mock_podlove.storage.open.side_effect = lambda *args: BytesIO(mock_file.read.return_value.encode())
 
         transcript = mocker.MagicMock()
         transcript.podlove = mock_podlove
@@ -612,7 +613,7 @@ class TestPodcastAudio:
             {"transcripts": [{"speaker": "Alice", "voice": "Alice", "text": "Hello"}]}
         )
         mock_podlove = mocker.MagicMock()
-        mock_podlove.open.return_value = mock_file
+        mock_podlove.storage.open.side_effect = lambda *args: BytesIO(mock_file.read.return_value.encode())
         transcript = mocker.MagicMock()
         transcript.podlove = mock_podlove
         audio = mocker.MagicMock()
@@ -633,7 +634,7 @@ class TestPodcastAudio:
         assert serializer.get_contributors(audio) == []
 
         # Given a podlove file that is missing from storage
-        mock_podlove.open.side_effect = FileNotFoundError
+        mock_podlove.storage.open.side_effect = FileNotFoundError
         assert serializer.get_contributors(audio) == []
 
     def test_podlove_detail_endpoint_includes_contributors(self, api_client, episode):
