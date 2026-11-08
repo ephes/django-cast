@@ -1,6 +1,15 @@
 Unreleased
 ==========
 
+- Escape captured fields and diagnostics in comparison HTML. Fail browser page
+  checks on missing/non-2xx final responses and record final HTTP status/URL in
+  screenshot metadata and reports. Screenshot-all flags HTTP failures; redirects
+  use the final navigation response.
+
+- Close screenshot/browser resources on failures without hiding the primary
+  error. Validate discovered themes, reject filename collisions, contain output
+  paths and encode literal theme query values while retaining metadata labels.
+
 - Preserve entry attribution in bundle reports while counting shared output files
   once in labeled unique-file totals; test inventories and missing-file rows.
 
