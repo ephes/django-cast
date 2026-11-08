@@ -1052,3 +1052,122 @@ class TestDeleteEndpoint:
             **AJAX,
         )
         assert r.status_code == 404
+
+
+def test_simultaneous_first_author_attempts_are_counted(settings, rf, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, Lock
+
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 1
+    start = Barrier(2)
+    missed = Barrier(2)
+    lock = Lock()
+    values = {}
+    deadlines = []
+
+    def add(key, value, timeout):
+        with lock:
+            if key in values:
+                return False
+            values[key] = value
+            deadlines.append(timeout)
+            return True
+
+    def incr(key):
+        with lock:
+            absent = key not in values
+            if not absent:
+                values[key] += 1
+                return values[key]
+        # Force both legacy first misses to happen before either reset.
+        missed.wait(timeout=5)
+        raise ValueError("missing counter")
+
+    def set_value(key, value, timeout, **kwargs):
+        with lock:
+            values[key] = value
+            deadlines.append(timeout)
+
+    monkeypatch.setattr("django.core.cache.cache", SimpleNamespace(add=add, incr=incr, set=set_value))
+
+    def attempt():
+        start.wait(timeout=5)
+        return author_edits.rate_limited(rf.post("/", REMOTE_ADDR="192.0.2.1"), "edit")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: attempt(), range(2)))
+    assert sorted(results) == [False, True]
+    assert list(values.values()) == [2]
+    assert deadlines == [author_edits.appsettings.EDIT_RATE_WINDOW]
+    assert author_edits.rate_limited(rf.post("/", REMOTE_ADDR="192.0.2.1"), "edit")
+    assert list(values.values()) == [3]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("backend", ["db", "cached_db", "cache", "file"])
+@pytest.mark.parametrize("revocation", ["delete", "logout"])
+@pytest.mark.parametrize("new_login", [False, True])
+@pytest.mark.parametrize("action", ["edit", "delete"])
+def test_revoked_comment_session_cookie_cannot_reclaim_ownership(
+    client, post, settings, tmp_path, backend, revocation, new_login, action, comments_enabled
+):
+    from django.test import Client
+    from django.urls import reverse
+    from django_comments import get_model
+
+    from tests.factories import UserFactory
+
+    settings.CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 0
+    settings.SESSION_ENGINE = f"django.contrib.sessions.backends.{backend}"
+    settings.SESSION_FILE_PATH = str(tmp_path)
+    created = post_a_comment(client, post)
+    assert created.status_code == 200
+    comment = get_model().objects.get(content_type__model="post", object_pk=str(post.pk))
+    assert author_edits.owns_id(client.session, comment.pk)
+    stale_cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
+    before = (comment.comment, comment.is_public, comment.is_removed)
+    if revocation == "delete":
+        client.session.delete()
+    else:
+        client.logout()
+    replay = Client()
+    replay.cookies[settings.SESSION_COOKIE_NAME] = stale_cookie
+    if new_login:
+        replay.force_login(UserFactory())
+        assert replay.session.session_key != stale_cookie
+    response = replay.post(
+        reverse(f"comments-{action}-comment-ajax"),
+        {"comment_id": str(comment.pk), "comment": "Stolen replacement"},
+        **AJAX,
+    )
+    assert response.status_code == 403
+    comment.refresh_from_db()
+    assert (comment.comment, comment.is_public, comment.is_removed) == before
+
+
+@pytest.mark.parametrize("add_wins", [False, True])
+def test_rate_counter_disappearing_or_nonstoring_cache_does_not_raise(settings, rf, monkeypatch, mocker, add_wins):
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 1
+    backend = SimpleNamespace(
+        incr=mocker.Mock(side_effect=ValueError("expired")), add=mocker.Mock(return_value=add_wins)
+    )
+    monkeypatch.setattr("django.core.cache.cache", backend)
+    assert author_edits.rate_limited(rf.post("/"), "edit") is False
+    assert backend.incr.call_count == (1 if add_wins else 2)
+    backend.add.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_author_edit_with_dummy_cache_still_completes(client, comment, feature_on, settings):
+    from django.urls import reverse
+
+    settings.CACHES = {"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}}
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 1
+    seed_ownership(client, comment)
+    response = client.post(
+        reverse("comments-edit-comment-ajax"), {"comment_id": str(comment.pk), "comment": "Edited"}, **AJAX
+    )
+    assert response.status_code == 200
+    comment.refresh_from_db()
+    assert comment.comment == "Edited"

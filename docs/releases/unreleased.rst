@@ -340,3 +340,9 @@ Unreleased
 - Bound glossary proposal targets to 512 characters and 16 parts, with a safe
   diagnostic for skipped terms. Read live heading-migration bodies in ordered
   batches of 100 rows on the migration connection, preserving revision behavior.
+
+
+- Count concurrent first author edit/delete attempts using atomic cache
+  initialization and increments without renewing a competing counter's expiry.
+- Cover stale comment-ownership cookies after server-side session revocation or
+  logout, including a subsequent login, across all supported server-side backends.
