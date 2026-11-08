@@ -2,7 +2,7 @@ import hashlib
 from collections.abc import Iterable
 from typing import Any
 
-from django.db import models
+from django.db import connections, models, router, transaction
 from django.db.models.signals import m2m_changed, post_delete, pre_delete
 from django.dispatch import receiver
 from model_utils.models import TimeStampedModel
@@ -51,17 +51,37 @@ class Gallery(TimeStampedModel):
 
 
 def get_or_create_gallery(image_ids: Iterable[int]) -> Gallery | None:
-    filtered_image_ids = list(
-        Image.objects.filter(id__in=image_ids).values_list("id", flat=True)  # FIXME filter permissions
-    )
-    if not filtered_image_ids:
-        return None
-    signature = Gallery.build_signature(filtered_image_ids)
-    gallery = Gallery.objects.filter(signature=signature).order_by("pk").first()
-    if gallery is None:
-        gallery = Gallery.objects.create(signature=signature)
-        gallery.images.add(*filtered_image_ids)
-    return gallery
+    return get_or_create_galleries([image_ids])[0]
+
+
+def get_or_create_galleries(image_sets: Iterable[Iterable[int]]) -> list[Gallery | None]:
+    """Resolve a body's galleries with one globally ordered set of image locks."""
+    requested_sets = [set(image_ids) for image_ids in image_sets]
+    all_ids = {image_id for image_ids in requested_sets for image_id in image_ids}
+    if not all_ids:
+        return [None for _ in requested_sets]
+    using = router.db_for_write(Gallery)
+    with transaction.atomic(using=using):
+        existing_ids = set(
+            Image.objects.using(using)
+            .select_for_update(no_key=connections[using].features.has_select_for_no_key_update)
+            .filter(id__in=all_ids)
+            .order_by("pk")
+            .values_list("id", flat=True)
+        )
+        galleries: list[Gallery | None] = []
+        for requested_ids in requested_sets:
+            effective_ids = requested_ids & existing_ids
+            if not effective_ids:
+                galleries.append(None)
+                continue
+            signature = Gallery.build_signature(effective_ids)
+            gallery = Gallery.objects.using(using).filter(signature=signature).order_by("pk").first()
+            if gallery is None:
+                gallery = Gallery.objects.using(using).create(signature=signature)
+                gallery.images.add(*sorted(effective_ids))
+            galleries.append(gallery)
+        return galleries
 
 
 @receiver(m2m_changed, sender=Gallery.images.through)
