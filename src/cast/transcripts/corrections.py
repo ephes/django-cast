@@ -31,7 +31,6 @@ import json
 import logging
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
-from functools import partial
 from typing import Any, cast
 
 from django.core.exceptions import ValidationError
@@ -45,7 +44,7 @@ from wagtail.rich_text import RichText
 from cast.file_replacement import StagedFileReplacementGroup
 from cast.media_derivation import save_transcript_with_derivations
 
-from ..models import Contributor, Episode, Transcript, TranscriptGlossaryTerm, get_podcast_transcript_language
+from ..models import Contributor, Episode, Podcast, Transcript, TranscriptGlossaryTerm, get_podcast_transcript_language
 from . import dote, podlove, services, webvtt
 from .glossary import (
     ContributorGlossary,
@@ -78,7 +77,10 @@ STATUS_APPLIED = "applied"
 STATUS_NEEDS_EPISODE = "needs_episode"
 STATUS_NO_SEGMENTS = "no_segments"
 
-_save_derived_artifacts = partial(save_transcript_with_derivations, preserve_source_fingerprint=True)
+
+def _save_derived_artifacts(transcript: Transcript, **kwargs: Any) -> None:
+    kwargs["update_fields"] = [*kwargs["update_fields"], "source_fingerprint"]
+    save_transcript_with_derivations(transcript, preserve_source_fingerprint=True, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -135,10 +137,14 @@ class _State:
 
 def episodes_using_audio(transcript: Transcript) -> list[Episode]:
     """Episodes the review may offer as glossary context for this transcript."""
-    return list(Episode.objects.filter(podcast_audio_id=transcript.audio_id).order_by("pk"))
+    return list(
+        Episode.objects.using(transcript._state.db).filter(podcast_audio_id=transcript.audio_id).order_by("pk")
+    )
 
 
 def _uses_audio(episode: Episode | None, transcript: Transcript) -> bool:
+    if episode is not None and episode._state.db != transcript._state.db:
+        raise ValidationError(_("The episode belongs to a different database."))
     return episode is not None and episode.podcast_audio_id == transcript.audio_id
 
 
@@ -146,7 +152,9 @@ def _stored_episode(transcript: Transcript, data: dict[str, Any]) -> Episode | N
     episode_id = data.get("episode_id")
     if not isinstance(episode_id, int):
         return None
-    return Episode.objects.filter(pk=episode_id, podcast_audio_id=transcript.audio_id).first()
+    return (
+        Episode.objects.using(transcript._state.db).filter(pk=episode_id, podcast_audio_id=transcript.audio_id).first()
+    )
 
 
 def corrections_episode_state(transcript: Transcript) -> CorrectionsEpisodeState:
@@ -212,6 +220,15 @@ def _show_note_sources(value: Any) -> Iterator[str]:
             yield from _show_note_sources(item)
 
 
+def _glossary_revision(episode: Episode) -> Episode:
+    # Wagtail's revision deserializer otherwise resolves foreign keys on default.
+    if episode.has_unpublished_changes and episode.latest_revision_id:
+        revision = Episode.from_serializable_data(episode.latest_revision.content, check_fks=False)
+        revision._state.db = episode._state.db
+        return cast(Episode, revision)
+    return episode
+
+
 def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
     """The episode's glossary and a fingerprint of its input.
 
@@ -221,19 +238,22 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
     title. Like the speaker review, the latest revision is used, so draft show notes
     count.
     """
-    revision = cast(Episode, episode.get_latest_revision_as_object())
+    revision = _glossary_revision(episode)
     contributors: list[ContributorGlossary] = []
     seen: set[int] = set()
     for assignment in revision.contributor_assignments.all():
         if assignment.contributor_id in seen:
             continue
         seen.add(assignment.contributor_id)
-        contributor = assignment.contributor
+        contributor = Contributor.objects.using(episode._state.db).get(pk=assignment.contributor_id)
         contributors.append(ContributorGlossary(contributor.display_name, contributor.transcript_variants))
-    podcast = episode.get_parent().specific
+    podcast = Podcast.objects.using(episode._state.db).ancestor_of(episode).order_by("-depth").first()
+    assert podcast is not None
     show_terms = [
         ShowTerm(term.term, term.variants)
-        for term in TranscriptGlossaryTerm.objects.filter(podcast_id=podcast.pk).order_by("pk")
+        for term in TranscriptGlossaryTerm.objects.using(episode._state.db)
+        .filter(podcast_id=podcast.pk)
+        .order_by("pk")
     ]
     terms = episode_terms("\n".join(_show_note_sources(revision.body)), revision.title)
     language = get_podcast_transcript_language(podcast)
@@ -277,7 +297,7 @@ def corrections_are_current(transcript: Transcript) -> bool:
 def _fresh_data(transcript: Transcript, texts: Iterable[tuple[int, str]]) -> dict[str, Any]:
     return {
         "version": SIDECAR_VERSION,
-        "source_fingerprint": transcript.source_fingerprint,
+        "source_fingerprint": transcript.mapping_fingerprint(),
         "episode_id": None,
         "glossary_fingerprint": "",
         "segments": [{"start_ms": start_ms, "raw_text": text, "replacements": []} for start_ms, text in texts],
@@ -293,14 +313,10 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     A sidecar written for other artifacts (new Voxhelm import or upload) is
     replaced; its decisions are not carried over.
     """
+    _uses_audio(episode, transcript)
     services.validate_editor_artifacts(transcript)
-    if not transcript.source_fingerprint:
-        # Rows stored without ``save()``: record the current files as received, so the
-        # corrections written below do not count as new artifacts on the next run.
-        transcript.mark_artifacts_received()
-        transcript.save(update_fields=["source_fingerprint"])
     data = transcript.corrections_data
-    if _is_current(data, transcript.source_fingerprint):
+    if _is_current(data, transcript.mapping_fingerprint()):
         previously = {segment["start_ms"] for segment in data["segments"] if segment["replacements"]}
         return _State(data, _stored_episode(transcript, data), previously)
     texts = podlove.get_texts(transcript._load_transcript_json("podlove"))
@@ -447,6 +463,8 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
     """Store the sidecar and the corrected public files in one staged replacement."""
     services.validate_editor_artifacts(transcript)
     expected = services.artifact_state(transcript)
+    if not transcript.source_fingerprint:
+        transcript.mark_artifacts_received()
     changed_fields: list[str] = []
     changed = 0
     replacements = StagedFileReplacementGroup()
@@ -472,7 +490,10 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
             services.save_editor_artifacts(transcript, replacements, expected, save=_save_derived_artifacts)
     except Exception:
         replacements.rollback()
+        transcript.source_fingerprint = expected["source_fingerprint"]
         raise
+    if not changed_fields:
+        transcript.source_fingerprint = expected["source_fingerprint"]
     return changed
 
 
@@ -666,7 +687,8 @@ def add_original_to_glossary(transcript: Transcript, original: str, to: str) -> 
     if isinstance(state, CorrectionsResult) or state.episode is None:
         raise GlossaryAddError(_("Choose the episode for this transcript's glossary first."))
     episode = state.episode
-    podcast = episode.get_parent().specific
+    podcast = Podcast.objects.using(episode._state.db).ancestor_of(episode).order_by("-depth").first()
+    assert podcast is not None
     using = router.db_for_write(TranscriptGlossaryTerm, instance=podcast)
     with transaction.atomic(using=using):
         # Lock the concrete parent row before any glossary reads. UPDATE also
@@ -707,10 +729,10 @@ def _validated(clean: Callable[[], None]) -> None:
 
 
 def _contributor_for(episode: Episode, to: str) -> Contributor | None:
-    revision = cast(Episode, episode.get_latest_revision_as_object())
+    revision = _glossary_revision(episode)
     key = normalize_phrase(to)
     for assignment in revision.contributor_assignments.all():
-        contributor = assignment.contributor
+        contributor = Contributor.objects.using(episode._state.db).get(pk=assignment.contributor_id)
         targets = [
             contributor.display_name,
             *contributor.display_name.split(),
@@ -722,5 +744,5 @@ def _contributor_for(episode: Episode, to: str) -> Contributor | None:
             ),
         ]
         if key in {normalize_phrase(target) for target in targets}:
-            return Contributor.objects.get(pk=contributor.pk)
+            return Contributor.objects.using(episode._state.db).get(pk=contributor.pk)
     return None

@@ -11,6 +11,7 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
+from wagtail.models import Site
 
 from ..transcripts.glossary import is_common_word, normalize_phrase, parse_term_variants
 from .voxhelm_settings import VoxhelmSettings
@@ -29,9 +30,19 @@ def get_podcast_transcript_language(podcast: Podcast) -> str:
     derives from ``LANGUAGE_CODE``. The Voxhelm settings resolution is repeated
     here because model modules must not import ``cast.voxhelm``.
     """
-    site = podcast.get_site()
+    # Resolve the enclosing site on the owning database without Wagtail's global URL cache.
+    paths = [podcast.path[:end] for end in range(podcast.steplen, len(podcast.path) + 1, podcast.steplen)]
+    site = (
+        Site.objects.using(podcast._state.db)
+        .filter(root_page__path__in=paths)
+        .order_by("-root_page__depth", "-is_default_site", "pk")
+        .first()
+    )
+    language = (
+        VoxhelmSettings.objects.using(podcast._state.db).filter(site=site).values_list("language", flat=True).first()
+    )
     candidates = (
-        VoxhelmSettings.for_site(site).language if site is not None else "",
+        language or "",
         getattr(settings, "CAST_VOXHELM_LANGUAGE", None) or "",
         os.getenv("CAST_VOXHELM_LANGUAGE", ""),
     )
@@ -102,7 +113,9 @@ class TranscriptGlossaryTerm(TimeStampedModel):
         if not self.term or self.podcast_id is None:
             return
         term_key = normalize_phrase(self.term)
-        others = TranscriptGlossaryTerm.objects.filter(podcast_id=self.podcast_id).exclude(pk=self.pk)
+        others = (
+            TranscriptGlossaryTerm.objects.using(self._state.db).filter(podcast_id=self.podcast_id).exclude(pk=self.pk)
+        )
         other_terms: dict[str, str] = {}
         other_variants: dict[str, str] = {}
         for other in others.only("term", "variants"):

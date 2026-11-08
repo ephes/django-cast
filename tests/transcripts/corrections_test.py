@@ -1200,3 +1200,114 @@ def test_glossary_append_reloads_a_stale_contributor(transcript, jon, monkeypatc
     jon.refresh_from_db()
     assert injected
     assert {"Concurrent Synthetic", "Second Synthetic"} <= set(jon.transcript_variants.splitlines())
+
+
+@pytest.mark.django_db
+def test_legacy_dry_run_has_no_database_or_storage_writes(transcript, django_assert_num_queries, mocker):
+    Transcript.objects.filter(pk=transcript.pk).update(source_fingerprint="")
+    transcript.refresh_from_db()
+    before = file_bytes(transcript)
+    raw_fingerprint = transcript.transcript_artifact_fingerprint()
+    save = mocker.spy(transcript.corrections.storage, "save")
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as queries:
+        assert refresh_transcript_corrections(transcript, dry_run=True).changed == 2
+    assert not [q for q in queries if q["sql"].split()[0] in {"UPDATE", "INSERT", "DELETE"}]
+    save.assert_not_called()
+    assert file_bytes(transcript) == before
+    assert transcript.source_fingerprint == ""
+    refresh_transcript_corrections(transcript)
+    transcript.refresh_from_db()
+    assert transcript.source_fingerprint == raw_fingerprint == transcript.corrections_data["source_fingerprint"]
+    assert refresh_transcript_corrections(transcript).changed == 0
+
+
+@pytest.mark.django_db(databases=["default", "migration_other"])
+def test_correction_context_stays_on_owning_database(transcript, glossary_episode, jon, mocker, tmp_path):
+    from django.db import connections
+    from django.test.utils import CaptureQueriesContext
+
+    from cast.models import Episode
+
+    # The upstream search task has no database parameter; isolate its unrelated indexing.
+    mocker.patch("modelsearch.signal_handlers.insert_or_update_object_task")
+    mocker.patch("wagtail.signal_handlers.update_reference_index_task")
+
+    # Copy synthetic test data through Django fixtures to produce exact ID collisions.
+    fixture = tmp_path / "synthetic-context.json"
+    from io import StringIO
+
+    serialized = StringIO()
+    call_command("dumpdata", stdout=serialized)
+    fixture.write_text(serialized.getvalue())
+    call_command("flush", database="migration_other", interactive=False, inhibit_post_migrate=True, verbosity=0)
+    call_command("loaddata", str(fixture), database="migration_other", verbosity=0)
+    alias = "migration_other"
+    TranscriptGlossaryTerm.objects.using(alias).update(term="Othercorn")
+    Contributor.objects.using(alias).filter(pk=jon.pk).update(
+        display_name="Other Gould", transcript_variants="John => Other"
+    )
+    other = Transcript.objects.using(alias).get(pk=transcript.pk)
+    for field in ("podlove", "dote", "vtt"):
+        getattr(other, field).save(f"other-{field}", ContentFile(other._read_file_bytes(field)), save=False)
+    other.save(using=alias)
+    original_bytes = file_bytes(transcript)
+    other_episode = Episode.objects.using(alias).get(pk=glossary_episode.pk)
+    from wagtail.models import Revision
+
+    draft = other_episode.serializable_data()
+    draft["title"] = "SyntheticDraftTerm"
+    revision = Revision.objects.using(alias).create(
+        content_type_id=other_episode.content_type_id,
+        base_content_type_id=other_episode.content_type_id,
+        object_id=str(other_episode.pk),
+        content=draft,
+    )
+    Episode.objects.using(alias).filter(pk=other_episode.pk).update(
+        latest_revision_id=revision.pk, has_unpublished_changes=True
+    )
+    other_episode.refresh_from_db()
+    with CaptureQueriesContext(connections["default"]) as queries:
+        assert episodes_using_audio(other)[0]._state.db == alias
+        refresh_transcript_corrections(other)
+        glossary, _ = corrections.effective_glossary(other_episode)
+        assert "SyntheticDraftTerm" in {target.text for target in glossary.proposal_targets}
+        assert corrections._contributor_for(other_episode, "Other")._state.db == alias
+        add_original_to_glossary(other, "Otherr", "Other")
+        add_original_to_glossary(other, "Kubernetees", "Kubernetes")
+        assert corrections.corrections_episode_state(other).episode._state.db == alias
+    assert not queries.captured_queries
+    assert file_bytes(transcript) == original_bytes
+    assert Contributor.objects.get(pk=jon.pk).transcript_variants == "John => Jon"
+    assert "Otherr" in Contributor.objects.using(alias).get(pk=jon.pk).transcript_variants
+    assert "Othercorn" in other._load_transcript_json("podlove")["transcripts"][0]["text"]
+    for operation in (refresh_transcript_corrections, set_corrections_episode):
+        with pytest.raises(ValidationError, match="database"):
+            operation(other, episode=glossary_episode) if operation is refresh_transcript_corrections else operation(
+                other, glossary_episode
+            )
+
+
+@pytest.mark.django_db
+def test_failed_legacy_commit_restores_missing_identity(transcript, mocker):
+    Transcript.objects.filter(pk=transcript.pk).update(source_fingerprint="")
+    transcript.refresh_from_db()
+    before = file_bytes(transcript)
+    save = mocker.patch.object(corrections.services, "save_editor_artifacts", side_effect=OSError("synthetic"))
+    with pytest.raises(OSError):
+        refresh_transcript_corrections(transcript)
+    mocker.stop(save)
+    assert transcript.source_fingerprint == ""
+    assert file_bytes(transcript) == before
+    refresh_transcript_corrections(transcript)
+    assert transcript.source_fingerprint
+
+
+@pytest.mark.django_db
+def test_legacy_noop_write_does_not_change_in_memory_identity(transcript):
+    Transcript.objects.filter(pk=transcript.pk).update(source_fingerprint="")
+    transcript.refresh_from_db()
+    assert corrections._write(transcript, transcript.corrections_data, {}) == 0
+    assert transcript.source_fingerprint == ""
