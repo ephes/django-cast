@@ -166,3 +166,10 @@ Architecture Notes
 ==================
 
 For the end-to-end request/data flow (blog queryset, ``PostFilterset``, legacy serializer path, and modal API path), see :ref:`search_facet_architecture`.
+
+Publication ordering
+--------------------
+
+The blog index orders newest visible dates first by default. Equal dates use
+primary keys in descending order, including when ``o=visible_date`` requests
+ascending dates. This keeps pagination deterministic in both repository modes.

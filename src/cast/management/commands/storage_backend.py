@@ -152,10 +152,9 @@ def sync_media_files(
     Copy every path that is missing in the target.
 
     With ``refresh_changed`` paths that exist on both sides are compared by
-    content and the target copy is overwritten when it differs. In that mode a
-    path that cannot be checked, copied, compared or refreshed is reported and
-    counted as an error, and the remaining paths are still processed. Without
-    it the first failure propagates, as it always did.
+    content and the target copy is overwritten when it differs. In every mode,
+    a path that cannot be checked, copied, compared or refreshed is reported and
+    counted as an error, and the remaining paths are still processed.
     """
     result = SyncResult()
     for num, path in enumerate(storage_walk_paths(source_storage)):
@@ -166,23 +165,22 @@ def sync_media_files(
             else:
                 logger.warning(message)
             continue
-        if refresh_changed:
-            try:
-                if not target_storage.exists(path):
-                    copy_missing_file(source_storage, target_storage, path)
-                    result.copied += 1
-                elif content_differs(source_storage, target_storage, path):
-                    refresh_existing_file(source_storage, target_storage, path, report_error=report_error)
-                    result.refreshed += 1
-                else:
-                    result.unchanged += 1
-            except Exception as exc:
-                result.errors += 1
-                if report_error is not None:
-                    report_error(f"error backing up {path}: {exc}")
-        elif not target_storage.exists(path):
-            copy_missing_file(source_storage, target_storage, path)
-            result.copied += 1
+        try:
+            if not target_storage.exists(path):
+                copy_missing_file(source_storage, target_storage, path)
+                result.copied += 1
+            elif refresh_changed and content_differs(source_storage, target_storage, path):
+                refresh_existing_file(source_storage, target_storage, path, report_error=report_error)
+                result.refreshed += 1
+            else:
+                result.unchanged += 1
+        except Exception as exc:
+            result.errors += 1
+            message = f"error syncing {path}: {exc}"
+            if report_error is not None:
+                report_error(message)
+            else:
+                logger.warning(message)
         if num % 100 == 0:  # pragma: no cover
             print(".", end="", flush=True)
     return result

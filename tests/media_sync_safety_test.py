@@ -28,13 +28,12 @@ def test_missing_copy_requires_exact_name_and_keeps_concurrent_writer(mocker, mo
     mocker.patch(f"cast.management.commands.{command}.get_production_and_backup_storage", return_value=storages)
     output, errors = StringIO(), StringIO()
     options = {"refresh_changed": True} if mode == "refresh" else {}
-    with pytest.raises(CommandError if mode == "refresh" else RuntimeError):
+    with pytest.raises(CommandError):
         call_command(command, stdout=output, stderr=errors, **options)
     assert target._files == {"media.jpg": b"concurrent writer", "unrelated.jpg": b"unrelated"}
     assert target.deleted == (["media_other.jpg"] if saved_alternate else [])
-    if mode == "refresh":
-        assert "copied=0 refreshed=0 unchanged=0 errors=1" in output.getvalue()
-        assert "media_other.jpg" in errors.getvalue()
+    assert "copied=0 refreshed=0 unchanged=0 errors=1" in output.getvalue()
+    assert "media_other.jpg" in errors.getvalue()
 
 
 @pytest.mark.parametrize("both_fail", [False, True])

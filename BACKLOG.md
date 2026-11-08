@@ -31,6 +31,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - Implemented scout media/import safeguards and validation evidence are recorded in
   [backlog/2026-11-07-scout-media-imports.md](backlog/2026-11-07-scout-media-imports.md).
 
+- Scout round 83 publication ordering, media command outcomes, and Ajax comment
+  observer delivery are implemented; see
+  [the validation record](backlog/2026-11-08-publication-outcomes.md).
+
 ## Later
 
 - [ ] Transcript glossary, slice 2: LLM proposals via Voxhelm (on hold)

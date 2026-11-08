@@ -236,7 +236,7 @@ def test_media_backup_default_keeps_changed_backup_copy(mocker):
     call_command("media_backup", stdout=output)
 
     assert backup._files == {"video.mp4": b"old!", "added.mp4": b"added"}
-    assert "refreshed=" not in output.getvalue()
+    assert "copied=1 refreshed=0 unchanged=1 errors=0" in output.getvalue()
 
 
 def test_media_backup_refresh_changed_replaces_equal_length_changed_copy(mocker):
@@ -302,7 +302,7 @@ def test_media_backup_refresh_keeps_backup_copy_when_production_read_fails(mocke
     assert err.value.returncode == 1
     # the previous backup bytes survive, and the later path was still refreshed
     assert backup._files == {"bad.mp4": b"old", "good.mp4": b"new good"}
-    assert "error backing up bad.mp4: connection reset" in error_output.getvalue()
+    assert "error syncing bad.mp4: connection reset" in error_output.getvalue()
     assert "copied=0 refreshed=1 unchanged=0 errors=1" in output.getvalue()
 
 
@@ -324,7 +324,7 @@ def test_media_backup_refresh_removes_partial_staged_copy_when_staging_fails(moc
 
     # no partial .tmp object is left for media_restore to copy into production
     assert backup._files == {"video.mp4": b"old!"}
-    assert "error backing up video.mp4: connection reset" in error_output.getvalue()
+    assert "error syncing video.mp4: connection reset" in error_output.getvalue()
 
 
 def test_media_backup_refresh_counts_failed_existence_check_and_continues(mocker):
@@ -346,18 +346,18 @@ def test_media_backup_refresh_counts_failed_existence_check_and_continues(mocker
         call_command("media_backup", refresh_changed=True, stdout=output, stderr=error_output)
 
     assert backup._files == {"bad.mp4": b"old", "good.mp4": b"new good", "added.mp4": b"added"}
-    assert "error backing up bad.mp4: service unavailable" in error_output.getvalue()
+    assert "error syncing bad.mp4: service unavailable" in error_output.getvalue()
     assert "copied=1 refreshed=1 unchanged=0 errors=1" in output.getvalue()
 
 
-def test_media_backup_default_mode_still_stops_at_the_first_failure(mocker):
+def test_media_backup_default_mode_counts_each_existence_failure(mocker):
     production = StubOverwriteStorage({"bad.mp4": b"bad", "later.mp4": b"later"})
     backup = StubOverwriteStorage()
     patch_backup_storages(mocker, production, backup)
     mocker.patch.object(backup, "exists", side_effect=RuntimeError("service unavailable"))
 
-    with pytest.raises(RuntimeError, match="service unavailable"):
-        call_command("media_backup", stdout=StringIO())
+    with pytest.raises(CommandError, match="2 path"):
+        call_command("media_backup", stdout=StringIO(), stderr=StringIO())
 
     assert backup._files == {}
 
@@ -373,7 +373,7 @@ def test_media_backup_refresh_keeps_backup_copy_when_staged_copy_is_missing(mock
         call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
 
     assert backup._files == {"video.mp4": b"old!"}
-    assert "error backing up video.mp4: staged copy missing-stage.tmp was not saved" in error_output.getvalue()
+    assert "error syncing video.mp4: staged copy missing-stage.tmp was not saved" in error_output.getvalue()
 
 
 @pytest.mark.parametrize("generated_copy_exists", [True, False])
@@ -412,7 +412,7 @@ def test_media_backup_refresh_reports_staged_copy_that_cannot_be_removed(mocker)
         call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
 
     assert backup._files["video.mp4"] == b"new!"
-    assert "error backing up video.mp4: could not remove staged copy video.mp4.django-cast-refresh-" in (
+    assert "error syncing video.mp4: could not remove staged copy video.mp4.django-cast-refresh-" in (
         error_output.getvalue()
     )
 
@@ -1628,3 +1628,28 @@ def test_media_replace_removes_partial_requested_stage(mocker):
     assert "partial staging failure" in errors.getvalue()
     assert production._files == {"foo.jpg": b"original"}
     assert production.deleted == [stage]
+
+
+@pytest.mark.parametrize(
+    "command,refresh", [("media_backup", False), ("media_backup", True), ("media_restore", False)]
+)
+def test_media_sync_partial_failure_reports_and_continues(mocker, command, refresh):
+    source = StubOverwriteStorage({"bad.mp4": b"bad", "good.mp4": b"good"})
+    target = StubOverwriteStorage()
+    storages_pair = (target, source) if command == "media_restore" else (source, target)
+    mocker.patch(f"cast.management.commands.{command}.get_production_and_backup_storage", return_value=storages_pair)
+    original_open = source.open
+
+    def open_file(path, mode):
+        if path == "bad.mp4":
+            raise OSError("synthetic copy failure")
+        return original_open(path, mode)
+
+    mocker.patch.object(source, "open", side_effect=open_file)
+    output, errors = StringIO(), StringIO()
+    options = {"refresh_changed": refresh} if command == "media_backup" else {}
+    with pytest.raises(CommandError, match="1 path"):
+        call_command(command, stdout=output, stderr=errors, **options)
+    assert target._files == {"good.mp4": b"good"}
+    assert "copied=1 refreshed=0 unchanged=0 errors=1" in output.getvalue()
+    assert "bad.mp4" in errors.getvalue()

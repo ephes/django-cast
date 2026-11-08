@@ -28,7 +28,7 @@ def unfiltered_published_posts(blog: Blog) -> models.QuerySet[Post]:
 
     if blog.pk is None:
         return Post.objects.none()
-    return Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
+    return Post.objects.live().public().descendant_of(blog).order_by("-visible_date", "-pk")
 
 
 def create_blog_filterset(blog: Blog, get_params: QueryDict) -> PostFilterset:
