@@ -80,11 +80,13 @@ only in Wagtail admin.
 The web process and transcript worker must both receive the Voxhelm
 configuration used for job submission and artifact downloads. For
 deployment-managed secrets, set ``CAST_VOXHELM_API_BASE`` and
-``CAST_VOXHELM_API_KEY`` in the shared process environment; the Wagtail
-``Voxhelm settings`` API base and token fields must both stay blank in that
-setup. Any site credential selects the entire site pair, including when it is
-incomplete. To switch an existing site to deployment credentials, clear both
-fields together in Wagtail.
+``CAST_VOXHELM_API_KEY`` in the shared process environment. The API base URL is
+always deployment configuration (it is no longer a Wagtail site setting); a
+token stored in Wagtail ``Voxhelm settings`` overrides only the key. To switch
+a site to the deployment key, tick "Remove stored API token" in Wagtail.
+When upgrading past the migration that removed the site-level API base
+(``cast.0088``), set ``CAST_VOXHELM_API_BASE`` in deploy config first: the
+migration logs a warning for every stored site base that differs from it.
 If ``CAST_VOXHELM_DIARIZATION_ENABLED`` is enabled, make sure the Voxhelm
 backend has diarization support configured. Full-episode diarization can be
 slow and CPU-heavy, so keep it on the queued transcript worker path instead of

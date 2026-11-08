@@ -287,25 +287,33 @@ Transcription
 CAST_VOXHELM_API_BASE
 =====================
 
-Base URL for the Voxhelm service used by ``generate_transcripts``. The value
-may point at either the service root (for example
-``https://voxhelm.example.com``) or the ``/v1`` API prefix. This can be set as
-either a Django setting or an environment variable, or per site through the
-Wagtail admin ``Settings -> Voxhelm settings`` screen.
+Base URL for the Voxhelm service used by ``generate_transcripts`` and the
+Wagtail admin transcript workflow. The value may point at either the service
+root (for example ``https://voxhelm.example.com``) or the ``/v1`` API prefix.
 
-The base URL and API key must come from the same configuration level. A
-nonempty site credential selects the site pair; otherwise a nonempty Django
-credential selects the Django pair; otherwise the environment pair is used.
-Incomplete pairs disable generation rather than inheriting a credential.
-Changing the base URL in Wagtail requires re-entering the token. Clearing both
-fields together removes the site credentials and enables deployment fallback.
+This is **deployment configuration only**: set it as a Django setting or an
+environment variable. It is not editable in Wagtail admin (a site-level base
+URL let holders of the delegable settings permission aim server-side requests
+at arbitrary internal hosts). The value must be an absolute ``http://`` or
+``https://`` URL with a host and must not contain user info, a query string or
+a fragment; ``python manage.py check`` reports ``cast.E012`` for an invalid
+value and the Voxhelm client refuses to use it.
+
+Between the Django-settings and environment levels the base URL and
+``CAST_VOXHELM_API_KEY`` still resolve as a pair: a nonempty Django credential
+selects the Django pair, otherwise the environment pair is used, and an
+incomplete pair disables generation rather than inheriting a credential. A
+token stored in ``Settings -> Voxhelm settings`` overrides only the key.
 
 CAST_VOXHELM_API_KEY
 ====================
 
 Bearer token used for Voxhelm job submission, polling, and artifact download.
 This can be set as either a Django setting or an environment variable, or per
-site through the Wagtail admin ``Settings -> Voxhelm settings`` screen.
+site through the Wagtail admin ``Settings -> Voxhelm settings`` screen. A site
+token overrides the deployment key and is sent to the deployment
+``CAST_VOXHELM_API_BASE``; tick "Remove stored API token" there to fall back
+to the deployment key.
 
 CAST_VOXHELM_MODEL
 ==================
@@ -444,8 +452,9 @@ Wagtail Admin Configuration
 ===========================
 
 django-cast also exposes a site-scoped ``Voxhelm settings`` model in Wagtail
-admin for the API base URL, API token, optional model/language preferences,
-and optional diarization override. These values take precedence over Django
+admin for the API token, optional model/language preferences, and optional
+diarization override (the API base URL is deployment-only, see
+``CAST_VOXHELM_API_BASE``). These values take precedence over Django
 settings and environment variables for Wagtail-admin-triggered transcript
 generation on that site; the diarization and known-speaker fields can also be
 left at "Not set here" to inherit the Django/environment value.

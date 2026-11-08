@@ -36,8 +36,9 @@ Configuration:
   ``CAST_VOXHELM_POLL_TIMEOUT``, ``CAST_VOXHELM_REQUEST_TIMEOUT``
 
 For the management command, configure the API base and key together at one
-level: Django settings or environment variables. The Wagtail admin transcript workflow can also use
-site-scoped Wagtail settings for editor-triggered jobs.
+level: Django settings or environment variables. The API base URL is always
+deployment configuration; the Wagtail admin transcript workflow can
+additionally use a site-scoped API token for editor-triggered jobs.
 ``CAST_VOXHELM_DIARIZATION_ENABLED`` defaults to ``False``; enable it only when
 the Voxhelm backend has diarization configured.
 Full-episode diarization can be slow, so prefer the queued Wagtail transcript

@@ -252,8 +252,9 @@ transcript generation directly from:
 * an audio edit view
 
 The "Generate transcript" action only appears when Voxhelm is configured for
-the request's site — the API base URL and API key must resolve through site
-settings, Django settings, or environment variables. Transcript generation
+the request's site — the API base URL must resolve from Django settings or
+environment variables, and the API key from site settings, Django settings, or
+environment variables. Transcript generation
 status stays visible on both edit surfaces even when the configuration is
 later removed.
 
@@ -263,32 +264,35 @@ queued/running/succeeded/failed status on the same Episode and Audio edit
 surfaces while the background worker polls Voxhelm, downloads the artifacts,
 and updates the ``Transcript`` model.
 
-Site admins can manage the Voxhelm API base URL, API token, and optional
-model/language defaults in ``Settings -> Voxhelm settings``.
+Site admins can manage the Voxhelm API token and optional model/language
+defaults in ``Settings -> Voxhelm settings``. The API base URL is not a site
+setting: it comes only from ``CAST_VOXHELM_API_BASE`` in deployment
+configuration.
 
 When an existing API token is stored in Wagtail, the token field is intentionally
-blank when you reopen the settings form. If the help text says that a token is
-configured, keep the API base URL set and unchanged and submit the form with
-the token field blank to keep the stored token, or enter a new token to replace it. Changing the API base URL requires entering
-the token again. To use deployment credentials instead, clear both fields
-together; clearing the base and leaving the token blank removes the stored pair.
+blank when you reopen the settings form. Submit the form with the token field
+blank to keep the stored token, enter a new token to replace it, or tick
+"Remove stored API token" to delete it and use the deployment key.
 
-Production sites can also keep Voxhelm credentials in deployment-managed Django
+Production sites can also keep the Voxhelm token in deployment-managed Django
 settings or environment variables instead of the Wagtail database. django-cast
-looks up site-level Wagtail values first, then Django settings, then environment
+looks up a site-level token first, then Django settings, then environment
+variables; the base URL is looked up in Django settings, then environment
 variables. Use ``CAST_VOXHELM_API_BASE`` and ``CAST_VOXHELM_API_KEY`` for the
 required service URL and bearer token; optional defaults use
 ``CAST_VOXHELM_MODEL``, ``CAST_VOXHELM_LANGUAGE``, and
 ``CAST_VOXHELM_DIARIZATION_ENABLED``. If the token should be managed as a
-deployment secret, leave both Wagtail credential fields blank and provide both
+deployment secret, leave the Wagtail token blank and provide both
 ``CAST_VOXHELM_API_BASE`` and ``CAST_VOXHELM_API_KEY`` to the web process and
 transcript worker at the same level (Django settings or environment).
 
-The API base and token resolve as a pair from one level: Wagtail site settings,
-then Django settings, then environment variables. Any nonempty credential at a
-level selects that level; an incomplete pair is not configured and never
-inherits the missing credential. Existing installations that mix levels must
-move both credentials to one level before upgrading.
+Between Django settings and environment variables the API base and token resolve
+as a pair: any nonempty credential at a level selects that level, and an
+incomplete pair is not configured and never inherits the missing credential. A
+stored site token replaces only the key of that pair. Installations that kept
+the base URL in Wagtail must set ``CAST_VOXHELM_API_BASE`` in deploy config
+before upgrading; the removal migration warns about every stored site base that
+differs from the deployment value.
 
 The site-level diarization and known-speaker choices have three states. "Not
 set here" leaves the stored value empty so ``CAST_VOXHELM_DIARIZATION_ENABLED``

@@ -1,6 +1,17 @@
 Unreleased
 ==========
 
+- Security: the Voxhelm API base URL is now deployment configuration only
+  (``CAST_VOXHELM_API_BASE`` as a Django setting or environment variable). The
+  admin-editable site setting field is removed by migration ``cast.0088``,
+  which logs a warning for each stored base that differs from the deployment
+  value. The base must be an absolute ``http(s)`` URL without user info, query
+  or fragment (system check ``cast.E012``; the client refuses invalid values).
+  A site API token still overrides the deployment key; a new "Remove stored
+  API token" option replaces clearing both credential fields. **Upgrade
+  action:** set ``CAST_VOXHELM_API_BASE`` in deploy config before migrating if a
+  site used the Wagtail field.
+
 - Stop the player payload's permalink from adding two Site queries to each
   cached player-card render. The permalink now comes only from URLs already
   resolved for the request (repository ``page_url``, the page-link cache or

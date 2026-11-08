@@ -33,7 +33,6 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     VoxhelmSettings.objects.update_or_create(
         site=site,
         defaults={
-            "api_base": "https://voxhelm.example",
             "api_token": "very-secret-token",
             "model": "auto",
             "language": "",
@@ -54,7 +53,6 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
         response = admin_client.post(
             edit_url,
             {
-                "api_base": "https://voxhelm.example",
                 "api_token": "",
                 "model": "whisper-1",
                 "language": "de",
@@ -65,7 +63,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
 
     assert response.status_code == 200
     setting = VoxhelmSettings.for_site(site)
-    assert setting.api_base == "https://voxhelm.example"
+    assert not hasattr(setting, "api_base")
     assert setting.api_token == "very-secret-token"
     assert setting.model == "whisper-1"
     assert setting.language == "de"
@@ -75,7 +73,6 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
         response = admin_client.post(
             edit_url,
             {
-                "api_base": "https://voxhelm.internal",
                 "api_token": "replacement-token",
                 "model": "whisper-1",
                 "language": "de",
@@ -98,7 +95,6 @@ def test_voxhelm_settings_new_instance_allows_empty_token(admin_client, site):
         response = admin_client.post(
             edit_url,
             {
-                "api_base": "",
                 "api_token": "",
                 "model": "",
                 "language": "",
@@ -149,7 +145,8 @@ def test_episode_edit_page_hides_generate_transcript_action_when_unconfigured(
 def test_episode_edit_page_shows_generate_transcript_action_with_site_config(
     admin_client, episode, settings, monkeypatch
 ):
-    settings.CAST_VOXHELM_API_BASE = ""
+    # Deployment base URL plus a site-level token.
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
     settings.CAST_VOXHELM_API_KEY = ""
     monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
     monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
@@ -157,7 +154,7 @@ def test_episode_edit_page_shows_generate_transcript_action_with_site_config(
     assert site is not None
     VoxhelmSettings.objects.update_or_create(
         site=site,
-        defaults={"api_base": "https://voxhelm.example", "api_token": "secret"},
+        defaults={"api_token": "secret"},
     )
 
     response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
@@ -247,13 +244,14 @@ def test_audio_edit_page_hides_generate_transcript_action_when_unconfigured(
 def test_audio_edit_page_shows_generate_transcript_action_with_site_config(
     admin_client, audio, site, settings, monkeypatch
 ):
-    settings.CAST_VOXHELM_API_BASE = ""
+    # Deployment base URL plus a site-level token.
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
     settings.CAST_VOXHELM_API_KEY = ""
     monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
     monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
     VoxhelmSettings.objects.update_or_create(
         site=site,
-        defaults={"api_base": "https://voxhelm.example", "api_token": "secret"},
+        defaults={"api_token": "secret"},
     )
 
     response = admin_client.get(reverse("castaudio:edit", args=(audio.pk,)))
@@ -515,12 +513,12 @@ def test_generate_episode_transcript_reports_missing_site_token(admin_client, ep
     assert audio is not None
     site = episode.get_site()
     assert site is not None
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
     settings.CAST_VOXHELM_API_KEY = ""
     monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
     VoxhelmSettings.objects.update_or_create(
         site=site,
         defaults={
-            "api_base": "https://voxhelm.example",
             "api_token": "",
         },
     )
@@ -731,43 +729,51 @@ def test_user_can_generate_transcript_for_episode_returns_false_without_page_per
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("stored_token", ["stored-key", ""])
-def test_voxhelm_base_change_requires_fresh_token(admin_client, site, stored_token):
-    setting, _ = VoxhelmSettings.objects.update_or_create(
-        site=site, defaults={"api_base": "https://voxhelm.example", "api_token": stored_token}
-    )
+def test_voxhelm_settings_form_has_no_api_base_field(admin_client, site):
+    setting, _ = VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": "stored-key"})
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    content = admin_client.get(edit_url).content.decode()
+    assert 'name="api_base"' not in content
+    assert "CAST_VOXHELM_API_BASE" in content
     with TestCase.captureOnCommitCallbacks(execute=True):
         response = admin_client.post(
-            reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
-            {"api_base": "https://other.example", "api_token": "", "model": "", "language": ""},
-        )
-    assert response.status_code == 200
-    assert "Enter the API token when changing the API base URL" in response.content.decode()
-    setting.refresh_from_db()
-    assert setting.api_base == "https://voxhelm.example"
-    assert setting.api_token == stored_token
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    "stored_base,stored_token",
-    [("https://voxhelm.example", "stored-key"), ("https://voxhelm.example", ""), ("", "stored-key")],
-)
-def test_voxhelm_site_credentials_can_be_cleared(admin_client, site, stored_base, stored_token):
-    setting, _ = VoxhelmSettings.objects.update_or_create(
-        site=site, defaults={"api_base": stored_base, "api_token": stored_token}
-    )
-    with TestCase.captureOnCommitCallbacks(execute=True):
-        response = admin_client.post(
-            reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
-            {"api_base": "", "api_token": "", "model": "", "language": ""},
+            edit_url,
+            {"api_base": "http://127.0.0.1:9999/admin#", "api_token": "", "model": "", "language": ""},
             follow=True,
         )
     assert response.status_code == 200
-    assert "Enter the API token when changing" not in response.content.decode()
     setting.refresh_from_db()
-    assert setting.api_base == ""
+    assert setting.api_token == "stored-key"
+    assert not hasattr(setting, "api_base")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("stored_token", ["stored-key", ""])
+def test_voxhelm_site_token_can_be_cleared(admin_client, site, stored_token):
+    setting, _ = VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": stored_token})
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
+            {"api_token": "", "clear_api_token": "on", "model": "", "language": ""},
+            follow=True,
+        )
+    assert response.status_code == 200
+    setting.refresh_from_db()
     assert setting.api_token == ""
+
+
+@pytest.mark.django_db
+def test_voxhelm_site_token_clear_conflicts_with_new_token(admin_client, site):
+    setting, _ = VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": "stored-key"})
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(
+            reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
+            {"api_token": "new-key", "clear_api_token": "on", "model": "", "language": ""},
+        )
+    assert response.status_code == 200
+    assert "Either enter a new token or remove the stored one, not both." in response.content.decode()
+    setting.refresh_from_db()
+    assert setting.api_token == "stored-key"
 
 
 @pytest.mark.django_db
@@ -808,8 +814,8 @@ def test_voxhelm_settings_form_subclass_without_boolean_fields():
     form_class = type(
         "TokenOnlyVoxhelmSettingsForm",
         (VoxhelmSettingsForm,),
-        {"Meta": type("Meta", (), {"model": VoxhelmSettings, "fields": ["api_base", "api_token"]})},
+        {"Meta": type("Meta", (), {"model": VoxhelmSettings, "fields": ["api_token"]})},
     )
     form = form_class(instance=VoxhelmSettings())
 
-    assert set(form.fields) == {"api_base", "api_token"}
+    assert set(form.fields) == {"api_token", "clear_api_token"}

@@ -136,7 +136,6 @@ def test_site_settings_override_django_settings(site, settings):
     VoxhelmSettings.objects.update_or_create(
         site=site,
         defaults={
-            "api_base": "https://site.example",
             "api_token": "site-secret",
             "model": "whisper-1",
             "language": "de",
@@ -146,7 +145,8 @@ def test_site_settings_override_django_settings(site, settings):
 
     client = VoxhelmClient.from_settings(request_or_site=site)
 
-    assert client.api_base == "https://site.example/v1"
+    # The base URL is deployment-only; the site token still overrides the key.
+    assert client.api_base == "https://settings.example/v1"
     assert client.api_key == "site-secret"
     assert client.model == "whisper-1"
     assert client.language == "de"
@@ -160,7 +160,6 @@ def test_site_settings_can_be_loaded_from_request(site, settings):
     VoxhelmSettings.objects.update_or_create(
         site=site,
         defaults={
-            "api_base": "https://site.example",
             "api_token": "site-secret",
             "model": "whisper-1",
             "language": "de",
@@ -171,7 +170,8 @@ def test_site_settings_can_be_loaded_from_request(site, settings):
 
     client = VoxhelmClient.from_settings(request_or_site=request)
 
-    assert client.api_base == "https://site.example/v1"
+    # The base URL is deployment-only; the site token still overrides the key.
+    assert client.api_base == "https://settings.example/v1"
     assert client.api_key == "site-secret"
     assert client.diarization_enabled is True
 
@@ -859,18 +859,93 @@ def test_client_wait_for_job_polls_until_terminal_state(mocker):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("site_base,site_key", [("https://site.example", ""), ("", "site-key")])
-def test_incomplete_site_credentials_never_inherit(site, settings, monkeypatch, site_base, site_key):
+def test_site_token_without_deployment_base_is_not_configured(site, settings, monkeypatch):
     from cast.voxhelm.settings import voxhelm_configured
 
-    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
-    settings.CAST_VOXHELM_API_KEY = "settings-key"
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = ""
+    monkeypatch.delenv("CAST_VOXHELM_API_BASE", raising=False)
+    monkeypatch.delenv("CAST_VOXHELM_API_KEY", raising=False)
+    VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": "site-key"})
+    assert not voxhelm_configured(request_or_site=site)
+    with pytest.raises(ImproperlyConfigured, match="CAST_VOXHELM_API_BASE"):
+        VoxhelmClient.from_settings(request_or_site=site)
+
+
+@pytest.mark.django_db
+def test_site_token_combines_with_environment_base(site, settings, monkeypatch):
+    settings.CAST_VOXHELM_API_BASE = ""
+    settings.CAST_VOXHELM_API_KEY = ""
     monkeypatch.setenv("CAST_VOXHELM_API_BASE", "https://env.example")
     monkeypatch.setenv("CAST_VOXHELM_API_KEY", "env-key")
-    VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_base": site_base, "api_token": site_key})
-    assert not voxhelm_configured(request_or_site=site)
-    with pytest.raises(ImproperlyConfigured):
-        VoxhelmClient.from_settings(request_or_site=site)
+    VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": "site-key"})
+    client = VoxhelmClient.from_settings(request_or_site=site)
+    assert (client.api_base, client.api_key) == ("https://env.example/v1", "site-key")
+
+
+@pytest.mark.django_db
+def test_site_without_token_uses_deployment_pair(site, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://settings.example"
+    settings.CAST_VOXHELM_API_KEY = "settings-key"
+    VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": ""})
+    client = VoxhelmClient.from_settings(request_or_site=site)
+    assert (client.api_base, client.api_key) == ("https://settings.example/v1", "settings-key")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://user@voxhelm.example",
+        "https://user:pass@voxhelm.example",
+        "https://voxhelm.example/admin#",
+        "https://voxhelm.example/#/x",
+        "https://voxhelm.example/admin?",
+        "https://voxhelm.example/?a=b",
+        "ftp://voxhelm.example",
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "//voxhelm.example",
+        "voxhelm.example",
+        "https://",
+        "https://[::1",
+        "https://voxhelm.example:99999",
+        "https://voxhelm.example/a b",
+        "https://voxhelm.example\\@evil.example",
+        "   ",
+        None,
+        42,
+    ],
+)
+def test_validate_api_base_rejects_unsafe_values(value):
+    from cast.voxhelm.settings import validate_api_base
+
+    with pytest.raises(ImproperlyConfigured, match="CAST_VOXHELM_API_BASE"):
+        validate_api_base(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["https://voxhelm.example", "http://127.0.0.1:8000", " https://voxhelm.example/v1/ ", "https://[::1]:8443/x"],
+)
+def test_validate_api_base_accepts_http_urls(value):
+    from cast.voxhelm.settings import validate_api_base
+
+    assert validate_api_base(value) == value.strip()
+
+
+@pytest.mark.parametrize("source", ["django", "env"])
+def test_from_settings_rejects_unsafe_deployment_base(settings, monkeypatch, source):
+    unsafe = "http://127.0.0.1:9999/admin#"
+    if source == "django":
+        settings.CAST_VOXHELM_API_BASE = unsafe
+        settings.CAST_VOXHELM_API_KEY = "key"
+    else:
+        settings.CAST_VOXHELM_API_BASE = ""
+        settings.CAST_VOXHELM_API_KEY = ""
+        monkeypatch.setenv("CAST_VOXHELM_API_BASE", unsafe)
+        monkeypatch.setenv("CAST_VOXHELM_API_KEY", "key")
+    with pytest.raises(ImproperlyConfigured, match="fragment"):
+        VoxhelmClient.from_settings()
 
 
 @pytest.mark.parametrize("base,key", [("https://settings.example", ""), ("", "settings-key")])
