@@ -64,7 +64,10 @@ class PreviewMedia:
                 # create_rendition uses get_or_create but does not publish to
                 # Wagtail's shared cache, whose keys omit the database alias.
                 image = images[image_id]
-                image.create_rendition(image.clean_filter_for_svg(Filter(spec)))
+                # Wagtail 7.0 predates clean_filter_for_svg; its get_rendition
+                # passes the filter through unchanged, so do the same there.
+                clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
+                image.create_rendition(clean_filter(Filter(spec)))
         renditions: RenditionsForPosts = {}
         for rendition in Rendition.objects.using(using).filter(image_id__in=images):
             renditions.setdefault(rendition.image_id, []).append(rendition)

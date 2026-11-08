@@ -1231,8 +1231,11 @@ def test_correction_context_stays_on_owning_database(transcript, glossary_episod
 
     from cast.models import Episode
 
+    from wagtail.search.signal_handlers import post_save_signal_handler
+
     # The upstream search task has no database parameter; isolate its unrelated indexing.
-    mocker.patch("modelsearch.signal_handlers.insert_or_update_object_task")
+    # Wagtail 7.0 defines the handler itself; later versions re-export modelsearch's.
+    mocker.patch(f"{post_save_signal_handler.__module__}.insert_or_update_object_task")
     mocker.patch("wagtail.signal_handlers.update_reference_index_task")
 
     # Copy synthetic test data through Django fixtures to produce exact ID collisions.
