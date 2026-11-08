@@ -1228,10 +1228,9 @@ def test_legacy_dry_run_has_no_database_or_storage_writes(transcript, django_ass
 def test_correction_context_stays_on_owning_database(transcript, glossary_episode, jon, mocker, tmp_path):
     from django.db import connections
     from django.test.utils import CaptureQueriesContext
+    from wagtail.search.signal_handlers import post_save_signal_handler
 
     from cast.models import Episode
-
-    from wagtail.search.signal_handlers import post_save_signal_handler
 
     # The upstream search task has no database parameter; isolate its unrelated indexing.
     # Wagtail 7.0 defines the handler itself; later versions re-export modelsearch's.
