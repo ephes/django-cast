@@ -78,11 +78,9 @@ def upload_lock(user: Any, *, seconds: int | None = None) -> Iterator[None]:
     timeout = int(appsettings.CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS if seconds is None else seconds)
     if not cache.add(key, owner, timeout=timeout):
         raise MediaUploadInProgress
-    try:
-        yield
-    finally:
-        if cache.get(key) == owner:
-            cache.delete(key)
+    # Django's portable cache API has no atomic compare-and-delete operation.
+    # Let the lease expire: get()+delete() could delete a successor's lease.
+    yield
 
 
 def _delete_field_file(field: Any) -> None:
@@ -92,9 +90,17 @@ def _delete_field_file(field: Any) -> None:
 
 def cleanup_new_media_object(obj: Any, field_names: tuple[str, ...]) -> bool:
     """Remove files and a row created by an unsuccessful ingest."""
-    try:
-        for field_name in field_names:
+    failed = False
+    for field_name in field_names:
+        try:
             _delete_field_file(getattr(obj, field_name))
+        except Exception:
+            logger.exception("Media ingest cleanup failed for %s.%s", obj._meta.label, field_name)
+            failed = True
+    # Keep the row as a recovery reference if any owned file could not be removed.
+    if failed:
+        return False
+    try:
         if getattr(obj, "pk", None) is not None:
             obj.delete()
     except Exception:

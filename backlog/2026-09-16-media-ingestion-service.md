@@ -331,3 +331,9 @@ Every slice keeps `just check` green; 5 and 7 can be reordered freely. Slices 1-
 - critical, accepted (round 1): `_delete_file` suppresses every storage error (`file_replacement.py:170-172`), so a
   rollback built on it could never raise `MediaIngestCleanupFailed`. Rollback now uses a strict delete, post-commit
   deletion stays best-effort, and slice 3 covers the raising path with a failing-storage stub.
+
+## Round 80 ownership follow-up (implemented)
+
+Upload leases now expire naturally because the portable Django cache API cannot
+atomically compare and delete a token. Every owned field gets a cleanup attempt;
+failed file deletion retains the row for recovery and reports incomplete cleanup.

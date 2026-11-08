@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Keep upload leases until expiry to avoid deleting a successor's lock through a
+  non-atomic cache release. Repeat audio/video uploads, including retries, now
+  receive HTTP 429 until the configured lease expires (default two hours).
+  Failed ingest cleanup now attempts every owned file
+  and retains the row when any file deletion fails.
+
 - Escape captured fields and diagnostics in comparison HTML. Fail browser page
   checks on missing/non-2xx final responses and record final HTTP status/URL in
   screenshot metadata and reports. Screenshot-all flags HTTP failures; redirects
