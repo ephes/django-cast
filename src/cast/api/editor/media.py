@@ -22,6 +22,7 @@ from wagtail.models import Collection
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ... import appsettings
+from ...file_replacement import FileReplacementConflict
 from ...forms import AudioForm, get_video_form
 from ...media_ingest import (
     AUDIO_FILE_FIELDS,
@@ -359,7 +360,9 @@ def _submitted_audio_files(request: Request) -> list[str]:
     return submitted_files
 
 
-def _audio_ingest_error_response(exc: MediaIngestError, audio: Audio) -> Response:
+def _audio_ingest_error_response(exc: MediaIngestError | FileReplacementConflict, audio: Audio) -> Response:
+    if isinstance(exc, FileReplacementConflict):
+        return _flat_error("media_changed", str(exc), http_status=409)
     if isinstance(exc, MediaIngestCleanupFailed):
         return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
     if isinstance(exc, MediaProbeTimeout):
@@ -421,7 +424,7 @@ class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
             raise EditorValidationError(_form_errors(form))
         try:
             audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS))
-        except MediaIngestError as exc:
+        except (MediaIngestError, FileReplacementConflict) as exc:
             return _audio_ingest_error_response(exc, audio)
         if not audio_permission_policy.user_has_permission_for_instance(request.user, "choose", audio):
             if not _cleanup_media_object(audio, AUDIO_FILE_FIELDS):
@@ -510,7 +513,7 @@ class EditorAudioDetailView(EditorAPIView):
             raise EditorValidationError(_form_errors(form))
         try:
             audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS))
-        except MediaIngestError as exc:
+        except (MediaIngestError, FileReplacementConflict) as exc:
             return _audio_ingest_error_response(exc, audio)
         return Response(serialize_audio(audio, user=request.user))
 

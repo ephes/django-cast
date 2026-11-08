@@ -23,6 +23,7 @@ from wagtail.admin.models import popular_tags_for_model
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
+from ..file_replacement import FileReplacementConflict
 from ..forms import NonEmptySearchForm
 from ..media_ingest import (
     IngestPolicy,
@@ -103,7 +104,7 @@ class MediaAdminViews:
                     return obj, form, False
                 obj = ingest_upload(form, policy=config.ingest_policy())
                 return obj, form, True
-        except (MediaUploadInProgress, MediaProbeTimeout, MediaProbeFailed) as exc:
+        except (MediaUploadInProgress, MediaProbeTimeout, MediaProbeFailed, FileReplacementConflict) as exc:
             if form is None:
                 if obj is None:
                     obj = config.create_instance(request.user)
@@ -114,6 +115,8 @@ class MediaAdminViews:
                 form.is_valid()
             if isinstance(exc, MediaUploadInProgress):
                 message = config.upload_in_progress_message
+            elif isinstance(exc, FileReplacementConflict):
+                message = _("Media changed while editing; reload before replacing files.")
             elif isinstance(exc, MediaProbeTimeout):
                 message = config.probe_timeout_message
             else:

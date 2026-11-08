@@ -337,3 +337,7 @@ Every slice keeps `just check` green; 5 and 7 can be reordered freely. Slices 1-
 Upload leases now expire naturally because the portable Django cache API cannot
 atomically compare and delete a token. Every owned field gets a cleanup attempt;
 failed file deletion retains the row for recovery and reports incomplete cleanup.
+
+Staged groups now defer the saved marker to commit and expose an explicit scope
+for callers owning an outer transaction. Replacement row publication acquires a
+write lock before its snapshot and rejects stale timestamp/file generations.
