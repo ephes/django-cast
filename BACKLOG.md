@@ -37,6 +37,12 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
+- [ ] Decide whether to remove the generic `File` model and its Django admin
+  - Status: no code outside the model, admin, migrations and `media_stale` uses it. Uploads are now limited to
+    `CAST_FILE_EXTENSIONS` (security review finding F7), but the model remains an otherwise unused upload surface.
+  - Done when: production row counts are confirmed (expected 0 on all consumers) and either the model, admin and
+    `cast_files/` handling are removed with a migration, or the model is kept with a documented use case.
+
 - [ ] Transcript glossary, slice 2: LLM proposals via Voxhelm (on hold)
   - Spec: [backlog/2026-10-15-transcript-glossary.md](backlog/2026-10-15-transcript-glossary.md)
   - Slice 1 is implemented and verified on Django Chat staging (2026-10-16): contributor variants, show glossary

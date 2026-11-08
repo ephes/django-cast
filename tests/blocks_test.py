@@ -684,3 +684,74 @@ def test_gallery_block_get_prep_value_drops_empty_slots():
 
     # Wagtail normalizes a missing list value to an empty list.
     assert block.get_prep_value(None) == []
+
+
+def test_code_block_renders_unlisted_languages_as_plain_text(mocker):
+    from cast.blocks import render_code_block_html
+
+    lexer = mocker.spy(__import__("cast.blocks", fromlist=["get_lexer_by_name"]), "get_lexer_by_name")
+    html = render_code_block_html("rbcon", "1 + 1")
+    assert html == '<div class="highlight"><pre><span></span>1 + 1\n</pre></div>\n'
+    assert [call.args[0] for call in lexer.call_args_list] == ["text"]
+    assert render_code_block_html(None, None) == '<div class="highlight"><pre><span></span>\n</pre></div>\n'
+
+
+def test_code_block_language_allowlist_is_configurable(settings):
+    from cast.blocks import code_block_language_allowed, render_code_block_html
+
+    assert code_block_language_allowed(" Python ")
+    assert not code_block_language_allowed("elixir")
+    assert not code_block_language_allowed(42)
+    settings.CAST_CODE_BLOCK_LANGUAGES = ["elixir", 7]
+    assert code_block_language_allowed("elixir")
+    assert not code_block_language_allowed("python")
+    assert "<span" in render_code_block_html("elixir", "defmodule X do end").split("</span>", 1)[1]
+
+
+def test_code_block_oversized_stored_source_is_escaped_without_lexing(settings, mocker):
+    from cast.blocks import render_code_block_html
+
+    settings.CAST_CODE_BLOCK_MAX_SOURCE_LENGTH = 10
+    highlight = mocker.patch("cast.blocks.highlight")
+    html = render_code_block_html("python", "<script>x</script>")
+    assert html == '<div class="highlight"><pre><span></span>&lt;script&gt;x&lt;/script&gt;\n</pre></div>\n'
+    highlight.assert_not_called()
+
+
+def test_code_block_highlighting_is_cached(mocker):
+    from django.core.cache import cache
+
+    from cast.blocks import render_code_block_html
+
+    cache.clear()
+    highlight = mocker.patch("cast.blocks.highlight", return_value="<div>cached</div>")
+    assert render_code_block_html("python", "x = 1") == "<div>cached</div>"
+    assert render_code_block_html("PYTHON", "x = 1") == "<div>cached</div>"
+    assert highlight.call_count == 1
+    assert render_code_block_html("python", "x = 2") == "<div>cached</div>"
+    assert highlight.call_count == 2
+
+
+def test_code_block_clean_rejects_oversized_source_and_prerenders(settings, mocker):
+    from wagtail.blocks import StructBlockValidationError
+
+    from cast.blocks import CodeBlock
+
+    settings.CAST_CODE_BLOCK_MAX_SOURCE_LENGTH = 5
+    block = CodeBlock()
+    with pytest.raises(StructBlockValidationError) as excinfo:
+        block.clean(block.to_python({"language": "python", "source": "123456"}))
+    assert "limited to 5 characters" in str(excinfo.value.block_errors["source"])
+
+    prerender = mocker.patch("cast.blocks.render_code_block_html")
+    cleaned = block.clean(block.to_python({"language": "python", "source": "x=1"}))
+    assert cleaned["source"] == "x=1"
+    prerender.assert_called_once_with("python", "x=1")
+
+
+def test_code_block_allowlisted_alias_unknown_to_pygments_falls_back_to_text(settings):
+    from cast.blocks import render_code_block_html
+
+    settings.CAST_CODE_BLOCK_LANGUAGES = ["not-a-pygments-lexer"]
+    html = render_code_block_html("not-a-pygments-lexer", "plain")
+    assert html == '<div class="highlight"><pre><span></span>plain\n</pre></div>\n'

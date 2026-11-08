@@ -1,18 +1,22 @@
+import hashlib
 import logging
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator
 from copy import copy
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, Union
 
+from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db.models import Model, QuerySet
 from django.template.loader import TemplateDoesNotExist, get_template
 from django.utils.functional import cached_property
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-from pygments import highlight
+from pygments import __version__ as pygments_version, highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import ClassNotFound, get_lexer_by_name
-from wagtail.blocks import CharBlock, ChoiceBlock, ListBlock, StructBlock, TextBlock
+from wagtail.blocks import CharBlock, ChoiceBlock, ListBlock, StructBlock, StructBlockValidationError, TextBlock
 from wagtail.blocks.list_block import ListValue
 from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
@@ -588,17 +592,71 @@ class AudioChooserBlock(RepositoryChooserBlock):
         return super().get_prep_value(value)
 
 
+CODE_BLOCK_CACHE_SECONDS = 7 * 24 * 60 * 60
+
+
+def code_block_language_allowed(language: object) -> bool:
+    """Return whether ``language`` is a configured, highlightable code-block alias."""
+    if not isinstance(language, str):
+        return False
+    allowed = {alias.strip().lower() for alias in settings.CAST_CODE_BLOCK_LANGUAGES if isinstance(alias, str)}
+    return language.strip().lower() in allowed
+
+
+def code_block_source_too_long(source: object) -> bool:
+    return isinstance(source, str) and len(source) > settings.CAST_CODE_BLOCK_MAX_SOURCE_LENGTH
+
+
+def code_block_source_too_long_message() -> str:
+    return f"Code blocks are limited to {settings.CAST_CODE_BLOCK_MAX_SOURCE_LENGTH} characters."
+
+
+def _plain_code_html(source: str) -> str:
+    return f'<div class="highlight"><pre><span></span>{escape(source)}\n</pre></div>\n'
+
+
+def render_code_block_html(language: object, source: object) -> str:
+    """Return highlighted HTML for a code block without unbounded lexing work.
+
+    Only allowlisted lexer aliases reach Pygments; other languages use the
+    plain ``text`` lexer. Sources over ``CAST_CODE_BLOCK_MAX_SOURCE_LENGTH``
+    (stored before the cap existed) are escaped without lexing. Highlighted
+    output is cached by content hash so public renders and feeds do not lex
+    the same source again.
+    """
+    source = source if isinstance(source, str) else ""
+    if code_block_source_too_long(source):
+        return _plain_code_html(source)
+    alias = language.strip().lower() if isinstance(language, str) and code_block_language_allowed(language) else "text"
+    digest = hashlib.sha256(f"{alias}\0{source}".encode()).hexdigest()
+    cache_key = f"cast:code-block:{pygments_version}:{digest}"
+    highlighted = cache.get(cache_key)
+    if not isinstance(highlighted, str):
+        try:
+            lexer = get_lexer_by_name(alias, stripall=True)
+        except ClassNotFound:
+            lexer = get_lexer_by_name("text", stripall=True)
+        highlighted = highlight(source, lexer, HtmlFormatter())
+        cache.set(cache_key, highlighted, CODE_BLOCK_CACHE_SECONDS)
+    return highlighted
+
+
 class CodeBlock(StructBlock):
     language = CharBlock(help_text="The language of the code block")
     source = TextBlock(rows=8, help_text="The source code of the block")
 
+    def clean(self, value: Any) -> Any:
+        cleaned = super().clean(value)
+        if code_block_source_too_long(cleaned.get("source")):
+            raise StructBlockValidationError(
+                block_errors={"source": ValidationError(code_block_source_too_long_message())}
+            )
+        # Pre-render on save so the first public render is a cache hit.
+        render_code_block_html(cleaned.get("language"), cleaned.get("source"))
+        return cleaned
+
     def render_basic(self, value: dict[str, str] | None, context: dict[str, Any] | None = None) -> str:
         if value is not None:
-            try:
-                lexer = get_lexer_by_name(value["language"], stripall=True)
-            except (ClassNotFound, KeyError):
-                lexer = get_lexer_by_name("text", stripall=True)
-            highlighted = highlight(value["source"], lexer, HtmlFormatter())
-            return mark_safe(highlighted)
+            return mark_safe(render_code_block_html(value.get("language"), value.get("source")))
         else:
             return ""

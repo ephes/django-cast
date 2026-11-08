@@ -177,6 +177,10 @@ class TestCheckCastSettingTypes:
             ("CAST_AUDIO_PLAYER", str),
             ("CAST_MEDIA_STALE_MIN_AGE_DAYS", int),
             ("CAST_TRANSCRIPT_UPLOAD_MAX_BYTES", int),
+            ("CAST_CODE_BLOCK_MAX_SOURCE_LENGTH", int),
+            ("CAST_CODE_BLOCK_LANGUAGES", list),
+            ("CAST_GALLERY_TOKEN_MAX_AGE", int),
+            ("CAST_FILE_EXTENSIONS", list),
             ("CAST_PUBLIC_IMAGES_API", bool),
         )
         derived = tuple(

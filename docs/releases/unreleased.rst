@@ -1,6 +1,24 @@
 Unreleased
 ==========
 
+- Security hardening:
+
+  - Code blocks: sources are capped at ``CAST_CODE_BLOCK_MAX_SOURCE_LENGTH``
+    (default 32768 characters) on Wagtail and editor-API saves, only lexer
+    aliases in ``CAST_CODE_BLOCK_LANGUAGES`` are highlighted (others render as
+    plain text), oversized stored sources render escaped without lexing, and
+    highlighted HTML is cached by content hash and pre-rendered on save.
+  - Gallery modal tokens now expire after ``CAST_GALLERY_TOKEN_MAX_AGE``
+    seconds (default one day).
+  - ``/cast/styleguide/`` (dev tools only) requires an active staff user,
+    because rendering it seeds pages and media.
+  - SVG image uploads are rejected even when ``WAGTAILIMAGES_EXTENSIONS``
+    allows them.
+  - The generic ``File`` model accepts only ``CAST_FILE_EXTENSIONS`` (documents
+    and archives by default; migration ``cast.0089`` adds the validator). The
+    deployment guide now recommends ``nosniff`` and ``attachment`` headers
+    for media.
+
 - Security: the Voxhelm API base URL is now deployment configuration only
   (``CAST_VOXHELM_API_BASE`` as a Django setting or environment variable). The
   admin-editable site setting field is removed by migration ``cast.0088``,

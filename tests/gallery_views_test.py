@@ -325,3 +325,36 @@ class TestGalleryView:
 
         response = gallery_modal(request, "bootstrap4")
         assert response.status_code == 400
+
+
+def _signed_at(monkeypatch, timestamp: float, image_pks: list[int]) -> str:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr("django.core.signing.time", SimpleNamespace(time=lambda: timestamp))
+    return sign_gallery_image_pks(image_pks)
+
+
+def test_gallery_token_expires_after_configured_max_age(monkeypatch, settings):
+    from types import SimpleNamespace
+
+    from cast.gallery_tokens import gallery_image_pks_match_token
+
+    token = _signed_at(monkeypatch, 1_000_000.0, [1, 2])
+    monkeypatch.setattr("django.core.signing.time", SimpleNamespace(time=lambda: 1_000_000.0 + 24 * 60 * 60 - 1))
+    assert gallery_image_pks_match_token(token, [1, 2])
+    monkeypatch.setattr("django.core.signing.time", SimpleNamespace(time=lambda: 1_000_000.0 + 24 * 60 * 60 + 1))
+    assert not gallery_image_pks_match_token(token, [1, 2])
+
+    settings.CAST_GALLERY_TOKEN_MAX_AGE = 7 * 24 * 60 * 60
+    assert gallery_image_pks_match_token(token, [1, 2])
+
+
+def test_gallery_modal_form_rejects_expired_token(monkeypatch):
+    from types import SimpleNamespace
+
+    data = _gallery_modal_data([1, 2, 3])
+    data["gallery_token"] = _signed_at(monkeypatch, 1_000_000.0, [1, 2, 3])
+    monkeypatch.setattr("django.core.signing.time", SimpleNamespace(time=lambda: 1_000_000.0 + 2 * 24 * 60 * 60))
+    form = GalleryModalForm(data)
+    assert not form.is_valid()
+    assert "Gallery token does not match image ids." in str(form.errors)
