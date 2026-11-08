@@ -37,6 +37,12 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
+- [ ] Complete the round 85 editor boundary review and PostgreSQL validation
+  - Resume note: [B08 editor boundaries](backlog/2026-11-08-round85-editor-boundaries-resume.md).
+  - Status: all three fixes implemented and local `just check` passes; required Claude review is blocked
+    by expired OAuth. The audio permission slice also requires its separate-connection PostgreSQL check.
+    Keep the parked branch unmerged until the required gates pass.
+
 - [ ] Transcript glossary, slice 2: LLM proposals via Voxhelm (on hold)
   - Spec: [backlog/2026-10-15-transcript-glossary.md](backlog/2026-10-15-transcript-glossary.md)
   - Slice 1 is implemented and verified on Django Chat staging (2026-10-16): contributor variants, show glossary

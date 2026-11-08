@@ -1163,3 +1163,32 @@ def isolated_page_link_cache():
     PageLinkHandlerWithCache.clear_cache()
     yield
     PageLinkHandlerWithCache.clear_cache()
+
+
+@pytest.fixture
+def scoped_editor_audio(site):
+    """Synthetic audio selectable/editable only within one collection and owner."""
+    from datetime import time, timedelta
+
+    from django.core.files.base import ContentFile
+
+    from tests.api.editor_posts_test import (
+        grant_collection_permission,
+        grant_wagtail_admin_access,
+        page_permission_user,
+    )
+
+    actor = page_permission_user(codenames=("change_page",))
+    grant_wagtail_admin_access(actor)
+    root = Collection.get_first_root_node()
+    allowed = root.add_child(instance=Collection(name="Allowed synthetic audio"))
+    root.refresh_from_db()
+    forbidden = root.add_child(instance=Collection(name="Forbidden synthetic audio"))
+    for codename in ("choose_audio", "add_audio"):
+        grant_collection_permission(actor, allowed, app_label="cast", codename=codename)
+    audio = Audio(user=actor, collection=allowed, title="Synthetic audio", duration=timedelta(seconds=60))
+    audio.m4a.save("synthetic.m4a", ContentFile(b"synthetic original audio"), save=False)
+    audio.save(duration=False, cache_file_sizes=False)
+    audio.tags.add("original")
+    ChapterMark.objects.create(audio=audio, start=time(0), title="Original chapter")
+    return actor, audio, forbidden

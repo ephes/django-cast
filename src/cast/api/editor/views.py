@@ -9,7 +9,8 @@ from django.db.models import F, Q, Subquery
 from django.http import HttpResponse
 from django.urls import reverse
 from django.utils.text import slugify
-from rest_framework import status
+from rest_framework import serializers, status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -81,7 +82,13 @@ def _if_match_revision_id(request: Request) -> int | None:
         raise EditorValidationError(
             {"If-Match": [{"code": "invalid", "message": 'If-Match must be a quoted revision id such as "123".'}]}
         )
-    return int(revision_id)
+    try:
+        # Share the body revision field's bounded integer admission, before conversion.
+        return cast(int, serializers.IntegerField().run_validation(revision_id))
+    except DRFValidationError as exc:
+        raise EditorValidationError(
+            {"If-Match": [{"code": "invalid", "message": 'If-Match must be a quoted revision id such as "123".'}]}
+        ) from exc
 
 
 def _submitted_base_revision_id(request: Request, data: dict[str, Any]) -> int:
