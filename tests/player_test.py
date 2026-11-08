@@ -541,11 +541,137 @@ def test_public_transcript_endpoint_normalizes_oversized_times(client, episode, 
     assert all(cue["end"] > cue["start"] for cue in cues)
 
 
+def _cold_card_episode(episode):
+    """Return a freshly loaded concrete episode with cold Django and content-type caches."""
+    from django.contrib.contenttypes.models import ContentType
+    from django.core.cache import caches
+    from wagtail.models import Page
+
+    page = Page.objects.filter(pk=episode.pk).specific().get()
+    for cache in caches.all():
+        cache.clear()
+    ContentType.objects.clear_cache()
+    return page
+
+
+def _payload_queries(audio, episode, request, **kwargs):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from cast.models import Audio
+
+    audio = Audio.objects.get(pk=audio.pk)
+    card = _cold_card_episode(episode)
+    for name, value in kwargs.pop("attrs", {}).items():
+        setattr(card, name, value)
+    with CaptureQueriesContext(connection) as queries:
+        payload = build_player_payload(audio, post=card, request=request, **kwargs)
+    return payload, [query["sql"] for query in queries.captured_queries]
+
+
 @pytest.mark.django_db
-def test_player_payload_carries_the_playing_post_permalink(audio, episode, rf_request):
-    assert build_player_payload(audio, post=episode, request=rf_request)["permalink"] == rf_request.build_absolute_uri(
-        episode.get_url(rf_request)
-    )
+def test_cold_card_permalink_adds_no_queries(audio, episode):
+    """Regression: resolving the permalink with ``Page.get_url`` added two Site queries per render."""
+    from django.test import RequestFactory
+
+    without_permalink, baseline = _payload_queries(audio, episode, RequestFactory().get("/"), permalink="")
+    payload, queries = _payload_queries(audio, episode, RequestFactory().get("/"))
+    assert "permalink" not in without_permalink
+    assert "permalink" not in payload
+    assert len(queries) == len(baseline)
+    assert not any("wagtailcore_site" in sql for sql in queries)
+
+
+@pytest.mark.django_db
+def test_player_payload_uses_repository_page_url(audio, episode, rf_request):
+    _, baseline = _payload_queries(audio, episode, rf_request, permalink="")
+    payload, queries = _payload_queries(audio, episode, rf_request, attrs={"page_url": "/podcast/test-podcast-entry/"})
+    assert payload["permalink"] == "http://testserver/podcast/test-podcast-entry/"
+    assert len(queries) == len(baseline)
+
+
+@pytest.mark.django_db
+def test_player_payload_uses_page_url_of_wrapped_specific_page(audio, episode, rf_request):
+    from types import SimpleNamespace
+
+    card = _cold_card_episode(episode)
+    card.page_url = "https://example.com/podcast/test-podcast-entry/"
+    payload = build_player_payload(audio, post=SimpleNamespace(pk=card.pk, specific=card), request=rf_request)
+    assert payload["permalink"] == "https://example.com/podcast/test-podcast-entry/"
+
+
+@pytest.mark.django_db
+def test_player_payload_uses_request_local_page_link_cache(audio, episode, rf_request):
+    from cast.wagtail_hooks import PageLinkHandlerWithCache
+
+    _, baseline = _payload_queries(audio, episode, rf_request, permalink="")
+    PageLinkHandlerWithCache.cache_url(episode.pk, "/cached/episode/")
+    payload, queries = _payload_queries(audio, episode, rf_request)
+    assert payload["permalink"] == "http://testserver/cached/episode/"
+    assert len(queries) == len(baseline)
+
+
+@pytest.mark.django_db
+def test_player_payload_uses_wagtail_request_site_cache(audio, episode):
+    from django.test import RequestFactory
+
+    _, baseline = _payload_queries(audio, episode, RequestFactory().get("/"), permalink="")
+    request = RequestFactory().get("/")
+    expected = request.build_absolute_uri(episode.get_url(request))
+    payload, queries = _payload_queries(audio, episode, request)
+    assert payload["permalink"] == expected
+    assert len(queries) == len(baseline)
+
+
+@pytest.mark.django_db
+def test_request_site_cache_handles_multiple_sites(audio, episode, django_assert_num_queries):
+    from django.test import RequestFactory
+    from wagtail.models import Page, Site
+
+    other_root = Page.get_first_root_node().add_child(instance=Page(title="Other", slug="other-root"))
+    other_site = Site.objects.create(hostname="other.example", port=443, root_page=other_root)
+    request = RequestFactory().get("/")
+    episode.get_url(request)  # fills the request-scoped Wagtail caches
+    page_site = episode.get_site()
+    card = _cold_card_episode(episode)
+    card.blog  # noqa: B018 - resolve the parent blog outside the budget
+    build_player_payload(audio, post=card, request=request)
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as baseline:
+        build_player_payload(audio, post=card, request=request, permalink="")
+
+    request._wagtail_site = other_site
+    with django_assert_num_queries(len(baseline.captured_queries)):
+        foreign = build_player_payload(audio, post=card, request=request)
+    root_url, page_path = episode.get_url_parts(request)[1:]
+    assert foreign["permalink"] == f"{root_url}{page_path}"
+
+    request._wagtail_site = page_site
+    local = build_player_payload(audio, post=card, request=request)
+    assert local["permalink"] == request.build_absolute_uri(page_path)
+
+    del request._wagtail_site
+    assert build_player_payload(audio, post=card, request=request)["permalink"] == f"{root_url}{page_path}"
+
+
+@pytest.mark.django_db
+def test_request_site_cache_skips_unroutable_pages(audio, rf_request):
+    from types import SimpleNamespace
+
+    rf_request._wagtail_cached_site_root_paths = []
+    for parts in (None, (1, None, None)):
+        post = SimpleNamespace(pk="x", get_url_parts=lambda request, parts=parts: parts)
+        assert "permalink" not in build_player_payload(audio, post=post, request=rf_request)
+    assert "permalink" not in build_player_payload(audio, post=SimpleNamespace(pk="x"), request=rf_request)
+
+
+@pytest.mark.django_db
+def test_explicit_permalink_overrides_resolution(audio, episode, rf_request):
+    payload = build_player_payload(audio, post=episode, request=rf_request, permalink="/explicit/")
+    assert payload["permalink"] == "http://testserver/explicit/"
+    assert "permalink" not in build_player_payload(audio, post=episode, request=rf_request, permalink="javascript:x")
     assert "permalink" not in build_player_payload(audio, post=None, request=rf_request)
 
 
@@ -557,8 +683,9 @@ def test_player_payload_carries_the_playing_post_permalink(audio, episode, rf_re
 def test_player_payload_omits_unsupported_post_urls(audio, rf_request, url):
     from types import SimpleNamespace
 
-    post = SimpleNamespace(get_url=lambda request: url)
+    post = SimpleNamespace(page_url=url)
     assert "permalink" not in build_player_payload(audio, post=post, request=rf_request)
+    assert "permalink" not in build_player_payload(audio, post=None, request=rf_request, permalink=url)
 
 
 @pytest.mark.django_db
@@ -584,6 +711,5 @@ def test_rendered_detail_player_uses_request_origin_with_relative_page_context(
 def test_relative_permalink_without_request_is_omitted(audio):
     from types import SimpleNamespace
 
-    assert "permalink" not in build_player_payload(
-        audio, post=SimpleNamespace(get_url=lambda request: "/synthetic/"), request=None
-    )
+    assert "permalink" not in build_player_payload(audio, post=SimpleNamespace(page_url="/synthetic/"), request=None)
+    assert "permalink" not in build_player_payload(audio, post=SimpleNamespace(pk=1), request=None)

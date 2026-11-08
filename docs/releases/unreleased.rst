@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+- Stop the player payload's permalink from adding two Site queries to each
+  cached player-card render. The permalink now comes only from URLs already
+  resolved for the request (repository ``page_url``, the page-link cache or
+  Wagtail's request-scoped site roots); ``build_player_payload`` accepts an
+  explicit ``permalink=``. Posts without a resolved URL omit the permalink.
+
 - Make equal-date blog index pagination and RSS/Atom ordering deterministic with
   a descending primary-key tie-breaker in both repository modes.
 - Report media backup/restore summaries in every mode, continue independent paths
