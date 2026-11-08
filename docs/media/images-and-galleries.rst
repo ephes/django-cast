@@ -348,3 +348,25 @@ management command after deploying the specification change::
 The counterpart fallback keeps existing thumbnails visible until this command
 finishes; synchronization is still required to serve the newly configured
 renditions and clean up superseded thumbnail policy keys.
+
+Publication consistency
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Direct ``synchronize_post_media(post)`` calls update all built-in relationship
+sets in one transaction on the post's write database. A failure leaves the
+previous media index intact. Body inspection and rendition preparation remain
+outside that relationship write boundary.
+
+Canonical gallery creation locks existing effective image rows in primary-key
+order and rechecks the signature within the same transaction. Body inspection
+resolves all gallery sets as a batch, locking their complete union in order
+before creating any gallery. Code resolving several sets inside one outer
+transaction should use ``cast.models.gallery.get_or_create_galleries`` once,
+rather than accumulating locks through separate calls. PostgreSQL uses no-key
+update locks so unrelated rendition/relation FK inserts can proceed. Gallery
+locks last until an enclosing publication transaction finishes; rendition work
+may still run inside that enclosing transaction. On databases with
+row locks, concurrent creation for the same effective image set returns the same
+gallery, ignoring order, duplicate IDs and nonexistent IDs. SQLite does not offer
+row-level ``select_for_update`` serialization. Gallery membership stays mutable;
+there is no blanket unique constraint on its signature.

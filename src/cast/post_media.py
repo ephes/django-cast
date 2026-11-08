@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from django.db import router, transaction
+
 if TYPE_CHECKING:
     from wagtail.fields import StreamField
 
@@ -32,44 +34,51 @@ def media_ids_from_body(post: Post, body: StreamField) -> TypeToIdSet:
     from wagtail.images.models import Image
 
     from cast.blocks import gallery_item_parts
-    from cast.models.gallery import get_or_create_gallery
+    from cast.models.gallery import get_or_create_galleries
 
+    blocks = [block for content_block in body for block in content_block.value]
+    gallery_image_sets = []
+    for block in blocks:
+        if block.block_type == "gallery":
+            image_ids = []
+            for item in block.value.get("gallery", []):
+                image, _caption = gallery_item_parts(item)
+                if isinstance(image, Image):
+                    image_ids.append(image.pk)
+                elif isinstance(image, int):
+                    image_ids.append(image)
+            gallery_image_sets.append(image_ids)
+    galleries = iter(get_or_create_galleries(gallery_image_sets))
     from_body: TypeToIdSet = {}
-    for content_block in body:
-        for block in content_block.value:
-            if block.block_type == "gallery":
-                images = block.value.get("gallery", [])
-                image_ids = []
-                for item in images:
-                    image, _caption = gallery_item_parts(item)
-                    if isinstance(image, Image):
-                        image_ids.append(image.pk)
-                    elif isinstance(image, int):
-                        image_ids.append(image)
-                media_model = get_or_create_gallery(image_ids)
-            else:
-                media_model = block.value
-            if block.block_type not in post.media_model_lookup or media_model is None:
-                continue
-            if hasattr(media_model, "id"):
-                from_body.setdefault(block.block_type, set()).add(media_model.id)
-            elif isinstance(media_model, int):
-                media_model_class = post.media_model_lookup[block.block_type]
-                if media_model_class._default_manager.filter(pk=media_model).exists():
-                    from_body.setdefault(block.block_type, set()).add(media_model)
-            else:
-                raise ValueError(f"media model {media_model} is not an instance of int or a model")
+    for block in blocks:
+        if block.block_type == "gallery":
+            media_model = next(galleries)
+        else:
+            media_model = block.value
+        if block.block_type not in post.media_model_lookup or media_model is None:
+            continue
+        if hasattr(media_model, "id"):
+            from_body.setdefault(block.block_type, set()).add(media_model.id)
+        elif isinstance(media_model, int):
+            media_model_class = post.media_model_lookup[block.block_type]
+            if media_model_class._default_manager.filter(pk=media_model).exists():
+                from_body.setdefault(block.block_type, set()).add(media_model)
+        else:
+            raise ValueError(f"media model {media_model} is not an instance of int or a model")
     return from_body
 
 
 def synchronize_post_media(post: Post) -> None:
     """Synchronize built-in StreamField media into the Post relationships."""
-    to_add, to_remove = sync_media_ids(post.media_ids_from_db, media_ids_from_body(post, post.body))
-    media_attr_lookup = post.media_attr_lookup
-    for media_type, ids in to_add.items():
-        media_attr_lookup[media_type].add(*ids)
-    for media_type, ids in to_remove.items():
-        media_attr_lookup[media_type].remove(*ids)
+    from_body = media_ids_from_body(post, post.body)
+    using = router.db_for_write(type(post), instance=post)
+    with transaction.atomic(using=using):
+        to_add, to_remove = sync_media_ids(post.media_ids_from_db, from_body)
+        media_attr_lookup = post.media_attr_lookup
+        for media_type, ids in to_add.items():
+            media_attr_lookup[media_type].add(*ids)
+        for media_type, ids in to_remove.items():
+            media_attr_lookup[media_type].remove(*ids)
 
 
 def prepare_post_media(
