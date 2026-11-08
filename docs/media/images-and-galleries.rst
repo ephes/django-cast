@@ -370,3 +370,20 @@ row locks, concurrent creation for the same effective image set returns the same
 gallery, ignoring order, duplicate IDs and nonexistent IDs. SQLite does not offer
 row-level ``select_for_update`` serialization. Gallery membership stays mutable;
 there is no blanket unique constraint on its signature.
+
+Raster GPS inspection is limited to 100 frames and 50 million decoded pixels
+in total across frames. Every permitted frame is inspected, including when an
+earlier frame already contains GPS. Inputs exceeding either budget are refused
+before storage; uninspected uploads are never accepted. The frame count is not
+queried before this bounded walk because some decoders calculate it by seeking
+through the entire animation.
+
+These fixed limits also refuse GPS-free images: for example a 61 megapixel
+JPEG or a 101-frame animation. They are stricter than Wagtail's single-image
+pixel limit and apply in addition to its upload-size checks.
+
+The read-only ``report_image_gps`` command uses the same bounded inspection.
+Existing originals over the budget are reported separately as
+``budget-exceeded images``, with their IDs and storage names, rather than as
+unreadable. It leaves every original untouched and exits nonzero because GPS
+status for those originals is unknown; it does not scan them without a bound.
