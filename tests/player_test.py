@@ -657,6 +657,33 @@ def test_request_site_cache_handles_multiple_sites(audio, episode, django_assert
 
 
 @pytest.mark.django_db
+def test_request_site_cache_omits_ambiguous_shared_roots_without_site_query(audio, episode, django_assert_num_queries):
+    """A page under two sites' shared root would make Wagtail run ``Site.find_for_request``."""
+    from django.test import RequestFactory
+    from wagtail.models import Site
+
+    page_site = episode.get_site()
+    Site.objects.create(hostname="alias.example", port=443, root_page=page_site.root_page)
+    request = RequestFactory().get("/")
+    request._wagtail_cached_site_root_paths = Site.get_site_root_paths()
+    card = _cold_card_episode(episode)
+    card.blog  # noqa: B018 - resolve the parent blog outside the budget
+    build_player_payload(audio, post=card, request=request, permalink="")
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as baseline:
+        build_player_payload(audio, post=card, request=request, permalink="")
+    with django_assert_num_queries(len(baseline.captured_queries)):
+        payload = build_player_payload(audio, post=card, request=request)
+    assert "permalink" not in payload
+    assert not hasattr(request, "_wagtail_site")
+
+    request._wagtail_site = page_site
+    assert build_player_payload(audio, post=card, request=request)["permalink"].startswith("http://testserver/")
+
+
+@pytest.mark.django_db
 def test_request_site_cache_skips_unroutable_pages(audio, rf_request):
     from types import SimpleNamespace
 

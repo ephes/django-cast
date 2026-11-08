@@ -345,11 +345,17 @@ def _request_cached_page_url(page: Any, request: Any) -> str | None:
     get_url_parts = getattr(page, "get_url_parts", None)
     if root_paths is None or not callable(get_url_parts):
         return None
+    current_site = getattr(request, "_wagtail_site", None)
+    url_path = getattr(page, "url_path", None)
+    if current_site is None and isinstance(url_path, str):
+        matching_site_ids = {root_path[0] for root_path in root_paths if url_path.startswith(root_path[1])}
+        if len(matching_site_ids) > 1:
+            # ``get_url_parts`` would call ``Site.find_for_request`` to pick among them.
+            return None
     url_parts = get_url_parts(request=request)
     if url_parts is None or url_parts[2] is None:
         return None
     site_id, root_url, page_path = url_parts
-    current_site = getattr(request, "_wagtail_site", None)
     num_sites = len({root_path[0] for root_path in root_paths})
     if num_sites == 1 or (current_site is not None and site_id == current_site.pk):
         return page_path
