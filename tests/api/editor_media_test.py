@@ -323,6 +323,8 @@ class TestEditorMediaEndpoints:
         assert re.fullmatch(r"cast_audio/.+-[0-9a-f]{12}\.m4a", audio.m4a.name)
         assert run_probe.call_count == 2
 
+        # Simulate expiry before testing another independent upload outcome.
+        cache.delete(f"cast:editor-media-upload:{superuser.pk}")
         enabled = api_client.post(
             url,
             {
@@ -347,6 +349,8 @@ class TestEditorMediaEndpoints:
         assert "transcript_diarization_mode" not in probe.json()["errors"]
         assert probe.json()["errors"]["non_field_errors"][0]["code"] == "required"
 
+        # Simulate expiry before testing another independent upload outcome.
+        cache.delete(f"cast:editor-media-upload:{superuser.pk}")
         invalid = api_client.post(url, {"transcript_diarization_mode": "sometimes"}, format="multipart")
         assert invalid.status_code == 400
         assert invalid.json()["errors"]["transcript_diarization_mode"][0]["code"] == "invalid_choice"
@@ -360,11 +364,15 @@ class TestEditorMediaEndpoints:
         assert missing.status_code == 400
         assert missing.json()["errors"]["non_field_errors"][0]["code"] == "required"
 
+        # Simulate expiry before testing another independent upload outcome.
+        cache.delete(f"cast:editor-media-upload:{superuser.pk}")
         too_many = api_client.post(url, {"m4a": m4a_audio, "mp3": mp3_audio}, format="multipart")
         assert too_many.status_code == 400
         assert too_many.json()["errors"]["non_field_errors"][0]["code"] == "too_many_files"
 
         invalid_upload = SimpleUploadedFile("bad.txt", b"ID3-not-really-enough", content_type="audio/mpeg")
+        # Simulate expiry before testing another independent upload outcome.
+        cache.delete(f"cast:editor-media-upload:{superuser.pk}")
         invalid = api_client.post(url, {"title": "Invalid audio", "mp3": invalid_upload}, format="multipart")
         assert invalid.status_code == 400
         assert invalid.json()["errors"]["mp3"][0]["code"] == "invalid_extension"
@@ -394,6 +402,8 @@ class TestEditorMediaEndpoints:
         assert not Audio.objects.filter(title="Denied audio").exists()
 
         mocker.patch("cast.api.editor.media._cleanup_media_object", return_value=False)
+        # Simulate expiry before testing another independent upload outcome.
+        cache.delete(f"cast:editor-media-upload:{superuser.pk}")
         failed = api_client.post(url, {"title": "Cleanup audio", "m4a": second_upload}, format="multipart")
         assert failed.status_code == 500
         assert failed.json()["code"] == "cleanup_failed"
@@ -650,11 +660,15 @@ class TestEditorMediaEndpoints:
         mocker.patch.object(
             editor_media.video_permission_policy, "user_has_permission_for_instance", return_value=False
         )
+        # Simulate expiry before testing another independent upload outcome.
+        cache.delete(f"cast:editor-media-upload:{superuser.pk}")
         denied = api_client.post(url, {"title": "Denied video", "original": first_upload}, format="multipart")
         assert denied.status_code == 403
         assert denied.json()["code"] == "post_save_permission_denied"
 
         mocker.patch("cast.api.editor.media._cleanup_media_object", return_value=False)
+        # Simulate expiry before testing another independent upload outcome.
+        cache.delete(f"cast:editor-media-upload:{superuser.pk}")
         failed = api_client.post(url, {"title": "Cleanup video", "original": second_upload}, format="multipart")
         assert failed.status_code == 500
         assert failed.json()["code"] == "cleanup_failed"
@@ -872,3 +886,16 @@ def test_image_upload_success_uses_fresh_name_and_saves_tags(api_client, superus
     assert data["tags"] == ["synthetic"]
     assert data["width"] == data["height"] == 1
     assert storage.open(existing.file.name).read() == original_bytes
+
+
+@pytest.mark.django_db
+def test_upload_lease_blocks_retries_until_expiry(api_client, superuser, mocker, settings):
+    import time
+
+    settings.CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS = 5
+    api_client.force_authenticate(user=superuser)
+    url = reverse("cast:api:editor_media_audios")
+    assert api_client.post(url, {}, format="multipart").status_code == 400
+    assert api_client.post(url, {}, format="multipart").status_code == 429
+    mocker.patch("django.core.cache.backends.base.time.time", return_value=time.time() + 6)
+    assert api_client.post(url, {}, format="multipart").status_code == 400

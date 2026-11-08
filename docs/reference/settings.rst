@@ -777,9 +777,15 @@ CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
 Time-to-live, in seconds, for the shared editor API, legacy
 ``/api/upload_video/``, and Wagtail admin per-user audio/video upload lock.
 Defaults to ``7200`` (2 hours). The lock is stored in Django's default cache
-and is owner-token protected so one request does not release a successor lock.
+and remains until expiry because Django has no portable atomic owner-checked release.
 Multi-worker deployments need a shared cache backend, such as Redis or
 Memcached; Django's ``LocMemCache`` only coordinates within one process.
+
+Upload leases intentionally remain after completion or failure. With the default
+``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS = 7200``, the same user must wait up to
+two hours before another audio/video upload, including a retry. Choose a shorter
+finite lease if that admission interval is unsuitable; an operation exceeding
+the lease can overlap a later upload. Use a shared cache across workers.
 
 
 CAST_EDITOR_MEDIA_PROBE_SECONDS

@@ -1548,13 +1548,20 @@ logged with the original save failure retained as the cleanup exception's cause.
 The API returns HTTP 500 with flat code ``cleanup_failed``; operator cleanup of
 that orphan may be required.
 
-Audio and video uploads share a one-in-flight lock per authenticated user; a
-second concurrent audio/video upload returns ``rate_limited``. The lock uses
+Audio and video uploads share an expiring lease per authenticated user; another
+audio/video upload before expiry returns ``rate_limited``. The lock uses
 the default Django cache and requires a shared cache backend, such as Redis or
 Memcached, to be process-wide in multi-worker deployments; Django's
 ``LocMemCache`` only protects a single process. Configure
 ``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS`` when deployments need a longer or
-shorter owner-token TTL. Editor audio duration probing and optional chapter
+shorter lease TTL.
+
+Upload admission uses a finite per-user lease that is retained on completion and
+failure. Subsequent audio/video create or file-replacement requests can return
+``429 rate_limited`` until ``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS`` expires
+(default 7200 seconds, or two hours), even after the prior request finishes.
+
+Editor audio duration probing and optional chapter
 extraction run inside a cumulative request-path budget controlled by
 ``CAST_EDITOR_MEDIA_PROBE_SECONDS``. Required audio probing timeout returns
 ``probe_timeout`` and the failed object/files are cleaned up. Required audio

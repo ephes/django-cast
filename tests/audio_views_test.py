@@ -280,7 +280,7 @@ class TestAudioAdd:
         assert Audio.objects.count() == 0
         deleted_name = delete.call_args.args[0]
         assert not storage.exists(deleted_name)
-        assert cache.get(f"cast:editor-media-upload:{admin_user.pk}") is None
+        assert cache.get(f"cast:editor-media-upload:{admin_user.pk}") is not None
 
     def test_post_add_audio(self, admin_client, minimal_mp4):
         add_url = reverse("castaudio:add")

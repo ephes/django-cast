@@ -192,3 +192,19 @@ Checklist
 - [ ] Image renditions generated with ``sync_renditions``
 - [ ] Reverse proxy with TLS configured
 - [ ] Application server (Gunicorn) managed by systemd
+
+Upload lease and failure cleanup
+--------------------------------
+
+Audio/video upload admission uses atomic ``cache.add`` with a finite
+``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS`` lease. Use a shared cache in multi-worker
+setups. Django's portable cache API cannot atomically compare and delete an owner
+value, so leases remain until expiry even after successful or failed uploads.
+A repeat upload by that user can receive HTTP 429 until then. The lease is a
+bounded admission control, not protection for operations exceeding its lifetime.
+
+Failed ingest cleanup attempts every owned file even when one deletion fails.
+Incomplete cleanup is logged and reported with the original ingest error linked;
+any surviving row is retained for recovery. It may still reference later files
+that cleanup successfully removed. An ingest transaction rollback may already
+have removed the row; use the logged field names and storage inventory then.

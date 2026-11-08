@@ -24,7 +24,7 @@ class TestUploadLock:
             assert len(owner) == 32
 
         cache_mock.add.assert_called_once_with(f"cast:editor-media-upload:{user.pk}", owner, timeout=45)
-        cache_mock.delete.assert_called_once_with(f"cast:editor-media-upload:{user.pk}")
+        cache_mock.delete.assert_not_called()
 
     def test_does_not_release_a_successor_lock(self):
         user = UserFactory()
@@ -47,7 +47,7 @@ class TestUploadLock:
                 with media_ingest.upload_lock(user):
                     pass
 
-        assert cache.get(key) is None
+        assert cache.get(key) is not None
 
 
 def test_policies_read_current_settings(settings):
@@ -169,3 +169,54 @@ def test_ingest_upload_does_not_clean_stored_files_when_tracking_fails(mocker):
         media_ingest.ingest_upload(form, policy=media_ingest.IngestPolicy(None, ("upload",)))
 
     cleanup.assert_not_called()
+
+
+def test_release_never_deletes_a_lock_acquired_after_comparison(mocker):
+    user = SimpleNamespace(pk=91)
+    key = media_ingest.upload_lock_key(user)
+    cache.delete(key)
+    real_get = cache.get
+
+    def compare_then_replace(requested_key):
+        owner = real_get(requested_key)
+        cache.delete(requested_key)  # old lease expires
+        assert cache.add(requested_key, "successor", timeout=60)
+        return owner
+
+    mocker.patch("cast.media_ingest.cache.get", side_effect=compare_then_replace)
+    with media_ingest.upload_lock(user):
+        pass
+    with pytest.raises(media_ingest.MediaUploadInProgress):
+        with media_ingest.upload_lock(user):
+            pytest.fail("successor lease was deleted")
+    cache.delete(key)
+
+
+def test_cleanup_attempts_later_files_and_retains_failed_reference(mocker):
+    failed = FakeField("retained.mp3")
+    later = FakeField("removable.opus")
+    mocker.patch.object(failed, "delete", side_effect=OSError("storage unavailable"))
+    obj = SimpleNamespace(pk=4, _meta=SimpleNamespace(label="cast.Fake"), mp3=failed, opus=later, delete=mocker.Mock())
+    assert not media_ingest.cleanup_new_media_object(obj, ("mp3", "opus"))
+    assert later.name == ""
+    assert failed.name == "retained.mp3"
+    obj.delete.assert_not_called()
+
+    # Retrying after storage recovers must also report a row-deletion failure.
+    failed.delete.side_effect = None
+    obj.delete.side_effect = OSError("row cleanup failed")
+    assert not media_ingest.cleanup_new_media_object(obj, ("mp3", "opus"))
+    obj.delete.assert_called_once_with()
+
+
+@pytest.mark.django_db
+def test_ingest_exhaustive_cleanup_keeps_primary_failure(mocker):
+    primary = RuntimeError("ingest failed")
+    form = FakeForm(primary)
+    mocker.patch("cast.media_ingest.normalize_model_save_arguments", return_value=({"using": "default"}, "default"))
+    mocker.patch.object(form.instance.upload, "delete", side_effect=OSError("cannot delete first"))
+    with pytest.raises(media_ingest.MediaIngestCleanupFailed) as raised:
+        media_ingest.ingest_upload(form, policy=media_ingest.IngestPolicy(None, ("upload", "committed")))
+    assert raised.value.__cause__ is primary
+    assert form.instance.committed.name == ""
+    assert form.instance.upload.name
