@@ -1548,6 +1548,10 @@ logged with the original save failure retained as the cleanup exception's cause.
 The API returns HTTP 500 with flat code ``cleanup_failed``; operator cleanup of
 that orphan may be required.
 
+Audio replacements serialize publication within the request. If a row changes
+after form binding, they return ``409 media_changed``; reload before retrying.
+This is not a client-supplied revision precondition for earlier edits.
+
 Audio and video uploads share an expiring lease per authenticated user; another
 audio/video upload before expiry returns ``rate_limited``. The lock uses
 the default Django cache and requires a shared cache backend, such as Redis or

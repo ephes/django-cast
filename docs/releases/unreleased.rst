@@ -12,6 +12,10 @@ Unreleased
 - Update post media relationship sets atomically and serialize canonical gallery
   creation on databases supporting row locks, preserving mutable membership.
 
+- Defer staged replacement ownership until transaction commit and provide an
+  explicit rollback scope for outer transactions. Serialize media replacement
+  publication and reject stale editors; audio API conflicts return 409.
+
 - Keep upload leases until expiry to avoid deleting a successor's lock through a
   non-atomic cache release. Repeat audio/video uploads, including retries, now
   receive HTTP 429 until the configured lease expires (default two hours).
