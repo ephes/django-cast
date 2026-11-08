@@ -492,3 +492,18 @@ Ensure bucket policy allows required operations:
 - GetObject
 - PutObject
 - DeleteObject (if DELETE_WAGTAIL_IMAGES is True)
+
+Preview database isolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Preview hydration reads images, audio, video and rendition inventory from the
+post's database, falling back to the read router for an unbound post. It
+prefetches renditions from that alias and uses Wagtail's public rendition
+creation API for missing ones. This path neither reads nor writes Wagtail's
+shared rendition cache, whose keys omit the database alias. Equal image IDs and
+hashes in different databases therefore cannot cross-populate that cache. Derived rendition writes use the same alias;
+preview still never synchronizes post relationships or creates galleries.
+
+The rendition inventory helper
+``get_obsolete_and_missing_rendition_strings(..., using=alias)`` accepts an
+optional database alias; existing calls retain their normal router behavior.

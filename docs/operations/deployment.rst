@@ -208,3 +208,11 @@ Incomplete cleanup is logged and reported with the original ingest error linked;
 any surviving row is retained for recovery. It may still reference later files
 that cleanup successfully removed. An ingest transaction rollback may already
 have removed the row; use the logged field names and storage inventory then.
+
+Nested probe deadlines
+----------------------
+
+Nested media probe budgets keep the earliest active deadline. A longer inner
+budget cannot extend the caller's remaining time, and a shorter budget applies
+only for its scope. Normal and exceptional exits restore the parent deadline;
+independent asynchronous contexts keep independent budgets.

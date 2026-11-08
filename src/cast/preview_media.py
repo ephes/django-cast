@@ -3,7 +3,9 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from wagtail.images.models import Image, Rendition
+from django.db import router
+from django.db.models import Prefetch
+from wagtail.images.models import Filter, Image, Rendition
 
 from .blocks import gallery_item_parts
 from .models.image_renditions import get_obsolete_and_missing_rendition_strings
@@ -45,17 +47,30 @@ class PreviewMedia:
                     if (pk := _media_id(value)) is not None:
                         ids[kind].add(pk)
 
-        images = Image.objects.in_bulk(ids["image"] | ids["gallery"])
+        using = post._state.db or router.db_for_read(type(post), instance=post)
+        # Bind Wagtail's related rendition creation queryset to this database.
+        # Preview reads and writes deliberately bypass its shared rendition cache.
+        images = (
+            Image.objects.using(using)
+            .prefetch_related(Prefetch("renditions", queryset=Rendition.objects.using(using)))
+            .in_bulk(ids["image"] | ids["gallery"])
+        )
         kinds: tuple[tuple[str, ImageType], ...] = (("image", "regular"), ("gallery", "gallery"))
         images_with_type = [(image_type, images[pk]) for kind, image_type in kinds for pk in ids[kind] if pk in images]
         # Renditions are derived cache data. Never delete obsolete renditions here.
-        _, missing = get_obsolete_and_missing_rendition_strings(images_with_type)
+        _, missing = get_obsolete_and_missing_rendition_strings(images_with_type, using=using)
         for image_id, specs in missing.items():
             for spec in specs:
-                # Wagtail persists new renditions itself and may normalize a
-                # spec to an existing row. Do not save that cached row again.
-                images[image_id].get_rendition(spec)
+                # create_rendition uses get_or_create but does not publish to
+                # Wagtail's shared cache, whose keys omit the database alias.
+                image = images[image_id]
+                image.create_rendition(image.clean_filter_for_svg(Filter(spec)))
         renditions: RenditionsForPosts = {}
-        for rendition in Rendition.objects.filter(image_id__in=images):
+        for rendition in Rendition.objects.using(using).filter(image_id__in=images):
             renditions.setdefault(rendition.image_id, []).append(rendition)
-        return cls(images, Audio.objects.in_bulk(ids["audio"]), Video.objects.in_bulk(ids["video"]), renditions)
+        return cls(
+            images,
+            Audio.objects.using(using).in_bulk(ids["audio"]),
+            Video.objects.using(using).in_bulk(ids["video"]),
+            renditions,
+        )

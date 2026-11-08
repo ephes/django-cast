@@ -40,7 +40,9 @@ def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[in
             yield image.pk, filter_string
 
 
-def get_obsolete_and_missing_rendition_strings(images_with_type: ImagesWithType) -> ObsoleteAndMissing:
+def get_obsolete_and_missing_rendition_strings(
+    images_with_type: ImagesWithType, *, using: str | None = None
+) -> ObsoleteAndMissing:
     """
     Get all obsolete and missing rendition strings from a queryset of posts.
     """
@@ -51,7 +53,8 @@ def get_obsolete_and_missing_rendition_strings(images_with_type: ImagesWithType)
         if image_type == "gallery":
             srgb_counterpart_renditions.update(get_gallery_thumbnail_srgb_counterpart_filterstrings(image))
     all_image_ids = {image_id for image_id, filter_string in required_renditions}
-    renditions_queryset = Rendition.objects.filter(image__in=all_image_ids)
+    renditions = Rendition.objects if using is None else Rendition.objects.using(using)
+    renditions_queryset = renditions.filter(image__in=all_image_ids)
     existing_rendition_to_id = {
         (image_id, filter_spec): pk
         for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec")
