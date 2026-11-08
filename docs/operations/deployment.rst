@@ -80,11 +80,13 @@ only in Wagtail admin.
 The web process and transcript worker must both receive the Voxhelm
 configuration used for job submission and artifact downloads. For
 deployment-managed secrets, set ``CAST_VOXHELM_API_BASE`` and
-``CAST_VOXHELM_API_KEY`` in the shared process environment; the Wagtail
-``Voxhelm settings`` API base and token fields must both stay blank in that
-setup. Any site credential selects the entire site pair, including when it is
-incomplete. To switch an existing site to deployment credentials, clear both
-fields together in Wagtail.
+``CAST_VOXHELM_API_KEY`` in the shared process environment. The API base URL is
+always deployment configuration (it is no longer a Wagtail site setting); a
+token stored in Wagtail ``Voxhelm settings`` overrides only the key. To switch
+a site to the deployment key, tick "Remove stored API token" in Wagtail.
+When upgrading past the migration that removed the site-level API base
+(``cast.0088``), set ``CAST_VOXHELM_API_BASE`` in deploy config first: the
+migration logs a warning for every stored site base that differs from it.
 If ``CAST_VOXHELM_DIARIZATION_ENABLED`` is enabled, make sure the Voxhelm
 backend has diarization support configured. Full-episode diarization can be
 slow and CPU-heavy, so keep it on the queued transcript worker path instead of
@@ -128,6 +130,25 @@ Editor, legacy API, and Wagtail admin audio/video uploads share a per-user
 upload lock stored in Django's default cache. Multi-worker deployments need a
 shared cache backend, such as Redis or Memcached, for that lock to coordinate
 requests across processes; ``LocMemCache`` only coordinates within one process.
+
+Media is served by the storage backend or web server, not by django-cast, so
+response headers for user uploads are a deployment concern. Serve media from a
+separate origin where possible, and at least send
+``X-Content-Type-Options: nosniff`` for all media plus
+``Content-Disposition: attachment`` for generic file uploads under
+``cast_files/``. django-cast rejects SVG image uploads and limits generic files
+to ``CAST_FILE_EXTENSIONS``, but headers keep older stored files inert as well.
+For example, with nginx:
+
+.. code-block:: nginx
+
+    location /media/ {
+        add_header X-Content-Type-Options nosniff always;
+    }
+    location /media/cast_files/ {
+        add_header X-Content-Type-Options nosniff always;
+        add_header Content-Disposition attachment always;
+    }
 
 For backup and restore of media files, see :doc:`backup` and the
 :ref:`media management commands <cast_management_commands>`.

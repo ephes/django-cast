@@ -22,7 +22,15 @@ from cast.safe_fetch import (
 )
 
 from .exceptions import VoxhelmConnectionError, VoxhelmError
-from .settings import get_bool_setting, get_float_setting, get_setting, require_setting, validate_duration
+from .settings import (
+    API_BASE_SETTING,
+    get_bool_setting,
+    get_float_setting,
+    get_setting,
+    require_setting,
+    validate_api_base,
+    validate_duration,
+)
 
 TERMINAL_JOB_STATES = {"succeeded", "failed", "canceled", "expired"}
 KNOWN_SPEAKER_STRATEGY = "pyannote_known_speaker"
@@ -74,7 +82,7 @@ class VoxhelmClient:
     @classmethod
     def from_settings(cls, *, request_or_site: HttpRequest | Site | None = None) -> VoxhelmClient:
         return cls(
-            api_base=require_setting("CAST_VOXHELM_API_BASE", request_or_site=request_or_site),
+            api_base=validate_api_base(require_setting(API_BASE_SETTING, request_or_site=request_or_site)),
             api_key=require_setting("CAST_VOXHELM_API_KEY", request_or_site=request_or_site),
             model=str(get_setting("CAST_VOXHELM_MODEL", "auto", request_or_site=request_or_site)).strip() or "auto",
             language=str(get_setting("CAST_VOXHELM_LANGUAGE", "", request_or_site=request_or_site)).strip(),

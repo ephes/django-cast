@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -17,8 +18,13 @@ from ..setting_resolution import (
     resolve_layered_setting,
 )
 
+API_BASE_SETTING = "CAST_VOXHELM_API_BASE"
+API_KEY_SETTING = "CAST_VOXHELM_API_KEY"
+DEPLOYMENT_CREDENTIAL_NAMES = (API_BASE_SETTING, API_KEY_SETTING)
+
+# ``CAST_VOXHELM_API_BASE`` is deliberately absent: the base URL is deployment
+# configuration only (Django setting or environment variable).
 SITE_SETTING_FIELD_MAP = {
-    "CAST_VOXHELM_API_BASE": "api_base",
     "CAST_VOXHELM_API_KEY": "api_token",
     "CAST_VOXHELM_MODEL": "model",
     "CAST_VOXHELM_LANGUAGE": "language",
@@ -52,13 +58,14 @@ def resolve_setting(
     (``None``/``""``) at a level fall through to the next level, so a nullable
     site boolean left unset inherits the Django setting or environment variable.
     """
-    credential_names = ("CAST_VOXHELM_API_BASE", "CAST_VOXHELM_API_KEY")
-    if name in credential_names:
-        # Any credential at a level selects the entire pair, even if incomplete.
-        site_pair = {key: get_site_setting_value(key, request_or_site) for key in credential_names}
-        if any(value not in {None, ""} for value in site_pair.values()):
-            return site_pair[name], SETTING_SOURCE_SITE
-        django_pair = {key: getattr(settings, key, None) for key in credential_names}
+    if name == API_KEY_SETTING:
+        # A site token overrides the deployment key; the base URL never comes from the site.
+        site_token = get_site_setting_value(name, request_or_site)
+        if site_token not in {None, ""}:
+            return site_token, SETTING_SOURCE_SITE
+    if name in DEPLOYMENT_CREDENTIAL_NAMES:
+        # Any deployment credential at a level selects that level's pair, even if incomplete.
+        django_pair = {key: getattr(settings, key, None) for key in DEPLOYMENT_CREDENTIAL_NAMES}
         if any(value not in {None, ""} for value in django_pair.values()):
             return django_pair[name], SETTING_SOURCE_DJANGO
         return environment_setting(name, default)
@@ -67,6 +74,44 @@ def resolve_setting(
 
 def get_setting(name: str, default: object = None, *, request_or_site: HttpRequest | Site | None = None) -> object:
     return resolve_setting(name, default, request_or_site=request_or_site)[0]
+
+
+def validate_api_base(value: object) -> str:
+    """Return the stripped Voxhelm API base, or raise ``ImproperlyConfigured``.
+
+    Only absolute ``http``/``https`` URLs with a host are accepted. Userinfo,
+    query strings and fragments are rejected: ``/v1`` and job paths are appended
+    to the base, so a ``#`` or ``?`` would silently move the real request path.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ImproperlyConfigured(
+            f"{API_BASE_SETTING} must be configured as a Django setting or environment variable."
+        )
+    api_base = value.strip()
+    try:
+        parts = urlsplit(api_base)
+        hostname = parts.hostname
+        parts.port  # noqa: B018 - raises ValueError for an invalid port
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{API_BASE_SETTING} is not a valid URL.") from exc
+    if parts.scheme not in {"http", "https"} or not hostname:
+        raise ImproperlyConfigured(f"{API_BASE_SETTING} must be an absolute http:// or https:// URL with a host.")
+    if "@" in parts.netloc:
+        raise ImproperlyConfigured(f"{API_BASE_SETTING} must not contain credentials (user info).")
+    if "#" in api_base or parts.fragment:
+        raise ImproperlyConfigured(f"{API_BASE_SETTING} must not contain a fragment.")
+    if "?" in api_base or parts.query:
+        raise ImproperlyConfigured(f"{API_BASE_SETTING} must not contain a query string.")
+    if any(ord(character) < 33 or character == "\\" for character in api_base):
+        raise ImproperlyConfigured(
+            f"{API_BASE_SETTING} must not contain whitespace, control characters or backslashes."
+        )
+    return api_base
+
+
+def deployment_api_base() -> object:
+    """Return the configured deployment API base (Django setting, else environment)."""
+    return resolve_setting(API_BASE_SETTING)[0]
 
 
 def voxhelm_configured(*, request_or_site: HttpRequest | Site | None = None) -> bool:

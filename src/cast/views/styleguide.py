@@ -13,13 +13,16 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.contrib.auth.views import redirect_to_login
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.template import TemplateDoesNotExist
 from django.template.loader import get_template
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 from PIL import Image as PilImage
@@ -188,6 +191,13 @@ class StyleguideSeedData:
 def styleguide(request: HtmxHttpRequest) -> HttpResponse:
     if not _styleguide_is_enabled():
         raise Http404("Styleguide disabled")
+    # Rendering seeds pages and media (new rows and files on every request), so
+    # even with dev tools enabled only staff may trigger it.
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return redirect_to_login(request.get_full_path(), login_url=reverse("wagtailadmin_login"))
+    if not (user.is_active and user.is_staff):
+        raise PermissionDenied("The styleguide is limited to staff users.")
 
     theme = _resolve_styleguide_theme(request)
     styleguide_data = _build_styleguide_data(request)

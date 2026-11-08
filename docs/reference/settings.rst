@@ -14,6 +14,8 @@ Run ``python manage.py check`` during deployment. The ``cast.E010`` error means
 django-cast could not install its guarded Wagtail publication hook; publication
 rules such as the episode audio requirement are not safely enforced until the
 deployment uses a supported Wagtail version and the startup warning is resolved.
+``cast.E012`` means ``CAST_VOXHELM_API_BASE`` is not an absolute ``http(s)`` URL
+or contains user info, a query string or a fragment.
 
 ********
 Comments
@@ -232,6 +234,22 @@ remove the matching previous/next thumbnail color-profile rendition
 records/files safely. Until that synchronization completes, gallery rendering
 uses an existing counterpart rendition so thumbnails remain visible.
 
+CAST_GALLERY_TOKEN_MAX_AGE
+==========================
+
+Lifetime, in seconds, of the signed gallery token that rendered galleries pass
+to the gallery modal view. Defaults to ``86400`` (one day). Older tokens are
+rejected (the modal request returns ``400``), so a page left open longer than
+this must be reloaded before the modal opens again. Raise it if rendered pages
+are cached for longer than a day.
+
+SVG uploads
+===========
+
+Wagtail image uploads in SVG format are always rejected with a validation
+error, even if ``WAGTAILIMAGES_EXTENSIONS`` includes ``svg``: SVG is active
+content and would be stored unsanitized at a media URL.
+
 ****************
 Post Body Blocks
 ****************
@@ -253,6 +271,28 @@ other or the built-in block names.
         "overview": ["myapp.blocks.teaser_block"],
         "detail": ["myapp.blocks.callout_block"],
     }
+
+CAST_CODE_BLOCK_MAX_SOURCE_LENGTH
+=================================
+
+Maximum number of characters in a ``code`` block's source. Defaults to
+``32768``. Longer sources are rejected when saving in Wagtail or through the
+editor API (``too_long``). Sources stored before the limit existed still
+render, escaped as plain text without syntax highlighting.
+
+CAST_CODE_BLOCK_LANGUAGES
+=========================
+
+Pygments lexer aliases that ``code`` blocks may highlight. Defaults to a
+curated list of common languages (for example ``python``, ``javascript``,
+``bash``, ``html``, ``css``, ``json``, ``yaml``, ``sql``, ``rust``, ``go``).
+Any other language renders as plain text. Highlighted HTML is cached by content
+hash in the default Django cache and pre-rendered when a block is saved in
+Wagtail, so public page and feed renders rarely run Pygments.
+
+.. code-block:: python
+
+    CAST_CODE_BLOCK_LANGUAGES = ["python", "elixir", "text"]
 
 Configured blocks are also available to the editor API for their configured
 section. Editor API clients send custom block values in the block's
@@ -287,25 +327,33 @@ Transcription
 CAST_VOXHELM_API_BASE
 =====================
 
-Base URL for the Voxhelm service used by ``generate_transcripts``. The value
-may point at either the service root (for example
-``https://voxhelm.example.com``) or the ``/v1`` API prefix. This can be set as
-either a Django setting or an environment variable, or per site through the
-Wagtail admin ``Settings -> Voxhelm settings`` screen.
+Base URL for the Voxhelm service used by ``generate_transcripts`` and the
+Wagtail admin transcript workflow. The value may point at either the service
+root (for example ``https://voxhelm.example.com``) or the ``/v1`` API prefix.
 
-The base URL and API key must come from the same configuration level. A
-nonempty site credential selects the site pair; otherwise a nonempty Django
-credential selects the Django pair; otherwise the environment pair is used.
-Incomplete pairs disable generation rather than inheriting a credential.
-Changing the base URL in Wagtail requires re-entering the token. Clearing both
-fields together removes the site credentials and enables deployment fallback.
+This is **deployment configuration only**: set it as a Django setting or an
+environment variable. It is not editable in Wagtail admin (a site-level base
+URL let holders of the delegable settings permission aim server-side requests
+at arbitrary internal hosts). The value must be an absolute ``http://`` or
+``https://`` URL with a host and must not contain user info, a query string or
+a fragment; ``python manage.py check`` reports ``cast.E012`` for an invalid
+value and the Voxhelm client refuses to use it.
+
+Between the Django-settings and environment levels the base URL and
+``CAST_VOXHELM_API_KEY`` still resolve as a pair: a nonempty Django credential
+selects the Django pair, otherwise the environment pair is used, and an
+incomplete pair disables generation rather than inheriting a credential. A
+token stored in ``Settings -> Voxhelm settings`` overrides only the key.
 
 CAST_VOXHELM_API_KEY
 ====================
 
 Bearer token used for Voxhelm job submission, polling, and artifact download.
 This can be set as either a Django setting or an environment variable, or per
-site through the Wagtail admin ``Settings -> Voxhelm settings`` screen.
+site through the Wagtail admin ``Settings -> Voxhelm settings`` screen. A site
+token overrides the deployment key and is sent to the deployment
+``CAST_VOXHELM_API_BASE``; tick "Remove stored API token" there to fall back
+to the deployment key.
 
 CAST_VOXHELM_MODEL
 ==================
@@ -444,8 +492,9 @@ Wagtail Admin Configuration
 ===========================
 
 django-cast also exposes a site-scoped ``Voxhelm settings`` model in Wagtail
-admin for the API base URL, API token, optional model/language preferences,
-and optional diarization override. These values take precedence over Django
+admin for the API token, optional model/language preferences, and optional
+diarization override (the API base URL is deployment-only, see
+``CAST_VOXHELM_API_BASE``). These values take precedence over Django
 settings and environment variables for Wagtail-admin-triggered transcript
 generation on that site; the diarization and known-speaker fields can also be
 left at "Not set here" to inherit the Django/environment value.
@@ -592,7 +641,10 @@ When enabled, these routes are accessible:
 - ``/cast/theme-compare/``
 - ``/cast/dev-health/``
 
-When disabled, these routes return ``404``.
+When disabled, these routes return ``404``. ``/cast/styleguide/`` creates seed
+pages and media on every visit, so even when enabled it requires a logged-in,
+active staff user (anonymous visitors are redirected to the Wagtail login,
+other users get ``403``).
 
 CAST_ENABLE_STYLEGUIDE
 ======================
@@ -770,6 +822,19 @@ or WebVTT transcript before parsing. Defaults to ``10485760`` (10 MiB). The
 limit is enforced from the uploaded content rather than a client-reported
 size.
 
+
+CAST_FILE_EXTENSIONS
+====================
+
+File extensions accepted for the generic ``File`` model (Django admin
+``Files``, stored under ``cast_files/``). Defaults to documents and archives
+only: ``csv``, ``docx``, ``epub``, ``gz``, ``json``, ``md``, ``odp``, ``ods``,
+``odt``, ``pdf``, ``pptx``, ``tar``, ``tgz``, ``txt``, ``xlsx`` and ``zip``.
+Never add active content such as ``html``, ``svg``, ``xml`` or ``js``.
+django-cast does not serve these files itself; configure the media server or
+object storage to send ``X-Content-Type-Options: nosniff`` and
+``Content-Disposition: attachment`` for ``cast_files/`` (see the deployment
+guide).
 
 CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
 =====================================

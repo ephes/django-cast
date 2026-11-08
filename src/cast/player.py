@@ -319,12 +319,9 @@ def audio_player_context_flags(*, enabled: bool) -> dict[str, bool]:
     }
 
 
-def _post_permalink(post: Any, request: Any) -> str:
-    getter = getattr(post, "get_url", None)
-    if not callable(getter):
-        return ""
-    url = getter(request)
-    if not isinstance(url, str):
+def _http_permalink(url: Any, request: Any) -> str:
+    """Return ``url`` as an absolute HTTP(S) URL, or ``""`` when unsupported."""
+    if not isinstance(url, str) or not url:
         return ""
     try:
         if request is not None and hasattr(request, "build_absolute_uri"):
@@ -335,7 +332,70 @@ def _post_permalink(post: Any, request: Any) -> str:
         return ""
 
 
-def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcript: bool = True) -> dict[str, Any]:
+def _request_cached_page_url(page: Any, request: Any) -> str | None:
+    """Resolve ``page``'s URL from Wagtail's request-scoped site cache only.
+
+    Wagtail stores ``Site.get_site_root_paths()`` on the request once any page
+    URL was resolved with that request (cast's repositories do this for every
+    listed post). Mirroring ``Page.get_url`` here, without its unconditional
+    ``Site.find_for_request`` lookup, keeps the payload free of database queries.
+    A request without that cache returns ``None`` instead of querying sites.
+    """
+    root_paths = getattr(request, "_wagtail_cached_site_root_paths", None)
+    get_url_parts = getattr(page, "get_url_parts", None)
+    if root_paths is None or not callable(get_url_parts):
+        return None
+    current_site = getattr(request, "_wagtail_site", None)
+    url_path = getattr(page, "url_path", None)
+    if current_site is None and isinstance(url_path, str):
+        matching_site_ids = {root_path[0] for root_path in root_paths if url_path.startswith(root_path[1])}
+        if len(matching_site_ids) > 1:
+            # ``get_url_parts`` would call ``Site.find_for_request`` to pick among them.
+            return None
+    url_parts = get_url_parts(request=request)
+    if url_parts is None or url_parts[2] is None:
+        return None
+    site_id, root_url, page_path = url_parts
+    num_sites = len({root_path[0] for root_path in root_paths})
+    if num_sites == 1 or (current_site is not None and site_id == current_site.pk):
+        return page_path
+    return f"{root_url}{page_path}"
+
+
+def _post_permalink(post: Any, episode: Any, request: Any) -> str:
+    """Return the playing post's HTTP(S) URL from already-resolved sources only.
+
+    Payloads are built for every card on cached overview pages, so the permalink
+    must not add per-render database work. Sources, in order: a ``page_url`` the
+    repository attached to the post, cast's request-local page-link URL cache
+    (filled by repositories for every listed post), and Wagtail's request-scoped
+    site-root cache. When none is available the permalink is omitted; callers
+    that know the URL can pass it to :func:`build_player_payload` explicitly.
+    """
+    for candidate in (post, episode):
+        page_url = getattr(candidate, "page_url", None)
+        if isinstance(page_url, str) and page_url:
+            return _http_permalink(page_url, request)
+    post_id = getattr(episode, "pk", None)
+    if isinstance(post_id, int):
+        from .wagtail_hooks import PageLinkHandlerWithCache
+
+        cached_url = PageLinkHandlerWithCache.cache.get(post_id)
+        if cached_url:
+            return _http_permalink(cached_url, request)
+    if request is None:
+        return ""
+    return _http_permalink(_request_cached_page_url(episode, request), request)
+
+
+def build_player_payload(
+    audio: Any,
+    *,
+    post: Any,
+    request: Any,
+    inline_transcript: bool = True,
+    permalink: str | None = None,
+) -> dict[str, Any]:
     """Return the normalized :class:`PlayerPayload` ``dict`` for ``audio``.
 
     The transcript is **lazy-loaded**: it is never inlined into the page.
@@ -347,6 +407,11 @@ def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcri
 
     ``inline_transcript=False`` (used by the transcript endpoint) builds and
     sanitizes the cues and returns ``{"cues": [...]}``.
+
+    ``permalink`` optionally supplies the playing post's URL (relative URLs are
+    resolved against ``request``). Without it, the URL is taken only from
+    already-resolved sources (see :func:`_post_permalink`), never from new
+    site/page queries.
     """
     episode = getattr(post, "specific", post)
 
@@ -380,7 +445,12 @@ def build_player_payload(audio: Any, *, post: Any, request: Any, inline_transcri
         "chapters": build_chapters(audio),
         "transcript": transcript,
     }
-    permalink = _post_permalink(episode, request)
-    if permalink:
-        payload["permalink"] = permalink
+    if permalink is not None:
+        resolved_permalink = _http_permalink(permalink, request)
+    elif post is None:
+        resolved_permalink = ""
+    else:
+        resolved_permalink = _post_permalink(post, episode, request)
+    if resolved_permalink:
+        payload["permalink"] = resolved_permalink
     return payload

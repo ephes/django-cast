@@ -37,10 +37,12 @@ def has_gps(image: Image.Image) -> bool:
 
 
 def sanitize_upload(upload: File) -> File:
-    """Return a sanitized file, leaving GPS-free originals unchanged."""
+    """Return a sanitized file, leaving GPS-free originals unchanged. SVG uploads are rejected."""
     try:
         if WillowImage.open(upload).format_name == "svg":
-            return upload
+            # Fail closed: SVG is active content (stored same-origin XSS) and is
+            # not sanitized here, even if an operator adds it to the allowlist.
+            raise ValueError("SVG images are not supported; upload a raster image (for example PNG or WebP).")
         with Image.open(upload) as image:
             if not has_gps(image):
                 return upload

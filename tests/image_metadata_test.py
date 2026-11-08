@@ -92,10 +92,31 @@ def test_raw_empty_and_svg_are_unchanged():
     raw = model(file=ContentFile(image_bytes(), name="raw.jpg"))
     strip_upload_gps(model, raw, raw=True)
     assert raw.file.read() == image_bytes()
-    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="24"></svg>'
-    image = model.objects.create(title="SVG", file=ContentFile(svg, name="image.svg"))
-    with image.file.storage.open(image.file.name, "rb") as stored:
-        assert stored.read() == svg
+
+
+@pytest.mark.django_db
+def test_svg_upload_fails_closed_before_storage(mocker, settings):
+    settings.WAGTAILIMAGES_EXTENSIONS = ["png", "svg"]
+    model = get_image_model()
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="24"><script>alert(1)</script></svg>'
+    image = model(title="SVG", file=ContentFile(svg, name="image.svg"))
+    save = mocker.patch.object(image.file.storage, "save")
+    with pytest.raises(ValueError, match="SVG images are not supported"):
+        image.save()
+    save.assert_not_called()
+    assert not model.objects.filter(title="SVG").exists()
+
+
+@pytest.mark.django_db
+def test_svg_upload_is_a_form_error(admin_client, admin_user, settings):
+    settings.WAGTAILIMAGES_EXTENSIONS = ["png", "svg"]
+    admin_user.is_superuser = True
+    admin_user.save()
+    svg = SimpleUploadedFile("image.svg", b'<svg xmlns="http://www.w3.org/2000/svg"/>', content_type="image/svg+xml")
+    response = admin_client.post(reverse("wagtailimages:add"), {"title": "SVG", "file": svg})
+    assert response.status_code == 200
+    assert "SVG images are not supported" in response.content.decode()
+    assert not get_image_model().objects.filter(title="SVG").exists()
 
 
 @pytest.mark.django_db
@@ -131,8 +152,16 @@ def test_report_is_read_only_and_handles_unreadable_files(mocker):
     # Simulate a pre-policy original without invoking model signals.
     gps.file.storage.delete(gps.file.name)
     gps.file.storage.save(gps.file.name, ContentFile(image_bytes()))
-    svg = model.objects.create(
-        title="SVG", file=ContentFile(b'<svg xmlns="http://www.w3.org/2000/svg"/>', name="x.svg")
+    # A pre-policy SVG row (stored before uploads failed closed), written without signals.
+    [svg] = model.objects.bulk_create(
+        [
+            model(
+                title="SVG",
+                width=1,
+                height=1,
+                file=ContentFile(b'<svg xmlns="http://www.w3.org/2000/svg"/>', name="x.svg"),
+            )
+        ]
     )
     before = list(model.objects.values())
     originals = {row.file.name: row.file.storage.open(row.file.name).read() for row in (clean, gps, svg)}

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from django.contrib.auth.models import Group
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -22,6 +24,7 @@ def _call_styleguide_with_stubbed_content(monkeypatch, rf, path: str, *, session
     monkeypatch.setattr(styleguide_view, "render", fake_render)
 
     request = rf.get(path)
+    request.user = SimpleNamespace(is_authenticated=True, is_active=True, is_staff=True)
     middleware = SessionMiddleware(lambda req: None)
     middleware.process_request(request)
     if session_theme is not None:
@@ -40,12 +43,42 @@ def test_styleguide_disabled_returns_404(settings, client):
 
 
 @pytest.mark.django_db
+def test_styleguide_requires_login_and_staff(settings, client, user, mocker):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    seed = mocker.patch.object(styleguide_view, "_build_styleguide_data")
+
+    response = client.get(reverse("cast:styleguide") + "?theme=plain")
+    assert response.status_code == 302
+    assert response["Location"].startswith(reverse("wagtailadmin_login"))
+    assert "next=/cast/styleguide/%3Ftheme%3Dplain" in response["Location"]
+
+    client.force_login(user)
+    assert client.get(reverse("cast:styleguide")).status_code == 403
+    user.is_staff = True
+    user.is_active = False
+    assert styleguide_view_status(user) == 403
+    seed.assert_not_called()
+
+
+def styleguide_view_status(user):
+    from django.test import RequestFactory
+
+    request = RequestFactory().get(reverse("cast:styleguide"))
+    request.user = user
+    try:
+        styleguide_view.styleguide(request)
+    except styleguide_view.PermissionDenied:
+        return 403
+    return 200  # pragma: no cover - the gate must not let inactive users through
+
+
+@pytest.mark.django_db
 @pytest.mark.slow
-def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
+def test_styleguide_enabled_renders_and_is_idempotent(settings, admin_client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "plain"})
 
-    response = client.get(reverse("cast:styleguide"))
+    response = admin_client.get(reverse("cast:styleguide"))
     assert response.status_code == 200
     assert response.context["styleguide_active_theme"] == "plain"
     styleguide_audio = response.context["styleguide_audio"]
@@ -56,7 +89,7 @@ def test_styleguide_enabled_renders_and_is_idempotent(settings, client, site):
     assert Blog.objects.filter(slug="styleguide-blog").count() == 1
     assert Post.objects.filter(slug__startswith="styleguide-post").count() == expected_posts
 
-    response_second = client.get(reverse("cast:styleguide"))
+    response_second = admin_client.get(reverse("cast:styleguide"))
     assert response_second.status_code == 200
     assert Blog.objects.filter(slug="styleguide-blog").count() == 1
     assert Post.objects.filter(slug__startswith="styleguide-post").count() == expected_posts
@@ -78,6 +111,7 @@ def test_styleguide_vue_theme_builds_payload(settings, rf, site, monkeypatch):
     monkeypatch.setattr(styleguide_view, "render", fake_render)
 
     request = rf.get(f"{reverse('cast:styleguide')}?theme=vue")
+    request.user = SimpleNamespace(is_authenticated=True, is_active=True, is_staff=True)
     response = styleguide_view.styleguide(request)
     assert response.status_code == 200
     assert captured["context"]["styleguide_active_theme"] == "vue"
@@ -88,11 +122,11 @@ def test_styleguide_vue_theme_builds_payload(settings, rf, site, monkeypatch):
 
 @pytest.mark.django_db
 @pytest.mark.slow
-def test_styleguide_seeds_comments_for_media_post(settings, client, site, comments_enabled):
+def test_styleguide_seeds_comments_for_media_post(settings, admin_client, site, comments_enabled):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "plain"})
 
-    response = client.get(reverse("cast:styleguide"))
+    response = admin_client.get(reverse("cast:styleguide"))
     assert response.status_code == 200
 
     from django.contrib.auth import get_user_model
@@ -115,7 +149,7 @@ def test_styleguide_seeds_comments_for_media_post(settings, client, site, commen
     comments[1].comment = "Old reply"
     comments[1].save(update_fields=["comment"])
 
-    response_second = client.get(reverse("cast:styleguide"))
+    response_second = admin_client.get(reverse("cast:styleguide"))
     assert response_second.status_code == 200
 
     refreshed = (
@@ -230,24 +264,24 @@ def test_styleguide_missing_templates_fallback_warning(settings, rf, site, monke
 
 @pytest.mark.django_db
 @pytest.mark.slow
-def test_styleguide_creates_site_when_missing(settings, client):
+def test_styleguide_creates_site_when_missing(settings, admin_client):
     settings.CAST_ENABLE_STYLEGUIDE = True
     from wagtail.models import Site
 
     Site.objects.all().delete()
 
-    response = client.get(reverse("cast:styleguide"))
+    response = admin_client.get(reverse("cast:styleguide"))
     assert response.status_code == 200
     assert Site.objects.exists()
 
 
 @pytest.mark.django_db
 @pytest.mark.slow
-def test_styleguide_repairs_episode_audio(settings, client, site):
+def test_styleguide_repairs_episode_audio(settings, admin_client, site):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
 
-    response = client.get(reverse("cast:styleguide"))
+    response = admin_client.get(reverse("cast:styleguide"))
     assert response.status_code == 200
 
     from cast.models import Episode
@@ -257,7 +291,7 @@ def test_styleguide_repairs_episode_audio(settings, client, site):
     episode.podcast_audio = None
     episode.save()
 
-    response_second = client.get(reverse("cast:styleguide"))
+    response_second = admin_client.get(reverse("cast:styleguide"))
     assert response_second.status_code == 200
 
     episode.refresh_from_db()
@@ -385,7 +419,7 @@ def test_styleguide_extract_podlove_player_api_url():
 
 @pytest.mark.django_db
 @pytest.mark.slow
-def test_styleguide_resets_invalid_blog_and_podcast_themes(settings, client, site, user):
+def test_styleguide_resets_invalid_blog_and_podcast_themes(settings, admin_client, site, user):
     settings.CAST_ENABLE_STYLEGUIDE = True
     TemplateBaseDirectory.objects.update_or_create(site=site, defaults={"name": "bootstrap4"})
     existing_blog = Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).first()
@@ -415,7 +449,7 @@ def test_styleguide_resets_invalid_blog_and_podcast_themes(settings, client, sit
     site.root_page.add_child(instance=podcast)
     Podcast.objects.filter(pk=podcast.pk).update(template_base_dir="invalid")
 
-    response = client.get(reverse("cast:styleguide"))
+    response = admin_client.get(reverse("cast:styleguide"))
     assert response.status_code == 200
 
     blog.refresh_from_db()
@@ -423,3 +457,9 @@ def test_styleguide_resets_invalid_blog_and_podcast_themes(settings, client, sit
     assert blog.template_base_dir == styleguide_view._styleguide_default_theme()
     assert blog.live is True
     assert podcast.template_base_dir == styleguide_view._styleguide_default_theme()
+
+
+def test_styleguide_without_auth_middleware_redirects_to_login(settings, rf):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    response = styleguide_view.styleguide(rf.get(reverse("cast:styleguide")))
+    assert response.status_code == 302

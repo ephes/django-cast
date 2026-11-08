@@ -1,6 +1,41 @@
 Unreleased
 ==========
 
+- Security hardening:
+
+  - Code blocks: sources are capped at ``CAST_CODE_BLOCK_MAX_SOURCE_LENGTH``
+    (default 32768 characters) on Wagtail and editor-API saves, only lexer
+    aliases in ``CAST_CODE_BLOCK_LANGUAGES`` are highlighted (others render as
+    plain text), oversized stored sources render escaped without lexing, and
+    highlighted HTML is cached by content hash and pre-rendered on save.
+  - Gallery modal tokens now expire after ``CAST_GALLERY_TOKEN_MAX_AGE``
+    seconds (default one day).
+  - ``/cast/styleguide/`` (dev tools only) requires an active staff user,
+    because rendering it seeds pages and media.
+  - SVG image uploads are rejected even when ``WAGTAILIMAGES_EXTENSIONS``
+    allows them.
+  - The generic ``File`` model accepts only ``CAST_FILE_EXTENSIONS`` (documents
+    and archives by default; migration ``cast.0089`` adds the validator). The
+    deployment guide now recommends ``nosniff`` and ``attachment`` headers
+    for media.
+
+- Security: the Voxhelm API base URL is now deployment configuration only
+  (``CAST_VOXHELM_API_BASE`` as a Django setting or environment variable). The
+  admin-editable site setting field is removed by migration ``cast.0088``,
+  which logs a warning for each stored base that differs from the deployment
+  value. The base must be an absolute ``http(s)`` URL without user info, query
+  or fragment (system check ``cast.E012``; the client refuses invalid values).
+  A site API token still overrides the deployment key; a new "Remove stored
+  API token" option replaces clearing both credential fields. **Upgrade
+  action:** set ``CAST_VOXHELM_API_BASE`` in deploy config before migrating if a
+  site used the Wagtail field.
+
+- Stop the player payload's permalink from adding two Site queries to each
+  cached player-card render. The permalink now comes only from URLs already
+  resolved for the request (repository ``page_url``, the page-link cache or
+  Wagtail's request-scoped site roots); ``build_player_payload`` accepts an
+  explicit ``permalink=``. Posts without a resolved URL omit the permalink.
+
 - Make equal-date blog index pagination and RSS/Atom ordering deterministic with
   a descending primary-key tie-breaker in both repository modes.
 - Report media backup/restore summaries in every mode, continue independent paths

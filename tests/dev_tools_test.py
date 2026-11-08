@@ -85,16 +85,16 @@ def test_dev_tools_enabled_both_set_new_false_overrides(settings):
 
 
 @pytest.mark.django_db
-def test_styleguide_view_respects_new_setting(settings, client):
+def test_styleguide_view_respects_new_setting(settings, admin_client):
     """Styleguide view should respond to CAST_ENABLE_DEV_TOOLS."""
     from django.urls import reverse
 
     if hasattr(settings, "CAST_ENABLE_STYLEGUIDE"):
         delattr(settings, "CAST_ENABLE_STYLEGUIDE")
     settings.CAST_ENABLE_DEV_TOOLS = False
-    response = client.get(reverse("cast:styleguide"))
+    response = admin_client.get(reverse("cast:styleguide"))
     assert response.status_code == 404
 
     settings.CAST_ENABLE_DEV_TOOLS = True
-    response = client.get(reverse("cast:styleguide"))
+    response = admin_client.get(reverse("cast:styleguide"))
     assert response.status_code == 200

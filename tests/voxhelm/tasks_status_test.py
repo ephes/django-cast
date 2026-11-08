@@ -147,7 +147,6 @@ def test_enqueue_audio_transcript_generation_uses_diarized_task_ref_from_site_se
     VoxhelmSettings.objects.update_or_create(
         site=site,
         defaults={
-            "api_base": "https://site.example",
             "api_token": "site-secret",
             "diarization_enabled": True,
         },

@@ -89,6 +89,24 @@ def test_list_item_unwrap_handles_plain_lists_and_nested_dicts():
     ) == {"items": [{"title": "A"}, {"title": "B"}], "plain": [1, {"x": 2}]}
 
 
+def test_code_converter_rejects_oversized_source(settings):
+    settings.CAST_CODE_BLOCK_MAX_SOURCE_LENGTH = 4
+    converter = CodeConverter()
+    ctx = ConversionContext(section="overview", user=None)
+    errors = ErrorCollector()
+
+    assert converter.to_stream({"language": "py", "source": "12345"}, ctx=ctx, path="p", errors=errors) is None
+    assert errors.error_map == {
+        "p.source": [{"code": "too_long", "message": "Code blocks are limited to 4 characters."}]
+    }
+    errors = ErrorCollector()
+    assert converter.to_stream({"language": "py", "source": "1234"}, ctx=ctx, path="p", errors=errors) == {
+        "language": "py",
+        "source": "1234",
+    }
+    assert not errors
+
+
 def test_code_converter_validates_and_reads_curated_fields():
     converter = CodeConverter()
     ctx = ConversionContext(section="overview", user=None)

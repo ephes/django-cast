@@ -198,7 +198,8 @@ Use two different URLs during frontend verification. They serve different purpos
    The styleguide route is still available, but the long-term direction is the
    reference-site workflow (``ensure_reference_site`` + real page checks).
 
-Component preview route:
+Component preview route (log in to the Wagtail admin as a staff user first;
+the route seeds pages and media and is limited to staff):
 
 .. code-block:: bash
 

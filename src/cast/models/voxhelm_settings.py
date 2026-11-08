@@ -22,15 +22,17 @@ from ..setting_resolution import (
 class VoxhelmSettings(BaseSiteSetting):
     base_form_class: type[WagtailAdminModelForm] | None = None
 
-    api_base: models.URLField = models.URLField(
-        blank=True,
-        help_text=_("Voxhelm service root or /v1 API base, for example https://voxhelm.example.com."),
-        verbose_name=_("API base URL"),
-    )
+    # The Voxhelm API base URL is deployment configuration only
+    # (``CAST_VOXHELM_API_BASE`` as a Django setting or environment variable).
+    # It is intentionally not editable here: a site-level URL let anyone with
+    # the delegable settings permission point server-side requests elsewhere.
     api_token: models.CharField = models.CharField(
         blank=True,
         max_length=255,
-        help_text=_("Bearer token used for Voxhelm job submission and artifact access."),
+        help_text=_(
+            "Bearer token used for Voxhelm job submission and artifact access. The API base URL comes from the "
+            "CAST_VOXHELM_API_BASE deployment setting."
+        ),
         verbose_name=_("API token"),
     )
     model: models.CharField = models.CharField(
@@ -68,8 +70,8 @@ class VoxhelmSettings(BaseSiteSetting):
     )
 
     panels = [
-        FieldPanel("api_base"),
         FieldPanel("api_token"),
+        FieldPanel("clear_api_token"),
         FieldPanel("model"),
         FieldPanel("language"),
         FieldPanel("diarization_enabled"),
@@ -99,6 +101,12 @@ INHERITABLE_BOOLEAN_SETTINGS = {
 
 
 class VoxhelmSettingsForm(WagtailAdminModelForm):
+    clear_api_token = forms.BooleanField(
+        required=False,
+        label=_("Remove stored API token"),
+        help_text=_("Remove this site's token so the deployment CAST_VOXHELM_API_KEY applies."),
+    )
+
     class Meta:
         widgets = {
             "api_token": forms.PasswordInput(render_value=False),
@@ -112,8 +120,8 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         if self.instance.pk and self.instance.api_token:
             self.fields["api_token"].help_text = _(
                 "A token is configured. The field is intentionally blank for security. Leave blank to keep the "
-                "existing token when the API base URL remains set and unchanged, or enter a new token to replace it. "
-                "Saving with both credential fields blank removes the stored token."
+                "existing token, enter a new token to replace it, or tick the removal box below to delete it. "
+                "The API base URL comes from the CAST_VOXHELM_API_BASE deployment setting."
             )
 
     def _describe_effective_boolean_settings(self) -> None:
@@ -146,18 +154,20 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
                     }
             field.help_text = f"{field.help_text} {effective}"
 
-    def clean_api_base(self) -> str:
-        return self.cleaned_data["api_base"].strip()
-
     def clean_api_token(self) -> str:
         token = self.cleaned_data.get("api_token", "").strip()
         if token:
             return token
-        if self.cleaned_data.get("api_base") == "":
-            return ""
-        if self.cleaned_data.get("api_base", self.instance.api_base) != self.instance.api_base:
-            raise forms.ValidationError(_("Enter the API token when changing the API base URL."))
         return self.instance.api_token
+
+    def clean(self) -> dict[str, object]:
+        cleaned_data = super().clean()
+        if cleaned_data.get("clear_api_token"):
+            if self.data.get(self.add_prefix("api_token"), "").strip():
+                self.add_error("clear_api_token", _("Either enter a new token or remove the stored one, not both."))
+            else:
+                cleaned_data["api_token"] = ""
+        return cleaned_data
 
     def clean_model(self) -> str:
         return self.cleaned_data["model"].strip()

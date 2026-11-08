@@ -413,3 +413,30 @@ def check_theme_contract(
                 )
             )
     return messages
+
+
+@register("cast")
+def check_cast_voxhelm_api_base(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Validate the deployment-only CAST_VOXHELM_API_BASE when it is set."""
+    from django.core.exceptions import ImproperlyConfigured
+
+    from cast.voxhelm.settings import deployment_api_base, validate_api_base
+
+    value = deployment_api_base()
+    if value in {None, ""}:
+        return []
+    try:
+        validate_api_base(value)
+    except ImproperlyConfigured as exc:
+        return [
+            Error(
+                str(exc),
+                hint="Set CAST_VOXHELM_API_BASE to the Voxhelm service root, e.g. https://voxhelm.example.com.",
+                id="cast.E012",
+            )
+        ]
+    return []

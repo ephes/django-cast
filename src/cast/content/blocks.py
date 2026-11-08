@@ -171,6 +171,11 @@ class CodeConverter:
                 invalid = True
         if invalid:
             return None
+        from ..blocks import code_block_source_too_long, code_block_source_too_long_message
+
+        if code_block_source_too_long(value["source"]):
+            errors.add(f"{path}.source", "too_long", code_block_source_too_long_message())
+            return None
         return {"language": value["language"], "source": value["source"]}
 
     def to_author(self, value: Any, *, ctx: ConversionContext) -> Any | Unsupported:
