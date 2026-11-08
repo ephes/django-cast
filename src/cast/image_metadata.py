@@ -13,11 +13,27 @@ from willow.image import Image as WillowImage
 
 GPS_INFO = ExifTags.IFD.GPSInfo
 GPSImageForm: Any = None
+MAX_INSPECTION_FRAMES = 100
+MAX_INSPECTION_PIXELS = 50_000_000
+
+
+class GPSInspectionBudgetExceeded(ValueError):
+    """Raster metadata inspection exceeded its supported work budget."""
 
 
 def has_gps(image: Image.Image) -> bool:
-    """Inspect every frame using Pillow's public EXIF API."""
-    return any(GPS_INFO in frame.getexif() for frame in ImageSequence.Iterator(image))
+    """Inspect frames within a cumulative work budget using Pillow's public EXIF API."""
+    pixels = 0
+    found = False
+    for index, frame in enumerate(ImageSequence.Iterator(image)):
+        pixels += frame.width * frame.height
+        if index >= MAX_INSPECTION_FRAMES or pixels > MAX_INSPECTION_PIXELS:
+            raise GPSInspectionBudgetExceeded(
+                f"Image GPS inspection budget exceeded (maximum {MAX_INSPECTION_FRAMES} frames / "
+                f"{MAX_INSPECTION_PIXELS} cumulative pixels)."
+            )
+        found = GPS_INFO in frame.getexif() or found
+    return found
 
 
 def sanitize_upload(upload: File) -> File:

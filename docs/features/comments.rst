@@ -661,3 +661,9 @@ session or logging out invalidates its former cookie for edit/delete requests,
 including after a new login. Database, cached-database, cache and file session
 backends are covered by create/revoke/replay journeys. Signed-cookie sessions
 remain unsupported for author actions.
+
+PostgreSQL concurrency regressions cover stock and Ajax replies racing with
+author edits/deletions on independent connections. They observe the competing
+transaction's database lock wait and check committed comment/moderation state
+after both orderings complete. Replies make subsequent author actions
+ineligible; a reply waiting behind deletion must reject the removed parent.

@@ -306,3 +306,66 @@ def test_sanitizer_failure_is_form_error(mocker):
     )
     assert not form.is_valid()
     assert form.errors.as_data()["file"][0].code == "gps_metadata"
+
+
+@pytest.mark.django_db
+def test_many_frame_upload_refuses_with_bounded_inspection_before_storage(mocker):
+
+    frames = [Image.new("RGB", (2, 2), (index, 0, 0)) for index in range(101)]
+    output = BytesIO()
+    frames[0].save(output, format="GIF", save_all=True, append_images=frames[1:], optimize=False)
+    model = get_image_model()
+    storage_save = mocker.spy(model._meta.get_field("file").storage, "save")
+    exif = mocker.spy(Image.Image, "getexif")
+    with pytest.raises(ValueError, match="inspection budget"):
+        model.objects.create(title="Many frames", file=ContentFile(output.getvalue(), name="many.gif"))
+    storage_save.assert_not_called()
+    assert exif.call_count <= 100
+    assert not model.objects.filter(title="Many frames").exists()
+
+
+def test_gps_pixel_budget_stops_before_exif_on_exhausting_frame(mocker, monkeypatch):
+    from cast import image_metadata
+
+    monkeypatch.setattr(image_metadata, "MAX_INSPECTION_PIXELS", 16 * 24, raising=False)
+    with Image.open(BytesIO(image_bytes(gps=False))) as first, Image.open(BytesIO(image_bytes())) as second:
+        inspect_second = mocker.spy(second, "getexif")
+        mocker.patch("cast.image_metadata.ImageSequence.Iterator", return_value=iter([first, second]))
+        with pytest.raises(ValueError, match="inspection budget"):
+            has_gps(first)
+        inspect_second.assert_not_called()
+
+
+def test_frame_budget_is_cumulative_even_if_frame_count_is_unknown(monkeypatch, mocker):
+    from types import SimpleNamespace
+
+    frame = SimpleNamespace(width=1, height=1, getexif=mocker.Mock(return_value={}))
+    mocker.patch("cast.image_metadata.ImageSequence.Iterator", return_value=iter([frame] * 101))
+    with pytest.raises(ValueError, match="inspection budget"):
+        has_gps(frame)
+    assert frame.getexif.call_count == 100
+
+
+@pytest.mark.django_db
+def test_gps_report_separates_budget_exhaustion_without_writes(mocker, monkeypatch):
+    from cast import image_metadata
+
+    model = get_image_model()
+    image = model.objects.create(title="Stored", file=ContentFile(image_bytes(gps=False), name="stored.jpg"))
+    before_rows = list(model.objects.values())
+    with image.file.storage.open(image.file.name, "rb") as stored:
+        before_bytes = stored.read()
+    monkeypatch.setattr(image_metadata, "MAX_INSPECTION_PIXELS", 1)
+    save = mocker.spy(image.file.storage, "save")
+    delete = mocker.spy(image.file.storage, "delete")
+    output, errors = StringIO(), StringIO()
+    with pytest.raises(CommandError, match="incomplete"):
+        call_command("report_image_gps", stdout=output, stderr=errors)
+    assert "unreadable images: 0; budget-exceeded images: 1" in output.getvalue()
+    assert f"Inspection budget exceeded for image {image.pk}" in errors.getvalue()
+    assert "1 cumulative pixels" in errors.getvalue()
+    assert list(model.objects.values()) == before_rows
+    with image.file.storage.open(image.file.name, "rb") as stored:
+        assert stored.read() == before_bytes
+    save.assert_not_called()
+    delete.assert_not_called()

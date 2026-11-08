@@ -346,3 +346,11 @@ Unreleased
   initialization and increments without renewing a competing counter's expiry.
 - Cover stale comment-ownership cookies after server-side session revocation or
   logout, including a subsequent login, across all supported server-side backends.
+
+- Limit upload GPS inspection to 100 frames and 50 million cumulative decoded
+  pixels, including GPS-free originals (for example 61 MP JPEGs or 101-frame
+  animations), refusing exhausted inputs before storage. The read-only GPS report
+  counts stored originals exceeding the budget separately and exits incomplete
+  without changing them.
+- Exercise real PostgreSQL serialization between stock/Ajax replies and author
+  edit/delete actions, checking committed comment and moderation state.

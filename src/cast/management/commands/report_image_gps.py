@@ -7,7 +7,7 @@ from PIL import Image
 from wagtail.images import get_image_model
 from willow.image import Image as WillowImage, UnrecognisedImageFormatError
 
-from cast.image_metadata import has_gps
+from cast.image_metadata import GPSInspectionBudgetExceeded, has_gps
 
 
 class Command(BaseCommand):
@@ -16,6 +16,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         failed = 0
         found = 0
+        budget_exceeded = 0
         for image in get_image_model().objects.order_by("pk").iterator():
             try:
                 with image.file.storage.open(image.file.name, "rb") as original:
@@ -25,6 +26,9 @@ class Command(BaseCommand):
                         if has_gps(raster):
                             self.stdout.write(f"{image.pk}\t{image.file.name}")
                             found += 1
+            except GPSInspectionBudgetExceeded as exc:
+                budget_exceeded += 1
+                self.stderr.write(f"Inspection budget exceeded for image {image.pk} ({image.file.name}): {exc}")
             except (
                 OSError,
                 ValueError,
@@ -34,6 +38,8 @@ class Command(BaseCommand):
             ) as exc:
                 failed += 1
                 self.stderr.write(f"Could not inspect image {image.pk} ({image.file.name}): {exc}")
-        self.stdout.write(f"GPS images: {found}; unreadable images: {failed}")
-        if failed:
-            raise CommandError("GPS report is incomplete; see unreadable images above.")
+        self.stdout.write(
+            f"GPS images: {found}; unreadable images: {failed}; budget-exceeded images: {budget_exceeded}"
+        )
+        if failed or budget_exceeded:
+            raise CommandError("GPS report is incomplete; see unreadable/budget-exceeded images above.")
