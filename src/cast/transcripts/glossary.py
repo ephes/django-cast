@@ -17,6 +17,7 @@ pass plain strings and segments with ``start_ms`` and ``text``.
 from __future__ import annotations
 
 import functools
+import logging
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
@@ -32,6 +33,9 @@ SOURCE_CONFLICT = "conflict"
 
 SIMILARITY_THRESHOLD = 0.8
 MIN_TARGET_LETTERS = 3
+MAX_TARGET_CHARACTERS = 512
+MAX_TARGET_PARTS = 16
+logger = logging.getLogger(__name__)
 
 COMMON_WORD_LANGUAGES: tuple[str, ...] = ("de", "en")
 
@@ -523,6 +527,13 @@ class EffectiveGlossary:
 
         def add_target(text: str, source: str) -> None:
             text = _clean_line(text)
+            if len(text) > MAX_TARGET_CHARACTERS or len(_parts(text)) > MAX_TARGET_PARTS:
+                logger.warning(
+                    "Skipping oversized transcript glossary target (maximum %s characters / %s parts).",
+                    MAX_TARGET_CHARACTERS,
+                    MAX_TARGET_PARTS,
+                )
+                return
             key = letters_key(text)
             if len(key) < MIN_TARGET_LETTERS or key in seen:
                 return

@@ -578,3 +578,25 @@ def test_sharp_s_variants_match_like_normalize_phrase(text):
 def test_apply_replacements_rejects_bad_spans(edit):
     with pytest.raises(ValueError):
         apply_replacements("abc", [edit])
+
+
+@pytest.mark.parametrize("oversized", ["x" * 513, " ".join(["token"] * 17)])
+def test_oversized_derived_targets_skip_quadratic_build(oversized, mocker, caplog):
+    from cast.transcripts import glossary as module
+
+    build = mocker.spy(module._Target, "build")
+    terms = module.episode_terms(f'<p><a href="https://example.com">{oversized}</a></p>')
+    glossary = module.EffectiveGlossary([], [], terms, language="en")
+    assert not glossary.proposal_targets
+    assert module.find_proposals([module.TextSegment(0, "synthetic words")], glossary, "en") == []
+    build.assert_not_called()
+    assert "Skipping oversized transcript glossary target" in caplog.text
+    assert oversized not in caplog.text
+
+
+def test_maximum_supported_target_has_bounded_part_construction(mocker):
+    from cast.transcripts import glossary as module
+
+    text = " ".join(f"token{index}" for index in range(module.MAX_TARGET_PARTS))
+    target = module._Target.build(module.ProposalTarget(text, module.SOURCE_EPISODE))
+    assert len(target.part_keys) == sum(range(1, module.MAX_TARGET_PARTS + 1)) - 1
