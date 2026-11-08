@@ -58,3 +58,8 @@ transcripts without a source fingerprint. A real correction commit records the
 identity of the raw artifacts together with the sidecar. Episode context, draft
 show notes, contributors and show terms are read from the owning database. An
 episode supplied from another database is refused even if its audio ID matches.
+
+Glossary additions require a unique credited contributor identity. Shared first
+names are refused; use an unambiguous full name instead. Corrections also refuse
+duplicate destination start times in DOTe or WebVTT before staging any files,
+so equal-time lines from different speakers cannot overwrite one another.
