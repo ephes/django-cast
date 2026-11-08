@@ -648,3 +648,16 @@ the server can still take effect after Cancel. Edit/Delete actions have a
 and HTTP failures show an accessible retry message, retain the comment/draft,
 and release pending controls. Theme integrations keep the existing object-ID
 and comment control selectors; adopt the rebuilt shared comments bundle.
+
+Author-action concurrency and session revocation
+-----------------------------------------------
+
+The author edit/delete rate counter is initialized atomically. Concurrent first
+attempts all count toward the same window; a losing initialization does not
+renew its expiry. Denied attempts continue to count.
+
+Comment ownership depends on the live server-side session. Revoking that
+session or logging out invalidates its former cookie for edit/delete requests,
+including after a new login. Database, cached-database, cache and file session
+backends are covered by create/revoke/replay journeys. Signed-cookie sessions
+remain unsupported for author actions.

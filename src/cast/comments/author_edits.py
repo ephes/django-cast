@@ -183,8 +183,14 @@ def rate_limited(request: HttpRequest, action: str) -> bool:
     try:
         count = cache.incr(key)
     except ValueError:
-        cache.set(key, 1, appsettings.EDIT_RATE_WINDOW)
-        count = 1
+        if cache.add(key, 1, appsettings.EDIT_RATE_WINDOW):
+            count = 1
+        else:
+            try:
+                count = cache.incr(key)
+            except ValueError:
+                # The competing counter expired/was evicted before the retry.
+                count = 1
     return count > limit
 
 
