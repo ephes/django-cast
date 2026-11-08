@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Keep nested media probe deadlines within their parent's remaining budget.
+- Hydrate preview media and create derived renditions on the post's database,
+  including when IDs and rendition cache keys collide across databases.
+
 - Update post media relationship sets atomically and serialize canonical gallery
   creation on databases supporting row locks, preserving mutable membership.
 

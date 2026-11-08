@@ -13,7 +13,11 @@ _probe_deadline: ContextVar[float | None] = ContextVar("cast_probe_deadline", de
 @contextmanager
 def media_probe_budget(seconds: float) -> Iterator[None]:
     """Apply a cumulative subprocess budget to nested media probing calls."""
-    token = _probe_deadline.set(time.monotonic() + seconds)
+    deadline = time.monotonic() + seconds
+    parent_deadline = _probe_deadline.get()
+    if parent_deadline is not None:
+        deadline = min(deadline, parent_deadline)
+    token = _probe_deadline.set(deadline)
     try:
         yield
     finally:

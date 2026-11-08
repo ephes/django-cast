@@ -337,3 +337,6 @@ Every slice keeps `just check` green; 5 and 7 can be reordered freely. Slices 1-
 Upload leases now expire naturally because the portable Django cache API cannot
 atomically compare and delete a token. Every owned field gets a cleanup attempt;
 failed file deletion retains the row for recovery and reports incomplete cleanup.
+
+Nested probe scopes retain the tightest active deadline and restore the parent
+on every exit; asynchronous tasks keep independent context-local budgets.
