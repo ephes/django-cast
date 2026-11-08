@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Keep legacy correction dry runs read-only and persist raw source identity with
+  the correction commit. Bind correction context and glossary writes to the owning
+  database; refuse cross-database episode selections.
+
 - Keep nested media probe deadlines within their parent's remaining budget.
 - Hydrate preview media and create derived renditions on the post's database,
   including when IDs and rendition cache keys collide across databases.

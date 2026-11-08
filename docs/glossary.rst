@@ -49,3 +49,12 @@ Glossary
       ``src/cast/models/repository/``) pre-fetch images, renditions, audio,
       video, and metadata, then expose them as dictionaries that the template
       layer and StreamField blocks can look up by primary key.
+
+Correction identity and databases
+---------------------------------
+
+Correction previews perform no database or storage writes, including for legacy
+transcripts without a source fingerprint. A real correction commit records the
+identity of the raw artifacts together with the sidecar. Episode context, draft
+show notes, contributors and show terms are read from the owning database. An
+episode supplied from another database is refused even if its audio ID matches.
