@@ -58,3 +58,12 @@ branch deletion or Actions. The parking commit uses `[skip ci]`.
 - `git diff --check`: passed. JavaScript unchanged; no rebuild needed.
 - Review: unavailable due expired OAuth, not a clean verdict. PostgreSQL
   validation remains blocked as described above. No merge or trunk push.
+
+## Finisher outcome (round 84)
+
+B23 reviewed by the Claude finisher (Opus): no Critical/Warning findings.
+`just check` (4,505 passed, 100% coverage) and strict Sphinx rerun outside the
+sandbox. The full suite on a disposable local PostgreSQL 17 passed except two
+settings self-containment checks that fail identically on unchanged develop when
+the PostgreSQL engine is set by environment (wagtailsearch requires
+`django.contrib.postgres`); unrelated to this bundle. Merged `--no-ff` to develop.
