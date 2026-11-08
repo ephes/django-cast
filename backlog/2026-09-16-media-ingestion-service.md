@@ -340,3 +340,7 @@ failed file deletion retains the row for recovery and reports incomplete cleanup
 
 Nested probe scopes retain the tightest active deadline and restore the parent
 on every exit; asynchronous tasks keep independent context-local budgets.
+
+Staged groups now defer the saved marker to commit and expose an explicit scope
+for callers owning an outer transaction. Replacement row publication acquires a
+write lock before its snapshot and rejects stale timestamp/file generations.

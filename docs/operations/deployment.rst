@@ -216,3 +216,28 @@ Nested media probe budgets keep the earliest active deadline. A longer inner
 budget cannot extend the caller's remaining time, and a shorter budget applies
 only for its scope. Normal and exceptional exits restore the parent deadline;
 independent asynchronous contexts keep independent budgets.
+
+Replacement transaction ownership
+---------------------------------
+
+``StagedFileReplacementGroup.save_model()`` defers successful ownership transfer
+and old-file retirement until the owning transaction commits. Use
+``with replacements.rollback_scope(using="default"):`` as the outermost scope
+(create the group first), placing any additional ``transaction.atomic()`` blocks
+inside it. The scope owns a durable Django transaction and cleans files after
+exception or silent rollback; an already-active application transaction is
+refused before staging. Use the model's database alias for the scope.
+
+For manually owned transactions, call ``rollback()`` only after leaving the
+owning transaction. It refuses to delete pending files while any transaction on
+that alias remains active, because Django's public API cannot mark a particular
+outer savepoint rollback-only. Django has no public rollback callback. Calling
+only ``save_model()`` inside an unowned outer transaction does not provide storage
+rollback cleanup; its owner must retain the group and clean up after rollback.
+
+Replacement publication locks and rereads the stored media row before saving.
+Stale loaded ``modified`` timestamps or staged old-file names raise
+``FileReplacementConflict``; losing staged files are removed. Editor audio
+requests receive ``409 media_changed`` and admin forms request a reload. Bulk
+writers that bypass model timestamps must implement their own generation checks.
+No model schema, theme context, or required setting changes are needed.

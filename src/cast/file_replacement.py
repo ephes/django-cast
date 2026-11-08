@@ -1,19 +1,34 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
-from contextlib import suppress
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
 from django.core.files.base import ContentFile
-from django.db import transaction
+from django.db import DEFAULT_DB_ALIAS, models, transaction
 
 from cast.media_derivation import normalize_model_save_arguments
 
 COMPOUND_SUFFIXES = (".podlove.json", ".dote.json", ".speakers.json", ".corrections.json")
 GENERATED_SUFFIX_RE = re.compile(r"(?:-[0-9a-f]{12})+$")
+
+
+class FileReplacementConflict(ValueError):
+    """The stored media generation changed since this editor loaded it."""
+
+
+def _lock_current_row(instance: Any, *, using: str) -> Any:
+    manager = type(instance)._default_manager.using(using)
+    # A no-op write also obtains SQLite's write lock before reading a snapshot.
+    # PostgreSQL holds this row lock until the surrounding save transaction exits.
+    manager.filter(pk=instance.pk).update(**{instance._meta.pk.name: models.F(instance._meta.pk.name)})
+    stored = manager.get(pk=instance.pk)
+    if getattr(stored, "modified", None) != getattr(instance, "modified", None):
+        raise FileReplacementConflict("Media changed while editing; reload before replacing files.")
+    return stored
 
 
 @dataclass(frozen=True)
@@ -30,6 +45,23 @@ class StagedFileReplacementGroup:
         self.replacements: list[StagedFileReplacement] = []
         self._rolled_back = False
         self._saved = False
+        self._pending_using: str | None = None
+        self._scope_using: str | None = None
+
+    @contextmanager
+    def rollback_scope(self, *, using: str = DEFAULT_DB_ALIAS) -> Iterator[StagedFileReplacementGroup]:
+        """Own the outermost transaction and clean staged files after rollback.
+
+        Place any additional atomic blocks inside this scope. Django's durable
+        boundary refuses an already-active application transaction before staging.
+        """
+        try:
+            with transaction.atomic(using=using, durable=True):
+                self._scope_using = using
+                yield self
+        finally:
+            self._scope_using = None
+            self.rollback()
 
     def stage(self, field: Any, filename: str, content: bytes) -> StagedFileReplacement:
         try:
@@ -49,16 +81,33 @@ class StagedFileReplacementGroup:
     ) -> None:
         save_kwargs, using = normalize_model_save_arguments(model, args, kwargs)
         try:
+            if self._scope_using is not None and using != self._scope_using:
+                raise ValueError("A replacement scope must use the model's database.")
             with transaction.atomic(using=using):
+                if getattr(model, "pk", None) is not None:
+                    stored = _lock_current_row(model, using=using)
+                    expected_names: dict[str, str] = {}
+                    for replacement in self.replacements:
+                        expected_names.setdefault(replacement.field.field.name, replacement.old_name)
+                    if any((getattr(stored, name).name or "") != old for name, old in expected_names.items()):
+                        raise FileReplacementConflict(
+                            "Media files changed while editing; reload before replacing files."
+                        )
                 if save is None:
                     model.save(**save_kwargs)
                 else:
                     save(model, **save_kwargs)
-                transaction.on_commit(self.delete_old_files, using=using)
+                self._pending_using = using
+                transaction.on_commit(self._commit, using=using)
         except Exception:
             self.rollback()
             raise
+
+    def _commit(self) -> None:
+        if self._rolled_back:
+            return
         self._saved = True
+        self.delete_old_files()
 
     def delete_old_files(self) -> None:
         for replacement in self.replacements:
@@ -68,6 +117,8 @@ class StagedFileReplacementGroup:
     def rollback(self) -> None:
         if self._rolled_back or self._saved:
             return
+        if self._pending_using is not None and transaction.get_connection(self._pending_using).in_atomic_block:
+            raise RuntimeError("Exit the owning transaction before rolling back replacement files.")
         for replacement in reversed(self.replacements):
             if replacement.new_name and replacement.new_name != replacement.old_name:
                 _delete_file(replacement.new_storage, replacement.new_name)
@@ -92,9 +143,8 @@ class FileFieldReplacementGuard:
 
     @classmethod
     def track(cls, instance: Any, field_names: tuple[str, ...], *, using: str) -> FileFieldReplacementGuard:
-        stored_names = (
-            type(instance)._default_manager.using(using).filter(pk=instance.pk).values_list(*field_names).get()
-        )
+        stored = _lock_current_row(instance, using=using)
+        stored_names = [getattr(stored, name).name for name in field_names]
         snapshots = [
             _FileFieldSnapshot(
                 field=getattr(instance, field_name),
