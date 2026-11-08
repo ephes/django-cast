@@ -245,7 +245,9 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
         if assignment.contributor_id in seen:
             continue
         seen.add(assignment.contributor_id)
-        contributor = Contributor.objects.using(episode._state.db).get(pk=assignment.contributor_id)
+        contributor = Contributor.objects.using(episode._state.db).filter(pk=assignment.contributor_id).first()
+        if contributor is None:
+            continue
         contributors.append(ContributorGlossary(contributor.display_name, contributor.transcript_variants))
     podcast = Podcast.objects.using(episode._state.db).ancestor_of(episode).order_by("-depth").first()
     assert podcast is not None
@@ -459,9 +461,20 @@ def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | No
     return texts
 
 
+def _validate_destination_times(transcript: Transcript, texts: dict[int, str]) -> None:
+    """Preflight destination correspondence before staging any replacement files."""
+    try:
+        dote.set_texts(transcript._load_transcript_json("dote"), texts)
+        if transcript.vtt:
+            webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts)
+    except ValueError as exc:
+        raise ValidationError(_("Correction destination has ambiguous start times.")) from exc
+
+
 def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) -> int:
     """Store the sidecar and the corrected public files in one staged replacement."""
     services.validate_editor_artifacts(transcript)
+    _validate_destination_times(transcript, texts)
     expected = services.artifact_state(transcript)
     if not transcript.source_fingerprint:
         transcript.mark_artifacts_received()
@@ -508,6 +521,7 @@ def _commit(transcript: Transcript, state: _State, *, dry_run: bool = False) -> 
     }
     texts = corrected_texts(data, corrected)
     if dry_run:
+        _validate_destination_times(transcript, texts)
         changed = podlove.set_texts(transcript._load_transcript_json("podlove"), texts)
     else:
         changed = _write(transcript, data, texts)
@@ -731,8 +745,12 @@ def _validated(clean: Callable[[], None]) -> None:
 def _contributor_for(episode: Episode, to: str) -> Contributor | None:
     revision = _glossary_revision(episode)
     key = normalize_phrase(to)
+    matches: dict[int, Contributor] = {}
+    exact: dict[int, Contributor] = {}
     for assignment in revision.contributor_assignments.all():
-        contributor = Contributor.objects.using(episode._state.db).get(pk=assignment.contributor_id)
+        contributor = Contributor.objects.using(episode._state.db).filter(pk=assignment.contributor_id).first()
+        if contributor is None:
+            continue
         targets = [
             contributor.display_name,
             *contributor.display_name.split(),
@@ -743,6 +761,11 @@ def _contributor_for(episode: Episode, to: str) -> Contributor | None:
                 )
             ),
         ]
+        if key == normalize_phrase(contributor.display_name):
+            exact[contributor.pk] = contributor
         if key in {normalize_phrase(target) for target in targets}:
-            return Contributor.objects.using(episode._state.db).get(pk=contributor.pk)
-    return None
+            matches[contributor.pk] = contributor
+    matches = exact or matches
+    if len(matches) > 1:
+        raise GlossaryAddError(_("This contributor name is ambiguous; use a unique full name."))
+    return next(iter(matches.values()), None)

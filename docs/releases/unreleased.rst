@@ -49,6 +49,9 @@ Unreleased
   ownership failures roll back comment creation; optional observer failures no
   longer turn an accepted comment into a failed request.
 
+- Refuse ambiguous contributor shorthand and duplicate correction destination
+  timestamps before changing glossary entries, sidecars or public artifacts.
+
 - Keep legacy correction dry runs read-only and persist raw source identity with
   the correction commit. Bind correction context and glossary writes to the owning
   database; refuse cross-database episode selections.

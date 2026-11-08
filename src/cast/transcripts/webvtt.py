@@ -379,6 +379,7 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
     payload_lines: list[str] | None = None
     text: str | None = None
     changed = 0
+    seen: set[int] = set()
 
     def flush_payload() -> None:
         nonlocal changed, payload_lines
@@ -404,6 +405,10 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
         if TIMING_SEPARATOR in line:
             start_ms = timing_line_start_ms(line)
             text = texts_by_start_ms.get(start_ms) if start_ms is not None else None
+            if text is not None and start_ms is not None:
+                if start_ms in seen:
+                    raise ValueError("Correction destination has ambiguous start times.")
+                seen.add(start_ms)
             payload_lines = []
         rewritten_lines.append(line)
 
