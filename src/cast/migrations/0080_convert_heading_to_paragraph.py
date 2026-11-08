@@ -60,6 +60,9 @@ def _load_json(value: Any) -> Any:
     return value
 
 
+LIVE_BODY_BATCH_SIZE = 100
+
+
 def _convert_live_bodies(model: type[Any], schema_editor: Any) -> None:
     connection = schema_editor.connection
     field = model._meta.get_field("body")
@@ -67,20 +70,26 @@ def _convert_live_bodies(model: type[Any], schema_editor: Any) -> None:
     pk_column = model._meta.pk.column
     body_column = field.column
 
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT {pk_column}, {body_column} FROM {table}".format(
-                pk_column=connection.ops.quote_name(pk_column),
-                body_column=connection.ops.quote_name(body_column),
-                table=connection.ops.quote_name(table_name),
+    last_pk = None
+    while True:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT {pk}, {body} FROM {table} {where} ORDER BY {pk} LIMIT %s".format(
+                    pk=connection.ops.quote_name(pk_column),
+                    body=connection.ops.quote_name(body_column),
+                    table=connection.ops.quote_name(table_name),
+                    where="" if last_pk is None else f"WHERE {connection.ops.quote_name(pk_column)} > %s",
+                ),
+                [LIVE_BODY_BATCH_SIZE] if last_pk is None else [last_pk, LIVE_BODY_BATCH_SIZE],
             )
-        )
-        rows = cursor.fetchall()
-
-    for pk, raw_body in rows:
-        body = _load_json(raw_body)
-        if convert_heading_blocks(body):
-            _update_streamfield_json(model, pk, body, schema_editor)
+            rows = cursor.fetchall()
+        if not rows:
+            break
+        for pk, raw_body in rows:
+            body = _load_json(raw_body)
+            if convert_heading_blocks(body):
+                _update_streamfield_json(model, pk, body, schema_editor)
+        last_pk = rows[-1][0]
 
 
 def _convert_revisions(apps: Any, using: str) -> None:

@@ -58,3 +58,10 @@ transcripts without a source fingerprint. A real correction commit records the
 identity of the raw artifacts together with the sidecar. Episode context, draft
 show notes, contributors and show terms are read from the owning database. An
 episode supplied from another database is refused even if its audio ID matches.
+
+Proposal targets are limited to 512 characters and 16 word/name parts (including
+CamelCase parts). The limit covers contributors, variant replacements, show terms
+and derived show-note targets. Oversized targets are skipped before
+contiguous-part construction; a warning reports the limits without the source
+text. At most 135 proper contiguous parts are built for each accepted target.
+Normal automatic variant matching remains unchanged.

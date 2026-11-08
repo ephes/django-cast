@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import connection
 from django.db.migrations.loader import MigrationLoader
 from django.test import override_settings
+from django.test.utils import isolate_apps
 from django.utils import timezone
 from wagtail.models import Revision
 
@@ -180,3 +181,70 @@ def test_heading_migration_converts_live_bodies_and_revisions(blog, podcast, sit
     assert json.loads(episode_revision_converted["body"]) == [
         {"type": "paragraph", "value": "<h2>A &amp; B &lt;x&gt;</h2>", "id": "episode-revision-heading"}
     ]
+
+
+@pytest.mark.django_db(databases=["default", "migration_other"])
+@isolate_apps("cast")
+def test_live_heading_bodies_use_bounded_keyset_batches(monkeypatch):
+    from django.db import connections, models
+
+    alias = "migration_other"
+    conn = connections[alias]
+
+    # A historical model with a plain JSON body exercises the raw SQL conversion,
+    # including sparse IDs and bodies much larger than the batch count.
+    class HistoricalBody(models.Model):
+        body = models.JSONField()
+
+        class Meta:
+            app_label = "cast"
+            db_table = "synthetic_heading_bodies"
+
+    with conn.cursor() as cursor:
+        cursor.execute("CREATE TABLE synthetic_heading_bodies (id INTEGER PRIMARY KEY, body TEXT)")
+    try:
+        bodies = {
+            pk: [
+                {"type": "heading", "id": str(pk), "value": "x" * 10000},
+                {"type": "paragraph", "id": "keep", "value": "<p>Keep</p>"},
+            ]
+            for pk in (2, 8, 12, 20, 33)
+        }
+        HistoricalBody.objects.using(alias).bulk_create(
+            [HistoricalBody(pk=pk, body=body) for pk, body in bodies.items()]
+        )
+        monkeypatch.setattr(migration, "LIVE_BODY_BATCH_SIZE", 2, raising=False)
+        counts = []
+        original_cursor = conn.cursor
+
+        class CheckedCursor:
+            def __enter__(self):
+                self.cursor = original_cursor().__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.cursor.__exit__(*args)
+
+            def execute(self, sql, params):
+                self.cursor.execute(sql, params)
+
+            def fetchall(self):
+                rows = self.cursor.fetchall()
+                counts.append(len(rows))
+                assert len(rows) <= 2
+                return rows
+
+        monkeypatch.setattr(conn, "cursor", CheckedCursor)
+        migration._convert_live_bodies(HistoricalBody, SimpleNamespace(connection=conn))
+        monkeypatch.setattr(conn, "cursor", original_cursor)
+        assert counts == [2, 2, 1, 0]
+        for pk, body in bodies.items():
+            expected = [
+                {"type": "paragraph", "id": str(pk), "value": "<h2>" + "x" * 10000 + "</h2>"},
+                {"type": "paragraph", "id": "keep", "value": "<p>Keep</p>"},
+            ]
+            assert HistoricalBody.objects.using(alias).get(pk=pk).body == expected
+    finally:
+        monkeypatch.setattr(conn, "cursor", original_cursor)
+        with conn.cursor() as cursor:
+            cursor.execute("DROP TABLE synthetic_heading_bodies")

@@ -336,3 +336,7 @@ Unreleased
   prefix as ``<v Alice>Alice: text</v>`` instead of ``Alice: text``, and an
   indented ``Speaker N:`` prefix is now mapped or stripped, as detection
   already did.
+
+- Bound glossary proposal targets to 512 characters and 16 parts, with a safe
+  diagnostic for skipped terms. Read live heading-migration bodies in ordered
+  batches of 100 rows on the migration connection, preserving revision behavior.
