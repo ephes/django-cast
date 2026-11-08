@@ -41,6 +41,15 @@ Unreleased
   Wagtail's request-scoped site roots); ``build_player_payload`` accepts an
   explicit ``permalink=``. Posts without a resolved URL omit the permalink.
 
+- Bound editor ``If-Match`` revision decoding using the body integer validator.
+  Oversized quoted tokens return structured HTTP 400 without revision writes.
+- Recheck audio choose/change permissions against the locked current row before
+  PATCH form or storage work, preserving the existing 404/403 error envelopes
+  when concurrent collection or owner changes revoke access.
+- Require choose permission for the latest draft's podcast audio before reading
+  episode transcript status, speaker mappings, generation errors or configuration
+  reference counts; unselectable audio returns the media endpoint's HTTP 404.
+
 - Make equal-date blog index pagination and RSS/Atom ordering deterministic with
   a descending primary-key tie-breaker in both repository modes.
 - Report media backup/restore summaries in every mode, continue independent paths
