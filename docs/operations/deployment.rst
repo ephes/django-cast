@@ -227,6 +227,8 @@ and old-file retirement until the owning transaction commits. Use
 inside it. The scope owns a durable Django transaction and cleans files after
 exception or silent rollback; an already-active application transaction is
 refused before staging. Use the model's database alias for the scope.
+Each group supports one ``save_model()`` attempt; create a fresh group for every
+save or retry, and finish staging before calling ``save_model()``.
 
 For manually owned transactions, call ``rollback()`` only after leaving the
 owning transaction. It refuses to delete pending files while any transaction on

@@ -41,6 +41,8 @@ class StagedFileReplacement:
 
 
 class StagedFileReplacementGroup:
+    """Stage files for one save attempt; create a fresh group for each attempt."""
+
     def __init__(self) -> None:
         self.replacements: list[StagedFileReplacement] = []
         self._rolled_back = False
