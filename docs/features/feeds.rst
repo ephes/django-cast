@@ -42,6 +42,10 @@ The template receives the following context variables:
 - ``spotify_url`` — Spotify URL from settings, or ``None`` (podcasts only)
 - ``youtube_url`` — YouTube URL from settings, or ``None`` (podcasts only)
 
+RSS and Atom entries use descending ``visible_date``, then descending primary
+key for equal dates, in both repository modes. Blog feed limits select entries
+in this same order; podcast feeds retain the complete archive.
+
 Feed Types
 ==========
 

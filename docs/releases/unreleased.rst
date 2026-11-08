@@ -1,6 +1,14 @@
 Unreleased
 ==========
 
+- Make equal-date blog index pagination and RSS/Atom ordering deterministic with
+  a descending primary-key tie-breaker in both repository modes.
+- Report media backup/restore summaries in every mode, continue independent paths
+  after copy errors, and exit nonzero for any failed path.
+- Run Ajax comment observers robustly after transaction commit. Required session
+  ownership failures roll back comment creation; optional observer failures no
+  longer turn an accepted comment into a failed request.
+
 - Keep legacy correction dry runs read-only and persist raw source identity with
   the correction commit. Bind correction context and glossary writes to the owning
   database; refuse cross-database episode selections.

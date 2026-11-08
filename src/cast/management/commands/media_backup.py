@@ -34,8 +34,6 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         refresh_changed = options["refresh_changed"]
         result = self.backup_media_files(*get_production_and_backup_storage(), refresh_changed=refresh_changed)
-        if not refresh_changed:
-            return
         self.stdout.write("")
         self.stdout.write(result.summary())
         if result.errors:

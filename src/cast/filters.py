@@ -29,6 +29,13 @@ from cast.models.snippets import PostCategory
 from cast.search_utils import safe_fulltext_queryset
 
 
+class StableDateOrderingFilter(django_filters.OrderingFilter):
+    def filter(self, qs: models.QuerySet, value: list[str]) -> models.QuerySet:
+        if value:
+            value = [*value, "-pk"]
+        return super().filter(qs, value)
+
+
 class CountFacetWidget(Widget):
     data: QueryDict
 
@@ -386,7 +393,7 @@ class PostFilterset(django_filters.FilterSet):
         label="Date Facets",
         widget=CountFacetWidget(attrs={"class": "cast-date-facet-container"}),
     )
-    o = django_filters.OrderingFilter(
+    o = StableDateOrderingFilter(
         fields=(("visible_date", "visible_date"),),
         field_labels={"visible_date": "Date"},
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import django_comments
@@ -32,6 +33,7 @@ from wagtail.models import Page
 from cast.audio_access import page_is_publicly_viewable, user_can_edit_page
 
 from . import appsettings, author_edits
+from .receivers import record_owned_comment
 from .throttle import comment_post_retry_after
 from .utils import comment_target_is_accessible, comments_are_open, get_comment_context_data, get_comment_template_name
 
@@ -40,6 +42,18 @@ if TYPE_CHECKING:
 
     from .forms import CastCommentForm
     from .models import BaseComment
+
+
+logger = logging.getLogger(__name__)
+
+
+def _notify_comment_observers(comment: BaseComment, request: HttpRequest) -> None:
+    responses = signals.comment_was_posted.send_robust(
+        sender=comment.__class__, comment=comment, request=request, cast_ownership_recorded=True
+    )
+    failures = sum(isinstance(response, Exception) for _, response in responses)
+    if failures:
+        logger.warning("%d comment observer(s) failed after commit", failures)
 
 
 @csrf_protect
@@ -93,15 +107,15 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
 
     parent_id = getattr(comment, "parent_id", None)
 
-    if parent_id:
-        # Coordinate with delete on the parent row: lock it and reject a reply to
-        # a parent that is no longer a valid target (removed or author-deleted), so
-        # no child is created under a deleted parent. (An *edited* but still-public
-        # parent correctly accepts replies — the invariant is that a comment is
-        # never edited or deleted *after* a reply exists, which the edit/delete
-        # path enforces via its own re-check.)
-        comment_model = django_comments.get_model()
-        with transaction.atomic(using=using):
+    with transaction.atomic(using=using):
+        if parent_id:
+            # Coordinate with delete on the parent row: lock it and reject a reply to
+            # a parent that is no longer a valid target (removed or author-deleted), so
+            # no child is created under a deleted parent. (An *edited* but still-public
+            # parent correctly accepts replies — the invariant is that a comment is
+            # never edited or deleted *after* a reply exists, which the edit/delete
+            # path enforces via its own re-check.)
+            comment_model = django_comments.get_model()
             try:
                 # select_related(None) drops the manager's join to the nullable
                 # ``user`` FK: Postgres rejects ``FOR UPDATE`` over the nullable
@@ -113,13 +127,11 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
             if error is not None:
                 return error
             comment.save(using=using)
-    else:
-        comment.save(using=using)
+        else:
+            comment.save(using=using)
 
-    # Sent after the comment is committed (outside the lock transaction) so
-    # receivers do not run for a transaction that could still roll back. The
-    # comment_was_posted receiver records session ownership for all post paths.
-    signals.comment_was_posted.send(sender=comment.__class__, comment=comment, request=request)
+        record_owned_comment(sender=comment.__class__, comment=comment, request=request)
+        transaction.on_commit(lambda: _notify_comment_observers(comment, request), using=using)
     return _ajax_result(request, form, "post", comment, object_id=data.get("object_pk"))
 
 

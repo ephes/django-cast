@@ -213,8 +213,18 @@ The ``post_comment_ajax`` view handles the request:
 5. **Signal dispatch** -- ``comment_will_be_posted`` fires, giving the
    moderator (see :ref:`comments_moderation`) a chance to mark the comment
    as spam. If any receiver returns ``False``, the comment is rejected.
-6. **Save and respond** -- the comment is saved, ``comment_was_posted``
-   fires, and a JSON response is returned.
+6. **Save and respond** -- Ajax saves the comment and records required session
+   ownership inside one transaction. An ownership failure propagates and rolls
+   back the comment. ``comment_was_posted`` observers run through Django's
+   ``send_robust`` after the outermost transaction commits; an optional observer
+   failure does not change acceptance or prevent other observers from running.
+   Cast logs one count-only warning for failed observers; Django's dispatcher
+   also logs receiver exceptions using the application's logging configuration.
+   Ownership is not repeated during observer delivery. Under ``ATOMIC_REQUESTS``
+   or an explicit outer transaction, the JSON result is provisional until that
+   transaction commits: rollback discards the comment and observer callbacks.
+   Session persistence still follows Django's session middleware contract.
+   Stock non-Ajax signal delivery retains its existing behavior.
 
 .. _comments_ajax_response:
 
@@ -650,7 +660,7 @@ and release pending controls. Theme integrations keep the existing object-ID
 and comment control selectors; adopt the rebuilt shared comments bundle.
 
 Author-action concurrency and session revocation
------------------------------------------------
+------------------------------------------------
 
 The author edit/delete rate counter is initialized atomically. Concurrent first
 attempts all count toward the same window; a losing initialization does not

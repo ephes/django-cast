@@ -51,14 +51,16 @@ def on_comment_will_be_posted(sender: Any, comment: Any, request: HttpRequest | 
 
 
 @receiver(signals.comment_was_posted)
-def record_owned_comment(sender: Any, comment: Any, request: HttpRequest | None, **kwargs: Any) -> None:
+def record_owned_comment(
+    sender: Any, comment: Any, request: HttpRequest | None, *, cast_ownership_recorded: bool = False, **kwargs: Any
+) -> None:
     """Record session ownership of a freshly posted comment (all post paths).
 
     Lives on the shared ``comment_was_posted`` signal so comments created through
     the stock ``django_comments`` post view are owned by their author too, not
     only those posted through the AJAX view.
     """
-    if request is None or not author_edits.author_edits_enabled():
+    if cast_ownership_recorded or request is None or not author_edits.author_edits_enabled():
         return
     session = getattr(request, "session", None)
     if session is None:

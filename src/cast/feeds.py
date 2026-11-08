@@ -116,11 +116,11 @@ class RepositoryMixin(Feed):
                     .descendant_of(blog)
                     .select_related("podcast_audio__transcript", "season")
                     .filter(podcast_audio__isnull=False)
-                    .order_by("-visible_date")
+                    .order_by("-visible_date", "-pk")
                 )
             else:
                 post_queryset = limit_blog_feed_posts(
-                    Post.objects.live().public().descendant_of(blog).order_by("-visible_date")
+                    Post.objects.live().public().descendant_of(blog).order_by("-visible_date", "-pk")
                 )
             return FeedContext.create_from_django_models(
                 request=request,

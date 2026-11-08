@@ -197,7 +197,7 @@ class Blog(Page):
         cached = getattr(self, "_last_build_date", None)
         if cached is not None:
             return cached
-        newest_post = Post.objects.live().public().descendant_of(self).order_by("-visible_date").first()
+        newest_post = Post.objects.live().public().descendant_of(self).order_by("-visible_date", "-pk").first()
         if newest_post is not None:
             return newest_post.visible_date
         if self.first_published_at is not None:

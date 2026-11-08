@@ -41,5 +41,11 @@ replacing a file in place (``media_replace``), run
 ``media_backup --refresh-changed`` so the backup does not keep the old bytes
 under the same path.
 
+Both commands report ``copied``, ``refreshed``, ``unchanged`` and ``errors``
+counts and continue processing independent paths after a file error. Any failed
+path causes a nonzero command exit, including default backup and restore.
+Successful sibling copies remain available. Restore still copies missing paths
+only and never overwrites existing production files.
+
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.
