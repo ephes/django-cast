@@ -7,7 +7,7 @@ from django.utils import timezone
 from wagtail.images.models import Image
 
 from cast import appsettings
-from cast.models import Blog, File, Podcast, Season
+from cast.models import Blog, Podcast, Season
 from cast.models.repository import BlogIndexContext
 
 
@@ -92,19 +92,6 @@ class TestGalleryModel:
         other_gallery.refresh_from_db()
         assert other_gallery.signature == other_gallery.build_signature(other_gallery.image_ids)
         assert image.pk in other_gallery.image_ids
-
-
-class TestFileModel:
-    @pytest.mark.django_db
-    def test_get_all_file_paths(self, file_instance):
-        all_paths = list(file_instance.get_all_paths())
-        assert len(all_paths) == 1
-
-    @pytest.mark.django_db
-    def test_get_all_file_paths_without_original(self, user):
-        file_instance = File(user=user)
-
-        assert file_instance.get_all_paths() == set()
 
 
 @pytest.fixture()

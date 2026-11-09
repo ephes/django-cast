@@ -116,7 +116,6 @@ Cast models are organized into:
    - ``Gallery`` (``models/gallery.py``): Collection of images
    - ``ChapterMark`` (``models/audio.py``): Timestamps for podcast chapters
    - ``Transcript`` (``models/transcript.py``): Text for audio/video
-   - ``File`` (``models/file.py``): Generic uploaded files
 
 3. **Moderation** (``models/moderation.py``):
 
@@ -355,11 +354,12 @@ Code Organization
     ├── models/
     │   ├── pages.py                # Post, Episode, HomePage
     │   ├── index_pages.py          # Blog, Podcast, Season
-    │   ├── audio.py, video.py, gallery.py, file.py, transcript.py
+    │   ├── audio.py, video.py, gallery.py, transcript.py
     │   ├── contributors.py, snippets.py, itunes.py, moderation.py
     │   ├── theme.py, voxhelm_settings.py, transcript_generation.py
     │   ├── transcript_glossary.py   # Glossary entries and transcript corrections
     │   ├── image_renditions.py     # Missing/obsolete post renditions
+    │   ├── file.py                 # Shim for migration 0089 (File model removed)
     │   └── repository/             # Read models: snapshot, contexts, builders
     ├── blog_index.py               # Blog index querysets and filtersets
     ├── filters.py                  # django-filter facets for the blog index

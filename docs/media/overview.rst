@@ -1,7 +1,7 @@
 Media Handling
 ==============
 
-Django Cast provides comprehensive media management for images, audio, video, and generic files. All media is user-owned and integrates seamlessly with Wagtail's admin interface and Django's storage backends.
+Django Cast provides comprehensive media management for images, audio and video. All media is user-owned and integrates seamlessly with Wagtail's admin interface and Django's storage backends.
 
 Overview
 --------
@@ -111,17 +111,6 @@ Video file support with automatic poster generation in built-in upload workflows
     video.poster = None
     video.poster_seconds = 5.0
     save_video_with_derivations(video)
-
-Files
-~~~~~
-
-Generic file storage for other document types.
-
-**Features**:
-
-- Simple file upload and storage
-- User association
-- Path tracking for cleanup
 
 Storage Configuration
 ---------------------

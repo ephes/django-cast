@@ -823,19 +823,6 @@ limit is enforced from the uploaded content rather than a client-reported
 size.
 
 
-CAST_FILE_EXTENSIONS
-====================
-
-File extensions accepted for the generic ``File`` model (Django admin
-``Files``, stored under ``cast_files/``). Defaults to documents and archives
-only: ``csv``, ``docx``, ``epub``, ``gz``, ``json``, ``md``, ``odp``, ``ods``,
-``odt``, ``pdf``, ``pptx``, ``tar``, ``tgz``, ``txt``, ``xlsx`` and ``zip``.
-Never add active content such as ``html``, ``svg``, ``xml`` or ``js``.
-django-cast does not serve these files itself; configure the media server or
-object storage to send ``X-Content-Type-Options: nosniff`` and
-``Content-Disposition: attachment`` for ``cast_files/`` (see the deployment
-guide).
-
 CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS
 =====================================
 

@@ -1,6 +1,5 @@
 from .audio import Audio, ChapterMark, sync_chapter_marks
 from .contributors import Contributor, ContributorLink, EpisodeContributor
-from .file import File
 from .gallery import Gallery, get_or_create_gallery
 from .index_pages import Blog, Podcast, Season
 from .itunes import ItunesArtWork
@@ -31,7 +30,6 @@ __all__ = [
     "ChapterMark",
     "sync_chapter_marks",
     "Blog",
-    "File",
     "Gallery",
     "get_or_create_gallery",
     "get_required_template_names",

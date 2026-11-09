@@ -16,25 +16,6 @@ _MEDIA_PROBE_SECONDS = 30
 _TRANSCRIPT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
 _CODE_BLOCK_MAX_SOURCE_LENGTH = 32 * 1024
 _GALLERY_TOKEN_MAX_AGE_SECONDS = 24 * 60 * 60
-# Generic ``File`` uploads: documents and archives only, never active content (html/svg/xml/js).
-_FILE_EXTENSIONS = [
-    "csv",
-    "docx",
-    "epub",
-    "gz",
-    "json",
-    "md",
-    "odp",
-    "ods",
-    "odt",
-    "pdf",
-    "pptx",
-    "tar",
-    "tgz",
-    "txt",
-    "xlsx",
-    "zip",
-]
 # Curated Pygments aliases for code blocks; anything else renders as plain text.
 _CODE_BLOCK_LANGUAGES = [
     "bash",
@@ -142,7 +123,6 @@ CAST_SETTING_REGISTRY: dict[str, CastSetting] = {
     "CAST_CODE_BLOCK_MAX_SOURCE_LENGTH": CastSetting(_CODE_BLOCK_MAX_SOURCE_LENGTH, int),
     "CAST_CODE_BLOCK_LANGUAGES": CastSetting(_CODE_BLOCK_LANGUAGES, list),
     "CAST_GALLERY_TOKEN_MAX_AGE": CastSetting(_GALLERY_TOKEN_MAX_AGE_SECONDS, int),
-    "CAST_FILE_EXTENSIONS": CastSetting(_FILE_EXTENSIONS, list),
     "CAST_STYLEGUIDE_GALLERY_CHUNK_SIZE": CastSetting(6),
     "CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS": CastSetting(2),
     "CAST_STYLEGUIDE_BODY_GALLERY_LIMIT": CastSetting(1),
@@ -208,7 +188,6 @@ if TYPE_CHECKING:
     CAST_CODE_BLOCK_MAX_SOURCE_LENGTH: int
     CAST_CODE_BLOCK_LANGUAGES: list[str]
     CAST_GALLERY_TOKEN_MAX_AGE: int
-    CAST_FILE_EXTENSIONS: list[str]
     CAST_STYLEGUIDE_GALLERY_CHUNK_SIZE: int
     CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS: int
     CAST_STYLEGUIDE_BODY_GALLERY_LIMIT: int

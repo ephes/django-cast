@@ -29,7 +29,7 @@ from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACH
 
 from cast import appsettings
 from cast.devdata import create_transcript
-from cast.models import Audio, ChapterMark, File, ItunesArtWork
+from cast.models import Audio, ChapterMark, ItunesArtWork
 from cast.models.theme import _clear_template_base_dir_choices_cache
 from cast.private_storage import PrivateFileSystemStorage, get_private_filesystem_storage
 
@@ -641,13 +641,6 @@ def chaptermarks(audio):
 @pytest.fixture()
 def transcript(audio):
     return create_transcript(audio=audio)
-
-
-@pytest.fixture()
-def file_instance(user, m4a_audio):
-    file_instance = File(user=user, original=m4a_audio)
-    file_instance.save()
-    return file_instance
 
 
 @pytest.fixture()

@@ -15,7 +15,7 @@ from django.utils import timezone
 from cast.devdata import create_transcript
 from cast.management.commands.media_backup import Command as MediaBackupCommand
 from cast.management.commands.media_stale import Command as MediaStaleCommand
-from cast.models import Contributor
+from cast.models import Contributor, Video
 from cast.models.contributors import ContributorVoiceReference
 from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
 
@@ -556,7 +556,7 @@ def test_media_replace_without_yes_and_only_missing_paths_does_not_error(mocker)
 
 
 @pytest.mark.django_db
-def test_media_stale_get_models_paths_includes_all_managed_media(audio, video, file_instance):
+def test_media_stale_get_models_paths_includes_all_managed_media(audio, video):
     transcript = create_transcript(
         audio=audio,
         podlove={"transcripts": []},
@@ -578,7 +578,6 @@ def test_media_stale_get_models_paths_includes_all_managed_media(audio, video, f
     assert transcript.speakers.name in paths
     assert voice_reference.clip.name in paths
     assert video.original.name in paths
-    assert file_instance.original.name in paths
 
 
 @pytest.mark.django_db
@@ -1518,8 +1517,8 @@ def test_media_stale_unknown_age_is_reported(mocker, capsys):
 
 
 @pytest.mark.django_db
-def test_media_stale_reference_created_after_selection(mocker, file_instance, capsys):
-    path = "cast_files/in-flight.txt"
+def test_media_stale_reference_created_after_selection(mocker, video, capsys):
+    path = "cast_videos/in-flight.mp4"
     storage = StubWalkStorage({path: b"upload"})
     mocker.patch(
         "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
@@ -1529,8 +1528,7 @@ def test_media_stale_reference_created_after_selection(mocker, file_instance, ca
     def select_and_reference(production):
         paths = original_get_paths(production)
         # Candidate snapshot has already been taken; the upload now saves its file name.
-        file_instance.original.name = path
-        file_instance.save()
+        Video.objects.filter(pk=video.pk).update(original=path)
         return paths
 
     mocker.patch.object(MediaStaleCommand, "get_paths", side_effect=select_and_reference)
