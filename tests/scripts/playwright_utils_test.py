@@ -9,7 +9,13 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from scripts import playwright_utils as browser_tools
+# scripts/playwright_utils.py is a dev-only helper that exits when playwright is
+# missing. The tox dependency-compatibility environments install only the
+# package's test dependencies, so skip this module there; the uv dev-group jobs
+# install playwright and still run it.
+pytest.importorskip("playwright", reason="playwright is a dev-group dependency, not a tox test dependency")
+
+from scripts import playwright_utils as browser_tools  # noqa: E402
 
 
 @pytest.fixture
