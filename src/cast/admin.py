@@ -11,7 +11,6 @@ from .models import (
     Blog,
     ChapterMark,
     Episode,
-    File,
     Gallery,
     ItunesArtWork,
     Podcast,
@@ -92,12 +91,6 @@ class EpisodeModelAdmin(AdminUserMixin, ModelAdmin):
 class ItunesArtWorkModelAdmin(AdminUserMixin, ModelAdmin):
     list_display = ("pk", "original")
     fields = ("original",)
-
-
-@admin.register(File)
-class FileModelAdmin(AdminUserMixin, ModelAdmin):
-    list_display = ("original", "user")
-    fields = ("user", "original")
 
 
 @admin.action(description="Cache file sizes")

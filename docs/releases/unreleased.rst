@@ -14,10 +14,15 @@ Unreleased
     because rendering it seeds pages and media.
   - SVG image uploads are rejected even when ``WAGTAILIMAGES_EXTENSIONS``
     allows them.
-  - The generic ``File`` model accepts only ``CAST_FILE_EXTENSIONS`` (documents
-    and archives by default; migration ``cast.0089`` adds the validator). The
-    deployment guide now recommends ``nosniff`` and ``attachment`` headers
-    for media.
+  - The unused generic ``File`` model and its Django admin are removed,
+    together with the ``CAST_FILE_EXTENSIONS`` setting and the ``cast_files/``
+    prefix in ``media_stale`` (which now ignores that prefix). Migration
+    ``cast.0090`` drops the ``cast_file`` table and refuses to run while it
+    still has rows. **Upgrade action:** if ``cast_file`` has rows, back up the
+    uploads under ``cast_files/``, delete the rows (``DELETE FROM cast_file``)
+    and migrate again. Migration ``cast.0089`` (an interim upload validator)
+    stays in the graph. The deployment guide now recommends a ``nosniff``
+    header for all media.
 
 - Security: the Voxhelm API base URL is now deployment configuration only
   (``CAST_VOXHELM_API_BASE`` as a Django setting or environment variable). The

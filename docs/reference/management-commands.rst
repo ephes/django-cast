@@ -386,10 +386,11 @@ media_stale
 
 Find media files in production storage that are not referenced by any
 database record. The command checks paths referenced by image, video,
-audio, transcript, contributor voice-reference, and file records before
-classifying anything as stale. Only known django-cast/Wagtail-managed media
-prefixes are eligible for stale reporting or deletion, so unrelated objects in
-the same storage backend are ignored by default.
+audio, transcript and contributor voice-reference records before classifying
+anything as stale. Only known django-cast/Wagtail-managed media prefixes are
+eligible for stale reporting or deletion, so unrelated objects in the same
+storage backend are ignored by default. Leftover uploads of the removed
+``File`` model under ``cast_files/`` are no longer reported.
 Requires configured ``production`` and ``backup`` storage backends.
 
 .. code-block:: bash

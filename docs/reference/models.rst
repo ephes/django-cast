@@ -380,17 +380,6 @@ Collection of images for gallery displays.
 
 - ``get_or_create_gallery()``: Reuses galleries with same images
 
-File
-====
-
-Simple file storage with user association.
-
-.. code-block:: python
-
-    class File(models.Model):
-        user = ForeignKey(User)
-        original = FileField(upload_to='cast_files')
-
 ItunesArtWork
 =============
 
@@ -650,7 +639,7 @@ Media Associations
 User Relationships
 ==================
 
-- **Audio/Video/File/Image** → **User** (ForeignKey)
+- **Audio/Video/Image** → **User** (ForeignKey)
 - **Post** → **User** (via Wagtail's owner)
 
 Categorization

@@ -180,7 +180,6 @@ class TestCheckCastSettingTypes:
             ("CAST_CODE_BLOCK_MAX_SOURCE_LENGTH", int),
             ("CAST_CODE_BLOCK_LANGUAGES", list),
             ("CAST_GALLERY_TOKEN_MAX_AGE", int),
-            ("CAST_FILE_EXTENSIONS", list),
             ("CAST_PUBLIC_IMAGES_API", bool),
         )
         derived = tuple(

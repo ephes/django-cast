@@ -15,7 +15,6 @@ from .storage_backend import get_production_and_backup_storage
 
 MANAGED_MEDIA_PREFIXES = (
     "cast_audio/",
-    "cast_files/",
     "cast_images/",
     "cast_transcript/",
     "cast_transcript_corrections/",
