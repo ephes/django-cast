@@ -35,6 +35,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   observer delivery are implemented; see
   [the validation record](backlog/2026-11-08-publication-outcomes.md).
 
+- Scout round 81 correction ambiguity checks and round 85 editor boundary
+  hardening are implemented; see
+  [the validation record](backlog/2026-11-08-round85-editor-boundaries.md).
+
 ## Later
 
 - [ ] Transcript glossary, slice 2: LLM proposals via Voxhelm (on hold)
