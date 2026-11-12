@@ -328,3 +328,62 @@ class TestEpisodeTranscriptStatus:
         data = api_client.get(transcript_url(episode)).json()["transcript"]
         assert data["preview_speaker_labels"] == ["Live Host"]
         assert data["known_speaker_suggestions"] is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("protected_draft", [False, True], ids=["stored-reference", "latest-draft-reference"])
+def test_transcript_read_denies_unselectable_draft_audio(
+    scoped_editor_audio, podcast, api_client, mocker, protected_draft
+):
+    from cast.api.editor import transcripts as editor_transcripts
+    from cast.models import Transcript
+    from tests.factories import EpisodeFactory
+
+    actor, audio, forbidden = scoped_editor_audio
+    episode = EpisodeFactory(parent=podcast, title="Synthetic episode", slug="synthetic-episode", live=False)
+    if not protected_draft:
+        episode.podcast_audio = audio
+        episode.save()
+    else:
+        # Only the latest draft references this audio; the persisted page does not.
+        episode.save_revision()
+        episode.podcast_audio = audio
+    episode.save_revision(user=actor)
+    transcript = Transcript.objects.create(audio=audio, collection=audio.collection)
+    TranscriptSpeakerMapping.objects.create(
+        transcript=transcript, speaker_label="Speaker 1", display_name="Protected speaker"
+    )
+    TranscriptGeneration.objects.create(audio=audio, status="failed", error_message="Protected upstream error")
+    Audio.objects.filter(pk=audio.pk).update(collection=forbidden)
+    generation = mocker.spy(editor_transcripts, "get_transcript_generation")
+    configuration = mocker.spy(editor_transcripts, "configuration_payload")
+    transcript_read = mocker.spy(editor_transcripts, "_transcript_or_none")
+    references = mocker.spy(editor_transcripts, "build_known_speaker_references")
+    api_client.force_authenticate(user=actor)
+
+    direct = api_client.get(reverse("cast:api:editor_media_audio_detail", args=[audio.pk]))
+    response = api_client.get(transcript_url(episode))
+
+    assert direct.status_code == response.status_code == 404
+    assert response.json() == direct.json() == {"code": "not_found", "detail": "Audio not found."}
+    generation.assert_not_called()
+    configuration.assert_not_called()
+    transcript_read.assert_not_called()
+    references.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_transcript_read_requires_choose_but_not_change(scoped_editor_audio, podcast, api_client):
+    from tests.factories import EpisodeFactory
+
+    actor, audio, _ = scoped_editor_audio
+    Audio.objects.filter(pk=audio.pk).update(user=UserFactory())
+    episode = EpisodeFactory(
+        parent=podcast, title="Synthetic episode", slug="synthetic-episode", podcast_audio=audio, live=False
+    )
+    episode.save_revision(user=actor)
+    api_client.force_authenticate(user=actor)
+    response = api_client.get(transcript_url(episode))
+    assert response.status_code == 200, response.content
+    assert response.json()["audio"] == {"id": audio.pk}
+    assert api_client.post(transcript_url(episode)).status_code == 403

@@ -2,6 +2,7 @@
 
 import copy
 import re
+from collections import Counter
 from collections.abc import Mapping
 from typing import Any
 
@@ -114,6 +115,9 @@ def set_texts(data: dict, texts_by_start_ms: Mapping[int, str]) -> int:
     lines = data.get("lines")
     if not isinstance(lines, list):
         return 0
+    starts = Counter(dote_timestamp_to_ms(line.get("startTime")) for line in lines if isinstance(line, dict))
+    if any(count > 1 and start in texts_by_start_ms for start, count in starts.items()):
+        raise ValueError("Correction destination has ambiguous start times.")
     changed = 0
     for line in lines:
         if not isinstance(line, dict):

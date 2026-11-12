@@ -1313,3 +1313,65 @@ def test_legacy_noop_write_does_not_change_in_memory_identity(transcript):
     transcript.refresh_from_db()
     assert corrections._write(transcript, transcript.corrections_data, {}) == 0
     assert transcript.source_fingerprint == ""
+
+
+@pytest.mark.django_db
+def test_ambiguous_contributor_target_refuses_without_writes(transcript, glossary_episode):
+    first = Contributor.objects.create(display_name="Alex Green", slug="alex-green")
+    second = Contributor.objects.create(display_name="Alex Brown", slug="alex-brown")
+    for contributor in (first, second):
+        EpisodeContributor.objects.create(episode=glossary_episode, contributor=contributor, role="guest")
+    before = file_bytes(transcript)
+    with pytest.raises(corrections.GlossaryAddError, match="ambiguous"):
+        add_original_to_glossary(transcript, "Aleks", "Alex")
+    assert file_bytes(transcript) == before
+    assert list(
+        Contributor.objects.filter(pk__in=[first.pk, second.pk]).values_list("transcript_variants", flat=True)
+    ) == ["", ""]
+    add_original_to_glossary(transcript, "Aleks Green", "Alex Green")
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.transcript_variants == "Aleks Green"
+    assert second.transcript_variants == ""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("destination", ["dote", "vtt"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_ambiguous_destination_refuses_before_staging(transcript, destination, mocker, dry_run):
+    duplicate = [(10000, "John said Gunacorn is fast."), (10000, "Different speaker and words.")]
+    if destination == "dote":
+        transcript._write_transcript_json("dote", dote_data(duplicate))
+    else:
+        transcript._save_text_file("vtt", vtt_content(duplicate))
+    transcript.save()
+    before = file_bytes(transcript)
+    fingerprint = transcript.source_fingerprint
+    storage_save = mocker.spy(transcript.corrections.storage, "save")
+    with pytest.raises(ValidationError, match="ambiguous start times"):
+        refresh_transcript_corrections(transcript, dry_run=dry_run)
+    storage_save.assert_not_called()
+    assert file_bytes(transcript) == before
+    assert transcript.source_fingerprint == fingerprint
+
+
+@pytest.mark.django_db
+def test_exact_unique_contributor_name_wins_over_another_name_part(transcript, glossary_episode):
+    exact = Contributor.objects.create(display_name="Alex", slug="alex")
+    partial = Contributor.objects.create(display_name="Alex Green", slug="alex-green")
+    for contributor in (exact, partial):
+        EpisodeContributor.objects.create(episode=glossary_episode, contributor=contributor, role="guest")
+    add_original_to_glossary(transcript, "Aleks", "Alex")
+    exact.refresh_from_db()
+    partial.refresh_from_db()
+    assert exact.transcript_variants == "Aleks"
+    assert partial.transcript_variants == ""
+
+
+@pytest.mark.django_db
+def test_deleted_contributor_in_draft_glossary_is_ignored(transcript, glossary_episode, jon):
+    glossary_episode.save_revision()
+    EpisodeContributor.objects.filter(episode=glossary_episode, contributor=jon).delete()
+    jon.delete()
+    assert refresh_transcript_corrections(transcript).status == STATUS_APPLIED
+    assert corrections._contributor_for(glossary_episode, "Jon") is None

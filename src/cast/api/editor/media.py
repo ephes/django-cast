@@ -485,6 +485,11 @@ class EditorAudioDetailView(EditorAPIView):
         if not Audio.objects.filter(pk=audio.pk).update(transcript_diarization_mode=F("transcript_diarization_mode")):
             raise EditorNotFound("Audio not found.")
         audio = Audio.objects.select_related("collection", "user").get(pk=audio.pk)
+        # Collection/ownership may have changed since the initial unlocked lookup.
+        if not audio_permission_policy.user_has_permission_for_instance(request.user, "choose", audio):
+            raise EditorNotFound("Audio not found.")
+        if not audio_permission_policy.user_has_permission_for_instance(request.user, "change", audio):
+            raise EditorPermissionDenied("You cannot change this audio.")
         # A bound ModelForm treats absent fields as cleared, so start from the stored
         # values and overlay only what the request sent.
         form_data: dict[str, Any] = {

@@ -65,3 +65,8 @@ and derived show-note targets. Oversized targets are skipped before
 contiguous-part construction; a warning reports the limits without the source
 text. At most 135 proper contiguous parts are built for each accepted target.
 Normal automatic variant matching remains unchanged.
+
+Glossary additions require a unique credited contributor identity. Shared first
+names are refused; use an unambiguous full name instead. Corrections also refuse
+duplicate destination start times in DOTe or WebVTT before staging any files,
+so equal-time lines from different speakers cannot overwrite one another.

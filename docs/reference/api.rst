@@ -937,7 +937,10 @@ revision id as a strict ``If-Match`` header:
 Only a single strong quoted integer token is accepted; optional surrounding
 whitespace is ignored. Bare integers (``If-Match: 6543``), weak ETags
 (``W/"6543"``), wildcard ``*``, blank values, and comma-separated ETag lists are
-rejected with the normal ``validation_error`` envelope. If both
+rejected with the normal ``validation_error`` envelope. If
+the quoted decimal exceeds the body integer decoder's string limit (currently
+1,000 digits) or integer conversion fails, it also returns ``400 validation_error``
+without creating a revision. If both
 ``base_revision_id`` and ``If-Match`` are supplied, they must carry the same
 revision id. This endpoint uses
 ``If-Match`` only as an alternate transport for django-cast's revision token:
@@ -1213,6 +1216,12 @@ endpoint below (``transcript.preview_speaker_labels``) to check speaker names.
 
     GET  /api/editor/episodes/{id}/transcript/
     POST /api/editor/episodes/{id}/transcript/
+
+``GET`` requires edit permission for the episode and current ``choose`` permission
+for the latest draft's podcast audio. Unselectable audio returns the same
+``404 not_found`` as the media detail endpoint, before reading generation status,
+transcript speaker mappings, configuration or known-speaker reference counts.
+Episodes without podcast audio still return their empty audio/transcript status.
 
 ``POST`` requests Voxhelm transcript generation for the podcast audio of the
 episode's latest draft revision, exactly like the Wagtail **Generate
@@ -1495,6 +1504,11 @@ Read or update one audio::
 missing and unselectable audio both return ``404 not_found``. ``PATCH`` updates
 the same audio and additionally requires ``change`` permission for it
 (``403 permission_denied`` otherwise) and the ``write`` scope for scoped tokens.
+Both audio permissions are checked again against the current row while holding
+its write lock, before constructing the update form or touching storage. A
+concurrent collection or owner change therefore returns the same ``404`` or
+``403`` as an initially denied request, without changing metadata, tags, chapter
+marks or files.
 ``OPTIONS`` lists ``PATCH`` in ``Allow``. It accepts
 ``multipart/form-data``, ``application/x-www-form-urlencoded``, or JSON with any
 of these fields:
@@ -1623,7 +1637,7 @@ Authorization uses standard Wagtail page permissions:
 - ``POST /api/editor/episodes/{id}/publish/`` — requires edit and publish
   permission for the episode, and a non-null ``podcast_audio``.
 - ``GET /api/editor/episodes/{id}/transcript/`` — requires edit permission for
-  the episode.
+  the episode and choose permission for its latest draft's podcast audio.
 - ``POST /api/editor/episodes/{id}/transcript/`` — requires edit permission for
   the episode and change permission for its draft podcast audio.
 - ``GET /api/editor/contributors/`` — requires Wagtail admin access.

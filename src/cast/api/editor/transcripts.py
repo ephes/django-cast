@@ -27,7 +27,7 @@ from ...voxhelm import (
     resolve_bool_setting,
     voxhelm_configured,
 )
-from .errors import EditorFlatError, EditorPermissionDenied, EditorValidationError
+from .errors import EditorFlatError, EditorNotFound, EditorPermissionDenied, EditorValidationError
 from .media import audio_permission_policy
 from .views import EditorAPIView, EpisodeEditorMixin
 
@@ -173,6 +173,10 @@ class EpisodeTranscriptView(EpisodeEditorMixin, EditorAPIView):
 
     def get(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         episode, draft, audio, site = self._target(request, pk, denied_message="You cannot view this draft.")
+        if audio is not None and not audio_permission_policy.user_has_permission_for_instance(
+            request.user, "choose", audio
+        ):
+            raise EditorNotFound("Audio not found.")
         generation = get_transcript_generation(audio) if audio is not None else None
         return Response(
             self._payload(request, episode=episode, draft=draft, audio=audio, site=site, generation=generation)
