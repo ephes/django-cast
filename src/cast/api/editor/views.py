@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from functools import wraps
 from typing import Any, cast
 
-from django.db import transaction
+from django.contrib.auth import get_user_model
+from django.db import router, transaction
 from django.db.models import F, Q, Subquery
 from django.http import HttpResponse
 from django.urls import reverse
@@ -16,8 +18,9 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ...content.media_refs import MediaResolution
 from ...content.sections import body_sections_with_replacements, section_value
-from ...models import Audio, Blog, Contributor, Episode, EpisodeContributor, Podcast, Post, Season
+from ...models import Audio, Blog, Contributor, Episode, EpisodeContributor, Podcast, Post, Season, Video
 from ...models.snippets import PostCategory
 from ...preview import render_editor_preview
 from ...publication import PublicationRejected, check_publishable
@@ -47,6 +50,62 @@ from .serializers import (
     PostLookupSerializer,
     PostUpdateSerializer,
 )
+
+
+def _page_write_database(instance: Any | None = None) -> str:
+    """Require one routed authority for the Wagtail page/revision write graph."""
+    from django.contrib.contenttypes.models import ContentType
+    from taggit.models import Tag
+    from wagtail.images import get_image_model
+    from wagtail.models import GroupPagePermission, Locale, Page, PageLogEntry, Revision
+
+    alias = router.db_for_write(Post, instance=instance)
+    models = (
+        Page,
+        Blog,
+        Podcast,
+        Post,
+        Episode,
+        Revision,
+        PageLogEntry,
+        ContentType,
+        Locale,
+        GroupPagePermission,
+        get_user_model(),
+        get_image_model(),
+        Audio,
+        Video,
+        Contributor,
+        Season,
+        Tag,
+        PostCategory,
+        EpisodeContributor,
+        Post.tags.through,
+        Post.categories.through,
+    )
+    if (instance is not None and instance._state.db != alias) or any(
+        router.db_for_write(model) != alias or router.db_for_read(model) != alias for model in models
+    ):
+        raise EditorValidationError(
+            {
+                "database": [
+                    {
+                        "code": "unsupported",
+                        "message": "Page, revision and related models must use one database for editor writes.",
+                    }
+                ]
+            }
+        )
+    return alias
+
+
+def _page_write_transaction(fn: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(fn)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        with transaction.atomic(using=_page_write_database()):
+            return fn(*args, **kwargs)
+
+    return wrapped
 
 
 class HasWagtailAdminAccess(BasePermission):
@@ -182,6 +241,8 @@ class PostEditorMixin:
         if post is None:
             raise EditorNotFound("Post not found.")
         post = post.specific
+        if for_update:
+            self._check_write_user(post, user)
         if not post.permissions_for_user(user).can_edit():
             raise EditorPermissionDenied(denied_message, parent_id=None)
         return post
@@ -196,15 +257,30 @@ class PostEditorMixin:
         """
         from wagtail.models import Page
 
-        updated = Page.objects.filter(pk=parent.pk).update(numchild=F("numchild"))
+        alias = _page_write_database(parent)
+        updated = Page.objects.using(alias).filter(pk=parent.pk).update(numchild=F("numchild"))
         if updated != 1:
             raise EditorNotFound(f"{noun} parent not found.")
         return self._get_parent(parent.pk)
 
+    @staticmethod
+    def _check_write_user(page: Any, user: Any) -> None:
+        if user._state.db != _page_write_database(page):
+            raise EditorValidationError(
+                {"database": [{"code": "unsupported", "message": "The editor user must belong to the page database."}]}
+            )
+
+    def _check_current_add_permission(self, parent: Any, user: Any, *, noun: str) -> None:
+        # Wagtail caches page grants on the request user. A fresh user avoids
+        # reusing admission-time grants after a parent move or withdrawal.
+        current_user = get_user_model()._default_manager.using(user._state.db).get(pk=user.pk)
+        if not parent.permissions_for_user(current_user).can_add_subpage():
+            raise EditorPermissionDenied(f"You cannot add {noun} under this page.", parent_id=parent.id)
+
     def _check_unique_slug(self, parent: Any, slug: str, *, exclude_id: int | None = None) -> None:
         from wagtail.models import Page
 
-        siblings = Page.objects.child_of(parent)
+        siblings = Page.objects.using(_page_write_database(parent)).child_of(parent)
         if exclude_id is not None:
             siblings = siblings.exclude(pk=exclude_id)
         # Wagtail validates edits against persisted Page.slug values, while editor
@@ -298,13 +374,20 @@ class PostEditorMixin:
         inputs share the same validation and rich-text sanitization.
         """
         sections = []
+        media_resolution = MediaResolution(user)
         for section in ("overview", "detail"):
             if markdown_field(section) in data:
-                value = markdown_to_section(data[markdown_field(section)], user=user, section=section)
+                value = markdown_to_section(
+                    data[markdown_field(section)], user=user, section=section, media_resolution=media_resolution
+                )
             elif section in data:
                 existing_section = section_value(existing_body, section) if existing_body is not None else None
                 value = author_blocks_to_section(
-                    data[section], user=user, path_prefix=section, existing_section=existing_section
+                    data[section],
+                    user=user,
+                    path_prefix=section,
+                    existing_section=existing_section,
+                    media_resolution=media_resolution,
                 )
             else:
                 continue
@@ -338,6 +421,7 @@ class PostEditorMixin:
         else:
             publication_status = "draft"
 
+        media_resolution = MediaResolution(user)
         data = {
             "id": post.id,
             "type": content_post._meta.label,
@@ -352,10 +436,16 @@ class PostEditorMixin:
             "categories": [category.pk for category in content_post.categories.all()],
             "cover_image": cover,
             "overview": section_to_author_blocks(
-                section_value(content_post.body.raw_data, "overview"), path_prefix="overview", user=user
+                section_value(content_post.body.raw_data, "overview"),
+                path_prefix="overview",
+                user=user,
+                media_resolution=media_resolution,
             ),
             "detail": section_to_author_blocks(
-                section_value(content_post.body.raw_data, "detail"), path_prefix="detail", user=user
+                section_value(content_post.body.raw_data, "detail"),
+                path_prefix="detail",
+                user=user,
+                media_resolution=media_resolution,
             ),
             "latest_revision_id": latest_revision_id,
             "previous_revision_id": _previous_page_revision_id(post, latest_revision_id),
@@ -388,7 +478,7 @@ class PostEditorMixin:
         except PublicationRejected as error:
             raise EditorValidationError(error.as_error_map()) from error
 
-    @transaction.atomic
+    @_page_write_transaction
     def _publish(
         self,
         page_id: int,
@@ -510,6 +600,7 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         if not parent.permissions_for_user(user).can_add_subpage():
             raise EditorPermissionDenied("You cannot add posts under this page.", parent_id=parent.id)
 
+        self._check_write_user(parent, user)
         title = data["title"]
         slug = data.get("slug") or slugify(title)
         cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
@@ -519,8 +610,9 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         # Assign body as a JSON string (the proven pattern in tests/conftest.py);
         # the StreamField parses it on access. Each section value is the list of
         # internal block dicts produced by the canonical block conversion.
-        with transaction.atomic():
+        with transaction.atomic(using=_page_write_database(parent)):
             parent = self._lock_parent_for_slug_check(parent, noun="Post")
+            self._check_current_add_permission(parent, user, noun="posts")
             self._check_unique_slug(parent, slug)
             post = Post(
                 title=title,
@@ -559,7 +651,7 @@ class PostDetailView(PostEditorMixin, EditorAPIView):
         post = self._get_post(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(post, user=request.user))
 
-    @transaction.atomic
+    @_page_write_transaction
     def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         serializer = PostUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -670,6 +762,8 @@ class EpisodeEditorMixin(PostEditorMixin):
         episode = episodes.filter(pk=pk).specific().first()
         if not isinstance(episode, Episode):
             raise EditorNotFound("Episode not found.")
+        if for_update:
+            self._check_write_user(episode, user)
         if not episode.permissions_for_user(user).can_edit():
             raise EditorPermissionDenied(denied_message, parent_id=None)
         return episode
@@ -831,6 +925,7 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         if not parent.permissions_for_user(user).can_add_subpage():
             raise EditorPermissionDenied("You cannot add episodes under this page.", parent_id=parent.id)
 
+        self._check_write_user(parent, user)
         title = data["title"]
         slug = data.get("slug") or slugify(title)
 
@@ -852,8 +947,9 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         self._apply_episode_metadata(episode, data, user, get_podcast=lambda: parent)
         if data.get("visible_date") is not None:
             episode.visible_date = data["visible_date"]
-        with transaction.atomic():
+        with transaction.atomic(using=_page_write_database(parent)):
             parent = self._lock_parent_for_slug_check(parent, noun="Episode")
+            self._check_current_add_permission(parent, user, noun="episodes")
             self._check_unique_slug(parent, slug)
             parent.add_child(instance=episode)
             if data["tags"]:
@@ -877,7 +973,7 @@ class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):
         episode = self._get_episode(pk, request.user, denied_message="You cannot view this draft.")
         return Response(self._serialize(episode, user=request.user))
 
-    @transaction.atomic
+    @_page_write_transaction
     def patch(self, request: Request, *args: Any, pk: int, **kwargs: Any) -> Response:
         serializer = EpisodeUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

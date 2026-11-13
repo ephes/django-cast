@@ -11,6 +11,7 @@ from ...content.convert import (
 from ...content.errors import ContentValidationError, ErrorCollector
 from ...content.markdown import markdown_to_author_blocks
 from ...content.media_refs import (
+    MediaResolution,
     get_choosable_audio as get_choosable_audio,
     get_choosable_image as get_choosable_image,
 )
@@ -18,7 +19,12 @@ from .errors import EditorValidationError
 
 
 def author_blocks_to_section(
-    blocks: list[dict], *, user: Any, path_prefix: str, existing_section: list[dict] | None = None
+    blocks: list[dict],
+    *,
+    user: Any,
+    path_prefix: str,
+    existing_section: list[dict] | None = None,
+    media_resolution: MediaResolution | None = None,
 ) -> list[dict]:
     """Convert an author-facing block list into a Wagtail body-section StreamField value.
 
@@ -28,7 +34,13 @@ def author_blocks_to_section(
     Raises :class:`EditorValidationError` aggregating every problem with a field-precise path.
     """
     section = content_section(path_prefix)
-    ctx = ConversionContext(section=section, user=user, existing_section=existing_section, path_prefix=path_prefix)
+    ctx = ConversionContext(
+        section=section,
+        user=user,
+        existing_section=existing_section,
+        path_prefix=path_prefix,
+        media_resolution=media_resolution,
+    )
     try:
         return convert_author_blocks_to_section(blocks, ctx=ctx)
     except ContentValidationError as exc:
@@ -47,7 +59,9 @@ def markdown_field(section: str) -> str:
     return f"{section}_markdown"
 
 
-def markdown_to_section(source: str, *, user: Any, section: str) -> list[dict]:
+def markdown_to_section(
+    source: str, *, user: Any, section: str, media_resolution: MediaResolution | None = None
+) -> list[dict]:
     """Convert Markdown into a body-section value through the canonical block pipeline.
 
     The generated ``paragraph``/``code`` author blocks are validated and sanitized
@@ -60,7 +74,7 @@ def markdown_to_section(source: str, *, user: Any, section: str) -> list[dict]:
     if errors:
         raise EditorValidationError(errors.error_map)
     try:
-        return author_blocks_to_section(blocks, user=user, path_prefix=section)
+        return author_blocks_to_section(blocks, user=user, path_prefix=section, media_resolution=media_resolution)
     except EditorValidationError as exc:
         raise EditorValidationError(
             {field + path.removeprefix(section): items for path, items in exc.error_map.items()}
@@ -68,11 +82,15 @@ def markdown_to_section(source: str, *, user: Any, section: str) -> list[dict]:
 
 
 def section_to_author_blocks(
-    section_value: list[dict], *, path_prefix: str = "overview", user: Any | None = None
+    section_value: list[dict],
+    *,
+    path_prefix: str = "overview",
+    user: Any | None = None,
+    media_resolution: MediaResolution | None = None,
 ) -> list[dict]:
     """Inverse of :func:`author_blocks_to_section` for supported block types."""
     section = content_section(path_prefix)
-    ctx = ConversionContext(section=section, user=user, path_prefix=path_prefix)
+    ctx = ConversionContext(section=section, user=user, path_prefix=path_prefix, media_resolution=media_resolution)
     return convert_section_to_author_blocks(section_value, ctx=ctx)
 
 

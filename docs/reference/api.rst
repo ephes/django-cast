@@ -546,6 +546,17 @@ formats. Review the feature list before resubmitting existing content.
    Resubmitting a section sanitizes its editable rich text; it does not clean
    preserved unsupported blocks, other sections, or revision history.
 
+Creation rechecks add-subpage permission using the locked current parent and
+fresh user grants immediately before writing pages or revisions. A concurrent
+parent move or permission withdrawal returns 403 without page, tag or revision
+writes. Media conversion precedes the parent write lock.
+
+Editor page writes, sibling slug checks, revisions and publication use one
+transaction on the routed page write database. Page/revision/related models
+must route reads and writes consistently to that database; split layouts and
+users from another database are rejected with a ``database`` validation error.
+Single-database behavior is unchanged.
+
 Request fields:
 
 - ``parent`` (required): ``{"id": <page id>}`` — must be a ``Blog`` or
@@ -610,6 +621,33 @@ and preserved unsupported placeholders are outside this write-time protection.
 Other custom container types, such as ``TypedTableBlock``, are not traversed;
 their implementation must sanitize nested HTML itself, or the site must not
 expose them through this API.
+
+Editable stored blocks with an ID expose the additive optional field
+``existing_block_id`` alongside ``type`` and ``value``. Send it back on PATCH
+(including when reordering) to retain that top-level StreamField ID and its
+external anchors/comment associations. The ID must name a block of the same
+type in the same section of the existing revision selected by
+``base_revision_id``. Duplicate, foreign, invalid or create-time identities are
+rejected. IDs are nonempty strings of at most 64 characters. Omit the field for
+new blocks; conversion allocates a fresh UUID for each new block. Unsupported
+placeholders keep their existing preservation contract and do not accept this field. This does
+not preserve nested ListBlock or gallery-item identities after editing them.
+
+Custom-block read conversion admits at most 32 container levels and 10,000
+visited values per block, including custom API representations. Cyclic or
+larger outputs become unsupported placeholders without changing the stored
+source. These limits bound the adapter traversal; custom block methods remain
+trusted site code. Ordinary nested List/Struct values retain their values.
+
+Rich-text rejection and read-only normalization logs contain only the exception
+class and up to 12 stack locations, without exception payloads, chained
+exceptions, source lines or frame locals. HTTP errors retain their field paths.
+
+Built-in image, audio, video and gallery references are resolved in batches of
+at most 500 distinct IDs. Permission results, including denied IDs, are reused
+only within one conversion, user and routed database, shared across overview
+and detail by the editor. Repeated denied references still report every block's
+validation path. A subsequent request re-evaluates choose permissions.
 
 Stored body blocks that this API version cannot safely edit are returned as
 ``{"type": "unsupported", "value": {"stored_type": "...", "position":

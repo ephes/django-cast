@@ -145,17 +145,13 @@ def select_samples(
     limit: int,
 ) -> dict[str, list[TranscriptSpeakerSample]]:
     samples = {}
-    speaker_labels = sorted(
-        {candidate.speaker_label for candidate in podlove_candidates}
-        | {candidate.speaker_label for candidate in dote_candidates}
-    )
-    for speaker_label in speaker_labels:
-        podlove_speaker_candidates = sort_candidates(
-            [candidate for candidate in podlove_candidates if candidate.speaker_label == speaker_label]
-        )
-        dote_speaker_candidates = sort_candidates(
-            [candidate for candidate in dote_candidates if candidate.speaker_label == speaker_label]
-        )
+    grouped: dict[str, dict[str, list[_SpeakerSampleCandidate]]] = {"podlove": {}, "dote": {}}
+    for source, candidates in (("podlove", podlove_candidates), ("dote", dote_candidates)):
+        for candidate in candidates:
+            grouped[source].setdefault(candidate.speaker_label, []).append(candidate)
+    for speaker_label in sorted(grouped["podlove"].keys() | grouped["dote"].keys()):
+        podlove_speaker_candidates = sort_candidates(grouped["podlove"].get(speaker_label, []))
+        dote_speaker_candidates = sort_candidates(grouped["dote"].get(speaker_label, []))
         candidate_pool = (
             [candidate for candidate in podlove_speaker_candidates if candidate.useful]
             or [candidate for candidate in dote_speaker_candidates if candidate.useful]

@@ -6,6 +6,7 @@ from django.urls import reverse
 from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page
 
 from cast.models import Post
+from tests.block_assertions import block_values
 from tests.factories import EpisodeFactory, PostFactory, UserFactory
 
 
@@ -470,11 +471,11 @@ class TestEditorDetailSection:
         assert created.status_code == 201, created.content
         data = created.json()
         assert data["overview"] == []
-        assert data["detail"] == payload["detail"]
+        assert block_values(data["detail"]) == block_values(payload["detail"])
 
         detail_url = reverse("cast:api:editor_post_detail", kwargs={"pk": data["id"]})
         read_back = api_client.get(detail_url, format="json").json()
-        assert read_back["detail"] == payload["detail"]
+        assert block_values(read_back["detail"]) == block_values(payload["detail"])
 
         replacement = [{"type": "paragraph", "value": "<p>Updated detail.</p>"}]
         patched = api_client.patch(
@@ -484,7 +485,7 @@ class TestEditorDetailSection:
         )
         assert patched.status_code == 200, patched.content
         assert patched.json()["overview"] == []
-        assert patched.json()["detail"] == replacement
+        assert block_values(patched.json()["detail"]) == block_values(replacement)
 
     def test_create_rejects_heading_block(self, api_client, blog, superuser):
         api_client.force_authenticate(user=superuser)
@@ -534,12 +535,14 @@ class TestEditorDetailSection:
         )
 
         assert response.status_code == 200, response.content
-        assert response.json()["detail"] == replacement
+        assert block_values(response.json()["detail"]) == block_values(replacement)
         draft = Post.objects.get(id=post.id).get_latest_revision_as_object()
         stored_detail = draft.body.raw_data[0]["value"]
         assert stored_detail[0]["type"] == "embed"
         assert stored_detail[0]["value"] == "https://example.com"
-        assert stored_detail[1] == {"type": "paragraph", "value": "<h2>Replacement</h2>"}
+        assert block_values([stored_detail[1]]) == block_values(
+            [{"type": "paragraph", "value": "<h2>Replacement</h2>"}]
+        )
 
     def test_patch_can_move_unsupported_placeholder(self, api_client, blog, admin_user):
         post = Post(
@@ -565,10 +568,12 @@ class TestEditorDetailSection:
         )
 
         assert response.status_code == 200, response.content
-        assert response.json()["detail"] == [
-            {"type": "paragraph", "value": "<h2>Inserted above</h2>"},
-            {"type": "unsupported", "value": {"stored_type": "embed", "position": "detail.1"}},
-        ]
+        assert block_values(response.json()["detail"]) == block_values(
+            [
+                {"type": "paragraph", "value": "<h2>Inserted above</h2>"},
+                {"type": "unsupported", "value": {"stored_type": "embed", "position": "detail.1"}},
+            ]
+        )
 
     def test_patch_can_swap_same_type_unsupported_placeholders(self, api_client, blog, admin_user):
         post = Post(
@@ -662,13 +667,15 @@ class TestEditorDetailSection:
         )
 
         assert response.status_code == 200, response.content
-        assert response.json()["detail"] == [
-            {"type": "paragraph", "value": "<h2>Keep editing</h2>"},
-            {"type": "unsupported", "value": {"stored_type": "image", "position": "detail.1"}},
-            {"type": "unsupported", "value": {"stored_type": "gallery", "position": "detail.2"}},
-            {"type": "unsupported", "value": {"stored_type": "audio", "position": "detail.3"}},
-            {"type": "unsupported", "value": {"stored_type": "video", "position": "detail.4"}},
-        ]
+        assert block_values(response.json()["detail"]) == block_values(
+            [
+                {"type": "paragraph", "value": "<h2>Keep editing</h2>"},
+                {"type": "unsupported", "value": {"stored_type": "image", "position": "detail.1"}},
+                {"type": "unsupported", "value": {"stored_type": "gallery", "position": "detail.2"}},
+                {"type": "unsupported", "value": {"stored_type": "audio", "position": "detail.3"}},
+                {"type": "unsupported", "value": {"stored_type": "video", "position": "detail.4"}},
+            ]
+        )
 
     def test_patch_preserves_malformed_gallery_placeholder(self, api_client, blog, admin_user):
         post = Post(

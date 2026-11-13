@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
+from uuid import uuid4
 
 from ..post_body_blocks import POST_BODY_SECTIONS
 from .blocks import UNSUPPORTED, ConversionContext, content_converters
 from .errors import ContentValidationError, ErrorCollector
+from .media_refs import MediaResolution
 from .placeholders import placeholder_for, resolve_placeholder
 
 
@@ -21,6 +24,15 @@ def _path_prefix(ctx: ConversionContext) -> str:
     if path_prefix is None:
         raise ValueError("path_prefix is required when section is None")
     return path_prefix
+
+
+def _with_media_resolution(ctx: ConversionContext, blocks: list[Any], *, stored: bool) -> ConversionContext:
+    resolution = ctx.media_resolution or MediaResolution(ctx.user)
+    if resolution.user is not ctx.user:
+        raise ValueError("Media resolution belongs to another user.")
+    if not stored or ctx.user is not None:
+        resolution.prefetch(blocks, stored=stored)
+    return replace(ctx, media_resolution=resolution)
 
 
 def author_blocks_to_section(blocks: Any, *, ctx: ConversionContext) -> list[dict]:
@@ -39,9 +51,16 @@ def convert_author_blocks(blocks: Any, *, ctx: ConversionContext, errors: ErrorC
         errors.add(path_prefix, "invalid", f"{path_prefix} must be a list of blocks.")
         return []
 
+    ctx = _with_media_resolution(ctx, blocks, stored=False)
     result: list[dict] = []
-    preserved_unsupported_indexes: set[int] = set()
     converters = content_converters(ctx.section)
+    existing_by_id: dict[str, int | None] = {}
+    existing = ctx.existing_section or []
+    for index, stored in enumerate(existing):
+        identity = stored.get("id")
+        if isinstance(identity, str) and 0 < len(identity) <= 64:
+            existing_by_id[identity] = None if identity in existing_by_id else index
+    used_existing_indexes: set[int] = set()
     for index, block in enumerate(blocks):
         base = f"{path_prefix}.{index}"
         if not isinstance(block, dict) or "type" not in block:
@@ -53,18 +72,36 @@ def convert_author_blocks(blocks: Any, *, ctx: ConversionContext, errors: ErrorC
             errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
             continue
 
+        existing_index = None
+        if "existing_block_id" in block:
+            identity = block["existing_block_id"]
+            existing_index = existing_by_id.get(identity) if isinstance(identity, str) else None
+            if (
+                existing_index is None
+                or block_type == "unsupported"
+                or existing[existing_index].get("type") != block_type
+                or existing_index in used_existing_indexes
+            ):
+                errors.add(
+                    f"{base}.existing_block_id",
+                    "invalid",
+                    "Block identity must name one existing block of the same type in this section and revision, used only once.",
+                )
+                continue
+            used_existing_indexes.add(existing_index)
+
         if block_type == "unsupported":
             before = len(errors)
             preserved, existing_index = resolve_placeholder(value, ctx=ctx, path=base, errors=errors)
             if len(errors) > before or preserved is None:
                 continue
             assert existing_index is not None
-            if existing_index in preserved_unsupported_indexes:
+            if existing_index in used_existing_indexes:
                 errors.add(
                     f"{base}.value.position", "duplicate", "Unsupported placeholder position is already preserved."
                 )
                 continue
-            preserved_unsupported_indexes.add(existing_index)
+            used_existing_indexes.add(existing_index)
             result.append(preserved)
             continue
 
@@ -75,13 +112,19 @@ def convert_author_blocks(blocks: Any, *, ctx: ConversionContext, errors: ErrorC
         before = len(errors)
         prepared = converter.to_stream(value, ctx=ctx, path=f"{base}.value", errors=errors)
         if len(errors) == before:
-            result.append({"type": block_type, "value": prepared})
+            converted = {
+                "type": block_type,
+                "value": prepared,
+                "id": block["existing_block_id"] if existing_index is not None else str(uuid4()),
+            }
+            result.append(converted)
     return result
 
 
 def section_to_author_blocks(section_value: list[dict], *, ctx: ConversionContext) -> list[dict]:
     """Convert stored StreamField values to the curated author format."""
     path_prefix = _path_prefix(ctx)
+    ctx = _with_media_resolution(ctx, section_value, stored=True)
     author: list[dict] = []
     converters = content_converters(ctx.section)
     for index, block in enumerate(section_value):
@@ -95,5 +138,9 @@ def section_to_author_blocks(section_value: list[dict], *, ctx: ConversionContex
         if author_value is UNSUPPORTED:
             author.append(placeholder_for(index, block, path_prefix))
         else:
-            author.append({"type": block_type, "value": author_value})
+            converted = {"type": block_type, "value": author_value}
+            identity = block.get("id")
+            if isinstance(identity, str) and 0 < len(identity) <= 64:
+                converted["existing_block_id"] = identity
+            author.append(converted)
     return author

@@ -95,7 +95,11 @@ def test_editor_api_caption_roundtrip(image, admin_user):
     author = [
         {"type": "gallery", "value": [{"id": image.pk, "caption": "First"}, {"id": image.pk, "caption": "Second"}]}
     ]
-    assert overview_to_author_blocks(author_blocks_to_overview(author, user=admin_user)) == author
+    from tests.block_assertions import block_values
+
+    assert block_values(overview_to_author_blocks(author_blocks_to_overview(author, user=admin_user))) == block_values(
+        author
+    )
     for caption in [None, "x" * 251]:
         author[0]["value"][0]["caption"] = caption
         with pytest.raises(EditorValidationError) as exc:

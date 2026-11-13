@@ -21,6 +21,7 @@ from cast.content.blocks import (
 from cast.content.convert import author_blocks_to_section
 from cast.content.errors import ContentValidationError, ErrorCollector
 from cast.post_body_blocks import DEFAULT_CONTENT_BLOCK_NAMES
+from tests.block_assertions import block_values
 
 
 def test_content_converters_without_section_returns_all_builtins_only():
@@ -60,10 +61,12 @@ def test_custom_block_can_prepare_a_successful_none_value(mocker):
         return_value=[("nullable", NullBlock())],
     )
 
-    assert author_blocks_to_section(
-        [{"type": "nullable", "value": None}],
-        ctx=ConversionContext(section="overview", user=None),
-    ) == [{"type": "nullable", "value": None}]
+    assert block_values(
+        author_blocks_to_section(
+            [{"type": "nullable", "value": None}],
+            ctx=ConversionContext(section="overview", user=None),
+        )
+    ) == block_values([{"type": "nullable", "value": None}])
 
 
 def test_unknown_section_has_no_custom_blocks():

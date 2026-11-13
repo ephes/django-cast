@@ -12,6 +12,15 @@ See [the analysis and implementation plan](2026-09-07-editor-richtext-sanitizati
 and `docs/reference/api.rst` for the current contract and historical-content
 limitations. The older save-path claims below are superseded by this correction.
 
+Implemented hardening (2026-11-13): creation rechecks current parent authority
+under the parent lock with fresh user grants. Editor page, slug and revision
+writes share the routed write-database transaction; split page/revision/user
+layouts are refused. Editable author blocks expose optional `existing_block_id`
+bound to the submitted section/revision; accepted new blocks get fresh UUIDs.
+Custom read output is bounded to 32 levels and 10,000 values, and built-in media
+resolution uses conversion-local batches of 500 with user/database isolation.
+See `docs/reference/api.rst` for the current additive contract.
+
 Status: Slice 1 implemented (2026-06-22): `GET /api/editor/parents/`, `POST /api/editor/posts/`, and
 `GET /api/editor/posts/{id}/` are shipped. An exact, permission-checked direct-parent plus slug lookup on
 `GET /api/editor/posts/?parent=…&slug=…` was added on 2026-07-18 for deterministic draft find-or-create clients; it is

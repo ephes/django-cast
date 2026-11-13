@@ -1,5 +1,7 @@
 """Pure voice-reference candidate extraction helpers."""
 
+from bisect import bisect_right
+from collections import Counter
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
@@ -69,7 +71,7 @@ def get_candidates(
         return []
 
     candidates_by_speaker: dict[str, list[TranscriptVoiceReferenceCandidate]] = {}
-    for run in get_runs(podlove_data, max_gap_seconds=max_gap_seconds):
+    for run in get_clean_runs(podlove_data, max_gap_seconds=max_gap_seconds):
         candidate = build_candidate_from_run(
             run,
             target_seconds=target_seconds,
@@ -88,6 +90,77 @@ def get_candidates(
         for rank, candidate in enumerate(speaker_candidates[:limit_per_speaker], start=1):
             ranked_candidates.append(replace(candidate, rank=rank))
     return ranked_candidates
+
+
+def get_clean_runs(podlove_data: dict, *, max_gap_seconds: Decimal) -> list[list[_PodloveVoiceReferenceSegment]]:
+    """Intersect source runs with a sweep of solo intervals, including textless speech.
+
+    Half-open intervals make touching endpoints safe. Silent gaps can join runs,
+    but any intervening speech by another label breaks the clean interval.
+    """
+    events: dict[Decimal, Counter[str]] = {}
+    for segment in podlove_data.get("transcripts", []):
+        if not isinstance(segment, dict):
+            continue
+        labels = {label for key in ("speaker", "voice") if (label := parsing.clean_speaker_label(segment.get(key)))}
+        start = parsing.parse_record_decimal_seconds(
+            segment, millisecond_field="start_ms", timestamp_fields=("start", "startTime")
+        )
+        end = parsing.parse_record_decimal_seconds(
+            segment, millisecond_field="end_ms", timestamp_fields=("end", "endTime")
+        )
+        if not labels or start is None or end is None or start >= end:
+            continue
+        for label in labels:
+            events.setdefault(start, Counter())[label] += 1
+            events.setdefault(end, Counter())[label] -= 1
+    active: Counter[str] = Counter()
+    ranges: dict[str, list[tuple[Decimal, Decimal]]] = {}
+    previous_label = None
+    times = sorted(events)
+    for start, end in zip(times, times[1:]):
+        for label, delta in events[start].items():
+            active[label] += delta
+            if active[label] == 0:
+                del active[label]
+        if not active:
+            continue
+        if len(active) != 1:
+            previous_label = None
+            continue
+        label = next(iter(active))
+        solo = ranges.setdefault(label, [])
+        if previous_label == label:
+            solo[-1] = (solo[-1][0], end)
+        else:
+            solo.append((start, end))
+        previous_label = label
+    ends = {label: [end for _, end in intervals] for label, intervals in ranges.items()}
+    clean_runs = []
+    for run in get_runs(podlove_data, max_gap_seconds=max_gap_seconds):
+        label = run[0].speaker_label
+        intervals = ranges.get(label, [])
+        first = bisect_right(ends.get(label, []), run[0].start_seconds)
+        segment_ends = [segment.end_seconds for segment in run]
+        for interval_index in range(first, len(intervals)):
+            start, end = intervals[interval_index]
+            if start >= run[-1].end_seconds:
+                break
+            clipped = []
+            for segment_index in range(bisect_right(segment_ends, start), len(run)):
+                segment = run[segment_index]
+                if segment.start_seconds >= end:
+                    break
+                clipped.append(
+                    replace(
+                        segment,
+                        start_seconds=max(start, segment.start_seconds),
+                        end_seconds=min(end, segment.end_seconds),
+                    )
+                )
+            if clipped:
+                clean_runs.append(clipped)
+    return clean_runs
 
 
 def get_runs(

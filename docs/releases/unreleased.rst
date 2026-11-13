@@ -1,6 +1,18 @@
 Unreleased
 ==========
 
+- Subtract cross-speaker overlap before ranking voice-reference ranges, including
+  textless and ambiguous-label segments. Group speaker samples in one pass.
+
+- Recheck current parent permissions under the creation lock; bind editor page,
+  slug and revision transactions to the routed write database and reject split
+  page/revision routing or cross-database editor users.
+- Bound custom-block output traversal (32 levels, 10,000 values), preserve
+  editable top-level block identities through optional ``existing_block_id``,
+  and batch built-in media permission resolution in groups of 500 per conversion.
+- Keep rich-text rejection and normalization diagnostics free of exception
+  payloads and source text while retaining bounded stack locations.
+
 - Security hardening:
 
   - Code blocks: sources are capped at ``CAST_CODE_BLOCK_MAX_SOURCE_LENGTH``

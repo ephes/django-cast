@@ -2,6 +2,11 @@
 
 Status: implemented in 0.2.65 (unreleased); review cycle complete with advisory suggestions only.
 
+Follow-up implemented (2026-11-13): rejection and read-only
+normalization logs retain bounded exception classes/stack locations only,
+excluding exception payloads, chained exceptions, source lines and frame locals.
+The HTTP validation paths and historical-source preservation contract remain.
+
 ## Root cause and independent analysis
 
 `RichTextBlock.clean()` runs field validation, not the Draftail widget's
