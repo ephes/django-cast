@@ -557,6 +557,22 @@ must route reads and writes consistently to that database; split layouts and
 users from another database are rejected with a ``database`` validation error.
 Single-database behavior is unchanged.
 
+.. warning::
+
+   This includes primary/replica setups. If a database router sends reads of
+   any model in the editor write graph to a read replica, every editor API
+   write (create, PATCH, publish)
+   returns 400 with a ``database`` error, because the locked permission and
+   slug rechecks must read the same database they write to. The checked
+   models are Wagtail's ``Page``, ``Revision``, ``PageLogEntry``, ``Locale``
+   and ``GroupPagePermission``, ``ContentType``, the user model, the image
+   model, taggit's ``Tag``, and cast's ``Blog``, ``Podcast``, ``Post``,
+   ``Episode``, ``Audio``, ``Video``, ``Contributor``, ``Season``,
+   ``PostCategory`` and ``EpisodeContributor`` plus the ``Post`` tag and
+   category through models. Route reads of all of them to the primary (for
+   example in the router's ``db_for_read``) to use the editor API on such a
+   site.
+
 Request fields:
 
 - ``parent`` (required): ``{"id": <page id>}`` — must be a ``Blog`` or
@@ -628,7 +644,9 @@ Editable stored blocks with an ID expose the additive optional field
 external anchors/comment associations. The ID must name a block of the same
 type in the same section of the existing revision selected by
 ``base_revision_id``. Duplicate, foreign, invalid or create-time identities are
-rejected. IDs are nonempty strings of at most 64 characters. Omit the field for
+rejected. IDs are nonempty strings of at most 64 characters. A stored ID that
+occurs more than once in a section is ambiguous and is not exposed; those
+blocks round-trip as new blocks with fresh IDs. Omit the field for
 new blocks; conversion allocates a fresh UUID for each new block. Unsupported
 placeholders keep their existing preservation contract and do not accept this field. This does
 not preserve nested ListBlock or gallery-item identities after editing them.

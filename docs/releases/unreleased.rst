@@ -6,7 +6,13 @@ Unreleased
 
 - Recheck current parent permissions under the creation lock; bind editor page,
   slug and revision transactions to the routed write database and reject split
-  page/revision routing or cross-database editor users.
+  page/revision routing or cross-database editor users. Sites whose database
+  router sends reads of any model in the editor write graph (Wagtail pages,
+  revisions, page log entries, locales, page permissions, content types,
+  users, images, tags and cast's page, media and episode metadata models) to a
+  read replica now get a ``database`` error on every editor API write; route
+  those reads to the primary to keep using the editor API (see the editor API
+  reference for the full list).
 - Bound custom-block output traversal (32 levels, 10,000 values), preserve
   editable top-level block identities through optional ``existing_block_id``,
   and batch built-in media permission resolution in groups of 500 per conversion.

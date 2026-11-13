@@ -54,3 +54,18 @@ def test_block_identity_cannot_alias_another_block(mode):
         ]
     with pytest.raises(ContentValidationError):
         author_blocks_to_section(author, ctx=ctx)
+
+
+def test_duplicate_stored_identities_round_trip_as_new_blocks():
+    stored = [
+        {"id": "a", "type": "paragraph", "value": "<p>One</p>"},
+        {"id": "a", "type": "paragraph", "value": "<p>Two</p>"},
+        {"id": "b", "type": "code", "value": {"language": "python", "source": "pass"}},
+    ]
+    ctx = ConversionContext(section="overview", user=None, existing_section=stored)
+    author = section_to_author_blocks(stored, ctx=ctx)
+    assert ["existing_block_id" in block for block in author] == [False, False, True]
+    section = author_blocks_to_section(author, ctx=ctx)
+    assert [block["value"] for block in section] == [block["value"] for block in stored]
+    assert section[2]["id"] == "b"
+    assert len({section[0]["id"], section[1]["id"], "a", "b"}) == 4

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
+from typing import Any, TypeGuard
 from uuid import uuid4
 
 from ..post_body_blocks import POST_BODY_SECTIONS
@@ -24,6 +24,20 @@ def _path_prefix(ctx: ConversionContext) -> str:
     if path_prefix is None:
         raise ValueError("path_prefix is required when section is None")
     return path_prefix
+
+
+def _valid_block_identity(identity: Any) -> TypeGuard[str]:
+    return isinstance(identity, str) and 0 < len(identity) <= 64
+
+
+def _unique_block_identities(section_value: list[Any]) -> dict[str, int | None]:
+    """Map each valid stored ID to its index, or ``None`` when the section repeats it."""
+    identities: dict[str, int | None] = {}
+    for index, stored in enumerate(section_value):
+        identity = stored.get("id") if isinstance(stored, dict) else None
+        if _valid_block_identity(identity):
+            identities[identity] = None if identity in identities else index
+    return identities
 
 
 def _with_media_resolution(ctx: ConversionContext, blocks: list[Any], *, stored: bool) -> ConversionContext:
@@ -54,12 +68,8 @@ def convert_author_blocks(blocks: Any, *, ctx: ConversionContext, errors: ErrorC
     ctx = _with_media_resolution(ctx, blocks, stored=False)
     result: list[dict] = []
     converters = content_converters(ctx.section)
-    existing_by_id: dict[str, int | None] = {}
     existing = ctx.existing_section or []
-    for index, stored in enumerate(existing):
-        identity = stored.get("id")
-        if isinstance(identity, str) and 0 < len(identity) <= 64:
-            existing_by_id[identity] = None if identity in existing_by_id else index
+    existing_by_id = _unique_block_identities(existing)
     used_existing_indexes: set[int] = set()
     for index, block in enumerate(blocks):
         base = f"{path_prefix}.{index}"
@@ -127,6 +137,9 @@ def section_to_author_blocks(section_value: list[dict], *, ctx: ConversionContex
     ctx = _with_media_resolution(ctx, section_value, stored=True)
     author: list[dict] = []
     converters = content_converters(ctx.section)
+    # Expose only identities the write side can bind back: a stored ID repeated in
+    # the section is ambiguous, so its blocks round-trip as new blocks instead.
+    unique_ids = _unique_block_identities(section_value)
     for index, block in enumerate(section_value):
         block_type = block.get("type")
         value = block.get("value")
@@ -140,7 +153,7 @@ def section_to_author_blocks(section_value: list[dict], *, ctx: ConversionContex
         else:
             converted = {"type": block_type, "value": author_value}
             identity = block.get("id")
-            if isinstance(identity, str) and 0 < len(identity) <= 64:
+            if _valid_block_identity(identity) and unique_ids.get(identity) is not None:
                 converted["existing_block_id"] = identity
             author.append(converted)
     return author
