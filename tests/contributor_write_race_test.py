@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import close_old_connections, connection
+from wagtail.models import Locale
 
 from cast.models import Contributor, ContributorLink, Episode, EpisodeContributor
 
@@ -22,10 +23,12 @@ def test_assignment_rechecks_cached_link(episode):
 
 
 @pytest.fixture
-def race_episode(transactional_db):
+def race_episode(transactional_db, settings):
     if connection.vendor != "postgresql":
         pytest.skip("requires independent PostgreSQL row locks")
-    return Episode.add_root(title="Synthetic episode", slug="synthetic-episode")
+    # An earlier transactional test flushes the migrated default locale.
+    locale, _ = Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE)
+    return Episode.add_root(title="Synthetic episode", slug="synthetic-episode", locale=locale)
 
 
 @pytest.mark.django_db(transaction=True)
