@@ -1,9 +1,11 @@
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.files.storage import Storage
-from django.db import models
+from django.db import models, router, transaction
 from django.http import HttpRequest
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -14,6 +16,7 @@ from wagtail.models import Orderable
 from wagtail.snippets.models import register_snippet
 
 from ..form_widgets import PrivateClearableFileInput
+from ..media_derivation import normalize_model_save_arguments
 from ..transcripts.glossary import letters_key, normalize_phrase
 
 CONTRIBUTOR_ROLE_HOST = "host"
@@ -22,6 +25,24 @@ CONTRIBUTOR_ROLE_CHOICES = (
     (CONTRIBUTOR_ROLE_HOST, _("Host")),
     (CONTRIBUTOR_ROLE_GUEST, _("Guest")),
 )
+
+
+def validate_voice_reference_range(start: Any, end: Any, duration: timedelta | None) -> None:
+    """Admit finite source bounds, including legacy rows at payload construction."""
+    try:
+        start, end = Decimal(str(start)), Decimal(str(end))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValidationError(_("Source range bounds must be finite numbers.")) from exc
+    if not start.is_finite() or not end.is_finite() or start < 0:
+        raise ValidationError(_("Source range bounds must be finite and nonnegative."))
+    if end > Decimal("9999999.999"):
+        raise ValidationError(_("Source range bounds exceed the supported precision."))
+    if start >= end:
+        raise ValidationError(_("The source range start time must be before its end time."))
+    if duration is not None:
+        seconds = Decimal(duration.days * 86400 + duration.seconds) + Decimal(duration.microseconds) / 1000000
+        if end > seconds:
+            raise ValidationError(_("The source range must not exceed the source audio duration."))
 
 
 @register_snippet
@@ -293,8 +314,9 @@ class ContributorVoiceReference(Orderable):
                 raise ValidationError(_("A source range needs both a start and an end time."))
             if self.source_audio_id is None:
                 raise ValidationError(_("A source range needs source audio."))
-            if self.start_seconds >= self.end_seconds:
-                raise ValidationError(_("The source range start time must be before its end time."))
+            validate_voice_reference_range(
+                self.start_seconds, self.end_seconds, getattr(self.source_audio, "duration", None)
+            )
         if self.status == self.Status.APPROVED and not self.consent_confirmed:
             raise ValidationError(_("Approving a voice reference requires confirmed consent."))
 
@@ -343,14 +365,19 @@ class ContributorLink(Orderable):
         self._validate_episode_assignments_match_contributor()
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        self._validate_episode_assignments_match_contributor()
-        super().save(*args, **kwargs)
+        kwargs, using = normalize_model_save_arguments(self, args, kwargs)
+        with transaction.atomic(using=using):
+            # Both link-owner writes and assignment admission take this same lock.
+            type(self).objects.using(using).filter(pk=self.pk).update(contributor_id=models.F("contributor_id"))
+            self._validate_episode_assignments_match_contributor(using=using)
+            super().save(**kwargs)
 
-    def _validate_episode_assignments_match_contributor(self) -> None:
+    def _validate_episode_assignments_match_contributor(self, *, using: str | None = None) -> None:
         if self.pk is None or self.contributor_id is None:
             return
-        mismatching_assignments = EpisodeContributor.objects.filter(link_id=self.pk).exclude(
-            contributor_id=self.contributor_id
+        using = using or router.db_for_write(type(self), instance=self)
+        mismatching_assignments = (
+            EpisodeContributor.objects.using(using).filter(link_id=self.pk).exclude(contributor_id=self.contributor_id)
         )
         if mismatching_assignments.exists():
             raise ValidationError(
@@ -437,8 +464,15 @@ class EpisodeContributor(Orderable):
             raise ValidationError({"link": _("The selected link must belong to the selected contributor.")})
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        self.clean()
-        super().save(*args, **kwargs)
+        kwargs, using = normalize_model_save_arguments(self, args, kwargs)
+        with transaction.atomic(using=using):
+            if self.link_id is not None:
+                links = ContributorLink.objects.using(using).filter(pk=self.link_id)
+                links.update(contributor_id=models.F("contributor_id"))
+                # Ignore a form/modelcluster relation cached before an owner change.
+                self.link = links.get()
+            self.clean()
+            super().save(**kwargs)
 
     @property
     def display_name(self) -> str:

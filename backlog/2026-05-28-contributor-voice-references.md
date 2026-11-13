@@ -69,7 +69,9 @@ Field names can change during implementation. Keep these rules:
 
 - A reference should be either an uploaded/managed clip or a source range into
   existing audio, not an ambiguous mixture.
-- Source ranges need `start_seconds < end_seconds`.
+- Source ranges require finite, nonnegative bounds with `start_seconds < end_seconds` and
+  `end_seconds <= source_audio.duration` when duration is known. Implemented in round 88;
+  outbound payload admission also skips invalid legacy ranges.
 - Approved references must contain clean solo speech from the contributor.
 - New references start as `pending` and must be explicitly approved before they
   can be sent to Voxhelm.

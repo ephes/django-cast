@@ -479,7 +479,8 @@ def test_submit_for_audio_requires_job_id(settings, user, m4a_audio):
         (VoxhelmError("Voxhelm job job-7 ended in state 'failed'."), "Voxhelm job job-7 ended in state 'failed'."),
     ],
 )
-def test_generate_for_audio_names_the_job_when_completion_fails(mocker, error, expected):
+@pytest.mark.django_db
+def test_generate_for_audio_names_the_job_when_completion_fails(mocker, error, expected, audio):
     service = VoxhelmTranscriptService(client=SimpleNamespace())
     submission = TranscriptSubmission(
         job_id="job-7",
@@ -491,7 +492,12 @@ def test_generate_for_audio_names_the_job_when_completion_fails(mocker, error, e
     mocker.patch.object(service, "complete_audio_job", side_effect=error)
 
     with pytest.raises(VoxhelmError) as exc_info:
-        service.generate_for_audio(SimpleNamespace(pk=1))
+        service.generate_for_audio(audio)
 
     assert str(exc_info.value) == expected
     assert type(exc_info.value) is type(error)
+
+
+def test_submit_for_audio_requires_saved_audio():
+    with pytest.raises(VoxhelmError, match="must be saved"):
+        VoxhelmTranscriptService(client=object()).submit_for_audio(SimpleNamespace(pk=None))

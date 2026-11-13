@@ -1,6 +1,15 @@
 Unreleased
 ==========
 
+- Preserve the current Voxhelm token on blank settings saves, including stale
+  forms and Wagtail deferred saves. Refuse conflicting explicit token changes.
+- Fence synchronous CLI transcript completion by generation attempt and artifact
+  revision so newer queued work or editor changes retain their files and mappings.
+- Serialize contributor link reassignment with episode assignment admission and
+  recheck cached link ownership on the write database.
+- Reject negative, nonfinite and over-duration voice-reference ranges; skip
+  invalid legacy ranges when building known-speaker requests.
+
 - Subtract cross-speaker overlap before ranking voice-reference ranges, including
   textless and ambiguous-label segments. Group speaker samples in one pass.
 
