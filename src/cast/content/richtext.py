@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import traceback
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -19,6 +21,21 @@ from .errors import ErrorCollector
 
 logger = logging.getLogger(__name__)
 _RICH_TEXT_INPUT_ERRORS = (AssertionError, IndexError, KeyError, TypeError, ValueError, OverflowError)
+
+
+def _log_conversion_failure(message: str, exc: Exception, *, path: str = "value") -> None:
+    # No exception messages, chained exceptions, source lines or frame locals:
+    # converters may include the entire unpublished source in any of these.
+    frames = deque(
+        (
+            f"{frame.f_code.co_filename[-256:]}:{lineno} in {frame.f_code.co_name[:80]}"
+            for frame, lineno in traceback.walk_tb(exc.__traceback__)
+        ),
+        maxlen=12,
+    )
+    logger.warning(
+        "%s at %s (exception=%s; locations=%s)", message, path, type(exc).__name__[:80], " -> ".join(frames)
+    )
 
 
 class _InlineEmbedError(Exception):
@@ -101,11 +118,11 @@ def sanitize_rich_text(
     except _InlineEmbedError:
         errors.add(path, "inline_embed", "Use structured media blocks instead of inline embeds.")
         return None
-    except _RICH_TEXT_INPUT_ERRORS:
+    except _RICH_TEXT_INPUT_ERRORS as exc:
         # The parser assumes editor-generated HTML and can raise assertions,
         # indexing errors, or link-conversion errors for malformed API input.
         # Preserve an operator-visible trace, including failures in custom rules.
-        logger.warning("Rejected editor API rich text at %s", path, exc_info=True)
+        _log_conversion_failure("Rejected editor API rich text", exc, path=path)
         errors.add(path, "invalid", "Invalid rich text.")
         return None
     return RichText(html)
@@ -153,8 +170,8 @@ def normalize_rich_text(block: blocks.RichTextBlock, source: str) -> NormalizedR
     errors = ErrorCollector()
     try:
         result = sanitize_rich_text(block, RichText(source), path="value", errors=errors)
-    except Exception:
-        logger.exception("Unable to normalize stored rich text.")
+    except Exception as exc:
+        _log_conversion_failure("Unable to normalize stored rich text.", exc)
         errors.add("value", "normalization_failed", "Rich-text normalization failed.")
         result = None
     if result is None and not errors:

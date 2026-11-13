@@ -1008,3 +1008,17 @@ page objects reuse restriction data, including when setting private response
 headers; a later request performs a fresh read. Live restricted pages remain
 request-specific, and draft access still requires edit permission. Explicit
 anchors continue to fail with 404 when absent, mismatched or unauthorized.
+
+Voice-reference overlap and sample grouping
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Candidate extraction subtracts speech by other labels across the complete
+source timeline, including unsorted, nested, textless and conflicting-label
+segments. Touching endpoints do not overlap. Only solo portions meeting the
+minimum duration are offered; original transcript timing remains unchanged.
+A candidate's text is the full text of its source segments, so a range clipped
+around another speaker can show words spoken outside that range; judge the
+audio, not the text.
+Candidates still require editorial listening and consent approval.
+Speaker samples group each source's candidates once before per-speaker
+selection, retaining Podlove preference, low-signal fallback and spreading.

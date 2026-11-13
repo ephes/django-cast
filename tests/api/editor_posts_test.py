@@ -14,6 +14,7 @@ from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page,
 from cast.api.editor import views as editor_views
 from cast.models import Post
 from cast.models.snippets import PostCategory
+from tests.block_assertions import block_values
 from tests.factories import BlogFactory, PostFactory, UserFactory
 
 
@@ -129,7 +130,7 @@ class TestEditorPostLookup:
         assert data["type"] == "cast.Post"
         assert data["parent"] == {"id": blog.id}
         assert data["slug"] == "lookup-draft"
-        assert data["overview"] == [{"type": "paragraph", "value": "<p>Draft.</p>"}]
+        assert block_values(data["overview"]) == block_values([{"type": "paragraph", "value": "<p>Draft.</p>"}])
         assert data["latest_revision_id"] == create_response.json()["latest_revision_id"]
         assert data["previous_revision_id"] == create_response.json()["previous_revision_id"]
         assert data["live"] is False
@@ -283,10 +284,12 @@ class TestEditorPostDetail:
         assert data["seo_title"] == "Readable draft for search"
         assert data["search_description"] == "A concise description for search and social previews."
         assert data["tags"] == ["weeknotes"]
-        assert data["overview"] == [
-            {"type": "paragraph", "value": "<h2>Notes</h2>"},
-            {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
-        ]
+        assert block_values(data["overview"]) == block_values(
+            [
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
+                {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
+            ]
+        )
 
     def test_rejects_caller_without_edit_permission(self, api_client, blog, admin_user):
         created = self._create(api_client, blog, admin_user)
@@ -514,6 +517,7 @@ class TestEditorPostUpdate:
                 assert set(kwargs) == {"numchild"}
                 return 0
 
+        monkeypatch.setattr(Page.objects, "using", lambda alias: Page.objects)
         monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
         response = api_client.patch(
             reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]}),
@@ -893,10 +897,12 @@ class TestEditorPostUpdate:
         assert data["title"] == "Retitled draft"
         assert data["slug"] == "editable-draft"
         assert data["tags"] == ["weeknotes"]
-        assert data["overview"] == [
-            {"type": "paragraph", "value": "<h2>Notes</h2>"},
-            {"type": "paragraph", "value": "<p>Original text.</p>"},
-        ]
+        assert block_values(data["overview"]) == block_values(
+            [
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
+                {"type": "paragraph", "value": "<p>Original text.</p>"},
+            ]
+        )
         assert data["live"] is False
 
     def test_patch_predecessor_is_relative_to_the_exact_serialized_revision(
@@ -974,7 +980,7 @@ class TestEditorPostUpdate:
         assert data["tags"] == ["weeknotes", "updated"]
         assert data["categories"] == [category.id]
         assert data["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
-        assert data["overview"] == overview
+        assert block_values(data["overview"]) == block_values(overview)
         assert data["visible_date"].startswith("2026-06-23T")
         assert data["live"] is False
         assert data["status"] == "draft"
@@ -987,7 +993,7 @@ class TestEditorPostUpdate:
         assert detail["tags"] == ["weeknotes", "updated"]
         assert detail["categories"] == [category.id]
         assert detail["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
-        assert detail["overview"] == overview
+        assert block_values(detail["overview"]) == block_values(overview)
 
         revision_post = Post.objects.get(id=created["id"]).get_latest_revision().as_object()
         assert revision_post.seo_title == "Updated search title"
@@ -1236,7 +1242,7 @@ class TestEditorPostUpdate:
         )
 
         assert response.status_code == 200, response.content
-        assert response.json()["overview"] == overview
+        assert block_values(response.json()["overview"]) == block_values(overview)
         draft = Post.objects.get(id=post.id).get_latest_revision_as_object()
         assert [block.block_type for block in draft.body] == ["overview", "detail"]
 
@@ -1262,6 +1268,6 @@ class TestEditorPostUpdate:
         )
 
         assert response.status_code == 200, response.content
-        assert response.json()["detail"] == detail
+        assert block_values(response.json()["detail"]) == block_values(detail)
         draft = Post.objects.get(id=post.id).get_latest_revision_as_object()
         assert [block.block_type for block in draft.body] == ["overview", "detail"]

@@ -5,6 +5,7 @@ from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page
 
 from cast.models import Episode, Post, Season
 from cast.models.snippets import PostCategory
+from tests.block_assertions import block_values
 from tests.factories import EpisodeFactory, PodcastFactory, PostFactory, UserFactory
 
 
@@ -135,6 +136,7 @@ class TestEditorEpisodeCreate:
                 assert set(kwargs) == {"numchild"}
                 return 0
 
+        monkeypatch.setattr(Page.objects, "using", lambda alias: Page.objects)
         monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
         api_client.force_authenticate(user=admin_user)
 
@@ -263,7 +265,7 @@ class TestEditorEpisodeCreate:
         assert data["search_description"] == "Episode search and social description."
         assert data["categories"] == [category.id]
         assert data["cover_image"] == {"id": image.id, "alt_text": "Cover"}
-        assert data["detail"] == [{"type": "paragraph", "value": "<p>Long form.</p>"}]
+        assert block_values(data["detail"]) == block_values([{"type": "paragraph", "value": "<p>Long form.</p>"}])
         assert data["visible_date"].startswith("2026-06-29T")
 
     def test_create_without_tags_or_categories(self, api_client, podcast, admin_user):
@@ -361,7 +363,7 @@ class TestEditorEpisodeDetail:
         assert data["id"] == created["id"]
         assert data["type"] == "cast.Episode"
         assert data["status"] == "draft"
-        assert data["overview"] == [{"type": "paragraph", "value": "<h2>Notes</h2>"}]
+        assert block_values(data["overview"]) == block_values([{"type": "paragraph", "value": "<h2>Notes</h2>"}])
 
     def test_plain_post_is_not_an_episode(self, api_client, blog, admin_user):
         post = PostFactory(owner=blog.owner, parent=blog, title="Just a post", slug="just-a-post")
@@ -503,6 +505,7 @@ class TestEditorEpisodeUpdate:
                 assert set(kwargs) == {"numchild"}
                 return 0
 
+        monkeypatch.setattr(Page.objects, "using", lambda alias: Page.objects)
         monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
         response = api_client.patch(
             reverse("cast:api:editor_episode_detail", kwargs={"pk": created["id"]}),
@@ -672,8 +675,8 @@ class TestEditorEpisodeUpdate:
         assert data["tags"] == ["podcast", "updated"]
         assert data["categories"] == [category.id]
         assert data["cover_image"] == {"id": image.id, "alt_text": "Updated alt"}
-        assert data["overview"] == overview
-        assert data["detail"] == detail
+        assert block_values(data["overview"]) == block_values(overview)
+        assert block_values(data["detail"]) == block_values(detail)
         assert data["visible_date"].startswith("2026-06-29T")
 
     def test_live_episode_patch_keeps_public_page_slug_until_publish(self, api_client, podcast, admin_user):

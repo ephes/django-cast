@@ -19,6 +19,7 @@ from cast.api.editor.errors import (
 )
 from cast.models import Post
 from cast.models.snippets import PostCategory
+from tests.block_assertions import block_values
 from tests.factories import BlogFactory, PostFactory, UserFactory
 
 WEEKNOTE_LINK = {
@@ -216,15 +217,17 @@ class TestAuthorBlocksToOverview:
             ],
             user=superuser,
         )
-        assert result == [
-            {"type": "paragraph", "value": "<h2>Notes</h2>"},
-            {"type": "paragraph", "value": "<p>Shipped.</p>"},
-            {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
-        ]
+        assert block_values(result) == block_values(
+            [
+                {"type": "paragraph", "value": "<h2>Notes</h2>"},
+                {"type": "paragraph", "value": "<p>Shipped.</p>"},
+                {"type": "code", "value": {"language": "python", "source": "print('hi')"}},
+            ]
+        )
 
     def test_image_block_resolves_to_pk(self, image, superuser):
         result = author_blocks_to_overview([{"type": "image", "value": {"id": image.id}}], user=superuser)
-        assert result == [{"type": "image", "value": image.id}]
+        assert block_values(result) == block_values([{"type": "image", "value": image.id}])
 
     def test_gallery_block_builds_layout_struct(self, image, superuser):
         result = author_blocks_to_overview([{"type": "gallery", "value": [{"id": image.id}]}], user=superuser)
@@ -248,7 +251,7 @@ class TestAuthorBlocksToOverview:
 
     def test_audio_block_resolves_to_pk(self, audio, superuser):
         result = author_blocks_to_overview([{"type": "audio", "value": {"id": audio.id}}], user=superuser)
-        assert result == [{"type": "audio", "value": audio.id}]
+        assert block_values(result) == block_values([{"type": "audio", "value": audio.id}])
 
     def test_audio_not_choosable_by_caller_reports_not_found(self, audio):
         caller = UserFactory()
@@ -263,7 +266,7 @@ class TestAuthorBlocksToOverview:
 
     def test_video_block_resolves_to_pk(self, video, superuser):
         result = author_blocks_to_overview([{"type": "video", "value": {"id": video.id}}], user=superuser)
-        assert result == [{"type": "video", "value": video.id}]
+        assert block_values(result) == block_values([{"type": "video", "value": video.id}])
 
     def test_video_not_choosable_reports_not_found(self, video):
         caller = UserFactory()
@@ -334,7 +337,7 @@ class TestAuthorBlocksToOverview:
         assert internal[0]["type"] == "weeknote_links"
         assert internal[0]["value"][0]["type"] == "item"
         assert internal[0]["value"][0]["value"] == WEEKNOTE_LINK
-        assert overview_to_author_blocks(internal) == author
+        assert block_values(overview_to_author_blocks(internal)) == block_values(author)
 
     @override_settings(CAST_POST_BODY_BLOCKS={"overview": ["tests.custom_post_body_blocks.weeknote_links_block"]})
     def test_configured_custom_block_validation_errors_are_field_precise(self, superuser):
@@ -405,7 +408,7 @@ class TestOverviewToAuthorBlocks:
             {"type": "video", "value": {"id": video.id}},
         ]
         internal = author_blocks_to_overview(author, user=superuser)
-        assert overview_to_author_blocks(internal) == author
+        assert block_values(overview_to_author_blocks(internal)) == block_values(author)
 
     def test_unknown_stored_block_is_placeholder(self):
         internal = [{"type": "embed", "value": "https://example.com"}, {"type": "heading", "value": "h"}]
@@ -484,7 +487,10 @@ class TestOverviewToAuthorBlocks:
             user=superuser,
             existing_section=existing,
         )
-        assert moved == [{"type": "paragraph", "value": "<h2>Inserted above</h2>"}, existing[0]]
+        assert moved[1] == existing[0]
+        assert block_values(moved) == block_values(
+            [{"type": "paragraph", "value": "<h2>Inserted above</h2>"}, existing[0]]
+        )
 
         with pytest.raises(EditorValidationError) as excinfo:
             author_blocks_to_overview(
@@ -636,6 +642,7 @@ class TestEditorPostCreate:
                 assert set(kwargs) == {"numchild"}
                 return 0
 
+        monkeypatch.setattr(Page.objects, "using", lambda alias: Page.objects)
         monkeypatch.setattr(Page.objects, "filter", lambda **kwargs: MissingParentQuery())
         api_client.force_authenticate(user=admin_user)
 

@@ -2,6 +2,7 @@ import pytest
 from django.urls import reverse
 
 from tests.api.editor_posts_test import grant_collection_permission, grant_wagtail_admin_access, page_permission_user
+from tests.block_assertions import block_values
 
 
 @pytest.mark.django_db
@@ -19,13 +20,13 @@ def test_gallery_captions_survive_editor_create_get_and_patch(api_client, blog, 
     assert response.status_code == 201, response.json()
     created = response.json()
     url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
-    assert api_client.get(url).json()["overview"] == overview
+    assert block_values(api_client.get(url).json()["overview"]) == block_values(overview)
     overview[0]["value"][0]["caption"] = "Changed"
     updated = api_client.patch(
         url, {"base_revision_id": created["latest_revision_id"], "overview": overview}, format="json"
     )
     assert updated.status_code == 200
-    assert api_client.get(url).json()["overview"] == overview
+    assert block_values(api_client.get(url).json()["overview"]) == block_values(overview)
 
 
 @pytest.mark.django_db

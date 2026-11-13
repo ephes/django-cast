@@ -2,6 +2,8 @@ import pytest
 from django.test import override_settings
 from django.urls import reverse
 
+from tests.block_assertions import block_values
+
 WEEKNOTE_LINK = {
     "category": "articles",
     "kind": "article",
@@ -35,7 +37,7 @@ def test_editor_post_create_reads_custom_overview_block_without_internal_wrapper
 
     assert response.status_code == 201, response.content
     data = response.json()
-    assert data["overview"] == [{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}]
+    assert block_values(data["overview"]) == block_values([{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}])
 
 
 @pytest.mark.django_db
@@ -63,8 +65,8 @@ def test_editor_post_patch_reads_custom_detail_block_without_internal_wrappers(a
     )
 
     assert response.status_code == 200, response.content
-    assert response.json()["detail"] == detail
-    assert api_client.get(detail_url, format="json").json()["detail"] == detail
+    assert block_values(response.json()["detail"]) == block_values(detail)
+    assert block_values(api_client.get(detail_url, format="json").json()["detail"]) == block_values(detail)
 
 
 @pytest.mark.django_db
@@ -84,7 +86,7 @@ def test_editor_episode_create_reads_custom_overview_block_without_internal_wrap
     assert response.status_code == 201, response.content
     data = response.json()
     assert data["type"] == "cast.Episode"
-    assert data["overview"] == [{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}]
+    assert block_values(data["overview"]) == block_values([{"type": "weeknote_links", "value": [WEEKNOTE_LINK]}])
 
 
 @pytest.mark.django_db

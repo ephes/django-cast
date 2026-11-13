@@ -14,10 +14,13 @@ from cast.blocks import gallery_item_parts
 from cast.post_body_blocks import configured_content_blocks, default_content_blocks
 
 from .errors import ErrorCollector, flatten_django_validation_error
-from .media_refs import get_choosable_audio, get_choosable_image, get_choosable_video
+from .media_refs import MediaResolution, get_choosable_audio, get_choosable_image, get_choosable_video
 from .richtext import sanitize_block_value
 
-_CUSTOM_BLOCK_CONVERSION_ERRORS = (TypeError, ValueError, KeyError, AttributeError)
+CUSTOM_AUTHOR_MAX_DEPTH = 32
+CUSTOM_AUTHOR_MAX_NODES = 10000
+
+_CUSTOM_BLOCK_CONVERSION_ERRORS = (TypeError, ValueError, KeyError, AttributeError, RecursionError)
 _CUSTOM_BLOCK_READ_ERRORS = (DjangoValidationError, *_CUSTOM_BLOCK_CONVERSION_ERRORS)
 
 
@@ -33,6 +36,7 @@ class ConversionContext:
     user: Any | None
     existing_section: list[dict] | None = None
     path_prefix: str | None = None
+    media_resolution: MediaResolution | None = None
 
     def __post_init__(self) -> None:
         if self.path_prefix is None:
@@ -66,21 +70,41 @@ class BlockConverter(Protocol):
     def to_author(self, value: Any, *, ctx: ConversionContext) -> Any | Unsupported: ...  # pragma: no cover
 
 
-def _unwrap_list_item_values(value: Any) -> Any:
-    if isinstance(value, list):
-        if all(isinstance(item, dict) and item.get("type") == "item" and "value" in item for item in value):
-            return [_unwrap_list_item_values(item["value"]) for item in value]
-        return [_unwrap_list_item_values(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _unwrap_list_item_values(item) for key, item in value.items()}
-    return value
+def _unwrap_list_item_values(value: Any, *, unwrap: bool = True) -> Any:
+    """Copy admitted JSON containers; refuse cycles and excessive nested work."""
+    active: set[int] = set()
+    remaining = CUSTOM_AUTHOR_MAX_NODES
+
+    def visit(item: Any, depth: int) -> Any:
+        nonlocal remaining
+        remaining -= 1
+        if depth > CUSTOM_AUTHOR_MAX_DEPTH or remaining < 0:
+            raise ValueError("Custom block nesting/work limit exceeded.")
+        if not isinstance(item, (list, tuple, dict)):
+            return item
+        if id(item) in active:
+            raise ValueError("Cyclic custom block value.")
+        if len(item) > remaining:
+            raise ValueError("Custom block work limit exceeded.")
+        active.add(id(item))
+        try:
+            if isinstance(item, (list, tuple)):
+                wrapped = unwrap and all(
+                    isinstance(child, dict) and child.get("type") == "item" and "value" in child for child in item
+                )
+                return [visit(child["value"] if wrapped else child, depth + 1) for child in item]
+            return {key: visit(child, depth + 1) for key, child in item.items()}
+        finally:
+            active.remove(id(item))
+
+    return visit(value, 0)
 
 
 def _custom_author_value(block: Block, value: Any) -> Any:
     python_value = block.to_python(value)
     cleaned = block.clean(python_value)
     if type(block).get_api_representation is not Block.get_api_representation:
-        return block.get_api_representation(cleaned)
+        return _unwrap_list_item_values(block.get_api_representation(cleaned), unwrap=False)
     return _unwrap_list_item_values(block.get_prep_value(cleaned))
 
 
@@ -195,13 +219,26 @@ class MediaRefConverter:
 
     def to_stream(self, value: Any, *, ctx: ConversionContext, path: str, errors: ErrorCollector) -> Any | None:
         object_id = value.get("id") if isinstance(value, dict) else None
-        if self.resolver(object_id, ctx.user) is None:
+        resolved = (
+            ctx.media_resolution.resolve(self.name, object_id)
+            if ctx.media_resolution is not None
+            else self.resolver(object_id, ctx.user)
+        )
+        if resolved is None:
             errors.add(f"{path}.id", "not_found", self.not_found_message(object_id))
             return None
         return object_id
 
     def to_author(self, value: Any, *, ctx: ConversionContext) -> Any | Unsupported:
-        if ctx.user is not None and self.resolver(value, ctx.user) is None:
+        if (
+            ctx.user is not None
+            and (
+                ctx.media_resolution.resolve(self.name, value)
+                if ctx.media_resolution is not None
+                else self.resolver(value, ctx.user)
+            )
+            is None
+        ):
             return UNSUPPORTED
         return {"id": value}
 
@@ -246,7 +283,11 @@ class GalleryConverter:
         valid = True
         for index, ref in enumerate(value):
             image_id = ref.get("id") if isinstance(ref, dict) else None
-            if get_choosable_image(image_id, ctx.user) is None:
+            if (
+                ctx.media_resolution.resolve("image", image_id)
+                if ctx.media_resolution is not None
+                else get_choosable_image(image_id, ctx.user)
+            ) is None:
                 errors.add(
                     f"{path}.{index}.id",
                     "not_found",
@@ -277,7 +318,15 @@ class GalleryConverter:
             image_id, caption = gallery_item_parts(item)
             if not isinstance(caption, str) or len(caption) > 250:
                 return UNSUPPORTED
-            if ctx.user is not None and get_choosable_image(image_id, ctx.user) is None:
+            if (
+                ctx.user is not None
+                and (
+                    ctx.media_resolution.resolve("image", image_id)
+                    if ctx.media_resolution is not None
+                    else get_choosable_image(image_id, ctx.user)
+                )
+                is None
+            ):
                 return UNSUPPORTED
             ref = {"id": image_id}
             if caption:

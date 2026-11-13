@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from cast.models import Episode, Post
 from tests.api.editor_richtext_test import assert_safe_fragment
+from tests.block_assertions import block_values
 
 pytestmark = pytest.mark.django_db
 
@@ -50,8 +51,8 @@ def test_create_converts_markdown_into_canonical_blocks(api_client, admin_user, 
 
     assert response.status_code == 201, response.content
     data = response.json()
-    assert data["overview"] == EXPECTED_BLOCKS
-    assert data["detail"] == [{"type": "paragraph", "value": "<p>Detail <b>text</b></p>"}]
+    assert block_values(data["overview"]) == block_values(EXPECTED_BLOCKS)
+    assert block_values(data["detail"]) == block_values([{"type": "paragraph", "value": "<p>Detail <b>text</b></p>"}])
     assert "overview_markdown" not in data
     page = model.objects.get(id=data["id"])
     assert [block.block_type for block in page.body[0].value] == ["paragraph", "code"]
@@ -65,8 +66,10 @@ def test_markdown_and_block_list_may_be_mixed_across_sections(api_client, admin_
     )
 
     assert response.status_code == 201, response.content
-    assert response.json()["overview"] == [{"type": "paragraph", "value": "<p>Blocks</p>"}]
-    assert response.json()["detail"] == [{"type": "paragraph", "value": "<p><i>md</i></p>"}]
+    assert block_values(response.json()["overview"]) == block_values([{"type": "paragraph", "value": "<p>Blocks</p>"}])
+    assert block_values(response.json()["detail"]) == block_values(
+        [{"type": "paragraph", "value": "<p><i>md</i></p>"}]
+    )
 
 
 def test_empty_overview_markdown_creates_empty_overview(api_client, admin_user, blog):
@@ -149,7 +152,9 @@ def test_generated_html_passes_through_the_rich_text_sanitizer(api_client, admin
     response = create(api_client, "post", blog, overview_markdown="# Top heading\n\n## Kept heading")
 
     assert response.status_code == 201, response.content
-    assert response.json()["overview"] == [{"type": "paragraph", "value": "<p>Top heading</p><h2>Kept heading</h2>"}]
+    assert block_values(response.json()["overview"]) == block_values(
+        [{"type": "paragraph", "value": "<p>Top heading</p><h2>Kept heading</h2>"}]
+    )
 
 
 def test_markdown_images_are_rejected(api_client, admin_user, blog):
@@ -224,8 +229,10 @@ class TestMarkdownPatch:
         )
 
         assert response.status_code == 200, response.content
-        assert response.json()["overview"] == [{"type": "paragraph", "value": "<p>Old overview</p>"}]
-        assert response.json()["detail"] == EXPECTED_BLOCKS
+        assert block_values(response.json()["overview"]) == block_values(
+            [{"type": "paragraph", "value": "<p>Old overview</p>"}]
+        )
+        assert block_values(response.json()["detail"]) == block_values(EXPECTED_BLOCKS)
 
     def test_patch_markdown_alone_counts_as_an_update(self, api_client, created):
         kind, data = created

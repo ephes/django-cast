@@ -132,3 +132,36 @@ def test_none_without_a_collected_error_is_never_silent(mocker, caplog):
         "value": [{"code": "normalization_failed", "message": "Rich-text normalization failed."}]
     }
     assert "returned no value without recording an error" in caplog.text
+
+
+@pytest.mark.parametrize("normalization", [False, True])
+def test_rejection_logs_keep_locations_without_exception_content(mocker, caplog, normalization):
+    secret = "SYNTHETIC-PRIVATE-DRAFT-8472"
+    if normalization:
+
+        def fail(*args, **kwargs):
+            raise RuntimeError(secret)
+
+        mocker.patch("cast.content.richtext.sanitize_rich_text", side_effect=fail)
+        result = normalize_rich_text(blocks.RichTextBlock(), secret)
+        assert result.classification == "rejected"
+    else:
+
+        def fail(*args, **kwargs):
+            try:
+                raise KeyError(secret)
+            except KeyError as cause:
+                raise ValueError(secret) from cause
+
+        mocker.patch("cast.content.richtext.ContentstateConverter.from_database_format", side_effect=fail)
+        errors = ErrorCollector()
+        assert (
+            sanitize_block_value(blocks.RichTextBlock(), RichText(secret), path="overview.0.value", errors=errors)
+            is None
+        )
+        assert errors.error_map["overview.0.value"][0]["message"] == "Invalid rich text."
+    assert secret not in caplog.text
+    assert "richtext_test.py:" in caplog.text
+    for record in caplog.records:
+        assert record.exc_info is None
+        assert secret not in caplog.handler.format(record)

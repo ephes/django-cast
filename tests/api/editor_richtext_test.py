@@ -18,6 +18,7 @@ from cast.api.editor.body import author_blocks_to_section
 from cast.api.editor.errors import EditorValidationError
 from cast.api.editor.richtext import sanitize_block_value, sanitize_rich_text
 from cast.models import Post
+from tests.block_assertions import block_values
 from tests.factories import PostFactory
 
 UNSAFE_HTML = [
@@ -128,7 +129,7 @@ def test_optional_empty_rich_text_remains_empty(value):
 def test_supported_prose_round_trips_without_random_editor_metadata(html):
     result = author_blocks_to_section([{"type": "paragraph", "value": html}], user=None, path_prefix="overview")
     assert result[0]["value"] == html
-    assert author_blocks_to_section(result, user=None, path_prefix="overview") == result
+    assert block_values(author_blocks_to_section(result, user=None, path_prefix="overview")) == block_values(result)
 
 
 def test_features_follow_editor_options_explicit_block_features_and_defaults():
@@ -143,9 +144,11 @@ def test_features_follow_editor_options_explicit_block_features_and_defaults():
         assert sanitize_rich_text(RichTextBlock(), RichText(html), path="value").source == (
             "<blockquote>Quote</blockquote><p><code>inline</code> plain</p>"
         )
-        assert author_blocks_to_section([{"type": "paragraph", "value": html}], user=None, path_prefix="overview") == [
-            {"type": "paragraph", "value": "<blockquote>Quote</blockquote><p><code>inline</code> plain</p>"}
-        ]
+        assert block_values(
+            author_blocks_to_section([{"type": "paragraph", "value": html}], user=None, path_prefix="overview")
+        ) == block_values(
+            [{"type": "paragraph", "value": "<blockquote>Quote</blockquote><p><code>inline</code> plain</p>"}]
+        )
         assert sanitize_rich_text(
             RichTextBlock(features=[]), RichText("<p><b>plain</b></p>"), path="value"
         ).source == ("<p>plain</p>")
@@ -183,7 +186,7 @@ def test_supplied_comment_keys_survive_and_new_random_keys_are_omitted():
     html = '<p data-block-key="comment-anchor">Existing</p><p>New</p>'
     result = author_blocks_to_section([{"type": "paragraph", "value": html}], user=None, path_prefix="overview")
     assert result[0]["value"] == html
-    assert author_blocks_to_section(result, user=None, path_prefix="overview") == result
+    assert block_values(author_blocks_to_section(result, user=None, path_prefix="overview")) == block_values(result)
     malicious_key = '<p data-block-key="x&quot; onclick=&quot;alert(1)">Text</p>'
     result = author_blocks_to_section(
         [{"type": "paragraph", "value": malicious_key}], user=None, path_prefix="overview"
@@ -302,16 +305,16 @@ def test_deleted_page_and_document_links_survive_api_writes(api_client, blog, po
     )
     assert response.status_code == 201, response.content
     created = response.json()
-    assert created["overview"] == body
-    assert created["detail"] == body
+    assert block_values(created["overview"]) == block_values(body)
+    assert block_values(created["detail"]) == block_values(body)
     response = api_client.patch(
         reverse(f"cast:api:editor_{kind}_detail", kwargs={"pk": created["id"]}),
         {"base_revision_id": created["latest_revision_id"], "overview": body, "detail": body},
         format="json",
     )
     assert response.status_code == 200, response.content
-    assert response.json()["overview"] == body
-    assert response.json()["detail"] == body
+    assert block_values(response.json()["overview"]) == block_values(body)
+    assert block_values(response.json()["detail"]) == block_values(body)
     preview = api_client.get(reverse(f"cast:api:editor_{kind}_preview", kwargs={"pk": created["id"]}))
     assert preview.status_code == 200, preview.content
     assert "Deleted page" in preview.content.decode()
