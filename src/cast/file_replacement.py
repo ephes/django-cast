@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
@@ -11,6 +12,8 @@ from django.core.files.base import ContentFile
 from django.db import DEFAULT_DB_ALIAS, models, transaction
 
 from cast.media_derivation import normalize_model_save_arguments
+
+logger = logging.getLogger(__name__)
 
 COMPOUND_SUFFIXES = (".podlove.json", ".dote.json", ".speakers.json", ".corrections.json")
 GENERATED_SUFFIX_RE = re.compile(r"(?:-[0-9a-f]{12})+$")
@@ -176,14 +179,15 @@ class FileFieldReplacementGuard:
     def rollback(self) -> None:
         if self._rolled_back:
             return
-        cleanup_errors: list[Exception] = []
+        cleanup_errors: list[BaseException] = []
         for snapshot in reversed(self.snapshots):
             new_name = snapshot.field.name or ""
             # Django sets _committed only after storage.save() returns successfully.
             if new_name and new_name != snapshot.old_name and snapshot.field._committed:
                 try:
                     _delete_file_strict(snapshot.field.storage, new_name)
-                except Exception as exc:
+                except BaseException as exc:
+                    logger.exception("Media replacement cleanup failed; recovery storage key=%s", new_name)
                     cleanup_errors.append(exc)
             _set_field_name(snapshot.field, snapshot.old_name)
         self._rolled_back = True

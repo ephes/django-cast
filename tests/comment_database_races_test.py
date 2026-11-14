@@ -10,6 +10,7 @@ from django.test import Client
 from django.urls import reverse
 from django_comments import get_form, get_model
 
+from cast.comments import author_edits
 from tests.comment_author_edits_test import AJAX, seed_ownership
 from tests.factories import PostFactory
 
@@ -66,7 +67,11 @@ def test_reply_and_author_actions_serialize(pg_editor_actors, settings, route, a
                 if role == "author":
                     response = author.post(
                         reverse(f"comments-{action}-comment-ajax"),
-                        {"comment_id": str(parent.pk), "comment": "Edited"},
+                        {
+                            "comment_id": str(parent.pk),
+                            "revision": author_edits.comment_revision(parent),
+                            "comment": "Edited",
+                        },
                         **AJAX,
                     )
                 else:
@@ -114,3 +119,75 @@ def test_reply_and_author_actions_serialize(pg_editor_actors, settings, route, a
             assert statuses["reply"] == (200 if route == "ajax" else 302)
             assert children.count() == 1
             assert parent.comment == "Edited" and parent.is_public and not parent.is_removed
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL row-lock semantics")
+def test_concurrent_edit_checks_revision_after_waiting(pg_editor_actors, settings, comments_enabled):
+    _, blog = pg_editor_actors
+    settings.CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 0
+    settings.SESSION_ENGINE = "django.contrib.sessions.backends.db"
+    post = PostFactory(parent=blog, title="Synthetic edit race", slug="synthetic-edit-race", live=True)
+    model = get_model()
+    comment = model.objects.create(content_object=post, site_id=settings.SITE_ID, comment="Original", is_public=True)
+    revision = author_edits.comment_revision(comment)
+    clients = [Client(), Client()]
+    for client in clients:
+        seed_ownership(client, comment)
+    locked, attempted, release = threading.Event(), threading.Event(), threading.Event()
+    pids, responses = {}, {}
+
+    def perform(index):
+        close_old_connections()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '10s'")
+                cursor.execute("SELECT pg_backend_pid()")
+                pids[index] = cursor.fetchone()[0]
+
+            def observe(execute, sql, params, many, context):
+                is_lock = "FOR UPDATE" in sql and model._meta.db_table in sql
+                if is_lock and index == 1:
+                    attempted.set()
+                result = execute(sql, params, many, context)
+                if is_lock and index == 0:
+                    locked.set()
+                    assert release.wait(10)
+                return result
+
+            with connection.execute_wrapper(observe):
+                responses[index] = clients[index].post(
+                    reverse("comments-edit-comment-ajax"),
+                    {"comment_id": str(comment.pk), "comment": f"Edit {index}", "revision": revision},
+                    **AJAX,
+                )
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        leading = pool.submit(perform, 0)
+        trailing = None
+        try:
+            assert locked.wait(10)
+            trailing = pool.submit(perform, 1)
+            assert attempted.wait(10)
+            deadline = time.monotonic() + 5
+            with connection.cursor() as cursor:
+                while time.monotonic() < deadline:
+                    cursor.execute("SELECT pg_blocking_pids(%s)", [pids[1]])
+                    if pids[0] in cursor.fetchone()[0]:
+                        break
+                    assert not trailing.done(), "Second edit did not wait on the row lock"
+                else:
+                    pytest.fail("No database lock wait was observed")
+        finally:
+            release.set()
+        leading.result(timeout=15)
+        if trailing is not None:
+            trailing.result(timeout=15)
+    assert responses[0].status_code == 200
+    assert responses[1].status_code == 409
+    assert responses[1].json()["current_comment"] == "Edit 0"
+    comment.refresh_from_db()
+    assert comment.comment == "Edit 0"

@@ -444,6 +444,13 @@ def post_comment_edit_ajax(request: HttpRequest, using: str | None = None) -> Ht
             return loaded
         comment = loaded
 
+        revision = author_edits.comment_revision(comment)
+        if request.POST.get("revision") != revision:
+            return JsonResponse(
+                {"success": False, "conflict": True, "current_comment": comment.comment, "revision": revision},
+                status=409,
+            )
+
         # Only the text is mutable; identity fields are preserved from the stored
         # comment and never read from the request.
         comment.comment = text
@@ -457,7 +464,9 @@ def post_comment_edit_ajax(request: HttpRequest, using: str | None = None) -> Ht
         comment.save(using=using)
         author_edits.mark_edited(comment)
 
-    return _rendered_comment_json(request, comment, {"action": "edit", "edited": True})
+    return _rendered_comment_json(
+        request, comment, {"action": "edit", "edited": True, "revision": author_edits.comment_revision(comment)}
+    )
 
 
 @csrf_protect

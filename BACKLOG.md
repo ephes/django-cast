@@ -51,6 +51,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   hardening are implemented; see
   [the validation record](backlog/2026-11-08-round85-editor-boundaries.md).
 
+- Round 91 recoverable media and comment edits are implemented; validation and
+  remaining external acceptance are recorded in
+  [the B30 handoff](backlog/2026-11-14-round91-recoverable-edits.md).
+
 ## Later
 
 - [ ] Verify concurrent gallery membership/signature publication on PostgreSQL

@@ -255,9 +255,11 @@ Options:
     Files are compared by content. Different sizes mark a file as changed
     without reading it; equal sizes prove nothing, so both copies are then read
     completely and their SHA-256 digests compared. Every existing file is
-    therefore downloaded from both storages on each run with this option, which
+    with equal sizes is downloaded from both storages on each run, which
     costs time and transfer on remote storage. Unchanged files are not
-    rewritten. Each full read has its own 16 GiB byte ceiling and a 300 second
+    rewritten. For changed files, staging verification reads the source again
+    and reads the staged target bytes. A digest mismatch refuses publication.
+    Each full read has its own 16 GiB byte ceiling and a 300 second
     deadline that grows with the object size (at most about 68 minutes);
     exceeding it reports an incomplete path without publishing a replacement.
     See :doc:`../operations/backup` for inventory limits, synchronous I/O
@@ -272,7 +274,12 @@ Options:
     ``FileSystemStorage`` without ``allow_overwrite``, or S3 storage with
     ``file_overwrite = False``), the previous backup copy is kept, the generated
     copy is removed, and the path is reported as an error. A staged copy is
-    removed again whether the refresh succeeds or fails. Cleanup attempts every
+    verified against the source SHA-256 digest before the final write. Failed
+    or incomplete staging is removed. When the final overwrite itself
+    fails, the verified complete stage is retained and its exact recovery key is
+    reported; a save under a generated name never touched the target and keeps
+    no stage.
+    Successful publication removes its stage. Cleanup attempts every other
     requested and returned staging name even if another deletion fails. Leftover
     names and deletion failures are logged and reported on command stderr when publication has
     already failed, preserving the original publication exception; cleanup failure
@@ -283,8 +290,14 @@ Options:
     makes it. Object storage replaces an object atomically, so a failed
     overwrite keeps the previous object. A backend that writes in place
     (``FileSystemStorage`` with ``allow_overwrite``) can leave a partial file
-    under the path if that last write fails; run the command again to repair
-    it. Missing-copy writes are also staged and their partial final keys are
+    under the path if that last write fails. If the source remains available,
+    rerun ``media_backup --refresh-changed`` to repair it. If the source is gone,
+    open/download the reported complete recovery key through the configured
+    target Storage, inspect it, and explicitly save its bytes to the intended
+    destination with an overwrite-capable backend. Verify the destination
+    digest before deleting the recovery key with ``Storage.delete(key)``.
+    Retried commands do not automatically consume or delete older recovery keys.
+    Missing-copy writes are also staged and their partial final keys are
     cleaned on exceptions under the same-host publisher lock. A run that is
     killed can leave a staged ``.tmp`` key in the backup storage. Backup and restore skip the exact reserved refresh-key pattern
     described below; inspect and remove abandoned objects manually.
@@ -293,15 +306,17 @@ Options:
     ``copied=<n> refreshed=<n> unchanged=<n> errors=<n>``. A path that cannot be
     checked, copied, compared or refreshed does not stop the run, but the
     command then exits with ``CommandError`` (a non-zero exit status). Without
-    the option the first storage error still aborts the command.
+    the option failed paths are also reported and processing continues.
 
 Backup and restore reserve keys ending in
 ``.django-cast-refresh-<32 lowercase hexadecimal characters>.tmp`` for temporary
-refresh data. Such source objects are skipped in every synchronization mode,
+refresh data, including Django-generated ``_<alphanumeric>`` suffixes before
+``.tmp``. Backends returning any other staging name are refused before
+publication and that incomplete/unverified stage is cleaned up. Such source objects are skipped in every synchronization mode,
 with a diagnostic naming each skipped key, without deleting source objects or
 counting a successful copy. Similar names outside this precise pattern remain
 ordinary media. Inspect leftovers before removing them manually; arbitrary
-backend-renamed temporary keys require manual inspection too.
+backend-renamed temporary keys from older versions require manual inspection too.
 
 media_restore
 -------------

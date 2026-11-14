@@ -230,8 +230,9 @@ class TestTranscriptEditIngestion:
         assert all(new_names[name] != old_names[name] for name in self.files)
         assert all(storage.exists(name) for name in (*old_names.values(), *new_names.values()))
 
-        assert len(callbacks) == 1
-        callbacks[0]()
+        assert callbacks
+        for callback in callbacks:
+            callback()
         assert all(not storage.exists(name) for name in old_names.values())
         assert all(storage.exists(name) for name in new_names.values())
         for field_name in self.files:

@@ -251,7 +251,11 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "edited text"},
+            {
+                "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
+                "comment": "edited text",
+            },
             **AJAX,
         )
         assert r.status_code == 200
@@ -266,7 +270,7 @@ class TestEditEndpoint:
 
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "hacked"},
+            {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "hacked"},
             **AJAX,
         )
         assert r.status_code in (403, 404)
@@ -280,7 +284,11 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "edited text"},
+            {
+                "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
+                "comment": "edited text",
+            },
             **AJAX,
         )
         assert r.status_code == 404
@@ -296,6 +304,7 @@ class TestEditEndpoint:
             reverse("comments-edit-comment-ajax"),
             {
                 "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
                 "comment": "new text",
                 "name": "Impersonator",
                 "email": "evil@example.com",
@@ -315,7 +324,11 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "sneaky edit"},
+            {
+                "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
+                "comment": "sneaky edit",
+            },
             **AJAX,
         )
         assert r.status_code == 403
@@ -332,7 +345,11 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "late edit"},
+            {
+                "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
+                "comment": "late edit",
+            },
             **AJAX,
         )
         assert r.status_code == 403
@@ -345,7 +362,7 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "   "},
+            {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "   "},
             **AJAX,
         )
         assert r.status_code == 400
@@ -375,7 +392,11 @@ class TestEditEndpoint:
         ):
             r = client.post(
                 reverse("comments-edit-comment-ajax"),
-                {"comment_id": str(comment.pk), "comment": "buy cheap pills now"},
+                {
+                    "comment_id": str(comment.pk),
+                    "revision": author_edits.comment_revision(comment),
+                    "comment": "buy cheap pills now",
+                },
                 **AJAX,
             )
         assert r.status_code == 200
@@ -398,7 +419,11 @@ class TestEditEndpoint:
             seed_ownership(client, comment)
             client.post(
                 reverse("comments-edit-comment-ajax"),
-                {"comment_id": str(comment.pk), "comment": "edited"},
+                {
+                    "comment_id": str(comment.pk),
+                    "revision": author_edits.comment_revision(comment),
+                    "comment": "edited",
+                },
                 **AJAX,
             )
         finally:
@@ -411,7 +436,7 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "edited"},
+            {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "edited"},
             **AJAX,
         )
         assert author_edits.edited_pks_for([comment.pk]) == {str(comment.pk)}
@@ -428,7 +453,11 @@ class TestEditEndpoint:
         with CaptureQueriesContext(connection) as ctx:
             r = client.post(
                 reverse("comments-edit-comment-ajax"),
-                {"comment_id": str(comment.pk), "comment": "edited"},
+                {
+                    "comment_id": str(comment.pk),
+                    "revision": author_edits.comment_revision(comment),
+                    "comment": "edited",
+                },
                 **AJAX,
             )
         assert r.status_code == 200
@@ -446,7 +475,7 @@ class TestEditEndpoint:
         # No X-Requested-With header -> rejected by the shared guard.
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "x"},
+            {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "x"},
         )
         assert r.status_code == 400
 
@@ -471,7 +500,12 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "x", "honeypot": "i am a bot"},
+            {
+                "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
+                "comment": "x",
+                "honeypot": "i am a bot",
+            },
             **AJAX,
         )
         assert r.status_code == 400
@@ -483,7 +517,11 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "x" * (COMMENT_MAX_LENGTH + 1)},
+            {
+                "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
+                "comment": "x" * (COMMENT_MAX_LENGTH + 1),
+            },
             **AJAX,
         )
         assert r.status_code == 400
@@ -504,7 +542,11 @@ class TestEditEndpoint:
         with patch("cast.comments.receivers.default_moderator", new=DenyModerator()):
             r = client.post(
                 reverse("comments-edit-comment-ajax"),
-                {"comment_id": str(comment.pk), "comment": "rejected text"},
+                {
+                    "comment_id": str(comment.pk),
+                    "revision": author_edits.comment_revision(comment),
+                    "comment": "rejected text",
+                },
                 **AJAX,
             )
         assert r.status_code == 400
@@ -517,7 +559,11 @@ class TestEditEndpoint:
         seed_ownership(client, comment)
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": str(comment.pk), "comment": "edited body"},
+            {
+                "comment_id": str(comment.pk),
+                "revision": author_edits.comment_revision(comment),
+                "comment": "edited body",
+            },
             **AJAX,
         )
         html = r.json()["html"]
@@ -614,7 +660,7 @@ class TestRateLimiting:
         settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 2
         seed_ownership(client, comment)
         url = reverse("comments-edit-comment-ajax")
-        data = {"comment_id": str(comment.pk), "comment": "edited"}
+        data = {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "edited"}
         statuses = [client.post(url, data, **AJAX).status_code for _ in range(5)]
         assert 429 in statuses
 
@@ -918,10 +964,14 @@ class TestPostRecordsOwnership:
     def test_owner_can_then_edit_their_posted_comment(self, client, post, comments_enabled, feature_on):
         from django.urls import reverse
 
-        new_id = str(post_a_comment(client, post).json()["comment_id"])
+        posted = post_a_comment(client, post).json()
+        new_id = str(posted["comment_id"])
+        from django_comments import get_model
+
+        revision = author_edits.comment_revision(get_model().objects.get(pk=new_id))
         r = client.post(
             reverse("comments-edit-comment-ajax"),
-            {"comment_id": new_id, "comment": "edited after posting"},
+            {"comment_id": new_id, "revision": revision, "comment": "edited after posting"},
             **AJAX,
         )
         assert r.status_code == 200
@@ -1138,7 +1188,11 @@ def test_revoked_comment_session_cookie_cannot_reclaim_ownership(
         assert replay.session.session_key != stale_cookie
     response = replay.post(
         reverse(f"comments-{action}-comment-ajax"),
-        {"comment_id": str(comment.pk), "comment": "Stolen replacement"},
+        {
+            "comment_id": str(comment.pk),
+            "revision": author_edits.comment_revision(comment),
+            "comment": "Stolen replacement",
+        },
         **AJAX,
     )
     assert response.status_code == 403
@@ -1166,8 +1220,42 @@ def test_author_edit_with_dummy_cache_still_completes(client, comment, feature_o
     settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 1
     seed_ownership(client, comment)
     response = client.post(
-        reverse("comments-edit-comment-ajax"), {"comment_id": str(comment.pk), "comment": "Edited"}, **AJAX
+        reverse("comments-edit-comment-ajax"),
+        {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "Edited"},
+        **AJAX,
     )
     assert response.status_code == 200
     comment.refresh_from_db()
     assert comment.comment == "Edited"
+
+
+@pytest.mark.django_db
+def test_stale_editor_cannot_overwrite_accepted_edit(client, comment, feature_on):
+    from django.test import Client
+    from django.urls import reverse
+
+    second = Client()
+    seed_ownership(client, comment)
+    seed_ownership(second, comment)
+    revision = author_edits.comment_revision(comment)
+    url = reverse("comments-edit-comment-ajax")
+    response = client.post(url, {"comment_id": str(comment.pk), "comment": "First edit", "revision": revision}, **AJAX)
+    assert response.status_code == 200
+    response = second.post(
+        url, {"comment_id": str(comment.pk), "comment": "Unsent draft", "revision": revision}, **AJAX
+    )
+    assert response.status_code == 409
+    assert response.json()["current_comment"] == "First edit"
+    assert response.json()["conflict"] is True
+    comment.refresh_from_db()
+    assert comment.comment == "First edit"
+    assert response.json()["revision"] == author_edits.comment_revision(comment)
+    assert client.post(url, {"comment_id": str(comment.pk), "comment": "Missing token"}, **AJAX).status_code == 409
+    assert (
+        second.post(
+            url,
+            {"comment_id": str(comment.pk), "comment": "Merged draft", "revision": response.json()["revision"]},
+            **AJAX,
+        ).status_code
+        == 200
+    )

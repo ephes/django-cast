@@ -226,7 +226,14 @@ Failed ingest cleanup attempts every owned file even when one deletion fails.
 Incomplete cleanup is logged and reported with the original ingest error linked;
 any surviving row is retained for recovery. It may still reference later files
 that cleanup successfully removed. An ingest transaction rollback may already
-have removed the row; use the logged field names and storage inventory then.
+have removed the row; use the logged exact recovery storage keys and storage
+inventory then. Compensation also runs for ``KeyboardInterrupt`` and
+``SystemExit`` during saving or synchronous derivation. All owned files are
+attempted even when a cleanup is interrupted; the original interruption is
+re-raised, with a cleanup-failure note when necessary. Existing replacement
+files are preserved. Interruptions in callbacks after a successful commit leave
+the committed row and its files intact. Abrupt process termination (for example SIGKILL) cannot run
+Python compensation and still requires a storage inventory.
 
 Nested probe deadlines
 ----------------------

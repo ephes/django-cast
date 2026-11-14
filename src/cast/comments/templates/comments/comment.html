@@ -41,6 +41,6 @@
     </h3>
 
     <div class="comment-text">{{ comment.comment|linebreaks }}</div>
-    {% if can_edit %}<textarea class="comment-raw" hidden>{{ comment.comment }}</textarea>{% endif %}
+    {% if can_edit %}<textarea class="comment-raw" data-revision="{{ comment_revision }}" hidden>{{ comment.comment }}</textarea>{% endif %}
   {% endblock %}
 </div>

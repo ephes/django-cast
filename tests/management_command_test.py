@@ -405,7 +405,8 @@ def test_media_backup_refresh_keeps_backup_copy_when_storage_does_not_overwrite(
     with pytest.raises(CommandError):
         call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
 
-    # neither the stray generated copy nor the staged copy is left behind
+    # The renamed save never touched the target: no recovery stage is kept, and
+    # neither the stray generated copy nor the staged copy is left behind.
     assert backup._files == {"video.mp4": b"old!"}
     assert "saved copy as video_1.mp4 instead of requested video.mp4" in error_output.getvalue()
 
@@ -1660,3 +1661,31 @@ def test_media_sync_partial_failure_reports_and_continues(mocker, command, refre
     assert target._files == {"good.mp4": b"good"}
     assert "copied=1 refreshed=0 unchanged=0 errors=1" in output.getvalue()
     assert "bad.mp4" in errors.getvalue()
+
+
+def test_refresh_retains_verified_recovery_after_partial_final_write(mocker):
+    from cast.management.commands.storage_backend import refresh_existing_file, sync_media_files
+
+    source = StubOverwriteStorage({"video.mp4": b"complete synthetic new bytes"})
+    target = StubOverwriteStorage({"video.mp4": b"old bytes"})
+    original_save = target.save
+
+    def fail_final(name, content):
+        if name == "video.mp4":
+            target._files[name] = content.read(3)
+            source._files.clear()  # the source is gone when recovery is needed
+            raise OSError("partial final write")
+        return original_save(name, content)
+
+    mocker.patch.object(target, "save", side_effect=fail_final)
+    errors = []
+    with pytest.raises(OSError, match="partial final write"):
+        refresh_existing_file(source, target, "video.mp4", report_error=errors.append)
+    assert len(target.staged()) == 1
+    key = target.staged()[0]
+    assert target._files[key] == b"complete synthetic new bytes"
+    assert any(key in message for message in errors)
+    restored = StubOverwriteStorage({})
+    result = sync_media_files(target, restored)
+    assert key not in restored._files  # quarantined, never auto-promoted by restore
+    assert result.copied == 1

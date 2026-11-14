@@ -147,7 +147,7 @@ describe("ajaxcomments", () => {
       <div class="comments" data-object-id="7">
         <div id="c5" class="comment-item">
           <div class="comment-text">old</div>
-          <textarea class="comment-raw" hidden>old</textarea>
+          <textarea class="comment-raw" data-revision="original-revision" hidden>old</textarea>
           <a class="comment-edit-link" data-comment-id="5" data-edit-action="/comments/edit/ajax/">edit</a>
         </div>
       </div>`;
@@ -183,11 +183,11 @@ describe("ajaxcomments", () => {
   const actionMarkup = () => {
     document.body.innerHTML = `<form class="js-comments-form" data-object-id="7"></form>
       <div class="comments" data-object-id="7"><div id="c5">
-      <div class="comment-text">old</div><textarea class="comment-raw" hidden>old</textarea>
+      <div class="comment-text">old</div><textarea class="comment-raw" data-revision="original-revision" hidden>old</textarea>
       <a class="comment-edit-link" data-comment-id="5" data-edit-action="/edit">Edit</a>
       <a class="comment-delete-link" data-comment-id="5" data-delete-action="/delete">Delete</a></div></div>`;
   };
-  const success = () => new Response(JSON.stringify({success: true, object_id: "7", comment_id: "5",
+  const success = () => new Response(JSON.stringify({success: true, revision: "saved-revision", object_id: "7", comment_id: "5",
     html: '<div id="c5"><div class="comment-text">saved</div></div>'}), {status: 200});
   const click = (selector: string) => document.querySelector<HTMLElement>(selector)!.click();
 
@@ -227,8 +227,28 @@ describe("ajaxcomments", () => {
     expect(document.querySelector('[role="status"]')?.textContent).toContain("newer changes");
     click(".comment-edit-save"); await flush();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[1][1]?.body as FormData).get("revision")).toBe("saved-revision");
     expect((fetchMock.mock.calls[1][1]?.body as FormData).get("comment")).toBe("newer draft");
     expect(document.querySelector(".comment-edit-form")).toBeNull();
+  });
+
+  it("keeps a conflicting draft and shows current text before an explicit retry", async () => {
+    actionMarkup();
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      success: false, conflict: true, current_comment: "<b>Accepted text</b>", revision: "current-revision",
+    }), {status: 409})).mockResolvedValue(success());
+    await boot(); click(".comment-edit-link");
+    const textarea = document.querySelector<HTMLTextAreaElement>(".comment-edit-textarea")!;
+    textarea.value = "unsent draft";
+    click(".comment-edit-save"); await flush();
+    expect((fetchMock.mock.calls[0][1]?.body as FormData).get("revision")).toBe("original-revision");
+    expect(textarea.value).toBe("unsent draft");
+    expect(document.querySelector(".comment-edit-status")?.textContent).toContain("<b>Accepted text</b>");
+    expect(document.querySelector(".comment-edit-status b")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    click(".comment-edit-save"); await flush();
+    expect((fetchMock.mock.calls[1][1]?.body as FormData).get("revision")).toBe("current-revision");
+    expect((fetchMock.mock.calls[1][1]?.body as FormData).get("comment")).toBe("unsent draft");
   });
 
   it("ignores a cancelled editor's late save after a new editor opens", async () => {

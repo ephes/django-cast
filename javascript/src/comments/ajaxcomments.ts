@@ -128,6 +128,9 @@
     is_public?: boolean;
     action?: string;
     edited?: boolean;
+    conflict?: boolean;
+    current_comment?: string;
+    revision?: string;
   };
 
   const addCommentWrapper = (data: AjaxCommentResult, forPreview: boolean) => {
@@ -393,9 +396,11 @@
         credentials: "same-origin",
         headers: { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": getCsrfToken() },
       });
-      if (!response.ok) return null;
+      if (!response.ok && response.status !== 409) return null;
       const data = await response.json();
-      return data && typeof data === "object" && data.success === true ? data as AjaxCommentResult : null;
+      return data && typeof data === "object" &&
+        ((response.ok && data.success === true) || (response.status === 409 && data.conflict === true))
+        ? data as AjaxCommentResult : null;
     };
     try {
       return await Promise.race([request(), deadline]);
@@ -454,6 +459,7 @@
     if (item.querySelector(".comment-edit-form")) return; // already open
     const textEl = item.querySelector(".comment-text") as HTMLElement | null;
     const raw = (item.querySelector(".comment-raw") as HTMLTextAreaElement | null)?.value ?? (textEl?.textContent ?? "");
+    let revision = item.querySelector<HTMLTextAreaElement>(".comment-raw")?.dataset.revision ?? "";
     const form = document.createElement("div");
     form.className = "comment-edit-form";
     form.innerHTML =
@@ -481,9 +487,19 @@
       save.disabled = true;
       const value = textarea.value;
       try {
-        const data = await postAction(url, { comment_id: commentId, comment: value });
+        const data = await postAction(url, { comment_id: commentId, comment: value, revision });
         if (!form.isConnected || item.querySelector(".comment-edit-form") !== form) return;
+        if (data?.conflict && typeof data.current_comment === "string" && typeof data.revision === "string") {
+          revision = data.revision;
+          if (textEl) textEl.textContent = data.current_comment;
+          const raw = item.querySelector<HTMLTextAreaElement>(".comment-raw");
+          if (raw) { raw.value = data.current_comment; raw.dataset.revision = revision; }
+          status.hidden = false;
+          status.textContent = `This comment changed. Current text: ${data.current_comment} — Your draft is kept. Review it before saving again.`;
+          return;
+        }
         if (!data?.success || typeof data.html !== "string") throw new Error("Save failed.");
+        revision = data.revision ?? revision;
         const replacement = document.createElement("div");
         replacement.innerHTML = data.html.trim();
         const fresh = replacement.firstElementChild;
@@ -507,7 +523,7 @@
             else textEl.textContent = value;
           }
           const raw = item.querySelector<HTMLTextAreaElement>(".comment-raw");
-          if (raw) raw.value = value;
+          if (raw) { raw.value = value; raw.dataset.revision = revision; }
           status.hidden = false;
           status.textContent = "Saved. Your newer changes are not saved yet.";
           return;

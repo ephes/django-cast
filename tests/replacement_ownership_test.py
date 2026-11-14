@@ -263,3 +263,54 @@ def test_scope_commits_and_retires_old_file_once(synthetic_audio, mocker):
     assert audio.m4a.name == replacement.new_name
     assert audio.m4a.storage.exists(replacement.new_name)
     delete.assert_called_once_with(old_name)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+@pytest.mark.parametrize("replace", [False, True])
+@pytest.mark.parametrize("writes", [1, 2])
+def test_interrupted_ingest_compensates_real_files(synthetic_audio, interruption, replace, writes):
+    original = synthetic_audio
+    old_name = original.m4a.name
+    storage = original.m4a.storage
+    instance = original if replace else Audio(user=original.user, collection=original.collection, title="New")
+    written = []
+    error = interruption("synthetic interruption during derivation")
+
+    def save():
+        for field in ("m4a", "mp3")[:writes]:
+            getattr(instance, field).save(f"interrupt.{field}", ContentFile(b"synthetic new bytes"), save=False)
+            written.append(getattr(instance, field).name)
+        instance.save(duration=False, cache_file_sizes=False)
+        raise error
+
+    with pytest.raises(interruption) as raised:
+        ingest_upload(SimpleNamespace(instance=instance, save=save), policy=IngestPolicy(None, ("m4a", "mp3")))
+    assert raised.value is error
+    assert all(not storage.exists(name) for name in written)
+    assert storage.exists(old_name)
+    original.refresh_from_db()
+    assert original.m4a.name == old_name
+    assert Audio.objects.count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_post_commit_interruption_keeps_committed_files(synthetic_audio):
+    audio = synthetic_audio
+    written = []
+
+    def stop_after_commit():
+        raise KeyboardInterrupt("synthetic callback interruption")
+
+    def save():
+        audio.m4a.save("committed-interrupt.m4a", ContentFile(b"committed bytes"), save=False)
+        written.append(audio.m4a.name)
+        audio.save(duration=False, cache_file_sizes=False)
+        transaction.on_commit(stop_after_commit)
+        return audio
+
+    with pytest.raises(KeyboardInterrupt):
+        ingest_upload(SimpleNamespace(instance=audio, save=save), policy=IngestPolicy(None, ("m4a",)))
+    audio.refresh_from_db()
+    assert audio.m4a.name == written[0]
+    assert audio.m4a.storage.exists(written[0])

@@ -288,7 +288,9 @@ class TestVideoEdit:
         video.refresh_from_db()
         assert video.title == post_data["title"]
         assert video.original.name == old_name
-        assert callbacks == []
+        for callback in callbacks:
+            callback()
+        assert video.original.storage.exists(old_name)
 
     def test_post_edit_video_refuses_concurrent_upload(self, admin_client, admin_user, video_urls, minimal_mp4):
         old_name = video_urls.video.original.name
@@ -331,8 +333,9 @@ class TestVideoEdit:
         assert new_name != old_name
         assert storage.exists(old_name) and storage.exists(new_name)
 
-        assert len(callbacks) == 1
-        callbacks[0]()
+        assert callbacks
+        for callback in callbacks:
+            callback()
         assert not storage.exists(old_name)
         assert storage.exists(new_name)
         video_urls.video.original.delete(save=False)

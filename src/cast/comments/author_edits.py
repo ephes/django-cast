@@ -8,6 +8,7 @@ solely by the comment id (as a string) being present in the current session's
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Collection, Iterable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -209,9 +210,14 @@ def edited_pks_for(pks: Iterable[object]) -> set[str]:
     return set(model.objects.filter(comment_pk__in=wanted, edited=True).values_list("comment_pk", flat=True))
 
 
+def comment_revision(comment: Any) -> str:
+    """Bind an edit to the exact comment text the editor loaded."""
+    return hashlib.sha256(f"{comment.pk}\0{comment.comment}".encode()).hexdigest()
+
+
 def comment_action_context(
     request: HttpRequest, comment: Any, edited_pks: Collection[str] | None = None
-) -> dict[str, bool]:
+) -> dict[str, bool | str]:
     """Per-comment UI flags for the templates: whether the current session may
     edit/delete this comment, and whether it carries an 'edited' marker."""
     if not author_edits_enabled():
@@ -228,4 +234,7 @@ def comment_action_context(
         edited = str(comment.pk) in edited_pks
     else:
         edited = bool(edited_pks_for([comment.pk]))
-    return {"can_edit": owns, "can_delete": owns, "edited": edited}
+    context: dict[str, bool | str] = {"can_edit": owns, "can_delete": owns, "edited": edited}
+    if owns:
+        context["comment_revision"] = comment_revision(comment)
+    return context
