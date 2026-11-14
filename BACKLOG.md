@@ -2,6 +2,12 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
+- Round 88 credential/transcript stale-write safeguards and contributor/reference
+  admission are implemented; see the [validation/handoff record](backlog/2026-11-13-scout-round88.md),
+  `docs/releases/unreleased.rst` and the retained
+  [contributor](backlog/2026-05-12-podcast-episode-contributors.md) /
+  [voice-reference](backlog/2026-05-28-contributor-voice-references.md) notes.
+
 - Use this file as the index for planned and future work.
 - Put larger feature notes in `backlog/*.md` and link them from here.
 - Keep README and docs backlog references as links to this file instead of maintaining separate planned-work lists.

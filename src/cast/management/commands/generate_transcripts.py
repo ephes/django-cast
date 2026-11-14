@@ -10,6 +10,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from ...models import Audio, Episode, Transcript
 from ...voxhelm import VoxhelmError, VoxhelmTranscriptService, transcript_complete
+from ...voxhelm.service import TranscriptGenerationActive
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,10 @@ class Command(BaseCommand):
 
             try:
                 result = service.generate_for_audio(audio, task_ref=task_ref, episode=target.episode)
+            except TranscriptGenerationActive as exc:
+                skipped += 1
+                self.stdout.write(f"skipped audio={audio.pk}: {exc}")
+                continue
             except VoxhelmError as exc:
                 errors += 1
                 self.stderr.write(f"error audio={audio.pk}: {exc}")

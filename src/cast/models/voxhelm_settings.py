@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django import forms
-from django.core.exceptions import ImproperlyConfigured
-from django.db import models
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.db import models, transaction
+from django.utils.crypto import salted_hmac
+from django.utils.html import format_html
+from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.forms import WagtailAdminModelForm
 from wagtail.admin.panels import FieldPanel
 from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
 
+from ..media_derivation import normalize_model_save_arguments
 from ..setting_resolution import (
     SETTING_SOURCE_DEFAULT,
     SETTING_SOURCE_DJANGO,
@@ -81,6 +87,36 @@ class VoxhelmSettings(BaseSiteSetting):
     class Meta:
         verbose_name = _("Voxhelm settings")
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        intent = getattr(self, "_token_save_intent", None)
+        if intent is None:
+            super().save(*args, **kwargs)
+            return
+        if self.pk is None:
+            super().save(*args, **kwargs)
+            del self._token_save_intent
+            return
+        kwargs, using = normalize_model_save_arguments(self, args, kwargs)
+        original_version, replacement = intent
+        with transaction.atomic(using=using):
+            current = type(self).objects.using(using).filter(pk=self.pk)
+            # Obtain the write lock before reading, including on SQLite.
+            current.update(api_token=models.F("api_token"))
+            stored = current.get().api_token
+            if replacement is not None and api_token_version(stored) != original_version:
+                raise ValidationError(TOKEN_CONFLICT_MESSAGE)
+            self.api_token = stored if replacement is None else replacement
+            super().save(**kwargs)
+        del self._token_save_intent
+
+
+TOKEN_CONFLICT_MESSAGE = _("The stored API token changed. Reload settings before replacing or removing it.")
+
+
+def api_token_version(token: str) -> str:
+    """Opaque fingerprint of a stored token; the form round-trips it instead of the secret."""
+    return salted_hmac("cast.voxhelm.api_token_version", token).hexdigest()
+
 
 class InheritableBooleanSelect(forms.NullBooleanSelect):
     """Tri-state select whose empty choice reads as "inherit", not as an unknown value."""
@@ -100,6 +136,22 @@ INHERITABLE_BOOLEAN_SETTINGS = {
 }
 
 
+class TokenInput(forms.PasswordInput):
+    """Never-prefilled token input that also carries the stored token's fingerprint."""
+
+    version_name = ""
+    version = ""
+
+    def __init__(self, attrs: dict[str, str] | None = None) -> None:
+        super().__init__(attrs, render_value=False)
+
+    def render(self, name: str, value: Any, attrs: dict[str, Any] | None = None, renderer: Any = None) -> SafeString:
+        html = super().render(name, value, attrs, renderer)
+        if not self.version_name:
+            return html
+        return html + format_html('<input type="hidden" name="{}" value="{}">', self.version_name, self.version)
+
+
 class VoxhelmSettingsForm(WagtailAdminModelForm):
     clear_api_token = forms.BooleanField(
         required=False,
@@ -109,13 +161,24 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
 
     class Meta:
         widgets = {
-            "api_token": forms.PasswordInput(render_value=False),
+            "api_token": TokenInput,
             "diarization_enabled": InheritableBooleanSelect,
             "known_speaker_enabled": InheritableBooleanSelect,
         }
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
+        # TokenInput renders the fingerprint of the token stored when the page was
+        # rendered, so a replacement or removal from a page opened before another
+        # administrator's change is refused. It is deliberately not a form field:
+        # Wagtail would render an unclaimed field a second time, empty.
+        rendered_version = api_token_version(self.instance.api_token)
+        token_widget = self.fields["api_token"].widget
+        if isinstance(token_widget, TokenInput):
+            token_widget.version_name = self.add_prefix("api_token_version")
+            token_widget.version = rendered_version
+        posted_version = self.data.get(self.add_prefix("api_token_version"), "") if self.is_bound else ""
+        self._original_api_token_version = posted_version or rendered_version
         self._describe_effective_boolean_settings()
         if self.instance.pk and self.instance.api_token:
             self.fields["api_token"].help_text = _(
@@ -167,7 +230,24 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
                 self.add_error("clear_api_token", _("Either enter a new token or remove the stored one, not both."))
             else:
                 cleaned_data["api_token"] = ""
+        if self._token_replacement() is not None and self.instance.pk is not None:
+            stored = (
+                type(self.instance).objects.filter(pk=self.instance.pk).values_list("api_token", flat=True).first()
+            )
+            if stored is not None and api_token_version(stored) != self._original_api_token_version:
+                self.add_error("api_token", TOKEN_CONFLICT_MESSAGE)
         return cleaned_data
+
+    def _token_replacement(self) -> str | None:
+        if self.cleaned_data.get("clear_api_token") or self.data.get(self.add_prefix("api_token"), "").strip():
+            return str(self.cleaned_data.get("api_token", ""))
+        return None
+
+    def save(self, commit: bool = True) -> VoxhelmSettings:
+        # Keep intent on the model for Wagtail's save(commit=False) path too. The model
+        # rechecks the fingerprint under the row lock for a change after clean().
+        self.instance._token_save_intent = (self._original_api_token_version, self._token_replacement())
+        return super().save(commit=commit)
 
     def clean_model(self) -> str:
         return self.cleaned_data["model"].strip()

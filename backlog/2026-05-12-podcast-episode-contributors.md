@@ -206,3 +206,11 @@ Possible later approaches:
   explicit prefetch/select behavior.
 - Tests cover admin/model behavior, feed XML output, visibility filtering, and
   rendering context.
+
+## Round 88 ownership hardening (implemented)
+
+Link owner changes and episode assignment saves serialize on the current link
+row on the routed write database. Assignment admission reloads cached links;
+incompatible concurrent writes raise validation errors. Wagtail/modelcluster
+save paths retain the same ownership rule. Bulk SQL remains responsible for
+maintaining that invariant.

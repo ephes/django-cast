@@ -272,7 +272,12 @@ configuration.
 When an existing API token is stored in Wagtail, the token field is intentionally
 blank when you reopen the settings form. Submit the form with the token field
 blank to keep the stored token, enter a new token to replace it, or tick
-"Remove stored API token" to delete it and use the deployment key.
+"Remove stored API token" to delete it and use the deployment key. A blank
+submission preserves the token stored when the save runs, including a rotation
+or removal by another administrator. The form carries an opaque fingerprint of
+the token stored when the page was rendered (never the token itself); replacing
+or removing the token from a page opened before another administrator changed it
+shows a form error. Reload settings and retry.
 
 Production sites can also keep the Voxhelm token in deployment-managed Django
 settings or environment variables instead of the Wagtail database. django-cast
@@ -351,6 +356,16 @@ Use a stable, distinct ``--worker-id`` for each deployed site. See
 
     # Operator fallback
     python manage.py generate_transcripts --episode-id 42
+
+The synchronous command owns a generation attempt just like queued work. It does
+not take over an admin-queued or running generation: such audio is reported as
+``skipped`` with a message, so retry after that work finishes (a generation older
+than ``CAST_VOXHELM_STALE_AFTER`` counts as interrupted and is taken over). A newer
+attempt or an artifact edit while it waits makes completion obsolete: it raises
+an error without publishing files or replacing speaker mappings. Retrying starts
+a new attempt. Interrupting the command (for example with Ctrl-C) marks its
+attempt failed, so admin regeneration is not blocked. Failed jobs retain their Voxhelm job ID in the generation status;
+manual artifact recovery must be reviewed against the current transcript.
 
 django-cast now consumes Voxhelm-owned Podlove, DOTe, and WebVTT transcript
 artifacts directly from the batch job result and persists them onto the
@@ -452,7 +467,11 @@ Each reference is either an uploaded clean-solo clip **or** a source range into
 existing audio, never both:
 
 - A *source range* points at an existing ``Audio`` object with
-  ``start_seconds`` and ``end_seconds`` (start must be before end).
+  ``start_seconds`` and ``end_seconds``. Bounds must be finite and nonnegative,
+  start must be before end, and end may equal but must not exceed the known audio
+  duration. Unknown duration permits otherwise valid bounds. Payload construction
+  skips invalid legacy ranges before contacting Voxhelm. Bounds also respect the
+  field's maximum of 9,999,999.999 seconds.
 - An *uploaded clip* is stored through a protected storage backend. Configure a
   non-public backend under the ``"cast_voice_references"`` alias in
   ``STORAGES`` for dedicated voice-reference storage. When the alias is absent,
@@ -1022,3 +1041,12 @@ audio, not the text.
 Candidates still require editorial listening and consent approval.
 Speaker samples group each source's candidates once before per-speaker
 selection, retaining Podlove preference, low-signal fallback and spreading.
+
+Contributor link ownership
+--------------------------
+
+Saving an episode contributor rechecks the selected link's current owner under
+the same database row lock used for link reassignment. Concurrent incompatible
+assignment and owner changes cannot both commit. This also applies to Wagtail
+modelcluster saves; stale cached link objects do not authorize an assignment.
+Direct bulk SQL updates bypass model validation and must preserve this invariant.

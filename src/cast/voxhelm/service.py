@@ -5,17 +5,18 @@ import logging
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models, transaction
 from django.http import HttpRequest
 from django.utils import timezone
 from wagtail.models import Site
 
-from cast.models.contributors import ContributorVoiceReference
+from cast.models.contributors import ContributorVoiceReference, validate_voice_reference_range
 from cast.models.transcript import Transcript
 from cast.models.transcript_generation import TranscriptGeneration
 from cast.transcripts.corrections import refresh_transcript_corrections
 from cast.transcripts.generation_status import get_transcript_generation
+from cast.transcripts.services import artifact_revision
 
 from ..file_replacement import StagedFileReplacementGroup, stage_file_replacement
 from ..media_derivation import save_transcript_with_derivations
@@ -259,8 +260,11 @@ def build_known_speaker_references(episode: Any) -> list[dict[str, Any]]:
 def build_known_speaker_reference_entry(reference: Any) -> dict[str, Any] | None:
     if reference.is_source_range and reference.source_audio_id is not None:
         try:
+            validate_voice_reference_range(
+                reference.start_seconds, reference.end_seconds, getattr(reference.source_audio, "duration", None)
+            )
             url = resolve_audio_source_url(reference.source_audio)
-        except VoxhelmError:
+        except (VoxhelmError, ValidationError):
             return None
         return {
             "kind": "source_range",
@@ -298,6 +302,10 @@ def resolve_audio_diarization_enabled(audio: Audio, client: object) -> bool:
 
 class StaleTranscriptAttempt(VoxhelmError):
     """Completion no longer owns the generation it was queued for."""
+
+
+class TranscriptGenerationActive(VoxhelmError):
+    """Another (admin-queued) attempt currently owns this audio's transcript generation."""
 
 
 class VoxhelmTranscriptService:
@@ -374,6 +382,7 @@ class VoxhelmTranscriptService:
         generation_id: int | None = None,
         attempt_id: str | None = None,
         using: str = "default",
+        expected_revision: str | None = None,
     ) -> TranscriptGenerationResult:
         job_payload = initial_job_payload or {}
         if str(job_payload.get("id", "")) != job_id:
@@ -401,6 +410,14 @@ class VoxhelmTranscriptService:
                 if not matched:
                     raise StaleTranscriptAttempt("Transcript completion attempt was replaced.")
             transcript, created = self._get_or_create_transcript(audio=audio)
+            if expected_revision is not None:
+                Transcript.objects.using(using).filter(pk=transcript.pk).update(
+                    source_fingerprint=models.F("source_fingerprint")
+                )
+                transcript.refresh_from_db(using=using)
+                revision = "" if created else artifact_revision(transcript)
+                if revision != expected_revision:
+                    raise StaleTranscriptAttempt("Transcript artifacts changed during synchronous generation.")
             self._update_collection(transcript=transcript, audio=audio)
             self._save_artifacts(
                 transcript=transcript, audio=audio, podlove=podlove, dote=dote, vtt=vtt, speakers=speakers
@@ -420,21 +437,70 @@ class VoxhelmTranscriptService:
         task_ref: str | None = None,
         episode: Any | None = None,
     ) -> TranscriptGenerationResult:
-        submission = self.submit_for_audio(audio, task_ref=task_ref, episode=episode)
+        if audio.pk is None:
+            raise VoxhelmError("Audio must be saved before requesting a transcript.")
+        using = audio._state.db or "default"
+        with transaction.atomic(using=using):
+            generation, created = TranscriptGeneration.objects.using(using).get_or_create(
+                audio=audio, defaults={"task_ref": ""}
+            )
+            TranscriptGeneration.objects.using(using).filter(pk=generation.pk).update(
+                updated_at=models.F("updated_at")
+            )
+            generation.refresh_from_db(using=using)
+            if not created and generation.is_active:
+                raise TranscriptGenerationActive(
+                    "Transcript generation is already queued or running for this audio; retry after it finishes."
+                )
+            generation.queue_submission(
+                task_ref=task_ref or "",
+                voxhelm_job_id="",
+                source_url="",
+                task_result_id="",
+                site=None,
+                requested_by=None,
+            )
+            generation.mark_running()
+            transcript = Transcript.objects.using(using).filter(audio=audio).first()
+            expected_revision = artifact_revision(transcript) if transcript is not None else ""
+        current = TranscriptGeneration.objects.using(using).filter(
+            pk=generation.pk, attempt_id=generation.attempt_id, status=TranscriptGeneration.Status.RUNNING
+        )
+        submission = None
         try:
+            submission = self.submit_for_audio(audio, task_ref=task_ref, episode=episode)
+            if not current.update(
+                task_ref=submission.task_ref, voxhelm_job_id=submission.job_id, source_url=submission.source_url
+            ):
+                raise StaleTranscriptAttempt("Transcript completion attempt was replaced.")
             result = self.complete_audio_job(
                 audio,
                 job_id=submission.job_id,
                 source_url=submission.source_url,
                 initial_job_payload=submission.job_payload,
                 episode=episode,
+                generation_id=generation.pk,
+                attempt_id=str(generation.attempt_id),
+                using=using,
+                expected_revision=expected_revision,
             )
-        except VoxhelmError as exc:
-            # The job keeps running in Voxhelm; name it so its result can be
-            # imported with complete_audio_job instead of submitting it again.
-            if submission.job_id in str(exc):
-                raise
-            raise type(exc)(f"{exc} (Voxhelm job {submission.job_id})") from exc
+        except BaseException as exc:
+            # BaseException: an interrupted or cancelled CLI wait must not leave the row RUNNING.
+            current.update(
+                status=TranscriptGeneration.Status.FAILED,
+                error_message=str(exc),
+                completed_at=timezone.now(),
+                updated_at=timezone.now(),
+            )
+            if isinstance(exc, VoxhelmError) and submission is not None and submission.job_id not in str(exc):
+                raise type(exc)(f"{exc} (Voxhelm job {submission.job_id})") from exc
+            raise
+        current.update(
+            status=TranscriptGeneration.Status.SUCCEEDED,
+            error_message="",
+            completed_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
         return replace(result, warnings=submission.warnings)
 
     @staticmethod
