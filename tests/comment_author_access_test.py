@@ -30,7 +30,11 @@ def action(request):
 def submit(client, comment, action):
     return client.post(
         reverse(f"comments-{action}-comment-ajax"),
-        {"comment_id": str(comment.pk), "comment": "Author replacement"},
+        {
+            "comment_id": str(comment.pk),
+            "revision": author_edits.comment_revision(comment),
+            "comment": "Author replacement",
+        },
         **AJAX,
     )
 

@@ -66,7 +66,8 @@ def test_staging_cleanup_attempts_all_keys_and_reports_all_failures(mocker, both
 def test_refresh_preserves_publication_error_and_logs_cleanup_leftover(mocker, caplog, through_command):
     source = StubOverwriteStorage({"media.jpg": b"new"})
     target = StubOverwriteStorage({"media.jpg": b"original"})
-    requested, returned = "a-stage.tmp", "b-stage.tmp"
+    requested = "media.jpg.django-cast-refresh-" + "a" * 32 + ".tmp"
+    returned = requested[:-4] + "_alternate.tmp"
     mocker.patch("cast.management.commands.storage_backend.temporary_refresh_path", return_value=requested)
     original_delete = target.delete
     attempted = []
@@ -99,9 +100,9 @@ def test_refresh_preserves_publication_error_and_logs_cleanup_leftover(mocker, c
     else:
         with pytest.raises(OSError, match="primary publication failure") as error:
             refresh_existing_file(source, target, "media.jpg")
-        assert requested in error.value.__notes__[0]
-    assert attempted == [requested, returned]
-    assert target._files == {"media.jpg": b"original", requested: b"partial"}
+        assert requested in " ".join(error.value.__notes__)
+    assert attempted == [requested]
+    assert target._files == {"media.jpg": b"original", requested: b"partial", returned: b"new"}
     assert requested in caplog.text
     assert "cleanup denied" in caplog.text
 
@@ -198,7 +199,60 @@ def test_refresh_reports_generated_alternate_when_cleanup_fails(mocker, failure)
     mocker.patch.object(target, failure, side_effect=fail_on_alternate)
     with pytest.raises(RuntimeError, match="alternate.jpg.*media.jpg.*cleanup denied"):
         refresh_existing_file(source, target, "media.jpg")
-    assert target._files == {"media.jpg": b"old", "alternate.jpg": b"new"}
+    assert target._files["media.jpg"] == b"old"
+    assert target._files["alternate.jpg"] == b"new"
+    assert len(target.staged()) == 1
+
+
+@pytest.mark.parametrize("mode", ["truncated", "unreserved"])
+def test_unverified_stage_is_removed_before_publication(mocker, mode):
+    source = StubOverwriteStorage({"media.jpg": b"complete bytes"})
+    target = StubOverwriteStorage({"media.jpg": b"old"})
+    original_save = target.save
+
+    def save(name, content):
+        if mode == "unreserved":
+            name = "unexpected.tmp"
+        result = original_save(name, content)
+        if mode == "truncated":
+            target._files[result] = b"partial"
+        return result
+
+    mocker.patch.object(target, "save", side_effect=save)
+    with pytest.raises(RuntimeError, match="verification|non-reserved"):
+        refresh_existing_file(source, target, "media.jpg")
+    assert target._files == {"media.jpg": b"old"}
+
+
+def test_real_filesystem_keeps_complete_stage_after_partial_final_write(tmp_path):
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import FileSystemStorage
+
+    source = FileSystemStorage(location=tmp_path / "source")
+
+    class FailingStorage(FileSystemStorage):
+        fail = False
+
+        def _save(self, name, content):
+            if self.fail and name == "video.mp4":
+                with open(self.path(name), "wb") as output:
+                    output.write(content.read(3))
+                source.delete(name)
+                raise OSError("synthetic partial filesystem write")
+            return super()._save(name, content)
+
+    target = FailingStorage(location=tmp_path / "target", allow_overwrite=True)
+    source.save("video.mp4", ContentFile(b"complete synthetic new bytes"))
+    target.save("video.mp4", ContentFile(b"old"))
+    target.fail = True
+    errors = []
+    with pytest.raises(OSError, match="partial filesystem write"):
+        refresh_existing_file(source, target, "video.mp4", report_error=errors.append)
+    stages = list((tmp_path / "target").glob("*.tmp"))
+    assert len(stages) == 1
+    assert stages[0].read_bytes() == b"complete synthetic new bytes"
+    assert stages[0].name in errors[0]
+    assert not source.exists("video.mp4")
 
 
 def test_renamed_missing_copy_reports_that_nothing_was_published():
@@ -215,9 +269,12 @@ def test_renamed_missing_copy_reports_that_nothing_was_published():
     target = RenamingStorage()
     result = sync_media_files(StubOverwriteStorage({"media.jpg": b"abc"}), target, report_error=errors.append)
     assert result.errors == 1
-    assert "nothing was published at the requested path" in errors[0]
-    assert "was removed" not in errors[0]
+    reported = "\n".join(errors)
+    assert "nothing was published at the requested path" in reported
+    assert "was removed" not in reported
     assert "media.jpg" not in target._files and "media.jpg_renamed" not in target._files
+    # The verified stage stays as the reported recovery copy.
+    assert len(target.staged()) == 1 and target.staged()[0] in reported
 
     class StuckRenamingStorage(RenamingStorage):
         def delete(self, path):
@@ -229,6 +286,7 @@ def test_renamed_missing_copy_reports_that_nothing_was_published():
     stuck = StuckRenamingStorage()
     result = sync_media_files(StubOverwriteStorage({"media.jpg": b"abc"}), stuck, report_error=errors.append)
     assert result.errors == 1
-    assert "could not remove generated copy media.jpg_renamed" in errors[0]
-    assert "synthetic delete refusal" in errors[0]
-    assert "was removed" not in errors[0]
+    reported = "\n".join(errors)
+    assert "could not remove generated copy media.jpg_renamed" in reported
+    assert "synthetic delete refusal" in reported
+    assert "was removed" not in reported

@@ -102,5 +102,12 @@ as well, since Python cannot interrupt an individual blocked storage call.
 These ceilings cover hashing; backend-managed ``save`` I/O (the staging upload
 and the final save) is not charged to any of them.
 
+A failed final refresh can leave partial destination bytes. The command retains
+a SHA-256-verified complete recovery copy and reports its exact reserved
+``.django-cast-refresh-<random>.tmp`` key. Backup and restore skip
+these keys. Retry with the original source when available; otherwise inspect
+and explicitly recover from the reported key, verify the destination, and
+delete the key manually. See :doc:`/reference/management-commands` for details.
+
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.

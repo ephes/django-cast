@@ -74,6 +74,10 @@ def temporary_refresh_path(path: str) -> str:
     return f"{path}.django-cast-refresh-{uuid4().hex}.tmp"
 
 
+def is_refresh_key(path: str) -> bool:
+    return re.search(r"\.django-cast-refresh-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
+
+
 def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
     budget = budget or MediaReadBudget.for_object(storage, path)
     digest = hashlib.sha256()
@@ -202,6 +206,8 @@ def publish_staged_file(
 
     Writers outside this same-host lock require backend conditional operations;
     they must be quiesced. Generic Storage has no compare-and-swap primitive.
+    A digest-verified stage is retained on publication failure as a reserved
+    recovery key excluded from restore enumeration.
     """
     target_exists = target_storage.exists(path)
     if target_exists == missing:
@@ -214,12 +220,15 @@ def publish_staged_file(
     if target_storage.exists(requested_stage):
         raise RuntimeError(f"media publication conflict: staging key already exists {requested_stage}")
     staged_names = {requested_stage}
+    recovery_name = None
     try:
         with source_storage.open(path, "rb") as in_f:
             staged_name = target_storage.save(requested_stage, in_f)
         staged_names.add(staged_name)
         if not target_storage.exists(staged_name):
             raise RuntimeError(f"staged copy {staged_name} was not saved")
+        if not is_refresh_key(staged_name):
+            raise RuntimeError(f"storage returned non-reserved staging key {staged_name}")
         if (
             content_digest(target_storage, staged_name) != source_before
             or content_digest(source_storage, path) != source_before
@@ -230,6 +239,9 @@ def publish_staged_file(
             current_exists and content_digest(target_storage, path) != target_before
         ):
             raise RuntimeError(f"media publication conflict: target changed while staging {path}")
+        # Verified complete and still current: from here on a failed publication
+        # keeps this stage as the recovery copy.
+        recovery_name = staged_name
         with target_storage.open(staged_name, "rb") as staged_f:
             try:
                 saved_name = target_storage.save(path, staged_f)
@@ -259,6 +271,13 @@ def publish_staged_file(
                 ) from cleanup_error
             raise RuntimeError(message)
     except BaseException as primary_error:
+        if recovery_name is not None:
+            staged_names.discard(recovery_name)
+            message = f"complete recovery copy retained at {recovery_name}; inspect before retry or manual deletion"
+            primary_error.add_note(message)
+            logger.warning(message)
+            if report_error is not None:
+                report_error(message)
         try:
             remove_staged_copies(target_storage, staged_names)
         except RuntimeError as cleanup_error:
@@ -289,7 +308,7 @@ def sync_media_files(
     result = SyncResult()
     try:
         for num, path in enumerate(storage_walk_paths(source_storage)):
-            if re.search(r"\.django-cast-refresh-[0-9a-f]{32}\.tmp\Z", path):
+            if is_refresh_key(path):
                 message = f"skipped reserved refresh staging key {path}; inspect and remove manually"
                 if report_error is not None:
                     report_error(message)

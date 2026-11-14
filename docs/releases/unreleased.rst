@@ -1,6 +1,16 @@
 Unreleased
 ==========
 
+- Compensate interrupted media ingestion (KeyboardInterrupt/SystemExit), attempt
+  all owned file cleanup, log exact recovery keys on cleanup failure, and
+  preserve the original interruption and existing replacement files.
+- Verify refresh staging contents and retain the complete recovery copy after
+  final-publication failure. Report its exact key, exclude it from backup/restore
+  enumeration and document explicit recovery and cleanup.
+- Reject stale or missing comment edit content tokens with HTTP 409. Keep the
+  browser draft and show current accepted text before an explicit retry.
+  Custom edit clients/themes must adopt the revision token and rebuilt bundle.
+
 - Preserve the current Voxhelm token on blank settings saves, including stale
   forms and Wagtail deferred saves. Refuse explicit token changes from a settings
   page opened before another change, with a form error.

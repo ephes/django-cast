@@ -432,3 +432,20 @@ class RecordingModel:
         self.storage.events.append(("db_save", tuple(update_fields) if update_fields is not None else None))
         if self.fail_save:
             raise RuntimeError("db save failed")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_ingest_interrupted_during_synchronous_probe_keeps_old_files(audio, m4a_audio, mocker, interruption):
+    old_name = audio.m4a.name
+    storage = audio.m4a.storage
+    before = set(storage.listdir("cast_audio")[1])
+    form = _replacement_audio_form(audio, m4a_audio)
+    error = interruption("synthetic derivation interruption")
+    mocker.patch("cast.models.audio.run_media_probe", side_effect=error)
+    with pytest.raises(interruption) as raised:
+        ingest_upload(form, policy=IngestPolicy(10, ("m4a", "mp3", "oga", "opus")))
+    assert raised.value is error
+    audio.refresh_from_db()
+    assert audio.m4a.name == old_name
+    assert set(storage.listdir("cast_audio")[1]) == before

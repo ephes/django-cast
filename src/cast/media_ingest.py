@@ -92,10 +92,17 @@ def cleanup_new_media_object(obj: Any, field_names: tuple[str, ...]) -> bool:
     """Remove files and a row created by an unsuccessful ingest."""
     failed = False
     for field_name in field_names:
+        field = getattr(obj, field_name)
+        recovery_name = getattr(field, "name", "")
         try:
-            _delete_field_file(getattr(obj, field_name))
-        except Exception:
-            logger.exception("Media ingest cleanup failed for %s.%s", obj._meta.label, field_name)
+            _delete_field_file(field)
+        except BaseException:
+            logger.exception(
+                "Media ingest cleanup failed for %s.%s; recovery storage key=%s",
+                obj._meta.label,
+                field_name,
+                recovery_name,
+            )
             failed = True
     # Keep the row as a recovery reference if any owned file could not be removed.
     if failed:
@@ -103,7 +110,7 @@ def cleanup_new_media_object(obj: Any, field_names: tuple[str, ...]) -> bool:
     try:
         if getattr(obj, "pk", None) is not None:
             obj.delete()
-    except Exception:
+    except BaseException:
         logger.exception("Media ingest cleanup failed for %s pk=%s", obj._meta.label, getattr(obj, "pk", None))
         return False
     return True
@@ -128,16 +135,26 @@ def ingest_upload(form: Any, *, policy: IngestPolicy) -> Any:
     probe_budget = nullcontext() if policy.probe_seconds is None else media_probe_budget(policy.probe_seconds)
     is_replacement = instance.pk is not None
     replacement_guard: FileFieldReplacementGuard | None = None
+    committed = False
+
+    def mark_committed() -> None:
+        nonlocal committed
+        committed = True
 
     try:
         with probe_budget, transaction.atomic(using=using):
+            # Register before form-owned callbacks: interruptions after a successful
+            # commit must not remove files now referenced by the committed row.
+            transaction.on_commit(mark_committed, using=using)
             if is_replacement:
                 replacement_guard = FileFieldReplacementGuard.track(instance, policy.file_fields, using=using)
             result = form.save()
             if replacement_guard is not None:
                 replacement_guard.commit()
             return result
-    except Exception as exc:
+    except BaseException as exc:
+        if committed:
+            raise
         try:
             if replacement_guard is not None:
                 replacement_guard.rollback()
@@ -147,7 +164,7 @@ def ingest_upload(form: Any, *, policy: IngestPolicy) -> Any:
                 cleanup_succeeded = True
             else:
                 cleanup_succeeded = cleanup_new_media_object(instance, policy.file_fields)
-        except Exception:
+        except BaseException:
             logger.exception(
                 "Media ingest rollback cleanup failed for %s pk=%s",
                 instance._meta.label,
@@ -160,6 +177,9 @@ def ingest_upload(form: Any, *, policy: IngestPolicy) -> Any:
                 instance._meta.label,
                 getattr(instance, "pk", None),
             )
+            if not isinstance(exc, Exception):
+                exc.add_note("Media ingest cleanup failed; inspect logged recovery storage keys.")
+                raise
             raise MediaIngestCleanupFailed("Media ingest cleanup failed.") from exc
         if isinstance(exc, (subprocess.TimeoutExpired, AudioDurationProbeTimeout)):
             raise MediaProbeTimeout("Media probing exceeded the ingest budget.") from exc

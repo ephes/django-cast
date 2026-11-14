@@ -354,9 +354,9 @@
 								"X-CSRFToken": getCsrfToken()
 							}
 						});
-						if (!response.ok) return null;
+						if (!response.ok && response.status !== 409) return null;
 						const data = yield response.json();
-						return data && typeof data === "object" && data.success === true ? data : null;
+						return data && typeof data === "object" && (response.ok && data.success === true || response.status === 409 && data.conflict === true) ? data : null;
 					});
 					return function request() {
 						return _ref2.apply(this, arguments);
@@ -417,7 +417,7 @@
 			};
 		}();
 		const openInlineEditor = (a) => {
-			var _ref5, _item$querySelector$v, _item$querySelector;
+			var _ref5, _item$querySelector$v, _item$querySelector, _item$querySelector$d, _item$querySelector2;
 			const commentId = a.getAttribute("data-comment-id");
 			const url = a.getAttribute("data-edit-action");
 			const item = document.getElementById(`c${commentId}`);
@@ -425,6 +425,7 @@
 			if (item.querySelector(".comment-edit-form")) return;
 			const textEl = item.querySelector(".comment-text");
 			const raw = (_ref5 = (_item$querySelector$v = (_item$querySelector = item.querySelector(".comment-raw")) === null || _item$querySelector === void 0 ? void 0 : _item$querySelector.value) !== null && _item$querySelector$v !== void 0 ? _item$querySelector$v : textEl === null || textEl === void 0 ? void 0 : textEl.textContent) !== null && _ref5 !== void 0 ? _ref5 : "";
+			let revision = (_item$querySelector$d = (_item$querySelector2 = item.querySelector(".comment-raw")) === null || _item$querySelector2 === void 0 ? void 0 : _item$querySelector2.dataset.revision) !== null && _item$querySelector$d !== void 0 ? _item$querySelector$d : "";
 			const form = document.createElement("div");
 			form.className = "comment-edit-form";
 			form.innerHTML = "<textarea class=\"comment-edit-textarea\"></textarea><p class=\"comment-edit-note\">Editable from this browser until someone replies or your session expires.</p><button type=\"button\" class=\"comment-edit-save\">Save</button><button type=\"button\" class=\"comment-edit-cancel\">Cancel</button><span class=\"comment-edit-status\" role=\"status\" hidden></span>";
@@ -446,12 +447,27 @@
 				save.disabled = true;
 				const value = textarea.value;
 				try {
+					var _data$revision;
 					const data = yield postAction(url, {
 						comment_id: commentId,
-						comment: value
+						comment: value,
+						revision
 					});
 					if (!form.isConnected || item.querySelector(".comment-edit-form") !== form) return;
+					if ((data === null || data === void 0 ? void 0 : data.conflict) && typeof data.current_comment === "string" && typeof data.revision === "string") {
+						revision = data.revision;
+						if (textEl) textEl.textContent = data.current_comment;
+						const raw = item.querySelector(".comment-raw");
+						if (raw) {
+							raw.value = data.current_comment;
+							raw.dataset.revision = revision;
+						}
+						status.hidden = false;
+						status.textContent = `This comment changed. Current text: ${data.current_comment} — Your draft is kept. Review it before saving again.`;
+						return;
+					}
 					if (!(data === null || data === void 0 ? void 0 : data.success) || typeof data.html !== "string") throw new Error("Save failed.");
+					revision = (_data$revision = data.revision) !== null && _data$revision !== void 0 ? _data$revision : revision;
 					const replacement = document.createElement("div");
 					replacement.innerHTML = data.html.trim();
 					const fresh = replacement.firstElementChild;
@@ -474,7 +490,10 @@
 							else textEl.textContent = value;
 						}
 						const raw = item.querySelector(".comment-raw");
-						if (raw) raw.value = value;
+						if (raw) {
+							raw.value = value;
+							raw.dataset.revision = revision;
+						}
 						status.hidden = false;
 						status.textContent = "Saved. Your newer changes are not saved yet.";
 						return;

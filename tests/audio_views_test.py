@@ -377,7 +377,9 @@ class TestAudioEdit:
         audio.refresh_from_db()
         assert audio.title == post_data["title"]
         assert audio.m4a.name == old_name
-        assert callbacks == []
+        for callback in callbacks:
+            callback()
+        assert audio.m4a.storage.exists(old_name)
 
     def test_post_edit_audio_m4a(self, admin_client, audio_urls, m4a_audio, django_capture_on_commit_callbacks):
         old_name = audio_urls.audio.m4a.name
@@ -396,8 +398,9 @@ class TestAudioEdit:
         assert new_name != old_name
         assert storage.exists(old_name) and storage.exists(new_name)
 
-        assert len(callbacks) == 1
-        callbacks[0]()
+        assert callbacks
+        for callback in callbacks:
+            callback()
         assert not storage.exists(old_name)
         assert storage.exists(new_name)
 
@@ -428,8 +431,9 @@ class TestAudioEdit:
         assert audio.m4a.name == m4a_name
         assert all(storage.exists(name) for name in (old_mp3_name, new_mp3_name, m4a_name))
 
-        assert len(callbacks) == 1
-        callbacks[0]()
+        assert callbacks
+        for callback in callbacks:
+            callback()
         assert not storage.exists(old_mp3_name)
         assert storage.exists(new_mp3_name) and storage.exists(m4a_name)
         audio.mp3.delete(save=False)

@@ -717,3 +717,24 @@ Memcached backends across workers. File/database/dummy caches and unverified
 custom backends refuse posting with ``429``; cache outages also fail closed.
 See :ref:`CAST_COMMENTS_POST_RATE_LIMIT <cast_comments_post_rate_limit>` for
 backend support, deployment compatibility and conservative ``Retry-After``.
+
+
+Comment edit content conflicts
+------------------------------
+
+Each inline editor sends the ``revision`` content token from the rendered
+``textarea.comment-raw`` element's ``data-revision`` attribute. The edit endpoint
+compares it with the current comment text under the comment row lock before
+moderation or saving. Missing or stale tokens return HTTP 409 with
+``success: false``, ``conflict: true``, ``current_comment`` and the current
+``revision``. Ownership, page access and moderation eligibility are checked first.
+
+The shared browser bundle keeps the unsent draft, displays the current text as
+plain text, and requires another explicit Save after review. Cancel reveals the
+current accepted text. A successful save returns the new ``revision`` so changes
+typed during that save can be submitted against the acknowledged text. This is
+a content token, not a monotonically increasing history version: edits that
+return to exactly the same text have the same token. No schema change is needed.
+Custom edit clients must send the token; theme overrides of the raw textarea
+must retain ``data-revision="{{ comment_revision }}"`` and use the rebuilt shared
+comments bundle. Legacy clients without a token fail with 409 until refreshed.
