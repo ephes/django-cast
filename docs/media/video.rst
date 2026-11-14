@@ -159,3 +159,28 @@ display widths round to the nearest positive pixel. Display aspect does not
 itself trigger a rotation. Probe stderr remains separate from JSON stdout. The existing 30-second probe budget and temporary
 poster cleanup remain in force. Existing posters are not regenerated; any
 historical regeneration is a separate operator action after package adoption.
+
+Poster publication and work limits
+----------------------------------
+
+``recalc_video_posters`` publishes only the poster and modification timestamp,
+using a conditional update against the original storage name, prior poster and
+``poster_seconds``. Concurrent title edits survive. A changed source, poster or
+extraction timestamp rejects the attempt; its newly stored file is removed if
+unreferenced, while editor-owned files remain intact. Generation/publication
+failures are counted, processing continues, and the command exits nonzero.
+Source generations are identified by storage names: replace originals using
+storage's unique-name policy, rather than overwrite existing bytes in place.
+
+After sample-aspect correction, output must fit **8192 pixels per side** and
+**16,777,216 pixels total**. Oversized metadata leaves the poster unavailable
+before ffmpeg extraction. Sample-aspect metadata is limited to 64 characters;
+exponential notation is refused before rational arithmetic (ffprobe emits
+rational pairs). Normal rotated and anamorphic output retains its
+orientation. This deliberately refuses excessive previews instead of silently
+changing their dimensions.
+
+Diagnostics record stable video IDs, phases and fixed failure categories, never
+media URLs, argv or raw probe exception text. ffmpeg stdout/stderr are captured
+instead of inherited by the command's stderr; signed URL credentials therefore
+remain inside the probe invocation. The existing 30-second timeouts still apply.

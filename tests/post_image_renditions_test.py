@@ -75,6 +75,9 @@ class RenditionQuerysetStub:
     srgb_gallery_thumbnail_pk = 12
     srgb_gallery_avif_thumbnail_pk = 13
 
+    def __iter__(self):
+        return iter(())
+
     def values_list(self, *_args):
         return [
             (self.unrelated_width_pk, 1, "width-400"),

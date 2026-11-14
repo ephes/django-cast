@@ -1,7 +1,10 @@
+from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, TypeAlias
 
-from wagtail.images.models import Image, Rendition
+from django.db import router, transaction
+from django.db.models import Prefetch
+from wagtail.images.models import Filter, Image, Rendition
 
 from ..renditions import ImageType, RenditionFilters, get_srgb_counterpart_filter_spec
 
@@ -46,6 +49,12 @@ def get_obsolete_and_missing_rendition_strings(
     """
     Get all obsolete and missing rendition strings from a queryset of posts.
     """
+    images_with_type = list(images_with_type)
+    aliases = {image._state.db for _, image in images_with_type if hasattr(image, "_state")}
+    if using is None:
+        if len(aliases) > 1:
+            raise ValueError("Rendition inventory requires images from one database.")
+        using = next(iter(aliases), None)
     required_renditions: set[tuple[int, str]] = set()
     srgb_counterpart_renditions: set[tuple[int, str]] = set()
     for image_type, image in images_with_type:
@@ -60,6 +69,16 @@ def get_obsolete_and_missing_rendition_strings(
         for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec")
     }
     existing_renditions = set(existing_rendition_to_id.keys())
+    # Inspect only required keys, once per storage/key even for repeated images.
+    exists: dict[tuple[int, str], bool] = {}
+    for rendition in renditions_queryset:
+        key = (rendition.image_id, rendition.filter_spec)
+        if key in required_renditions:
+            storage_key = (id(rendition.file.storage), rendition.file.name)
+            if storage_key not in exists:
+                exists[storage_key] = bool(rendition.file.name) and rendition.file.storage.exists(rendition.file.name)
+            if not exists[storage_key]:
+                existing_renditions.discard(key)
     obsolete_renditions_unfiltered = existing_renditions - required_renditions
 
     # Only remove known predecessor/successor specs from django-cast's gallery thumbnail sRGB policy.
@@ -85,24 +104,54 @@ def get_all_images_from_posts(posts: Iterator["Post"]) -> ImagesWithType:
         yield from post.get_all_images()
 
 
-def create_missing_renditions_for_images(missing_renditions: RenditionStringsByImageId) -> None:
+def repair_missing_rendition_files(image: Image, filter_specs: Iterable[str]) -> None:
+    """Repair broken files without scheduling deletion of a reused storage key.
+
+    The caller owns the transaction. Preserve existing rows and usable policy
+    counterparts; Wagtail's public generation and cache APIs handle the file.
     """
-    Create all required renditions for all images in the iterable posts.
-    """
+    for rendition in image.renditions.select_for_update().filter(filter_spec__in=filter_specs):
+        if not rendition.file.name or not rendition.file.storage.exists(rendition.file.name):
+            with image.generate_rendition_file(Filter(rendition.filter_spec)) as generated:
+                rendition.file.save(generated.name, generated, save=False)
+            name = rendition.file.name
+            try:
+                if not rendition.file.storage.exists(name):
+                    raise OSError("Required rendition file was not saved.")
+                rendition.save(using=image._state.db, update_fields=["file"])
+            except Exception:
+                rendition.file.storage.delete(name)
+                raise
+            rendition.purge_from_cache()
+
+
+def create_missing_renditions_for_images(
+    missing_renditions: RenditionStringsByImageId, *, using: str | None = None
+) -> None:
+    """Create required renditions on the source database without shared cache collisions."""
+    using = using or router.db_for_write(Image)
+    images = Image.objects.using(using).prefetch_related(
+        Prefetch("renditions", queryset=Rendition.objects.using(using))
+    )
     for image_id, filter_specs in missing_renditions.items():
-        image = Image.objects.get(id=image_id)
-        for filter_string in filter_specs:
-            image.get_rendition(filter_string).save()
-        # for filter_string, rendition in image.get_renditions(*filter_specs).items():
-        #     if rendition.pk is None:
-        #         # this causes a lot of weird errors, probably a bug in Wagtail :(
-        #         rendition.save()  # FIXME why do we need to save the rendition twice?
+        image = images.get(id=image_id)
+        with transaction.atomic(using=using):
+            repair_missing_rendition_files(image, filter_specs)
+            for filter_string in filter_specs:
+                clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
+                # Public single-rendition API uses the explicitly bound related
+                # manager; bulk creation and the shared cache can lose the alias.
+                rendition = image.create_rendition(clean_filter(Filter(filter_string)))
+                if not rendition.file.storage.exists(rendition.file.name):
+                    raise OSError("Required rendition file was not saved.")
 
 
-def create_missing_renditions_for_posts(posts: Iterator["Post"]) -> None:
-    """
-    Create all required renditions for all images in the iterable posts.
-    """
-    images_with_type = get_all_images_from_posts(posts)
-    _, missing_renditions = get_obsolete_and_missing_rendition_strings(images_with_type)
-    create_missing_renditions_for_images(missing_renditions)
+def create_missing_renditions_for_posts(posts: Iterable["Post"]) -> None:
+    """Create required renditions, grouping source instances by database."""
+    grouped: dict[str, list[tuple[ImageType, Image]]] = defaultdict(list)
+    for image_type, image in get_all_images_from_posts(iter(posts)):
+        using = image._state.db or router.db_for_write(Image, instance=image)
+        grouped[using].append((image_type, image))
+    for using, images in grouped.items():
+        _, missing = get_obsolete_and_missing_rendition_strings(images, using=using)
+        create_missing_renditions_for_images(missing, using=using)

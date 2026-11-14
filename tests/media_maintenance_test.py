@@ -4,10 +4,8 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-from django.core.files.storage import FileSystemStorage
 from django.core.management import CommandError, call_command
 from wagtail.images.models import Image, Rendition
-from wagtail.models import Collection
 
 from cast.management.commands.storage_backend import sync_media_files
 from cast.models import Post
@@ -86,17 +84,6 @@ def test_invalid_explicit_rendition_selection_fails_before_mutation(mocker, blog
         call_command("sync_renditions", **options)
     plan.assert_not_called()
     retire.assert_not_called()
-
-
-@pytest.fixture
-def disk_image(db, tmp_path, image_1px, monkeypatch):
-    storage = FileSystemStorage(location=str(tmp_path))
-    monkeypatch.setattr(Image._meta.get_field("file"), "storage", storage)
-    monkeypatch.setattr(Rendition._meta.get_field("file"), "storage", storage)
-    collection = Collection.get_first_root_node() or Collection.add_root(instance=Collection(name="Root"))
-    image = Image(title="Synthetic image", file=image_1px, collection=collection)
-    image.save()
-    return image
 
 
 @pytest.mark.django_db

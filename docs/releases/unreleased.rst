@@ -1,6 +1,18 @@
 Unreleased
 ==========
 
+- Admit only opened regular glossary sources (including symlinks to regular
+  files), reject duplicate JSON members before writes, and validate canonical
+  positive maintenance IDs against backend field ranges. Unknown explicitly
+  selected transcripts now fail before processing.
+- Preserve database affinity in direct gallery/post rendition generation and
+  repair required rows whose stored files were lost. Verify replacements before
+  retiring usable thumbnail counterparts; failed repairs remain retryable.
+- Publish missing video posters conditionally against current source/poster
+  identity, preserving concurrent editor changes and cleaning attempt-owned
+  files on conflict. Remove capability URLs and raw probe errors from
+  diagnostics; refuse posters above 8192 pixels per side or 16,777,216 pixels.
+
 - Compensate interrupted media ingestion (KeyboardInterrupt/SystemExit), attempt
   all owned file cleanup, log exact recovery keys on cleanup failure, and
   preserve the original interruption and existing replacement files. An
