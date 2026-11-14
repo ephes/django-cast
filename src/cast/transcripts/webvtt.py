@@ -2,7 +2,7 @@
 
 import html
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 
 from . import parsing
 
@@ -19,7 +19,7 @@ def webvtt_timestamp_to_ms(value: object) -> int | None:
     """Parse a WebVTT ``HH:MM:SS.mmm`` or ``MM:SS.mmm`` timestamp into milliseconds."""
     if not isinstance(value, str):
         return None
-    match = re.fullmatch(r"(?:(\d+):)?(\d{2}):(\d{2})\.(\d{1,3})", value.strip())
+    match = re.fullmatch(r"(?:([0-9]{1,18}):)?([0-5][0-9]):([0-5][0-9])\.([0-9]{1,3})", value.strip())
     if match is None:
         return None
     hours, minutes, seconds, millis = match.groups()
@@ -27,8 +27,39 @@ def webvtt_timestamp_to_ms(value: object) -> int | None:
 
 
 def timing_line_start_ms(line: str) -> int | None:
-    start_timestamp = line.split(TIMING_SEPARATOR, 1)[0].strip()
-    return webvtt_timestamp_to_ms(start_timestamp)
+    match = re.fullmatch(r"([^\s]+)[ \t]+-->[ \t]+([^\s]+)(?:[ \t]+[^\r\n]*)?", line.strip())
+    if match is None or webvtt_timestamp_to_ms(match[2]) is None:
+        return None
+    return webvtt_timestamp_to_ms(match[1])
+
+
+def cue_lines(content: str) -> Iterator[tuple[str, int | None, bool]]:
+    """Yield untouched lines, a cue start for timing lines, and payload membership.
+
+    Only the first or second line of a block can introduce a cue. Header,
+    NOTE, STYLE and REGION blocks remain opaque through the next blank line.
+    """
+    state = "start"
+    for line in content.splitlines(keepends=True):
+        body = line.strip()
+        start_ms = None
+        payload = False
+        if not body:
+            state = "start"
+        elif state == "payload":
+            payload = True
+        elif state in {"start", "identifier"}:
+            if state == "start" and re.match(r"^(?:\ufeff?WEBVTT|NOTE)(?:[ \t]|$)|^(?:STYLE|REGION)$", body):
+                state = "ignored"
+            else:
+                start_ms = timing_line_start_ms(line)
+                if start_ms is not None:
+                    state = "payload"
+                elif state == "start" and TIMING_SEPARATOR not in line:
+                    state = "identifier"
+                else:
+                    state = "ignored"
+        yield line, start_ms, payload
 
 
 def split_line_ending(line: str) -> tuple[str, str]:
@@ -79,16 +110,9 @@ def match_echoed_voice_label(body: str) -> tuple[str, re.Match[str], str, str] |
 
 def get_speaker_labels(content: str) -> set[str]:
     labels: set[str] = set()
-    in_cue_payload = False
-    for line in content.splitlines():
+    for line, _start_ms, is_payload in cue_lines(content):
         stripped = line.strip()
-        if not stripped:
-            in_cue_payload = False
-            continue
-        if TIMING_SEPARATOR in line:
-            in_cue_payload = True
-            continue
-        if not in_cue_payload:
+        if not is_payload:
             continue
         for match in VOICE_OPENING_RE.finditer(line):
             label = parsing.clean_speaker_label(match.group("label"))
@@ -121,7 +145,7 @@ def clear_suggestions_from_content(content: str, start_milliseconds: set[int]) -
         payload_lines = None
         should_clear = False
 
-    for line in content.splitlines(keepends=True):
+    for line, start_ms, _is_payload in cue_lines(content):
         if payload_lines is not None:
             if not line.strip():
                 flush_payload()
@@ -130,9 +154,8 @@ def clear_suggestions_from_content(content: str, start_milliseconds: set[int]) -
                 payload_lines.append(line)
             continue
 
-        if TIMING_SEPARATOR in line:
-            start_ms = timing_line_start_ms(line)
-            should_clear = start_ms in start_milliseconds if start_ms is not None else False
+        if start_ms is not None:
+            should_clear = start_ms in start_milliseconds
             payload_lines = []
         rewritten_lines.append(line)
 
@@ -178,7 +201,7 @@ def apply_suggestions_to_content(content: str, names_by_start_ms: Mapping[int, s
         current_name = None
         payload_lines = None
 
-    for line in content.splitlines(keepends=True):
+    for line, start_ms, _is_payload in cue_lines(content):
         if payload_lines is not None:
             if not line.strip():
                 flush_payload()
@@ -187,9 +210,8 @@ def apply_suggestions_to_content(content: str, names_by_start_ms: Mapping[int, s
                 payload_lines.append(line)
             continue
 
-        if TIMING_SEPARATOR in line:
-            start_ms = timing_line_start_ms(line)
-            current_name = names_by_start_ms.get(start_ms) if start_ms is not None else None
+        if start_ms is not None:
+            current_name = names_by_start_ms.get(start_ms)
             payload_lines = []
         rewritten_lines.append(line)
 
@@ -269,21 +291,11 @@ def set_payload_line_voice(line: str, name: str) -> tuple[str, bool, bool]:
 def rewrite_speakers(content: str, mapping: Mapping[str, str]) -> tuple[str, bool]:
     rewritten_lines = []
     changed = False
-    in_cue_payload = False
-    for line in content.splitlines(keepends=True):
-        stripped = line.strip()
-        if not stripped:
-            in_cue_payload = False
-            rewritten_lines.append(line)
-        elif TIMING_SEPARATOR in line:
-            in_cue_payload = True
-            rewritten_lines.append(line)
-        elif in_cue_payload:
+    for line, _start_ms, is_payload in cue_lines(content):
+        if is_payload:
             line, line_changed = rewrite_payload_line(line, mapping)
             changed = changed or line_changed
-            rewritten_lines.append(line)
-        else:
-            rewritten_lines.append(line)
+        rewritten_lines.append(line)
     return "".join(rewritten_lines), changed
 
 
@@ -394,7 +406,7 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
         rewritten_lines.extend(lines)
         payload_lines = None
 
-    for line in content.splitlines(keepends=True):
+    for line, start_ms, _is_payload in cue_lines(content):
         if payload_lines is not None:
             if not line.strip():
                 flush_payload()
@@ -402,10 +414,9 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
             else:
                 payload_lines.append(line)
             continue
-        if TIMING_SEPARATOR in line:
-            start_ms = timing_line_start_ms(line)
-            text = texts_by_start_ms.get(start_ms) if start_ms is not None else None
-            if text is not None and start_ms is not None:
+        if start_ms is not None:
+            text = texts_by_start_ms.get(start_ms)
+            if text is not None:
                 if start_ms in seen:
                     raise ValueError("Correction destination has ambiguous start times.")
                 seen.add(start_ms)
@@ -428,21 +439,12 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
         return content
 
     sanitized_lines = []
-    in_cue_payload = False
     # One entry per voice opening still open in the current cue: whether it was kept.
     open_voices: list[bool] = []
-    for line in content.splitlines(keepends=True):
-        stripped = line.strip()
-        if not stripped:
-            in_cue_payload = False
-            sanitized_lines.append(line)
-            continue
-        if TIMING_SEPARATOR in line:
-            in_cue_payload = True
+    for line, start_ms, is_payload in cue_lines(content):
+        if start_ms is not None:
             open_voices = []
-            sanitized_lines.append(line)
-            continue
-        if in_cue_payload:
+        if is_payload:
             line = _sanitize_webvtt_payload_line(line, allowed_speaker_labels, open_voices)
         sanitized_lines.append(line)
     return "".join(sanitized_lines)

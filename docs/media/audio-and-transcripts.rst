@@ -1087,3 +1087,44 @@ leave unreferenced staged files or obsolete committed files in storage; this is
 not a garbage-collection guarantee. Check references across all databases before
 removing those blobs. The test establishes process-crash behavior on temporary
 filesystem storage, not power-loss durability or remote object-store behavior.
+
+Transcript artifact admission
+-----------------------------
+
+Stored transcript JSON and private sidecars reject repeated object members,
+including identical repeats and nested fields. Reusing a field name in separate
+objects is supported. Editorial review and apply refuse these artifacts before
+writing files; replace the corrupt source or detach the invalid private sidecar.
+Known-speaker segments require text (or null) for speaker names, raw diarization
+labels and reason fields, boolean uncertainty, and scalar text action/speaker
+fields in editor decisions. Malformed values return the same artifact error in
+the editor instead of entering speaker counting or publication. Unknown textual
+decision actions retain their legacy ignored behavior; smoothing is unchanged.
+Read-only API summaries omit malformed private suggestions, keeping the rest of
+the transcript available.
+
+WebVTT cue boundaries
+---------------------
+
+Speaker discovery, renaming, sanitizing, suggestions and text corrections only
+operate on actual cue payloads. NOTE, STYLE, REGION and header blocks remain
+byte-for-byte unchanged, including their line endings, even when they contain
+arrows, timing-looking lines, voice tags or generic speaker prefixes. Cue
+identifiers and cue settings are preserved. Timing lines must contain both valid
+start and end timestamps separated by whitespace around ``-->``. Minutes and
+seconds are limited to 00–59, digits are ASCII, and hours accept at most 18 digits
+before conversion. One to three fractional digits remain supported; invalid
+timestamps return no match and cannot select a correction destination.
+
+Audio size metadata
+-------------------
+
+Size derivation (``audio.save(duration=False, cache_file_sizes=True)``) reconciles
+every format with its current file and stores the file name alongside its size.
+Cleared, missing and unreadable formats lose their previous cached size; other
+metadata is preserved. A cached size is used without a storage request only when
+its file name matches the current field. Legacy sizes without file identities
+fall back to storage until the next derivation. Missing or unreadable files report
+zero bytes. Replacing bytes under an unchanged storage name requires running size
+derivation to refresh the cached length, as does removing a file outside Django.
+No automatic sweep of existing rows is performed.

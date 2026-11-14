@@ -2,6 +2,10 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
+- Round 96 transcript admission, WebVTT grammar and feed metadata fixes are
+  implemented; external clerk review and integration are pending. See the
+  [validation/handoff record](backlog/2026-11-14-scout-round96.md).
+
 - Scout round 92 glossary admission, rendition identity/repair and poster
   boundaries are implemented, reviewed and integrated into `develop`; validation
   is recorded in [the handoff record](backlog/2026-11-14-scout-round92.md).

@@ -297,7 +297,14 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
 
     def get_speaker_suggestions(self) -> list[dict]:
         """Per-segment known-speaker suggestions for editor review."""
-        segments = self.speakers_data.get("segments", [])
+        data = self.speakers_data
+        try:
+            known_speakers.validate_sidecar(data)
+        except parsing.TranscriptArtifactError:
+            # Read-only API summaries retain the corrupt-sidecar fallback.
+            # Editorial mutations use strict preflight and refuse the artifact.
+            return []
+        segments = data.get("segments", [])
         return [segment for segment in segments if isinstance(segment, dict)]
 
     def get_speaker_suggestion_summary(self) -> dict:

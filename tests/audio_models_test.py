@@ -237,7 +237,7 @@ class TestAudioModel:
 
         # when size is in cache, it should be read from cache
         expected_cache_size = 123
-        audio.data = {"size": {"m4a": expected_cache_size}}
+        audio.data = {"size": {"m4a": expected_cache_size}, "size_file_names": {"m4a": audio.m4a.name}}
         assert audio.get_file_size("m4a") == expected_cache_size
 
         # when file field is null, return 0
@@ -299,7 +299,7 @@ class TestAudioModel:
     def test_save_skips_enrichment_save_when_nothing_changes(self, audio, mocker):
         base_save = mocker.patch("cast.models.audio.TimeStampedModel.save")
         audio.duration = timedelta(seconds=1)
-        audio.data = {"size": {"m4a": audio.m4a.size}}
+        audio.data = {"size": {"m4a": audio.m4a.size}, "size_file_names": {"m4a": audio.m4a.name}}
 
         save_audio_with_derivations(audio)
 

@@ -44,7 +44,8 @@ The template receives the following context variables:
 
 RSS and Atom entries use descending ``visible_date``, then descending primary
 key for equal dates, in both repository modes. Blog feed limits select entries
-in this same order; podcast feeds retain the complete archive.
+in this same order; podcast feeds retain the complete archive for the requested
+audio format.
 
 Feed Types
 ==========
@@ -78,6 +79,15 @@ Podcast feeds extend blog feeds with additional podcast-specific features:
 - Atom at ``<slug>/feed/podcast/<audio_format>/atom.xml``
 - Chapter marks support for enhanced navigation
 - Transcript URLs included in feeds (WebVTT and DOTE formats)
+
+Each RSS/Atom format feed omits episodes whose audio has no file name in that
+format, in both the default serialized repository and the Django-model mode.
+For example, an MP3-only episode remains in the MP3 subscription and is absent
+from the M4A subscription. A missing format does not break the entire feed;
+Wagtail view restrictions continue to exclude private episodes. Selection uses
+the stored file field without a storage existence request per entry. Size
+metadata is refreshed by normal audio derivation; missing/unreadable stored files
+report zero bytes after refresh (see :doc:`/media/audio-and-transcripts`).
 
 Feed Fields
 ===========

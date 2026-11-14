@@ -20,6 +20,10 @@ def normalize_editor_decision(decision: object) -> dict[str, str] | None:
     if not isinstance(decision, Mapping):
         return None
     action = decision.get("action")
+    if not isinstance(action, str):
+        return None
+    if decision.get("speaker") is not None and not isinstance(decision.get("speaker"), str):
+        return None
     if action == KNOWN_SPEAKER_DECISION_REJECT:
         return {"action": KNOWN_SPEAKER_DECISION_REJECT, "speaker": ""}
     if action not in {KNOWN_SPEAKER_DECISION_APPROVE, KNOWN_SPEAKER_DECISION_CORRECT}:
@@ -28,6 +32,39 @@ def normalize_editor_decision(decision: object) -> dict[str, str] | None:
     if not speaker:
         return None
     return {"action": str(action), "speaker": speaker}
+
+
+def validate_sidecar(data: object) -> None:
+    """Refuse malformed scalar discriminators before counting or applying suggestions."""
+    if not isinstance(data, Mapping):
+        return
+    segments = data.get("segments", [])
+    if not isinstance(segments, list):
+        raise parsing.TranscriptArtifactError(
+            "Invalid transcript JSON: speaker segments must be a list. Replace the artifact and reload."
+        )
+    for segment in segments:
+        if not isinstance(segment, Mapping):
+            continue  # Legacy non-record entries preserve their ignored review positions.
+        for key in ("speaker", "raw_diarization_speaker", "speaker_accept_reason", "speaker_uncertain_reason"):
+            value = segment.get(key)
+            if value is not None and not isinstance(value, str):
+                raise parsing.TranscriptArtifactError(
+                    "Invalid transcript JSON: speaker label must be text. Replace the artifact and reload."
+                )
+        if "speaker_uncertain" in segment and not isinstance(segment["speaker_uncertain"], bool):
+            raise parsing.TranscriptArtifactError(
+                "Invalid transcript JSON: speaker uncertainty must be boolean. Replace the artifact and reload."
+            )
+        decision = segment.get(KNOWN_SPEAKER_EDITOR_DECISION_FIELD)
+        if decision is not None and (
+            not isinstance(decision, Mapping)
+            or not isinstance(decision.get("action"), str)
+            or (decision.get("speaker") is not None and not isinstance(decision.get("speaker"), str))
+        ):
+            raise parsing.TranscriptArtifactError(
+                "Invalid transcript JSON: speaker decision is malformed. Replace the artifact and reload."
+            )
 
 
 def segment_has_reject_decision(segment: Mapping[str, object]) -> bool:
