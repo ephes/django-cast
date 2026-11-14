@@ -336,26 +336,33 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         return f"{hours}:{minutes:02d}:{seconds:02d}"
 
     def size_to_metadata(self) -> None:
-        self.data["size"] = self.data.get("size", {})
-        for audio_format, field in self.uploaded_audio_files:
+        sizes = self.data.setdefault("size", {})
+        names = self.data.setdefault("size_file_names", {})
+        for audio_format in self.audio_formats:
+            sizes.pop(audio_format, None)
+            names.pop(audio_format, None)
+            field = getattr(self, audio_format)
+            if not field:
+                continue
             try:
-                assert hasattr(field, "size"), f"field {field} has no size attribute"
-                self.data["size"][audio_format] = field.size
-            except FileNotFoundError:
-                # file does not exist -> do not cache
+                sizes[audio_format] = field.size
+                names[audio_format] = field.name
+            except (OSError, ValueError):
+                # Missing/unreadable current files must retire their previous size.
                 pass
 
     def get_file_size(self, audio_format: str) -> int:
-        """Return the file size of the given audio format."""
-        cached_size = self.data.get("size", {}).get(audio_format)
-        if cached_size is not None:
-            return cached_size
+        """Return a size bound to the current file name, without I/O on a cache hit."""
         file_field = getattr(self, audio_format)
+        if not file_field:
+            return 0
+        cached_size = self.data.get("size", {}).get(audio_format)
+        cached_name = self.data.get("size_file_names", {}).get(audio_format)
+        if cached_size is not None and cached_name == file_field.name:
+            return cached_size
         try:
-            assert hasattr(file_field, "size"), f"field {file_field} has no size attribute"
             return file_field.size
-        except ValueError:
-            # file_field is null
+        except (OSError, ValueError):
             return 0
 
     def save(self, *args: Any, **kwargs: Any) -> None:

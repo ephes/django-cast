@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import datetime, time
 from functools import update_wrapper, wraps
 from typing import Any, Protocol, cast
@@ -12,7 +12,7 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.syndication.views import Feed
 from django.core.cache import BaseCache, caches
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
-from django.db.models import Model, QuerySet
+from django.db.models import Model
 from django.http import Http404, HttpRequest, HttpResponse
 from django.http.response import HttpResponseBase
 from django.utils.cache import get_conditional_response
@@ -32,7 +32,7 @@ from cast.http_types import HtmxHttpRequest
 from cast.presenters import render_post_description
 from cast.site_lookup import get_site_specific_unrestricted_page_or_404
 
-from .models import Audio, Blog, EpisodeContributor, Podcast, Post
+from .models import Audio, Blog, Episode, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext, limit_blog_feed_posts
 from .models.theme import get_default_template_base_dir
 
@@ -129,7 +129,7 @@ class RepositoryMixin(Feed):
                 template_base_dir=get_default_template_base_dir(request, blog.template_base_dir),
             )
 
-    def items(self) -> QuerySet[Post]:
+    def items(self) -> Iterable[Post]:
         assert self.repository is not None
         queryset = self.repository.post_queryset
         # mark repository as used - the post_queryset might be empty if used twice
@@ -562,6 +562,14 @@ class PodcastFeed(RepositoryMixin):
     object: Podcast
     request: HtmxHttpRequest
     is_podcast: bool = True
+
+    def items(self) -> list[Post]:
+        # Both repository modes (and injected contexts) share this admission step.
+        return [
+            post
+            for post in super().items()
+            if (audio := cast(Episode, post).podcast_audio) is not None and getattr(audio, self.audio_format)
+        ]
 
     def set_audio_format(self, audio_format: str) -> None:
         format_to_mime = Audio.mime_lookup

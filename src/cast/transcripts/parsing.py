@@ -16,6 +16,15 @@ MAX_TRANSCRIPT_JSON_DEPTH = 64
 MAX_STORED_TRANSCRIPT_JSON_BYTES = 10 * 1024 * 1024
 
 
+def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise TranscriptArtifactError("Invalid transcript JSON: repeated member. Replace the artifact and reload.")
+        result[key] = value
+    return result
+
+
 def read_json_artifact(file: Any) -> Any:
     """Read binary stored JSON with a fixed byte ceiling, including short reads."""
     content = bytearray()
@@ -24,7 +33,7 @@ def read_json_artifact(file: Any) -> Any:
         if len(content) > MAX_STORED_TRANSCRIPT_JSON_BYTES:
             raise TranscriptArtifactError("Stored transcript JSON exceeds 10 MiB. Replace the artifact and reload.")
     try:
-        return json.loads(content.decode("utf-8"))
+        return json.loads(content.decode("utf-8"), object_pairs_hook=_unique_members)
     except (UnicodeDecodeError, RecursionError) as error:
         raise TranscriptArtifactError(
             "Invalid transcript JSON encoding or nesting. Replace the artifact and reload."

@@ -1,6 +1,20 @@
 Unreleased
 ==========
 
+- Refuse repeated JSON object members in stored transcript artifacts and malformed
+  known-speaker scalar fields before editorial review or publication. Preserve
+  original artifact files for replacement, without changing speaker smoothing.
+
+- Validate WebVTT timestamp ranges and cue timing grammar; preserve NOTE, STYLE,
+  REGION and header blocks across speaker and text transforms. Cues follow the
+  WebVTT block rules, so a timing line on a block's second line (for example
+  after ``NOTE``) is still a cue and is sanitized for public captions.
+- Omit episodes without the requested audio format from RSS and Atom subscriptions
+  in both repository modes. Bind cached audio sizes to current file names and
+  retire sizes for cleared, missing or unreadable formats during derivation.
+  Existing cached sizes have no file identity yet: until an audio is derived
+  again, feeds and the player ask storage once per format for its size.
+
 - Keep automatic episode numbering and publication transactions on the owning
   database; refuse cross-database revisions and stream candidate numbers instead
   of materializing the complete podcast history.
