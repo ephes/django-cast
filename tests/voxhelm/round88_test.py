@@ -10,7 +10,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from cast.models import TranscriptGeneration, VoxhelmSettings
-from cast.models.voxhelm_settings import VoxhelmSettingsForm, api_token_version
+from cast.models.voxhelm_settings import TokenInput, VoxhelmSettingsForm, api_token_version
 from cast.voxhelm import TranscriptSubmission, VoxhelmTranscriptService
 from cast.voxhelm.service import StaleTranscriptAttempt, TranscriptGenerationActive
 from tests.known_speaker_apply_test import make_transcript
@@ -232,3 +232,10 @@ def test_settings_edit_view_refuses_stale_token_replacement(admin_client, site):
     assert response.status_code == 200
     setting.refresh_from_db()
     assert (setting.api_token, setting.language) == ("rotated", "de")
+
+
+def test_token_input_without_form_renders_only_the_password_field():
+    html = TokenInput().render("api_token", "secret-synthetic")
+    assert 'type="password"' in html
+    assert "hidden" not in html
+    assert "secret-synthetic" not in html
