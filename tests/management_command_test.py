@@ -71,7 +71,10 @@ class StubStorage:
         return name
 
     def save_without_adding(self, name: str, content: BytesIO) -> None:
-        self._files[name] = content
+        self._files[name] = BytesIO(content.getvalue())
+
+    def delete(self, path: str) -> None:
+        self._files.pop(path, None)
 
     def listdir(self, _path: str) -> tuple[list, dict[str, BytesIO]]:
         return [], self._files
@@ -79,7 +82,7 @@ class StubStorage:
     @contextmanager
     def open(self, name: str, _mode: str) -> Iterator[BytesIO]:
         try:
-            yield self._files[name]
+            yield BytesIO(self._files[name].getvalue())
         finally:
             pass
 
@@ -122,13 +125,19 @@ class StubLocalStorage:
         yield BytesIO(self._files[name])
 
 
+def storage_listing(files, path):
+    prefix = path + "/" if path else ""
+    names = [name[len(prefix) :] for name in files if name.startswith(prefix)]
+    return sorted({name.split("/")[0] for name in names if "/" in name}), [name for name in names if "/" not in name]
+
+
 class StubWalkStorage:
     def __init__(self, files: dict[str, bytes]) -> None:
         self._files = files
         self.deleted: list[str] = []
 
-    def listdir(self, _path: str) -> tuple[list[str], list[str]]:
-        return [], list(self._files.keys())
+    def listdir(self, path: str) -> tuple[list[str], list[str]]:
+        return storage_listing(self._files, path)
 
     def get_modified_time(self, path: str):
         return timezone.now() - timedelta(days=8)
@@ -198,8 +207,8 @@ class StubOverwriteStorage:
     def size(self, path: str) -> int:
         return len(self._files[path])
 
-    def listdir(self, _path: str) -> tuple[list[str], list[str]]:
-        return [], list(self._files)
+    def listdir(self, path: str) -> tuple[list[str], list[str]]:
+        return storage_listing(self._files, path)
 
     def save(self, name: str, content: BytesIO) -> str:
         self.saved.append(name)
@@ -255,7 +264,7 @@ def test_media_backup_refresh_changed_replaces_equal_length_changed_copy(mocker)
     assert "copied=1 refreshed=1 unchanged=1 errors=0" in output.getvalue()
 
 
-def test_media_backup_refresh_changed_skips_content_read_when_sizes_differ(mocker):
+def test_media_backup_refresh_changed_checks_target_generation_when_sizes_differ(mocker):
     production = StubOverwriteStorage({"video.mp4": b"longer than before"})
     backup = StubOverwriteStorage({"video.mp4": b"short"})
     patch_backup_storages(mocker, production, backup)
@@ -263,8 +272,8 @@ def test_media_backup_refresh_changed_skips_content_read_when_sizes_differ(mocke
     call_command("media_backup", refresh_changed=True, stdout=StringIO())
 
     assert backup._files == {"video.mp4": b"longer than before"}
-    # the backup copy was only read back from its staged key, never hashed
-    assert "video.mp4" not in backup.opened
+    # Publication revalidates the old target even when the comparison used size.
+    assert backup.opened.count("video.mp4") == 2
 
 
 def test_media_backup_refresh_changed_compares_content_without_size_support(mocker):
@@ -398,7 +407,7 @@ def test_media_backup_refresh_keeps_backup_copy_when_storage_does_not_overwrite(
 
     # neither the stray generated copy nor the staged copy is left behind
     assert backup._files == {"video.mp4": b"old!"}
-    assert "saved the refreshed copy as video_1.mp4 instead of overwriting video.mp4" in error_output.getvalue()
+    assert "saved copy as video_1.mp4 instead of requested video.mp4" in error_output.getvalue()
 
 
 def test_media_backup_refresh_reports_staged_copy_that_cannot_be_removed(mocker):

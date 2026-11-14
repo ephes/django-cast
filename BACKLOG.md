@@ -2,6 +2,12 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
+- Round 90 storage inventory/recovery/publication and atomic comment admission
+  safeguards are implemented; see the [validation/handoff record](backlog/2026-11-14-scout-round90.md).
+  Before rollout, choose a supported shared Redis/Memcached cache for homepage
+  and python-podcast; their current file caches intentionally refuse limited
+  comment posts. External clerk review and integration remain pending.
+
 - Round 88 credential/transcript stale-write safeguards and contributor/reference
   admission are implemented; see the [validation/handoff record](backlog/2026-11-13-scout-round88.md),
   `docs/releases/unreleased.rst` and the retained

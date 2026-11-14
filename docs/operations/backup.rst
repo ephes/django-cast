@@ -47,5 +47,60 @@ path causes a nonzero command exit, including default backup and restore.
 Successful sibling copies remain available. Restore still copies missing paths
 only and never overwrites existing production files.
 
+Storage inventories must list direct child names, never absolute paths, parent
+components, embedded separators, drive syntax or NULs. Unicode child names are
+supported. Backup/restore refuse an unsafe listing before copying its files.
+Traversal is iterative and limited to 64 levels below the starting prefix,
+10,000 directories (including that prefix), and 1,000,000 file entries. Duplicate
+directory prefixes are refused. Exceeding a limit reports an incomplete inventory
+and a nonzero exit; files already copied remain intact. These are finite safety
+ceilings, not an assurance that a backend's individual ``listdir`` call cannot
+block or allocate a large response. Colons are accepted in names (they are
+ordinary in POSIX file names and S3 keys) except on Windows. ``media_stale`` uses the same bounded walker
+and refuses an unsafe inventory before deleting files.
+
+Missing copies now use the same owned temporary staging as refreshes. A failed
+staging save removes both the requested and any returned temporary key; a failed
+final save for a previously absent target also removes that invocation's partial
+final key, allowing an ordinary retry. Cleanup errors remain visible alongside
+the original failure. An existing staging name is a conflict and is never
+removed. A killed process can still leave scratch/partial keys: inspect these
+before retrying; this is exception recovery, not a crash transaction.
+
+Publication uses a nonblocking OS file lock shared by cooperating backup/restore
+invocations on the same host, OS user and temporary directory (``TMPDIR``). The
+lock file lives in an owner-only directory ``django-cast-media-sync-uid-<uid>``
+inside the temporary directory and is opened without following symlinks; a
+directory that is not private to the current user is refused rather than used.
+A competing invocation reports a publication conflict; rerun it after the active
+writer finishes. The lock is released on process exit; its file is retained to
+keep the lock identity stable. All media publications share this lock, including
+different keys. Existence checks and unchanged decisions also hold the lock,
+so they cannot count another sync's in-flight partial key as complete.
+Source, staged bytes and target content are checked again before
+publication; a changed source or target is refused, retaining the newer target.
+Concurrent source writers must use atomic replacement and leave the source
+stable through publication. These checks cannot provide backend compare-and-swap.
+
+Do not run publishers from other hosts, users or isolated temporary directories,
+or write directly to the target, during sync. Django's generic storage API has
+no conditional final save; such writers are outside the lock's guarantee,
+including recovery of a failed missing-copy save. Cross-host publication needs
+backend-specific conditional writes and is unsupported. Existing-file final
+write failures remain backend-dependent as described in the command reference.
+
+Every full read used for hashing (comparison of source and target, and each
+publication-verification read of target, source and staged copy) has its own
+ceiling of 16 GiB of bytes and a deadline of 300 seconds, extended for large
+objects to their reported size at 4 MiB/s (at most the time 16 GiB takes at that
+rate, about 68 minutes). Missing copies are subject to the same
+per-read ceilings, since they are staged and verified like refreshes. Reads
+request at most 1 MiB (or the remaining budget plus one overflow byte). Oversized, growing or delayed streams cause an explicit
+path error before publication. A refused comparison never counts as unchanged.
+The deadline is checked around synchronous reads; configure backend I/O timeouts
+as well, since Python cannot interrupt an individual blocked storage call.
+These ceilings cover hashing; backend-managed ``save`` I/O (the staging upload
+and the final save) is not charged to any of them.
+
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.

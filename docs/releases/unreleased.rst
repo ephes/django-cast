@@ -452,6 +452,27 @@ Unreleased
 - Exercise real PostgreSQL serialization between stock/Ajax replies and author
   edit/delete actions, checking committed comment and moderation state.
 
+- Refuse unsafe storage listing components before opening or copying media.
+  Bound iterative inventory traversal by depth, directory and file counts;
+  report backup/restore inventory refusal as incomplete with a nonzero exit.
+- Stage missing media copies, clean owned partial writes on exceptions and
+  refuse staging collisions. Serialize cooperating same-host publishers and
+  revalidate source/staged/target bytes before publication; refuse concurrent
+  changes rather than silently replacing a newer target. Cross-host/direct
+  target writers remain unsupported; see the backup recovery contract.
+- Bound comparison and publication-verification hashing with a byte/time
+  budget per full read (the deadline scales with the object size; staging
+  uploads are not charged), refusing growing or delayed streams without
+  publishing a replacement. The publication lock lives in an owner-only
+  directory and is opened without following symlinks. Colons stay valid in
+  storage names except on Windows; ``media_stale`` and ``media_sizes`` report
+  an unsafe inventory as a command error.
+- Reserve comment POST budgets with atomic expiring cache slots, preserving
+  trusted-proxy identity, disabled limits and independent author-action budgets.
+  Unsupported cache backends and outages fail closed with Retry-After. Deploy
+  with Django's built-in shared Redis/Memcached cache; file-based consumer caches
+  require configuration changes before rollout. Retry-After is conservative.
+
 - Replace all classifier counts on refit, including JSON-restored models.
   Tokenless corpora now classify from learned priors without division by zero.
 

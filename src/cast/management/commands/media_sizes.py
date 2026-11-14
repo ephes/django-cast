@@ -1,9 +1,9 @@
 from typing import Any
 
 from django.core.files.storage import Storage
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
-from cast.utils import storage_walk_paths
+from cast.utils import StorageInventoryError, storage_walk_paths
 
 from .storage_backend import get_production_and_backup_storage
 
@@ -33,10 +33,13 @@ class Command(BaseCommand):
     @staticmethod
     def get_paths_with_sizes_for(storage_backend: Storage) -> dict[str, int]:
         paths = {}
-        for path in storage_walk_paths(storage_backend):
-            size = storage_backend.size(path)
-            paths[path] = size
-            print(path, size / 2**20)
+        try:
+            for path in storage_walk_paths(storage_backend):
+                size = storage_backend.size(path)
+                paths[path] = size
+                print(path, size / 2**20)
+        except StorageInventoryError as exc:
+            raise CommandError(f"media inventory incomplete: {exc}") from exc
         return paths
 
     def handle(self, *args: Any, **options: Any) -> None:

@@ -257,7 +257,11 @@ Options:
     completely and their SHA-256 digests compared. Every existing file is
     therefore downloaded from both storages on each run with this option, which
     costs time and transfer on remote storage. Unchanged files are not
-    rewritten.
+    rewritten. Each full read has its own 16 GiB byte ceiling and a 300 second
+    deadline that grows with the object size (at most about 68 minutes);
+    exceeding it reports an incomplete path without publishing a replacement.
+    See :doc:`../operations/backup` for inventory limits, synchronous I/O
+    limitations and the same-host publication concurrency contract.
 
     A changed file is first copied to a temporary key next to the target
     (``<path>.django-cast-refresh-<random>.tmp``) in the backup storage, and
@@ -280,8 +284,9 @@ Options:
     overwrite keeps the previous object. A backend that writes in place
     (``FileSystemStorage`` with ``allow_overwrite``) can leave a partial file
     under the path if that last write fails; run the command again to repair
-    it. A run that is killed can leave a staged ``.tmp`` key in the backup
-    storage. Backup and restore skip the exact reserved refresh-key pattern
+    it. Missing-copy writes are also staged and their partial final keys are
+    cleaned on exceptions under the same-host publisher lock. A run that is
+    killed can leave a staged ``.tmp`` key in the backup storage. Backup and restore skip the exact reserved refresh-key pattern
     described below; inspect and remove abandoned objects manually.
 
     With this option the command prints

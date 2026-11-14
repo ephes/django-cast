@@ -10,7 +10,7 @@ from django.utils import timezone
 from wagtail.images.models import Image, Rendition
 
 from ... import appsettings
-from ...utils import storage_walk_paths
+from ...utils import StorageInventoryError, storage_walk_paths
 from .storage_backend import get_production_and_backup_storage
 
 MANAGED_MEDIA_PREFIXES = (
@@ -49,12 +49,15 @@ class Command(BaseCommand):
     @staticmethod
     def get_paths(storage: Storage) -> dict[str, int]:
         paths: dict[str, int] = {}
-        for num, path in enumerate(storage_walk_paths(storage)):
-            size = storage.size(path)
-            paths[path] = size
-            if num % 100 == 0:
-                print(".", end="", flush=True)
-            # print(path, size / 2 ** 20)
+        try:
+            for num, path in enumerate(storage_walk_paths(storage)):
+                size = storage.size(path)
+                paths[path] = size
+                if num % 100 == 0:
+                    print(".", end="", flush=True)
+                # print(path, size / 2 ** 20)
+        except StorageInventoryError as exc:
+            raise CommandError(f"media inventory incomplete: {exc}") from exc
         return paths
 
     @staticmethod

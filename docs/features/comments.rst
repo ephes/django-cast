@@ -705,3 +705,15 @@ author edits/deletions on independent connections. They observe the competing
 transaction's database lock wait and check committed comment/moderation state
 after both orderings complete. Replies make subsequent author actions
 ineligible; a reply waiting behind deletion must reject the removed parent.
+
+Concurrent public post admission
+================================
+
+Public comment POSTs reserve expiring cache slots atomically, so independent
+requests cannot both consume the last available slot. Both post views share the
+same budget, while previews and author edit/delete actions remain separate.
+The default cache must support atomic ``add``: use Django's built-in Redis or
+Memcached backends across workers. File/database/dummy caches and unverified
+custom backends refuse posting with ``429``; cache outages also fail closed.
+See :ref:`CAST_COMMENTS_POST_RATE_LIMIT <cast_comments_post_rate_limit>` for
+backend support, deployment compatibility and conservative ``Retry-After``.
