@@ -818,4 +818,4 @@ def test_voxhelm_settings_form_subclass_without_boolean_fields():
     )
     form = form_class(instance=VoxhelmSettings())
 
-    assert set(form.fields) == {"api_token", "clear_api_token", "api_token_version"}
+    assert set(form.fields) == {"api_token", "clear_api_token"}

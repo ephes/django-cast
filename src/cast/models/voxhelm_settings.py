@@ -158,10 +158,6 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         label=_("Remove stored API token"),
         help_text=_("Remove this site's token so the deployment CAST_VOXHELM_API_KEY applies."),
     )
-    # Fingerprint of the token stored when the form was rendered (rendered by TokenInput),
-    # so a replacement or removal from a page opened before another administrator's
-    # change is refused.
-    api_token_version = forms.CharField(required=False, widget=forms.HiddenInput)
 
     class Meta:
         widgets = {
@@ -172,6 +168,10 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
+        # TokenInput renders the fingerprint of the token stored when the page was
+        # rendered, so a replacement or removal from a page opened before another
+        # administrator's change is refused. It is deliberately not a form field:
+        # Wagtail would render an unclaimed field a second time, empty.
         rendered_version = api_token_version(self.instance.api_token)
         token_widget = self.fields["api_token"].widget
         if isinstance(token_widget, TokenInput):

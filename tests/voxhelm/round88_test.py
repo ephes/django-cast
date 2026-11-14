@@ -1,5 +1,6 @@
 """Synthetic stale-form and synchronous generation interleavings."""
 
+import re
 from io import StringIO
 
 import pytest
@@ -213,8 +214,11 @@ def test_settings_edit_view_refuses_stale_token_replacement(admin_client, site):
     setting = VoxhelmSettings.objects.create(site=site, api_token="old-synthetic")
     edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
     content = admin_client.get(edit_url).content.decode()
-    rendered = api_token_version("old-synthetic")
-    assert f'value="{rendered}"' in content
+    # Build the POST from what the browser submits: exactly one fingerprint input.
+    versions = re.findall(r'<input[^>]*name="api_token_version"[^>]*>', content)
+    assert len(versions) == 1, versions
+    rendered = re.search(r'value="([^"]*)"', versions[0]).group(1)
+    assert rendered == api_token_version("old-synthetic")
     assert "old-synthetic" not in content
     # Another administrator rotates the token after the page was opened.
     VoxhelmSettings.objects.filter(pk=setting.pk).update(api_token="rotated")
