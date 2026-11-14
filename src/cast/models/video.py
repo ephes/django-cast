@@ -10,7 +10,8 @@ from typing import Any, Optional
 
 from django.contrib.auth import get_user_model
 from django.core.files import File as DjangoFile
-from django.db import models
+from django.db import models, router
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from taggit.managers import TaggableManager
@@ -21,6 +22,9 @@ from wagtail.search.queryset import SearchableQuerySetMixin
 from ..media_probe import run_media_probe
 
 logger = logging.getLogger(__name__)
+
+MAX_POSTER_SIDE = 8192
+MAX_POSTER_PIXELS = 16_777_216
 
 
 class VideoQuerySet(SearchableQuerySetMixin, models.QuerySet):
@@ -42,12 +46,19 @@ def get_video_dimensions(lines: list[str]) -> tuple[int | None, int | None]:
     width, height = stream.get("width"), stream.get("height")
     if type(width) is not int or type(height) is not int or width <= 0 or height <= 0:
         return None, None
+    aspect_text = str(stream.get("sample_aspect_ratio", "1:1"))
+    # ffprobe emits rational pairs. Refuse excessive or exponential metadata
+    # before Fraction can materialize an arbitrarily large power of ten.
+    if len(aspect_text) > 64 or "e" in aspect_text.lower():
+        return None, None
     try:
-        sample_aspect = Fraction(str(stream.get("sample_aspect_ratio", "1:1")).replace(":", "/"))
+        sample_aspect = Fraction(aspect_text.replace(":", "/"))
         if sample_aspect > 0:
             width = max(1, round(width * sample_aspect))
     except (ValueError, ZeroDivisionError):
         pass
+    if width > MAX_POSTER_SIDE or height > MAX_POSTER_SIDE or width * height > MAX_POSTER_PIXELS:
+        return None, None
     tags = stream.get("tags")
     rotation = tags.get("rotate", 0) if isinstance(tags, dict) else 0
     side_data = stream.get("side_data_list")
@@ -135,13 +146,13 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         fp, tmp_path = tempfile.mkstemp(prefix="poster_", suffix=".jpg")
         try:
             os.close(fp)
-            logger.info(f"original url: {self.original.url}")
+            logger.info("video=%s poster phase=probe", self.pk)
             video_url = self.original.url
             if not video_url.startswith("http"):
                 video_url = self.original.path
             width, height = self._get_video_dimensions(video_url)
             if width is None or height is None:
-                logger.info("skip creating poster: video dimensions unavailable")
+                logger.info("video=%s poster phase=probe result=dimensions-unavailable", self.pk)
                 return
             poster_cmd = [
                 "ffmpeg",
@@ -158,8 +169,8 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 f"{width}x{height}",
                 tmp_path,
             ]
-            logger.info(poster_cmd)
-            run_media_probe(poster_cmd, check=True, timeout=30)
+            logger.info("video=%s poster phase=extract", self.pk)
+            run_media_probe(poster_cmd, check=True, timeout=30, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             name = os.path.basename(tmp_path)
             with open(tmp_path, "rb") as tmp_file:
                 self.poster.save(name, DjangoFile(tmp_file), save=False)
@@ -168,8 +179,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 os.unlink(tmp_path)
             except FileNotFoundError:
                 pass
-        logger.info(self.pk)
-        logger.info(self.poster)
+        logger.info("video=%s poster phase=store result=success", self.pk)
 
     def create_poster(self, *, raise_errors: bool = False) -> None:
         """Create the poster if it is missing and wanted.
@@ -179,15 +189,44 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
         """
         if self.poster or not self.calc_poster:
             # poster is not null
-            logger.info("skip creating poster")
+            logger.info("video=%s poster phase=admission result=skipped", self.pk)
         else:
             try:
                 self._create_poster()
-            except Exception as e:
-                logger.info(e)
-                logger.info("create poster failed")
+            except Exception as exc:
+                category = "timeout" if isinstance(exc, subprocess.TimeoutExpired) else "generation-failed"
+                logger.info("video=%s poster phase=generation result=%s", self.pk, category)
                 if raise_errors:
                     raise
+
+    def publish_missing_poster(self) -> None:
+        """Publish only this attempt's poster if its source generation is current.
+
+        Storage names identify generations: consumers must replace originals
+        through storage's unique-name policy, rather than overwrite bytes in place.
+        """
+        expected = {"original": self.original.name, "poster": self.poster.name, "poster_seconds": self.poster_seconds}
+        using = self._state.db or router.db_for_write(type(self), instance=self)
+        try:
+            self.create_poster(raise_errors=True)
+            if self.calc_poster and not self.poster:
+                raise RuntimeError("no poster was created")
+            if self.poster.name == expected["poster"]:
+                return
+            if (
+                not type(self)
+                .objects.using(using)
+                .filter(pk=self.pk, **expected)
+                .update(poster=self.poster.name, modified=timezone.now())
+            ):
+                raise RuntimeError("video poster generation changed; retry")
+        except Exception:
+            name = self.poster.name
+            if name and name != expected["poster"]:
+                # Never retire an editor's object or a published object.
+                if not type(self).objects.using(using).filter(poster=name).exists():
+                    self.poster.storage.delete(name)
+            raise
 
     def get_all_paths(self) -> set[str]:
         paths = set()

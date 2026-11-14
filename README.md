@@ -38,6 +38,15 @@ and [Wagtail](https://wagtail.org).
 - [Frontend themes](https://django-cast.readthedocs.io/en/develop/features/themes.html) to
   customize the look and feel of your site
 
+## Media and glossary maintenance
+
+Glossary imports accept bounded regular UTF-8 JSON files and reject repeated
+object members. Podcast/transcript IDs must be canonical positive integers within
+the database field range. `sync_renditions` repairs missing stored rendition files;
+direct gallery/post generation retains the source database. Poster maintenance
+preserves concurrent editor changes and refuses output above 8192 pixels per side
+or 16,777,216 pixels. See the media and management-command documentation for details.
+
 ## Deployment
 
 See [the deployment documentation](https://django-cast.readthedocs.io/en/develop/operations/deployment.html).

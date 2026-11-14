@@ -15,6 +15,7 @@ from django.apps import apps
 from django.conf import settings as django_settings
 from django.contrib.auth.models import Group, Permission
 from django.core.cache import cache
+from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.db.models.fields.files import FieldFile
@@ -23,7 +24,7 @@ from django.utils import timezone
 from django_comments import get_model as get_comments_model
 from django_htmx.middleware import HtmxDetails
 from rest_framework.test import APIClient
-from wagtail.images.models import Image
+from wagtail.images.models import Image, Rendition
 from wagtail.models import Collection, GroupCollectionPermission, GroupPagePermission, Locale, Page, Site
 from wagtail.models.sites import SITE_ROOT_PATHS_CACHE_KEY, SITE_ROOT_PATHS_CACHE_VERSION
 
@@ -1185,3 +1186,14 @@ def scoped_editor_audio(site):
     audio.tags.add("original")
     ChapterMark.objects.create(audio=audio, start=time(0), title="Original chapter")
     return actor, audio, forbidden
+
+
+@pytest.fixture
+def disk_image(db, tmp_path, image_1px, monkeypatch):
+    storage = FileSystemStorage(location=str(tmp_path))
+    monkeypatch.setattr(Image._meta.get_field("file"), "storage", storage)
+    monkeypatch.setattr(Rendition._meta.get_field("file"), "storage", storage)
+    collection = Collection.get_first_root_node() or Collection.add_root(instance=Collection(name="Root"))
+    image = Image(title="Synthetic image", file=image_1px, collection=collection)
+    image.save()
+    return image

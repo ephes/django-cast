@@ -6,6 +6,7 @@ from django.db.models import QuerySet
 from cast.models import Episode, Transcript
 from cast.transcripts.corrections import refresh_transcript_corrections
 
+from ._selectors import positive_id
 from .import_transcript_glossary import Command as ImportGlossaryCommand
 
 
@@ -18,7 +19,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser: CommandParser) -> None:
         selection = parser.add_mutually_exclusive_group(required=True)
         selection.add_argument(
-            "--transcript", type=int, action="append", dest="transcripts", metavar="ID", help="Transcript id."
+            "--transcript", action="append", dest="transcripts", metavar="ID", help="Transcript id."
         )
         selection.add_argument("--podcast", help="Podcast page id or slug: transcripts of its episodes.")
         selection.add_argument("--all", action="store_true", help="All transcripts.")
@@ -28,7 +29,11 @@ class Command(BaseCommand):
     def get_transcripts(options: dict[str, Any]) -> QuerySet[Transcript]:
         transcripts = Transcript.objects.select_related("audio").order_by("pk")
         if options["transcripts"]:
-            return transcripts.filter(pk__in=options["transcripts"])
+            ids = {positive_id(value, Transcript) for value in options["transcripts"]}
+            selected = transcripts.filter(pk__in=ids)
+            if set(selected.values_list("pk", flat=True)) != ids:
+                raise CommandError("Unknown transcript ID in explicit selection.")
+            return selected
         if options["podcast"]:
             podcast = ImportGlossaryCommand.get_podcast(options["podcast"])
             episodes = Episode.objects.descendant_of(podcast)

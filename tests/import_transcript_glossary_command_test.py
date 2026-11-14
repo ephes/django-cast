@@ -89,7 +89,7 @@ class TestImportTranscriptGlossary:
 
 
 @pytest.mark.django_db
-def test_import_source_read_is_bounded(podcast, monkeypatch, mocker):
+def test_import_source_read_is_bounded(podcast, tmp_path, monkeypatch, mocker):
     from io import BytesIO
 
     from cast.management.commands import import_transcript_glossary as command
@@ -97,10 +97,12 @@ def test_import_source_read_is_bounded(podcast, monkeypatch, mocker):
     monkeypatch.setattr(command, "MAX_INPUT_BYTES", 64, raising=False)
     stream = BytesIO(b" " * 10000)
     read = mocker.spy(stream, "read")
-    mocker.patch.object(command.Path, "open", return_value=stream)
+    path = tmp_path / "growing.json"
+    path.write_bytes(b"[]")
+    mocker.patch.object(command.os, "fdopen", return_value=stream)
     term = TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Synthetica")
     with pytest.raises(CommandError, match="exceeds.*bytes"):
-        run(podcast.slug, "misleading.json")
+        run(podcast.slug, str(path))
     read.assert_called_once_with(65)
     term.refresh_from_db()
     assert term.term == "Synthetica"
@@ -135,7 +137,7 @@ def test_import_diagnostics_keep_location_and_safe_read_reason(tmp_path, mocker)
     with pytest.raises(CommandError, match="invalid JSON at line 1, column 2") as error:
         Command.load_entries(write_json(tmp_path, "{private-source"))
     assert "private-source" not in str(error.value)
-    mocker.patch("pathlib.Path.open", side_effect=OSError(13, "Synthetic read refusal"))
+    mocker.patch("os.open", side_effect=OSError(13, "Synthetic read refusal"))
     with pytest.raises(CommandError, match="Synthetic read refusal"):
         Command.load_entries("synthetic.json")
 

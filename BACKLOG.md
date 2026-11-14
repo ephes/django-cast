@@ -2,6 +2,10 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
+- Scout round 92 glossary admission, rendition identity/repair and poster
+  boundaries are implemented, reviewed and integrated into `develop`; validation
+  is recorded in [the handoff record](backlog/2026-11-14-scout-round92.md).
+
 - Round 90 storage inventory/recovery/publication and atomic comment admission
   safeguards are implemented; see the [validation/handoff record](backlog/2026-11-14-scout-round90.md).
   Before rollout, choose a supported shared Redis/Memcached cache for homepage

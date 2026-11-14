@@ -2,11 +2,12 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
+from django.db import transaction
 from rich.progress import track
 from wagtail.images.models import Image, Rendition
 
 from ...models import Blog, Post
-from ...models.image_renditions import get_obsolete_and_missing_rendition_strings
+from ...models.image_renditions import get_obsolete_and_missing_rendition_strings, repair_missing_rendition_files
 
 
 class Command(BaseCommand):
@@ -57,20 +58,24 @@ By default all posts are synced.
 
         posts_queryset = posts_queryset.prefetch_related("images", "galleries__images")
         all_images = Post.get_all_images_from_queryset(posts_queryset)
-        obsolete_renditions, missing_renditions = get_obsolete_and_missing_rendition_strings(all_images)
+        obsolete_renditions, missing_renditions = get_obsolete_and_missing_rendition_strings(
+            all_images, check_files=True
+        )
         missing_rendition_items = list(missing_renditions.items())
         print("len missing renditions: ", len(missing_rendition_items))
         for image_id, filter_specs in track(missing_rendition_items, description="create missing renditions"):
             image = Image.objects.get(id=image_id)
-            renditions = image.get_renditions(*filter_specs)
-            for filter_spec in filter_specs:
-                rendition = renditions.get(filter_spec)
-                if (
-                    rendition is None
-                    or rendition.pk is None
-                    or not rendition.file.name
-                    or not rendition.file.storage.exists(rendition.file.name)
-                ):
-                    raise CommandError(f"Required replacement {filter_spec} for image {image_id} was not saved.")
+            with transaction.atomic(using=image._state.db):
+                repair_missing_rendition_files(image, filter_specs)
+                renditions = image.get_renditions(*filter_specs)
+                for filter_spec in filter_specs:
+                    rendition = renditions.get(filter_spec)
+                    if (
+                        rendition is None
+                        or rendition.pk is None
+                        or not rendition.file.name
+                        or not rendition.file.storage.exists(rendition.file.name)
+                    ):
+                        raise CommandError(f"Required replacement {filter_spec} for image {image_id} was not saved.")
         # Keep all old counterparts until every planned replacement is usable.
         Rendition.objects.filter(id__in=obsolete_renditions).delete()

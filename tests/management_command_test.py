@@ -1037,23 +1037,23 @@ def test_recalc_video_posters_continues_after_error_and_exits_nonzero(mocker):
     output = StringIO()
     error_output = StringIO()
     first = Mock(pk=1)
-    first.create_poster.side_effect = RuntimeError("boom")
+    first.publish_missing_poster.side_effect = RuntimeError("boom")
     second = Mock(pk=2)
     third = Mock(pk=3)
-    third.save.side_effect = RuntimeError("cannot save")
+    third.publish_missing_poster.side_effect = RuntimeError("cannot save")
     _stub_videos(mocker, [first, second, third])
 
     with pytest.raises(CommandError, match="^2 of 3 video posters could not be recalculated$"):
         call_command("recalc_video_posters", stdout=output, stderr=error_output)
 
     # Every video was attempted; the healthy one was saved despite the failures around it.
-    first.create_poster.assert_called_once_with(raise_errors=True)
+    first.publish_missing_poster.assert_called_once_with()
     first.save.assert_not_called()
-    second.create_poster.assert_called_once_with(raise_errors=True)
-    second.save.assert_called_once_with(poster=False)
-    third.create_poster.assert_called_once_with(raise_errors=True)
-    assert "error recalculating poster for video 1: boom" in error_output.getvalue()
-    assert "error recalculating poster for video 3: cannot save" in error_output.getvalue()
+    second.publish_missing_poster.assert_called_once_with()
+    second.save.assert_not_called()
+    third.publish_missing_poster.assert_called_once_with()
+    assert "error recalculating poster for video 1: generation/publication failed" in error_output.getvalue()
+    assert "error recalculating poster for video 3: generation/publication failed" in error_output.getvalue()
     # The summary is still printed before the command fails.
     assert "processed=3 errors=2" in output.getvalue()
 
@@ -1067,7 +1067,7 @@ def test_recalc_video_posters_succeeds_when_every_poster_was_recalculated(mocker
     call_command("recalc_video_posters", stdout=output, stderr=error_output)
 
     for video in videos:
-        video.save.assert_called_once_with(poster=False)
+        video.publish_missing_poster.assert_called_once_with()
     assert "processed=2 errors=0" in output.getvalue()
     assert error_output.getvalue() == ""
 
@@ -1100,9 +1100,9 @@ def test_recalc_video_posters_reports_real_poster_generation_failures(mocker):
     with pytest.raises(CommandError, match="^2 of 5 video posters could not be recalculated$"):
         call_command("recalc_video_posters", stdout=output, stderr=error_output)
 
-    assert "error recalculating poster for video 1: ffmpeg exited with 1" in error_output.getvalue()
-    assert "error recalculating poster for video 2: no poster was created" in error_output.getvalue()
-    assert [call.args[0].pk for call in save.call_args_list] == [3, 4, 5]
+    assert "error recalculating poster for video 1: generation/publication failed" in error_output.getvalue()
+    assert "error recalculating poster for video 2: generation/publication failed" in error_output.getvalue()
+    save.assert_not_called()
     assert "processed=5 errors=2" in output.getvalue()
 
 

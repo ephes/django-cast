@@ -670,6 +670,20 @@ A site that already keeps a list can load it for one podcast:
 The UTF-8 JSON file is limited to 8 MiB and 10,000 entries. Reads stop at
 the byte ceiling plus one; oversized, unreadable or malformed inputs are
 rejected before the mutation transaction, leaving the glossary unchanged.
+Only regular files are accepted: the command opens nonblocking, checks the
+opened descriptor, and closes it on refusal (including FIFOs, directories and
+devices). Symlinks to regular files are intentionally supported. Duplicate JSON
+object members, including escaped spellings and nested objects, reject the whole
+document before writes; this differs from duplicate glossary terms in separate
+entries, which are skipped individually.
+
+Podcast IDs and explicit transcript IDs must use canonical positive ASCII decimal
+notation within the selected backend's primary-key field range. Zero, signs,
+leading zeros, Unicode numeric spellings and oversized IDs fail with a concise
+command error before querying. Nonnumeric podcast slugs remain supported. An
+explicit transcript selection containing any unknown ID fails before processing
+any transcript.
+
 Split larger glossaries into smaller imports. The file is a list of entries:
 
 .. code-block:: json

@@ -349,6 +349,20 @@ The counterpart fallback keeps existing thumbnails visible until this command
 finishes; synchronization is still required to serve the newly configured
 renditions and clean up superseded thumbnail policy keys.
 
+Rendition inventory also checks required physical files, deduplicating checks by
+storage object and key within the inventory. A stored row with a lost file is
+planned for repair. Synchronization repairs files in existing rows through public
+Wagtail generation APIs inside a transaction and verifies every replacement before retiring
+usable thumbnail counterparts. A failure keeps those counterparts and the broken
+row available for a retry, and the command exits nonzero.
+
+Direct ``Gallery.create_renditions()`` and
+``create_missing_renditions_for_posts(posts)`` retain each source database.
+Posts with images from several databases are grouped by alias. The low-level
+inventory accepts one database at a time (or an explicit ``using`` alias), because
+numeric image IDs alone cannot represent identities across databases. Direct
+generation bypasses Wagtail's shared rendition cache, whose keys lack an alias.
+
 Publication consistency
 ~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -1,6 +1,7 @@
 import json
+import os
+import stat
 from copy import copy
-from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -13,8 +14,19 @@ from wagtail.models import Page
 from cast.models import Podcast, TranscriptGlossaryTerm
 from cast.transcripts.glossary import normalize_phrase
 
+from ._selectors import is_id_selector, positive_id
+
 MAX_INPUT_BYTES = 8 * 1024 * 1024
 MAX_ENTRIES = 10_000
+
+
+def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise CommandError("Glossary input contains a duplicate JSON member.")
+        result[key] = value
+    return result
 
 
 def _variants_text(value: Any) -> str:
@@ -43,8 +55,8 @@ class Command(BaseCommand):
 
     @staticmethod
     def get_podcast(identifier: str) -> Podcast:
-        if identifier.isdigit():
-            podcast = Podcast.objects.filter(pk=int(identifier)).first()
+        if is_id_selector(identifier):
+            podcast = Podcast.objects.filter(pk=positive_id(identifier, Podcast)).first()
             if podcast is None:
                 raise CommandError(f"No podcast with id {identifier}.")
             return podcast
@@ -59,14 +71,21 @@ class Command(BaseCommand):
     @staticmethod
     def load_entries(path: str) -> list[Any]:
         try:
-            with Path(path).open("rb") as source:
-                raw = source.read(MAX_INPUT_BYTES + 1)
+            # Follow symlinks intentionally, but admit the opened target before reading.
+            fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise CommandError("Glossary input must be a regular file.")
+                with os.fdopen(fd, "rb", closefd=False) as source:
+                    raw = source.read(MAX_INPUT_BYTES + 1)
+            finally:
+                os.close(fd)
         except OSError as exc:
             raise CommandError(f"Cannot read {path}: {exc.strerror or 'unreadable file'}.") from exc
         if len(raw) > MAX_INPUT_BYTES:
             raise CommandError(f"Glossary input exceeds {MAX_INPUT_BYTES} bytes.")
         try:
-            data = json.loads(raw.decode("utf-8"))
+            data = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_members)
         except json.JSONDecodeError as exc:
             raise CommandError(f"Cannot read {path}: invalid JSON at line {exc.lineno}, column {exc.colno}.") from exc
         except (UnicodeDecodeError, RecursionError) as exc:

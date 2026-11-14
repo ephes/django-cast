@@ -46,9 +46,10 @@ class Gallery(TimeStampedModel):
         return signature
 
     def create_renditions(self) -> None:
-        images_with_type: ImagesWithType = [("gallery", image) for image in self.images.all()]
-        _, missing_renditions = get_obsolete_and_missing_rendition_strings(images_with_type)
-        create_missing_renditions_for_images(missing_renditions)
+        using = self._state.db or router.db_for_write(type(self), instance=self)
+        images_with_type: ImagesWithType = [("gallery", image) for image in self.images.using(using).all()]
+        _, missing_renditions = get_obsolete_and_missing_rendition_strings(images_with_type, using=using)
+        create_missing_renditions_for_images(missing_renditions, using=using)
 
 
 def get_or_create_gallery(image_ids: Iterable[int]) -> Gallery | None:
