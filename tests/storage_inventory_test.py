@@ -9,9 +9,7 @@ from cast.utils import storage_walk_paths
 from tests.management_command_test import StubOverwriteStorage
 
 
-@pytest.mark.parametrize(
-    "name", ["..", ".", "", "../escape", "/absolute", "a/b", r"a\b", r"C:\escape", "C:escape", "a\x00b"]
-)
+@pytest.mark.parametrize("name", ["..", ".", "", "../escape", "/absolute", "a/b", r"a\b", r"C:\escape", "a\x00b"])
 @pytest.mark.parametrize("kind", ["directory", "file"])
 def test_listing_refuses_unsafe_components_before_copy(mocker, name, kind):
     source, target = StubOverwriteStorage(), StubOverwriteStorage()
@@ -29,6 +27,43 @@ def test_listing_refuses_unsafe_components_before_copy(mocker, name, kind):
     listing_mock.assert_called_once_with("")
     open_mock.assert_not_called()
     save_mock.assert_not_called()
+
+
+def test_colon_names_are_ordinary_posix_and_s3_keys(mocker):
+    source = StubOverwriteStorage()
+    mocker.patch.object(
+        source, "listdir", side_effect=[(["2026-11-14T10:00"], ["Episode 1: Intro.mp3"]), ([], ["a:b"])]
+    )
+    mocker.patch("cast.utils.UNSAFE_COMPONENT_CHARACTERS", ("/", "\\", "\x00"))
+    assert set(storage_walk_paths(source)) == {"Episode 1: Intro.mp3", "2026-11-14T10:00/a:b"}
+
+
+def test_colon_names_are_refused_with_windows_semantics(mocker):
+    from cast.utils import StorageInventoryError
+
+    source = StubOverwriteStorage()
+    mocker.patch.object(source, "listdir", return_value=([], ["C:escape"]))
+    mocker.patch("cast.utils.UNSAFE_COMPONENT_CHARACTERS", ("/", "\\", "\x00", ":"))
+    with pytest.raises(StorageInventoryError):
+        list(storage_walk_paths(source))
+
+
+@pytest.mark.parametrize("command", ["media_stale", "media_sizes"])
+def test_inventory_refusal_is_a_command_error(mocker, command):
+    source = StubOverwriteStorage()
+    mocker.patch.object(source, "listdir", return_value=([], ["a\x00b"]))
+    module = f"cast.management.commands.{command}"
+    if command == "media_stale":
+        mocker.patch(f"{module}.storages", {"production": source}, create=True)
+        from cast.management.commands.media_stale import Command
+
+        with pytest.raises(CommandError, match="media inventory incomplete"):
+            Command.get_paths(source)
+    else:
+        from cast.management.commands.media_sizes import Command
+
+        with pytest.raises(CommandError, match="media inventory incomplete"):
+            Command.get_paths_with_sizes_for(source)
 
 
 def test_unicode_hierarchy_and_requested_prefix(mocker):

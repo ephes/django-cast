@@ -27,20 +27,13 @@ def reservation_cache(settings):
 
 def race_at_final_slot(mocker):
     barrier = Barrier(2)
-    original_get, original_add = LocMemCache.get, LocMemCache.add
-
-    def get(cache, key, *args, **kwargs):
-        value = original_get(cache, key, *args, **kwargs)
-        if key.startswith("throttle_cast_comment_post_"):
-            barrier.wait(5)
-        return value
+    original_add = LocMemCache.add
 
     def add(cache, key, *args, **kwargs):
         if key.endswith(":slot:1"):
             barrier.wait(5)
         return original_add(cache, key, *args, **kwargs)
 
-    mocker.patch.object(LocMemCache, "get", get)
     mocker.patch.object(LocMemCache, "add", add)
 
 

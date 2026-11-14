@@ -199,3 +199,36 @@ def test_refresh_reports_generated_alternate_when_cleanup_fails(mocker, failure)
     with pytest.raises(RuntimeError, match="alternate.jpg.*media.jpg.*cleanup denied"):
         refresh_existing_file(source, target, "media.jpg")
     assert target._files == {"media.jpg": b"old", "alternate.jpg": b"new"}
+
+
+def test_renamed_missing_copy_reports_that_nothing_was_published():
+    from cast.management.commands.storage_backend import sync_media_files
+    from tests.management_command_test import StubOverwriteStorage
+
+    class RenamingStorage(StubOverwriteStorage):
+        def save(self, name, content):
+            if ".django-cast-refresh-" in name:
+                return super().save(name, content)
+            return super().save(name + "_renamed", content)
+
+    errors = []
+    target = RenamingStorage()
+    result = sync_media_files(StubOverwriteStorage({"media.jpg": b"abc"}), target, report_error=errors.append)
+    assert result.errors == 1
+    assert "nothing was published at the requested path" in errors[0]
+    assert "was removed" not in errors[0]
+    assert "media.jpg" not in target._files and "media.jpg_renamed" not in target._files
+
+    class StuckRenamingStorage(RenamingStorage):
+        def delete(self, path):
+            if path.endswith("_renamed"):
+                raise OSError("synthetic delete refusal")
+            super().delete(path)
+
+    errors.clear()
+    stuck = StuckRenamingStorage()
+    result = sync_media_files(StubOverwriteStorage({"media.jpg": b"abc"}), stuck, report_error=errors.append)
+    assert result.errors == 1
+    assert "could not remove generated copy media.jpg_renamed" in errors[0]
+    assert "synthetic delete refusal" in errors[0]
+    assert "was removed" not in errors[0]

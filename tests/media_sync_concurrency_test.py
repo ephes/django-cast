@@ -155,3 +155,49 @@ def test_default_sync_cannot_call_an_active_partial_write_unchanged():
     assert result.errors == 1
     assert result.unchanged == result.copied == result.refreshed == 0
     assert target._files == {"media": b"part"}
+
+
+def test_publication_lock_refuses_a_shared_or_foreign_directory(tmp_path, monkeypatch):
+    import os
+
+    from cast.management.commands import storage_backend as media
+
+    monkeypatch.setattr(media.tempfile, "gettempdir", lambda: str(tmp_path))
+    directory = tmp_path / f"django-cast-media-sync-{media.publication_identity()}"
+    directory.mkdir(mode=0o777)
+    os.chmod(directory, 0o777)
+    with pytest.raises(RuntimeError, match="not private"):
+        with media.media_publication_lock():
+            pass
+    os.chmod(directory, 0o700)
+    with media.media_publication_lock():
+        pass
+    assert (directory / "publication.lock").exists()
+
+
+def test_publication_lock_does_not_follow_a_planted_symlink(tmp_path, monkeypatch):
+    import os
+
+    from cast.management.commands import storage_backend as media
+
+    monkeypatch.setattr(media.tempfile, "gettempdir", lambda: str(tmp_path))
+    directory = tmp_path / f"django-cast-media-sync-{media.publication_identity()}"
+    directory.mkdir(mode=0o700)
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"keep")
+    (directory / "publication.lock").symlink_to(victim)
+    with pytest.raises(OSError):
+        with media.media_publication_lock():
+            pass
+    assert victim.read_bytes() == b"keep"
+    assert os.path.islink(directory / "publication.lock")
+
+
+def test_publication_identity_without_a_posix_uid_uses_the_login_name(monkeypatch):
+    import hashlib
+
+    from cast.management.commands import storage_backend as media
+
+    monkeypatch.delattr(media.os, "getuid")
+    monkeypatch.setattr(media.getpass, "getuser", lambda: "synthetic")
+    assert media.publication_identity() == hashlib.sha256(b"synthetic").hexdigest()

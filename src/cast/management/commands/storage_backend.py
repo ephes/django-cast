@@ -1,7 +1,10 @@
 import getpass
 import hashlib
 import logging
+import math
+import os
 import re
+import stat
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -21,12 +24,29 @@ logger = logging.getLogger(__name__)
 CONTENT_CHUNK_SIZE = 1024 * 1024
 MAX_MEDIA_READ_BYTES = 16 * 1024**3
 MAX_MEDIA_READ_SECONDS = 300
+# Large objects on remote storage get more time: the per-read deadline never
+# assumes a link faster than this.
+MIN_MEDIA_READ_BYTES_PER_SECOND = 4 * 1024**2
 
 
 @dataclass
 class MediaReadBudget:
+    """Bytes and time for one full read of one object."""
+
     remaining: int = field(default_factory=lambda: MAX_MEDIA_READ_BYTES)
     deadline: float = field(default_factory=lambda: monotonic() + MAX_MEDIA_READ_SECONDS)
+
+    @classmethod
+    def for_object(cls, storage: Storage, path: str) -> "MediaReadBudget":
+        """A fresh budget whose deadline scales with the reported object size."""
+        try:
+            size = storage.size(path)
+        except Exception:  # Advisory only: an unknown size keeps the base deadline.
+            size = 0
+        # Beyond the byte ceiling more time cannot help: such a read is refused anyway.
+        scaled = min(max(size, 0), MAX_MEDIA_READ_BYTES)
+        seconds = max(MAX_MEDIA_READ_SECONDS, math.ceil(scaled / MIN_MEDIA_READ_BYTES_PER_SECOND))
+        return cls(deadline=monotonic() + seconds)
 
     def check_time(self) -> None:
         if monotonic() >= self.deadline:
@@ -55,7 +75,7 @@ def temporary_refresh_path(path: str) -> str:
 
 
 def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
-    budget = budget or MediaReadBudget()
+    budget = budget or MediaReadBudget.for_object(storage, path)
     digest = hashlib.sha256()
     budget.check_time()
     with storage.open(path, "rb") as in_f:
@@ -81,11 +101,10 @@ def sizes_differ(source_storage: Storage, target_storage: Storage, path: str) ->
 
 
 def content_differs(source_storage: Storage, target_storage: Storage, path: str) -> bool:
-    budget = MediaReadBudget()
     if sizes_differ(source_storage, target_storage, path):
-        budget.check_time()
         return True
-    return content_digest(source_storage, path, budget=budget) != content_digest(target_storage, path, budget=budget)
+    # Each full read gets its own byte/time budget.
+    return content_digest(source_storage, path) != content_digest(target_storage, path)
 
 
 def remove_staged_copies(storage: Storage, staged_names: set[str]) -> None:
@@ -100,13 +119,45 @@ def remove_staged_copies(storage: Storage, staged_names: set[str]) -> None:
         raise RuntimeError("; ".join(failures))
 
 
+def publication_identity() -> str:
+    getuid = getattr(os, "getuid", None)
+    if getuid is not None:
+        return f"uid-{getuid()}"
+    try:
+        return hashlib.sha256(getpass.getuser().encode()).hexdigest()
+    except OSError:  # pragma: no cover - only without a POSIX uid and a login name
+        return "default"
+
+
+def publication_lock_path() -> Path:
+    """The lock file inside an owner-only directory in the temp directory.
+
+    A shared, world-writable temp directory lets another local user pre-create a
+    predictable name (unreadable, or a symlink); the private directory and a
+    no-follow open refuse both instead of locking a file someone else chose.
+    """
+    directory = Path(tempfile.gettempdir()) / f"django-cast-media-sync-{publication_identity()}"
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    info = directory.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or (hasattr(os, "getuid") and info.st_uid != os.getuid())
+        or (os.name != "nt" and info.st_mode & 0o077)
+    ):
+        raise RuntimeError(f"media publication lock directory {directory} is not private to this user")
+    return directory / "publication.lock"
+
+
 @contextmanager
 def media_publication_lock() -> Iterator[None]:
     """Fence cooperating media publishers sharing this host/user/temp directory."""
-    identity = hashlib.sha256(getpass.getuser().encode()).hexdigest()
-    lock_path = Path(tempfile.gettempdir()) / f"django-cast-media-sync-{identity}.lock"
+    lock_path = publication_lock_path()
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
     # Never unlink: waiters must keep referring to the same lock inode.
-    with lock_path.open("a+b") as lock_file:
+    with os.fdopen(os.open(lock_path, flags, 0o600), "r+b") as lock_file:
         if not locks.lock(lock_file, locks.LOCK_EX | locks.LOCK_NB):
             raise RuntimeError(
                 "media publication conflict: another sync owns the local publication lock or locking is unsupported"
@@ -155,9 +206,10 @@ def publish_staged_file(
     target_exists = target_storage.exists(path)
     if target_exists == missing:
         raise RuntimeError(f"media publication conflict: target presence changed for {path}")
-    budget = MediaReadBudget()
-    target_before = content_digest(target_storage, path, budget=budget) if target_exists else None
-    source_before = content_digest(source_storage, path, budget=budget)
+    # Every full read gets its own size-scaled budget; backend save I/O is not
+    # charged to any of them.
+    target_before = content_digest(target_storage, path) if target_exists else None
+    source_before = content_digest(source_storage, path)
     requested_stage = temporary_refresh_path(path)
     if target_storage.exists(requested_stage):
         raise RuntimeError(f"media publication conflict: staging key already exists {requested_stage}")
@@ -169,13 +221,13 @@ def publish_staged_file(
         if not target_storage.exists(staged_name):
             raise RuntimeError(f"staged copy {staged_name} was not saved")
         if (
-            content_digest(target_storage, staged_name, budget=budget) != source_before
-            or content_digest(source_storage, path, budget=budget) != source_before
+            content_digest(target_storage, staged_name) != source_before
+            or content_digest(source_storage, path) != source_before
         ):
             raise RuntimeError(f"media publication conflict: source changed while staging {path}")
         current_exists = target_storage.exists(path)
         if current_exists != target_exists or (
-            current_exists and content_digest(target_storage, path, budget=budget) != target_before
+            current_exists and content_digest(target_storage, path) != target_before
         ):
             raise RuntimeError(f"media publication conflict: target changed while staging {path}")
         with target_storage.open(staged_name, "rb") as staged_f:
@@ -188,10 +240,16 @@ def publish_staged_file(
                     staged_names.add(path)
                 raise
         if saved_name != path:
-            message = (
-                f"storage saved copy as {saved_name} instead of requested {path}; "
-                "the existing copy was kept (the target storage must overwrite existing names)"
-            )
+            if missing:
+                message = (
+                    f"storage saved copy as {saved_name} instead of requested {path}; "
+                    "nothing was published at the requested path"
+                )
+            else:
+                message = (
+                    f"storage saved copy as {saved_name} instead of requested {path}; "
+                    "the existing copy was kept (the target storage must overwrite existing names)"
+                )
             try:
                 if target_storage.exists(saved_name):
                     target_storage.delete(saved_name)

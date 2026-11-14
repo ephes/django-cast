@@ -1,3 +1,4 @@
+import os
 import posixpath
 from collections.abc import Iterable
 
@@ -12,8 +13,13 @@ class StorageInventoryError(ValueError):
     """The backend cannot supply a safe, complete, bounded inventory."""
 
 
+# Colons are ordinary in POSIX names and S3 keys ("Episode 1: Intro.mp3"); only
+# Windows gives them drive/stream meaning.
+UNSAFE_COMPONENT_CHARACTERS = ("/", "\\", "\x00", ":") if os.name == "nt" else ("/", "\\", "\x00")
+
+
 def validate_storage_component(name: str) -> None:
-    if not isinstance(name, str) or name in {"", ".", ".."} or any(c in name for c in ("/", "\\", ":", "\x00")):
+    if not isinstance(name, str) or name in {"", ".", ".."} or any(c in name for c in UNSAFE_COMPONENT_CHARACTERS):
         raise StorageInventoryError(f"storage inventory refused unsafe listing component {name!r}")
 
 

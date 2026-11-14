@@ -22,8 +22,9 @@ def test_comparison_accepts_exact_combined_boundary(mocker, target_bytes):
     assert media.content_differs(source, target, "media") == (target_bytes != b"abc")
 
 
-def test_comparison_charges_both_streams_and_closes_on_refusal(mocker):
-    limits(mocker, size=5)
+def test_comparison_budgets_each_stream_and_closes_on_refusal(mocker):
+    # Each full read has its own byte ceiling: three bytes exceed two.
+    limits(mocker, size=2)
     opened = []
 
     class StreamStorage(StubOverwriteStorage):
@@ -36,8 +37,11 @@ def test_comparison_charges_both_streams_and_closes_on_refusal(mocker):
     source, target = StreamStorage({"media": b"abc"}), StreamStorage({"media": b"xyz"})
     with pytest.raises(RuntimeError, match="byte budget"):
         media.content_differs(source, target, "media")
-    assert len(opened) == 2
+    assert len(opened) == 1
     assert all(file.closed for file in opened)
+    limits(mocker, size=3)
+    assert media.content_differs(source, target, "media")
+    assert len(opened) == 3 and all(file.closed for file in opened)
 
 
 def test_growing_stream_has_bounded_reads_and_no_save(mocker):
@@ -95,7 +99,7 @@ def test_slow_read_refuses_before_refresh_save_and_closes(mocker):
     assert closed == [True]
 
 
-def test_deadline_is_shared_by_source_and_target(mocker):
+def test_each_read_has_its_own_deadline(mocker):
     limits(mocker)
     now = [0.0]
     mocker.patch.object(media, "monotonic", side_effect=lambda: now[0], create=True)
@@ -107,5 +111,46 @@ def test_deadline_is_shared_by_source_and_target(mocker):
             with super().open(name, mode) as stream:
                 yield stream
 
-    with pytest.raises(RuntimeError, match="time budget"):
-        media.content_differs(DelayedStorage({"media": b"abc"}), DelayedStorage({"media": b"xyz"}), "media")
+    # Six seconds per open: the second read is not charged with the first one's time.
+    assert media.content_differs(DelayedStorage({"media": b"abc"}), DelayedStorage({"media": b"xyz"}), "media")
+
+
+def test_deadline_scales_with_reported_object_size(mocker):
+    limits(mocker, size=1000, seconds=10)
+    mocker.patch.object(media, "MIN_MEDIA_READ_BYTES_PER_SECOND", 1, create=True)
+    mocker.patch.object(media, "monotonic", return_value=100.0, create=True)
+    storage = StubOverwriteStorage({"big": b"x" * 50, "small": b"x"})
+    assert media.MediaReadBudget.for_object(storage, "big").deadline == 150.0
+    assert media.MediaReadBudget.for_object(storage, "small").deadline == 110.0
+
+    class Unsized(StubOverwriteStorage):
+        def size(self, name):
+            raise NotImplementedError
+
+    assert media.MediaReadBudget.for_object(Unsized({"x": b""}), "x").deadline == 110.0
+
+    # A size beyond the byte ceiling cannot buy more time than the ceiling needs.
+    mocker.patch.object(media, "MAX_MEDIA_READ_BYTES", 60, create=True)
+
+    class Huge(StubOverwriteStorage):
+        def size(self, name):
+            return 10**18
+
+    assert media.MediaReadBudget.for_object(Huge({"x": b""}), "x").deadline == 160.0
+
+
+def test_staging_upload_time_is_not_charged_to_verification_reads(mocker):
+    limits(mocker, seconds=10)
+    now = [0.0]
+    mocker.patch.object(media, "monotonic", side_effect=lambda: now[0], create=True)
+
+    class SlowSaveStorage(StubOverwriteStorage):
+        def save(self, name, content):
+            now[0] += 60  # Far beyond one read deadline.
+            return super().save(name, content)
+
+    source = StubOverwriteStorage({"media": b"abc"})
+    target = SlowSaveStorage()
+    result = media.sync_media_files(source, target)
+    assert (result.copied, result.errors) == (1, 0)
+    assert target._files["media"] == b"abc"

@@ -257,7 +257,8 @@ Options:
     completely and their SHA-256 digests compared. Every existing file is
     therefore downloaded from both storages on each run with this option, which
     costs time and transfer on remote storage. Unchanged files are not
-    rewritten. Comparison has a shared 16 GiB / 300 second hashing budget;
+    rewritten. Each full read has its own 16 GiB byte ceiling and a 300 second
+    deadline that grows with the object size (at most about 68 minutes);
     exceeding it reports an incomplete path without publishing a replacement.
     See :doc:`../operations/backup` for inventory limits, synchronous I/O
     limitations and the same-host publication concurrency contract.

@@ -55,7 +55,8 @@ Traversal is iterative and limited to 64 levels below the starting prefix,
 directory prefixes are refused. Exceeding a limit reports an incomplete inventory
 and a nonzero exit; files already copied remain intact. These are finite safety
 ceilings, not an assurance that a backend's individual ``listdir`` call cannot
-block or allocate a large response. ``media_stale`` uses the same bounded walker
+block or allocate a large response. Colons are accepted in names (they are
+ordinary in POSIX file names and S3 keys) except on Windows. ``media_stale`` uses the same bounded walker
 and refuses an unsafe inventory before deleting files.
 
 Missing copies now use the same owned temporary staging as refreshes. A failed
@@ -67,7 +68,10 @@ removed. A killed process can still leave scratch/partial keys: inspect these
 before retrying; this is exception recovery, not a crash transaction.
 
 Publication uses a nonblocking OS file lock shared by cooperating backup/restore
-invocations on the same host, OS user and temporary directory (``TMPDIR``).
+invocations on the same host, OS user and temporary directory (``TMPDIR``). The
+lock file lives in an owner-only directory ``django-cast-media-sync-uid-<uid>``
+inside the temporary directory and is opened without following symlinks; a
+directory that is not private to the current user is refused rather than used.
 A competing invocation reports a publication conflict; rerun it after the active
 writer finishes. The lock is released on process exit; its file is retained to
 keep the lock identity stable. All media publications share this lock, including
@@ -85,14 +89,18 @@ including recovery of a failed missing-copy save. Cross-host publication needs
 backend-specific conditional writes and is unsupported. Existing-file final
 write failures remain backend-dependent as described in the command reference.
 
-Content comparison shares a ceiling of 16 GiB of bytes and 300 seconds between
-source and target hashing. Publication verification has its own shared ceiling
-across all of its hashes. Reads request at most 1 MiB (or the remaining budget
-plus one overflow byte). Oversized, growing or delayed streams cause an explicit
+Every full read used for hashing (comparison of source and target, and each
+publication-verification read of target, source and staged copy) has its own
+ceiling of 16 GiB of bytes and a deadline of 300 seconds, extended for large
+objects to their reported size at 4 MiB/s (at most the time 16 GiB takes at that
+rate, about 68 minutes). Missing copies are subject to the same
+per-read ceilings, since they are staged and verified like refreshes. Reads
+request at most 1 MiB (or the remaining budget plus one overflow byte). Oversized, growing or delayed streams cause an explicit
 path error before publication. A refused comparison never counts as unchanged.
 The deadline is checked around synchronous reads; configure backend I/O timeouts
 as well, since Python cannot interrupt an individual blocked storage call.
-These ceilings cover hashing, not backend-managed ``save`` I/O.
+These ceilings cover hashing; backend-managed ``save`` I/O (the staging upload
+and the final save) is not charged to any of them.
 
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.

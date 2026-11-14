@@ -460,8 +460,13 @@ Unreleased
   revalidate source/staged/target bytes before publication; refuse concurrent
   changes rather than silently replacing a newer target. Cross-host/direct
   target writers remain unsupported; see the backup recovery contract.
-- Bound comparison and publication-verification hashing to shared byte/time
-  budgets, refusing growing or delayed streams without publishing a replacement.
+- Bound comparison and publication-verification hashing with a byte/time
+  budget per full read (the deadline scales with the object size; staging
+  uploads are not charged), refusing growing or delayed streams without
+  publishing a replacement. The publication lock lives in an owner-only
+  directory and is opened without following symlinks. Colons stay valid in
+  storage names except on Windows; ``media_stale`` and ``media_sizes`` report
+  an unsafe inventory as a command error.
 - Reserve comment POST budgets with atomic expiring cache slots, preserving
   trusted-proxy identity, disabled limits and independent author-action budgets.
   Unsupported cache backends and outages fail closed with Retry-After. Deploy
