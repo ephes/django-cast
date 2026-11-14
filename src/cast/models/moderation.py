@@ -334,4 +334,7 @@ class SpamFilter(TimeStampedModel):
 
     @classmethod
     def get_default(cls) -> Optional["SpamFilter"]:
-        return next((spamfilter for spamfilter in cls.objects.order_by("pk") if spamfilter.is_trained), None)
+        return next(
+            (spamfilter for spamfilter in cls.objects.order_by("pk").iterator(chunk_size=1) if spamfilter.is_trained),
+            None,
+        )
