@@ -405,11 +405,9 @@ def test_media_backup_refresh_keeps_backup_copy_when_storage_does_not_overwrite(
     with pytest.raises(CommandError):
         call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
 
-    # The complete stage is retained for manual recovery; the stray copy is removed.
-    assert backup._files["video.mp4"] == b"old!"
-    assert len(backup.staged()) == 1
-    assert backup._files[backup.staged()[0]] == b"new!"
-    assert "video_1.mp4" not in backup._files
+    # The renamed save never touched the target: no recovery stage is kept, and
+    # neither the stray generated copy nor the staged copy is left behind.
+    assert backup._files == {"video.mp4": b"old!"}
     assert "saved copy as video_1.mp4 instead of requested video.mp4" in error_output.getvalue()
 
 

@@ -206,8 +206,9 @@ def publish_staged_file(
 
     Writers outside this same-host lock require backend conditional operations;
     they must be quiesced. Generic Storage has no compare-and-swap primitive.
-    A digest-verified stage is retained on publication failure as a reserved
-    recovery key excluded from restore enumeration.
+    A digest-verified stage is retained only when a refresh's final overwrite
+    ``save()`` raises, as a reserved recovery key excluded from restore
+    enumeration; verification failures, conflicts and renamed saves remove it.
     """
     target_exists = target_storage.exists(path)
     if target_exists == missing:
@@ -229,19 +230,15 @@ def publish_staged_file(
             raise RuntimeError(f"staged copy {staged_name} was not saved")
         if not is_refresh_key(staged_name):
             raise RuntimeError(f"storage returned non-reserved staging key {staged_name}")
-        if (
-            content_digest(target_storage, staged_name) != source_before
-            or content_digest(source_storage, path) != source_before
-        ):
+        if content_digest(target_storage, staged_name) != source_before:
+            raise RuntimeError(f"staged copy {staged_name} failed content verification")
+        if content_digest(source_storage, path) != source_before:
             raise RuntimeError(f"media publication conflict: source changed while staging {path}")
         current_exists = target_storage.exists(path)
         if current_exists != target_exists or (
             current_exists and content_digest(target_storage, path) != target_before
         ):
             raise RuntimeError(f"media publication conflict: target changed while staging {path}")
-        # Verified complete and still current: from here on a failed publication
-        # keeps this stage as the recovery copy.
-        recovery_name = staged_name
         with target_storage.open(staged_name, "rb") as staged_f:
             try:
                 saved_name = target_storage.save(path, staged_f)
@@ -250,6 +247,11 @@ def publish_staged_file(
                     # Absence was revalidated while holding the writer lock:
                     # a failed final save can only have created our own key.
                     staged_names.add(path)
+                else:
+                    # The failed overwrite may have left partial bytes over the
+                    # previous target: keep the verified stage as the recovery
+                    # copy. A renamed save never touched the target and needs none.
+                    recovery_name = staged_name
                 raise
         if saved_name != path:
             if missing:

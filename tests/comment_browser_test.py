@@ -11,7 +11,12 @@ from tests.comment_author_edits_test import seed_ownership
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.skipif(os.environ.get("CAST_RUN_BROWSER") != "1", reason="Opt-in real Chromium journey")
-def test_two_open_editors_preserve_conflicting_draft(client, comment, post, settings, comments_enabled, live_server):
+def test_two_open_editors_preserve_conflicting_draft(
+    client, comment, post, settings, comments_enabled, live_server, monkeypatch
+):
+    # Playwright's sync API runs an event loop in this thread; the test's own ORM
+    # calls (post URL, assertions) are synchronous and safe here.
+    monkeypatch.setenv("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
     settings.CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True
     settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 0
     settings.SESSION_ENGINE = "django.contrib.sessions.backends.db"

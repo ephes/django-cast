@@ -275,8 +275,10 @@ Options:
     ``file_overwrite = False``), the previous backup copy is kept, the generated
     copy is removed, and the path is reported as an error. A staged copy is
     verified against the source SHA-256 digest before the final write. Failed
-    or incomplete staging is removed. After final-publication failure, the
-    verified complete stage is retained and its exact recovery key is reported.
+    or incomplete staging is removed. When the final overwrite itself
+    fails, the verified complete stage is retained and its exact recovery key is
+    reported; a save under a generated name never touched the target and keeps
+    no stage.
     Successful publication removes its stage. Cleanup attempts every other
     requested and returned staging name even if another deletion fails. Leftover
     names and deletion failures are logged and reported on command stderr when publication has

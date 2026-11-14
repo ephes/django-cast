@@ -3,9 +3,10 @@ Unreleased
 
 - Compensate interrupted media ingestion (KeyboardInterrupt/SystemExit), attempt
   all owned file cleanup, log exact recovery keys on cleanup failure, and
-  preserve the original interruption and existing replacement files.
-- Verify refresh staging contents and retain the complete recovery copy after
-  final-publication failure. Report its exact key, exclude it from backup/restore
+  preserve the original interruption and existing replacement files. An
+  interruption of the cleanup itself is re-raised, never swallowed.
+- Verify refresh staging contents and retain the complete recovery copy when
+  the final overwrite fails (not for renamed saves or missing copies). Report its exact key, exclude it from backup/restore
   enumeration and document explicit recovery and cleanup.
 - Reject stale or missing comment edit content tokens with HTTP 409. Keep the
   browser draft and show current accepted text before an explicit retry.

@@ -247,3 +247,30 @@ def test_interruption_survives_unexpected_rollback_failure(mocker):
     with pytest.raises(SystemExit) as raised:
         media_ingest.ingest_upload(form, policy=media_ingest.IngestPolicy(None, ("upload",)))
     assert raised.value is error
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_cleanup_interruption_after_ordinary_failure_is_not_swallowed(mocker, caplog, interruption):
+    primary = ValueError("ordinary failure")
+    form = FakeForm(primary)
+    mocker.patch("cast.media_ingest.normalize_model_save_arguments", return_value=({}, "default"))
+    mocker.patch.object(form.instance.upload, "delete", side_effect=interruption("stop"))
+    committed_delete = mocker.spy(form.instance.committed, "delete")
+    with pytest.raises(interruption) as raised:
+        media_ingest.ingest_upload(form, policy=media_ingest.IngestPolicy(None, ("upload", "committed")))
+    assert raised.value.__cause__ is primary
+    # The remaining file was still attempted before the interruption propagated.
+    assert committed_delete.called
+    assert f"recovery storage key={form.instance.upload.name}" in caplog.text
+
+
+@pytest.mark.django_db
+def test_cleanup_helper_reraises_interruption_from_row_delete(mocker):
+    form = FakeForm(ValueError("unused"))
+    obj = form.instance
+    mocker.patch.object(obj, "pk", 1, create=True)
+    mocker.patch.object(obj, "delete", side_effect=KeyboardInterrupt, create=True)
+    mocker.patch("cast.media_ingest._delete_field_file")
+    with pytest.raises(KeyboardInterrupt):
+        media_ingest.cleanup_new_media_object(obj, ("upload",))

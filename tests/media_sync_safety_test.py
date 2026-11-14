@@ -199,9 +199,7 @@ def test_refresh_reports_generated_alternate_when_cleanup_fails(mocker, failure)
     mocker.patch.object(target, failure, side_effect=fail_on_alternate)
     with pytest.raises(RuntimeError, match="alternate.jpg.*media.jpg.*cleanup denied"):
         refresh_existing_file(source, target, "media.jpg")
-    assert target._files["media.jpg"] == b"old"
-    assert target._files["alternate.jpg"] == b"new"
-    assert len(target.staged()) == 1
+    assert target._files == {"media.jpg": b"old", "alternate.jpg": b"new"}
 
 
 @pytest.mark.parametrize("mode", ["truncated", "unreserved"])
@@ -273,8 +271,8 @@ def test_renamed_missing_copy_reports_that_nothing_was_published():
     assert "nothing was published at the requested path" in reported
     assert "was removed" not in reported
     assert "media.jpg" not in target._files and "media.jpg_renamed" not in target._files
-    # The verified stage stays as the reported recovery copy.
-    assert len(target.staged()) == 1 and target.staged()[0] in reported
+    # A missing copy keeps no recovery stage: an ordinary retry repairs it.
+    assert target.staged() == []
 
     class StuckRenamingStorage(RenamingStorage):
         def delete(self, path):

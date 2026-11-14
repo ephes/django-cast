@@ -108,6 +108,8 @@ a SHA-256-verified complete recovery copy and reports its exact reserved
 these keys. Retry with the original source when available; otherwise inspect
 and explicitly recover from the reported key, verify the destination, and
 delete the key manually. See :doc:`/reference/management-commands` for details.
+A failed missing copy keeps no recovery key: its partial final key is removed
+and an ordinary retry copies the file again.
 
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.
