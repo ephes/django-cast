@@ -369,7 +369,9 @@ may still run inside that enclosing transaction. On databases with
 row locks, concurrent creation for the same effective image set returns the same
 gallery, ignoring order, duplicate IDs and nonexistent IDs. SQLite does not offer
 row-level ``select_for_update`` serialization. Gallery membership stays mutable;
-there is no blanket unique constraint on its signature.
+there is no blanket unique constraint on its signature. Signature refreshes and
+forward/reverse image add, remove, clear and deletion signals use the mutation
+database explicitly, including when another database has the same primary keys.
 
 Raster GPS inspection is limited to 100 frames and 50 million decoded pixels
 in total across frames. Every permitted frame is inspected, including when an

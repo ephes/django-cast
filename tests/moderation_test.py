@@ -125,7 +125,8 @@ def test_spamfilter_retrain_from_scratch(comment, comment_spam):
     assert spamfilter.model.prior_probabilities == {}
 
     train = SpamFilter.get_training_data_comments()
-    spamfilter.retrain_from_scratch(train)
+    # Three rows are required by the default three-fold evaluation.
+    spamfilter.retrain_from_scratch(train * 2)
     assert spamfilter.model.prior_probabilities == {"ham": 0.5, "spam": 0.5}
 
 
@@ -180,3 +181,132 @@ def test_evaluate_with_some_messages():
     messages = []
     with pytest.raises(ValueError):
         evaluation.evaluate(messages)
+
+
+@pytest.mark.parametrize("restore", [False, True])
+def test_refit_replaces_all_training_state(restore):
+    import json
+
+    from cast.models.moderation import ModelDecoder, ModelEncoder
+
+    model = NaiveBayes().fit([("ham", "oldword"), ("spam", "spamword")])
+    if restore:
+        model = json.loads(json.dumps(model, cls=ModelEncoder), cls=ModelDecoder)
+    train = [("newlabel", "newword newword")]
+    model.fit(train)
+    fresh = NaiveBayes().fit(train)
+    assert model == fresh
+    assert model.number_of_words == fresh.number_of_words
+    assert model.number_of_all_words == fresh.number_of_all_words
+    model.fit([])
+    assert model == NaiveBayes().fit([])
+    assert model.number_of_all_words == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("message", ["", "ordinary incoming comment"])
+def test_tokenless_persisted_classifier_uses_priors(message):
+    from types import SimpleNamespace
+
+    from cast.moderation import Moderator
+
+    train = [("ham", ""), ("ham", "a"), ("spam", "x")]
+    spamfilter = SpamFilter.objects.create(name="tokenless", model=NaiveBayes().fit(train))
+    spamfilter.refresh_from_db()
+    assert spamfilter.model.predict(message) == {"ham": 2 / 3, "spam": 1 / 3}
+    comment = SimpleNamespace(name="", email="", title="", comment=message)
+    assert Moderator(None, spamfilter).moderate(comment, None, None) is False
+    assert comment.is_public and not comment.is_removed
+
+
+@pytest.mark.parametrize("stratified", [False, True])
+def test_folds_retain_every_row_without_mutating_input(stratified):
+    messages = [("ham", str(i)) for i in range(5)] + [("spam", str(i)) for i in range(5, 9)]
+    original = messages[:]
+    folds = (
+        Evaluation(num_folds=4).stratified_split_into_folds(messages)
+        if stratified
+        else Evaluation.split_into_folds(messages, 4)
+    )
+    assert messages == original
+    assert sorted(row for fold in folds for row in fold) == sorted(messages)
+    assert max(map(len, folds)) - min(map(len, folds)) <= 1
+    if stratified:
+        for label in ("ham", "spam"):
+            counts = [sum(row[0] == label for row in fold) for fold in folds]
+            assert max(counts) - min(counts) <= 1
+
+
+def test_evaluation_pools_confusion_counts_from_all_folds(monkeypatch):
+    class Model:
+        prior_probabilities = {"ham": 0.5, "spam": 0.5}
+
+        def fit(self, train):
+            return self
+
+        def predict_label(self, message):
+            return message
+
+    folds = [[("ham", "ham")], [("ham", "spam"), ("spam", "spam")], [("spam", "ham")]]
+    evaluation = Evaluation(model_class=Model)
+    monkeypatch.setattr(evaluation, "stratified_split_into_folds", lambda messages: folds)
+    performance = evaluation.evaluate([row for fold in folds for row in fold])
+    assert performance == {label: {"precision": 0.5, "recall": 0.5, "f1": 0.5} for label in ("ham", "spam")}
+
+
+@pytest.mark.parametrize("prediction", ["ham", "alien", None])
+def test_evaluate_unseen_actual_and_predicted_labels(prediction):
+    class Model:
+        prior_probabilities = {"ham": 1.0}
+
+        def predict_label(self, message):
+            return prediction
+
+    results = Evaluation.evaluate_model(Model(), [("spam", "new message")])
+    assert results["spam"]["false_negative"] == 1
+    if prediction is not None:
+        assert results[prediction]["false_positive"] == 1
+    assert None not in results
+
+
+def test_evaluate_empty_model_counts_miss():
+    results = Evaluation.evaluate_model(NaiveBayes().fit([]), [("spam", "message")])
+    assert results["spam"]["false_negative"] == 1
+
+
+@pytest.mark.parametrize("folds", [0, True, False, -1, 1.5, "3", None])
+def test_invalid_fold_count_refused(folds):
+    with pytest.raises(ValueError, match="fold count"):
+        Evaluation(num_folds=folds)
+    with pytest.raises(ValueError, match="fold count"):
+        Evaluation.split_into_folds([("ham", "hello")], folds)
+
+
+@pytest.mark.parametrize("messages,folds", [([], 3), ([("ham", "hi")], 3), ([("ham", "hi")], 2)])
+def test_evaluation_refuses_undersized_corpus_before_training(messages, folds, mocker):
+    model = mocker.Mock()
+    with pytest.raises(ValueError, match="corpus"):
+        Evaluation(model_class=model, num_folds=folds).evaluate(messages)
+    model.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_retrain_preserves_concurrent_name_edit(monkeypatch):
+    spamfilter = SpamFilter.objects.create(name="original")
+    train = [("ham", "greetings")] * 3
+
+    def evaluate(evaluation, messages):
+        SpamFilter.objects.filter(pk=spamfilter.pk).update(name="renamed concurrently")
+        return {"ham": {"precision": 1, "recall": 1, "f1": 1}}
+
+    monkeypatch.setattr(Evaluation, "evaluate", evaluate)
+    spamfilter.retrain_from_scratch(train)
+    spamfilter.refresh_from_db()
+    assert spamfilter.name == "renamed concurrently"
+    assert spamfilter.model == NaiveBayes().fit(train)
+    assert spamfilter.performance["ham"]["f1"] == 1
+
+
+@pytest.mark.parametrize("probabilities", [{}, {"ham": 0, "spam": 0}])
+def test_normalize_zero_sum_keeps_probabilities(probabilities):
+    assert normalize(probabilities.copy()) == probabilities

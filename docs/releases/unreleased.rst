@@ -451,3 +451,27 @@ Unreleased
   without changing them.
 - Exercise real PostgreSQL serialization between stock/Ajax replies and author
   edit/delete actions, checking committed comment and moderation state.
+
+- Replace all classifier counts on refit, including JSON-restored models.
+  Tokenless corpora now classify from learned priors without division by zero.
+
+- Retain every cross-validation row, balance remainder rows without mutating
+  inputs, and compute metrics from pooled confusion counts across all folds.
+
+- Account for unseen classes and abstentions in evaluation. Refuse invalid fold
+  counts and corpora smaller than the requested fold count before training.
+
+- Show missing spam-filter metrics safely in admin list/change views. Skip
+  untrained defaults and injected untrained rows when moderating comments;
+  newly trained defaults take effect on the next request.
+
+- Keep gallery membership/signature signal reads and writes on the mutation
+  database, including reverse relations, clear and image deletion.
+
+- Publish retrained model/metrics without overwriting concurrently edited filter
+  names or other metadata.
+
+- Reserve a persisted spam-filter retrain attempt before collecting the admin
+  corpus. Only the latest attempt publishes its model and matching metrics;
+  failed evaluation preserves the prior usable pair. Apply the new migration
+  before upgrading training publishers together.

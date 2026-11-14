@@ -38,9 +38,10 @@ class Gallery(TimeStampedModel):
         signature_input = ",".join(str(image_id) for image_id in normalized_image_ids)
         return hashlib.sha256(signature_input.encode("ascii")).hexdigest()
 
-    def refresh_signature(self) -> str:
-        signature = self.build_signature(self.images.values_list("id", flat=True))
-        type(self).objects.filter(pk=self.pk).update(signature=signature)
+    def refresh_signature(self, using: str | None = None) -> str:
+        using = using or self._state.db or router.db_for_write(type(self), instance=self)
+        signature = self.build_signature(self.images.using(using).values_list("id", flat=True))
+        type(self).objects.using(using).filter(pk=self.pk).update(signature=signature)
         self.signature = signature
         return signature
 
@@ -91,18 +92,21 @@ def refresh_gallery_signature_on_image_change(
     action: str,
     reverse: bool,
     pk_set: set[int] | None,
+    using: str,
     **kwargs: Any,
 ) -> None:
     if not reverse:
         if action not in {"post_add", "post_clear", "post_remove"}:
             return
         assert isinstance(instance, Gallery)
-        instance.refresh_signature()
+        instance.refresh_signature(using=using)
         return
 
     assert isinstance(instance, Image)
     if action == "pre_clear":
-        setattr(instance, "gallery_ids_to_refresh", list(instance.gallery_set.values_list("pk", flat=True)))
+        setattr(
+            instance, "gallery_ids_to_refresh", list(instance.gallery_set.using(using).values_list("pk", flat=True))
+        )
         return
     if action not in {"post_add", "post_clear", "post_remove"}:
         return
@@ -111,17 +115,17 @@ def refresh_gallery_signature_on_image_change(
         delattr(instance, "gallery_ids_to_refresh")
     else:
         gallery_ids = pk_set or []
-    for gallery in Gallery.objects.filter(pk__in=gallery_ids):
-        gallery.refresh_signature()
+    for gallery in Gallery.objects.using(using).filter(pk__in=gallery_ids):
+        gallery.refresh_signature(using=using)
 
 
 @receiver(pre_delete, sender=Image)
-def cache_gallery_ids_before_image_delete(sender: Any, instance: Image, **kwargs: Any) -> None:
-    instance.gallery_ids_to_refresh = list(instance.gallery_set.values_list("pk", flat=True))
+def cache_gallery_ids_before_image_delete(sender: Any, instance: Image, using: str, **kwargs: Any) -> None:
+    instance.gallery_ids_to_refresh = list(instance.gallery_set.using(using).values_list("pk", flat=True))
 
 
 @receiver(post_delete, sender=Image)
-def refresh_gallery_signatures_after_image_delete(sender: Any, instance: Image, **kwargs: Any) -> None:
+def refresh_gallery_signatures_after_image_delete(sender: Any, instance: Image, using: str, **kwargs: Any) -> None:
     gallery_ids = getattr(instance, "gallery_ids_to_refresh", [])
-    for gallery in Gallery.objects.filter(pk__in=gallery_ids):
-        gallery.refresh_signature()
+    for gallery in Gallery.objects.using(using).filter(pk__in=gallery_ids):
+        gallery.refresh_signature(using=using)

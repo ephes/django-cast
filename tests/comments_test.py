@@ -259,3 +259,30 @@ class TestModeratorUsesCurrentSpamFilter:
 
         moderator.spamfilter = None
         assert moderator.moderate(self.make_comment(), None, None) is False
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("model", [{}, NaiveBayes().fit([])])
+def test_untrained_filter_falls_back_until_usable_filter_exists(client, post, model, comments_enabled):
+    from django_comments import get_form
+
+    untrained = SpamFilter.objects.create(name="untrained", model=model)
+    form = get_form()(post)
+    data = {
+        **form.generate_security_data(),
+        "name": "Synthetic",
+        "email": "test@example.com",
+        "title": "Synthetic",
+        "comment": "ordinary synthetic comment",
+    }
+    response = client.post(reverse("comments-post-comment"), data)
+    assert response.status_code == 302
+    assert SpamFilter.get_default() is None
+    moderator = Moderator(None)
+    comment = TestModeratorUsesCurrentSpamFilter.make_comment()
+    assert moderator.moderate(comment, None, None) is False
+    # Explicitly supplied untrained rows use the same request boundary.
+    assert Moderator(None, untrained).moderate(comment, None, None) is False
+    trained = TestModeratorUsesCurrentSpamFilter.make_filter("trained", "spam")
+    assert SpamFilter.get_default() == trained
+    assert moderator.moderate(comment, None, None) is True

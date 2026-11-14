@@ -544,7 +544,11 @@ not change public comment display.
 Each comment is converted to a message string by concatenating its ``name``,
 ``email``, ``title``, and ``comment`` fields. The classifier tokenizes this
 string into lowercase words (using the regex pattern ``\b\w\w+\b``) and
-builds per-word label frequency counts.
+builds per-word label frequency counts. Each ``fit()`` replaces all previous
+training state, including after JSON deserialization. Empty training produces
+no prediction. Training with no two-character tokens uses the learned class
+priors for every prediction; empty incoming text also uses those priors.
+Equal probabilities use the descending label order as a deterministic tie-break.
 
 .. code-block:: python
 
@@ -559,9 +563,10 @@ Classification
 When a new comment arrives, the ``Moderator.moderate()`` method:
 
 1. Converts the comment to a message string.
-2. Uses the ``SpamFilter`` instance that was loaded during ``Moderator``
-   initialization (``SpamFilter.get_default()`` is called once in
-   ``__init__``, not on every comment).
+2. Looks up the first usable trained ``SpamFilter`` (lowest primary key)
+   for each comment. Name-only rows and models without learned priors are
+   skipped. Without a trained filter, the comment remains public. An explicitly
+   injected untrained row uses the same fallback.
 3. Calls ``predict_label(message)`` on the stored ``NaiveBayes`` model.
 4. If the predicted label is ``"spam"``, the comment is marked as removed and
    not public.
@@ -584,12 +589,24 @@ as removed), retrain the filter via the Django admin:
 
 The retrain action:
 
+- Reserves a persisted attempt identity before collecting the comment snapshot.
 - Collects all comments and labels them as ham or spam based on their current
   ``is_public`` / ``is_removed`` status.
-- Fits a new ``NaiveBayes`` model on the full dataset.
 - Runs a 3-fold stratified cross-validation to compute precision, recall,
-  and F1 for both the "ham" and "spam" classes.
-- Saves the updated model and performance metrics to the database.
+  and F1 for the classes present in the corpus.
+- Fits a new ``NaiveBayes`` model on the full dataset after successful evaluation.
+- Saves the updated model and performance metrics together with the modified
+  timestamp, preserving concurrent name edits. Only the latest started attempt
+  may publish. An older attempt finishing later is discarded. A failed attempt
+  keeps the previous complete model and metrics, while superseding earlier
+  attempts. Direct callers may pass a corpus; its attempt starts on method entry.
+
+Retraining needs at least three comments for the default three-fold evaluation.
+The admin reports unsupported corpora as an error message and keeps the existing
+model and metrics.
+Apply the ``SpamFilter.retrain_attempt`` migration before using this version.
+Consumers need no settings changes; update their dependency and migrate.
+All training publishers must use the updated package together.
 
 .. image:: ../images/spam_filter_performance.png
    :width: 800
@@ -603,16 +620,27 @@ Evaluation Metrics
 The ``Evaluation`` class performs stratified k-fold cross-validation:
 
 1. Comments are split by label so each fold has a proportional mix of ham and
-   spam.
+   spam. Every input row appears in exactly one held-out fold, including
+   remainders. Splitting does not change the input list.
 2. For each fold, a fresh ``NaiveBayes`` model is trained on the remaining
    folds and evaluated on the held-out fold.
 3. A confusion matrix (true positives, false positives, false negatives) is
    built per label.
-4. Precision, recall, and F1 are computed from the final fold's confusion
-   matrix.
+4. Confusion counts are summed over every fold; precision, recall, and F1
+   are computed once from these pooled counts.
+
+Fold counts must be positive integers (booleans are refused). Evaluation
+raises ``ValueError`` before training when the corpus has fewer rows than
+folds, including an empty corpus. The legacy one-fold mode remains supported:
+it evaluates all rows against a model trained on an empty set. Rare actual
+classes absent from training are counted; an unknown predicted label gets a
+false positive, while ``None`` is an abstention and counts only as a false
+negative for the actual class.
 
 The resulting metrics are stored in the ``SpamFilter.performance`` JSON field
-and displayed as read-only ``spam`` and ``ham`` columns in the admin list view.
+and displayed as read-only ``spam`` and ``ham`` fields in the admin list and
+change views. Missing class metrics display "Not trained / no metrics"; existing
+metric payloads remain visible for diagnosis, without fabricated scores.
 
 .. hint::
 

@@ -1,7 +1,7 @@
 import logging
 from typing import TYPE_CHECKING
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin import ModelAdmin
 from django.db.models import QuerySet
 
@@ -137,21 +137,23 @@ class GalleryModelAdmin(AdminUserMixin, ModelAdmin):
 @admin.action(description="Retrain model from scratch using marked comments")
 def retrain(_modeladmin: ModelAdmin, _request: "HttpRequest", queryset: QuerySet[SpamFilter]) -> None:
     for spamfilter in queryset:
-        train = spamfilter.get_training_data_comments()
-        spamfilter.retrain_from_scratch(train)
+        try:
+            spamfilter.retrain_from_scratch()
+        except ValueError as exc:
+            _modeladmin.message_user(_request, str(exc), level=messages.ERROR)
 
 
 @admin.register(SpamFilter)
 class SpamfilterModelAdmin(ModelAdmin):
     readonly_fields = ["spam", "ham"]
     list_display = tuple(["pk", "name"] + readonly_fields)
-    fields = ("name",)
+    fields = ("name", "spam", "ham")
     actions = [retrain]
 
     @staticmethod
-    def spam(obj: SpamFilter) -> dict:
-        return obj.performance["spam"]
+    def spam(obj: SpamFilter) -> dict | str:
+        return obj.performance.get("spam", "Not trained / no metrics")
 
     @staticmethod
-    def ham(obj: SpamFilter) -> dict:
-        return obj.performance["ham"]
+    def ham(obj: SpamFilter) -> dict | str:
+        return obj.performance.get("ham", "Not trained / no metrics")

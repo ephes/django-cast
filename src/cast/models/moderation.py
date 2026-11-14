@@ -1,12 +1,14 @@
 import json
 import random
 import re
+import uuid
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from typing import Any, Optional
 
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import models
+from django.db import models, router
+from django.utils import timezone
 from model_utils.models import TimeStampedModel
 
 token_pattern = re.compile(r"(?u)\b\w\w+\b")
@@ -65,6 +67,7 @@ class NaiveBayes:
         self.prior_probabilities = {label: count / number_of_messages for label, count in label_counts.items()}
 
     def set_word_label_counts(self, messages: Messages) -> None:
+        self.word_label_counts = defaultdict(lambda: defaultdict(int))
         counts = self.word_label_counts
         for label, text in messages:
             for word in self.tokenize(text):
@@ -98,6 +101,8 @@ class NaiveBayes:
 
     def predict(self, message: str) -> Probabilities:
         probabilities = dict(self.prior_probabilities)
+        if not self.number_of_all_words:
+            return probabilities
         for word in self.tokenize(message):
             counts_per_label = self.word_label_counts.get(word, {})
             probabilities = normalize(
@@ -151,8 +156,14 @@ class Evaluation:
     """Simple cross validation evaluation."""
 
     def __init__(self, model_class: type = NaiveBayes, num_folds: int = 3):
+        self.validate_fold_count(num_folds)
         self.model_class = model_class
         self.num_folds = num_folds
+
+    @staticmethod
+    def validate_fold_count(num_folds: int) -> None:
+        if type(num_folds) is not int or num_folds < 1:
+            raise ValueError("fold count must be a positive integer")
 
     @staticmethod
     def split_into_labels(messages: Messages) -> dict[str, Messages]:
@@ -167,25 +178,19 @@ class Evaluation:
         """
         Split the messages into num_folds folds.
         """
-        random.shuffle(messages)
-        fold_size = len(messages) // num_folds
-        folds = []
-        for i in range(num_folds):
-            folds.append(messages[i * fold_size : (i + 1) * fold_size])  # noqa: E203
-        return folds
+        Evaluation.validate_fold_count(num_folds)
+        shuffled = list(messages)
+        random.shuffle(shuffled)
+        return [shuffled[i::num_folds] for i in range(num_folds)]
 
     def stratified_split_into_folds(self, messages: Messages) -> list[Messages]:
-        """Split the messages in a stratified way into num_folds folds."""
-        data_per_label = self.split_into_labels(messages)
-        labeled_folds = []
-        for label, labeled_messages in data_per_label.items():
-            labeled_folds.append(self.split_into_folds(labeled_messages, self.num_folds))
-        folds = []
-        for nested_fold in zip(*labeled_folds):
-            fold = []
-            for labeled_fold in nested_fold:
-                fold.extend(labeled_fold)
-            folds.append(fold)
+        """Balance every label and the total population without dropping rows."""
+        folds: list[Messages] = [[] for _ in range(self.num_folds)]
+        offset = 0
+        for labeled_messages in self.split_into_labels(messages).values():
+            for i, fold in enumerate(self.split_into_folds(labeled_messages, self.num_folds)):
+                folds[(offset + i) % self.num_folds].extend(fold)
+            offset = (offset + len(labeled_messages)) % self.num_folds
         return folds
 
     @staticmethod
@@ -205,7 +210,7 @@ class Evaluation:
         possible_results = [f"{a}_{b}" for b in outcomes[1] for a in outcomes[0]]
         result_template = dict.fromkeys(possible_results, 0)
 
-        labels = set(model.prior_probabilities)
+        labels = set(model.prior_probabilities) | {label for label, _ in test_messages}
         label_results = {label: dict(result_template) for label in labels}
 
         for label, message in test_messages:
@@ -214,7 +219,8 @@ class Evaluation:
                 label_results[label]["true_positive"] += 1
             else:
                 label_results[label]["false_negative"] += 1
-                label_results[predicted]["false_positive"] += 1
+                if predicted is not None:
+                    label_results.setdefault(predicted, dict(result_template))["false_positive"] += 1
         return label_results
 
     @staticmethod
@@ -248,13 +254,17 @@ class Evaluation:
         Evaluate the model on the given messages. Use stratified cross validation
         to determine precision, recall and f1 score.
         """
+        self.validate_fold_count(self.num_folds)
+        if len(messages) < self.num_folds:
+            raise ValueError("corpus must contain at least one message per fold")
         folds = self.stratified_split_into_folds(messages)
-        results = None
+        results: dict[str, Counts] = {}
         for train, test in self.generate_train_test(folds):
             model = self.model_class().fit(train)
-            results = self.evaluate_model(model, test)
-        if results is None:
-            raise ValueError("No results")
+            for label, counts in self.evaluate_model(model, test).items():
+                pooled = results.setdefault(label, dict.fromkeys(counts, 0))
+                for outcome, count in counts.items():
+                    pooled[outcome] += count
         return self.calc_performance(results)
 
 
@@ -273,6 +283,7 @@ class SpamFilter(TimeStampedModel):
     name = models.CharField(unique=True, max_length=128)
     model = models.JSONField(verbose_name="Spamfilter Model", default=dict, encoder=ModelEncoder, decoder=ModelDecoder)
     performance = models.JSONField(verbose_name="Spamfilter Performance Indicators", default=dict)
+    retrain_attempt = models.UUIDField(null=True, editable=False)
 
     @classmethod
     def comment_to_message(cls, comment: Any) -> str:
@@ -300,16 +311,30 @@ class SpamFilter(TimeStampedModel):
             train.append((label, message))
         return train
 
-    def retrain_from_scratch(self, train: Messages) -> None:
-        """
-        Retrain on all comments for now. Later on there might be
-        different spam filters for different blogs/sites..
-        """
+    def retrain_from_scratch(self, train: Messages | None = None) -> None:
+        """Publish only the most recently started attempt's model and metrics."""
+        if self.pk is None:
+            raise ValueError("Save the spam filter before retraining")
+        using = self._state.db or router.db_for_write(type(self), instance=self)
+        filters = type(self).objects.using(using).filter(pk=self.pk)
+        attempt = uuid.uuid4()
+        filters.update(retrain_attempt=attempt)
+        # Reserve authority before taking the admin corpus snapshot. Callers may
+        # also supply an explicit corpus, whose attempt starts at this method.
+        if train is None:
+            train = self.get_training_data_comments()
+        performance = Evaluation().evaluate(train)
         model = NaiveBayes().fit(train)
-        self.model = model
-        self.performance = Evaluation().evaluate(train)
-        self.save()
+        filters.filter(retrain_attempt=attempt).update(model=model, performance=performance, modified=timezone.now())
+        self.refresh_from_db(using=using)
+
+    @property
+    def is_trained(self) -> bool:
+        return isinstance(self.model, NaiveBayes) and bool(self.model.prior_probabilities)
 
     @classmethod
     def get_default(cls) -> Optional["SpamFilter"]:
-        return cls.objects.first()
+        return next(
+            (spamfilter for spamfilter in cls.objects.order_by("pk").iterator(chunk_size=1) if spamfilter.is_trained),
+            None,
+        )

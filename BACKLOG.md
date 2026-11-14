@@ -47,6 +47,16 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
+- [ ] Verify concurrent gallery membership/signature publication on PostgreSQL
+  - Round 89's mutation-database isolation fix is implemented. The separate
+    publication-race oracle remains pending because the local PostgreSQL bootstrap
+    cannot allocate shared memory in the restricted worker environment.
+  - Scope: pause one add/remove after its membership read, complete a competing
+    mutation/signature refresh, then release it; the final digest must match the
+    committed through-table set and canonical lookup must return the correct set.
+  - Add a real two-connection barrier test first; introduce shared gallery row
+    locking only if that oracle demonstrates stale publication.
+
 - [ ] Transcript glossary, slice 2: LLM proposals via Voxhelm (on hold)
   - Spec: [backlog/2026-10-15-transcript-glossary.md](backlog/2026-10-15-transcript-glossary.md)
   - Slice 1 is implemented and verified on Django Chat staging (2026-10-16): contributor variants, show glossary
