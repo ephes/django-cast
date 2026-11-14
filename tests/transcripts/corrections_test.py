@@ -1492,3 +1492,12 @@ def test_corrections_real_storage_crash_restart(pg_editor_actors, request, setti
     assert new_bytes != old_bytes
     assert refresh_transcript_corrections(transcript).changed == 0
     assert file_bytes(transcript) == new_bytes
+
+
+@pytest.mark.django_db
+def test_stale_episode_instance_is_not_a_glossary_change(transcript, glossary_episode):
+    # The Voxhelm import passes the episode loaded when the job was submitted.
+    stale = type(glossary_episode).objects.get(pk=glossary_episode.pk)
+    type(glossary_episode).objects.get(pk=glossary_episode.pk).save_revision()
+    assert refresh_transcript_corrections(transcript, episode=stale).status == STATUS_APPLIED
+    assert transcript.corrections_data["episode_id"] == glossary_episode.pk

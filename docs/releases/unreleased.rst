@@ -8,7 +8,9 @@ Unreleased
   and 16,000 token characters. Editors must split oversized galleries; modal
   requests fail before conversion/signature work exceeds these bounds.
 - Bulk-load correction contributors and recheck the glossary/revision fingerprint
-  before publishing staged artifacts. Context changes return a retry conflict.
+  before publishing staged artifacts. Context changes return a retry conflict;
+  the episode is re-read first, so a caller's older instance (such as a Voxhelm
+  import) is not mistaken for a change.
   Add real-storage process-crash coverage before and after the correction commit;
   unreferenced blobs may remain for reference-aware cleanup.
 

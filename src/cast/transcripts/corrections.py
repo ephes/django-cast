@@ -519,7 +519,21 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
     return changed
 
 
+def _current_episode(transcript: Transcript, episode: Episode | None) -> Episode | None:
+    """Re-read the context episode, so the glossary fingerprint matches the commit-time check.
+
+    Callers such as the Voxhelm import may hold an instance loaded long before; a
+    draft saved since then must not look like a glossary change made while editing.
+    """
+    if episode is None:
+        return None
+    return (
+        Episode.objects.using(transcript._state.db).filter(pk=episode.pk, podcast_audio_id=transcript.audio_id).first()
+    )
+
+
 def _commit(transcript: Transcript, state: _State, *, dry_run: bool = False) -> CorrectionsResult:
+    state.episode = _current_episode(transcript, state.episode)
     if state.episode is None:
         if state.fresh and not dry_run:
             _write(transcript, state.data, {})  # keep the raw text before anything is applied
