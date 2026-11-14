@@ -150,6 +150,11 @@ the new files and removes the previous/next sRGB-policy counterpart keys for the
 same thumbnail specs. Uploaded originals, Wagtail admin renditions, and custom
 site renditions with unrelated filter specs are preserved.
 
+The command also checks that each required rendition's stored file still
+exists, and regenerates the file for rows whose file was lost. This check makes
+one storage request per required rendition, so it runs only here: publication
+and gallery rendition creation compare database rows only.
+
 Run this as a one-off migration step after a deployment that changes rendition
 specifications or policy; it is not required for every normal application
 deployment. During an sRGB policy transition, rendering falls back to an

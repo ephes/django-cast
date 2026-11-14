@@ -6,8 +6,12 @@ Unreleased
   positive maintenance IDs against backend field ranges. Unknown explicitly
   selected transcripts now fail before processing.
 - Preserve database affinity in direct gallery/post rendition generation and
-  repair required rows whose stored files were lost. Verify replacements before
-  retiring usable thumbnail counterparts; failed repairs remain retryable.
+  let ``sync_renditions`` repair required rows whose stored files were lost
+  (publication paths still compare rows only, without storage requests). Verify
+  replacements before retiring usable thumbnail counterparts; failed repairs
+  remain retryable. When a later spec fails in direct generation, files of the
+  renditions completed before it are removed unless a committed row references
+  them.
 - Publish missing video posters conditionally against current source/poster
   identity, preserving concurrent editor changes and cleaning attempt-owned
   files on conflict. Remove capability URLs and raw probe errors from

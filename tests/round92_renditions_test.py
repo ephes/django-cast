@@ -97,8 +97,19 @@ def test_planning_checks_each_required_storage_key_once(disk_image, mocker):
     rendition = image.get_rendition("width-1")
     mocker.patch("cast.models.image_renditions.get_all_filterstrings", return_value=[(image.pk, "width-1")])
     exists = mocker.spy(rendition.file.storage, "exists")
-    assert get_obsolete_and_missing_rendition_strings([("regular", image)] * 20) == (set(), {})
+    assert get_obsolete_and_missing_rendition_strings([("regular", image)] * 20, check_files=True) == (set(), {})
     assert exists.call_count == 1
+
+
+@pytest.mark.django_db
+def test_default_planning_compares_rows_without_storage_requests(disk_image, mocker):
+    image = disk_image
+    rendition = image.get_rendition("width-1")
+    rendition.file.storage.delete(rendition.file.name)
+    mocker.patch("cast.models.image_renditions.get_all_filterstrings", return_value=[(image.pk, "width-1")])
+    exists = mocker.spy(rendition.file.storage, "exists")
+    assert get_obsolete_and_missing_rendition_strings([("regular", image)]) == (set(), {})
+    exists.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -124,7 +135,10 @@ def test_planning_reuses_existence_for_shared_keys_and_handles_empty_names(disk_
         return_value=[(image.pk, "width-1"), (image.pk, "height-1"), (image.pk, "fill-1x1")],
     )
     exists = mocker.spy(first.file.storage, "exists")
-    assert get_obsolete_and_missing_rendition_strings([("regular", image)]) == (set(), {image.pk: {"fill-1x1"}})
+    assert get_obsolete_and_missing_rendition_strings([("regular", image)], check_files=True) == (
+        set(),
+        {image.pk: {"fill-1x1"}},
+    )
     assert exists.call_count == 1
 
 
@@ -159,6 +173,60 @@ def test_direct_creation_verifies_storage_and_does_not_rewrite_usable_rows(disk_
     repair_missing_rendition_files(image, ["width-1"])
     save.assert_not_called()
     mocker.patch.object(Image, "create_rendition", return_value=row)
-    mocker.patch.object(row.file.storage, "exists", side_effect=[True, False])
+    mocker.patch.object(row.file.storage, "exists", side_effect=[False])
     with pytest.raises(OSError, match="not saved"):
-        create_missing_renditions_for_images({image.pk: {"width-1"}})
+        create_missing_renditions_for_images({image.pk: {"height-1"}})
+    # The returned file belongs to a committed row, so the rollback keeps it.
+    mocker.stopall()
+    assert row.file.storage.exists(row.file.name)
+
+
+@pytest.mark.django_db
+def test_direct_creation_does_not_regenerate_repaired_rows(disk_image, mocker):
+    from cast.models.image_renditions import create_missing_renditions_for_images
+
+    image = disk_image
+    row = image.get_rendition("width-1")
+    row.file.storage.delete(row.file.name)
+    create = mocker.spy(Image, "create_rendition")
+    create_missing_renditions_for_images({image.pk: {"width-1"}})
+    create.assert_not_called()
+    repaired = image.renditions.get(filter_spec="width-1")
+    assert repaired.pk == row.pk
+    assert repaired.file.storage.exists(repaired.file.name)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("delete_fails", [None, "delete", "lookup"])
+def test_rolled_back_direct_creation_removes_its_unreferenced_files(disk_image, mocker, caplog, delete_fails):
+    from cast.models.image_renditions import create_missing_renditions_for_images
+
+    image = disk_image
+    storage = Rendition._meta.get_field("file").storage
+    original_create = Image.create_rendition
+    created: list[str] = []
+
+    def create_then_fail(self, filter):
+        if created:
+            raise RuntimeError("synthetic second rendition failure")
+        rendition = original_create(self, filter)
+        created.append(rendition.file.name)
+        return rendition
+
+    mocker.patch.object(Image, "create_rendition", create_then_fail)
+    if delete_fails == "delete":
+        mocker.patch.object(type(storage), "delete", side_effect=OSError("synthetic delete refusal"))
+    elif delete_fails == "lookup":
+        from django.db.models.query import QuerySet
+
+        mocker.patch.object(QuerySet, "exists", side_effect=RuntimeError("synthetic lookup failure"))
+    with pytest.raises(RuntimeError, match="synthetic second"):
+        create_missing_renditions_for_images({image.pk: {"width-1", "height-1"}})
+    mocker.stopall()
+    assert not image.renditions.exists()
+    assert len(created) == 1
+    if delete_fails:
+        assert storage.exists(created[0])
+        assert "Could not remove orphaned rendition file" in caplog.text
+    else:
+        assert not storage.exists(created[0])

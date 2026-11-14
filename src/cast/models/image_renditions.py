@@ -1,12 +1,16 @@
+import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, TypeAlias
 
+from django.core.files.storage import Storage
 from django.db import router, transaction
 from django.db.models import Prefetch
 from wagtail.images.models import Filter, Image, Rendition
 
 from ..renditions import ImageType, RenditionFilters, get_srgb_counterpart_filter_spec
+
+logger = logging.getLogger(__name__)
 
 ImageIdSet = set[int]
 RenditionStringsByImageId = dict[int, set[str]]
@@ -44,10 +48,15 @@ def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[in
 
 
 def get_obsolete_and_missing_rendition_strings(
-    images_with_type: ImagesWithType, *, using: str | None = None
+    images_with_type: ImagesWithType, *, using: str | None = None, check_files: bool = False
 ) -> ObsoleteAndMissing:
     """
     Get all obsolete and missing rendition strings from a queryset of posts.
+
+    By default only database rows are compared, which keeps publication and
+    gallery paths free of per-rendition storage requests. With
+    ``check_files=True`` (``sync_renditions``) a required row whose stored file
+    is absent also counts as missing.
     """
     images_with_type = list(images_with_type)
     aliases = {image._state.db for _, image in images_with_type if hasattr(image, "_state")}
@@ -71,7 +80,7 @@ def get_obsolete_and_missing_rendition_strings(
     existing_renditions = set(existing_rendition_to_id.keys())
     # Inspect only required keys, once per storage/key even for repeated images.
     exists: dict[tuple[int, str], bool] = {}
-    for rendition in renditions_queryset:
+    for rendition in renditions_queryset if check_files else ():
         key = (rendition.image_id, rendition.filter_spec)
         if key in required_renditions:
             storage_key = (id(rendition.file.storage), rendition.file.name)
@@ -104,17 +113,25 @@ def get_all_images_from_posts(posts: Iterator["Post"]) -> ImagesWithType:
         yield from post.get_all_images()
 
 
-def repair_missing_rendition_files(image: Image, filter_specs: Iterable[str]) -> None:
+def repair_missing_rendition_files(
+    image: Image, filter_specs: Iterable[str], *, written: list[tuple[Storage, str]] | None = None
+) -> set[str]:
     """Repair broken files without scheduling deletion of a reused storage key.
 
     The caller owns the transaction. Preserve existing rows and usable policy
     counterparts; Wagtail's public generation and cache APIs handle the file.
+    Return the filter specs that already have a row, so callers do not generate
+    them again, and append each newly saved file to ``written``.
     """
+    present: set[str] = set()
     for rendition in image.renditions.select_for_update().filter(filter_spec__in=filter_specs):
+        present.add(rendition.filter_spec)
         if not rendition.file.name or not rendition.file.storage.exists(rendition.file.name):
             with image.generate_rendition_file(Filter(rendition.filter_spec)) as generated:
                 rendition.file.save(generated.name, generated, save=False)
             name = rendition.file.name
+            if written is not None:
+                written.append((rendition.file.storage, name))
             try:
                 if not rendition.file.storage.exists(name):
                     raise OSError("Required rendition file was not saved.")
@@ -123,6 +140,7 @@ def repair_missing_rendition_files(image: Image, filter_specs: Iterable[str]) ->
                 rendition.file.storage.delete(name)
                 raise
             rendition.purge_from_cache()
+    return present
 
 
 def create_missing_renditions_for_images(
@@ -135,15 +153,35 @@ def create_missing_renditions_for_images(
     )
     for image_id, filter_specs in missing_renditions.items():
         image = images.get(id=image_id)
-        with transaction.atomic(using=using):
-            repair_missing_rendition_files(image, filter_specs)
-            for filter_string in filter_specs:
-                clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
-                # Public single-rendition API uses the explicitly bound related
-                # manager; bulk creation and the shared cache can lose the alias.
-                rendition = image.create_rendition(clean_filter(Filter(filter_string)))
-                if not rendition.file.storage.exists(rendition.file.name):
-                    raise OSError("Required rendition file was not saved.")
+        written: list[tuple[Storage, str]] = []
+        try:
+            with transaction.atomic(using=using):
+                present = repair_missing_rendition_files(image, filter_specs, written=written)
+                for filter_string in filter_specs:
+                    if filter_string in present:
+                        continue
+                    clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
+                    # Public single-rendition API uses the explicitly bound related
+                    # manager; bulk creation and the shared cache can lose the alias.
+                    rendition = image.create_rendition(clean_filter(Filter(filter_string)))
+                    written.append((rendition.file.storage, rendition.file.name))
+                    if not rendition.file.storage.exists(rendition.file.name):
+                        raise OSError("Required rendition file was not saved.")
+        except BaseException:
+            discard_unreferenced_rendition_files(written, using=using)
+            raise
+
+
+def discard_unreferenced_rendition_files(written: Iterable[tuple[Storage, str]], *, using: str) -> None:
+    """Remove files written by a rolled-back attempt that no committed row references."""
+    # Best effort: never replace the caller's original failure.
+    for storage, name in written:
+        try:
+            if Rendition.objects.using(using).filter(file=name).exists():
+                continue
+            storage.delete(name)
+        except Exception:
+            logger.warning("Could not remove orphaned rendition file %s", name, exc_info=True)
 
 
 def create_missing_renditions_for_posts(posts: Iterable["Post"]) -> None:

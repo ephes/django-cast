@@ -54,7 +54,8 @@ def test_combined_rendition_selectors_intersect_blog_and_post(mocker, blog, post
     other_post.images.add(image)
     seen = []
 
-    def plan(images):
+    def plan(images, *, check_files=False):
+        assert check_files
         seen.extend(images)
         return set(), {}
 
