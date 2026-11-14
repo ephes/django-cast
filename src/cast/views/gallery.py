@@ -11,17 +11,28 @@ from django.views.decorators.http import require_GET
 from wagtail.images.models import Image
 
 from ..blocks import get_srcset_images_for_slots
-from ..gallery_tokens import gallery_image_pks_match_token
+from ..gallery_tokens import (
+    GALLERY_LIMIT_MESSAGE,
+    MAX_GALLERY_IDS_LENGTH,
+    MAX_GALLERY_IMAGES,
+    MAX_GALLERY_TOKEN_LENGTH,
+    gallery_image_pks_match_token,
+)
 from ..models.theme import get_template_base_dir_choices
 from .htmx_helpers import HtmxHttpRequest
 
 
 class CommaSeparatedIntegerField(forms.Field):
     def to_python(self, value: Any | None) -> list[int]:  # Any | None from super -> do not override
+        if value is not None and (len(value) > MAX_GALLERY_IDS_LENGTH or value.count(",") >= MAX_GALLERY_IMAGES):
+            raise forms.ValidationError(GALLERY_LIMIT_MESSAGE)
         if value is None or not value.strip():
             return []
+        items = value.split(",")
+        if any(len(item.strip()) > 20 for item in items):
+            raise forms.ValidationError(GALLERY_LIMIT_MESSAGE)
         try:
-            return [int(item.strip()) for item in value.split(",")]  # image_pks
+            return [int(item.strip()) for item in items]  # image_pks
         except ValueError:
             raise forms.ValidationError(_("Enter a list of image ids."))
 
@@ -30,7 +41,7 @@ class GalleryModalForm(forms.Form):
     image_pks = CommaSeparatedIntegerField()
     current_image_index = forms.IntegerField()
     block_id = forms.CharField()
-    gallery_token = forms.CharField()
+    gallery_token = forms.CharField(max_length=MAX_GALLERY_TOKEN_LENGTH, strip=False)
 
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean() or {}

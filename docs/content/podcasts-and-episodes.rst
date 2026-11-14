@@ -187,3 +187,14 @@ Block
 -----
 
 Indicates whether the episode is blocked from iTunes or not.
+
+Number allocation and database ownership
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Automatic first-publication numbering keeps its counter lock, current episode
+read, number lookup and revision update on the episode's owning database.
+Revisions from another database are refused before allocation. The publication
+transaction uses that same database, so a failed publication rolls back the
+counter and revision together. Gap search streams an ordered number-only
+projection starting at the counter; historical numbers below it are not loaded.
+Manual numbers and the existing per-podcast collision rules are unchanged.

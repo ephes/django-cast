@@ -634,3 +634,113 @@ def test_postgres_first_publications_serialize_per_podcast(pg_editor_actors, mon
     for show in (first_podcast, second_podcast):
         show.refresh_from_db()
         assert show.next_episode_number == (8 if independent_podcasts else 9)
+
+
+@pytest.mark.django_db(databases=["default", "migration_other"])
+def test_number_allocation_uses_episode_database(podcast, audio, body, tmp_path, mocker):
+    from io import StringIO
+
+    from django.core.exceptions import ValidationError
+    from django.db import connections, transaction
+    from wagtail.models import Revision
+    from wagtail.search.signal_handlers import post_save_signal_handler
+
+    mocker.patch(f"{post_save_signal_handler.__module__}.insert_or_update_object_task")
+    mocker.patch("wagtail.signal_handlers.update_reference_index_task")
+    enable_numbering(podcast, next_number=40)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="secondary-number")
+    revision = episode.save_revision()
+    serialized = StringIO()
+    call_command("dumpdata", stdout=serialized)
+    fixture = tmp_path / "synthetic-numbering.json"
+    fixture.write_text(serialized.getvalue())
+    alias = "migration_other"
+    call_command("flush", database=alias, interactive=False, inhibit_post_migrate=True, verbosity=0)
+    call_command("loaddata", str(fixture), database=alias, verbosity=0)
+    Podcast.objects.using(alias).filter(pk=podcast.pk).update(next_episode_number=70)
+    other = Episode.objects.using(alias).get(pk=episode.pk)
+    other_revision = Revision.objects.using(alias).get(pk=revision.pk)
+    with pytest.raises(ValidationError, match="database"):
+        assign_episode_number_for_publish(other, revision)
+    for fail in (True, False):
+        other.refresh_from_db()
+        other_revision.refresh_from_db()
+        try:
+            with transaction.atomic(using=alias):
+                assert assign_episode_number_for_publish(other, other_revision) == 70
+                other.live = True
+                other.save(using=alias)
+                if fail:
+                    raise RuntimeError("synthetic publish failure")
+        except RuntimeError:
+            pass
+        assert Podcast.objects.using(alias).get(pk=podcast.pk).next_episode_number == (70 if fail else 71)
+        assert Episode.objects.using(alias).get(pk=episode.pk).episode_number == (None if fail else 70)
+        assert Revision.objects.using(alias).get(pk=revision.pk).content["episode_number"] == (None if fail else 70)
+        assert not connections[alias].needs_rollback
+    podcast.refresh_from_db()
+    revision.refresh_from_db()
+    episode.refresh_from_db()
+    assert podcast.next_episode_number == 40
+    assert revision.content["episode_number"] is None
+    assert episode.episode_number is None and not episode.live
+
+    # Exercise Wagtail's public publication entry point with the complete graph
+    # routed to the owning alias (its deserializer also needs that routing).
+    from django.test import override_settings
+    from wagtail.actions.publish_page_revision import PublishPageRevisionAction
+
+    class SecondaryRouter:
+        def db_for_read(self, model, **hints):
+            return alias
+
+        def db_for_write(self, model, **hints):
+            return alias
+
+    Episode.objects.using(alias).filter(pk=other.pk).update(live=False, first_published_at=None, episode_number=None)
+    Podcast.objects.using(alias).filter(pk=podcast.pk).update(next_episode_number=70)
+    other_revision.refresh_from_db()
+    other_revision.content["episode_number"] = None
+    other_revision.save(using=alias, update_fields=["content"])
+    with override_settings(DATABASE_ROUTERS=[SecondaryRouter()]):
+        failure = mocker.patch.object(
+            PublishPageRevisionAction, "_after_publish", side_effect=RuntimeError("synthetic publication failure")
+        )
+        with pytest.raises(RuntimeError, match="synthetic publication failure"):
+            other_revision.publish(log_action=False)
+        assert Podcast.objects.using(alias).get(pk=podcast.pk).next_episode_number == 70
+        assert Episode.objects.using(alias).get(pk=other.pk).episode_number is None
+        other_revision.refresh_from_db()
+        assert other_revision.content["episode_number"] is None
+        mocker.stop(failure)
+        other_revision.publish(log_action=False)
+    other.refresh_from_db()
+    other_revision.refresh_from_db()
+    assert other.live and other.episode_number == other_revision.content["episode_number"] == 70
+    assert Podcast.objects.using(alias).get(pk=podcast.pk).next_episode_number == 71
+    podcast.refresh_from_db()
+    episode.refresh_from_db()
+    assert podcast.next_episode_number == 40
+    assert not episode.live and episode.episode_number is None
+
+
+@pytest.mark.django_db
+def test_gap_scan_projects_only_candidate_numbers(podcast, audio, body, mocker):
+    from django.db.models.query import QuerySet
+
+    from cast import podcast_numbering
+
+    enable_numbering(podcast, next_number=100)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="bounded-gap")
+    Episode.objects.filter(pk=episode.pk).update(episode_number=99)
+    for number in range(1, 51):
+        make_draft_episode(podcast=podcast, audio=audio, body=[], slug=f"historical-{number}", episode_number=number)
+    streamed = mocker.spy(QuerySet, "iterator")
+    numbers = podcast_numbering._used_episode_numbers(podcast, Episode(pk=-1))
+    assert list(numbers) == []
+    assert streamed.call_count == 1
+    assert "episode_number" in str(streamed.call_args[0][0].query)
+    for used in ([100, 101, 104], [101, 103], [100, 100, 101, 102]):
+        mocker.patch.object(podcast_numbering, "_used_episode_numbers", return_value=iter(used))
+        expected = next(n for n in range(100, 110) if n not in set(used))
+        assert _next_available_episode_number(podcast, episode) == expected

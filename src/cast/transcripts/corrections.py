@@ -240,12 +240,10 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
     """
     revision = _glossary_revision(episode)
     contributors: list[ContributorGlossary] = []
-    seen: set[int] = set()
-    for assignment in revision.contributor_assignments.all():
-        if assignment.contributor_id in seen:
-            continue
-        seen.add(assignment.contributor_id)
-        contributor = Contributor.objects.using(episode._state.db).filter(pk=assignment.contributor_id).first()
+    contributor_ids = list(dict.fromkeys(item.contributor_id for item in revision.contributor_assignments.all()))
+    by_id = Contributor.objects.using(episode._state.db).in_bulk(contributor_ids)
+    for contributor_id in contributor_ids:
+        contributor = by_id.get(contributor_id)
         if contributor is None:
             continue
         contributors.append(ContributorGlossary(contributor.display_name, contributor.transcript_variants))
@@ -260,6 +258,9 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
     terms = episode_terms("\n".join(_show_note_sources(revision.body)), revision.title)
     language = get_podcast_transcript_language(podcast)
     payload = {
+        "episode_id": episode.pk,
+        "latest_revision_id": episode.latest_revision_id,
+        "has_unpublished_changes": episode.has_unpublished_changes,
         "contributors": [[item.display_name, item.transcript_variants] for item in contributors],
         "show_terms": [[item.term, item.variants] for item in show_terms],
         "episode_terms": terms,
@@ -481,6 +482,14 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
     changed_fields: list[str] = []
     changed = 0
     replacements = StagedFileReplacementGroup()
+
+    def save_with_current_glossary(instance: Transcript, **kwargs: Any) -> None:
+        if data.get("episode_id") is not None:
+            episode = _stored_episode(instance, data)
+            if episode is None or effective_glossary(episode)[1] != data["glossary_fingerprint"]:
+                raise services.TranscriptEditConflict("Reload the transcript; its glossary changed while editing.")
+        _save_derived_artifacts(instance, **kwargs)
+
     try:
         if data != transcript.corrections_data:
             transcript._write_corrections_data(data, replacements=replacements)
@@ -500,7 +509,7 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
                 transcript._save_text_file("vtt", content, replacements=replacements)
                 changed_fields.append("vtt")
         if changed_fields:
-            services.save_editor_artifacts(transcript, replacements, expected, save=_save_derived_artifacts)
+            services.save_editor_artifacts(transcript, replacements, expected, save=save_with_current_glossary)
     except Exception:
         replacements.rollback()
         transcript.source_fingerprint = expected["source_fingerprint"]
@@ -510,7 +519,21 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
     return changed
 
 
+def _current_episode(transcript: Transcript, episode: Episode | None) -> Episode | None:
+    """Re-read the context episode, so the glossary fingerprint matches the commit-time check.
+
+    Callers such as the Voxhelm import may hold an instance loaded long before; a
+    draft saved since then must not look like a glossary change made while editing.
+    """
+    if episode is None:
+        return None
+    return (
+        Episode.objects.using(transcript._state.db).filter(pk=episode.pk, podcast_audio_id=transcript.audio_id).first()
+    )
+
+
 def _commit(transcript: Transcript, state: _State, *, dry_run: bool = False) -> CorrectionsResult:
+    state.episode = _current_episode(transcript, state.episode)
     if state.episode is None:
         if state.fresh and not dry_run:
             _write(transcript, state.data, {})  # keep the raw text before anything is applied
