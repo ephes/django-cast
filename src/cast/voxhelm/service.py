@@ -304,6 +304,10 @@ class StaleTranscriptAttempt(VoxhelmError):
     """Completion no longer owns the generation it was queued for."""
 
 
+class TranscriptGenerationActive(VoxhelmError):
+    """Another (admin-queued) attempt currently owns this audio's transcript generation."""
+
+
 class VoxhelmTranscriptService:
     def __init__(
         self,
@@ -437,12 +441,17 @@ class VoxhelmTranscriptService:
             raise VoxhelmError("Audio must be saved before requesting a transcript.")
         using = audio._state.db or "default"
         with transaction.atomic(using=using):
-            generation, _ = TranscriptGeneration.objects.using(using).get_or_create(
+            generation, created = TranscriptGeneration.objects.using(using).get_or_create(
                 audio=audio, defaults={"task_ref": ""}
             )
             TranscriptGeneration.objects.using(using).filter(pk=generation.pk).update(
                 updated_at=models.F("updated_at")
             )
+            generation.refresh_from_db(using=using)
+            if not created and generation.is_active:
+                raise TranscriptGenerationActive(
+                    "Transcript generation is already queued or running for this audio; retry after it finishes."
+                )
             generation.queue_submission(
                 task_ref=task_ref or "",
                 voxhelm_job_id="",
@@ -475,7 +484,8 @@ class VoxhelmTranscriptService:
                 using=using,
                 expected_revision=expected_revision,
             )
-        except Exception as exc:
+        except BaseException as exc:
+            # BaseException: an interrupted or cancelled CLI wait must not leave the row RUNNING.
             current.update(
                 status=TranscriptGeneration.Status.FAILED,
                 error_message=str(exc),

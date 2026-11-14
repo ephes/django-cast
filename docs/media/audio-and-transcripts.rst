@@ -274,8 +274,10 @@ blank when you reopen the settings form. Submit the form with the token field
 blank to keep the stored token, enter a new token to replace it, or tick
 "Remove stored API token" to delete it and use the deployment key. A blank
 submission preserves the token stored when the save runs, including a rotation
-or removal by another administrator. Explicit replacement/removal from a stale
-form instance raises a validation conflict; reload settings and retry.
+or removal by another administrator. The form carries an opaque fingerprint of
+the token stored when the page was rendered (never the token itself); replacing
+or removing the token from a page opened before another administrator changed it
+shows a form error. Reload settings and retry.
 
 Production sites can also keep the Voxhelm token in deployment-managed Django
 settings or environment variables instead of the Wagtail database. django-cast
@@ -355,10 +357,14 @@ Use a stable, distinct ``--worker-id`` for each deployed site. See
     # Operator fallback
     python manage.py generate_transcripts --episode-id 42
 
-The synchronous command owns a generation attempt just like queued work. A newer
+The synchronous command owns a generation attempt just like queued work. It does
+not take over an admin-queued or running generation: such audio is reported as
+``skipped`` with a message, so retry after that work finishes (a generation older
+than ``CAST_VOXHELM_STALE_AFTER`` counts as interrupted and is taken over). A newer
 attempt or an artifact edit while it waits makes completion obsolete: it raises
 an error without publishing files or replacing speaker mappings. Retrying starts
-a new attempt. Failed jobs retain their Voxhelm job ID in the generation status;
+a new attempt. Interrupting the command (for example with Ctrl-C) marks its
+attempt failed, so admin regeneration is not blocked. Failed jobs retain their Voxhelm job ID in the generation status;
 manual artifact recovery must be reviewed against the current transcript.
 
 django-cast now consumes Voxhelm-owned Podlove, DOTe, and WebVTT transcript

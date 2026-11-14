@@ -1,13 +1,18 @@
 """Synthetic stale-form and synchronous generation interleavings."""
 
+from io import StringIO
+
 import pytest
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.forms import modelform_factory
+from django.test import TestCase
+from django.urls import reverse
 
 from cast.models import TranscriptGeneration, VoxhelmSettings
-from cast.models.voxhelm_settings import VoxhelmSettingsForm
+from cast.models.voxhelm_settings import VoxhelmSettingsForm, api_token_version
 from cast.voxhelm import TranscriptSubmission, VoxhelmTranscriptService
-from cast.voxhelm.service import StaleTranscriptAttempt
+from cast.voxhelm.service import StaleTranscriptAttempt, TranscriptGenerationActive
 from tests.known_speaker_apply_test import make_transcript
 from tests.voxhelm.tasks_status_test import VALID_DOTE_ARTIFACT, VALID_PODLOVE_ARTIFACT, VALID_VTT_ARTIFACT
 
@@ -140,3 +145,90 @@ def test_cli_completion_refuses_attempt_replaced_during_submission(audio, mocker
     generation = TranscriptGeneration.objects.get(audio=audio)
     assert generation.voxhelm_job_id == "new"
     assert generation.status == generation.Status.QUEUED
+
+
+def queued_generation(audio):
+    generation, _ = TranscriptGeneration.objects.get_or_create(audio=audio, defaults={"task_ref": ""})
+    generation.queue_submission(
+        task_ref="admin", voxhelm_job_id="admin-job", source_url="", task_result_id="", site=None, requested_by=None
+    )
+    return TranscriptGeneration.objects.get(pk=generation.pk)
+
+
+@pytest.mark.django_db
+def test_cli_refuses_to_preempt_active_generation(audio, mocker):
+    queued = queued_generation(audio)
+    service = VoxhelmTranscriptService(client=mocker.Mock())
+    submit = mocker.patch.object(service, "submit_for_audio")
+    with pytest.raises(TranscriptGenerationActive):
+        service.generate_for_audio(audio)
+    submit.assert_not_called()
+    generation = TranscriptGeneration.objects.get(pk=queued.pk)
+    assert (generation.attempt_id, generation.status, generation.voxhelm_job_id) == (
+        queued.attempt_id,
+        TranscriptGeneration.Status.QUEUED,
+        "admin-job",
+    )
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_command_skips_active_generation(audio, mocker, settings):
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "synthetic"
+    queued_generation(audio)
+    submit = mocker.patch.object(VoxhelmTranscriptService, "submit_for_audio")
+    stdout = StringIO()
+    call_command("generate_transcripts", "--audio-id", str(audio.pk), "--force", stdout=stdout)
+    submit.assert_not_called()
+    assert f"skipped audio={audio.pk}: Transcript generation is already queued or running" in stdout.getvalue()
+    assert "skipped=1 errors=0" in stdout.getvalue()
+
+
+@pytest.mark.django_db
+def test_cli_interrupt_marks_generation_failed(audio, mocker):
+    service = VoxhelmTranscriptService(client=mocker.Mock())
+    mocker.patch.object(service, "submit_for_audio", side_effect=KeyboardInterrupt)
+    with pytest.raises(KeyboardInterrupt):
+        service.generate_for_audio(audio)
+    assert TranscriptGeneration.objects.get(audio=audio).status == TranscriptGeneration.Status.FAILED
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("clear", [True, False])
+def test_form_reports_token_changed_after_render(site, clear):
+    setting = VoxhelmSettings.objects.create(site=site, api_token="old-synthetic")
+    rendered = api_token_version("old-synthetic")
+    VoxhelmSettings.objects.filter(pk=setting.pk).update(api_token="rotated")
+    form_class = modelform_factory(VoxhelmSettings, form=VoxhelmSettingsForm, fields=["api_token", "language"])
+    data = {"api_token": "" if clear else "replacement", "language": "de", "api_token_version": rendered}
+    if clear:
+        data["clear_api_token"] = "on"
+    form = form_class(data=data, instance=VoxhelmSettings.objects.get(pk=setting.pk))
+    assert not form.is_valid()
+    assert "changed" in str(form.errors["api_token"])
+
+
+@pytest.mark.django_db
+def test_settings_edit_view_refuses_stale_token_replacement(admin_client, site):
+    setting = VoxhelmSettings.objects.create(site=site, api_token="old-synthetic")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    content = admin_client.get(edit_url).content.decode()
+    rendered = api_token_version("old-synthetic")
+    assert f'value="{rendered}"' in content
+    assert "old-synthetic" not in content
+    # Another administrator rotates the token after the page was opened.
+    VoxhelmSettings.objects.filter(pk=setting.pk).update(api_token="rotated")
+    post = {"api_token_version": rendered, "model": "", "language": "", "diarization_enabled": "unknown"}
+
+    response = admin_client.post(edit_url, {**post, "api_token": "replacement"})
+
+    assert response.status_code == 200
+    assert "Reload settings before replacing or removing it" in response.content.decode()
+    setting.refresh_from_db()
+    assert setting.api_token == "rotated"
+
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        response = admin_client.post(edit_url, {**post, "api_token": "", "language": "de"}, follow=True)
+    assert response.status_code == 200
+    setting.refresh_from_db()
+    assert (setting.api_token, setting.language) == ("rotated", "de")

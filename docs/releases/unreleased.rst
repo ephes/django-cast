@@ -2,9 +2,12 @@ Unreleased
 ==========
 
 - Preserve the current Voxhelm token on blank settings saves, including stale
-  forms and Wagtail deferred saves. Refuse conflicting explicit token changes.
+  forms and Wagtail deferred saves. Refuse explicit token changes from a settings
+  page opened before another change, with a form error.
 - Fence synchronous CLI transcript completion by generation attempt and artifact
   revision so newer queued work or editor changes retain their files and mappings.
+  ``generate_transcripts`` skips audio whose generation is already queued or
+  running, and an interrupted run marks its attempt failed.
 - Serialize contributor link reassignment with episode assignment admission and
   recheck cached link ownership on the write database.
 - Reject negative, nonfinite and over-duration voice-reference ranges; skip
