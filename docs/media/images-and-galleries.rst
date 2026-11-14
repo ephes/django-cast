@@ -403,3 +403,15 @@ Existing originals over the budget are reported separately as
 ``budget-exceeded images``, with their IDs and storage names, rather than as
 unreadable. It leaves every original untouched and exits nonzero because GPS
 status for those originals is unknown; it does not scan them without a bound.
+
+Gallery request limits
+~~~~~~~~~~~~~~~~~~~~~~
+
+A rendered gallery supports at most 500 images and image IDs of at most 20
+characters. Split larger galleries into separate blocks; the editor reports the
+500-image limit, and rendering/signing oversized imported galleries raises a
+validation error before rendition work. The modal accepts at most 10,500
+characters of comma-separated IDs and 16,000 characters of signed token.
+Oversized requests return HTTP 400 before integer conversion (ID limits) or
+signature decoding (token limit). Existing theme context keys, signed tokens and
+current/previous/next navigation remain compatible within these bounds.

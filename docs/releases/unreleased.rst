@@ -1,6 +1,17 @@
 Unreleased
 ==========
 
+- Keep automatic episode numbering and publication transactions on the owning
+  database; refuse cross-database revisions and stream candidate numbers instead
+  of materializing the complete podcast history.
+- Limit galleries to 500 images, 20-character IDs, 10,500 request ID characters
+  and 16,000 token characters. Editors must split oversized galleries; modal
+  requests fail before conversion/signature work exceeds these bounds.
+- Bulk-load correction contributors and recheck the glossary/revision fingerprint
+  before publishing staged artifacts. Context changes return a retry conflict.
+  Add real-storage process-crash coverage before and after the correction commit;
+  unreferenced blobs may remain for reference-aware cleanup.
+
 - Admit only opened regular glossary sources (including symlinks to regular
   files), reject duplicate JSON members before writes, and validate canonical
   positive maintenance IDs against backend field ranges. Unknown explicitly

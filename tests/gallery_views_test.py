@@ -358,3 +358,61 @@ def test_gallery_modal_form_rejects_expired_token(monkeypatch):
     form = GalleryModalForm(data)
     assert not form.is_valid()
     assert "Gallery token does not match image ids." in str(form.errors)
+
+
+@pytest.mark.parametrize(
+    "field,value", [("image_pks", "1," * 500 + "1"), ("image_pks", "1" * 11000), ("gallery_token", "x" * 20000)]
+)
+def test_gallery_admission_precedes_conversion_and_signature(field, value, mocker):
+    data = _gallery_modal_data([1])
+    data[field] = value
+    if field == "image_pks":
+        convert = mocker.patch("cast.views.gallery.int", side_effect=AssertionError("conversion"), create=True)
+    decode = mocker.patch("cast.gallery_tokens.signing.loads", side_effect=AssertionError("signature"))
+    assert not GalleryModalForm(data).is_valid()
+    if field == "image_pks":
+        convert.assert_not_called()
+    decode.assert_not_called()
+
+
+def test_gallery_signing_rejects_oversized_editor_gallery():
+    from django.core.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="500"):
+        sign_gallery_image_pks(range(501))
+
+
+def test_maximum_gallery_signing_and_navigation():
+    from cast.gallery_tokens import gallery_image_pks_match_token
+
+    ids = list(range(1, 501))
+    data = _gallery_modal_data(ids, current_image_index=250)
+    form = GalleryModalForm(data)
+    assert form.is_valid(), form.errors
+    assert get_prev_next_indices(form.cleaned_data["image_pks"], 250) == (249, 251)
+    assert not gallery_image_pks_match_token("x" * 16001, ids)
+
+
+def test_gallery_editor_reports_cardinality_limit():
+    from wagtail.blocks import CharBlock, ListBlockValidationError
+
+    from cast.blocks import GalleryBlock
+
+    block = GalleryBlock(CharBlock())
+    with pytest.raises(ListBlockValidationError) as error:
+        block.clean(["synthetic"] * 501)
+    assert "500" in str(error.value.non_block_errors)
+
+
+def test_gallery_rejects_overlong_individual_id():
+    data = _gallery_modal_data([1])
+    data["image_pks"] = "1" * 21
+    assert not GalleryModalForm(data).is_valid()
+
+
+def test_raw_gallery_token_budget_precedes_whitespace_normalization(mocker):
+    data = _gallery_modal_data([1])
+    data["gallery_token"] = " " * 16000 + data["gallery_token"]
+    decode = mocker.patch("cast.gallery_tokens.signing.loads")
+    assert not GalleryModalForm(data).is_valid()
+    decode.assert_not_called()

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
-from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db import router, transaction
 from django.utils import timezone
 
 if TYPE_CHECKING:
@@ -41,22 +42,27 @@ def _is_first_publish_candidate(episode: Episode, podcast: Podcast) -> bool:
     return episode.episode_number is None and episode_type_consumes_number(episode.episode_type)
 
 
-def _used_episode_numbers(podcast: Podcast, episode: Episode) -> set[int]:
+def _used_episode_numbers(podcast: Podcast, episode: Episode) -> Iterator[int]:
     from cast.models import Episode
 
-    return set(
-        Episode.objects.descendant_of(podcast)
+    return (
+        Episode.objects.using(episode._state.db)
+        .descendant_of(podcast)
         .exclude(pk=episode.pk)
-        .filter(episode_number__isnull=False)
+        .filter(episode_number__gte=podcast.next_episode_number)
+        .order_by("episode_number")
         .values_list("episode_number", flat=True)
+        .iterator(chunk_size=1000)
     )
 
 
 def _next_available_episode_number(podcast: Podcast, episode: Episode) -> int:
     episode_number = podcast.next_episode_number
-    used_numbers = _used_episode_numbers(podcast, episode)
-    while episode_number in used_numbers:
-        episode_number += 1
+    for used_number in _used_episode_numbers(podcast, episode):
+        if used_number > episode_number:
+            break
+        if used_number == episode_number:
+            episode_number += 1
     return episode_number
 
 
@@ -71,7 +77,8 @@ def _current_publish_state(episode: Episode) -> tuple[bool, int | None, int | No
     from cast.models import Episode
 
     current = (
-        Episode.objects.filter(pk=episode.pk)
+        Episode.objects.using(episode._state.db)
+        .filter(pk=episode.pk)
         .values("episode_number", "live", "first_published_at", "live_revision_id")
         .first()
     )
@@ -102,14 +109,17 @@ def assign_episode_number_for_publish(
     revision: Revision | None = None,
     previous_revision: Revision | None = None,
 ) -> int | None:
+    using = episode._state.db or router.db_for_write(type(episode), instance=episode)
+    if any(item is not None and item._state.db != using for item in (revision, previous_revision)):
+        raise ValidationError("The revision belongs to a different database.")
     podcast = _get_episode_podcast(episode)
     if podcast is None:
         return None
 
-    with transaction.atomic():
+    with transaction.atomic(using=using):
         from cast.models import Podcast
 
-        locked_podcast = Podcast.objects.select_for_update().get(pk=podcast.pk)
+        locked_podcast = Podcast.objects.using(using).select_for_update().get(pk=podcast.pk)
 
         already_published, current_episode_number, live_revision_id = _current_publish_state(episode)
         if _should_preserve_current_episode_number(

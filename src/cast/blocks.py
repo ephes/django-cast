@@ -22,7 +22,7 @@ from wagtail.images.blocks import ChooserBlock, ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image, Rendition
 
 from . import appsettings as settings
-from .gallery_tokens import sign_gallery_image_pks
+from .gallery_tokens import MAX_GALLERY_IMAGES, sign_gallery_image_pks
 from .models.repository import AudioById, ImageById, RenditionsForPosts, VideoById
 from .renditions import (
     Height,
@@ -231,13 +231,14 @@ def prepare_context_for_gallery(images: Iterable[AbstractImage], context: dict) 
     """
     # Drop empty slots - Wagtail may hand us None entries for unfilled or deleted image choosers
     images_list = [image for image in images if image is not None]
+    gallery_token = sign_gallery_image_pks(image.pk for image in images_list)
     add_image_thumbnails(images_list, context=context)
     for index, image in enumerate(images_list):
         image.prev = f"gallery-{images_list[index - 1].pk}" if index > 0 else ""
         image.next = f"gallery-{images_list[index + 1].pk}" if index < len(images_list) - 1 else ""
     image_pks = [image.pk for image in images_list]
     context["image_pks"] = ",".join([str(pk) for pk in image_pks])
-    context["gallery_token"] = sign_gallery_image_pks(image_pks)
+    context["gallery_token"] = gallery_token
     context["images"] = images_list
     context["gallery_entries"] = [{"image": image, "caption": ""} for image in images_list]
     return context
@@ -279,6 +280,7 @@ class GalleryProxyRepository:
 
 class GalleryBlock(ListBlock):
     class Meta:
+        max_num = MAX_GALLERY_IMAGES
         icon = "image"
         label = "Gallery"
         template = "cast/gallery.html"

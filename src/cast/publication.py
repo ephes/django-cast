@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import router, transaction
 from django.utils.translation import gettext_lazy as _
 
 if TYPE_CHECKING:
@@ -188,7 +188,10 @@ def install_publication_policy() -> None:
         object_to_publish = arguments["object"]
         previous_revision = arguments.get("previous_revision")
         if isinstance(object_to_publish, Post):
-            with transaction.atomic():
+            using = object_to_publish._state.db or router.db_for_write(
+                type(object_to_publish), instance=object_to_publish
+            )
+            with transaction.atomic(using=using):
                 try:
                     check_publishable(object_to_publish, revision=revision)
                 except PublicationRejected as rejection:

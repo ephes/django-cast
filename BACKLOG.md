@@ -12,6 +12,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   and python-podcast; their current file caches intentionally refuse limited
   comment posts. External clerk review and integration remain pending.
 
+- [Round 93 validation/handoff](backlog/2026-11-14-scout-round93.md): database-owned numbering, bounded gap projections/gallery admission,
+  bulk correction contributors and publication-context checks are implemented.
+  Real-storage subprocess tests cover correction interruption before/after commit.
+  See `docs/releases/unreleased.rst` and the numbering/gallery/transcript docs.
+  Interrupted runs may leave unreferenced blobs; reference-aware cleanup remains
+  an operational requirement, not an automatic recovery promise.
+
 - Round 88 credential/transcript stale-write safeguards and contributor/reference
   admission are implemented; see the [validation/handoff record](backlog/2026-11-13-scout-round88.md),
   `docs/releases/unreleased.rst` and the retained

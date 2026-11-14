@@ -1375,3 +1375,120 @@ def test_deleted_contributor_in_draft_glossary_is_ignored(transcript, glossary_e
     jon.delete()
     assert refresh_transcript_corrections(transcript).status == STATUS_APPLIED
     assert corrections._contributor_for(glossary_episode, "Jon") is None
+
+
+@pytest.mark.django_db
+def test_effective_glossary_bulk_contributors(glossary_episode, django_assert_num_queries):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    for count in (2, 50):
+        for index in range(glossary_episode.contributor_assignments.count(), count):
+            contributor = Contributor.objects.create(
+                display_name=f"Synthetic Person {index}", slug=f"synthetic-{index}"
+            )
+            EpisodeContributor.objects.create(episode=glossary_episode, contributor=contributor, sort_order=index)
+        # Read from an uncached instance each time.
+        episode = type(glossary_episode).objects.get(pk=glossary_episode.pk)
+        with CaptureQueriesContext(connection) as queries:
+            glossary, fingerprint = corrections.effective_glossary(episode)
+        contributor_reads = [q for q in queries if 'FROM "cast_contributor"' in q["sql"]]
+        assert len(contributor_reads) == 1
+        reference, reference_fingerprint = corrections.effective_glossary(episode)
+        assert fingerprint == reference_fingerprint
+        assert glossary.replacement_map == reference.replacement_map
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("change", ["contributor", "show_term", "revision"])
+def test_correction_context_change_during_staging_refuses_publication(
+    transcript, glossary_episode, jon, mocker, change
+):
+    from cast.transcripts.services import TranscriptEditConflict
+
+    before = file_bytes(transcript)
+    original_save = corrections.services.save_editor_artifacts
+
+    def change_context(*args, **kwargs):
+        if change == "contributor":
+            Contributor.objects.filter(pk=jon.pk).update(transcript_variants="John => Jonathan")
+        elif change == "show_term":
+            TranscriptGlossaryTerm.objects.filter(podcast_id=glossary_episode.get_parent().pk).update(term="Newcorn")
+        else:
+            glossary_episode.title = "NewSyntheticTitle"
+            glossary_episode.save_revision()
+        return original_save(*args, **kwargs)
+
+    barrier = mocker.patch.object(corrections.services, "save_editor_artifacts", side_effect=change_context)
+    with pytest.raises(TranscriptEditConflict, match="glossary"):
+        refresh_transcript_corrections(transcript)
+    assert file_bytes(transcript) == before
+    mocker.stop(barrier)
+    assert refresh_transcript_corrections(transcript).status == STATUS_APPLIED
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("boundary", ["before_commit", "after_commit"])
+def test_corrections_real_storage_crash_restart(pg_editor_actors, request, settings, api_client, boundary):
+    import os
+    import selectors
+    import subprocess
+    import sys
+
+    from django.db import connection
+
+    transcript = request.getfixturevalue("transcript")
+    glossary_episode = request.getfixturevalue("glossary_episode")
+    jon = request.getfixturevalue("jon")
+    refresh_transcript_corrections(transcript)
+    transcript.refresh_from_db()
+    fields = ("podlove", "dote", "vtt", "corrections")
+    old_names = {name: getattr(transcript, name).name for name in fields}
+    old_bytes = file_bytes(transcript)
+    Contributor.objects.filter(pk=jon.pk).update(transcript_variants="John => Jonathan")
+    TranscriptGlossaryTerm.objects.filter(podcast_id=glossary_episode.get_parent().pk).update(term="Newcorn")
+    env = {
+        **os.environ,
+        "DJANGO_SETTINGS_MODULE": "tests.settings",
+        "CAST_TEST_DB": str(connection.settings_dict["NAME"]),
+        "CAST_TEST_MEDIA_ROOT": str(settings.MEDIA_ROOT),
+        "CAST_TEST_PRIVATE_MEDIA_ROOT": str(settings.CAST_PRIVATE_MEDIA_ROOT),
+        "CAST_VOXHELM_LANGUAGE": "en",
+    }
+    process = subprocess.Popen(
+        [sys.executable, "-m", "tests.transcripts.corrections_crash_worker", boundary, str(transcript.pk)],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            assert selector.select(timeout=20), "Correction subprocess did not reach the crash boundary"
+        assert process.stdout.readline().strip() == "READY"
+    finally:
+        process.kill()
+        _, errors = process.communicate(timeout=10)
+    assert process.returncode < 0, errors
+    transcript.refresh_from_db()
+    current_names = {name: getattr(transcript, name).name for name in fields}
+    if boundary == "before_commit":
+        assert current_names == old_names
+        assert file_bytes(transcript) == old_bytes
+    else:
+        assert all(current_names[name] != old_names[name] for name in fields)
+        assert all(file_bytes(transcript)[name] != old_bytes[name] for name in fields)
+    # A crash cannot delete any part of the last committed generation before commit.
+    for name in fields:
+        assert getattr(transcript, name).storage.exists(old_names[name])
+    url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": transcript.audio_id})
+    response = api_client.get(url, format="json")
+    assert response.status_code == 200
+    expected = "Jon" if boundary == "before_commit" else "Jonathan"
+    assert response.json()["transcripts"][0]["text"].startswith(expected + " said")
+    assert refresh_transcript_corrections(transcript).status == STATUS_APPLIED
+    new_bytes = file_bytes(transcript)
+    assert new_bytes != old_bytes
+    assert refresh_transcript_corrections(transcript).changed == 0
+    assert file_bytes(transcript) == new_bytes

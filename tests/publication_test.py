@@ -585,3 +585,24 @@ def test_scheduled_rejection_log_failure_preserves_retry_and_valid_sibling(pg_ed
     call_command("publish_scheduled", verbosity=0)
     assert PageLogEntry.objects.filter(page_id=rejected.pk, action="cast.publish.rejected").count() == 1
     assert PageLogEntry.objects.filter(page_id=valid.pk, action="wagtail.publish.scheduled").count() == 1
+
+
+@pytest.mark.django_db(databases=["default", "migration_other"], transaction=True)
+def test_publication_hook_owns_secondary_transaction(mocker):
+    from django.db import connections
+    from wagtail.actions.publish_revision import PublishRevisionAction
+
+    seen = []
+
+    def publish(self, revision, object, user, changed, log_action, previous_revision=None):
+        seen.append(connections["migration_other"].in_atomic_block)
+        raise RuntimeError("synthetic publication failure")
+
+    mocker.patch.object(PublishRevisionAction, "_publish_revision", publish)
+    install_publication_policy()
+    mocker.patch("cast.podcast_numbering.assign_episode_number_for_publish")
+    episode = Episode(podcast_audio_id=1)
+    episode._state.db = "migration_other"
+    with pytest.raises(RuntimeError, match="synthetic"):
+        PublishRevisionAction._publish_revision(None, Revision(), episode, None, True, False)
+    assert seen == [True]

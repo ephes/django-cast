@@ -1064,3 +1064,26 @@ the same database row lock used for link reassignment. Concurrent incompatible
 assignment and owner changes cannot both commit. This also applies to Wagtail
 modelcluster saves; stale cached link objects do not authorize an assignment.
 Direct bulk SQL updates bypass model validation and must preserve this invariant.
+
+Correction context and process interruption
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Correction refresh bulk-loads credited contributors from the transcript's
+database, retaining assignment order, hidden contributors and missing-record
+handling. Its fingerprint includes the episode revision, contributor variants,
+show terms, show-note terms and language. Immediately before saving staged
+artifact references, the service reads this context again on the owning database.
+A changed context raises ``TranscriptEditConflict`` (HTTP 409 in the review):
+reload and retry. Staged files are discarded and the committed generation stays
+intact. The final check adds no glossary locks across storage/network work.
+
+The real-storage subprocess regression kills correction refresh after all four
+artifact references are saved inside the uncommitted transaction, and after the
+database commit but before
+retiring old files. After restart, the database and public API reference one
+complete old or new generation of Podlove, DOTe, WebVTT and private corrections.
+Retry computes the current glossary and remains idempotent. Process death can
+leave unreferenced staged files or obsolete committed files in storage; this is
+not a garbage-collection guarantee. Check references across all databases before
+removing those blobs. The test establishes process-crash behavior on temporary
+filesystem storage, not power-loss durability or remote object-store behavior.
