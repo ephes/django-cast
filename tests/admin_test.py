@@ -36,7 +36,8 @@ class SpySpamfilter:
         self.got_training_data = True
         return []
 
-    def retrain_from_scratch(self, train):
+    def retrain_from_scratch(self):
+        self.get_training_data_comments()
         self.retrained = True
 
 
@@ -241,3 +242,45 @@ def test_contributor_link_options_requires_contributor_snippet_permission(client
             }
         ],
     }
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("performance", [{}, {"ham": {"precision": 1, "recall": 1, "f1": 1}}])
+def test_name_only_filter_admin_views_are_safe(admin_client, performance, settings):
+    settings.ROOT_URLCONF = "tests.spamfilter_admin_urls"
+    spamfilter = SpamFilter.objects.create(name="not trained", performance=performance)
+    for url in (
+        reverse("admin:cast_spamfilter_change", args=[spamfilter.pk]),
+        reverse("admin:cast_spamfilter_changelist"),
+    ):
+        response = admin_client.get(url)
+        assert response.status_code == 200
+        assert "Not trained" in response.content.decode()
+
+
+def test_admin_missing_class_metrics_are_explicit():
+    admin = SpamfilterModelAdmin(SpamFilter, None)
+    assert admin.spam(SpamFilter()) == "Not trained / no metrics"
+    assert admin.ham(SpamFilter()) == "Not trained / no metrics"
+    assert admin.ham(SpamFilter(performance={"ham": {"bad": "diagnostic"}})) == {"bad": "diagnostic"}
+
+
+@pytest.mark.django_db
+def test_admin_retrain_reports_small_corpus(admin_client, settings, monkeypatch):
+    settings.ROOT_URLCONF = "tests.spamfilter_admin_urls"
+    spamfilter = SpamFilter.objects.create(name="too small")
+    monkeypatch.setattr(SpamFilter, "get_training_data_comments", classmethod(lambda cls: [("ham", "one")]))
+    response = admin_client.post(
+        reverse("admin:cast_spamfilter_changelist"),
+        {"action": "retrain", "_selected_action": [spamfilter.pk]},
+        follow=True,
+    )
+    assert response.status_code == 200
+    from django.contrib.messages import get_messages
+
+    assert "corpus must contain at least one message per fold" in [
+        str(message) for message in get_messages(response.wsgi_request)
+    ]
+    spamfilter.refresh_from_db()
+    assert spamfilter.model == {}
+    assert spamfilter.performance == {}

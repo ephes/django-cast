@@ -35,6 +35,8 @@ class Moderator:
     def moderate(self, comment: Any, content_object: Any, request: HttpRequest) -> bool:
         message = SpamFilter.comment_to_message(comment)
         spamfilter = self.spamfilter
+        if isinstance(spamfilter, SpamFilter) and not spamfilter.is_trained:
+            spamfilter = None
         if spamfilter is not None:
             predicted_label = spamfilter.model.predict_label(message)
         else:
