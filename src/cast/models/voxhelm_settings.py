@@ -231,7 +231,9 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
             else:
                 cleaned_data["api_token"] = ""
         if self._token_replacement() is not None and self.instance.pk is not None:
-            stored = type(self.instance).objects.filter(pk=self.instance.pk).values_list("api_token", flat=True).first()
+            stored = (
+                type(self.instance).objects.filter(pk=self.instance.pk).values_list("api_token", flat=True).first()
+            )
             if stored is not None and api_token_version(stored) != self._original_api_token_version:
                 self.add_error("api_token", TOKEN_CONFLICT_MESSAGE)
         return cleaned_data
