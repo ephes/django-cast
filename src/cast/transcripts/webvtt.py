@@ -26,39 +26,70 @@ def webvtt_timestamp_to_ms(value: object) -> int | None:
     return ((int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds)) * 1000) + int(millis.ljust(3, "0"))
 
 
+# A WebVTT parser skips optional whitespace around ``-->`` and ends the end
+# timestamp after its millisecond digits; anything after it is read as settings.
+# Cue detection for sanitizing is deliberately at least as permissive as a
+# player; correction keys additionally require the end timestamp to stop at
+# whitespace or the line end, so ``00:02.0000``, ``00:02.00x`` or glued settings
+# never select a destination.
+_TIMESTAMP_PATTERN = r"(?:[0-9]+:)?[0-5][0-9]:[0-5][0-9]\.[0-9]{1,3}"
+TIMING_LINE_RE = re.compile(rf"(?P<start>{_TIMESTAMP_PATTERN})[ \t]*-->[ \t]*(?P<end>{_TIMESTAMP_PATTERN})")
+KEYED_TIMING_LINE_RE = re.compile(rf"{TIMING_LINE_RE.pattern}(?=[ \t]|$)")
+
+
+def is_cue_timing_line(line: str) -> bool:
+    """Whether ``line`` may be accepted as cue timings by a player (sanitize its payload)."""
+    return TIMING_LINE_RE.match(line.strip()) is not None
+
+
 def timing_line_start_ms(line: str) -> int | None:
-    match = re.fullmatch(r"([^\s]+)[ \t]+-->[ \t]+([^\s]+)(?:[ \t]+[^\r\n]*)?", line.strip())
-    if match is None or webvtt_timestamp_to_ms(match[2]) is None:
+    """Return the cue start of a timing line whose timestamps are in the supported domain."""
+    match = KEYED_TIMING_LINE_RE.match(line.strip())
+    if match is None or webvtt_timestamp_to_ms(match["end"]) is None:
         return None
-    return webvtt_timestamp_to_ms(match[1])
+    return webvtt_timestamp_to_ms(match["start"])
 
 
 def cue_lines(content: str) -> Iterator[tuple[str, int | None, bool]]:
     """Yield untouched lines, a cue start for timing lines, and payload membership.
 
-    Only the first or second line of a block can introduce a cue. Header,
-    NOTE, STYLE and REGION blocks remain opaque through the next blank line.
+    Follows the WebVTT block-collection algorithm: a line containing ``-->``
+    introduces a cue when it is the first line of a block, or the second line
+    after a first line without ``-->`` (so ``NOTE``/``STYLE``/``REGION`` or an
+    identifier followed by a timing line is a cue). Any other ``-->`` line, and
+    every ``-->`` line in the file header, ends the current block and is
+    re-read as the first line of a new block. Blocks without such a timing
+    line (header, comments, styles, regions, failed timing lines) remain opaque
+    through the next blank line.
     """
-    state = "start"
-    for line in content.splitlines(keepends=True):
+    block_lines = 0
+    seen_arrow = False
+    in_cue = False
+    in_header = False
+    for index, line in enumerate(content.splitlines(keepends=True)):
         body = line.strip()
         start_ms = None
         payload = False
         if not body:
-            state = "start"
-        elif state == "payload":
-            payload = True
-        elif state in {"start", "identifier"}:
-            if state == "start" and re.match(r"^(?:\ufeff?WEBVTT|NOTE)(?:[ \t]|$)|^(?:STYLE|REGION)$", body):
-                state = "ignored"
-            else:
-                start_ms = timing_line_start_ms(line)
-                if start_ms is not None:
-                    state = "payload"
-                elif state == "start" and TIMING_SEPARATOR not in line:
-                    state = "identifier"
-                else:
-                    state = "ignored"
+            block_lines = 0
+            seen_arrow = in_cue = in_header = False
+        elif index == 0 and re.match(r"^\ufeff?WEBVTT(?:[ \t]|$)", body):
+            block_lines = 1
+            in_header = True
+        elif TIMING_SEPARATOR in line:
+            if in_header or not (block_lines == 0 or (block_lines == 1 and not seen_arrow)):
+                # The arrow line ends the current block and starts a new one.
+                block_lines = 0
+                in_header = False
+            block_lines += 1
+            seen_arrow = True
+            start_ms = timing_line_start_ms(line)
+            # A rendered cue whose start cannot be keyed (e.g. an hour field
+            # beyond the supported range) still has a payload to sanitize.
+            in_cue = start_ms is not None or is_cue_timing_line(line)
+        else:
+            block_lines += 1
+            payload = in_cue
         yield line, start_ms, payload
 
 
@@ -145,14 +176,13 @@ def clear_suggestions_from_content(content: str, start_milliseconds: set[int]) -
         payload_lines = None
         should_clear = False
 
-    for line, start_ms, _is_payload in cue_lines(content):
+    for line, start_ms, is_payload in cue_lines(content):
         if payload_lines is not None:
-            if not line.strip():
-                flush_payload()
-                rewritten_lines.append(line)
-            else:
+            if is_payload:
                 payload_lines.append(line)
-            continue
+                continue
+            # A blank line or an arrow line that starts a new block ends the payload.
+            flush_payload()
 
         if start_ms is not None:
             should_clear = start_ms in start_milliseconds
@@ -201,14 +231,13 @@ def apply_suggestions_to_content(content: str, names_by_start_ms: Mapping[int, s
         current_name = None
         payload_lines = None
 
-    for line, start_ms, _is_payload in cue_lines(content):
+    for line, start_ms, is_payload in cue_lines(content):
         if payload_lines is not None:
-            if not line.strip():
-                flush_payload()
-                rewritten_lines.append(line)
-            else:
+            if is_payload:
                 payload_lines.append(line)
-            continue
+                continue
+            # A blank line or an arrow line that starts a new block ends the payload.
+            flush_payload()
 
         if start_ms is not None:
             current_name = names_by_start_ms.get(start_ms)
@@ -406,14 +435,13 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
         rewritten_lines.extend(lines)
         payload_lines = None
 
-    for line, start_ms, _is_payload in cue_lines(content):
+    for line, start_ms, is_payload in cue_lines(content):
         if payload_lines is not None:
-            if not line.strip():
-                flush_payload()
-                rewritten_lines.append(line)
-            else:
+            if is_payload:
                 payload_lines.append(line)
-            continue
+                continue
+            # A blank line or an arrow line that starts a new block ends the payload.
+            flush_payload()
         if start_ms is not None:
             text = texts_by_start_ms.get(start_ms)
             if text is not None:
@@ -441,10 +469,11 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
     sanitized_lines = []
     # One entry per voice opening still open in the current cue: whether it was kept.
     open_voices: list[bool] = []
-    for line, start_ms, is_payload in cue_lines(content):
-        if start_ms is not None:
+    for line, _start_ms, is_payload in cue_lines(content):
+        if not is_payload:
+            # Every timing line (keyed or not) and block boundary starts a fresh cue stack.
             open_voices = []
-        if is_payload:
+        else:
             line = _sanitize_webvtt_payload_line(line, allowed_speaker_labels, open_voices)
         sanitized_lines.append(line)
     return "".join(sanitized_lines)
