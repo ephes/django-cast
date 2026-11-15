@@ -195,3 +195,39 @@ msgstr "Erneut erzeugen…"
 
 msgid "Try again"
 msgstr "Erneut versuchen"
+
+msgid "New transcript"
+msgstr "Neues Transkript"
+
+msgid "Transcript: %(title)s"
+msgstr "Transkript: %(title)s"
+
+msgid "Episode: %(title)s"
+msgstr "Episode: %(title)s"
+
+msgid "Transcript: {0} updated."
+msgstr "Transkript: {0} aktualisiert."
+
+msgid "Transcript: {0} added."
+msgstr "Transkript: {0} hinzugefügt."
+
+msgid "Transcript: {0} could not be saved due to errors."
+msgstr "Transkript: {0} konnte wegen Fehlern nicht gespeichert werden."
+
+msgid "Episode"
+msgstr "Episode"
+
+msgid "Audio"
+msgstr "Audio"
+
+msgid "Files"
+msgstr "Dateien"
+
+msgid "Voices named"
+msgstr "Benannte Stimmen"
+
+msgid "Player"
+msgstr "Player"
+
+msgid "Transcripts"
+msgstr "Transkripte"

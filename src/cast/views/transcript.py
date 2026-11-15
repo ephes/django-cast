@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, TypedDict, cast
 
 from django.core.exceptions import ValidationError
+from django.db.models import Count, F, Q
 from django.db.models.fields.files import FieldFile
 from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
@@ -154,7 +155,9 @@ def _render_transcript_html(
 
 
 def _search_transcripts(base_transcripts: Any, raw_query_string: str) -> tuple[Any, str]:
-    return base_transcripts.filter(audio__title__icontains=raw_query_string), raw_query_string
+    return base_transcripts.filter(
+        Q(audio__title__icontains=raw_query_string) | Q(audio__episodes__title__icontains=raw_query_string)
+    ).distinct(), raw_query_string
 
 
 def _create_transcript(user: Any) -> Transcript:
@@ -162,7 +165,29 @@ def _create_transcript(user: Any) -> Transcript:
 
 
 def _transcript_message_arg(transcript: Transcript) -> Any:
-    return transcript.pk
+    if transcript.audio_id is None:
+        return _("New transcript")
+    episodes = list(transcript.audio.episodes.all())
+    return episodes[0].title if episodes else transcript.audio.title
+
+
+def _transcript_list_queryset(queryset: Any) -> Any:
+    return (
+        queryset.select_related("audio")
+        .prefetch_related("audio__episodes")
+        .annotate(
+            voices_total=Count("speaker_mappings", filter=Q(speaker_mappings__active=True), distinct=True),
+            voices_named=Count(
+                "speaker_mappings",
+                filter=Q(
+                    speaker_mappings__active=True,
+                    speaker_mappings__review_state="approved",
+                    speaker_mappings__source_artifact_fingerprint=F("source_fingerprint"),
+                ),
+                distinct=True,
+            ),
+        )
+    )
 
 
 def get_speaker_mapping_rows(
@@ -463,12 +488,14 @@ def _handle_transcript_form_save(
 
         messages.success(
             request,
-            _("Transcript file '{0}' updated").format(transcript.pk),
+            _("Transcript: {0} updated.").format(_transcript_message_arg(transcript)),
             buttons=[messages.button(reverse("cast-transcript:edit", args=(transcript.id,)), _("Edit"))],
         )
-        return redirect("cast-transcript:index")
+        return redirect("cast-transcript:edit", transcript_id=transcript.id)
     else:
-        messages.error(request, _("The transcript could not be saved due to errors."))
+        messages.error(
+            request, _("Transcript: {0} could not be saved due to errors.").format(_transcript_message_arg(transcript))
+        )
     return EditFormState(form=form, speaker_mapping_form=speaker_mapping_form)
 
 
@@ -601,6 +628,8 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
         "cast/transcript/edit.html",
         {
             "transcript": transcript,
+            "transcript_title": _transcript_message_arg(transcript),
+            "transcript_episodes": transcript.audio.episodes.all(),
             "artifact_revision": services.artifact_revision(transcript),
             "form": form,
             "speaker_mapping_rows": speaker_mapping_rows,
@@ -643,12 +672,14 @@ transcript_admin_config = MediaAdminConfig(
     get_chosen_data=get_transcript_data,
     create_instance=_create_transcript,
     search=_search_transcripts,
-    ordering=None,
+    ordering="pk",
+    prepare_queryset=_transcript_list_queryset,
+    add_redirect_to_edit=True,
     show_popular_tags=False,
     index_search_placeholder=_("Search transcript files"),
     index_fallback_placeholder=_("Search transcripts"),
-    added_message=_("Transcript file '{0}' added."),
-    add_error_message=_("The transcript file could not be saved due to errors."),
+    added_message=_("Transcript: {0} added."),
+    add_error_message=_("Transcript: {0} could not be saved due to errors."),
     deleted_message=_("Transcript '{0}' deleted."),
     chooser_upload_error_message=_("The transcript could not be saved due to errors."),
     message_arg=_transcript_message_arg,

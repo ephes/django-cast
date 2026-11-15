@@ -43,6 +43,9 @@ def test_transcript_admin_journey(client, admin_user, episode, settings, live_se
             page.goto(live_server.url + reverse("cast-transcript:add") + f"?audio={episode.podcast_audio_id}")
             expect(page.locator("#id_audio")).to_have_value(str(episode.podcast_audio_id))
             page.goto(live_server.url + reverse("cast-transcript:edit", args=(transcript.pk,)))
+            expect(page.get_by_role("heading", name=f"Transcript: {episode.title}")).to_be_visible()
+            page.get_by_role("button", name="Save", exact=True).click()
+            expect(page).to_have_url(live_server.url + reverse("cast-transcript:edit", args=(transcript.pk,)))
             expect(page.get_by_role("button", name="Save speaker mappings")).to_be_visible()
             assert errors == []
         finally:

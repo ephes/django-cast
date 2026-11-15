@@ -1221,3 +1221,15 @@ generation when Voxhelm is configured. Queued/running and failed runs remain
 visible. The panel reads saved revision state. Counts use the mapping rows
 materialized on file save/import, so opening the episode never reads transcript
 artifacts. Preview and passage counts are deferred to the preview slice.
+
+Transcript navigation
+~~~~~~~~~~~~~~~~~~~~~
+
+The transcript editor is titled ``Transcript: <episode title>`` (or the audio
+title when unused) and links back to every episode using that audio. File-form
+saves and new uploads return to the transcript editor. File save messages name
+the episode. The list shows Episode, Audio, Files and Voices named, and searches
+both episode and audio titles. Related audio/episodes and mapping counts are
+loaded in a constant number of queries for each list page. These admin template
+changes do not affect public theme templates; no existing template blocks were
+renamed.

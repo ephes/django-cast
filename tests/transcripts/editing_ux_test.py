@@ -157,3 +157,60 @@ def test_hub_counts_only_current_approvals(episode):
     mapping.source_artifact_fingerprint = "outdated"
     mapping.save()
     assert transcript_voice_counts(transcript) == {"named": 0, "total": 2}
+
+
+def test_transcript_title_back_link_search_and_save(admin_client, episode):
+    transcript = create_transcript(audio=episode.podcast_audio, podlove={"transcripts": [{"speaker": "Speaker 1"}]})
+    edit_url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    content = admin_client.get(edit_url).content.decode()
+    assert f"Transcript: {episode.title}" in content
+    assert reverse("wagtailadmin_pages:edit", args=(episode.pk,)) in content
+    response = admin_client.post(edit_url, {"audio": episode.podcast_audio_id, "collection": transcript.collection_id})
+    assert response.status_code == 302
+    assert response.url == edit_url
+    content = admin_client.get(reverse("cast-transcript:index"), {"q": episode.title}).content.decode()
+    assert edit_url in content
+    assert "Voices named" in content
+    assert "Files" in content
+
+
+def test_transcript_list_query_count_is_constant(admin_client, episode, django_assert_num_queries):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from cast.models import Audio, Transcript
+
+    create_transcript(audio=episode.podcast_audio)
+    url = reverse("cast-transcript:index")
+    admin_client.get(url)  # warm content types and Wagtail caches
+    with CaptureQueriesContext(connection) as first:
+        admin_client.get(url)
+    for index in range(19):
+        Transcript.objects.create(audio=Audio.objects.create(title=f"Other {index}", user=episode.owner))
+    with CaptureQueriesContext(connection) as second:
+        response = admin_client.get(url)
+    assert response.status_code == 200
+    assert len(second) == len(first)
+
+
+def test_transcript_title_falls_back_to_audio_and_links_all_episodes(admin_client, episode):
+    from cast.models import Audio
+
+    audio = Audio.objects.create(title="Standalone audio", user=episode.owner)
+    transcript = create_transcript(audio=audio)
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    assert "Transcript: Standalone audio" in admin_client.get(url).content.decode()
+    episode.podcast_audio = audio
+    episode.save()
+    from tests.factories import EpisodeFactory
+
+    unpublished_episode = EpisodeFactory(
+        parent=episode.get_parent(),
+        owner=episode.owner,
+        podcast_audio=audio,
+        title="Second episode",
+        slug="second-episode",
+    )
+    content = admin_client.get(url).content.decode()
+    for item in (episode, unpublished_episode):
+        assert reverse("wagtailadmin_pages:edit", args=(item.pk,)) in content

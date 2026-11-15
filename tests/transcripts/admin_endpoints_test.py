@@ -147,7 +147,7 @@ class TestTranscriptAdd:
 
         # make sure we don't get redirected to index
         assert r.status_code == 200
-        assert r.context["message"] == "The transcript file could not be saved due to errors."
+        assert "could not be saved due to errors." in r.context["message"]
 
         # make sure we didn't create an transcript
         assert Transcript.objects.first() is None
@@ -163,7 +163,7 @@ class TestTranscriptAdd:
 
         # make sure we get redirected to index
         assert r.status_code == 302
-        assert r.url == reverse("cast-transcript:index")
+        assert r.url == reverse("cast-transcript:edit", args=(Transcript.objects.get(audio=audio).pk,))
 
         # make sure field were saved correctly
         transcript = Transcript.objects.first()

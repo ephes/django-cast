@@ -2,7 +2,7 @@
 {% load i18n %}
 {% load l10n %}
 {% load wagtailimages_tags wagtailadmin_tags %}
-{% block titletag %}{% blocktrans with title=transcript.pk %}Editing {{ title }}{% endblocktrans %}{% endblock %}
+{% block titletag %}{% blocktrans with title=transcript_title %}Transcript: {{ title }}{% endblocktrans %}{% endblock %}
 
 {% block extra_js %}
   {{ block.super }}
@@ -342,8 +342,11 @@
 {% endblock %}
 
 {% block content %}
-  {% trans "Editing" as editing_str %}
-  {% include "wagtailadmin/shared/header.html" with title=editing_str subtitle=transcript.pk icon="media" usage_object=transcript %}
+  {% blocktrans with title=transcript_title asvar editor_title %}Transcript: {{ title }}{% endblocktrans %}
+  {% include "wagtailadmin/shared/header.html" with title=editor_title icon="media" usage_object=transcript %}
+  <div class="nice-padding">
+    {% for episode in transcript_episodes %}<p><a href="{% url 'wagtailadmin_pages:edit' episode.pk %}">{% blocktrans with title=episode.title %}Episode: {{ title }}{% endblocktrans %}</a></p>{% endfor %}
+  </div>
 
   {% block form_row %}
     <div class="row row-flush nice-padding">

@@ -1,35 +1,15 @@
 {% load i18n %}
 <table class="listing">
-  <col />
-  <col  />
-  <col width="16%" />
-  <thead>
-    <tr class="table-headers">
-      <th>
-        {% if not is_searching %}
-          <a href="{% url 'cast-transcript:index' %}{% if not ordering == "pk" %}?ordering=pk{% endif %}" class="icon icon-arrow-down-after {% if  ordering == "pk" %}teal{% endif %}">
-            {% trans "ID" %}
-          </a>
-        {% else %}
-          {% trans "ID" %}
-        {% endif %}
-      </th>
-      <th>{% trans "Audio title" %}</th>
-    </tr>
-  </thead>
+  <thead><tr><th>{% trans "Episode" %}</th><th>{% trans "Audio" %}</th><th>{% trans "Files" %}</th><th>{% trans "Voices named" %}</th></tr></thead>
   <tbody>
     {% for transcript in transcripts %}
       <tr>
-        <td class="ID">
-          {% if choosing %}
-            <h2><a href="{% url 'cast-transcript:chosen' transcript.id %}" class="media-choice">{{ transcript.id }}</a></h2>
-          {% else %}
-            <h2><a href="{% url 'cast-transcript:edit' transcript.id %}">{{ transcript.id }}</a></h2>
-          {% endif %}
-        </td>
-        <td>
-          {{ transcript.audio.title }}
-        </td>
+        <td><h2><a href="{% if choosing %}{% url 'cast-transcript:chosen' transcript.id %}{% else %}{% url 'cast-transcript:edit' transcript.id %}{% endif %}"{% if choosing %} class="media-choice"{% endif %}>
+          {% for episode in transcript.audio.episodes.all %}{{ episode.title }}{% if not forloop.last %}, {% endif %}{% empty %}{{ transcript.audio.title }}{% endfor %}
+        </a></h2></td>
+        <td>{{ transcript.audio.title }}</td>
+        <td>{% if transcript.podlove %}{% trans "Player" %}{% endif %} {% if transcript.vtt %}WebVTT{% endif %} {% if transcript.dote %}DOTe{% endif %}</td>
+        <td>{{ transcript.voices_named }} / {{ transcript.voices_total }}</td>
       </tr>
     {% endfor %}
   </tbody>

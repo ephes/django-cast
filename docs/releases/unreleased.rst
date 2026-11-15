@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Name transcript editors and file save messages after the episode, link back
+  to episodes, and keep file saves on the editor. Transcript lists search episode
+  titles and show file availability and voice mapping counts.
+
 - Add a Transcript panel to saved episodes and move the open Contributors panel
   directly after Podcast audio. Upload links preselect the saved audio.
 
