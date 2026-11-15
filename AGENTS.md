@@ -32,7 +32,9 @@
 - Tests run with coverage via `uv run coverage run -m pytest` and `uv run coverage report`; `fail_under = 100` is configured in `pyproject.toml`.
 - Maintain 100% test coverage for the Python test suite.
 - Transcript evidence tests use synthetic bounded/counting readers; hashing admits
-  10 MiB per public artifact and 30 MiB in aggregate, without signing partial hashes.
+  10 MiB per public artifact and 30 MiB in aggregate for editor evidence only
+  (`enforce_byte_budget=True`), without signing partial hashes; save() and public
+  rendering hash complete artifacts.
 - Signed voice choices include immutable audio storage names and duration; source
   replacement and candidate creation serialize through the audio row write lock.
 - Podlove edit identities are nonnegative integer milliseconds (never booleans).

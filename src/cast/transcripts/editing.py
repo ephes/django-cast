@@ -108,7 +108,7 @@ def transcript_evidence(transcript: Transcript) -> dict[str, Any]:
     return {
         "transcript": transcript.pk,
         "revision": artifact_revision(transcript),
-        "fingerprint": transcript.transcript_artifact_fingerprint(),
+        "fingerprint": transcript.transcript_artifact_fingerprint(enforce_byte_budget=True),
         # Stored audio names are immutable upload generations. Include every
         # format because a reference can be auditioned using any offered source.
         "audio": {

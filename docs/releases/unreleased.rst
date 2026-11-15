@@ -1,8 +1,10 @@
 Unreleased
 ==========
 
-- Bound transcript fingerprint hashing to 10 MiB per artifact and 30 MiB total,
-  with bounded reads and an editorial error before signing partial evidence.
+- Bound editorial transcript evidence hashing to 10 MiB per artifact and 30 MiB
+  total, with bounded reads and an editorial error before signing partial
+  evidence. Saving transcripts and public speaker-mapping checks still hash the
+  complete artifacts, so larger configured uploads keep working.
   Bind signed voice-reference choices to the source audio storage generation
   and duration under the audio lock; old choices require a fresh preview.
 
