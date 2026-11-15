@@ -121,9 +121,13 @@ the wrong voices. Screenshot `07-transcript-edit-after-regen.png`.
   review state: `src/cast/forms.py:460-465`.
 - Saving sets every row with a target to "approved" with the new fingerprint:
   `src/cast/forms.py:532-548`.
-- The same stale row also bites after "Approve and apply confident
-  suggestions": segments that stayed on the raw label "Speaker 1" got the old
-  mapping's name in public output (`src/cast/transcripts/visibility.py:227-250`).
+- Public output itself is safe while the row is in "needs review": only
+  approved rows with the current fingerprint are used
+  (`src/cast/transcripts/visibility.py:183-193`). The wrong names reach the
+  public only through the re-approval above. Once re-approved, the row also
+  names the segments that "Approve and apply confident suggestions" left on the
+  raw label "Speaker 1" (`src/cast/transcripts/visibility.py:227-250`). The fix
+  therefore belongs in the form, not in the visibility filter.
 
 #### 3. The segment review breaks at real episode length
 

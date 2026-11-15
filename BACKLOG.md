@@ -40,6 +40,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - Use this file as the index for planned and future work.
 - Put larger feature notes in `backlog/*.md` and link them from here.
+- Design documents that precede a larger change live in `docs/design/*.md` and are linked from here.
 - Keep README and docs backlog references as links to this file instead of maintaining separate planned-work lists.
 - When docs mention future behavior, add or update the matching entry here.
 - Do not keep a separate done list. Completed user-facing work belongs in the current release notes under
