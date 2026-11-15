@@ -81,6 +81,13 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
+- [ ] Transcript editing in the Wagtail admin: a workflow an editor can follow
+  - Design: [docs/design/transcript-editing-ux.md](docs/design/transcript-editing-ux.md)
+  - Scope: ten slices, biggest gain first (confirm before a regeneration replaces a reviewed transcript, no
+    pre-selected stale speaker names, a transcript panel on the episode page, paged passage review, one
+    "Speakers" section, preview, generation feedback, clearer upload, contributor conveniences, restore).
+  - Done when: the slices are implemented or explicitly dropped and the note carries a status line saying so.
+
 - [ ] Verify concurrent gallery membership/signature publication on PostgreSQL
   - Round 89's mutation-database isolation fix is implemented. The separate
     publication-race oracle remains pending because the local PostgreSQL bootstrap
