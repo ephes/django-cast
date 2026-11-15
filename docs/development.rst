@@ -81,7 +81,8 @@ Audit the full committed JavaScript lock, including development packages, with:
 
    $ npm audit --package-lock-only --include=dev
 
-CI runs this independent audit on pushes, pull requests and the weekly schedule.
+``just check-javascript`` (part of ``just check``) runs this independent audit; the
+manual-only GitHub Actions workflow runs it only on dispatch.
 Do not expose the Vite/Vitest development servers to untrusted clients: development
 tooling is included in the audit even though it is not shipped player code.
 
@@ -445,14 +446,12 @@ PostgreSQL row locks skip on SQLite. These include glossary imports competing
 for one cross-term variant: the later import reports a validation conflict,
 while imports for other podcasts can proceed independently.
 
-CI runs those cases plus the publication-policy and editor publication-lock
-modules in the dedicated ``postgres-locks`` matrix job on a standard Ubuntu runner. GitHub Actions starts and
-discards a PostgreSQL 17 service container for that job. It uses Python 3.12,
-Django 6.1 and Wagtail 8, has a ten-minute timeout, and runs on pushes and pull
-requests, not the weekly dependency-audit schedule. It does not repeat the full
-test matrix or require a permanent database. Standard GitHub-hosted runners
-are currently free for public repositories; see
-`GitHub Actions billing <https://docs.github.com/en/actions/concepts/billing-and-usage>`_.
+``just check-postgres`` runs those cases plus the publication-policy and editor
+publication-lock modules against a local PostgreSQL server (configure the
+``CAST_TEST_DB_*`` variables). The manual-only GitHub Actions workflow has an
+equivalent ``postgres-locks`` matrix job with a disposable PostgreSQL 17 service
+container (Python 3.12, Django 6.1, Wagtail 8, ten-minute timeout); it runs only
+on dispatch. Neither repeats the full test matrix or requires a permanent database.
 
 To run the same checks locally, optionally start a disposable PostgreSQL server
 (or a PostgreSQL 17 Docker container) and run:
@@ -543,7 +542,7 @@ Type-check the TypeScript sources with ``tsc --noEmit``:
    $ npm run typecheck
 
 Vite and Vitest only strip types, so this is the only command that actually checks them.
-CI runs this check for sources and tests alongside ``npm test``. Run both checks
+``just check-javascript`` runs this check for sources and tests alongside ``npm test``. Run both checks
 before submitting JavaScript changes.
 
 Build shipped JavaScript assets:
@@ -588,11 +587,11 @@ warnings summary that the rest of the matrix - and a plain ``pytest`` run - supp
 ``filterwarnings`` list in ``pyproject.toml``. The warnings do not fail the run. Treat a new one
 coming from ``src/cast`` as work to schedule before the framework release that removes the API, and
 ignore third-party noise until the whole matrix is quiet enough to turn deprecations into errors.
-Wagtail 8.1 is the newest explicitly tested branch. CI runs
+Wagtail 8.1 is the newest explicitly tested branch. ``just check-compatibility`` runs
 ``py311-django52-wagtail81`` and ``py314-django61-wagtail81`` alongside the retained
 ``py314-django61-wagtail80`` and ``py315-django61-wagtail80`` environments, so the
 same summary shows up there. Both Wagtail 8 factors run the isolated v3 experiment
-in a separate process after the regular suite. The Python quality job pins
+in a separate process after the regular suite. The manual-only Actions quality job pins
 Wagtail 8.0.1 and 8.1 exactly and enforces 100% coverage on each; tox factors
 resolve the latest patch within their respective branches. PostgreSQL publication and row-lock
 checks also run on both branches via ``postgres`` (8.0) and ``postgres-wagtail81``;
@@ -653,7 +652,7 @@ Django-cast uses Ruff for code formatting and linting. The project is configured
 - Import sorting (the ``I`` rules, so the ``[tool.ruff.lint.isort]`` options apply)
 
 The lint rule selection is pinned in ``pyproject.toml`` (``[tool.ruff.lint] select``)
-so the CI gate does not depend on the installed Ruff version. Pre-commit's Ruff hook
+so the lint gate does not depend on the installed Ruff version. Pre-commit's Ruff hook
 reads the same configuration, so ``just lint`` and ``pre-commit`` agree.
 
 Format your code:
@@ -794,7 +793,7 @@ Making Changes
 3. Add tests for new functionality
 4. Run ``just check`` (linting, type checking, isolated collection, and tests in one command)
 5. Update documentation
-6. Hand off the parked branch for external review and integration into ``develop``
+6. Open a pull request against ``develop`` (or, for maintainers, merge into ``develop`` after review)
 
 Pull Request Guidelines
 -----------------------

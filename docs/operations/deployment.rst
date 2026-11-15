@@ -9,7 +9,7 @@ This section covers key considerations for deploying Django Cast in production.
 Prerequisites
 =============
 
-- Python 3.11+
+- Python 3.11.5+
 - A database (PostgreSQL or SQLite)
 - A reverse proxy (e.g., Traefik, Nginx) with a WSGI server (e.g., Gunicorn)
 
