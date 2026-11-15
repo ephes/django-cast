@@ -177,6 +177,7 @@ def _transcript_list_queryset(queryset: Any) -> Any:
     return (
         queryset.select_related("audio")
         .prefetch_related("audio__episodes")
+        .order_by("pk")
         .annotate(
             voices_total=Count("speaker_mappings", filter=Q(speaker_mappings__active=True), distinct=True),
             voices_named=Count(
@@ -704,7 +705,7 @@ transcript_admin_config = MediaAdminConfig(
     get_chosen_data=get_transcript_data,
     create_instance=_create_transcript,
     search=_search_transcripts,
-    ordering="pk",
+    ordering=None,
     prepare_queryset=_transcript_list_queryset,
     add_redirect_to_edit=True,
     show_popular_tags=False,

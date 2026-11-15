@@ -1,0 +1,39 @@
+<script>
+(() => {
+  const root = document.currentScript.previousElementSibling;
+  if (!root || root.dataset.active !== "true") return;
+  const deadline = Date.now() + 30 * 60 * 1000;
+  let timer;
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+    clearTimeout(timer);
+    document.removeEventListener("visibilitychange", hidden);
+  };
+  const hidden = () => { if (document.hidden) stop(); };
+  const poll = async () => {
+    if (stopped || document.hidden || Date.now() >= deadline) { stop(); return; }
+    try {
+      const response = await fetch(root.dataset.statusUrl, {credentials: "same-origin", cache: "no-store"});
+      if (!response.ok) throw new Error("status");
+      const data = await response.json();
+      if (stopped || document.hidden || Date.now() >= deadline) { stop(); return; }
+      root.querySelector("[data-generation-message]").textContent = data.transcript_generation_message;
+      root.querySelector("[data-generation-error]").textContent = data.transcript_generation_error;
+      const link = root.querySelector("[data-generation-link]");
+      const url = data.transcript_generation_transcript_url;
+      link.hidden = !url;
+      if (url) link.href = url;
+      if (!data.transcript_generation_active) { stop(); return; }
+      timer = setTimeout(poll, 5000);
+    } catch {
+      // A failed status request is visible; avoid a silent retry loop.
+      root.querySelector("[data-generation-error]").textContent = root.dataset.pollError;
+      stop();
+    }
+  };
+  document.addEventListener("visibilitychange", hidden);
+  if (document.hidden) stop();
+  else timer = setTimeout(poll, 5000);
+})();
+</script>

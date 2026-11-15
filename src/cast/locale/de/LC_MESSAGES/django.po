@@ -255,3 +255,54 @@ msgstr "Passagenseiten"
 
 msgid "Page %(number)s of %(total)s"
 msgstr "Seite %(number)s von %(total)s"
+
+msgid "Speaker detection: on"
+msgstr "Sprechererkennung: an"
+
+msgid "Speaker detection: off"
+msgstr "Sprechererkennung: aus"
+
+msgid "inherited setting"
+msgstr "geerbte Einstellung"
+
+msgid "audio setting"
+msgstr "Audio-Einstellung"
+
+msgid "Change speaker detection"
+msgstr "Sprechererkennung ändern"
+
+msgid "Voice recognition is off. Voices must be named by hand."
+msgstr "Stimmerkennung ist aus. Stimmen müssen von Hand benannt werden."
+
+msgid "Voice samples to send: %(count)s of %(total)s contributors."
+msgstr "Zu sendende Sprachproben: %(count)s von %(total)s Mitwirkenden."
+
+msgid "No voice sample will be sent for:"
+msgstr "Keine Sprachprobe wird gesendet für:"
+
+msgid "These voices must be named by hand."
+msgstr "Diese Stimmen müssen von Hand benannt werden."
+
+msgid "Name the voices"
+msgstr "Stimmen benennen"
+
+msgid "Status could not be refreshed. Reload the page."
+msgstr "Der Status konnte nicht aktualisiert werden. Lade die Seite neu."
+
+msgid "Transcript generation is queued."
+msgstr "Die Transkripterzeugung ist eingereiht."
+
+msgid "Transcript generation is running."
+msgstr "Das Transkript wird erzeugt."
+
+msgid "Transcript generation completed."
+msgstr "Das Transkript wurde erzeugt."
+
+msgid "Transcript generation failed."
+msgstr "Die Transkripterzeugung ist fehlgeschlagen."
+
+msgid "Transcript generation was interrupted. Generate the transcript again."
+msgstr "Die Transkripterzeugung wurde unterbrochen. Erzeuge das Transkript erneut."
+
+msgid "Interrupted"
+msgstr "Unterbrochen"

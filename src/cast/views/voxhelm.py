@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any
+
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods
 from wagtail.admin import messages
 from wagtail.models import Site
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
@@ -17,8 +20,12 @@ from ..models.transcript_generation import TranscriptGeneration
 from ..transcripts.editing import episode_from_latest_revision
 from ..voxhelm import (
     VoxhelmError,
+    build_known_speaker_references,
     enqueue_audio_transcript_generation,
     get_transcript_generation_status_context,
+    resolve_audio_diarization_enabled,
+    resolve_audio_episode,
+    resolve_bool_setting,
     voxhelm_configured,
 )
 
@@ -189,3 +196,46 @@ def generate_audio_transcript(request: HttpRequest, audio_id: int) -> HttpRespon
 
 def get_audio_transcript_status_context(*, audio: Audio) -> dict[str, str | bool]:
     return get_transcript_generation_status_context(audio=audio)
+
+
+def get_generation_readiness(*, request: HttpRequest, audio: Audio, episode: Episode | None = None) -> dict[str, Any]:
+    site = (episode.get_site() if episode is not None else None) or resolve_site_for_audio(
+        request=request, audio=audio
+    )
+    try:
+        diarization, _source = resolve_bool_setting("CAST_VOXHELM_DIARIZATION_ENABLED", request_or_site=site)
+        known_speaker, _source = resolve_bool_setting("CAST_VOXHELM_KNOWN_SPEAKER_ENABLED", request_or_site=site)
+    except ImproperlyConfigured as exc:
+        return {"readiness_error": str(exc)}
+    enabled = resolve_audio_diarization_enabled(audio, SimpleNamespace(diarization_enabled=diarization))
+    reference_episode = resolve_audio_episode(audio, episode=episode)
+    contributors = (
+        {
+            assignment.contributor_id: assignment.contributor
+            for assignment in reference_episode.contributor_assignments.all()
+        }
+        if reference_episode is not None
+        else {}
+    )
+    references = build_known_speaker_references(reference_episode) if enabled and known_speaker else []
+    sent_ids = {reference["id"] for reference in references}
+    return {
+        "speaker_detection_enabled": enabled,
+        "speaker_detection_inherited": audio.transcript_diarization_mode == "inherit",
+        "known_speaker_enabled": known_speaker,
+        "voice_sample_count": len(sent_ids),
+        "voice_sample_total": len(contributors),
+        "missing_voice_samples": [
+            contributor.display_name for pk, contributor in contributors.items() if str(pk) not in sent_ids
+        ],
+        "audio_edit_url": reverse("castaudio:edit", args=(audio.pk,)),
+    }
+
+
+@login_required
+@require_GET
+def audio_transcript_status(request: HttpRequest, audio_id: int) -> HttpResponse:
+    audio = get_object_or_404(Audio, pk=audio_id)
+    if not user_can_generate_transcript_for_audio(request=request, audio=audio):
+        raise PermissionDenied
+    return JsonResponse(get_audio_transcript_status_context(audio=audio))

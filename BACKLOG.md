@@ -84,7 +84,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Transcript editing in the Wagtail admin: a workflow an editor can follow
   - Design: [docs/design/transcript-editing-ux.md](docs/design/transcript-editing-ux.md)
-  - Status: slices 1–4 implemented; remaining slices still planned.
+  - Status: slices 1–4 and 7 implemented; slices 5, 6, 8, 9 and 10 await owner answers.
   - Scope: ten slices, biggest gain first (confirm before a regeneration replaces a reviewed transcript, no
     pre-selected stale speaker names, a transcript panel on the episode page, paged passage review, one
     "Speakers" section, preview, generation feedback, clearer upload, contributor conveniences, restore).

@@ -277,3 +277,152 @@ def test_segment_review_filter_and_missing_post_fields(admin_client, episode):
     )
     assert form.is_valid()
     assert form.segment_decisions == {}
+
+
+@pytest.mark.parametrize("state", [None, "queued", "running", "failed", "succeeded", "interrupted"])
+def test_generation_status_json(admin_client, episode, state):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    create_transcript(audio=episode.podcast_audio)
+    if state is not None:
+        generation = TranscriptGeneration.objects.create(
+            audio=episode.podcast_audio,
+            task_ref="test",
+            status="running" if state == "interrupted" else state,
+            error_message="Upstream failure" if state == "failed" else "",
+        )
+        if state == "interrupted":
+            TranscriptGeneration.objects.filter(pk=generation.pk).update(updated_at=timezone.now() - timedelta(days=1))
+    response = admin_client.get(reverse("cast-voxhelm:status_audio", args=(episode.podcast_audio_id,)))
+    assert response.status_code == 200
+    data = response.json()
+    assert data["transcript_generation_active"] == (state in {"queued", "running"})
+    assert data["transcript_generation_status"] == (state.capitalize() if state else "")
+    if state == "succeeded":
+        assert data["transcript_generation_transcript_url"]
+    if state == "failed":
+        assert data["transcript_generation_error"] == "Upstream failure"
+
+
+def test_status_denies_audio_change_without_permission(rf, user, audio):
+    from django.core.exceptions import PermissionDenied
+
+    from cast.views.voxhelm import audio_transcript_status
+
+    request = rf.get("/")
+    request.user = user
+    with pytest.raises(PermissionDenied):
+        audio_transcript_status(request, audio.pk)
+
+
+def test_generation_readiness_uses_draft_contributors_and_audio_override(admin_client, episode, settings, mocker):
+    from cast.models import Audio, Contributor, EpisodeContributor
+
+    settings.CAST_VOXHELM_API_BASE = "https://voxhelm.example"
+    settings.CAST_VOXHELM_API_KEY = "secret"
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = False
+    settings.CAST_VOXHELM_KNOWN_SPEAKER_ENABLED = True
+    host = Contributor.objects.create(display_name="Host", slug="host")
+    guest = Contributor.objects.create(display_name="Missing Guest", slug="missing-guest")
+    episode.contributor_assignments.add(
+        EpisodeContributor(contributor=host, role="host"), EpisodeContributor(contributor=guest, role="guest")
+    )
+    episode.save_revision()
+    audio = episode.podcast_audio
+    audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.ENABLED
+    audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
+    build = mocker.patch("cast.views.voxhelm.build_known_speaker_references", return_value=[{"id": str(host.pk)}])
+    content = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,))).content.decode()
+    assert "Speaker detection: on" in content
+    assert "1 of 2" in content
+    assert "Missing Guest" in content
+    assert build.call_args.args[0].pk == episode.pk
+
+
+def test_failed_resubmission_replaces_previous_success(audio, site, mocker):
+    from cast.voxhelm import VoxhelmError, enqueue_audio_transcript_generation
+    from tests.voxhelm.stale_recovery_test import mock_resubmission
+
+    generation = TranscriptGeneration.objects.create(audio=audio, status="succeeded", task_ref="test")
+    service, _ = mock_resubmission(mocker, audio)
+    service.submit_for_audio.side_effect = VoxhelmError("Submission failed")
+    with pytest.raises(VoxhelmError, match="Submission failed"):
+        enqueue_audio_transcript_generation(audio=audio, request_or_site=site)
+    generation.refresh_from_db()
+    assert generation.status == "failed"
+    assert generation.error_message == "Submission failed"
+
+
+def test_invalid_generation_readiness_is_visible(rf, episode, settings):
+    from cast.views.voxhelm import get_generation_readiness
+
+    settings.CAST_VOXHELM_DIARIZATION_ENABLED = "not-a-boolean"
+    context = get_generation_readiness(request=rf.get("/"), audio=episode.podcast_audio, episode=episode)
+    assert "CAST_VOXHELM_DIARIZATION_ENABLED" in context["readiness_error"]
+
+
+def test_stale_contributor_mapping_shows_former_name_and_stays_private(admin_client, client, episode):
+    from cast.models import Contributor, EpisodeContributor
+
+    host = Contributor.objects.create(display_name="Previous Host", slug="previous-host")
+    EpisodeContributor.objects.create(episode=episode, contributor=host, role="host")
+    episode.save_revision()
+    transcript = create_transcript(
+        audio=episode.podcast_audio, podlove={"transcripts": [{"speaker": "Speaker 1", "text": "Changed voice"}]}
+    )
+    transcript.speaker_mappings.update(contributor=host, review_state="stale")
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    response = admin_client.get(url)
+    assert not response.context["speaker_mapping_form"]["speaker_0"].value()
+    assert "Before the transcript changed: Previous Host." in response.content.decode()
+    assert (
+        admin_client.post(url, {"action": "map-speakers", "speaker_0": "", "speaker_display_name_0": ""}).status_code
+        == 302
+    )
+    mapping = transcript.speaker_mappings.get()
+    assert mapping.contributor == host
+    assert mapping.review_state == "stale"
+    assert (
+        not client.get(reverse("cast:podlove-transcript-json", args=(transcript.pk,)))
+        .json()["transcripts"][0]
+        .get("speaker")
+    )
+
+
+def test_episode_hub_does_not_open_transcript_artifacts(admin_client, episode, mocker):
+    transcript = create_transcript(
+        audio=episode.podcast_audio,
+        podlove={"transcripts": [{"speaker": "Speaker 1"}]},
+        vtt="WEBVTT\n",
+        dote={"lines": []},
+    )
+    opened = mocker.patch.object(
+        transcript.podlove.storage, "open", side_effect=AssertionError("Panel must not read files")
+    )
+    response = admin_client.get(reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
+    assert response.status_code == 200
+    assert "0 of 1 voices named" in response.content.decode()
+    opened.assert_not_called()
+
+
+def test_browser_stub_completes_real_generation_import(episode, mocker):
+    from django.test import TestCase
+
+    from cast.voxhelm import enqueue_audio_transcript_generation
+    from tests.transcript_admin_browser_test import BrowserVoxhelmClient
+
+    transcript = create_transcript(
+        audio=episode.podcast_audio, podlove={"transcripts": [{"speaker": "Speaker 1", "text": "Original"}]}
+    )
+    transcript.speaker_mappings.update(display_name="Former Host", review_state="approved")
+    mocker.patch("cast.voxhelm.service.VoxhelmClient.from_settings", return_value=BrowserVoxhelmClient())
+    mocker.patch("cast.voxhelm.service.resolve_audio_source_url", return_value="https://media.example/audio.m4a")
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        result = enqueue_audio_transcript_generation(audio=episode.podcast_audio, episode=episode)
+    result.generation.refresh_from_db()
+    assert result.generation.status == "succeeded"
+    transcript.refresh_from_db()
+    assert transcript.podlove_data["transcripts"][0]["text"] == "Regenerated"
+    assert transcript.speaker_mappings.get().review_state == "stale"

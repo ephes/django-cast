@@ -19,7 +19,7 @@ class EpisodeTranscriptStatusPanel(Panel):
         def transcript_generation_context(self) -> dict[str, Any]:
             # Read the saved revision, not unsubmitted form values.
             from cast.transcripts.editing import episode_from_latest_revision
-            from cast.views.voxhelm import generation_available
+            from cast.views.voxhelm import generation_available, get_generation_readiness
 
             episode = episode_from_latest_revision(self.instance) if self.instance.pk else self.instance
             audio = getattr(episode, "podcast_audio", None)
@@ -30,6 +30,9 @@ class EpisodeTranscriptStatusPanel(Panel):
             context["upload_transcript_url"] = reverse("cast-transcript:add") + "?" + urlencode({"audio": audio.pk})
             context["generate_transcript_url"] = reverse("cast-voxhelm:generate_episode", args=(episode.pk,))
             context["can_generate_transcript"] = generation_available(request=self.request, audio=audio)
+            context["transcript_status_url"] = reverse("cast-voxhelm:status_audio", args=(audio.pk,))
+            if context["can_generate_transcript"]:
+                context.update(get_generation_readiness(request=self.request, audio=audio, episode=episode))
             if hasattr(audio, "transcript"):
                 context["transcript"] = audio.transcript
                 context["transcript_voices"] = transcript_voice_counts(audio.transcript)

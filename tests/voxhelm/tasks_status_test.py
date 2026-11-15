@@ -373,9 +373,7 @@ def test_enqueue_audio_transcript_generation_marks_failed_when_initial_submit_fa
 
 
 @pytest.mark.django_db
-def test_enqueue_audio_transcript_generation_preserves_existing_failed_row_when_retry_submit_fails(
-    mocker, audio, site
-):
+def test_enqueue_audio_transcript_generation_updates_failure_when_retry_submit_fails(mocker, audio, site):
     generation = TranscriptGeneration.objects.create(
         audio=audio,
         status=TranscriptGeneration.Status.FAILED,
@@ -391,7 +389,7 @@ def test_enqueue_audio_transcript_generation_preserves_existing_failed_row_when_
 
     generation.refresh_from_db()
     assert generation.status == TranscriptGeneration.Status.FAILED
-    assert generation.error_message == "older failure"
+    assert generation.error_message == "voxhelm still offline"
 
 
 @pytest.mark.django_db

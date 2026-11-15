@@ -1245,3 +1245,16 @@ Saving preserves the current filter/page and changes only submitted decisions
 on that page. Other pages and omitted fields retain their decisions. The
 artifact revision check still refuses concurrent replacement. This avoids
 Django's default 1,000-field request limit without raising the site setting.
+
+Generation feedback
+~~~~~~~~~~~~~~~~~~~
+
+The episode and audio editors show the effective speaker detection setting,
+whether it is inherited, and how many contributors will supply usable approved
+voice samples. Missing contributors are named before generation. Only samples
+that the existing Voxhelm submission service would send count as available.
+Queued/running status refreshes every five seconds and ends with ``Name the
+voices`` on success. Failure messages remain visible, including a failed retry
+of an earlier successful generation. Polling stops on completion, request error,
+a hidden tab, or after 30 minutes; reload to resume. The status JSON endpoint
+requires audio change permission and returns no private sidecar contents.

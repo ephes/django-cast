@@ -1,6 +1,6 @@
 # Transcript editing in the Wagtail admin: a workflow an editor can follow
 
-Status: implementation in progress, 2026-11-15. Slices 1–4 implemented. Integration branch: `develop`
+Status: implementation in progress, 2026-11-15. Slices 1–4 and 7 implemented; slices 5, 6, 8, 9 and 10 await owner answers. Integration branch: `develop`
 (evidence taken at `e723b0c4`).
 
 This document is about the **editor** who works in the Wagtail admin. It is not

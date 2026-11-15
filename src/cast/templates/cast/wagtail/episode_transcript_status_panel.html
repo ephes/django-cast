@@ -1,16 +1,17 @@
 {% load i18n %}
-<div class="cast-transcript-status w-mb-4" role="status">
+<div class="cast-transcript-status w-mb-4" role="status" data-transcript-status data-poll-error="{% trans 'Status could not be refreshed. Reload the page.' %}" data-status-url="{{ transcript_status_url }}" data-active="{{ transcript_generation_active|yesno:'true,false' }}">
   {% if not transcript_audio %}
     <p>{% trans "Choose the podcast audio and save first." %}</p>
   {% else %}
-    {% if transcript_generation_status %}
-      <p><strong>{% trans "Transcript status:" %}</strong> {{ transcript_generation_status }}. {{ transcript_generation_message }} {{ transcript_generation_error }}</p>
-    {% endif %}
+    <p data-generation-message>{% if transcript_generation_status %}<strong>{% trans "Transcript status:" %}</strong> {{ transcript_generation_status }}. {{ transcript_generation_message }}{% endif %}</p>
+    <p data-generation-error>{{ transcript_generation_error }}</p>
+    <a data-generation-link{% if not transcript_generation_transcript_url %} hidden{% endif %} href="{{ transcript_generation_transcript_url }}">{% trans "Name the voices" %}</a>
     {% if transcript and not transcript_generation_active %}
       <p>{% blocktrans with named=transcript_voices.named total=transcript_voices.total %}{{ named }} of {{ total }} voices named{% endblocktrans %}</p>
       <a href="{% url 'cast-transcript:edit' transcript.pk %}">{% trans "Edit transcript and speakers" %}</a>
     {% endif %}
     {% if not transcript_generation_active %}
+      {% if can_generate_transcript %}{% include "cast/wagtail/_transcript_readiness.html" %}{% endif %}
       <p><a href="{{ upload_transcript_url }}">{% trans "Upload transcript files" %}</a></p>
       {% if can_generate_transcript %}
         {% if transcript %}
@@ -22,3 +23,5 @@
     {% endif %}
   {% endif %}
 </div>
+
+{% include "cast/wagtail/_transcript_status_poll.html" %}

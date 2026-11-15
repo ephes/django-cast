@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+- Show speaker detection and missing voice samples before generation, refresh
+  active admin status with bounded polling, and retain failed resubmission
+  messages instead of showing an earlier success. Add an audio-change-protected
+  status endpoint.
+
 - Paginate segment decisions in groups of 50, with Needs a decision and All
   passages filters. Partial saves preserve other pages and omitted decisions,
   preventing TooManyFieldsSent on long transcripts.

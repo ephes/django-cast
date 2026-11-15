@@ -628,8 +628,7 @@ def enqueue_audio_transcript_generation(
                 episode=episode,
             )
         except Exception as exc:
-            if created or interrupted:
-                generation.mark_failed(str(exc))
+            generation.mark_failed(str(exc))
             raise
         generation.queue_submission(
             task_ref=submission.task_ref,
