@@ -7,7 +7,7 @@ authors = [
 ]
 description = "Django Cast is a blogging and podcasting package built on Django and Wagtail CMS"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 keywords = [
     "blog",
     "podcast",
@@ -55,7 +55,7 @@ dependencies = [
     "python-slugify",  # slugify for page slugs
     "requests>=2.33.0",  # security floor for Wagtail's runtime HTTP stack
     "rich",  # progress bars for management commands
-    "soupsieve>=2.9.0",  # security floor for Wagtail's HTML parser stack
+    "soupsieve>=4.1",  # security floor for Wagtail's HTML parser stack
     "sqlparse>=0.6.0",  # security floor for Django's SQL formatting dependency
     "urllib3>=2.8.0",  # security floor for the runtime HTTP stack
     "wagtail>=7.0.9,<9,!=7.1.*,!=7.2.*,!=7.3.*,!=7.4.0,!=7.4.1,!=7.4.2",  # supported LTS and current branches
@@ -81,24 +81,28 @@ module-name = "cast"
 source-include = ["src/cast/quickstart_templates/*.template"]
 
 [dependency-groups]
-dev = [
-    "django-allauth",  # for mypy
-    "django_extensions",
-    "django-stubs[compatible-mypy]",
+test = [
+    "django-stubs-ext",  # imported directly by tests.settings
     "factory_boy",
     "feedparser",
-    "furo",
-    "jupyter",
-    "markdown-it-py>=3.0.0",  # exercises the optional editor API Markdown input
-    "mypy",
-    "playwright",
-    "pre-commit",
     "pytest >= 6",
     "pytest-cov >= 3",
     "pytest-django",
     "pytest-mock",
     "pytest-randomly",
     "pytz",
+]
+dev = [
+    {include-group = "test"},
+    "django-allauth",  # for mypy
+    "django_extensions",
+    "django-stubs[compatible-mypy]",
+    "furo",
+    "jupyter",
+    "markdown-it-py>=3.0.0",  # exercises the optional editor API Markdown input
+    "mypy",
+    "playwright",
+    "pre-commit",
     "ruff >= 0.16.2",  # 0.16 formats Python code blocks in markdown; CI uses latest
     "tox",
     "tox-uv",

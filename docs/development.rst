@@ -20,7 +20,7 @@ Prerequisites
 
 Before you begin, ensure you have the following installed:
 
-- Python 3.11 or higher
+- Python 3.11.5 or higher
 - Node.js 20.19 or higher (or Node.js 22.12 or higher)
 - `uv <https://github.com/astral-sh/uv>`_ for Python package management
 - `just <https://github.com/casey/just>`_ command runner
@@ -55,7 +55,7 @@ The install command will:
 
 - Create a virtual environment if one doesn't exist
 - Install django-cast in editable mode
-- Install all development dependencies
+- Install all development dependencies, including the shared ``test`` dependency group
 
 The repository intentionally does not track ``uv.lock`` because its test matrix
 resolves several supported Django and Wagtail branches. After ``uv sync``, audit
@@ -81,7 +81,8 @@ Audit the full committed JavaScript lock, including development packages, with:
 
    $ npm audit --package-lock-only --include=dev
 
-CI runs this independent audit on pushes, pull requests and the weekly schedule.
+``just check-javascript`` (part of ``just check``) runs this independent audit; the
+manual-only GitHub Actions workflow runs it only on dispatch.
 Do not expose the Vite/Vitest development servers to untrusted clients: development
 tooling is included in the audit even though it is not shipped player code.
 
@@ -445,14 +446,12 @@ PostgreSQL row locks skip on SQLite. These include glossary imports competing
 for one cross-term variant: the later import reports a validation conflict,
 while imports for other podcasts can proceed independently.
 
-CI runs those cases plus the publication-policy and editor publication-lock
-modules in the dedicated ``postgres-locks`` matrix job on a standard Ubuntu runner. GitHub Actions starts and
-discards a PostgreSQL 17 service container for that job. It uses Python 3.12,
-Django 6.1 and Wagtail 8, has a ten-minute timeout, and runs on pushes and pull
-requests, not the weekly dependency-audit schedule. It does not repeat the full
-test matrix or require a permanent database. Standard GitHub-hosted runners
-are currently free for public repositories; see
-`GitHub Actions billing <https://docs.github.com/en/actions/concepts/billing-and-usage>`_.
+``just check-postgres`` runs those cases plus the publication-policy and editor
+publication-lock modules against a local PostgreSQL server (configure the
+``CAST_TEST_DB_*`` variables). The manual-only GitHub Actions workflow has an
+equivalent ``postgres-locks`` matrix job with a disposable PostgreSQL 17 service
+container (Python 3.12, Django 6.1, Wagtail 8, ten-minute timeout); it runs only
+on dispatch. Neither repeats the full test matrix or requires a permanent database.
 
 To run the same checks locally, optionally start a disposable PostgreSQL server
 (or a PostgreSQL 17 Docker container) and run:
@@ -543,7 +542,7 @@ Type-check the TypeScript sources with ``tsc --noEmit``:
    $ npm run typecheck
 
 Vite and Vitest only strip types, so this is the only command that actually checks them.
-CI runs this check for sources and tests alongside ``npm test``. Run both checks
+``just check-javascript`` runs this check for sources and tests alongside ``npm test``. Run both checks
 before submitting JavaScript changes.
 
 Build shipped JavaScript assets:
@@ -588,11 +587,11 @@ warnings summary that the rest of the matrix - and a plain ``pytest`` run - supp
 ``filterwarnings`` list in ``pyproject.toml``. The warnings do not fail the run. Treat a new one
 coming from ``src/cast`` as work to schedule before the framework release that removes the API, and
 ignore third-party noise until the whole matrix is quiet enough to turn deprecations into errors.
-Wagtail 8.1 is the newest explicitly tested branch. CI runs
+Wagtail 8.1 is the newest explicitly tested branch. ``just check-compatibility`` runs
 ``py311-django52-wagtail81`` and ``py314-django61-wagtail81`` alongside the retained
 ``py314-django61-wagtail80`` and ``py315-django61-wagtail80`` environments, so the
 same summary shows up there. Both Wagtail 8 factors run the isolated v3 experiment
-in a separate process after the regular suite. The Python quality job pins
+in a separate process after the regular suite. The manual-only Actions quality job pins
 Wagtail 8.0.1 and 8.1 exactly and enforces 100% coverage on each; tox factors
 resolve the latest patch within their respective branches. PostgreSQL publication and row-lock
 checks also run on both branches via ``postgres`` (8.0) and ``postgres-wagtail81``;
@@ -601,14 +600,47 @@ these opt-in tox environments require a running PostgreSQL server.
 Code Quality
 ============
 
-Run all quality checks (linting, type checking, and tests) in one command:
+Run all quality checks (linting, type checking, isolated collection, and tests) in one command:
 
 .. code-block:: bash
 
    $ just check
 
-This runs ``just lint``, ``just typecheck``, and ``just test`` in sequence,
-stopping on first failure.
+This runs ``just lint``, ``just typecheck``, ``just check-collect``, and ``just test``
+followed by JavaScript type checks, tests, build verification and audit, a docs
+build, and runtime/advisory-floor dependency audits, stopping on first failure.
+``just check-collect`` uses an isolated
+environment with only the ``test`` dependency group and the ``markdown`` extra,
+without changing the development ``.venv``. This catches unconditional imports
+of dev-only packages during collection, like the compatibility tox jobs. It does
+not exercise imports inside test functions; run tox for that coverage.
+
+GitHub Actions workflows are manual-only (``workflow_dispatch``); pushes and pull
+requests do not run CI. Qualify locally. In addition to ``just check``, run:
+
+.. code-block:: bash
+
+   $ just check-compatibility  # six former dependency-compatibility combinations
+   $ just check-python         # Python 3.13; other versions covered above
+   $ just check-postgres       # both locking suites; needs local PostgreSQL
+
+The matrix recipes use isolated tox environments and require the corresponding
+Python interpreters (3.11 through 3.15). ``just check`` also needs Node.js, npm,
+and ffmpeg. Advisory floors live in ``scripts/advisory-floors.txt``, shared by the
+local audit and the manual workflow. Report unavailable services explicitly;
+do not substitute hosted Actions for blocked local checks.
+
+Test dependencies are declared once in ``pyproject.toml``'s ``test`` group.
+The ``dev`` group includes it and tox installs it via ``dependency_groups``.
+Playwright remains dev-only; the optional comment browser journey skips cleanly
+when it is absent. To run it with Playwright and Chromium installed, use
+``CAST_RUN_BROWSER=1 uv run pytest tests/comment_browser_test.py``.
+
+The isolated collect check needs a warm uv cache or network access. If only
+creating that environment is blocked, run the remaining ``just check`` recipes
+separately, report that limitation, and have the integrator run
+the dependency-compatibility tox environments. Qualify locally before pushing;
+do not wait for or re-run paid GitHub Actions.
 
 Linting and Formatting
 ----------------------
@@ -620,7 +652,7 @@ Django-cast uses Ruff for code formatting and linting. The project is configured
 - Import sorting (the ``I`` rules, so the ``[tool.ruff.lint.isort]`` options apply)
 
 The lint rule selection is pinned in ``pyproject.toml`` (``[tool.ruff.lint] select``)
-so the CI gate does not depend on the installed Ruff version. Pre-commit's Ruff hook
+so the lint gate does not depend on the installed Ruff version. Pre-commit's Ruff hook
 reads the same configuration, so ``just lint`` and ``pre-commit`` agree.
 
 Format your code:
@@ -759,9 +791,9 @@ Making Changes
 1. Create a feature branch from ``develop``
 2. Make your changes
 3. Add tests for new functionality
-4. Run ``just check`` (linting, type checking, and tests in one command)
+4. Run ``just check`` (linting, type checking, isolated collection, and tests in one command)
 5. Update documentation
-6. Create a pull request to ``develop``
+6. Open a pull request against ``develop`` (or, for maintainers, merge into ``develop`` after review)
 
 Pull Request Guidelines
 -----------------------

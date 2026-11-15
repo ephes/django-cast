@@ -92,10 +92,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Structure quick wins: green trunk, parallel tests, readable release notes
   - Design: [docs/design/structure-quick-wins.md](docs/design/structure-quick-wins.md)
-  - Do first: slice S1. CI on `develop` has been red since 2026-11-12 (an unconditional Playwright import breaks
-    all six dependency-compatibility tox jobs; the audited `soupsieve` floor has advisories), and both consumer sites install from
-    `develop`.
-  - Scope: eight small slices ranked by benefit per effort: CI repair with one test dependency list, `pytest -n 4`,
+  - S1 collect/dependency repair is implemented on the parked S1 branch; external review and integration
+    remain pending. After integration, continue with S2. Both consumer sites install from `develop`.
+  - Scope: eight small slices ranked by benefit per effort: local gates and manual workflows with one test dependency list, `pytest -n 4`,
     one release-notes file with upgrade actions first, single version source, backlog hygiene, tooling drift,
     shipped-surface trims (`runner.py`, `python-dateutil`), test tree tidy-up.
   - Done when: the slices are implemented or explicitly dropped and the note carries a status line saying so.

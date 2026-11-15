@@ -117,8 +117,8 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
 3. The pull request should work for Python 3.11, 3.12, 3.13, 3.14, and 3.15.
-   CI tests Python 3.15 allowing prerelease interpreters through
-   ``actions/setup-python``'s ``allow-prereleases: true`` input. This selects
-   release candidates before the final release and stable versions afterward;
-   it does not enable prerelease package dependencies.
+   The GitHub Actions workflow runs only on manual dispatch; qualify changes
+   locally with ``just check``, ``just check-compatibility`` (Python 3.11,
+   3.12, 3.14 and 3.15 dependency combinations), ``just check-python``
+   (Python 3.13) and, with a local PostgreSQL service, ``just check-postgres``.
 4. Submit pull requests to the ``develop`` branch, not ``main``.

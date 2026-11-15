@@ -41,7 +41,7 @@ Prerequisites
 
 Before you begin, ensure you have:
 
-- Python 3.11 or higher
+- Python 3.11.5 or higher
 - Django 5.2.17+, 6.0.8+, or 6.1.1+
 - Wagtail 7.0.9+ on the 7.0 LTS branch, 7.4.3+ on the 7.4 LTS branch,
   or 8.x (the unpatched 7.1 and 7.2 branches and the end-of-life 7.3 branch
@@ -110,7 +110,8 @@ environment when upgrading django-cast, then audit that application-specific
 resolution rather than assuming package metadata covers future advisories.
 Supported Django security floors are 5.2.17, 6.0.8 and 6.1.1;
 Django 6.1.0 is excluded because the advisory audit reports CVE-2026-15830.
-CI audits each minimum separately as well as the resolved runtime dependencies.
+``just audit-floors`` and ``just audit-dependencies`` audit each minimum separately as
+well as the resolved runtime dependencies.
 These checks use current advisory data, so a previously passing minimum can
 require a policy update without an application-code regression.
 

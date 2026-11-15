@@ -14,11 +14,13 @@
 - Type checks: `uv run mypy` (or `just typecheck`).
 - Lint/format: `just lint` runs `ruff check --fix .` and `ruff format .` (line length 119).
 - Coverage: `just coverage` runs tests with coverage and opens HTML report.
-- Full matrix: `just tox` for multi-environment testing.
+- Full matrix: `just tox` for multi-environment testing. `just check-compatibility` runs the six former dependency CI combinations; `just check-python` covers Python 3.13 (the remaining supported version); `just check-postgres` requires a local PostgreSQL service.
+- All workflows are manual-only (`on: workflow_dispatch`); do not add automatic triggers or rely on Actions for qualification.
 - Docs preview: `just docs` to rebuild Sphinx and open HTML locally.
 - Pre-commit hooks: `just pre-commit` or `pre-commit run --all-files`.
-- Run `just check` before delivery; it runs `just lint`, `just typecheck`, and `just test` in sequence and all three must pass. Because `just test` enforces `fail_under = 100`, `just check` fails if coverage drops below 100%.
-- Do not consider a task done until `just check` passes.
+- Run `just check` before delivery; it runs `just lint`, `just typecheck`, `just check-collect`, and `just test` in sequence then JavaScript checks/build/audit, docs, runtime audit and advisory-floor audit; all must pass. Because `just test` enforces `fail_under = 100`, `just check` fails if coverage drops below 100%.
+- `just check-collect` collects in an isolated environment with only the `test` dependency group and the `markdown` extra. It catches unconditional imports of dev-only packages (including Playwright). It needs a warm uv cache or network; if environment creation alone is blocked, run the other local gates separately, report the blocked collect check, and have the integrator run the dependency-compatibility tox environments.
+- Do not consider a task done until `just check` passes (or the environment-creation exception above is explicitly handed off).
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ with 4-space indentation; prefer explicit typing—public functions and classes should be type-annotated.
@@ -51,7 +53,8 @@
 - This repository uses **trunk-based development**: `develop` is the trunk. Integrate work in small, frequent commits to `develop`—either directly or via short-lived branches that fast-forward back into it. Avoid long-lived feature branches that drift from the trunk.
 - Commit messages: short, imperative subjects; keep each commit scoped to a single logical change.
 - Do not bump version numbers on every commit.
-- Before opening a PR, run `just check` (lint, typecheck, and tests).
+- Before committing, run `just check` (Python/JavaScript gates, isolated collection, docs, assets and security audits).
+- Qualify changes locally before pushing; do not wait for or re-run paid GitHub Actions. For dependency/test-setup changes, also run the oldest and newest supported tox environments. Report any browser/PostgreSQL checks that could not run in the handoff.
 - Before committing, verify whether documentation and release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 - Update docs when adding features or changing behavior.
 - When preparing a release, add a new file under `docs/releases/` and link it in `docs/releases/index.rst`.
