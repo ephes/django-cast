@@ -1,0 +1,20 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n %}
+{% block titletag %}{% trans "Generate transcript again" %}{% endblock %}
+{% block content %}
+{% trans "Generate transcript again" as title %}
+{% include "wagtailadmin/shared/header.html" with title=title subtitle=audio.title icon="doc-full" %}
+<div class="nice-padding">
+  <p>{% trans "This replaces the transcript files and speaker decisions. There is no restore option yet." %}</p>
+  <p>{% blocktrans with count=segment_decisions %}Passage decisions: {{ count }}.{% endblocktrans %}</p>
+  <p>{% trans "Glossary decisions:" %} {{ glossary_decisions }}</p>
+  <ul>{% for voice in named_voices %}<li>{{ voice }}</li>{% empty %}<li>{% trans "No named voices" %}</li>{% endfor %}</ul>
+  <ul>{% for episode in episodes %}<li>{{ episode.title }} — {% if episode.live %}{% trans "Live: speaker names disappear from the public transcript until you name the voices again." %}{% else %}{% trans "Draft" %}{% endif %}</li>{% endfor %}</ul>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="button serious" name="confirm_regeneration" value="yes">{% trans "Replace and generate transcript" %}</button>
+    <a href="{{ next }}" class="button button-secondary">{% trans "Cancel" %}</a>
+  </form>
+</div>
+{% endblock %}

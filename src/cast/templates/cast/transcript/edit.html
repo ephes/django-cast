@@ -507,6 +507,9 @@
                       {{ row.mapping.get_review_state_display }}
                       {% if not row.mapping.active %} · {% trans "inactive" %}{% endif %}
                     </p>
+                    {% if row.mapping.review_state == "stale" and row.mapping.target_display_name %}
+                      <p>{% blocktrans with name=row.mapping.target_display_name %}Before the transcript changed: {{ name }}. Listen to the samples and choose again.{% endblocktrans %}</p>
+                    {% endif %}
                     {% include "wagtailadmin/shared/field.html" with field=row.target_field %}
                     {% include "wagtailadmin/shared/field.html" with field=row.display_name_field %}
                   </div>

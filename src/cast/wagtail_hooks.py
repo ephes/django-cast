@@ -297,6 +297,7 @@ class GenerateEpisodeTranscriptMenuItem(ActionMenuItem):
         page = parent_context["page"]
         audio = getattr(page, "podcast_audio", None)
         if isinstance(audio, Audio):
+            context["transcript_exists"] = hasattr(audio, "transcript")
             status_context = get_transcript_generation_status_context(audio=audio)
             context["transcript_generation_active"] = status_context["transcript_generation_active"]
         else:

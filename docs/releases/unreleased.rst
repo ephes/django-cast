@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+- Require confirmation before regenerating an existing transcript in the admin;
+  leave stale speaker choices empty until explicitly reviewed again.
+
 - Bound editorial transcript evidence hashing to 10 MiB per artifact and 30 MiB
   total, with bounded reads and an editorial error before signing partial
   evidence. Saving transcripts and public speaker-mapping checks still hash the

@@ -3,11 +3,11 @@ from __future__ import annotations
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods
 from wagtail.admin import messages
 from wagtail.models import Site
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
@@ -83,8 +83,37 @@ def _add_generation_error_message(request: HttpRequest, exc: VoxhelmError) -> No
     messages.error(request, _("Transcript generation failed: %(message)s") % {"message": exc})
 
 
+def _confirm_regeneration(request: HttpRequest, *, audio: Audio, redirect_url: str) -> HttpResponse | None:
+    if not hasattr(audio, "transcript"):
+        return redirect(redirect_url) if request.method == "GET" else None
+    if request.method == "POST":
+        if request.POST.get("confirm_regeneration") != "yes":
+            return HttpResponse(_("Confirm replacement of the existing transcript first."), status=400)
+        return None
+    transcript = audio.transcript
+    mappings = (
+        transcript.speaker_mappings.filter(active=True).exclude(review_state="unmapped").select_related("contributor")
+    )
+    return render(
+        request,
+        "cast/wagtail/confirm_regenerate_transcript.html",
+        {
+            "audio": audio,
+            "named_voices": [mapping.target_display_name for mapping in mappings],
+            "segment_decisions": sum(
+                bool(segment.get("editor_decision")) for segment in transcript.get_speaker_suggestions()
+            ),
+            "glossary_decisions": sum(
+                len(transcript.corrections_data.get(key, [])) for key in ("decisions", "occurrence_decisions")
+            ),
+            "episodes": audio.episodes.all(),
+            "next": redirect_url,
+        },
+    )
+
+
 @login_required
-@require_POST
+@require_http_methods(["GET", "POST"])
 def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpResponse:
     episode = get_object_or_404(Episode.objects.specific(), pk=episode_id)
     redirect_url = _get_redirect_url(request, reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
@@ -94,6 +123,9 @@ def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpRe
     audio = draft_episode.podcast_audio
     if not isinstance(audio, Audio) or not user_can_generate_transcript_for_audio(request=request, audio=audio):
         raise PermissionDenied
+    confirmation = _confirm_regeneration(request, audio=audio, redirect_url=redirect_url)
+    if confirmation is not None:
+        return confirmation
     site = episode.get_site() or Site.find_for_request(request)
     try:
         result = enqueue_audio_transcript_generation(
@@ -118,12 +150,15 @@ def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpRe
 
 
 @login_required
-@require_POST
+@require_http_methods(["GET", "POST"])
 def generate_audio_transcript(request: HttpRequest, audio_id: int) -> HttpResponse:
     audio = get_object_or_404(Audio, pk=audio_id)
     redirect_url = _get_redirect_url(request, reverse("castaudio:edit", args=(audio.pk,)))
     if not user_can_generate_transcript_for_audio(request=request, audio=audio):
         raise PermissionDenied
+    confirmation = _confirm_regeneration(request, audio=audio, redirect_url=redirect_url)
+    if confirmation is not None:
+        return confirmation
     try:
         result = enqueue_audio_transcript_generation(
             audio=audio,

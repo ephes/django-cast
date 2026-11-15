@@ -457,7 +457,7 @@ class SpeakerContributorMappingForm(forms.Form):
             self.display_field_names[display_field_name] = speaker_label
             target_field = forms.ChoiceField(label=speaker_label, choices=choices, required=False)
             display_field = forms.CharField(label=_("One-off display name"), max_length=128, required=False)
-            if mapping is not None:
+            if mapping is not None and mapping.review_state != TranscriptSpeakerMapping.ReviewState.STALE:
                 if mapping.contributor_id is not None:
                     target_field.initial = self.contributor_value_by_id.get(mapping.contributor_id, "")
                 elif mapping.display_name:
@@ -529,6 +529,12 @@ class SpeakerContributorMappingForm(forms.Form):
                 continue
             contributor = update["contributor"]
             display_name = update["display_name"]
+            if (
+                not contributor
+                and not display_name
+                and mapping.review_state == TranscriptSpeakerMapping.ReviewState.STALE
+            ):
+                continue
             if contributor is not None or display_name:
                 review_state = TranscriptSpeakerMapping.ReviewState.APPROVED
                 reviewed_at = now

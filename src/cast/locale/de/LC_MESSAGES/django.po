@@ -144,3 +144,33 @@ msgstr "Bildunterschrift"
 #: src/cast/blocks.py
 msgid "Optional plain text, up to 250 characters. No formatting or links."
 msgstr "Optionaler Klartext, bis zu 250 Zeichen. Keine Formatierung oder Links."
+
+msgid "Generate transcript again"
+msgstr "Transkript erneut erzeugen"
+
+msgid "Confirm replacement of the existing transcript first."
+msgstr "Bestätige zuerst das Ersetzen des vorhandenen Transkripts."
+
+msgid "This replaces the transcript files and speaker decisions. There is no restore option yet."
+msgstr "Dies ersetzt die Transkriptdateien und Sprecherentscheidungen. Eine Wiederherstellung ist noch nicht möglich."
+
+msgid "Passage decisions: %(count)s."
+msgstr "Entscheidungen zu Passagen: %(count)s."
+
+msgid "Glossary decisions:"
+msgstr "Glossarentscheidungen:"
+
+msgid "No named voices"
+msgstr "Keine benannten Stimmen"
+
+msgid "Live: speaker names disappear from the public transcript until you name the voices again."
+msgstr "Veröffentlicht: Sprechernamen verschwinden aus dem öffentlichen Transkript, bis du die Stimmen erneut benennst."
+
+msgid "Draft"
+msgstr "Entwurf"
+
+msgid "Replace and generate transcript"
+msgstr "Transkript ersetzen und erzeugen"
+
+msgid "Before the transcript changed: %(name)s. Listen to the samples and choose again."
+msgstr "Vor der Änderung des Transkripts: %(name)s. Höre die Beispiele an und wähle erneut."

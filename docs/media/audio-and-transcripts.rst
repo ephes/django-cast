@@ -1198,3 +1198,15 @@ selected start may match at most one destination in each stored format
 Segment review preflights its prospective decisions before saving the sidecar.
 No public file or private sidecar is replaced on refusal. Unambiguous application
 continues to update the stored formats together.
+
+Admin transcript replacement
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Generating again from an episode or audio with an existing transcript opens a
+confirmation showing named voices, passage/glossary decisions and live episodes.
+Only an explicit confirmation POST queues replacement. Existing files remain
+until import completes; there is currently no restore option. After regeneration,
+old mappings that need review start empty and show the former name as a hint.
+Saving them unchanged preserves the review state and publishes no stale name.
+The editor API retains its explicit generation POST replacement contract; this admin
+confirmation does not change management commands or API clients.
