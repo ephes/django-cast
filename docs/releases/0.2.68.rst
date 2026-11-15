@@ -794,6 +794,10 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Derive ``cast.__version__`` from installed package metadata, with ``0+unknown``
+  for an uninstalled source tree. Documentation reads the version from
+  ``pyproject.toml``, the single version source.
+
 - Make every GitHub Actions workflow manual-only. Local ``just check`` now also
   covers JavaScript checks/build/audit, docs and dependency audits; use
   ``just check-compatibility``, ``just check-python`` and ``just check-postgres``

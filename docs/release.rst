@@ -5,11 +5,8 @@ Release Process
 Bump Version Number
 -------------------
 
-Change the version number in the following files:
-
-- ``src/cast/__init__.py``
-- ``docs/conf.py``
-- ``pyproject.toml``
+Change the version number in ``pyproject.toml``. The installed package and
+documentation derive their version from this source.
 
 The ``README.md`` "Upgrade note" heading is intentionally **not** bumped each
 release: it stays pinned to the version that introduced the breaking change it
@@ -122,11 +119,7 @@ Switch back to develop and bump the version to the next unreleased version:
 
    $ git checkout develop
 
-Update the version number in:
-
-- ``pyproject.toml``
-- ``docs/conf.py``
-- ``src/cast/__init__.py``
+Update the version number in ``pyproject.toml``.
 
 Create a new release notes file ``docs/releases/<next-version>.rst`` with
 "(unreleased)" as the date, and add it to ``docs/releases/index.rst``. Start
