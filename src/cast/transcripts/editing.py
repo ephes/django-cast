@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 
+from django.core import signing
 from django.core.exceptions import ValidationError
+from django.db import models, router, transaction
 from django.utils.translation import gettext_lazy as _
 
 from ..models import (
+    Audio,
     Contributor,
     Episode,
     EpisodeContributor,
@@ -16,6 +19,7 @@ from ..models import (
     TranscriptVoiceReferenceCandidate,
 )
 from ..models.contributors import ContributorVoiceReference
+from .services import artifact_revision
 
 
 class SpeakerMappingContext(TypedDict):
@@ -96,6 +100,39 @@ def get_voice_reference_candidate(
     return None
 
 
+CANDIDATE_SIGNING_SALT = "cast.voice-reference-candidate"
+
+
+def transcript_evidence(transcript: Transcript) -> dict[str, Any]:
+    """Per-transcript part of the signed evidence; reads every artifact once."""
+    return {
+        "transcript": transcript.pk,
+        "revision": artifact_revision(transcript),
+        "fingerprint": transcript.transcript_artifact_fingerprint(),
+    }
+
+
+def candidate_evidence(
+    transcript_part: dict[str, Any], candidate: TranscriptVoiceReferenceCandidate, contributor: Contributor | None
+) -> dict[str, Any]:
+    return {
+        **transcript_part,
+        "contributor": contributor.pk if contributor is not None else None,
+        "speaker": candidate.speaker_label,
+        "rank": candidate.rank,
+        "start": str(candidate.start_seconds),
+        "end": str(candidate.end_seconds),
+        "duration": str(candidate.duration_seconds),
+        "text": candidate.text,
+    }
+
+
+def sign_voice_reference_candidate(
+    transcript_part: dict[str, Any], candidate: TranscriptVoiceReferenceCandidate, contributor: Contributor | None
+) -> str:
+    return signing.dumps(candidate_evidence(transcript_part, candidate, contributor), salt=CANDIDATE_SIGNING_SALT)
+
+
 def create_voice_reference_from_candidate(
     transcript: Transcript,
     speaker_mapping_context: SpeakerMappingContext,
@@ -103,36 +140,63 @@ def create_voice_reference_from_candidate(
     *,
     status: str,
     consent_confirmed: bool,
+    candidate_token: str | None = None,
 ) -> tuple[ContributorVoiceReference, bool]:
-    contributor = resolve_voice_reference_contributor(
-        candidate.speaker_label,
-        speaker_mapping_context["contributor_assignments"],
-    )
-    if contributor is None:
-        raise ValidationError(
-            _("Map this speaker label to one episode contributor before creating a voice reference.")
+    using = router.db_for_write(ContributorVoiceReference, instance=transcript)
+    with transaction.atomic(using=using):
+        # Obtain the write lock before reading, including on SQLite. Audio
+        # owns the duplicate source-range key. Also lock the transcript
+        # generation before checking the signed evidence.
+        Audio.objects.using(using).filter(pk=transcript.audio_id).update(title=models.F("title"))
+        Transcript.objects.using(using).filter(pk=transcript.pk).update(
+            source_fingerprint=models.F("source_fingerprint")
         )
-    duplicate_reference = get_duplicate_voice_reference(
-        transcript=transcript,
-        contributor=contributor,
-        candidate=candidate,
-    )
-    if duplicate_reference is not None:
-        return duplicate_reference, False
-    reference = ContributorVoiceReference(
-        contributor=contributor,
-        source_audio=transcript.audio,
-        source_episode=speaker_mapping_context["source_episode"],
-        start_seconds=candidate.start_seconds,
-        end_seconds=candidate.end_seconds,
-        status=status,
-        consent_confirmed=consent_confirmed,
-        notes=_("Created from transcript %(transcript_id)s, speaker label '%(speaker_label)s'.")
-        % {"transcript_id": transcript.pk, "speaker_label": candidate.speaker_label},
-    )
-    reference.full_clean()
-    reference.save()
-    return reference, True
+        transcript = Transcript.objects.using(using).get(pk=transcript.pk)
+        if candidate_token is not None:
+            speaker_mapping_context = get_speaker_mapping_context(transcript)
+        contributor = resolve_voice_reference_contributor(
+            candidate.speaker_label,
+            speaker_mapping_context["contributor_assignments"],
+        )
+        if contributor is None:
+            raise ValidationError(
+                _("Map this speaker label to one episode contributor before creating a voice reference.")
+            )
+        current_candidate = get_voice_reference_candidate(
+            transcript, speaker_label=candidate.speaker_label, candidate_rank=candidate.rank
+        )
+        if current_candidate != candidate:
+            raise ValidationError(_("Voice-reference evidence changed. Reload the transcript and review it again."))
+        if candidate_token is not None:
+            try:
+                evidence = signing.loads(candidate_token, salt=CANDIDATE_SIGNING_SALT)
+            except signing.BadSignature as error:
+                raise ValidationError(_("Invalid voice-reference choice. Reload the transcript.")) from error
+            if evidence != candidate_evidence(transcript_evidence(transcript), candidate, contributor):
+                raise ValidationError(
+                    _("Voice-reference evidence changed. Reload the transcript and review it again.")
+                )
+        duplicate_reference = get_duplicate_voice_reference(
+            transcript=transcript,
+            contributor=contributor,
+            candidate=candidate,
+        )
+        if duplicate_reference is not None:
+            return duplicate_reference, False
+        reference = ContributorVoiceReference(
+            contributor=contributor,
+            source_audio=transcript.audio,
+            source_episode=speaker_mapping_context["source_episode"],
+            start_seconds=candidate.start_seconds,
+            end_seconds=candidate.end_seconds,
+            status=status,
+            consent_confirmed=consent_confirmed,
+            notes=_("Created from transcript %(transcript_id)s, speaker label '%(speaker_label)s'.")
+            % {"transcript_id": transcript.pk, "speaker_label": candidate.speaker_label},
+        )
+        reference.full_clean()
+        reference.save()
+        return reference, True
 
 
 def validation_error_message(error: ValidationError) -> str:

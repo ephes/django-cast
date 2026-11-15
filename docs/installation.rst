@@ -77,6 +77,23 @@ The fastest way for a developer to start a new django-cast project is the
     # Create a new django-cast project
     uv run django-cast-quickstart mysite
 
+Choose a Python identifier that is not a keyword (for example, ``class``) or
+one of the reserved package names ``django``, ``cast``, ``wagtail`` and
+``rest_framework``, and that does not shadow an importable module such as
+``email``, ``json``, ``logging`` or ``site`` (the generated project
+root comes first on ``sys.path``). These names are refused before files or
+child commands are created. The project directory is reserved exclusively: an existing directory,
+file or symlink is never reused. Setup failure removes only the root created by
+that invocation, provided its filesystem identity has not changed.
+
+Once migrations, static collection and optional superuser creation succeed,
+the project is retained even if changing directory, opening the browser or
+starting the server fails. A nonzero server exit returns failure; Ctrl+C stops
+the server normally. The command restores its original working directory.
+Retry a completed project with ``cd mysite`` then
+``uv run python manage.py runserver``; rerunning quickstart refuses that directory.
+Do not use the generated default credentials for a public deployment.
+
 This command will:
 
 1. Create a complete Django project structure

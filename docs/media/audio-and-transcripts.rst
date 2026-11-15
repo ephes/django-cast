@@ -1143,3 +1143,26 @@ No automatic sweep of existing rows is performed, so after upgrading each
 feed render or player request issues one storage size request per legacy format
 until that audio is derived again (``audio.save(duration=False,
 cache_file_sizes=True)``); on remote storage this can be one HEAD request each.
+
+
+Voice-reference selection freshness
+-----------------------------------
+
+Each candidate create form carries a signed choice bound to the transcript's
+artifact revision and content fingerprint, exact label/rank/range/text and
+resolved contributor. Both pending and approved submissions require that choice.
+Changed artifacts, reordered candidates, changed contributor assignments,
+missing tokens and tampered choices cannot create a replacement reference:
+reload the transcript, audition the current range and confirm consent again.
+The helper rechecks source evidence inside its creation transaction.
+
+Candidate creation takes a write lock on the shared audio before looking for
+an existing contributor/source/range reference. Concurrent identical submissions
+reuse one row. Different ranges or
+contributors remain separate. Manual reference editing and existing duplicate
+rows are unchanged; no uniqueness migration or data cleanup is introduced.
+
+The editor contributor list selects only its response fields (ID, slug, display
+name, default role and visibility). Biography and private transcript variants
+are neither hydrated nor returned by this endpoint; ordering and pagination stay
+the same. Public avatar rendition batching is unchanged.

@@ -31,6 +31,9 @@
   mirror module paths for discoverability.
 - Tests run with coverage via `uv run coverage run -m pytest` and `uv run coverage report`; `fail_under = 100` is configured in `pyproject.toml`.
 - Maintain 100% test coverage for the Python test suite.
+- Quickstart failure tests stub management commands; never delete an unowned project root.
+- Candidate-reference deduplication tests use two independent committed connections;
+  SQLite exercises the write-lock path, and PostgreSQL can run the same test.
 - Do not deliver changes if coverage drops below 100%; add tests or adjust coverage exclusions only when justified.
 - For regression proofs, add focused tests near the bug; prefer fixtures over inline setup to avoid duplication.
 - Use `pytest -k "keyword"` or `just test-one path::node` for fast iteration.

@@ -6,6 +6,8 @@ Creates a new Django project with django-cast pre-configured.
 """
 
 import argparse
+import importlib.util
+import keyword
 import os
 import secrets
 import shutil
@@ -21,6 +23,8 @@ from textwrap import dedent
 
 QUICKSTART_TEMPLATE_PACKAGE = "cast"
 QUICKSTART_TEMPLATE_DIR = "quickstart_templates"
+# Imported by the generated settings/URLs or by Django itself.
+RESERVED_PROJECT_NAMES = {"django", "cast", "wagtail", "rest_framework"}
 
 
 def render_quickstart_template(template_name: str, **context: str) -> str:
@@ -31,10 +35,9 @@ def render_quickstart_template(template_name: str, **context: str) -> str:
 
 
 def create_project_structure(project_name: str, target_dir: Path) -> None:
-    """Create the basic project directory structure."""
+    """Populate the project root already reserved by the caller."""
     # Create main directories
     project_dir = target_dir / project_name
-    project_dir.mkdir(parents=True, exist_ok=True)
 
     # Create app directory
     app_dir = project_dir / project_name
@@ -187,18 +190,31 @@ def main() -> None:
     project_name = args.project_name
 
     # Validate project name
-    if not project_name.isidentifier():
-        print(f"Error: '{project_name}' is not a valid Python identifier.")
-        print("Project name must start with a letter and contain only letters, numbers, and underscores.")
+    if not project_name.isidentifier() or keyword.iskeyword(project_name) or project_name in RESERVED_PROJECT_NAMES:
+        print(f"Error: '{project_name}' is not an available Python project name.")
+        print("Use a Python identifier that is neither a keyword nor a reserved framework/package name.")
         sys.exit(1)
 
     # Get target directory
     target_dir = Path.cwd()
     project_path = target_dir / project_name
 
-    if project_path.exists():
+    # The generated project root comes first on sys.path for manage.py, so a
+    # name that shadows a stdlib or installed module breaks Django at import.
+    if not project_path.exists() and (
+        project_name in sys.modules or importlib.util.find_spec(project_name) is not None
+    ):
+        print(f"Error: '{project_name}' conflicts with the name of an existing Python module.")
+        print("Choose a different project name.")
+        sys.exit(1)
+
+    try:
+        project_path.mkdir()
+    except FileExistsError:
         print(f"Error: Directory '{project_name}' already exists.")
         sys.exit(1)
+
+    owned_root = project_path.stat(follow_symlinks=False)
 
     print(f"Creating Django-Cast project '{project_name}'...")
 
@@ -227,38 +243,37 @@ def main() -> None:
         else:
             print("\nSkipping superuser creation.")
 
-        print(f"\nSuccess! Created Django-Cast project at {project_path}")
-
-        # Show login credentials if auto-created
-        if not args.no_superuser and not args.interactive_superuser:
-            print("\nDefault superuser credentials:")
-            print("  Username: user")
-            print("  Password: password")
-            print("\n⚠️  WARNING: Change these default credentials in production!")
-
-        # Change to project directory
-        os.chdir(project_path)
-        print(f"\nChanged to project directory: {project_path}")
-
-        # Start the development server
-        print("\nStarting development server...")
-        print("Press Ctrl+C to stop the server")
-
-        # Open browser to Wagtail admin after delay
-        admin_url = "http://localhost:8000/cms/"
-        print("\nThe browser will open automatically in a few seconds...")
-        open_browser_delayed(admin_url, delay=5.0)
-
-        # Run the development server
-        manage_py = project_path / "manage.py"
-        subprocess.run([sys.executable, str(manage_py), "runserver"])
-
     except Exception as e:
         print(f"\nError: {e}")
-        # Clean up on error
-        if project_path.exists():
+        # A competing creator/replacement never belongs to this invocation.
+        if (
+            project_path.exists()
+            and (current_root := project_path.stat(follow_symlinks=False)).st_dev == owned_root.st_dev
+            and current_root.st_ino == owned_root.st_ino
+        ):
             shutil.rmtree(project_path)
         sys.exit(1)
+
+    print(f"\nSuccess! Created Django-Cast project at {project_path}")
+    if not args.no_superuser and not args.interactive_superuser:
+        print("\nDefault superuser credentials:\n  Username: user\n  Password: password")
+        print("\n⚠️  WARNING: Change these default credentials in production!")
+
+    # Initialization is complete. Launch failures must preserve the project/database.
+    try:
+        os.chdir(project_path)
+        print(f"\nChanged to project directory: {project_path}")
+        print("\nStarting development server...\nPress Ctrl+C to stop the server")
+        print("\nThe browser will open automatically in a few seconds...")
+        open_browser_delayed("http://localhost:8000/cms/", delay=5.0)
+        subprocess.run([sys.executable, str(project_path / "manage.py"), "runserver"], check=True)
+    except KeyboardInterrupt:
+        print("\nDevelopment server stopped.")
+    except Exception as e:
+        print(f"\nLaunch failed: {e}\nRetry: cd {project_path} && {sys.executable} manage.py runserver")
+        sys.exit(1)
+    finally:
+        os.chdir(target_dir)
 
 
 if __name__ == "__main__":

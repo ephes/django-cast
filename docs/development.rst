@@ -471,7 +471,7 @@ test media remain isolated under ``.tox`` for each environment.
 
 Each environment runs the editor schedule-approval race, publication-policy,
 editor publication-lock, editor creation parent-authority and episode-numbering
-tests, chapter synchronization,
+tests, candidate voice-reference deduplication, chapter synchronization,
 transcript/glossary races, and the isolated v3 adapter races.
 Numbering tests use two committed connections: the second first-publication
 waits on the podcast counter lock, while another podcast can publish before the

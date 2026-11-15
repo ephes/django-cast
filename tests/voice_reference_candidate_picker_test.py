@@ -19,6 +19,12 @@ from cast.views.transcript import (
 )
 
 
+def candidate_token(transcript, speaker="Alice"):
+    response_context = get_speaker_mapping_context(transcript)
+    groups = get_voice_reference_candidate_groups(transcript, response_context)
+    return next(group["rows"][0]["candidate_token"] for group in groups if group["speaker_label"] == speaker)
+
+
 def podlove_segment(
     speaker: str,
     start: str,
@@ -213,6 +219,8 @@ class TestVoiceReferenceCandidateAdmin:
         assert 'data-cast-speaker-seek="1.500"' in content
         assert 'data-cast-speaker-end="12.500"' in content
         assert "Create approved" in content
+        token = response.context["voice_reference_candidate_groups"][0]["rows"][0]["candidate_token"]
+        assert f'name="candidate_token" value="{token}"' in content
 
     def test_post_create_approved_candidate_requires_explicit_consent(self, admin_client, episode):
         contributor = Contributor.objects.create(display_name="Alice", slug="approved-alice")
@@ -228,13 +236,17 @@ class TestVoiceReferenceCandidateAdmin:
                 "action": "create-voice-reference",
                 "speaker_label": "Alice",
                 "candidate_rank": "1",
+                "candidate_token": candidate_token(transcript),
                 "voice_reference_status": "approved",
             },
         )
 
         assert response.status_code == 200
         assert ContributorVoiceReference.objects.count() == 0
-        assert response.context["message"] == "The voice reference could not be created due to errors."
+        assert (
+            response.context["message"]
+            == "The voice reference could not be created due to errors. Reload the transcript and review the candidate again."
+        )
 
     def test_post_create_approved_candidate_creates_source_range_reference(self, admin_client, episode):
         contributor = Contributor.objects.create(display_name="Alice", slug="create-alice")
@@ -250,6 +262,7 @@ class TestVoiceReferenceCandidateAdmin:
                 "action": "create-voice-reference",
                 "speaker_label": "Alice",
                 "candidate_rank": "1",
+                "candidate_token": candidate_token(transcript),
                 "voice_reference_status": "approved",
                 "consent_confirmed": "on",
             },
@@ -279,6 +292,7 @@ class TestVoiceReferenceCandidateAdmin:
                 "action": "create-voice-reference",
                 "speaker_label": "Alice",
                 "candidate_rank": "1",
+                "candidate_token": candidate_token(transcript),
                 "voice_reference_status": "pending",
             },
         )
@@ -304,6 +318,7 @@ class TestVoiceReferenceCandidateAdmin:
                     "action": "create-voice-reference",
                     "speaker_label": "Alice",
                     "candidate_rank": "1",
+                    "candidate_token": candidate_token(transcript),
                     "voice_reference_status": "pending",
                 },
             )
@@ -325,13 +340,17 @@ class TestVoiceReferenceCandidateAdmin:
                 "action": "create-voice-reference",
                 "speaker_label": "Alice",
                 "candidate_rank": "99",
+                "candidate_token": candidate_token(transcript),
                 "voice_reference_status": "pending",
             },
         )
 
         assert response.status_code == 200
         assert ContributorVoiceReference.objects.count() == 0
-        assert response.context["message"] == "The selected voice-reference candidate is no longer available."
+        assert (
+            response.context["message"]
+            == "The selected voice-reference candidate is no longer available. Reload the transcript."
+        )
 
     def test_post_unresolved_candidate_is_rejected(self, admin_client, episode):
         transcript = create_transcript(
@@ -345,6 +364,7 @@ class TestVoiceReferenceCandidateAdmin:
                 "action": "create-voice-reference",
                 "speaker_label": "Speaker 1",
                 "candidate_rank": "1",
+                "candidate_token": candidate_token(transcript, "Speaker 1"),
                 "voice_reference_status": "pending",
             },
         )
@@ -377,6 +397,7 @@ class TestVoiceReferenceCandidateAdmin:
                 "action": "create-voice-reference",
                 "speaker_label": "Alice",
                 "candidate_rank": "1",
+                "candidate_token": candidate_token(transcript),
                 "voice_reference_status": "pending",
             },
         )
@@ -435,6 +456,36 @@ class TestVoiceReferenceCandidateHelpers:
         assert resolved_group["rows"][0]["duplicate_reference"] is not None
         assert unresolved_group["speaker_label"] == "Speaker 2"
 
+    def test_group_context_reads_transcript_artifacts_once_per_render(self, episode, monkeypatch):
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={
+                "transcripts": [
+                    podlove_segment("Alice", "1", "12"),
+                    podlove_segment("Speaker 2", "20", "32"),
+                    podlove_segment("Alice", "40", "52"),
+                    podlove_segment("Speaker 3", "60", "72"),
+                ]
+            },
+        )
+        storage = transcript.podlove.storage
+        real_open = storage.open
+        opened = []
+
+        def counting_open(name, *args, **kwargs):
+            opened.append(name)
+            return real_open(name, *args, **kwargs)
+
+        context = get_speaker_mapping_context(transcript)
+        candidates = transcript.get_voice_reference_candidates()
+        monkeypatch.setattr(storage, "open", counting_open)
+        monkeypatch.setattr(type(transcript), "get_voice_reference_candidates", lambda self: candidates)
+        groups = get_voice_reference_candidate_groups(transcript, context)
+
+        assert sum(len(group["rows"]) for group in groups) >= 3
+        artifacts = [field.name for field in (transcript.podlove, transcript.dote, transcript.vtt) if field]
+        assert sorted(opened) == sorted(artifacts)
+
     def test_create_helper_surfaces_model_validation_errors(self, episode):
         contributor = Contributor.objects.create(display_name="Alice", slug="helper-validation-alice")
         EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
@@ -462,6 +513,7 @@ class TestVoiceReferenceCandidateHelpers:
                 "action": "create-voice-reference",
                 "speaker_label": "Alice",
                 "candidate_rank": "1",
+                "candidate_token": "signed-choice",
                 "voice_reference_status": "pending",
             }
         )
@@ -470,6 +522,7 @@ class TestVoiceReferenceCandidateHelpers:
                 "action": "create-voice-reference",
                 "speaker_label": "Alice",
                 "candidate_rank": "1",
+                "candidate_token": "signed-choice",
                 "voice_reference_status": "approved",
                 "consent_confirmed": "on",
             }
@@ -477,3 +530,74 @@ class TestVoiceReferenceCandidateHelpers:
 
         assert pending_form.is_valid()
         assert approved_form.is_valid()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("change", ["range", "text", "contributor", "tampered", "missing"])
+def test_candidate_post_is_bound_to_editor_evidence(admin_client, episode, change):
+    import json
+
+    from django.core.files.base import ContentFile
+
+    contributor = Contributor.objects.create(display_name="Alice", slug="consented-alice")
+    assignment = EpisodeContributor.objects.create(episode=episode, contributor=contributor, role="host")
+    transcript = create_transcript(
+        audio=episode.podcast_audio,
+        podlove={"transcripts": [podlove_segment("Alice", "1", "12")]},
+    )
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    response = admin_client.get(url)
+    token = response.context["voice_reference_candidate_groups"][0]["rows"][0].get("candidate_token", "old-no-token")
+    if change in {"range", "text"}:
+        segment = (
+            podlove_segment("Alice", "20", "32")
+            if change == "range"
+            else podlove_segment("Alice", "1", "12", text="Changed evidence")
+        )
+        transcript.podlove.save("replacement.json", ContentFile(json.dumps({"transcripts": [segment]})))
+    elif change == "contributor":
+        other = Contributor.objects.create(display_name="Alice", slug="replacement-alice")
+        assignment.contributor = other
+        assignment.save()
+    elif change == "tampered":
+        token += "tampered"
+    else:
+        token = ""
+    response = admin_client.post(
+        url,
+        {
+            "action": "create-voice-reference",
+            "speaker_label": "Alice",
+            "candidate_rank": "1",
+            "candidate_token": token,
+            "voice_reference_status": "approved",
+            "consent_confirmed": "on",
+        },
+    )
+    assert response.status_code == 200
+    assert not ContributorVoiceReference.objects.exists()
+
+
+@pytest.mark.django_db
+def test_helper_rechecks_candidate_after_loading_current_generation(episode):
+    import json
+
+    from django.core.files.base import ContentFile
+
+    from cast.models import Transcript
+
+    contributor = Contributor.objects.create(display_name="Alice", slug="stale-helper")
+    EpisodeContributor.objects.create(episode=episode, contributor=contributor, role="host")
+    transcript = create_transcript(
+        audio=episode.podcast_audio,
+        podlove={"transcripts": [podlove_segment("Alice", "1", "12")]},
+    )
+    candidate = transcript.get_voice_reference_candidates()[0]
+    context = get_speaker_mapping_context(transcript)
+    stale = Transcript.objects.get(pk=transcript.pk)
+    transcript.podlove.save(
+        "changed.json", ContentFile(json.dumps({"transcripts": [podlove_segment("Alice", "20", "32")]}))
+    )
+    with pytest.raises(ValidationError, match="Reload the transcript"):
+        create_voice_reference_from_candidate(stale, context, candidate, status="pending", consent_confirmed=False)
+    assert not ContributorVoiceReference.objects.exists()
