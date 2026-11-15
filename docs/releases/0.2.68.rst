@@ -794,6 +794,10 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Keep the backlog focused on open work and retain dated validation records.
+  Remove obsolete debug notebooks, root inventory/example files and the
+  self-installing commands helper; use deployment-owned database restore tooling.
+
 - Derive ``cast.__version__`` from installed package metadata, with ``0+unknown``
   for an uninstalled source tree. Documentation reads the version from
   ``pyproject.toml``, the single version source.

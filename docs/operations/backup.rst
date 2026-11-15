@@ -20,14 +20,11 @@ easy. But for now you have to do something database specific.
 Howto Restore a Database
 ========================
 
-.. code-block:: shell
-
-    python commands.py production-db-to-local
-    cd backups
-    mv 2023-09-18-22:17:27_homepage.sql.gz db.staging.psql.gz
-    cd ..
-    cd deploy
-    ansible-playbook restore_database.yml --limit staging
+Use the database-native restore tooling or the backup/restore playbooks maintained
+by your deployment project. Fetch the backup with that project's documented
+procedure, verify it against a disposable local database, and select the intended
+target explicitly before restoring. The old repository-specific
+``production-db-to-local`` helper is no longer provided.
 
 ********************
 Media Backup/Restore

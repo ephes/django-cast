@@ -2,9 +2,11 @@
 
 Date: 2026-11-15
 
-Status: S1 implemented on the parked implementation branch; external review and integration remain pending.
-S2–S8 remain planned. Owner overrides (2026-11-15): S1 uses soupsieve >=4.1 (requiring Python >=3.11.5),
+Status: S1–S5 implemented on stacked parked implementation branches; external review and integration remain pending.
+S6–S8 remain planned. Owner overrides (2026-11-15): S1 uses soupsieve >=4.1 (requiring Python >=3.11.5),
 manual-only workflows and local checks instead of paid Actions, and branch parking without Claude invocation or merge.
+S2 uses four workers by default, worker-specific schema fingerprints and temporary lock directories.
+The owner approved deleting notebooks and commands.py, including the JupyterLab process and obsolete backup instructions.
 The measurements below describe the pre-implementation tree.
 
 Original design status: Review of `develop` at commit `831a2929`; file and line references were re-checked
