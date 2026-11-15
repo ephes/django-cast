@@ -103,13 +103,20 @@ def get_voice_reference_candidate(
 CANDIDATE_SIGNING_SALT = "cast.voice-reference-candidate"
 
 
-def candidate_evidence(
-    transcript: Transcript, candidate: TranscriptVoiceReferenceCandidate, contributor: Contributor | None
-) -> dict[str, Any]:
+def transcript_evidence(transcript: Transcript) -> dict[str, Any]:
+    """Per-transcript part of the signed evidence; reads every artifact once."""
     return {
         "transcript": transcript.pk,
         "revision": artifact_revision(transcript),
         "fingerprint": transcript.transcript_artifact_fingerprint(),
+    }
+
+
+def candidate_evidence(
+    transcript_part: dict[str, Any], candidate: TranscriptVoiceReferenceCandidate, contributor: Contributor | None
+) -> dict[str, Any]:
+    return {
+        **transcript_part,
         "contributor": contributor.pk if contributor is not None else None,
         "speaker": candidate.speaker_label,
         "rank": candidate.rank,
@@ -121,9 +128,9 @@ def candidate_evidence(
 
 
 def sign_voice_reference_candidate(
-    transcript: Transcript, candidate: TranscriptVoiceReferenceCandidate, contributor: Contributor | None
+    transcript_part: dict[str, Any], candidate: TranscriptVoiceReferenceCandidate, contributor: Contributor | None
 ) -> str:
-    return signing.dumps(candidate_evidence(transcript, candidate, contributor), salt=CANDIDATE_SIGNING_SALT)
+    return signing.dumps(candidate_evidence(transcript_part, candidate, contributor), salt=CANDIDATE_SIGNING_SALT)
 
 
 def create_voice_reference_from_candidate(
@@ -165,7 +172,7 @@ def create_voice_reference_from_candidate(
                 evidence = signing.loads(candidate_token, salt=CANDIDATE_SIGNING_SALT)
             except signing.BadSignature as error:
                 raise ValidationError(_("Invalid voice-reference choice. Reload the transcript.")) from error
-            if evidence != candidate_evidence(transcript, candidate, contributor):
+            if evidence != candidate_evidence(transcript_evidence(transcript), candidate, contributor):
                 raise ValidationError(
                     _("Voice-reference evidence changed. Reload the transcript and review it again.")
                 )

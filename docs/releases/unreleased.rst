@@ -1,14 +1,16 @@
 Unreleased
 ==========
 
-- Refuse keyword/reserved quickstart project names before writes, reserve the
+- Refuse keyword/reserved quickstart project names, and names that shadow an
+  importable stdlib or installed module, before writes; reserve the
   project root exclusively and clean up only its original filesystem identity.
   Preserve completed projects on launch failure, propagate server exit errors
   and restore the invoking working directory.
 - Bind voice-reference forms to signed current artifact/candidate/contributor
   evidence; stale choices require reload and renewed review. Serialize candidate
   creation on the shared audio so concurrent duplicates reuse one reference,
-  without changing manual reference semantics or the schema.
+  without changing manual reference semantics or the schema. The editor hashes
+  the transcript artifacts once per render, not once per candidate row.
 - Project editor contributor lists to their five response fields, avoiding
   unused biographies and private transcript-variant text.
 

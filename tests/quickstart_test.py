@@ -316,7 +316,10 @@ def test_main_refuses_before_setup(quickstart_main_environment, monkeypatch, ref
         assert list(target.iterdir()) == []
 
 
-@pytest.mark.parametrize("name", ["class", "None", "django", "cast", "wagtail", "rest_framework"])
+@pytest.mark.parametrize(
+    "name",
+    ["class", "None", "django", "cast", "wagtail", "rest_framework", "email", "logging", "json", "site"],
+)
 def test_main_rejects_unimportable_names_without_writes(quickstart_main_environment, monkeypatch, name):
     target, _, events = quickstart_main_environment
     monkeypatch.setattr(sys, "argv", ["django-cast-quickstart", name])

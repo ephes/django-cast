@@ -79,8 +79,10 @@ The fastest way for a developer to start a new django-cast project is the
 
 Choose a Python identifier that is not a keyword (for example, ``class``) or
 one of the reserved package names ``django``, ``cast``, ``wagtail`` and
-``rest_framework``. These names are refused before files or child commands are
-created. The project directory is reserved exclusively: an existing directory,
+``rest_framework``, and that does not shadow an importable module such as
+``email``, ``json``, ``logging`` or ``site`` (the generated project
+root comes first on ``sys.path``). These names are refused before files or
+child commands are created. The project directory is reserved exclusively: an existing directory,
 file or symlink is never reused. Setup failure removes only the root created by
 that invocation, provided its filesystem identity has not changed.
 

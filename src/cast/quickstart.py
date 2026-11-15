@@ -6,6 +6,7 @@ Creates a new Django project with django-cast pre-configured.
 """
 
 import argparse
+import importlib.util
 import keyword
 import os
 import secrets
@@ -197,6 +198,15 @@ def main() -> None:
     # Get target directory
     target_dir = Path.cwd()
     project_path = target_dir / project_name
+
+    # The generated project root comes first on sys.path for manage.py, so a
+    # name that shadows a stdlib or installed module breaks Django at import.
+    if not project_path.exists() and (
+        project_name in sys.modules or importlib.util.find_spec(project_name) is not None
+    ):
+        print(f"Error: '{project_name}' conflicts with the name of an existing Python module.")
+        print("Choose a different project name.")
+        sys.exit(1)
 
     try:
         project_path.mkdir()

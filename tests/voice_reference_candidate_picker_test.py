@@ -456,6 +456,36 @@ class TestVoiceReferenceCandidateHelpers:
         assert resolved_group["rows"][0]["duplicate_reference"] is not None
         assert unresolved_group["speaker_label"] == "Speaker 2"
 
+    def test_group_context_reads_transcript_artifacts_once_per_render(self, episode, monkeypatch):
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={
+                "transcripts": [
+                    podlove_segment("Alice", "1", "12"),
+                    podlove_segment("Speaker 2", "20", "32"),
+                    podlove_segment("Alice", "40", "52"),
+                    podlove_segment("Speaker 3", "60", "72"),
+                ]
+            },
+        )
+        storage = transcript.podlove.storage
+        real_open = storage.open
+        opened = []
+
+        def counting_open(name, *args, **kwargs):
+            opened.append(name)
+            return real_open(name, *args, **kwargs)
+
+        context = get_speaker_mapping_context(transcript)
+        candidates = transcript.get_voice_reference_candidates()
+        monkeypatch.setattr(storage, "open", counting_open)
+        monkeypatch.setattr(type(transcript), "get_voice_reference_candidates", lambda self: candidates)
+        groups = get_voice_reference_candidate_groups(transcript, context)
+
+        assert sum(len(group["rows"]) for group in groups) >= 3
+        artifacts = [field.name for field in (transcript.podlove, transcript.dote, transcript.vtt) if field]
+        assert sorted(opened) == sorted(artifacts)
+
     def test_create_helper_surfaces_model_validation_errors(self, episode):
         contributor = Contributor.objects.create(display_name="Alice", slug="helper-validation-alice")
         EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)

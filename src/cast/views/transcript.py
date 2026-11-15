@@ -237,6 +237,8 @@ def get_voice_reference_candidate_groups(
 ) -> list[VoiceReferenceCandidateGroup]:
     groups: dict[str, VoiceReferenceCandidateGroup] = {}
     candidates = transcript.get_voice_reference_candidates()
+    # Hash the transcript artifacts once per render, not once per candidate row.
+    transcript_part = editing.transcript_evidence(transcript) if candidates else {}
     for index, candidate in enumerate(candidates):
         contributor = resolve_voice_reference_contributor(
             candidate.speaker_label,
@@ -261,7 +263,7 @@ def get_voice_reference_candidate_groups(
         group["rows"].append(
             {
                 "candidate": candidate,
-                "candidate_token": editing.sign_voice_reference_candidate(transcript, candidate, contributor),
+                "candidate_token": editing.sign_voice_reference_candidate(transcript_part, candidate, contributor),
                 "contributor": contributor,
                 "duplicate_reference": duplicate_reference,
                 "form_id": f"cast-voice-reference-{transcript.pk}-{index}",
