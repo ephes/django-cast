@@ -113,3 +113,14 @@ and an ordinary retry copies the file again.
 
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.
+
+****************************
+Transcript previous versions
+****************************
+
+``Transcript.previous_version`` is a single private JSON bundle with embedded
+file bytes and editorial speaker mappings. Include ``CAST_PRIVATE_MEDIA_ROOT``
+or the configured private storage in backups. The admin swaps this bundle with
+the current version on restore; it is not an archive of every revision and does
+not replace normal database/media backups. Delete the transcript to remove its
+previous-version bundle. Never expose private storage through the media server.

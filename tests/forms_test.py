@@ -251,7 +251,7 @@ class TestTranscriptForm:
 
     def test_save_commit_false_defers_persistence_and_derivation(self, audio, mocker):
         save_with_derivations = mocker.patch("cast.forms.save_transcript_with_derivations")
-        form = TranscriptForm({"audio": audio.id})
+        form = TranscriptForm({"audio": audio.id}, {"vtt": SimpleUploadedFile("t.vtt", b"WEBVTT\n")})
         assert form.is_valid()
 
         transcript = form.save(commit=False)

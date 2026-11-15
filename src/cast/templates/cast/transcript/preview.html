@@ -1,0 +1,80 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n l10n %}
+{% block titletag %}{% trans "Transcript preview" %}{% endblock %}
+{% block extra_css %}{{ block.super }}<style>
+.transcript-passage { margin: 1.5rem 0; max-width: 60rem; }
+.passage-text { display: block; width: 100%; text-align: left; font: inherit; line-height: 1.6; white-space: pre-wrap; background: transparent; color: inherit; padding: .5rem; border: 1px solid transparent; cursor: text; }
+.passage-text:hover, .passage-text:focus-visible { border-color: currentColor; }
+.passage-text-form textarea { display: block; width: 100%; font: inherit; padding: .5rem; }
+.passage-save-status { min-height: 1.2em; }
+</style>{% endblock %}
+{% block content %}
+{% include "wagtailadmin/shared/header.html" with title=transcript_title icon="media" %}
+<div class="nice-padding">
+  <p><a href="{% url 'cast-transcript:edit' transcript.pk %}">{% trans "Edit transcript and speakers" %}</a></p>
+  <h2>{% trans "Transcript preview" %}</h2>
+  <p>{% blocktrans %}{{ unnamed }} passages without a name{% endblocktrans %}</p>
+  <audio controls preload="metadata" id="passage-audio">{% for source in transcript_audio_sources %}<source src="{{ source.url }}" type="{{ source.mimeType }}">{% endfor %}</audio>
+  {% for passage in passage_page %}
+    <section class="transcript-passage">
+      {% ifchanged passage.speaker %}<h3>{{ passage.speaker|default:_("No name") }}</h3>{% endifchanged %}
+      <button type="button" class="button button-small button-secondary" data-seek="{{ passage.seconds|unlocalize }}">{{ passage.timestamp }}</button>
+      <button type="button" class="passage-text" data-edit-text>{{ passage.text }}</button>
+      <form class="passage-text-form" hidden method="post">{% csrf_token %}
+        <input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
+        <input type="hidden" name="action" value="correct-text">
+        <input type="hidden" name="start_ms" value="{{ passage.start_ms|unlocalize }}">
+        <label>{% trans "Passage text" %}<textarea name="text" rows="3" maxlength="100000" required>{{ passage.text }}</textarea></label>
+        <button type="submit" class="button">{% trans "Save text" %}</button>
+        <button type="button" data-cancel-text class="button button-secondary">{% trans "Cancel" %}</button>
+      </form>
+      <p class="passage-save-status" role="status" aria-live="polite"></p>
+      <details><summary>{% trans "Change speaker" %}</summary>
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
+          <input type="hidden" name="start_ms" value="{{ passage.start_ms|unlocalize }}">
+          <label>{% trans "Speaker" %}<select name="speaker"><option value="">{% trans "No name" %}</option>{% for name in speaker_names %}<option{% if name == passage.speaker %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+          <button class="button" type="submit">{% trans "Save speaker" %}</button>
+        </form>
+      </details>
+    </section>
+  {% endfor %}
+  <nav>{% if passage_page.has_previous %}<a href="?episode_id={{ episode_id }}&amp;page={{ passage_page.previous_page_number }}">{% trans "Previous" %}</a>{% endif %} {{ passage_page.number }} / {{ passage_page.paginator.num_pages }} {% if passage_page.has_next %}<a href="?episode_id={{ episode_id }}&amp;page={{ passage_page.next_page_number }}">{% trans "Next" %}</a>{% endif %}</nav>
+</div>
+<script>
+  document.querySelectorAll('[data-seek]').forEach(button => button.addEventListener('click', () => {
+    const audio = document.getElementById('passage-audio');
+    audio.currentTime = Number(button.dataset.seek); audio.play().catch(() => {});
+  }));
+  let saving = false;
+  document.querySelectorAll('.transcript-passage').forEach(passage => {
+    const button = passage.querySelector('[data-edit-text]');
+    const form = passage.querySelector('.passage-text-form');
+    const input = form.querySelector('textarea');
+    const status = passage.querySelector('.passage-save-status');
+    const close = () => { form.hidden = true; button.hidden = false; button.focus(); };
+    button.addEventListener('click', () => {
+      if (saving) return;
+      input.value = button.textContent; button.hidden = true; form.hidden = false; input.focus();
+    });
+    form.querySelector('[data-cancel-text]').addEventListener('click', () => { if (!saving) close(); });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); if (!saving) close(); }
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); form.requestSubmit(); }
+    });
+    form.addEventListener('submit', async event => {
+      event.preventDefault(); if (saving) return; saving = true;
+      status.textContent = "{% trans 'Saving…' %}";
+      form.querySelector('[type=submit]').disabled = true;
+      try {
+        const response = await fetch(location.href, { method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'} });
+        if (!response.ok) throw new Error(response.status === 409 ? "{% trans 'Reload the transcript; it changed while you were editing.' %}" : (await response.text()).slice(0, 300) || "{% trans 'Could not save. Try again.' %}");
+        const result = await response.json(); button.textContent = result.text;
+        document.querySelectorAll('[name=artifact_revision]').forEach(field => { field.value = result.artifact_revision; });
+        status.textContent = "{% trans 'Saved' %}"; close();
+      } catch (error) { status.textContent = error.message; }
+      finally { saving = false; form.querySelector('[type=submit]').disabled = false; }
+    });
+  });
+</script>
+{% endblock %}

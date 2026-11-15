@@ -2,6 +2,7 @@
 {% load i18n %}
 {% block titletag %}{% trans "Generate transcript again" %}{% endblock %}
 {% block content %}
+<p>{% trans "Manual text corrections will be replaced. The previous version keeps them restorable." %}</p>
 {% trans "Generate transcript again" as title %}
 {% include "wagtailadmin/shared/header.html" with title=title subtitle=audio.title icon="doc-full" %}
 <div class="nice-padding">

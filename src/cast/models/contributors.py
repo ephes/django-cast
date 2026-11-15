@@ -11,7 +11,8 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 from modelcluster.fields import ParentalKey
 from modelcluster.models import ClusterableModel
-from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel
+from wagtail.admin.panels import FieldPanel, InlinePanel, MultiFieldPanel, TitleFieldPanel
+from wagtail.admin.widgets import SlugInput
 from wagtail.models import Orderable
 from wagtail.snippets.models import register_snippet
 
@@ -83,8 +84,8 @@ class Contributor(ClusterableModel):
     )
 
     panels = [
-        FieldPanel("display_name"),
-        FieldPanel("slug"),
+        TitleFieldPanel("display_name", targets=["slug"], placeholder=False),
+        FieldPanel("slug", widget=SlugInput),
         FieldPanel("visible"),
         FieldPanel("default_role"),
         FieldPanel("avatar"),
@@ -94,8 +95,8 @@ class Contributor(ClusterableModel):
             heading=_("Links"),
         ),
         MultiFieldPanel(
-            [InlinePanel("voice_references", label=_("Voice reference"))],
-            heading=_("Voice references (private)"),
+            [InlinePanel("voice_references", label=_("Voice sample"))],
+            heading=_("Voice samples (private)"),
         ),
         MultiFieldPanel(
             [FieldPanel("transcript_variants")],

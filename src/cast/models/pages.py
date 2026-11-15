@@ -649,6 +649,37 @@ class CustomEpisodeForm(WagtailAdminPageForm):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        from .contributors import EpisodeContributor
+
+        instance = kwargs.get("instance")
+        parent = kwargs.get("parent_page")
+        bound = bool(args and args[0] is not None) or kwargs.get("data") is not None
+        if (
+            instance is not None
+            and instance.pk is None
+            and not bound
+            and parent is not None
+            and not instance.contributor_assignments.all()
+        ):
+            previous = Episode.objects.child_of(parent).order_by("-visible_date", "-pk").first()
+            if previous is not None:
+                previous = previous.get_latest_revision_as_object()
+                hosts = [
+                    assignment
+                    for assignment in previous.contributor_assignments.all()
+                    if assignment.role == EpisodeContributor.ROLE_HOST and assignment.contributor.visible
+                ]
+                instance.contributor_assignments.set(
+                    [
+                        EpisodeContributor(
+                            contributor=assignment.contributor,
+                            role=assignment.role,
+                            link=assignment.link,
+                            sort_order=index,
+                        )
+                        for index, assignment in enumerate(hosts)
+                    ]
+                )
         super().__init__(*args, **kwargs)
         if self.parent_page is not None:
             self.instance._blog = cast("Blog", self.parent_page.specific)
@@ -661,6 +692,22 @@ class CustomEpisodeForm(WagtailAdminPageForm):
             parent_podcast_id = None
         if parent_podcast_id is not None:
             season_field.queryset = season_field.queryset.filter(podcast_id=parent_podcast_id)
+
+    def save(self, commit: bool = True) -> Any:
+        is_new = self.instance.pk is None
+        episode = super().save(commit=False)
+        if is_new and self.parent_page is not None:
+            podcast = self.parent_page.specific
+            first_role = "host" if getattr(podcast, "contributor_order", "guests_first") == "hosts_first" else "guest"
+            assignments = list(episode.contributor_assignments.all())
+            assignments.sort(key=lambda assignment: assignment.role != first_role)
+            for position, assignment in enumerate(assignments):
+                assignment.sort_order = position
+            episode.contributor_assignments.set(assignments)
+        if commit:
+            episode.save()
+            self.save_m2m()
+        return episode
 
     def clean(self) -> dict[str, Any]:
         cleaned_data = super().clean()

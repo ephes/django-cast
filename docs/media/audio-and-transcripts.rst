@@ -505,7 +505,7 @@ embeddings are owned by the transcription backend and would become stale when
 that backend changes its embedding model.
 
 Known-speaker recognition
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Enable known-speaker recognition with ``CAST_VOXHELM_KNOWN_SPEAKER_ENABLED`` or
 the site-level Voxhelm setting. When enabled, a diarized transcript-generation
@@ -1043,7 +1043,7 @@ request-specific, and draft access still requires edit permission. Explicit
 anchors continue to fail with 404 when absent, mismatched or unauthorized.
 
 Voice-reference overlap and sample grouping
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Candidate extraction subtracts speech by other labels across the complete
 source timeline, including unsorted, nested, textless and conflicting-label
@@ -1235,7 +1235,7 @@ changes do not affect public theme templates; no existing template blocks were
 renamed.
 
 Reviewing long transcripts
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Passages to check shows at most 50 segment decisions per page. The default
 ``Needs a decision`` filter includes uncertain suggestions, low-margin/no-name
@@ -1258,3 +1258,60 @@ voices`` on success. Failure messages remain visible, including a failed retry
 of an earlier successful generation. Polling stops on completion, request error,
 a hidden tab, or after 30 minutes; reload to resume. The status JSON endpoint
 requires audio change permission and returns no private sidecar contents.
+
+Transcript editing: speakers and voice samples
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The editor starts with Speakers and Passages to check, followed by collapsed
+Voice samples for next time, Spelling corrections and collapsed Files. An
+approved speaker-to-contributor mapping can supply voice samples immediately;
+names already matching assigned contributors need no second selection. Uploading
+replacement files discards suggestions from the earlier generation.
+
+Terminology for the django-chat runbook: “Known-speaker suggestions” is now
+“Suggested names” under “Speakers”; “Voice reference” becomes “Voice sample”;
+“Glossary corrections” becomes “Spelling corrections”. API/model names stay stable.
+
+Preview, passage corrections and upload
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Preview is available from the transcript editor and episode panel, including
+unpublished revisions. It shows 200 passages per page, marks unnamed passages,
+and plays audio from each timestamp. Change speaker affects the same timestamp
+in every stored format and retains a decision for generated transcripts.
+
+Click a passage's text to correct it inline. Enter or Cmd+Enter saves, Escape
+cancels, Shift+Enter inserts a line break. Saved and error states appear beside
+the passage without reloading. Manual corrections update the stored Podlove,
+DOTe and WebVTT files together, their plain text and search entry. They take
+precedence over subsequent spelling-correction review. Mismatched timestamps or
+styled WebVTT cues are refused without a partial update. Regeneration replaces
+manual corrections; restore the previous version to recover them.
+
+Uploads require at least one file. Podlove JSON is used by the web player;
+WebVTT or DOTe provides transcripts for podcast apps. Missing formats are named
+after saving. The audio chooser offers audios without a transcript and includes
+the episode title; duplicate submissions link to the existing transcript.
+
+New episode contributors
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The contributor name uses Wagtail's built-in slug synchronization. A new episode
+starts with the visible hosts from the latest episode of the same podcast
+(sorted by visible date, then ID), using its latest saved revision. Guests are
+not copied, and existing or submitted contributor rows are kept. The podcast's
+Contributor order setting chooses Guests, then hosts (default) or Hosts, then
+guests for new episode saves. Order within each group is preserved; existing
+episodes retain their custom order. No theme or consumer-site change is needed;
+the added setting has a migration with a default.
+
+Previous transcript version
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Generation and replacement uploads save one private previous version containing
+all public files, both editorial sidecars and speaker mappings. Restore the
+version from the displayed date to bring them back together. The current state
+then becomes the previous version, so restoring can be undone. This is one
+previous version, not a full history. It is deleted with its transcript and has
+no public download URL. The regeneration confirmation names the loss of manual
+text corrections explicitly.

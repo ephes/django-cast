@@ -769,9 +769,9 @@ class TestKnownSpeakerReviewView:
         transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, speakers=SPEAKERS)
         response = admin_client.get(reverse("cast-transcript:edit", args=(transcript.id,)))
         assert response.status_code == 200
-        assert b"Known-speaker suggestions" in response.content
+        assert b"Suggested names" in response.content
         assert b"Save segment decisions" in response.content
-        assert b"leaves uncertain segments unchanged" in response.content
+        assert b"check the uncertain passages below" in response.content
 
     def test_apply_action_labels_public_output(self, admin_client, audio):
         speakers = copy.deepcopy(SPEAKERS)
@@ -789,8 +789,8 @@ class TestKnownSpeakerReviewView:
         assert response.status_code == 302
         feedback = [str(message).strip() for message in get_messages(response.wsgi_request)]
         assert feedback == [
-            "Applied known-speaker names to 6 public transcript entries. "
-            "Uncertain segments were left unchanged for review, except for an unambiguous guest without a voice reference."
+            "Applied known-speaker names to 2 passages. "
+            "Uncertain segments were left unchanged for review, except for an unambiguous guest without a voice sample."
         ]
         transcript.refresh_from_db()
         # The quick action applies only confident suggestions. The uncertain
@@ -903,7 +903,7 @@ class TestKnownSpeakerReviewView:
         )
 
         assert response.status_code == 200
-        assert b"known-speaker segment decisions could not be saved" in response.content
+        assert b"passage decisions could not be saved" in response.content
         transcript.refresh_from_db()
         assert transcript.podlove_data["transcripts"][0]["speaker"] == ""
 

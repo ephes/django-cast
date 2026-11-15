@@ -9,6 +9,7 @@
     {% if transcript and not transcript_generation_active %}
       <p>{% blocktrans with named=transcript_voices.named total=transcript_voices.total %}{{ named }} of {{ total }} voices named{% endblocktrans %}</p>
       <a href="{% url 'cast-transcript:edit' transcript.pk %}">{% trans "Edit transcript and speakers" %}</a>
+      <a href="{% url 'cast-transcript:preview' transcript.pk %}?episode_id={{ self.instance.pk }}">{% trans "Preview" %}</a>
     {% endif %}
     {% if not transcript_generation_active %}
       {% if can_generate_transcript %}{% include "cast/wagtail/_transcript_readiness.html" %}{% endif %}

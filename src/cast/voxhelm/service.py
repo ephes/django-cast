@@ -542,13 +542,19 @@ class VoxhelmTranscriptService:
         validate_transcript_artifacts(podlove=podlove, dote=dote, vtt=vtt, speakers=speakers)
         file_stem = f"audio-{audio.pk}"
         replacements = StagedFileReplacementGroup()
+        from ..transcripts.versions import replacing
+
         try:
-            replacements.stage(transcript.podlove, f"{file_stem}.podlove.json", podlove)
-            replacements.stage(transcript.dote, f"{file_stem}.dote.json", dote)
-            replacements.stage(transcript.vtt, f"{file_stem}.vtt", vtt)
-            if speakers is not None:
-                replacements.stage(transcript.speakers, f"{file_stem}.speakers.json", speakers)
-            replacements.save_model(transcript, save=save_transcript_with_derivations)
+            with replacing(transcript):
+                replacements.stage(transcript.podlove, f"{file_stem}.podlove.json", podlove)
+                replacements.stage(transcript.dote, f"{file_stem}.dote.json", dote)
+                replacements.stage(transcript.vtt, f"{file_stem}.vtt", vtt)
+                transcript.corrections = ""
+                if speakers is None:
+                    transcript.speakers = ""
+                if speakers is not None:
+                    replacements.stage(transcript.speakers, f"{file_stem}.speakers.json", speakers)
+                replacements.save_model(transcript, save=save_transcript_with_derivations)
         except Exception:
             replacements.rollback()
             raise

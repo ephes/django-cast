@@ -1,6 +1,6 @@
 # Transcript editing in the Wagtail admin: a workflow an editor can follow
 
-Status: implementation in progress, 2026-11-15. Slices 1–4 and 7 implemented; slices 5, 6, 8, 9 and 10 await owner answers. Integration branch: `develop`
+Status: implemented on stacked branches A/B, 2026-11-15, including inline text correction. External review and integration pending. Integration branch: `develop`
 (evidence taken at `e723b0c4`).
 
 This document is about the **editor** who works in the Wagtail admin. It is not
@@ -31,7 +31,7 @@ No step may silently remove or change speaker names that are already published.
 - No new data model for transcripts. The three public files, the two private
   sidecars and `TranscriptSpeakerMapping` stay as they are. One slice adds one
   file field (slice 10).
-- No free-text editing of transcript segments (see owner question 3).
+- Plain-text passage correction is included per the revised owner answer (2026-11-15); no rich text or new framework.
 - No bulk tooling for many episodes at once. The management commands stay for
   that.
 
@@ -321,7 +321,7 @@ sections, in this order:
 
 **Step 4 – Check.** "Preview" shows the whole transcript as the public will see
 it, with names, grouped by speaker, each timestamp playable. Passages without a
-name are marked. The speaker of a single passage can be changed there.
+name are marked. The speaker of a single passage can be changed there. Click its text to correct it inline; Enter/Cmd+Enter saves, Escape cancels.
 
 Counted the same way as above, the task takes two admin areas, about six page
 loads and about 20 clicks.
@@ -331,7 +331,7 @@ loads and about 20 clicks.
 **A. Episode page as hub, existing transcript views reworked (chosen).**
 Keep the models, the hand-written transcript views and the services. Add a hub
 panel on the episode page, fix the dangerous paths, reorder and rename the
-transcript page, add a read-only preview.
+transcript page, add a preview with simple passage corrections.
 *For:* each slice is small and independently useful; the worst problems (1, 2,
 3) are fixed by guards and paging, not by new concepts; nothing changes for
 sites that use the management commands. *Against:* the transcript page keeps
@@ -551,7 +551,7 @@ friction points reproducible.
 
 ## Implementation plan
 
-Ten slices, biggest gain first. Each is 30–90 minutes for an implementation
+Ten original slices plus the owner-requested text-correction slice after slice 6, biggest gain first. Each is 30–90 minutes for an implementation
 worker, includes its tests, and updates `docs/media/audio-and-transcripts.rst`
 and `docs/releases/unreleased.rst` where behaviour changes. Slices 1, 3 and 4
 are independent of each other. Slice 2 is the base for 7. Slice 5 is the base
@@ -666,6 +666,21 @@ Fixes friction point 9.
   - A changed transcript in between yields the existing "Reload" response.
   - The view requires "change" permission and never outputs sidecar content.
 
+### Added slice after 6 – Inline passage text correction
+
+Owner revision, 2026-11-15: plain-text passage editing is wanted.
+
+- Click a passage in Preview, edit inline, Enter/Cmd+Enter saves, Escape cancels.
+  Shift+Enter inserts a line break. No page reload or rich-text framework.
+- Show saved/error state and retain unsaved input on failure. Changed artifacts
+  produce a Reload conflict instead of overwriting the other edit.
+- Store corrections in canonical public files and as manual overrides in the
+  existing spelling-correction sidecar. Podlove, DOTe, WebVTT, plain text and
+  the transcript search index stay consistent. Refuse a partial update for
+  mismatched timestamps or unsupported styled WebVTT cues.
+- Regeneration warns that manual corrections will be replaced; slice 10's
+  private previous version keeps them restorable.
+
 ### Slice 7 – Generation feedback
 
 Fixes friction point 11.
@@ -731,7 +746,7 @@ Completes friction point 1.
     the new previous version.
   - The bundle is never served publicly and is deleted with the transcript.
 
-## Open owner questions (class C)
+## Original owner questions (resolved 2026-11-15; answers recorded below)
 
 1. Soll „Transkript neu erzeugen" bei einer bereits veröffentlichten Episode
    nach der Rückfrage sofort die öffentlichen Sprechernamen entfernen (wie
@@ -769,3 +784,22 @@ All from the local walk-through, in `docs/design/transcript-editing-ux/`.
 | `07-transcript-edit-after-regen.png` | After regeneration: review table, and "Speaker 1 – Needs review" with the old host selected next to the guest's samples. |
 | `08-save-decisions-1200.png` | `TooManyFieldsSent` on "Save segment decisions" with 1,200 segments. |
 | `09-voice-reference-needs-mapping.png` | Voice samples ask for a mapping that is already saved. |
+
+Implementation update (2026-11-15): slice 5 implemented on branch B.
+
+## Owner decisions and branch B implementation (2026-11-15)
+
+Slices 5, 6, the added text-correction slice, 8, 9 and 10 are implemented on
+`codex-q/cast-transcript-editing-b`, stacked on branch A. Local verification and
+external cross-family review status are recorded by the worker handoff.
+
+The owner approved confirmation plus previous-version restore for published
+transcripts, host prefill from the previous episode, guests before hosts by
+default with a podcast setting, full manual-upload support, simpler UI wording,
+and inline plain-text corrections immediately after slice 6. Enter/Cmd+Enter
+saves, Escape cancels. Manual text overrides spelling corrections and is replaced
+by regeneration, with restoration through the previous-version bundle.
+
+Terminology for the django-chat runbook: Voice reference → Voice sample;
+Known-speaker suggestions → Suggested names under Speakers; Glossary corrections
+→ Spelling corrections. Python/API identifiers remain compatible.

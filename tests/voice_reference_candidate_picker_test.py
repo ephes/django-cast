@@ -214,7 +214,7 @@ class TestVoiceReferenceCandidateAdmin:
 
         assert response.status_code == 200
         content = response.content.decode("utf-8")
-        assert "Voice-reference candidates" in content
+        assert "Voice samples for next time" in content
         assert "Alice" in content
         assert 'data-cast-speaker-seek="1.500"' in content
         assert 'data-cast-speaker-end="12.500"' in content
@@ -245,7 +245,7 @@ class TestVoiceReferenceCandidateAdmin:
         assert ContributorVoiceReference.objects.count() == 0
         assert (
             response.context["message"]
-            == "The voice reference could not be created due to errors. Reload the transcript and review the candidate again."
+            == "The voice sample could not be created due to errors. Reload the transcript and review the candidate again."
         )
 
     def test_post_create_approved_candidate_creates_source_range_reference(self, admin_client, episode):
@@ -348,8 +348,7 @@ class TestVoiceReferenceCandidateAdmin:
         assert response.status_code == 200
         assert ContributorVoiceReference.objects.count() == 0
         assert (
-            response.context["message"]
-            == "The selected voice-reference candidate is no longer available. Reload the transcript."
+            response.context["message"] == "The selected voice sample is no longer available. Reload the transcript."
         )
 
     def test_post_unresolved_candidate_is_rejected(self, admin_client, episode):

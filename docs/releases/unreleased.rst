@@ -599,3 +599,15 @@ Unreleased
   corpus. Only the latest attempt publishes its model and matching metrics;
   failed evaluation preserves the prior usable pair. Apply the new migration
   before upgrading training publishers together.
+
+* Simplify transcript editing sections and wording; allow voice samples from
+  approved contributor mappings and detach stale generation suggestions on upload.
+
+* Add paginated admin transcript preview, per-passage speaker changes and inline
+  plain-text corrections with keyboard save/cancel and consistent output formats.
+* Explain transcript uploads, reject empty uploads, identify misplaced formats,
+  and link duplicate audios to their existing transcripts.
+* Prefill previous episode hosts, synchronize contributor slugs, and configure
+  guest/host ordering per podcast (guests first by default).
+* Keep one private previous transcript version before generation or replacement
+  upload, including text corrections and mappings, and allow swapping it back.

@@ -96,6 +96,7 @@ def test_private_model_field_storage_uses_the_session_private_media_root(isolate
         "cast.ContributorVoiceReference.clip",
         "cast.Transcript.speakers",
         "cast.Transcript.corrections",
+        "cast.Transcript.previous_version",
     ]
     session_private_root = Path(isolated_media_files["CAST_PRIVATE_MEDIA_ROOT"])
     for field in fields:

@@ -297,6 +297,29 @@ class AudioForm(BaseCollectionMemberForm):
         return audio
 
 
+class TranscriptAudioChoiceField(forms.ModelChoiceField):
+    allowed_audio: Any
+
+    def label_from_instance(self, audio: Audio) -> str:
+        titles = [episode.title for episode in audio.episodes.all()]
+        return " / ".join(titles) + " — " + str(audio.title or "") if titles else str(audio.title or "")
+
+    def to_python(self, value: Any) -> Any:
+        from django.urls import reverse
+        from django.utils.html import format_html
+
+        if value and self.queryset is not None:
+            existing = Transcript.objects.filter(audio_id=value).first() if str(value).isdigit() else None
+            if existing is not None and self.allowed_audio.filter(pk=value).exists():
+                raise ValidationError(
+                    format_html(
+                        'This audio already has a transcript. <a href="{}">Edit the existing transcript</a>.',
+                        reverse("cast-transcript:edit", args=(existing.pk,)),
+                    )
+                )
+        return super().to_python(value)
+
+
 class TranscriptForm(BaseCollectionMemberForm):
     """Form for creating and editing Transcript objects in the Wagtail admin.
 
@@ -313,6 +336,14 @@ class TranscriptForm(BaseCollectionMemberForm):
         super().__init__(*args, **kwargs)
         if user is not None:
             self.fields["audio"].queryset = audio_permission_policy.instances_user_has_permission_for(user, "choose")
+        if self.instance.pk is None:
+            allowed = self.fields["audio"].queryset
+            field = TranscriptAudioChoiceField(
+                queryset=allowed.filter(transcript__isnull=True).prefetch_related("episodes"),
+                label=self.fields["audio"].label,
+            )
+            field.allowed_audio = allowed
+            self.fields["audio"] = field
 
     class Meta:
         model = Transcript
@@ -323,12 +354,20 @@ class TranscriptForm(BaseCollectionMemberForm):
             "dote": forms.ClearableFileInput,
         }
 
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean()
+        if not self.errors and not any(cleaned.get(name) for name in ("podlove", "vtt", "dote")):
+            raise ValidationError(_("Upload at least one transcript file."))
+        return cleaned
+
     def clean_podlove(self) -> Any:
         podlove = self.cleaned_data.get("podlove")
         if not isinstance(podlove, UploadedFile):
             return podlove  # empty, cleared or the stored file kept: only new uploads are validated
         max_bytes = int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
         data = self._load_json(podlove, field_label="Podlove", max_bytes=max_bytes)
+        if isinstance(data, dict) and "lines" in data:
+            raise ValidationError(_("This is a DOTe file. Upload it in the DOTe Transcript field."))
         if not isinstance(data, dict) or "transcripts" not in data:
             raise ValidationError(_("Podlove transcript must include a top-level 'transcripts' key."))
         if not isinstance(data["transcripts"], list):
@@ -341,6 +380,8 @@ class TranscriptForm(BaseCollectionMemberForm):
             return dote  # empty, cleared or the stored file kept: only new uploads are validated
         max_bytes = int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
         data = self._load_json(dote, field_label="DOTe", max_bytes=max_bytes)
+        if isinstance(data, dict) and "transcripts" in data:
+            raise ValidationError(_("This is a Podlove file. Upload it in the Podlove Transcript field."))
         if not isinstance(data, dict) or "lines" not in data:
             raise ValidationError(_("DOTe transcript must include a top-level 'lines' key."))
         lines = data["lines"]
@@ -371,15 +412,37 @@ class TranscriptForm(BaseCollectionMemberForm):
             return vtt  # empty, cleared or the stored file kept: only new uploads are validated
         validate_transcript_upload(vtt, max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES))
         header = self._read_header(vtt)
+        if header.startswith(("{", "[")):
+            data = self._load_json(
+                vtt, field_label="WebVTT", max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
+            )
+            destination = (
+                "Podlove Transcript" if isinstance(data, dict) and "transcripts" in data else "DOTe Transcript"
+            )
+            raise ValidationError(
+                _("This is a JSON file. Upload it in the %(field)s field."), params={"field": destination}
+            )
         if not header.startswith("WEBVTT"):
             raise ValidationError(_("WebVTT transcripts must start with the WEBVTT header."))
         return vtt
 
     def save(self, commit: bool = True) -> Transcript:
+        from .transcripts.versions import replacing
+
         transcript = super().save(commit=False)
+        changed = any(name in self.changed_data for name in ("podlove", "dote", "vtt"))
         if commit:
-            save_transcript_with_derivations(transcript)
+            if changed:
+                with replacing(transcript):
+                    transcript.speakers = ""
+                    transcript.corrections = ""
+                    save_transcript_with_derivations(transcript)
+            else:
+                save_transcript_with_derivations(transcript)
             self._save_m2m()
+        elif changed:
+            transcript.speakers = ""
+            transcript.corrections = ""
         return transcript
 
     @staticmethod
@@ -387,7 +450,10 @@ class TranscriptForm(BaseCollectionMemberForm):
         try:
             validate_transcript_upload(uploaded_file, max_bytes=max_bytes)
             uploaded_file.seek(0)
-            return json.loads(uploaded_file.read(max_bytes + 1))
+            content = uploaded_file.read(max_bytes + 1)
+            if (content.decode("utf-8-sig") if isinstance(content, bytes) else content).lstrip().startswith("WEBVTT"):
+                raise ValidationError(_("This is a WebVTT file. Upload it in the WebVTT Transcript field."))
+            return json.loads(content)
         except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
             raise ValidationError(_("%(field)s transcript is not valid JSON."), params={"field": field_label})
         finally:
@@ -456,12 +522,19 @@ class SpeakerContributorMappingForm(forms.Form):
             self.speaker_field_names[field_name] = speaker_label
             self.display_field_names[display_field_name] = speaker_label
             target_field = forms.ChoiceField(label=speaker_label, choices=choices, required=False)
-            display_field = forms.CharField(label=_("One-off display name"), max_length=128, required=False)
+            display_field = forms.CharField(label=_("Name for this transcript only"), max_length=128, required=False)
             if mapping is not None and mapping.review_state != TranscriptSpeakerMapping.ReviewState.STALE:
                 if mapping.contributor_id is not None:
                     target_field.initial = self.contributor_value_by_id.get(mapping.contributor_id, "")
                 elif mapping.display_name:
                     display_field.initial = mapping.display_name
+            for assignment in contributor_assignments:
+                if assignment.display_name == speaker_label:
+                    target_field.initial = self._assignment_value(assignment)
+                    target_field.disabled = True
+                    display_field.initial = ""
+                    display_field.disabled = True
+                    break
             self.fields[field_name] = target_field
             self.fields[display_field_name] = display_field
 

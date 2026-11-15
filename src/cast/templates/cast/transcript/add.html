@@ -29,8 +29,10 @@
   {% include "wagtailadmin/shared/header.html" with title=add_str icon="media" %}
 
   <div class="nice-padding">
+    <p>{% trans "Upload at least one file. Podlove JSON supplies the web player; WebVTT or DOTe supplies podcast apps. Upload all three for complete format coverage." %}</p>
     <form action="{% block action %}{% url 'cast-transcript:add' %}{% endblock %}" method="POST" enctype="multipart/form-data" novalidate>
       {% csrf_token %}
+      {{ form.non_field_errors }}
       <ul class="fields">
         {% for field in form %}
           <li>

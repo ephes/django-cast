@@ -12,6 +12,14 @@ def parse_start_ms(value: object) -> int | None:
     return value if type(value) is int and value >= 0 else None
 
 
+def segment_start_ms(segment: Mapping[str, Any]) -> int | None:
+    """Use explicit milliseconds when supplied, otherwise standard Podlove timestamps."""
+    if "start_ms" in segment:
+        return parse_start_ms(segment["start_ms"])
+    seconds = parsing.parse_timestamp_decimal_seconds(segment.get("start"))
+    return int(seconds * 1000) if seconds is not None else None
+
+
 def validate_edit_times(data: dict) -> None:
     """Refuse boolean aliases before an editorial operation stages any files."""
     segments = data.get("transcripts")
@@ -32,7 +40,7 @@ def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms = parse_start_ms(segment.get("start_ms"))
+        start_ms = segment_start_ms(segment)
         if start_ms is None:
             continue
         name = names_by_start_ms.get(start_ms)
@@ -52,7 +60,7 @@ def clear_suggestions(data: dict, start_milliseconds: set[int]) -> tuple[int, bo
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms = parse_start_ms(segment.get("start_ms"))
+        start_ms = segment_start_ms(segment)
         if start_ms is None or start_ms not in start_milliseconds:
             continue
         applied += 1
@@ -85,7 +93,7 @@ def get_texts(data: dict) -> list[tuple[int, str]]:
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms, text = parse_start_ms(segment.get("start_ms")), segment.get("text")
+        start_ms, text = segment_start_ms(segment), segment.get("text")
         if start_ms is not None and isinstance(text, str):
             texts.append((start_ms, text))
             counts[start_ms] = counts.get(start_ms, 0) + 1
@@ -101,7 +109,7 @@ def set_texts(data: dict, texts_by_start_ms: Mapping[int, str]) -> int:
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms = parse_start_ms(segment.get("start_ms"))
+        start_ms = segment_start_ms(segment)
         text = texts_by_start_ms.get(start_ms) if start_ms is not None else None
         if text is not None and segment.get("text") != text:
             segment["text"] = text
