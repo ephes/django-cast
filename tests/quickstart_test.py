@@ -21,6 +21,7 @@ QUICKSTART_TEMPLATE_FILES = {
 
 
 def generate_quickstart_project(tmp_path: Path, project_name: str = "mysite") -> Path:
+    (tmp_path / project_name).mkdir()
     quickstart.create_project_structure(project_name, tmp_path)
     quickstart.create_settings_file(project_name, tmp_path)
     quickstart.create_urls_file(project_name, tmp_path)
@@ -234,7 +235,8 @@ def quickstart_main_environment(tmp_path, monkeypatch):
         assert Path.cwd() == project
         events.append(("browser", url, delay))
 
-    def server(argv):
+    def server(argv, *, check):
+        assert check is True
         assert Path.cwd() == project
         events.append(("server", argv))
         return subprocess.CompletedProcess(argv, 0)
@@ -263,7 +265,7 @@ def test_main_orders_setup_and_server(quickstart_main_environment, monkeypatch, 
         ("server", [sys.executable, str(project / "manage.py"), "runserver"]),
     ]
     assert events == expected
-    assert Path.cwd() == project
+    assert Path.cwd() == target
     assert (project / "synthetic_site" / "urls.py").is_file()
     assert project.parent == target
 
@@ -312,3 +314,145 @@ def test_main_refuses_before_setup(quickstart_main_environment, monkeypatch, ref
         assert (project / "keep.txt").read_text() == "synthetic sentinel"
     else:
         assert list(target.iterdir()) == []
+
+
+@pytest.mark.parametrize("name", ["class", "None", "django", "cast", "wagtail", "rest_framework"])
+def test_main_rejects_unimportable_names_without_writes(quickstart_main_environment, monkeypatch, name):
+    target, _, events = quickstart_main_environment
+    monkeypatch.setattr(sys, "argv", ["django-cast-quickstart", name])
+    writes = []
+    original_mkdir = Path.mkdir
+
+    def record_mkdir(path, *args, **kwargs):
+        writes.append(path)
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", record_mkdir)
+    with pytest.raises(SystemExit) as error:
+        quickstart.main()
+    assert error.value.code == 1
+    assert events == []
+    assert list(target.iterdir()) == []
+    assert writes == []
+
+
+def test_main_competing_creator_keeps_its_root(quickstart_main_environment, monkeypatch):
+    _, project, events = quickstart_main_environment
+    original_mkdir = Path.mkdir
+
+    def competing_mkdir(path, *args, **kwargs):
+        if path == project:
+            original_mkdir(path)
+            (path / "winner").write_text("other creator")
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", competing_mkdir)
+    with pytest.raises(SystemExit):
+        quickstart.main()
+    assert (project / "winner").read_text() == "other creator"
+    assert events == []
+    assert sorted(p.name for p in project.iterdir()) == ["winner"]
+
+
+@pytest.mark.parametrize("replacement", ["directory", "symlink", "missing"])
+def test_main_cleanup_preserves_replaced_root(quickstart_main_environment, monkeypatch, replacement):
+    target, project, _ = quickstart_main_environment
+    original = target / "original"
+
+    def replace_and_fail(path):
+        path.rename(original)
+        if replacement == "directory":
+            path.mkdir()
+            (path / "winner").write_text("other creator")
+        elif replacement == "symlink":
+            path.symlink_to(original, target_is_directory=True)
+        raise RuntimeError("setup failed")
+
+    monkeypatch.setattr(quickstart, "run_migrations", replace_and_fail)
+    with pytest.raises(SystemExit):
+        quickstart.main()
+    assert (original / "manage.py").exists()
+    if replacement == "directory":
+        assert (project / "winner").read_text() == "other creator"
+    elif replacement == "symlink":
+        assert project.is_symlink()
+    else:
+        assert not project.exists()
+
+
+@pytest.mark.parametrize("failure", ["spawn", "exit", "browser", "chdir", "interrupt"])
+def test_main_preserves_completed_project_on_launch_failure(quickstart_main_environment, monkeypatch, failure):
+    target, project, _ = quickstart_main_environment
+
+    def initialized(path):
+        (path / "db.sqlite3").write_bytes(b"synthetic database")
+
+    def server(argv, *, check=False):
+        if failure == "interrupt":
+            raise KeyboardInterrupt
+        if failure == "spawn":
+            raise OSError("spawn failed")
+        if check:
+            raise subprocess.CalledProcessError(7, argv)
+        return subprocess.CompletedProcess(argv, 7)
+
+    def fail(*args, **kwargs):
+        raise OSError("launch failed")
+
+    monkeypatch.setattr(quickstart, "run_migrations", initialized)
+    monkeypatch.setattr(quickstart.subprocess, "run", server)
+    if failure == "browser":
+        monkeypatch.setattr(quickstart, "open_browser_delayed", fail)
+    if failure == "chdir":
+        real_chdir = os.chdir
+        monkeypatch.setattr(quickstart.os, "chdir", lambda path: fail() if path == project else real_chdir(path))
+    if failure == "interrupt":
+        quickstart.main()
+    else:
+        with pytest.raises(SystemExit) as error:
+            quickstart.main()
+        assert error.value.code == 1
+    assert (project / "db.sqlite3").read_bytes() == b"synthetic database"
+    assert Path.cwd() == target
+
+
+def test_two_creators_reserve_root_exclusively(quickstart_main_environment, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    target, project, _ = quickstart_main_environment
+    barrier = threading.Barrier(2)
+    original_mkdir = Path.mkdir
+
+    def competing_mkdir(path, *args, **kwargs):
+        if path == project:
+            barrier.wait(timeout=10)
+        return original_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", competing_mkdir)
+
+    def create():
+        try:
+            quickstart.main()
+        except SystemExit as error:
+            return error.code
+        return 0
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: create(), range(2)))
+    assert sorted(results) == [0, 1]
+    assert (project / "manage.py").is_file()
+    assert Path.cwd() == target
+
+
+@pytest.mark.parametrize("alias", ["live", "dangling"])
+def test_main_refuses_existing_symlink(quickstart_main_environment, alias):
+    target, project, events = quickstart_main_environment
+    destination = target / "destination"
+    if alias == "live":
+        destination.mkdir()
+    project.symlink_to(destination, target_is_directory=True)
+    with pytest.raises(SystemExit):
+        quickstart.main()
+    assert project.is_symlink()
+    assert events == []

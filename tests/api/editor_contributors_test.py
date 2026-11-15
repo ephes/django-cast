@@ -194,3 +194,31 @@ class TestEpisodeContributors:
         assert bad_role.json()["errors"]["contributors.0.role"][0]["code"] == "invalid_choice"
         assert not Episode.objects.filter(slug="episode-with-hosts").exists()
         assert not EpisodeContributor.objects.exists()
+
+
+@pytest.mark.django_db
+def test_contributor_list_selects_only_payload_fields(api_client, admin_user):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    contributor = Contributor.objects.create(
+        display_name="Synthetic projection",
+        slug="projection",
+        short_bio="bio" * 10000,
+        transcript_variants="private" * 10000,
+    )
+    api_client.force_authenticate(user=admin_user)
+    with CaptureQueriesContext(connection) as queries:
+        response = api_client.get(reverse("cast:api:editor_contributors"))
+    assert response.json()["results"] == [
+        {
+            "id": contributor.pk,
+            "slug": "projection",
+            "display_name": "Synthetic projection",
+            "default_role": "guest",
+            "visible": True,
+        }
+    ]
+    selects = [q["sql"] for q in queries if 'FROM "cast_contributor"' in q["sql"]]
+    assert len(selects) == 2  # Count and the one bounded page; no deferred-field loads.
+    assert all('"short_bio"' not in sql and '"transcript_variants"' not in sql for sql in selects)

@@ -2,6 +2,10 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
+- Round 97 quickstart ownership/recovery and consented contributor references are
+  implemented; external clerk review and integration are pending. See the
+  [validation/handoff record](backlog/2026-11-15-scout-round97.md).
+
 - Round 96 transcript admission, WebVTT grammar and feed metadata fixes are
   implemented; external clerk review and integration are pending. See the
   [validation/handoff record](backlog/2026-11-14-scout-round96.md).

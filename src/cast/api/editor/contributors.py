@@ -36,7 +36,7 @@ class ContributorListView(EditorAPIView):
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         _reject_unsupported_query_params(request, self.allowed_query_params)
-        queryset = Contributor.objects.all()
+        queryset = Contributor.objects.only("id", "slug", "display_name", "default_role", "visible")
         q = request.query_params.get("q")
         if q:
             queryset = queryset.filter(Q(display_name__icontains=q) | Q(slug__icontains=q))

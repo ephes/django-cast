@@ -87,6 +87,7 @@ class SpeakerMappingRow(TypedDict):
 
 
 class VoiceReferenceCandidateRow(TypedDict):
+    candidate_token: str
     candidate: TranscriptVoiceReferenceCandidate
     contributor: Contributor | None
     duplicate_reference: ContributorVoiceReference | None
@@ -260,6 +261,7 @@ def get_voice_reference_candidate_groups(
         group["rows"].append(
             {
                 "candidate": candidate,
+                "candidate_token": editing.sign_voice_reference_candidate(transcript, candidate, contributor),
                 "contributor": contributor,
                 "duplicate_reference": duplicate_reference,
                 "form_id": f"cast-voice-reference-{transcript.pk}-{index}",
@@ -381,7 +383,9 @@ def _handle_voice_reference_create(
             candidate_rank=voice_reference_form.cleaned_data["candidate_rank"],
         )
         if candidate is None:
-            messages.error(request, _("The selected voice-reference candidate is no longer available."))
+            messages.error(
+                request, _("The selected voice-reference candidate is no longer available. Reload the transcript.")
+            )
         else:
             try:
                 reference, created = create_voice_reference_from_candidate(
@@ -390,6 +394,7 @@ def _handle_voice_reference_create(
                     candidate,
                     status=voice_reference_form.cleaned_data["voice_reference_status"],
                     consent_confirmed=voice_reference_form.cleaned_data["consent_confirmed"],
+                    candidate_token=voice_reference_form.cleaned_data["candidate_token"],
                 )
             except ValidationError as error:
                 messages.error(request, validation_error_message(error))
@@ -414,7 +419,12 @@ def _handle_voice_reference_create(
                     )
                 return redirect("cast-transcript:edit", transcript_id=transcript.id)
     else:
-        messages.error(request, _("The voice reference could not be created due to errors."))
+        messages.error(
+            request,
+            _(
+                "The voice reference could not be created due to errors. Reload the transcript and review the candidate again."
+            ),
+        )
     return EditFormState(form=form, speaker_mapping_form=speaker_mapping_form)
 
 

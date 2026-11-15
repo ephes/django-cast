@@ -1,6 +1,17 @@
 Unreleased
 ==========
 
+- Refuse keyword/reserved quickstart project names before writes, reserve the
+  project root exclusively and clean up only its original filesystem identity.
+  Preserve completed projects on launch failure, propagate server exit errors
+  and restore the invoking working directory.
+- Bind voice-reference forms to signed current artifact/candidate/contributor
+  evidence; stale choices require reload and renewed review. Serialize candidate
+  creation on the shared audio so concurrent duplicates reuse one reference,
+  without changing manual reference semantics or the schema.
+- Project editor contributor lists to their five response fields, avoiding
+  unused biographies and private transcript-variant text.
+
 - Refuse repeated JSON object members in stored transcript artifacts and malformed
   known-speaker scalar fields before editorial review or publication. Preserve
   original artifact files for replacement, without changing speaker smoothing.

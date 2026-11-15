@@ -673,6 +673,7 @@ class VoiceReferenceCandidateCreateForm(forms.Form):
     action = forms.CharField(initial=VOICE_REFERENCE_CREATE_ACTION, widget=forms.HiddenInput())
     speaker_label = forms.CharField(widget=forms.HiddenInput())
     candidate_rank = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+    candidate_token = forms.CharField(widget=forms.HiddenInput())
     voice_reference_status = forms.ChoiceField(
         choices=(
             (ContributorVoiceReference.Status.PENDING, _("Save pending reference")),

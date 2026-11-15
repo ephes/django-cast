@@ -611,6 +611,7 @@
 
                               <input type="hidden" name="action" value="create-voice-reference" />
                               <input type="hidden" name="speaker_label" value="{{ row.candidate.speaker_label }}" />
+                              <input type="hidden" name="candidate_token" value="{{ row.candidate_token }}" />
                               <input type="hidden" name="candidate_rank" value="{{ row.candidate.rank }}" />
                               <div class="cast-voice-reference-actions">
                                 <button
