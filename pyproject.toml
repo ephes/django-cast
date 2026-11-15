@@ -144,6 +144,7 @@ split-on-trailing-comma = true
 DJANGO_SETTINGS_MODULE = "tests.settings"
 minversion = "6.0"
 testpaths = ["tests"]
+python_files = ["*_test.py"]
 markers = [
     "slow: marks tests that are intentionally slower and can be skipped for a faster local feedback loop",
 ]

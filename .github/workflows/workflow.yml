@@ -55,16 +55,8 @@ jobs:
 
       - name: Build shipped JavaScript artifacts
         run: |
-          cd javascript
-          npm run build:all
-          rm -f dist/manifest.json
-          if [ -f dist/.vite/manifest.json ]; then
-            mv dist/.vite/manifest.json dist/manifest.json
-          fi
-          python -c "from pathlib import Path; p=Path('dist/manifest.json'); txt=p.read_text() if p.exists() else None; (p.write_text(txt.rstrip('\n') + '\n') if txt is not None else None)"
-          rm -rf dist/.vite
-          rm -f ../src/cast/static/cast/vite/*
-          cp dist/* ../src/cast/static/cast/vite/
+          bash scripts/build_frontend.sh
+          cd javascript && npm run build:comments
 
       - name: Verify committed assets are up to date
         run: git diff --exit-code -- src/cast/static/cast/vite src/cast/static/fluent_comments/js/ajaxcomments.js
@@ -227,7 +219,6 @@ jobs:
 
       - name: Build documentation
         run: |
-          rm -f docs/cast.api.rst docs/cast.migrations.rst docs/cast.rst docs/cast.templatetags.rst docs/modules.rst
           uv run make -C docs clean
           uv run make -C docs html
 

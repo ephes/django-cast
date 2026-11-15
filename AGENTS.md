@@ -24,7 +24,7 @@
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ with 4-space indentation; prefer explicit typing—public functions and classes should be type-annotated.
-- Imports and formatting follow Ruff (`E,W,F,I,B,UP,DJ`); avoid unused symbols and dead code.
+- Imports and formatting follow Ruff (`E4, E7, E9, F, I`); avoid unused symbols and dead code.
 - Modules/files use `snake_case`, classes `PascalCase`, functions/methods `snake_case`, Django settings/constants `UPPER_SNAKE_CASE`.
 - Keep Django/Wagtail app boundaries clean: models in `models/`, API in `api/`, templates in `templates/cast/`.
 

@@ -887,3 +887,11 @@ Additional Resources
 - `GitHub Repository <https://github.com/ephes/django-cast>`_
 - `PyPI Package <https://pypi.org/project/django-cast/>`_
 - `Example Project <https://github.com/ephes/django-cast/tree/main/example>`_
+
+Frontend build maintenance
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``just js-build-vite`` and the manual workflow both use
+``scripts/build_frontend.sh`` for Vite build, manifest normalization and copying.
+``just js-build-all`` also builds the comments bundle. Test modules use the
+``*_test.py`` naming convention. The django-upgrade hook targets Django 5.2.

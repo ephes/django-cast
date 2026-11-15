@@ -794,6 +794,10 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Share one frontend build script, remove obsolete apidoc cleanup and hook
+  configuration, align django-upgrade with Django 5.2 and test naming with
+  ``*_test.py``. Resolve styleguide pagination through the settings registry.
+
 - Keep the backlog focused on open work and retain dated validation records.
   Remove obsolete debug notebooks, root inventory/example files and the
   self-installing commands helper; use deployment-owned database restore tooling.
