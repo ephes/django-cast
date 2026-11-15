@@ -496,3 +496,27 @@ preview still never synchronizes post relationships or creates galleries.
 The rendition inventory helper
 ``get_obsolete_and_missing_rendition_strings(..., using=alias)`` accepts an
 optional database alias; existing calls retain their normal router behavior.
+
+Partial media persistence
+-------------------------
+
+Audio/video derivation helpers and the ``save()`` compatibility flags honor an
+empty ``update_fields`` iterable as a complete no-op, including generators:
+no model save, upload validation, probe or storage access occurs.
+
+A partial video save generates a poster only when ``original`` is included in
+``update_fields``. A title-only save leaves the stored source and poster alone,
+even if the instance holds an unsaved replacement upload. Audio duration and
+size reconciliation inspect all formats (including cleared ones), so partial
+audio saves derive them only when all four source fields (``mp3``, ``m4a``,
+``oga``, ``opus``) are included. Use a full save to derive all metadata, or
+explicitly include the source fields; helpers never broaden a partial save to
+persist excluded source uploads.
+
+Derivation write database
+-------------------------
+
+The derivation services resolve an explicit ``using`` alias first, otherwise
+Django's public ``router.db_for_write(..., instance=...)`` chooses the database.
+The selected alias owns the transaction, initial model save and derived-field
+save. A replica-loaded instance does not override a router that selects primary.

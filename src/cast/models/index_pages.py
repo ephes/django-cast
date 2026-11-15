@@ -186,7 +186,7 @@ class Blog(Page):
                 "paging-area": "_list_of_posts_and_paging_controls.html",
             }
             if request.htmx.target is not None:
-                template_name = target_to_template_name[request.htmx.target]
+                template_name = target_to_template_name.get(request.htmx.target, template_name)
             else:
                 logger.warning("HTMX target is None")
         template = f"cast/{template_base_dir}/{template_name}"

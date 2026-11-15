@@ -1880,3 +1880,26 @@ continue to apply to each reference. Captions are rendered as escaped text.
 Both legacy integer-valued and structured stored entries remain readable.
 Editor API clients use the ``id``/``caption`` format above, independently of
 the internal stored representation.
+
+Modal facet database snapshots
+------------------------------
+
+``mode=modal`` returns exact counts from one short database read snapshot, before
+response rendering. SQLite uses its transaction read snapshot; PostgreSQL uses a
+repeatable-read, read-only transaction. An existing PostgreSQL transaction must
+already use repeatable-read or serializable isolation (including when
+``ATOMIC_REQUESTS`` is enabled). Other database backends and external search
+backends without a database ``get_queryset()`` return HTTP 503 with code
+``facet_snapshot_unavailable`` rather than approximate or truncated counts.
+Database search membership remains in SQL subqueries, including the aggregation
+fallback: result IDs are never expanded into a Python list or SQL parameters.
+Search index contents outside the database have no cross-system snapshot guarantee.
+
+Editor JSON admission
+---------------------
+
+Editor JSON requests require unique object member names at every nesting level,
+including revision, publication and media controls. Repeated names return HTTP
+400 in the editor ``validation_error`` envelope with ``duplicate_member`` under
+``non_field_errors``, before mutations. Multipart and form uploads keep their
+existing parsers and validation.

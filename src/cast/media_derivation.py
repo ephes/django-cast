@@ -70,10 +70,12 @@ def normalize_model_save_arguments(
 ) -> tuple[dict[str, Any], str]:
     """Normalize Django's deprecated positional save arguments and resolve the write alias."""
     normalized = _normalize_positional_model_save_arguments(args, kwargs) if args else dict(kwargs)
+    if normalized.get("update_fields") is not None:
+        normalized["update_fields"] = tuple(normalized["update_fields"])
     using = normalized.get("using")
     if not using:
         state = getattr(model, "_state", None)
-        using = getattr(state, "db", None) or router.db_for_write(
+        using = router.db_for_write(
             type(model),
             instance=model if state is not None else None,
         )
@@ -90,6 +92,13 @@ def save_audio_with_derivations(
 ) -> None:
     """Persist an Audio and synchronously derive requested metadata."""
     save_kwargs, using = normalize_model_save_arguments(audio, args, kwargs)
+    selected_fields = save_kwargs.get("update_fields")
+    if selected_fields == ():
+        return
+    # Duration and size reconciliation inspect every format, including cleared ones.
+    sources_included = selected_fields is None or set(audio.audio_formats).issubset(selected_fields)
+    generate_duration = generate_duration and sources_included
+    cache_file_sizes = cache_file_sizes and sources_included
     if generate_duration:
         for audio_format, field in audio.uploaded_audio_files:
             if not getattr(field, "_committed", True):
@@ -129,6 +138,10 @@ def save_video_with_derivations(
 ) -> Video | None:
     """Persist a Video and synchronously derive its poster when requested."""
     save_kwargs, using = normalize_model_save_arguments(video, args, kwargs)
+    selected_fields = save_kwargs.get("update_fields")
+    if selected_fields == ():
+        return None
+    generate_poster = generate_poster and (selected_fields is None or "original" in selected_fields)
     if generate_poster and not getattr(video.original, "_committed", True):
         validate_video_upload(video.original.file)
 

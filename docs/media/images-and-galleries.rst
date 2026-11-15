@@ -415,3 +415,13 @@ characters of comma-separated IDs and 16,000 characters of signed token.
 Oversized requests return HTTP 400 before integer conversion (ID limits) or
 signature decoding (token limit). Existing theme context keys, signed tokens and
 current/previous/next navigation remain compatible within these bounds.
+
+Editor upload authority
+-----------------------
+
+The editor image-create endpoint checks collection add/choose authority again
+after ingest and before publishing a successful response, using a fresh user
+and current collection grants. A revoked grant or deactivated user returns
+HTTP 403 with ``post_save_permission_denied`` and removes the newly owned upload
+and row through ingest cleanup. Unrelated stored images are preserved. If
+cleanup fails, HTTP 500 ``cleanup_failed`` keeps the existing recovery contract.

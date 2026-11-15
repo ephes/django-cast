@@ -341,10 +341,14 @@ class PageLinkHandlerWithCache(PageLinkHandler):
             return self._get_cache()[key]
 
         def __setitem__(self, key: int, value: str | None) -> None:
-            self._get_cache()[key] = value
+            cache = self._get_cache().copy()
+            cache[key] = value
+            self._storage.set((get_language(), cache))
 
         def __delitem__(self, key: int) -> None:
-            del self._get_cache()[key]
+            cache = self._get_cache().copy()
+            del cache[key]
+            self._storage.set((get_language(), cache))
 
         def __iter__(self) -> Iterator[int]:
             return iter(self._get_cache())
@@ -368,9 +372,10 @@ class PageLinkHandlerWithCache(PageLinkHandler):
         def pop(self, key: int, default: _T) -> str | None | _T: ...  # pragma: no cover
 
         def pop(self, key: int, default: object = _missing) -> object:
-            if default is self._missing:
-                return self._get_cache().pop(key)
-            return self._get_cache().pop(key, default)
+            cache = self._get_cache().copy()
+            value = cache.pop(key) if default is self._missing else cache.pop(key, default)
+            self._storage.set((get_language(), cache))
+            return value
 
     cache: MutableMapping[int, str | None] = _ContextLocalCache("page_link_handler_cache")
     absolute_cache: MutableMapping[int, str | None] = _ContextLocalCache("page_link_handler_absolute_cache")

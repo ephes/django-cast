@@ -2,6 +2,10 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
+- Round 100 facet snapshots, editor/control isolation and media partial-save/write
+  authority safeguards are implemented; external clerk review and integration
+  are pending. See the [validation/handoff record](backlog/2026-11-15-scout-round100.md).
+
 - Round 99 bounded candidate evidence and editorial timestamp correspondence are
   implemented; external clerk review and integration are pending. See the
   [validation/handoff record](backlog/2026-11-15-scout-round99.md).
